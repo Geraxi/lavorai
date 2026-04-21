@@ -8,6 +8,13 @@ import {
 import { saveUserFile, readUserFile } from "@/lib/storage";
 import { decryptJson } from "@/lib/crypto";
 import { isPortalId, PORTALS } from "@/lib/portals";
+import {
+  extractFullProfile,
+  tailorProfileForJob,
+} from "@/lib/cv-profile-ai-full";
+import { profileToRow, rowToProfile } from "@/lib/cv-profile-types";
+import { detectLanguage } from "@/lib/lang-detect";
+import { renderCVPdf } from "@/lib/cv-pdf";
 
 /**
  * Worker: processa una candidatura fino a consegna al utente.
@@ -56,7 +63,10 @@ export async function processApplication(applicationId: string): Promise<void> {
     data: { status: "optimizing", startedAt: new Date() },
   });
 
-  let result;
+  const jobPosting = `${app.job.title}\n${app.job.company ?? ""}\n\n${app.job.description}`;
+  const jobLang = detectLanguage(`${app.job.title} ${app.job.description}`);
+
+  let result: Awaited<ReturnType<typeof optimizeCV>>;
   let cvPath: string;
   let clPath: string;
   let cvBuffer: Buffer;
@@ -66,7 +76,7 @@ export async function processApplication(applicationId: string): Promise<void> {
     // 1. Claude: ottimizza CV + cover letter per questo job specifico
     result = await optimizeCV({
       cvText: cv.extractedText,
-      jobPosting: `${app.job.title}\n${app.job.company ?? ""}\n\n${app.job.description}`,
+      jobPosting,
     });
 
     // 2. Genera DOCX
@@ -75,7 +85,7 @@ export async function processApplication(applicationId: string): Promise<void> {
       generateCoverLetterDocx(result.coverLetter),
     ]);
 
-    // 3. Salva su storage (fs in dev, Supabase in prod)
+    // 3. Salva DOCX su storage
     cvPath = await saveUserFile(
       app.userId,
       `applications/${applicationId}`,
@@ -97,7 +107,44 @@ export async function processApplication(applicationId: string): Promise<void> {
     return;
   }
 
-  // 4. Update status + salva paths + score
+  // 3b. PDF tailoring (structured CVProfile → tailored → ATS PDF). Non-fatal.
+  let cvPdfPath: string | null = null;
+  try {
+    let profileRow = await prisma.cVProfile.findUnique({
+      where: { userId: app.userId },
+    });
+    if (
+      !profileRow ||
+      (!profileRow.firstName &&
+        !profileRow.lastName &&
+        profileRow.experiencesJson === "[]")
+    ) {
+      const seeded = await extractFullProfile(cv.extractedText);
+      const row = profileToRow(seeded);
+      profileRow = await prisma.cVProfile.upsert({
+        where: { userId: app.userId },
+        create: { userId: app.userId, ...row },
+        update: row,
+      });
+    }
+    const baseProfile = rowToProfile(profileRow);
+    const tailored = await tailorProfileForJob({
+      profile: baseProfile,
+      jobPosting,
+      lang: jobLang,
+    });
+    const pdfBuffer = await renderCVPdf(tailored, jobLang);
+    cvPdfPath = await saveUserFile(
+      app.userId,
+      `applications/${applicationId}`,
+      `CV_${jobLang}.pdf`,
+      pdfBuffer,
+    );
+  } catch (err) {
+    console.error(`[worker] ${applicationId} PDF tailoring failed`, err);
+  }
+
+  // 4. Update status + salva paths + score + PDF
   await prisma.application.update({
     where: { id: applicationId },
     data: {
@@ -107,6 +154,8 @@ export async function processApplication(applicationId: string): Promise<void> {
       cvDocxPath: cvPath,
       coverLetterPath: clPath,
       coverLetterText: result.coverLetter,
+      cvPdfPath,
+      cvLanguage: jobLang,
     },
   });
 

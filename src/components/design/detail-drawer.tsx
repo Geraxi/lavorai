@@ -20,6 +20,8 @@ export interface DrawerApp {
   coverLetterText?: string | null;
   hasCvDocx?: boolean;
   hasCoverLetterDocx?: boolean;
+  hasCvPdf?: boolean;
+  cvLanguage?: string | null;
 }
 
 const PIPELINE = ["Applicata", "Vista", "Screening", "Colloquio", "Offerta"];
@@ -150,8 +152,18 @@ export function DetailDrawer({
                 </div>
                 <div className="ds-section-body flush">
                   <DocRow
-                    title="CV adattato al ruolo"
-                    sub="Ottimizzato per questo annuncio specifico"
+                    title={`CV PDF tailored${app.cvLanguage ? ` (${app.cvLanguage.toUpperCase()})` : ""}`}
+                    sub="ATS-friendly · riordinato per questo annuncio"
+                    available={Boolean(app.hasCvPdf)}
+                    downloadHref={
+                      app.hasCvPdf
+                        ? `/api/applications/${app.id}/document?kind=pdf`
+                        : undefined
+                    }
+                  />
+                  <DocRow
+                    title="CV DOCX (classico)"
+                    sub="Versione DOCX ottimizzata"
                     available={Boolean(app.hasCvDocx)}
                     downloadHref={
                       app.hasCvDocx

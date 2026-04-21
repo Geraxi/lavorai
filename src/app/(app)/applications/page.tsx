@@ -19,6 +19,8 @@ interface ApiApplication {
   coverLetterText: string | null;
   hasCvDocx: boolean;
   hasCoverLetterDocx: boolean;
+  hasCvPdf: boolean;
+  cvLanguage: string | null;
   job: {
     id: string;
     title: string;
@@ -65,6 +67,8 @@ type Row = (typeof MOCK)[number] & {
   coverLetterText?: string | null;
   hasCvDocx?: boolean;
   hasCoverLetterDocx?: boolean;
+  hasCvPdf?: boolean;
+  cvLanguage?: string | null;
 };
 
 export default function ApplicationsPage() {
@@ -94,6 +98,8 @@ export default function ApplicationsPage() {
       coverLetterText: a.coverLetterText,
       hasCvDocx: a.hasCvDocx,
       hasCoverLetterDocx: a.hasCoverLetterDocx,
+      hasCvPdf: a.hasCvPdf,
+      cvLanguage: a.cvLanguage,
     })) ?? [];
 
   // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).

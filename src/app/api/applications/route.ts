@@ -43,6 +43,8 @@ export async function GET() {
       coverLetterText: a.coverLetterText,
       hasCvDocx: Boolean(a.cvDocxPath),
       hasCoverLetterDocx: Boolean(a.coverLetterPath),
+      hasCvPdf: Boolean(a.cvPdfPath),
+      cvLanguage: a.cvLanguage,
       job: a.job,
     })),
   });

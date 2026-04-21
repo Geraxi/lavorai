@@ -20,7 +20,7 @@ export async function GET(
 
   const { id } = await params;
   const kind = request.nextUrl.searchParams.get("kind");
-  if (kind !== "cv" && kind !== "cover") {
+  if (kind !== "cv" && kind !== "cover" && kind !== "pdf") {
     return NextResponse.json({ error: "bad_kind" }, { status: 400 });
   }
 
@@ -30,6 +30,8 @@ export async function GET(
       userId: true,
       cvDocxPath: true,
       coverLetterPath: true,
+      cvPdfPath: true,
+      cvLanguage: true,
       job: { select: { title: true, company: true } },
     },
   });
@@ -38,7 +40,12 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const path = kind === "cv" ? app.cvDocxPath : app.coverLetterPath;
+  const path =
+    kind === "cv"
+      ? app.cvDocxPath
+      : kind === "cover"
+        ? app.coverLetterPath
+        : app.cvPdfPath;
   if (!path) {
     return NextResponse.json(
       { error: "not_ready", message: "File non ancora generato." },
@@ -51,16 +58,22 @@ export async function GET(
     const safeTitle = (app.job.title ?? "job")
       .replace(/[^a-zA-Z0-9_-]+/g, "_")
       .slice(0, 40);
+    const lang = app.cvLanguage ?? "it";
     const filename =
       kind === "cv"
         ? `CV_Ottimizzato_${safeTitle}.docx`
-        : `Lettera_Motivazionale_${safeTitle}.docx`;
+        : kind === "cover"
+          ? `Lettera_Motivazionale_${safeTitle}.docx`
+          : `CV_${safeTitle}_${lang}.pdf`;
+    const contentType =
+      kind === "pdf"
+        ? "application/pdf"
+        : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
-        "Content-Type":
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Type": contentType,
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "private, max-age=0, no-store",
       },

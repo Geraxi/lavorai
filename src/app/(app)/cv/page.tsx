@@ -4,8 +4,13 @@ import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { type ExtractedProfile } from "@/lib/cv-profile";
-import { CvEditor } from "./cv-editor";
+import { CVBuilder } from "./cv-builder";
+import { extractFullProfile } from "@/lib/cv-profile-ai-full";
+import {
+  EMPTY_PROFILE,
+  profileToRow,
+  rowToProfile,
+} from "@/lib/cv-profile-types";
 
 export const dynamic = "force-dynamic";
 
@@ -13,42 +18,37 @@ export default async function CVPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const cv = await prisma.cVDocument.findFirst({
-    where: { userId: session.user.id },
-    select: {
-      id: true,
-      originalFilename: true,
-      extractedText: true,
-      parsedProfileJson: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  const [cv, profileRow] = await Promise.all([
+    prisma.cVDocument.findFirst({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, originalFilename: true, extractedText: true, createdAt: true },
+    }),
+    prisma.cVProfile.findUnique({ where: { userId: session.user.id } }),
+  ]);
 
-  let profile: ExtractedProfile | null = null;
-  if (cv?.parsedProfileJson) {
+  // Seed one-shot se abbiamo CV ma non abbiamo ancora il profilo
+  let profile = profileRow ? rowToProfile(profileRow) : { ...EMPTY_PROFILE };
+  const isEmpty =
+    !profile.firstName &&
+    !profile.lastName &&
+    profile.experiences.length === 0 &&
+    profile.education.length === 0 &&
+    profile.skills.length === 0;
+
+  if (cv && isEmpty) {
     try {
-      profile = JSON.parse(cv.parsedProfileJson);
+      const seeded = await extractFullProfile(cv.extractedText);
+      // prefill email dalla session se vuota
+      if (!seeded.email && session.user.email) seeded.email = session.user.email;
+      await prisma.cVProfile.upsert({
+        where: { userId: session.user.id },
+        create: { userId: session.user.id, ...profileToRow(seeded) },
+        update: profileToRow(seeded),
+      });
+      profile = seeded;
     } catch {
-      profile = null;
-    }
-  }
-  // Backfill one-time se CV esiste ma non ha ancora il profilo cachato
-  if (cv && !profile) {
-    try {
-      const { extractProfileAI } = await import("@/lib/cv-profile-ai");
-      profile = await extractProfileAI(
-        cv.extractedText,
-        session.user.email ?? null,
-      );
-      await prisma.cVDocument
-        .update({
-          where: { id: cv.id },
-          data: { parsedProfileJson: JSON.stringify(profile) },
-        })
-        .catch(() => void 0);
-    } catch {
-      // ignore
+      // ignora — l'utente può compilare a mano
     }
   }
 
@@ -63,49 +63,7 @@ export default async function CVPage() {
           margin: "0 auto",
         }}
       >
-        <div className="mb-6">
-          <h1
-            style={{
-              fontSize: 22,
-              fontWeight: 600,
-              letterSpacing: "-0.022em",
-              margin: 0,
-            }}
-          >
-            Il tuo CV
-          </h1>
-          <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
-            {cv
-              ? "Modifica i dati personali e sostituisci il file quando serve — LavorAI adatta il CV a ogni candidatura."
-              : "Carica il tuo CV per iniziare. Lo useremo come base per ogni candidatura automatica."}
-          </p>
-        </div>
-
-        {!cv ? (
-          <EmptyCV />
-        ) : (
-          <CvEditor
-            cvFile={{
-              filename: cv.originalFilename,
-              chars: cv.extractedText.length,
-              preview: cv.extractedText.slice(0, 1500),
-              uploadedAt: cv.createdAt.toISOString(),
-            }}
-            profile={
-              profile ?? {
-                firstName: "",
-                lastName: "",
-                title: "",
-                email: session.user.email ?? "",
-                phone: "",
-                city: "",
-                seniority: null,
-                yearsExperience: null,
-                englishLevel: null,
-              }
-            }
-          />
-        )}
+        {!cv && isEmpty ? <EmptyCV /> : <CVBuilder initial={profile} />}
       </div>
     </>
   );
