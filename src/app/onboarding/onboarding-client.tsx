@@ -162,25 +162,46 @@ export default function OnboardingClient({
   const canContinueStep0 = cvInfo !== null;
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        gridTemplateColumns: "280px 1fr 1fr",
-        background: "var(--bg)",
-      }}
-    >
-      {/* ===== Rail: brand + vertical stepper ===== */}
-      <aside
-        style={{
-          padding: "32px 28px",
-          borderRight: "1px solid var(--border-ds)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 40,
-          background: "var(--bg-sunken)",
-        }}
-      >
+    <div className="ob-root">
+      {/* ===== Mobile / tablet: progress bar orizzontale in alto ===== */}
+      <div className="ob-mobile-bar">
+        <div className="ob-mobile-brand">
+          <span
+            className="mono inline-flex items-center justify-center"
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 5,
+              background: "var(--fg)",
+              color: "var(--bg)",
+              fontWeight: 700,
+              fontSize: 12,
+            }}
+          >
+            L
+          </span>
+          LavorAI
+        </div>
+        <div className="ob-mobile-progress">
+          {STEPS.map((_, i) => (
+            <div
+              key={i}
+              className="ob-mobile-dot"
+              data-done={i < step ? "true" : "false"}
+              data-current={i === step ? "true" : "false"}
+            />
+          ))}
+          <div
+            className="mono"
+            style={{ fontSize: 11, color: "var(--fg-muted)", marginLeft: 6 }}
+          >
+            {step + 1}/{STEPS.length} · {STEPS[step].label}
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Desktop: Rail sinistro con stepper verticale ===== */}
+      <aside className="ob-rail">
         <div className="flex items-center gap-2.5" style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.02em" }}>
           <span
             className="mono inline-flex items-center justify-center"
@@ -200,107 +221,32 @@ export default function OnboardingClient({
           LavorAI
         </div>
 
-        <div style={{ position: "relative" }}>
-          {/* Connector line */}
-          <div
-            aria-hidden
-            style={{
-              position: "absolute",
-              left: 15,
-              top: 18,
-              bottom: 18,
-              width: 2,
-              background: "var(--border-ds)",
-              borderRadius: 2,
-            }}
-          />
-          <div
-            aria-hidden
-            style={{
-              position: "absolute",
-              left: 15,
-              top: 18,
-              width: 2,
-              height: `calc(${(step / (STEPS.length - 1)) * 100}% - 0px)`,
-              background: "var(--fg)",
-              borderRadius: 2,
-              transition: "height 0.45s cubic-bezier(0.22,1,0.36,1)",
-            }}
-          />
-
+        <div className="ob-stepper">
           {STEPS.map((s, i) => {
             const done = i < step;
             const current = i === step;
             return (
               <div
                 key={s.key}
-                style={{
-                  position: "relative",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "8px 0",
-                  marginBottom: 4,
-                  cursor: done ? "pointer" : "default",
-                  opacity: current || done ? 1 : 0.5,
-                  transition: "opacity 0.2s",
-                }}
+                className="ob-step"
+                data-done={done ? "true" : "false"}
+                data-current={current ? "true" : "false"}
                 onClick={() => {
                   if (done) setStep(i);
                 }}
               >
-                <div
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    background: done
-                      ? "var(--fg)"
-                      : current
-                      ? "var(--bg-elev)"
-                      : "var(--bg-sunken)",
-                    border: current
-                      ? "2px solid var(--fg)"
-                      : done
-                      ? "2px solid var(--fg)"
-                      : "2px solid var(--border-strong)",
-                    color: done ? "var(--bg)" : "var(--fg)",
-                    flexShrink: 0,
-                    transition: "all 0.25s cubic-bezier(0.22,1,0.36,1)",
-                    boxShadow: current ? "0 0 0 4px var(--bg)" : "none",
-                  }}
-                >
+                <div className="ob-step-dot">
                   {done ? (
-                    <Icon name="check" size={14} />
+                    <Icon name="check" size={13} />
                   ) : (
-                    <Icon name={s.icon} size={14} />
+                    <span className="mono" style={{ fontSize: 12, fontWeight: 600 }}>
+                      {i + 1}
+                    </span>
                   )}
                 </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: 10.5,
-                      fontWeight: 500,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.08em",
-                      color: "var(--fg-subtle)",
-                      marginBottom: 1,
-                    }}
-                  >
-                    Step {i + 1}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 13.5,
-                      fontWeight: current ? 600 : 500,
-                      color: "var(--fg)",
-                    }}
-                  >
-                    {s.label}
-                  </div>
+                <div className="ob-step-label">
+                  <div className="ob-step-index">Step {i + 1}</div>
+                  <div className="ob-step-name">{s.label}</div>
                 </div>
               </div>
             );
@@ -313,15 +259,8 @@ export default function OnboardingClient({
       </aside>
 
       {/* ===== Main content ===== */}
-      <main
-        style={{
-          padding: "64px 56px 40px",
-          display: "flex",
-          flexDirection: "column",
-          minWidth: 0,
-        }}
-      >
-        <div style={{ flex: 1, maxWidth: 520, width: "100%" }}>
+      <main className="ob-main">
+        <div style={{ flex: 1, maxWidth: 560, width: "100%" }}>
           {step === 0 && (
             <StepCvUpload
               cvInfo={cvInfo}
@@ -396,17 +335,7 @@ export default function OnboardingClient({
       </main>
 
       {/* ===== Right: CV preview reale ===== */}
-      <aside
-        style={{
-          background: "var(--bg-sunken)",
-          padding: 40,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          position: "relative",
-          borderLeft: "1px solid var(--border-ds)",
-        }}
-      >
+      <aside className="ob-preview">
         <RealCvPreview cvInfo={cvInfo} profile={profile} />
 
         <div
@@ -441,6 +370,157 @@ export default function OnboardingClient({
           Anteprima · verrà adattato automaticamente al JD di ogni candidatura
         </div>
       </aside>
+
+      <style>{`
+        .ob-root {
+          min-height: 100vh;
+          display: grid;
+          grid-template-columns: 260px minmax(0, 1fr) minmax(0, 1fr);
+          background: var(--bg);
+        }
+        .ob-mobile-bar {
+          display: none;
+        }
+        .ob-rail {
+          padding: 32px 24px;
+          border-right: 1px solid var(--border-ds);
+          display: flex;
+          flex-direction: column;
+          gap: 36px;
+          background: var(--bg-sunken);
+          min-width: 0;
+        }
+        .ob-stepper {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+        .ob-step {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 6px;
+          border-radius: var(--radius-sm);
+          cursor: default;
+          transition: background 0.15s;
+        }
+        .ob-step[data-done="true"] { cursor: pointer; }
+        .ob-step[data-done="true"]:hover { background: var(--bg-elev); }
+        .ob-step-dot {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          background: var(--bg-elev);
+          border: 1.5px solid var(--border-strong);
+          color: var(--fg-subtle);
+          transition: all 0.2s var(--ease-premium);
+        }
+        .ob-step[data-done="true"] .ob-step-dot {
+          background: var(--fg);
+          border-color: var(--fg);
+          color: var(--bg);
+        }
+        .ob-step[data-current="true"] .ob-step-dot {
+          background: var(--bg-elev);
+          border-color: var(--fg);
+          color: var(--fg);
+          box-shadow: 0 0 0 3px var(--bg-sunken), 0 0 0 5px var(--fg);
+        }
+        .ob-step-label { min-width: 0; }
+        .ob-step-index {
+          font-size: 10px;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--fg-subtle);
+          margin-bottom: 1px;
+        }
+        .ob-step-name {
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--fg-muted);
+        }
+        .ob-step[data-current="true"] .ob-step-name {
+          font-weight: 600;
+          color: var(--fg);
+        }
+        .ob-step[data-done="true"] .ob-step-name {
+          color: var(--fg);
+        }
+
+        .ob-main {
+          padding: 56px 48px 40px;
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+        }
+        .ob-preview {
+          background: var(--bg-sunken);
+          padding: 40px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          position: relative;
+          border-left: 1px solid var(--border-ds);
+          min-width: 0;
+        }
+
+        /* Tablet (≤1100px): nascondi preview destro */
+        @media (max-width: 1100px) {
+          .ob-root { grid-template-columns: 240px minmax(0, 1fr); }
+          .ob-preview { display: none; }
+          .ob-main { padding: 40px 32px 32px; }
+        }
+
+        /* Mobile (≤720px): full-width con progress bar orizzontale sopra */
+        @media (max-width: 720px) {
+          .ob-root { grid-template-columns: 1fr; }
+          .ob-rail { display: none; }
+          .ob-mobile-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-ds);
+            background: var(--bg-sunken);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+          }
+          .ob-mobile-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            font-size: 14px;
+            letter-spacing: -0.02em;
+          }
+          .ob-mobile-progress {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          .ob-mobile-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--border-strong);
+            transition: background 0.2s, transform 0.2s;
+          }
+          .ob-mobile-dot[data-done="true"] { background: var(--fg); }
+          .ob-mobile-dot[data-current="true"] {
+            background: var(--fg);
+            transform: scale(1.3);
+            box-shadow: 0 0 0 3px var(--bg-sunken), 0 0 0 4px var(--fg);
+          }
+          .ob-main { padding: 24px 20px 32px; }
+        }
+      `}</style>
     </div>
   );
 }
