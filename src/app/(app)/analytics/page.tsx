@@ -18,11 +18,38 @@ export default async function AnalyticsPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const totalApps = await prisma.application.count({
-    where: { userId: user.id },
-  });
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  const [totalApps, thisMonth, prevMonth] = await Promise.all([
+    prisma.application.count({ where: { userId: user.id } }),
+    prisma.application.count({
+      where: { userId: user.id, createdAt: { gte: monthStart } },
+    }),
+    prisma.application.count({
+      where: { userId: user.id, createdAt: { gte: prevMonthStart, lt: monthStart } },
+    }),
+  ]);
 
   const isEmpty = totalApps === 0;
+
+  // Delta mese su mese reale
+  const monthDelta =
+    prevMonth === 0
+      ? thisMonth > 0
+        ? "+100% vs mese prec."
+        : "—"
+      : `${thisMonth >= prevMonth ? "+" : ""}${Math.round(
+          ((thisMonth - prevMonth) / prevMonth) * 100,
+        )}% vs mese prec.`;
+
+  // Stima tempo risparmiato: ~15 min per candidatura
+  const savedMin = totalApps * 15;
+  const savedLabel =
+    savedMin < 60
+      ? `${savedMin}m`
+      : `${Math.floor(savedMin / 60)}h${savedMin % 60 ? ` ${savedMin % 60}m` : ""}`;
 
   return (
     <>
@@ -61,30 +88,28 @@ export default async function AnalyticsPage() {
           <Kpi
             index={0}
             label="Candidature"
-            value={isEmpty ? "0" : String(totalApps)}
-            delta={isEmpty ? "Nessuna ancora" : "+34% vs mese prec."}
+            value={String(totalApps)}
+            delta={isEmpty ? "Nessuna ancora" : monthDelta}
             up={!isEmpty}
           />
           <Kpi
             index={1}
             label="Tasso risposta"
-            value={isEmpty ? "—" : "24%"}
-            delta={isEmpty ? "In attesa dati" : "+6pt"}
-            up={!isEmpty}
+            value="—"
+            delta="Nessuna risposta ancora"
           />
           <Kpi
             index={2}
             label="Tempo medio risposta"
-            value={isEmpty ? "—" : "3.2g"}
-            delta={isEmpty ? "In attesa dati" : "-0.8g"}
-            up={!isEmpty}
+            value="—"
+            delta="Nessuna risposta ancora"
             mono
           />
           <Kpi
             index={3}
-            label="ROI tempo"
-            value={isEmpty ? "0h" : "38h"}
-            delta={isEmpty ? "Attiva auto-apply" : "risparmiate"}
+            label="Tempo risparmiato"
+            value={isEmpty ? "0m" : savedLabel}
+            delta={isEmpty ? "Attiva auto-apply" : "stima 15 min/candidatura"}
             up={!isEmpty}
             mono
           />
