@@ -22,21 +22,29 @@ Rispondi SOLO con un JSON valido (nessun markdown), schema esatto:
   "email": string,       // Email. "" se non trovato.
   "phone": string,       // Telefono. "" se non trovato.
   "city": string,        // Città di residenza PROPRIA. "" se non esplicita (NON dedurre da nomi azienda).
-  "seniority": null,     // SEMPRE null. Non provare a dedurre — troppo soggettivo.
+  "seniority": null,
   "yearsExperience": number | null,
-    // SOLO se il CV ha date chiare (es. "Gen 2020 - Dic 2023"). Somma gli anni SOLO di ruoli FULL-TIME in azienda
-    // (esclusi: stage, side project, freelance part-time, ruoli con durata <3 mesi, periodi "Current" senza data inizio).
-    // Se meno di 3 ruoli full-time chiari → null.
-  "englishLevel": "none" | "a2" | "b1" | "b2" | "c1" | "c2" | null
-    // Solo se esplicitamente dichiarato nel CV.
-    // "Native"/"Madrelingua" → c2. "Fluent" → c1. "C2"/"C1"/"B2"/"B1"/"A2" letterali → match diretto.
-    // Se "English" compare senza livello → null.
+  "englishLevel": "none" | "a2" | "b1" | "b2" | "c1" | "c2" | null,
+  "suggestedRoles": string[],
+    // 6-10 titoli di ruolo SIMILI al profilo del CV che l'utente potrebbe voler candidare.
+    // Esempi: se CV è "Senior Software Engineer" suggerisci: ["Senior Software Engineer", "Software Engineer",
+    // "Full-Stack Developer", "Backend Engineer", "Staff Engineer", "Tech Lead"].
+    // Se CV è "Product Designer" → ["Product Designer", "Senior Product Designer", "UX Designer",
+    // "UI Designer", "Design Lead"]. Include sia il ruolo attuale sia progressioni naturali.
+    // SEMPRE in italiano o inglese coerente con il CV.
+    // Se il CV è troppo generico/ambiguo per suggerire, ritorna [].
+  "suggestedCities": string[]
+    // 3-6 città italiane dove l'utente potrebbe candidarsi, basate sulla città di residenza
+    // del CV. Include la città del CV + aggiungi "Remoto", e 2-3 città italiane principali
+    // accessibili (Milano, Roma, Torino, Bologna...).
+    // Se non c'è città nel CV, ritorna ["Milano", "Roma", "Remoto"] come default IT.
 }
 
 Regole ferree:
-- Non inventare. "" o null sono risposte valide e preferite a dati sbagliati.
-- seniority è SEMPRE null.
-- Il titolo va estratto COME SCRITTO (non modificarlo, non interpretarlo).`;
+- Non inventare dati personali. "" o null sono risposte valide.
+- seniority è SEMPRE null (troppo soggettivo).
+- Il titolo va estratto COME SCRITTO.
+- suggestedRoles: MAI vuoto se il CV ha un titolo professionale. Deve matchare l'area del CV.`;
 
 function userPrompt(cvText: string): string {
   // Limit length to keep token usage reasonable
@@ -89,6 +97,19 @@ export async function extractProfileAI(
       typeof v === "string" && v.length > 0 ? v : "";
     const email = str(parsed.email) || sessionEmail || "";
 
+    const suggestedRoles = Array.isArray(parsed.suggestedRoles)
+      ? parsed.suggestedRoles
+          .filter((r): r is string => typeof r === "string" && r.length > 0)
+          .slice(0, 10)
+          .map((r) => r.trim())
+      : [];
+    const suggestedCities = Array.isArray(parsed.suggestedCities)
+      ? parsed.suggestedCities
+          .filter((c): c is string => typeof c === "string" && c.length > 0)
+          .slice(0, 6)
+          .map((c) => c.trim())
+      : [];
+
     return {
       firstName: toTitleCase(str(parsed.firstName)),
       lastName: toTitleCase(str(parsed.lastName)),
@@ -104,6 +125,8 @@ export async function extractProfileAI(
           : null,
       englishLevel:
         (parsed.englishLevel as ExtractedProfile["englishLevel"]) ?? null,
+      suggestedRoles,
+      suggestedCities,
     };
   } catch (err) {
     console.error("[cv-profile-ai] Claude extraction failed, fallback to regex", err);

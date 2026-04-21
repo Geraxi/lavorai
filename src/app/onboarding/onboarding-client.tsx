@@ -34,8 +34,16 @@ const STEPS: StepDef[] = [
   { key: "confirm", label: "Conferma", icon: "check" },
 ];
 
-type RolePref = (typeof ROLE_PREFERENCES)[number];
-type LocationPref = (typeof LOCATION_PREFS)[number];
+interface RolePref {
+  title: string;
+  count?: number; // opzionale, riferimento quando disponibile
+  selected: boolean;
+}
+interface LocationPref {
+  city: string;
+  count?: number;
+  selected: boolean;
+}
 
 interface InitialCvState {
   filename: string;
@@ -53,6 +61,8 @@ interface ProfileState {
   seniority: Seniority | null;
   yearsExperience: number | null;
   englishLevel: EnglishLevel | null;
+  suggestedRoles?: string[];
+  suggestedCities?: string[];
 }
 
 interface InitialState {
@@ -71,8 +81,30 @@ export default function OnboardingClient({
   const [uploading, setUploading] = useState(false);
   const [cvInfo, setCvInfo] = useState<InitialCvState | null>(initial.cv);
   const [profile, setProfile] = useState<ProfileState | null>(initial.profile);
-  const [roles, setRoles] = useState<RolePref[]>(ROLE_PREFERENCES);
-  const [locations, setLocations] = useState<LocationPref[]>(LOCATION_PREFS);
+  // Ruoli: pre-popolati dai suggeriti AI dal CV (se disponibili), altrimenti
+  // lista default. L'utente può aggiungerne altri manualmente in Step 3.
+  const [roles, setRoles] = useState<RolePref[]>(() => {
+    const suggested = (initial.profile as ProfileState | null)?.suggestedRoles;
+    if (suggested && suggested.length > 0) {
+      return suggested.map((title, i) => ({ title, selected: i < 3 }));
+    }
+    return ROLE_PREFERENCES.map((r) => ({
+      title: r.title,
+      count: r.count,
+      selected: r.selected,
+    }));
+  });
+  const [locations, setLocations] = useState<LocationPref[]>(() => {
+    const suggested = (initial.profile as ProfileState | null)?.suggestedCities;
+    if (suggested && suggested.length > 0) {
+      return suggested.map((city, i) => ({ city, selected: i < 3 }));
+    }
+    return LOCATION_PREFS.map((l) => ({
+      city: l.city,
+      count: l.count,
+      selected: l.selected,
+    }));
+  });
   const [salary, setSalary] = useState(45);
   const [modeSel, setModeSel] = useState({
     remoto: true,
@@ -886,6 +918,123 @@ function StepDetails({
   );
 }
 
+function ChipGroup({
+  items,
+  onToggle,
+  onRemove,
+}: {
+  items: { label: string; selected: boolean }[];
+  onToggle: (i: number) => void;
+  onRemove: (i: number) => void;
+}) {
+  if (items.length === 0) {
+    return (
+      <div
+        style={{
+          fontSize: 12.5,
+          color: "var(--fg-subtle)",
+          padding: "10px 0",
+        }}
+      >
+        Nessun ruolo ancora. Aggiungi il primo qui sotto.
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      {items.map((it, i) => (
+        <div
+          key={`${it.label}-${i}`}
+          className="group"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 4px 6px 12px",
+            borderRadius: 999,
+            border: `1px solid ${it.selected ? "var(--fg)" : "var(--border-strong)"}`,
+            background: it.selected ? "var(--fg)" : "var(--bg-elev)",
+            color: it.selected ? "var(--bg)" : "var(--fg)",
+            fontSize: 12.5,
+            fontWeight: 500,
+            cursor: "pointer",
+            transition: "all 0.15s cubic-bezier(0.22,1,0.36,1)",
+          }}
+          onClick={() => onToggle(i)}
+        >
+          <span>{it.label}</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove(i);
+            }}
+            aria-label={`Rimuovi ${it.label}`}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: "50%",
+              border: "none",
+              background: "transparent",
+              color: "inherit",
+              opacity: 0.55,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 14,
+              lineHeight: 1,
+              padding: 0,
+            }}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AddChipInput({
+  placeholder,
+  onAdd,
+}: {
+  placeholder: string;
+  onAdd: (value: string) => void;
+}) {
+  const [value, setValue] = useState("");
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        const v = value.trim();
+        if (v.length < 2) return;
+        onAdd(v);
+        setValue("");
+      }}
+      style={{ display: "flex", gap: 6, marginTop: 10 }}
+    >
+      <input
+        type="text"
+        className="ds-input"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder={placeholder}
+        style={{ flex: 1, padding: "8px 12px", fontSize: 13 }}
+        maxLength={60}
+      />
+      <button
+        type="submit"
+        className="ds-btn"
+        disabled={value.trim().length < 2}
+        style={{ padding: "8px 14px", fontSize: 13 }}
+      >
+        + Aggiungi
+      </button>
+    </form>
+  );
+}
+
 function Pill({
   children,
   selected,
@@ -1000,60 +1149,55 @@ function StepPreferences({
         LavorAI applicherà solo ad annunci che corrispondono a questi criteri.
         Puoi modificarli quando vuoi.
       </p>
-      <div style={{ display: "grid", gap: 18 }}>
+      <div style={{ display: "grid", gap: 22 }}>
         <div>
           <label className="ds-label">
             Ruoli · {roles.filter((r) => r.selected).length} selezionati
           </label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-            {roles.map((r, i) => (
-              <div
-                key={r.title}
-                className={`ds-pref-card${r.selected ? " selected" : ""}`}
-                onClick={() =>
-                  setRoles((rs) =>
-                    rs.map((x, j) =>
-                      j === i ? { ...x, selected: !x.selected } : x,
-                    ),
-                  )
-                }
-              >
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{r.title}</div>
-                <div
-                  className="mono"
-                  style={{ fontSize: 11, color: "var(--fg-subtle)" }}
-                >
-                  {r.count.toLocaleString("it")} annunci
-                </div>
-              </div>
-            ))}
-          </div>
+          <p style={{ fontSize: 12, color: "var(--fg-subtle)", margin: "4px 0 8px" }}>
+            Suggeriti dall&apos;analisi del tuo CV. Clicca per selezionare, o aggiungi altri ruoli sotto.
+          </p>
+          <ChipGroup
+            items={roles.map((r) => ({ label: r.title, selected: r.selected }))}
+            onToggle={(i) =>
+              setRoles((rs) =>
+                rs.map((x, j) => (j === i ? { ...x, selected: !x.selected } : x)),
+              )
+            }
+            onRemove={(i) => setRoles((rs) => rs.filter((_, j) => j !== i))}
+          />
+          <AddChipInput
+            placeholder="Aggiungi ruolo (es. Backend Engineer)"
+            onAdd={(title) => {
+              if (roles.some((r) => r.title.toLowerCase() === title.toLowerCase())) return;
+              setRoles((rs) => [...rs, { title, selected: true }]);
+            }}
+          />
         </div>
+
         <div>
-          <label className="ds-label">Sedi</label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-            {locations.map((l, i) => (
-              <div
-                key={l.city}
-                className={`ds-pref-card${l.selected ? " selected" : ""}`}
-                onClick={() =>
-                  setLocations((ls) =>
-                    ls.map((x, j) =>
-                      j === i ? { ...x, selected: !x.selected } : x,
-                    ),
-                  )
-                }
-              >
-                <div style={{ fontSize: 13, fontWeight: 500 }}>{l.city}</div>
-                <div
-                  className="mono"
-                  style={{ fontSize: 11, color: "var(--fg-subtle)" }}
-                >
-                  {l.count.toLocaleString("it")} annunci
-                </div>
-              </div>
-            ))}
-          </div>
+          <label className="ds-label">
+            Sedi · {locations.filter((l) => l.selected).length} selezionate
+          </label>
+          <p style={{ fontSize: 12, color: "var(--fg-subtle)", margin: "4px 0 8px" }}>
+            Dove vuoi lavorare? Aggiungi città o &quot;Remoto&quot; per candidature remote.
+          </p>
+          <ChipGroup
+            items={locations.map((l) => ({ label: l.city, selected: l.selected }))}
+            onToggle={(i) =>
+              setLocations((ls) =>
+                ls.map((x, j) => (j === i ? { ...x, selected: !x.selected } : x)),
+              )
+            }
+            onRemove={(i) => setLocations((ls) => ls.filter((_, j) => j !== i))}
+          />
+          <AddChipInput
+            placeholder="Aggiungi città (es. Bologna)"
+            onAdd={(city) => {
+              if (locations.some((l) => l.city.toLowerCase() === city.toLowerCase())) return;
+              setLocations((ls) => [...ls, { city, selected: true }]);
+            }}
+          />
         </div>
         <div>
           <label className="ds-label">

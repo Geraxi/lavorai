@@ -13,6 +13,10 @@ export interface ExtractedProfile {
   seniority: "junior" | "mid" | "senior" | "lead" | "principal" | null;
   yearsExperience: number | null;
   englishLevel: "none" | "a2" | "b1" | "b2" | "c1" | "c2" | null;
+  /** Ruoli suggeriti basati sul CV (es. "Full-Stack Developer", "Backend Engineer") */
+  suggestedRoles?: string[];
+  /** Città suggerite (residenza + aree comuni se ne ha parlato) */
+  suggestedCities?: string[];
 }
 
 // Città italiane comuni — match case-insensitive
