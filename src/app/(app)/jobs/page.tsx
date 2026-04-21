@@ -36,20 +36,32 @@ export default async function JobsPage({
   let defaultWhat = "";
   let defaultWhere = "";
   let userSalaryMin: number | undefined;
+  let avoidSet = new Set<string>();
 
   if (user) {
-    const prefs = await prisma.userPreferences.findUnique({
-      where: { userId: user.id },
-    });
+    const [prefs, full] = await Promise.all([
+      prisma.userPreferences.findUnique({ where: { userId: user.id } }),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { avoidCompanies: true },
+      }),
+    ]);
     if (prefs) {
       const roles = safeParseArray(prefs.rolesJson);
       const locations = safeParseArray(prefs.locationsJson);
-      // Prima query: usa primo ruolo / prima città come default
       defaultWhat = roles[0] ?? "";
       defaultWhere =
-        locations.find((l) => l.toLowerCase() !== "remoto") ?? locations[0] ?? "";
+        locations.find((l) => l.toLowerCase() !== "remoto") ??
+        locations[0] ??
+        "";
       userSalaryMin = prefs.salaryMin ? prefs.salaryMin * 1000 : undefined;
     }
+    avoidSet = new Set(
+      (full?.avoidCompanies ?? "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    );
   }
 
   const what = sp.what ?? defaultWhat;
@@ -65,6 +77,7 @@ export default async function JobsPage({
   // Filtra per salary minima utente (se nota)
   const jobs: JobRow[] = jobsRaw
     .filter((j) => {
+      if (j.company && avoidSet.has(j.company.toLowerCase())) return false;
       if (!userSalaryMin) return true;
       if (!j.salaryMax && !j.salaryMin) return true; // dato mancante → non scartare
       const top = j.salaryMax ?? j.salaryMin ?? 0;

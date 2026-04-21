@@ -94,14 +94,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch jobs and dedupe against already-applied
-    const jobs = await prisma.job.findMany({ where: { id: { in: jobIds } } });
-    const already = await prisma.application.findMany({
-      where: { userId: user.id, jobId: { in: jobIds } },
-      select: { jobId: true },
-    });
+    // Fetch jobs and dedupe against already-applied + aziende escluse
+    const [jobs, already, full] = await Promise.all([
+      prisma.job.findMany({ where: { id: { in: jobIds } } }),
+      prisma.application.findMany({
+        where: { userId: user.id, jobId: { in: jobIds } },
+        select: { jobId: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { avoidCompanies: true },
+      }),
+    ]);
     const alreadySet = new Set(already.map((a) => a.jobId));
-    const toApply = jobs.filter((j) => !alreadySet.has(j.id));
+    const avoidSet = new Set(
+      (full?.avoidCompanies ?? "")
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    );
+    const toApply = jobs.filter(
+      (j) =>
+        !alreadySet.has(j.id) &&
+        !(j.company && avoidSet.has(j.company.toLowerCase())),
+    );
+    const excludedByCompany =
+      jobs.length - alreadySet.size - toApply.length;
 
     const capped =
       remainingQuota === Infinity ? toApply : toApply.slice(0, remainingQuota);
@@ -130,6 +148,7 @@ export async function POST(request: NextRequest) {
       enqueued,
       skipped: jobs.length - capped.length,
       alreadyApplied: alreadySet.size,
+      excludedByCompany,
       errors,
       remaining:
         remainingQuota === Infinity
