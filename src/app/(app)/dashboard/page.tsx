@@ -10,14 +10,10 @@ import {
   SectionHead,
   SectionBody,
 } from "@/components/design/section-card";
-import { LiveTicker } from "@/components/design/live-ticker";
 import { ThemeToggle } from "@/components/design/theme-toggle";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { WelcomeModal } from "@/components/welcome-modal";
-import {
-  DAILY_APPLICATIONS_30D,
-  getUIApplications,
-} from "@/lib/ui-applications";
+import { getUIApplications } from "@/lib/ui-applications";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
 import { prisma } from "@/lib/db";
@@ -36,29 +32,59 @@ export default async function DashboardPage() {
 
   // Real KPIs da Prisma
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const [totalCount, todayCount, successCount, failedCount] = await Promise.all([
+  const week1Start = new Date(todayStart.getTime() - 7 * 86400_000);
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const thirtyStart = new Date(todayStart.getTime() - 29 * 86400_000);
+
+  const [totalCount, todayCount, successCount, failedCount, last7Count, thisMonthCount, prevMonthCount, last30] = await Promise.all([
     prisma.application.count({ where: { userId: user.id } }),
+    prisma.application.count({ where: { userId: user.id, createdAt: { gte: todayStart } } }),
+    prisma.application.count({ where: { userId: user.id, status: "success" } }),
+    prisma.application.count({ where: { userId: user.id, status: "failed" } }),
+    prisma.application.count({ where: { userId: user.id, createdAt: { gte: week1Start } } }),
+    prisma.application.count({ where: { userId: user.id, createdAt: { gte: monthStart } } }),
     prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: todayStart } },
+      where: { userId: user.id, createdAt: { gte: prevMonthStart, lt: monthStart } },
     }),
-    prisma.application.count({
-      where: { userId: user.id, status: "success" },
-    }),
-    prisma.application.count({
-      where: { userId: user.id, status: "failed" },
+    prisma.application.findMany({
+      where: { userId: user.id, createdAt: { gte: thirtyStart } },
+      select: { createdAt: true },
     }),
   ]);
-  const _ = monthStart; // reserved for month-based KPIs
-  void _;
 
-  // Nuovi utenti: dashboard vuota (niente numeri inventati).
+  // 30d daily buckets (oldest first)
+  const daily30: number[] = Array.from({ length: 30 }, () => 0);
+  for (const a of last30) {
+    const idx = Math.floor(
+      (a.createdAt.getTime() - thirtyStart.getTime()) / 86400_000,
+    );
+    if (idx >= 0 && idx < 30) daily30[idx]++;
+  }
+  const daily30Max = Math.max(1, ...daily30);
+
   const isEmpty = totalCount === 0;
-  const displayTotal = totalCount;
-  const displayToday = todayCount;
-  const viewRate = isEmpty ? "—" : "62%";
-  const interviews = isEmpty ? "0" : "11";
+  const successRate =
+    totalCount === 0
+      ? "—"
+      : `${Math.round((successCount / totalCount) * 100)}%`;
+  // Stima tempo risparmiato: ~15 minuti per candidatura
+  const savedMinutes = totalCount * 15;
+  const savedLabel =
+    savedMinutes < 60
+      ? `${savedMinutes}m`
+      : `${Math.floor(savedMinutes / 60)}h${
+          savedMinutes % 60 > 0 ? ` ${savedMinutes % 60}m` : ""
+        }`;
+  const monthDelta =
+    prevMonthCount === 0
+      ? thisMonthCount > 0
+        ? "+100%"
+        : "—"
+      : `${thisMonthCount >= prevMonthCount ? "+" : ""}${Math.round(
+          ((thisMonthCount - prevMonthCount) / prevMonthCount) * 100,
+        )}%`;
 
   const allChecklistDone =
     onboarding.hasUploadedCv &&
@@ -144,34 +170,35 @@ export default async function DashboardPage() {
           <Kpi
             index={0}
             label="Candidature totali"
-            value={String(displayTotal)}
-            delta={isEmpty ? "Nessuna ancora" : `+${displayToday} oggi`}
+            value={String(totalCount)}
+            delta={isEmpty ? "Nessuna ancora" : `+${todayCount} oggi`}
             up={!isEmpty}
-            sparkData={isEmpty ? undefined : DAILY_APPLICATIONS_30D}
+            sparkData={isEmpty ? undefined : daily30}
           />
           <Kpi
             index={1}
-            label="Tasso di visualizzazione"
-            value={viewRate}
-            delta={isEmpty ? "In attesa dati" : "+4.2% vs settim."}
+            label="Ultimi 7 giorni"
+            value={String(last7Count)}
+            delta={isEmpty ? "In attesa dati" : `${thisMonthCount} questo mese`}
             up={!isEmpty}
-            sparkData={isEmpty ? undefined : [45, 48, 52, 55, 58, 62]}
-            sparkColor="var(--primary-ds)"
           />
           <Kpi
             index={2}
-            label="Colloqui programmati"
-            value={interviews}
-            delta={isEmpty ? "Nessuno in calendario" : "3 questa settim."}
-            up={!isEmpty}
-            sparkData={isEmpty ? undefined : [2, 3, 3, 5, 7, 9, 11]}
-            sparkColor="var(--amber)"
+            label="Tasso successo"
+            value={successRate}
+            delta={
+              isEmpty
+                ? "In attesa dati"
+                : `${successCount} riuscite · ${failedCount} fallite`
+            }
+            up={successCount > failedCount}
+            sparkColor="var(--primary-ds)"
           />
           <Kpi
             index={3}
             label="Tempo risparmiato"
-            value={isEmpty ? "0h" : "38h"}
-            delta={isEmpty ? "Attiva auto-apply" : "≈ €1.140 valore"}
+            value={isEmpty ? "0m" : savedLabel}
+            delta={isEmpty ? "Attiva auto-apply" : "stima 15 min/candidatura"}
             up={!isEmpty}
             mono
           />
@@ -309,7 +336,15 @@ export default async function DashboardPage() {
                       className="mono"
                       style={{ fontSize: 11.5, color: "var(--fg-muted)" }}
                     >
-                      <span style={{ color: "var(--primary-ds)" }}>▲ 34%</span>{" "}
+                      <span
+                        style={{
+                          color: monthDelta.startsWith("+")
+                            ? "var(--primary-ds)"
+                            : "var(--fg-subtle)",
+                        }}
+                      >
+                        {monthDelta}
+                      </span>{" "}
                       <span style={{ color: "var(--fg-subtle)" }}>
                         vs mese prec.
                       </span>
@@ -327,20 +362,23 @@ export default async function DashboardPage() {
                 ) : (
                   <>
                     <div className="ds-chart-bars">
-                      {DAILY_APPLICATIONS_30D.map((v, i) => (
+                      {daily30.map((v, i) => (
                         <div
                           key={i}
-                          className={`ds-chart-bar${i >= DAILY_APPLICATIONS_30D.length - 7 ? " accent" : ""}`}
-                          style={{ height: `${(v / 22) * 100}%` }}
+                          className={`ds-chart-bar${i >= daily30.length - 7 ? " accent" : ""}`}
+                          style={{
+                            height: `${Math.max(4, (v / daily30Max) * 100)}%`,
+                            opacity: v === 0 ? 0.35 : 1,
+                          }}
                           title={`${v} candidature`}
                         />
                       ))}
                     </div>
                     <div className="ds-chart-x">
-                      <span>20 mar</span>
-                      <span>27 mar</span>
-                      <span>3 apr</span>
-                      <span>10 apr</span>
+                      <span>30g fa</span>
+                      <span>21g fa</span>
+                      <span>14g fa</span>
+                      <span>7g fa</span>
                       <span>oggi</span>
                     </div>
                   </>
@@ -350,50 +388,18 @@ export default async function DashboardPage() {
           </div>
 
           <div className="flex flex-col" style={{ gap: 20 }}>
-            {!isEmpty && <LiveTicker />}
-
             <SectionCard>
               <SectionHead
                 icon={<Icon name="sparkles" size={14} />}
                 title="Prossime azioni"
               />
               <SectionBody flush>
-                {isEmpty ? (
-                  <EmptyBlock
-                    title="Tutto tranquillo"
-                    body="Quando ricevi risposte da recruiter o ci sono cose da fare, appariranno qui."
-                    compact
-                  />
-                ) : (
-                  <>
-                    <ActionRow
-                      icon="calendar"
-                      title="Colloquio con Nexi"
-                      meta="Domani 15:00 · Google Meet"
-                      badge="domani"
-                    />
-                    <ActionRow
-                      icon="edit"
-                      title="Rispondi a Everli"
-                      meta="Offerta ricevuta — 2 giorni per rispondere"
-                      badge="urgente"
-                      badgeColor="red"
-                    />
-                    <ActionRow
-                      icon="file"
-                      title="Completa CV"
-                      meta="Mancano certificazioni — +12% match"
-                      badge="suggerito"
-                    />
-                    <ActionRow
-                      icon="target"
-                      title="Amplia zone"
-                      meta="Includi Bologna per +488 annunci"
-                      badge="suggerito"
-                      last
-                    />
-                  </>
-                )}
+                <NextActions
+                  hasCv={onboarding.hasUploadedCv}
+                  hasPrefs={onboarding.hasSetPreferences}
+                  hasApplications={totalCount > 0}
+                  hasBrowsedJobs={onboarding.hasBrowsedJobs}
+                />
               </SectionBody>
             </SectionCard>
           </div>
@@ -473,56 +479,149 @@ function EmptyBlock({
   );
 }
 
-function ActionRow({
-  icon,
-  title,
-  meta,
-  badge,
-  badgeColor,
-  last,
+function NextActions({
+  hasCv,
+  hasPrefs,
+  hasApplications,
+  hasBrowsedJobs,
 }: {
-  icon: "calendar" | "edit" | "file" | "target";
-  title: string;
-  meta: string;
-  badge: string;
-  badgeColor?: "red";
-  last?: boolean;
+  hasCv: boolean;
+  hasPrefs: boolean;
+  hasApplications: boolean;
+  hasBrowsedJobs: boolean;
 }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "12px 16px",
-        borderBottom: last ? "none" : "1px solid var(--border-ds)",
-        cursor: "pointer",
-      }}
-    >
+  const actions: Array<{
+    href: string;
+    icon: "file" | "target" | "briefcase" | "sparkles";
+    title: string;
+    meta: string;
+    badge: string;
+    badgeColor?: "red";
+  }> = [];
+
+  if (!hasCv) {
+    actions.push({
+      href: "/onboarding",
+      icon: "file",
+      title: "Carica il tuo CV",
+      meta: "Serve per poter candidarti in automatico",
+      badge: "richiesto",
+      badgeColor: "red",
+    });
+  }
+  if (!hasPrefs) {
+    actions.push({
+      href: "/preferences",
+      icon: "target",
+      title: "Imposta le preferenze",
+      meta: "Ruoli, sedi e RAL che ti interessano",
+      badge: "richiesto",
+      badgeColor: "red",
+    });
+  }
+  if (hasCv && !hasBrowsedJobs) {
+    actions.push({
+      href: "/jobs",
+      icon: "briefcase",
+      title: "Sfoglia il job board",
+      meta: "Posizioni vere filtrate sulle tue preferenze",
+      badge: "suggerito",
+    });
+  }
+  if (hasCv && hasPrefs && !hasApplications) {
+    actions.push({
+      href: "/jobs",
+      icon: "sparkles",
+      title: "Invia la prima candidatura",
+      meta: "Scegli un annuncio e clicca Candidati",
+      badge: "inizia",
+    });
+  }
+  if (hasApplications) {
+    actions.push({
+      href: "/cv",
+      icon: "file",
+      title: "Affina il tuo CV",
+      meta: "Aggiungi bullet e skill per un match migliore",
+      badge: "suggerito",
+    });
+    actions.push({
+      href: "/jobs",
+      icon: "briefcase",
+      title: "Cerca altre posizioni",
+      meta: "Nuovi annunci compatibili ogni giorno",
+      badge: "",
+    });
+  }
+
+  if (actions.length === 0) {
+    return (
       <div
         style={{
-          width: 30,
-          height: 30,
-          borderRadius: 6,
-          background: "var(--bg-sunken)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
+          padding: "28px 20px",
+          textAlign: "center",
           color: "var(--fg-muted)",
-          flexShrink: 0,
+          fontSize: 13,
         }}
       >
-        <Icon name={icon} size={14} />
+        Tutto a posto per ora.
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500 }}>{title}</div>
-        <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 1 }}>
-          {meta}
-        </div>
-      </div>
-      <span className={`ds-chip${badgeColor === "red" ? " ds-chip-red" : ""}`}>
-        {badge}
-      </span>
-    </div>
+    );
+  }
+
+  return (
+    <>
+      {actions.map((a, i) => (
+        <Link
+          key={i}
+          href={a.href}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "12px 16px",
+            borderBottom:
+              i === actions.length - 1 ? "none" : "1px solid var(--border-ds)",
+            color: "inherit",
+            textDecoration: "none",
+          }}
+        >
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 6,
+              background: "var(--bg-sunken)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--fg-muted)",
+              flexShrink: 0,
+            }}
+          >
+            <Icon name={a.icon} size={14} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{a.title}</div>
+            <div
+              style={{
+                fontSize: 11.5,
+                color: "var(--fg-muted)",
+                marginTop: 1,
+              }}
+            >
+              {a.meta}
+            </div>
+          </div>
+          {a.badge ? (
+            <span
+              className={`ds-chip${a.badgeColor === "red" ? " ds-chip-red" : ""}`}
+            >
+              {a.badge}
+            </span>
+          ) : null}
+        </Link>
+      ))}
+    </>
   );
 }
