@@ -42,12 +42,8 @@ export function Hero() {
               className="text-balance text-5xl font-bold tracking-tight text-foreground sm:text-6xl md:text-7xl"
               style={{ letterSpacing: "-0.03em", lineHeight: 1.02 }}
             >
-              Il copilota{" "}
-              <span className="text-gradient-accent">italiano</span>
-              <br />
-              per la ricerca
-              <br />
-              del lavoro
+              Candidati al lavoro dei tuoi sogni{" "}
+              <span className="text-gradient-accent">con l&apos;AI.</span>
             </motion.h1>
 
             <motion.p
