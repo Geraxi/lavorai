@@ -48,7 +48,7 @@ export function AppSidebar({
 
   return (
     <aside
-      className="flex flex-col gap-0.5 border-r px-3 py-3.5"
+      className="sticky top-0 flex h-screen flex-col gap-0.5 border-r px-3 py-3.5"
       style={{
         background: "var(--bg)",
         borderColor: "var(--border-ds)",
@@ -144,7 +144,20 @@ export function AppSidebar({
           </div>
         </div>
 
-        <div className="mt-1 flex items-center gap-2.5 px-2 pb-1 pt-2.5">
+        <Link
+          href="/settings"
+          className="mt-1 flex items-center gap-2.5 rounded-md px-2 py-2.5 transition-colors"
+          style={{
+            textDecoration: "none",
+            color: "inherit",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--bg-sunken)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "transparent";
+          }}
+        >
           <div
             className="flex items-center justify-center rounded-full font-semibold text-white"
             style={{
@@ -152,18 +165,33 @@ export function AppSidebar({
               height: 26,
               background: "linear-gradient(135deg,#d9a0a0,#b0628a)",
               fontSize: 11,
+              flexShrink: 0,
             }}
           >
             {getInitials(userName)}
           </div>
           <div className="min-w-0 flex-1">
-            <div style={{ fontSize: 12.5, fontWeight: 500 }}>{userName}</div>
+            <div
+              style={{
+                fontSize: 12.5,
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {userName}
+            </div>
             <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>
               {userPlan}
             </div>
           </div>
-          <Icon name="more" size={14} style={{ color: "var(--fg-subtle)" }} />
-        </div>
+          <Icon
+            name="settings"
+            size={13}
+            style={{ color: "var(--fg-subtle)", flexShrink: 0 }}
+          />
+        </Link>
       </div>
     </aside>
   );

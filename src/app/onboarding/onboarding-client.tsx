@@ -184,7 +184,23 @@ export default function OnboardingClient({
   };
   const prev = () => setStep((s) => Math.max(0, s - 1));
   const finish = async () => {
-    // Marca il welcome come già visto: l'onboarding sostituisce il tour
+    // Salva preferenze su UserPreferences + marca User.onboardedAt
+    const selectedRoles = roles.filter((r) => r.selected).map((r) => r.title);
+    const selectedCities = locations
+      .filter((l) => l.selected)
+      .map((l) => l.city);
+    await fetch("/api/onboarding/preferences", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        roles: selectedRoles,
+        locations: selectedCities,
+        salaryMin: salary,
+        modeSel,
+      }),
+    }).catch(() => null);
+
+    // Marca il welcome come già visto
     await fetch("/api/onboarding/welcome-seen", { method: "POST" }).catch(
       () => null,
     );
