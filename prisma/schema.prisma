@@ -1,0 +1,237 @@
+// LavorAI — production schema.
+//
+// PER LA MIGRAZIONE A POSTGRES (prod Supabase):
+//   1. Cambia provider da "sqlite" a "postgresql" sotto
+//   2. Imposta DATABASE_URL alla connection string Supabase (pooled)
+//   3. npx prisma migrate reset  (cancella le migrazioni SQLite)
+//   4. npx prisma migrate dev --name initial_postgres
+//   5. Commit migrations/ aggiornate
+//   6. In prod (Vercel): npx prisma migrate deploy durante il build
+//
+// Le migrations SQLite attuali contengono SQL-lite-specific e NON
+// funzionano su Postgres. Serve un reset pulito.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // DEV: sqlite · PROD: postgresql (vedi note sopra)
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- NextAuth tables (@auth/prisma-adapter) ----------
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+/// Token one-time per verificare l'email post-signup password.
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique  // sha256 hex
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Token one-time per il reset password. Separato da VerificationToken
+/// (che NextAuth riserva al magic link) per evitare collisioni.
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique  // sha256 hex
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------- Business tables ----------
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  passwordHash  String?
+  createdAt     DateTime  @default(now())
+
+  // Subscription (one-to-one con Stripe)
+  tier                   String    @default("free") // "free" | "pro" | "pro_plus"
+  stripeCustomerId       String?   @unique
+  stripeSubscriptionId   String?   @unique
+  stripePriceId          String?
+  subscriptionStatus     String?   // "active" | "canceled" | "past_due" | null
+  currentPeriodEnd       DateTime?
+
+  // Onboarding / lifecycle
+  welcomeSeenAt    DateTime?
+  onboardedAt      DateTime?
+  lastLoginAt      DateTime?
+  privacyConsentAt DateTime?
+
+  // Dati per auto-apply targeting
+  seniority        String?  // "junior" | "mid" | "senior" | "lead" | "principal"
+  yearsExperience  Int?
+  englishLevel     String?  // "none" | "a2" | "b1" | "b2" | "c1" | "c2"
+  italianNative    Boolean  @default(true)
+  euAuthorized     Boolean  @default(true)
+  noticePeriod     String?  // "immediate" | "1m" | "2m" | "3m_plus"
+  avoidCompanies   String?  // comma-separated lowercase
+
+  accounts       Account[]
+  sessions       Session[]
+  portalSessions PortalSession[]
+  applications   Application[]
+  cvDocuments    CVDocument[]
+  preferences    UserPreferences?
+  resetTokens    PasswordResetToken[]
+  verifyTokens   EmailVerificationToken[]
+}
+
+model UserPreferences {
+  id          String @id @default(cuid())
+  userId      String @unique
+  autoApplyOn Boolean @default(false)
+  dailyCap    Int    @default(25)
+  matchMin    Int    @default(75)
+  salaryMin   Int    @default(30)
+  rolesJson   String @default("[]")
+  locationsJson String @default("[]")
+  sourcesJson String @default("[]")
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PortalSession {
+  id               String    @id @default(cuid())
+  userId           String
+  portal           String
+  encryptedCookies String
+  userAgent        String
+  lastValidatedAt  DateTime  @default(now())
+  expiresAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, portal])
+}
+
+model Job {
+  id            String    @id @default(cuid())
+  externalId    String
+  source        String
+  title         String
+  company       String?
+  location      String?
+  description   String
+  url           String
+  contractType  String?
+  remote        Boolean   @default(false)
+  salaryMin     Int?
+  salaryMax     Int?
+  category      String?
+  postedAt      DateTime?
+  cachedAt      DateTime  @default(now())
+
+  applications Application[]
+
+  @@unique([externalId, source])
+}
+
+model Application {
+  id              String    @id @default(cuid())
+  userId          String
+  jobId           String
+  portal          String
+  status          String    @default("queued")
+  errorMessage    String?
+  atsScore        Int?
+  suggestionsJson String?
+  cvDocxPath      String?
+  coverLetterPath String?
+  createdAt       DateTime  @default(now())
+  startedAt       DateTime?
+  completedAt     DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// CV staged BEFORE user account exists (from /optimize public form).
+/// When the user completes email magic-link, the signIn event adopts the row
+/// into CVDocument + sets User.privacyConsentAt, then deletes the staging row.
+model PendingCvSubmission {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  originalFilename  String
+  storagePath       String
+  extractedText     String
+  privacyConsentAt  DateTime
+  createdAt         DateTime @default(now())
+  expiresAt         DateTime
+
+  @@index([expiresAt])
+}
+
+model CVDocument {
+  id                String   @id @default(cuid())
+  userId            String
+  originalFilename  String
+  storagePath       String
+  extractedText     String
+  parsedProfileJson String?  // Cached AI extraction (name, seniority, years, english, ...)
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

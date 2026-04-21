@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Generate Prisma
+        run: npx prisma generate
+        env:
+          DATABASE_URL: "file:./dev.db"
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        env:
+          DATABASE_URL: "file:./dev.db"
+          AUTH_SECRET: ci-dummy-secret-for-build-only-ci-dummy-secret
+          NEXT_PUBLIC_SITE_URL: http://localhost:3000
+        run: npm run build

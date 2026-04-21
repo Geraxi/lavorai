@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /applications
+Disallow: /cv
+Disallow: /preferences
+Disallow: /analytics
+Disallow: /settings
+Disallow: /inbox
+
+Sitemap: https://lavorai.it/sitemap.xml

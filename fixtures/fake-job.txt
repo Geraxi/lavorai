@@ -1,0 +1,34 @@
+Per l'accrescimento della practice Insights & Data, siamo alla ricerca di un professionista esperto in Intelligenza Artificiale per guidare la progettazione, lo sviluppo e l'integrazione di soluzioni avanzate basate su Natural Language Processing (NLP) e Generative AI.
+Il candidato selezionato ottimizzerà le interazioni con sistemi NLP e Large Language Models (LLM), implementerà tecniche come il Retrieval-Augmented Generation (RAG) e progetterà soluzioni agentiche per i processi aziendali, collaborando strettamente con i team di sviluppo e gli stakeholder.
+
+
+Responsabilità principali
+Progettare, sviluppare e ottimizzare modelli generativi e NLP per applicazioni enterprise
+Integrare LLM, tecnologie LangChain e API di modelli GenAI (OpenAI, Hugging Face, ecc.) nei flussi di lavoro aziendali
+Gestire e preparare i dati utilizzando Python e strumenti di manipolazione dati
+Implementare tecniche RAG per migliorare la qualità delle risposte generate dai modelli
+Distribuire soluzioni NLP e AI in ambienti cloud (Azure, Google Cloud / VertexAI, AWS Sagemaker / Bedrock)
+Tradurre i requisiti di business in soluzioni AI allineate agli obiettivi organizzativi
+Monitorare costantemente gli sviluppi tecnici e gli standard di settore per garantire applicazioni avanzate di data analytics
+
+Competenze richieste
+Ottima conoscenza di Python, controllo versione con Git, unit testing
+Conoscenza teorica e pratica delle tecniche RAG
+Esperienza nell'integrazione di API per modelli LLM e GenAI
+Familiarità con framework NLP e tecnologie agentiche AI (LLM, LangChain, librerie NLP come spaCy, NLTK, Hugging Face)
+Esperienza con servizi cloud e distribuzione di soluzioni NLP in ambienti cloud
+Competenza negli algoritmi core di machine learning, sia tradizionali che generativi
+
+Soft Skills
+Spiccate capacità analitiche e di sintesi
+Attitudine al problem solving
+Flessibilità e adattabilità al cambiamento
+Orientamento ai risultati
+Ottime capacità di comunicazione, documentazione e gestione degli stakeholder
+
+Formazione e Requisiti
+Almeno 2 anni di esperienza con AI tradizionale e generativa
+Esperienza comprovata nella gestione di progetti end-to-end, preferibilmente con metodologie agile o ibride
+
+Get The Future You Want. Quel che ci distingue è esattamente ciò che ci definisce. I nostri talenti, le nostre persone perseguono gli obiettivi con entusiasmo e spirito di squadra, consapevoli di poterli raggiungere perché supportati da una realtà che non pone limiti alla crescita. Valorizziamo l'onestà, l'iniziativa e il divertimento: questi i valori che ci rendono la prima scelta per i nostri clienti e un'ottima opportunità di crescita per ciascun talento. Assumiamo persone qualificate e di valore senza distinzioni di sesso, razza, disabilità, età, orientamento sessuale, religione o credo, stato civile accompagnando le nostre persone nel percorso di genitorialità. Nutriamo una cultura inclusiva che permetta a tutti di mostrare a pieno il proprio potenziale e godere di una carriera soddisfacente. La nostra politica di flexible benefits e le nostre policies promuovono uno stile di vita improntato al work life balanced. La nostra missione è impiegare, sviluppare e trattenere le persone migliori per fornire soluzioni innovative ai nostri clienti. Teniamo fede ai nostri impegni, prestando attenzione alle risorse appartenenti alle categorie protette, ai sensi degli articoli 1 e 18 della legge 68 del '99. I dati personali saranno trattati in conformità alle disposizioni contenute nel regolamento UE 2016/679. Si prega di prendere visione dell'Informativa della Privacy Capgemini al seguente link https://www.capgemini.com/it-it/privacy-policy/
+Please, read our Privacy Policy: https://www.capgemini.com/it-it/privacy-policy/

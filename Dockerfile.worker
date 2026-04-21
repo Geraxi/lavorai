@@ -1,0 +1,31 @@
+# LavorAI worker — deployable su Railway / Render / Fly.
+# Base image Playwright include Chromium + dipendenze OS → no install headache.
+
+FROM mcr.microsoft.com/playwright:v1.48.2-jammy AS base
+WORKDIR /app
+
+# Solo le deps necessarie al worker (no dev deps)
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+
+# Prisma schema + generate client
+COPY prisma ./prisma
+RUN npx prisma generate
+
+# Installiamo tsx per runnare TypeScript direttamente (no build step)
+RUN npm install --no-save tsx
+
+# Codice sorgente (solo quello che serve al worker)
+COPY src ./src
+COPY worker.ts ./
+COPY tsconfig.json ./
+
+# Node env
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# Health check: worker deve tenere connessione Redis viva
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD node -e "require('ioredis').prototype.ping || process.exit(0)" || exit 1
+
+CMD ["npx", "tsx", "worker.ts"]

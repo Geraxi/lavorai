@@ -1,0 +1,17 @@
+# Railway config per il worker LavorAI.
+# Se deployi worker + web sullo stesso progetto Railway usa
+# "services" multipli (o progetti distinti).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.worker"
+
+[deploy]
+# Worker gira forever, restart su crash
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Non servono porte esposte (il worker è consumer, non HTTP)
+# numReplicas = 1 → un solo worker per evitare concorrenza sulla stessa queue
+#   (BullMQ gestisce concurrency internamente via WORKER_CONCURRENCY)
+numReplicas = 1
