@@ -16,6 +16,9 @@ interface ApiApplication {
   suggestions: string[];
   createdAt: string;
   errorMessage: string | null;
+  coverLetterText: string | null;
+  hasCvDocx: boolean;
+  hasCoverLetterDocx: boolean;
   job: {
     id: string;
     title: string;
@@ -57,7 +60,12 @@ const MOCK: Array<{
   { id: "m12", company: "Young Platform", color: "#00D084", role: "Product Designer", location: "Torino", mode: "Ibrido", salary: "€45k–55k", applied: "5 giorni fa", status: "vista", match: 85, source: "AngelList", stage: 2 },
 ];
 
-type Row = (typeof MOCK)[number];
+type Row = (typeof MOCK)[number] & {
+  jobUrl?: string;
+  coverLetterText?: string | null;
+  hasCvDocx?: boolean;
+  hasCoverLetterDocx?: boolean;
+};
 
 export default function ApplicationsPage() {
   const { data } = useSWR<{ applications: ApiApplication[] }>(
@@ -82,6 +90,10 @@ export default function ApplicationsPage() {
       match: a.atsScore ?? 80,
       source: a.job.source === "mock" ? "Demo" : cap(a.job.source),
       stage: 1,
+      jobUrl: a.job.url,
+      coverLetterText: a.coverLetterText,
+      hasCvDocx: a.hasCvDocx,
+      hasCoverLetterDocx: a.hasCoverLetterDocx,
     })) ?? [];
 
   // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).

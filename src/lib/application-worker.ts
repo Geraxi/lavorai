@@ -106,6 +106,7 @@ export async function processApplication(applicationId: string): Promise<void> {
       suggestionsJson: JSON.stringify(result.suggestions),
       cvDocxPath: cvPath,
       coverLetterPath: clPath,
+      coverLetterText: result.coverLetter,
     },
   });
 

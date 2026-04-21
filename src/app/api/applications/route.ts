@@ -40,6 +40,9 @@ export async function GET() {
         : [],
       createdAt: a.createdAt.toISOString(),
       completedAt: a.completedAt?.toISOString() ?? null,
+      coverLetterText: a.coverLetterText,
+      hasCvDocx: Boolean(a.cvDocxPath),
+      hasCoverLetterDocx: Boolean(a.coverLetterPath),
       job: a.job,
     })),
   });

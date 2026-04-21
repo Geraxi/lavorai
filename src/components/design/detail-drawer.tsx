@@ -16,6 +16,10 @@ export interface DrawerApp {
   match: number;
   source: string;
   stage: number;
+  jobUrl?: string;
+  coverLetterText?: string | null;
+  hasCvDocx?: boolean;
+  hasCoverLetterDocx?: boolean;
 }
 
 const PIPELINE = ["Applicata", "Vista", "Screening", "Colloquio", "Offerta"];
@@ -143,24 +147,69 @@ export function DetailDrawer({
                     <Icon name="file" size={13} />
                     Materiali inviati
                   </div>
-                  <button className="ds-btn ds-btn-sm ds-btn-ghost" type="button">
-                    <Icon name="refresh" size={12} /> Rigenera
-                  </button>
                 </div>
                 <div className="ds-section-body flush">
                   <DocRow
-                    title="CV adattato al JD"
-                    sub="Evidenziate esperienze fintech · rimossi progetti non rilevanti"
-                    time="14s fa AI"
+                    title="CV adattato al ruolo"
+                    sub="Ottimizzato per questo annuncio specifico"
+                    available={Boolean(app.hasCvDocx)}
+                    downloadHref={
+                      app.hasCvDocx
+                        ? `/api/applications/${app.id}/document?kind=cv`
+                        : undefined
+                    }
                   />
                   <DocRow
                     title="Lettera motivazionale"
-                    sub="Tono: professionale · accenni al prodotto dell'azienda"
-                    time="generata 12s fa"
+                    sub="Scritta su misura per questa candidatura"
+                    available={Boolean(app.hasCoverLetterDocx)}
+                    downloadHref={
+                      app.hasCoverLetterDocx
+                        ? `/api/applications/${app.id}/document?kind=cover`
+                        : undefined
+                    }
                     last
                   />
                 </div>
               </div>
+
+              {/* Cover letter anteprima */}
+              {app.coverLetterText && (
+                <div className="ds-section-card mb-6">
+                  <div className="ds-section-head">
+                    <div className="ds-section-head-title">
+                      <Icon name="sparkles" size={13} />
+                      Lettera di motivazione
+                    </div>
+                    {app.hasCoverLetterDocx && (
+                      <a
+                        className="ds-btn ds-btn-sm ds-btn-ghost"
+                        href={`/api/applications/${app.id}/document?kind=cover`}
+                        download
+                      >
+                        <Icon name="download" size={12} /> DOCX
+                      </a>
+                    )}
+                  </div>
+                  <div className="ds-section-body">
+                    <div
+                      style={{
+                        whiteSpace: "pre-wrap",
+                        fontSize: 13,
+                        lineHeight: 1.65,
+                        color: "var(--fg)",
+                        fontFamily:
+                          '"Charter", "Georgia", "Times New Roman", serif',
+                        maxHeight: 420,
+                        overflow: "auto",
+                        padding: "4px 2px",
+                      }}
+                    >
+                      {app.coverLetterText}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Timeline */}
               <div className="ds-section-card">
@@ -298,12 +347,14 @@ function MatchRow({
 function DocRow({
   title,
   sub,
-  time,
+  available,
+  downloadHref,
   last,
 }: {
   title: string;
   sub: string;
-  time: string;
+  available: boolean;
+  downloadHref?: string;
   last?: boolean;
 }) {
   return (
@@ -334,18 +385,25 @@ function DocRow({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500 }}>{title}</div>
         <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 1 }}>
-          {sub}
+          {available ? sub : "In generazione…"}
         </div>
       </div>
-      <div
-        className="mono"
-        style={{ fontSize: 11, color: "var(--fg-subtle)" }}
-      >
-        {time}
-      </div>
-      <button className="ds-btn ds-btn-sm ds-btn-ghost" type="button">
-        <Icon name="download" size={12} />
-      </button>
+      {available && downloadHref ? (
+        <a
+          className="ds-btn ds-btn-sm ds-btn-ghost"
+          href={downloadHref}
+          download
+        >
+          <Icon name="download" size={12} />
+        </a>
+      ) : (
+        <span
+          className="mono"
+          style={{ fontSize: 11, color: "var(--fg-subtle)" }}
+        >
+          pending
+        </span>
+      )}
     </div>
   );
 }

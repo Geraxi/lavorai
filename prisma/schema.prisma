@@ -202,6 +202,7 @@ model Application {
   suggestionsJson String?
   cvDocxPath      String?
   coverLetterPath String?
+  coverLetterText String?  @db.Text
   createdAt       DateTime  @default(now())
   startedAt       DateTime?
   completedAt     DateTime?
