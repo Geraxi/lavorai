@@ -212,7 +212,7 @@ export default async function DashboardPage() {
                     title="Nessuna candidatura ancora"
                     body="Sfoglia il job board e lascia che LavorAI si candidi per te."
                     ctaHref="/jobs"
-                    ctaLabel="Prova demo"
+                    ctaLabel="Candidati"
                   />
                 ) : (
                 <table className="ds-tbl">
