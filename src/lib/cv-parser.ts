@@ -1,5 +1,7 @@
 import mammoth from "mammoth";
-import { PDFParse } from "pdf-parse";
+// pdf-parse v1 (API diversa da v2) — v2 richiede DOMMatrix che non esiste
+// in Node serverless (Vercel). v1 usa solo Node primitives.
+import pdfParse from "pdf-parse";
 
 /**
  * Errore dedicato ai fallimenti di parsing CV. Permette al route
@@ -44,24 +46,16 @@ export async function parseCV(file: File): Promise<string> {
 }
 
 async function parsePdf(buffer: Buffer): Promise<string> {
-  // pdf-parse v2 (mehmet-kozan) vuole un Uint8Array o Buffer.
-  // Istanziamo, estraiamo testo, e dismettiamo il worker pdfjs.
-  const parser = new PDFParse({ data: new Uint8Array(buffer) });
-  try {
-    const result = await parser.getText();
-    const text = result.text?.trim() ?? "";
-    if (!text) {
-      throw new CVParseError(
-        "Il PDF non contiene testo estraibile (probabilmente è scansionato). " +
-          USER_FRIENDLY_ERROR,
-      );
-    }
-    return text;
-  } finally {
-    await parser.destroy().catch(() => {
-      /* noop: destroy può fallire se già chiuso */
-    });
+  // pdf-parse v1 API: pdfParse(buffer) → { text, numpages, info, metadata }
+  const result = await pdfParse(buffer);
+  const text = result.text?.trim() ?? "";
+  if (!text) {
+    throw new CVParseError(
+      "Il PDF non contiene testo estraibile (probabilmente è scansionato). " +
+        USER_FRIENDLY_ERROR,
+    );
   }
+  return text;
 }
 
 async function parseDocx(buffer: Buffer): Promise<string> {
