@@ -17,10 +17,12 @@ generator client {
 
 datasource db {
   // Provider postgresql per produzione (Vercel Postgres / Supabase / Neon).
-  // Per dev locale con SQLite, cambia temporaneamente in "sqlite" +
-  // DATABASE_URL="file:./dev.db" in .env.local
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Vercel Postgres best practice:
+  //   DATABASE_URL → POSTGRES_PRISMA_URL (pooled, per runtime queries)
+  //   DIRECT_URL   → POSTGRES_URL_NON_POOLING (diretta, per migrations/db push)
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------- NextAuth tables (@auth/prisma-adapter) ----------
