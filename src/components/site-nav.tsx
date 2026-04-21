@@ -77,12 +77,17 @@ export function SiteNav() {
               <Link href="/onboarding/cv">Aggiorna CV</Link>
             </Button>
           ) : (
-            <Button asChild size="sm" className="group">
-              <Link href="/jobs">
-                <span>Prova demo</span>
-                <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            </Button>
+            <>
+              <Button asChild size="sm" variant="ghost" className="hidden sm:inline-flex">
+                <Link href="/login">Accedi</Link>
+              </Button>
+              <Button asChild size="sm" className="group">
+                <Link href="/signup">
+                  <span>Registrati</span>
+                  <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </Button>
+            </>
           )}
         </div>
       </div>
