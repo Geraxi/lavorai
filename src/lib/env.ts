@@ -39,23 +39,28 @@ const CHECKS: EnvCheck[] = [
   },
   {
     name: "RESEND_API_KEY",
-    required: true,
-    description: "Resend API key per email (verify, reset, magic link)",
+    required: false,
+    description: "Resend API key — senza, email features (verify/reset) sono no-op",
   },
   {
     name: "EMAIL_FROM",
-    required: true,
+    required: false,
     description: "Sender email da dominio Resend verificato",
   },
   {
     name: "SUPABASE_URL",
-    required: true,
-    description: "Supabase project URL per storage CV",
+    required: false,
+    description: "Supabase Storage — alternativa a Vercel Blob",
   },
   {
     name: "SUPABASE_SERVICE_ROLE_KEY",
-    required: true,
-    description: "Supabase service role key (server-side only)",
+    required: false,
+    description: "Supabase service role key — solo se usi Supabase",
+  },
+  {
+    name: "BLOB_READ_WRITE_TOKEN",
+    required: false,
+    description: "Vercel Blob token — auto-iniettato se hai linked un Blob store",
   },
   {
     name: "APP_ENCRYPTION_KEY",
