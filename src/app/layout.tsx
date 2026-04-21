@@ -6,9 +6,14 @@ import { Providers } from "@/app/providers";
 import { assertEnvOrCrash } from "@/lib/env";
 import "./globals.css";
 
-// Fail-fast all'avvio se mancano env vars critiche in prod.
-// Ignorato durante build (NODE_ENV=production ma env non ancora wired).
-if (process.env.VERCEL_ENV === "production" || (process.env.NODE_ENV === "production" && process.env.RENDER_ENV === "runtime")) {
+// Fail-fast al PRIMO runtime request in prod se mancano env vars critiche.
+// Skippato durante `next build` (phase-production-build) — altrimenti il build
+// fallisce su Vercel dove le env vars non sono ancora completamente iniettate
+// durante il page-data collection.
+if (
+  process.env.NEXT_PHASE !== "phase-production-build" &&
+  process.env.VERCEL_ENV === "production"
+) {
   assertEnvOrCrash();
 }
 
