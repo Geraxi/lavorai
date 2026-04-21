@@ -16,8 +16,10 @@ generator client {
 }
 
 datasource db {
-  // DEV: sqlite · PROD: postgresql (vedi note sopra)
-  provider = "sqlite"
+  // Provider postgresql per produzione (Vercel Postgres / Supabase / Neon).
+  // Per dev locale con SQLite, cambia temporaneamente in "sqlite" +
+  // DATABASE_URL="file:./dev.db" in .env.local
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
