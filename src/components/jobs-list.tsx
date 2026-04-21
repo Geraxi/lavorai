@@ -10,6 +10,7 @@ import {
   SectionBody,
   SectionCard,
 } from "@/components/design/section-card";
+import { PaywallDialog } from "@/components/paywall-dialog";
 
 export interface JobRow {
   id: string;
@@ -37,6 +38,8 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [batchLoading, setBatchLoading] = useState(false);
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
 
   const remainingJobs = useMemo(
     () => jobs.filter((j) => !appliedIds.has(j.id)),
@@ -59,7 +62,8 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         return;
       }
       if (res.status === 402) {
-        toast.error(body?.message ?? "Limite mensile raggiunto.");
+        setPaywallMessage(body?.message ?? null);
+        setPaywallOpen(true);
         return;
       }
       if (!res.ok) {
@@ -97,7 +101,8 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         return;
       }
       if (res.status === 402) {
-        toast.error(body?.message ?? "Limite raggiunto.");
+        setPaywallMessage(body?.message ?? null);
+        setPaywallOpen(true);
         return;
       }
       if (!res.ok) {
@@ -284,6 +289,12 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
           );
         })}
       </div>
+      <PaywallDialog
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        variant="limit"
+        sub={paywallMessage ?? undefined}
+      />
     </>
   );
 }

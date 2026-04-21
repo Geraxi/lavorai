@@ -13,6 +13,7 @@ import {
 import { ThemeToggle } from "@/components/design/theme-toggle";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { WelcomeModal } from "@/components/welcome-modal";
+import { PostLoginCheckout } from "@/components/post-login-checkout";
 import { getUIApplications } from "@/lib/ui-applications";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
@@ -95,6 +96,7 @@ export default async function DashboardPage() {
   return (
     <>
       <WelcomeModal show={showWelcome} />
+      <PostLoginCheckout />
       <AppTopbar
         title="Dashboard"
         actions={

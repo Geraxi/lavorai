@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/design/icon";
+import { PaywallDialog } from "@/components/paywall-dialog";
 
 interface ApplyButtonProps {
   jobId: string;
@@ -13,6 +14,8 @@ interface ApplyButtonProps {
 export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
 
   async function onClick() {
     setLoading(true);
@@ -35,6 +38,11 @@ export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
         );
         return;
       }
+      if (res.status === 402) {
+        setPaywallMessage(body?.message ?? null);
+        setPaywallOpen(true);
+        return;
+      }
       if (!res.ok) {
         toast.error(body?.message ?? "Errore. Riprova tra qualche secondo.");
         return;
@@ -50,23 +58,31 @@ export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={loading}
-      className="ds-btn ds-btn-accent w-full"
-      style={{ padding: "11px 18px", fontSize: 14 }}
-    >
-      {loading ? (
-        <>
-          <Icon name="refresh" size={14} /> Invio in corso...
-        </>
-      ) : (
-        <>
-          <Icon name="sparkles" size={14} /> Applica con LavorAI{" "}
-          <Icon name="arrow-right" size={14} />
-        </>
-      )}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={loading}
+        className="ds-btn ds-btn-accent w-full"
+        style={{ padding: "11px 18px", fontSize: 14 }}
+      >
+        {loading ? (
+          <>
+            <Icon name="refresh" size={14} /> Invio in corso...
+          </>
+        ) : (
+          <>
+            <Icon name="sparkles" size={14} /> Applica con LavorAI{" "}
+            <Icon name="arrow-right" size={14} />
+          </>
+        )}
+      </button>
+      <PaywallDialog
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        variant="limit"
+        sub={paywallMessage ?? undefined}
+      />
+    </>
   );
 }

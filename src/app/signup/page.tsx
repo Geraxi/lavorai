@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/design/icon";
+import { PaywallDialog } from "@/components/paywall-dialog";
 
 export default function SignupPage() {
   return (
@@ -24,6 +25,11 @@ function SignupContent() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+
+  useEffect(() => {
+    if (created) setPaywallOpen(true);
+  }, [created]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -139,13 +145,26 @@ function SignupContent() {
                 </span>
                 . Clicca il link per attivare l&apos;account e accedere. Il link scade tra 24 ore.
               </p>
-              <Link
-                href="/login"
-                className="ds-btn"
-                style={{ marginTop: 24, alignSelf: "flex-start" }}
+              <div
+                style={{
+                  marginTop: 24,
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  alignSelf: "flex-start",
+                }}
               >
-                ← Torna al login
-              </Link>
+                <Link href="/login" className="ds-btn">
+                  ← Torna al login
+                </Link>
+                <button
+                  type="button"
+                  className="ds-btn ds-btn-ghost"
+                  onClick={() => setPaywallOpen(true)}
+                >
+                  Scegli il piano
+                </button>
+              </div>
             </>
           ) : (
             <>
@@ -398,6 +417,13 @@ function SignupContent() {
           .lavorai-login-left { padding: 28px 20px; }
         }
       `}</style>
+      <PaywallDialog
+        open={paywallOpen}
+        onClose={() => setPaywallOpen(false)}
+        variant="signup"
+        headline="Account creato — scegli il piano"
+        sub="Iniziamo gratis? Oppure passa a Pro: dopo il verify email ti porteremo al checkout."
+      />
     </div>
   );
 }
