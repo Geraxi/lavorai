@@ -200,18 +200,41 @@ export async function processApplication(applicationId: string): Promise<void> {
   //    (b) Email recruiter (scraped dall'annuncio)
   //    (c) Manual: ready_to_apply con istruzioni
   const portalSubmitEnabled = process.env.PORTAL_SUBMIT_ENABLED === "true";
-  // Adzuna restituisce short-URL che redirigono al vero ATS (greenhouse/
-  // lever/workable/linkedin/ecc.). Seguiamo i 302 per trovare l'URL finale.
+  // Passo 1: risoluzione URL reale
+  //   - HTTP redirect follow (funziona per short-URL normali)
+  //   - Adzuna wrapper? Serve Playwright per estrarre il vero link
   let resolvedUrl = app.job.url;
-  try {
-    resolvedUrl = await resolveFinalUrl(app.job.url);
-    if (resolvedUrl !== app.job.url) {
+  const isAdzuna = /\badzuna\.(it|com|co\.uk|de|fr|es|at|ch|ca)\b/i.test(
+    app.job.url,
+  );
+  if (portalSubmitEnabled && isAdzuna) {
+    const viaBrowser = await resolveAdzunaViaBrowser(app.job.url).catch(
+      (err) => {
+        console.warn(`[worker] ${applicationId} Adzuna resolve failed`, err);
+        return null;
+      },
+    );
+    if (viaBrowser && viaBrowser !== app.job.url) {
+      resolvedUrl = viaBrowser;
       console.log(
-        `[worker] ${applicationId} resolved ${app.job.url} → ${resolvedUrl}`,
+        `[worker] ${applicationId} Adzuna resolved → ${resolvedUrl}`,
+      );
+    } else {
+      console.log(
+        `[worker] ${applicationId} Adzuna wrapper non risolvibile — fallback email/manual`,
       );
     }
-  } catch (err) {
-    console.warn(`[worker] ${applicationId} URL resolve failed`, err);
+  } else {
+    try {
+      resolvedUrl = await resolveFinalUrl(app.job.url);
+      if (resolvedUrl !== app.job.url) {
+        console.log(
+          `[worker] ${applicationId} resolved ${app.job.url} → ${resolvedUrl}`,
+        );
+      }
+    } catch (err) {
+      console.warn(`[worker] ${applicationId} URL resolve failed`, err);
+    }
   }
   const adapter = portalSubmitEnabled
     ? findPortalAdapter(resolvedUrl) ?? findPortalAdapter(app.job.url)
@@ -931,6 +954,78 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       dryRun: process.env.PORTAL_SUBMIT_DRY_RUN === "true",
     });
     return outcome;
+  } finally {
+    if (browser) await browser.close().catch(() => void 0);
+  }
+}
+
+// ---------- Adzuna URL resolver via Playwright ----------
+/**
+ * Adzuna wrappa gli annunci in /details/<id> (client-side React) e
+ * /land/ad/<id> (bot-blocked). Il solo modo per estrarre il vero URL
+ * company → aprire la pagina in un browser reale, aspettare il bottone
+ * "Candidati ora" / "Apply", prendere il suo href.
+ */
+async function resolveAdzunaViaBrowser(adzunaUrl: string): Promise<string | null> {
+  const { chromium } = await import("playwright");
+  let browser: import("playwright").Browser | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+    });
+    const ctx = await browser.newContext({
+      locale: "it-IT",
+      timezoneId: "Europe/Rome",
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    });
+    const page = await ctx.newPage();
+    await page.goto(adzunaUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 30_000,
+    });
+    // Aspetta che l'app React carichi il bottone apply
+    const candidates = [
+      'a[href*="/land/ad/"]',
+      'a:has-text("Candidati")',
+      'a:has-text("Apply")',
+      'a[data-testid*="apply" i]',
+      'a.adp-apply-button',
+      'button:has-text("Candidati")',
+      'button:has-text("Apply")',
+    ];
+    for (const sel of candidates) {
+      const loc = page.locator(sel).first();
+      try {
+        await loc.waitFor({ timeout: 3000, state: "visible" });
+        const href = await loc.getAttribute("href");
+        if (href) {
+          const absolute = new URL(href, adzunaUrl).toString();
+          // Se è un /land/ad/, segui il redirect in browser per arrivare al vero URL
+          if (/\/land\/ad\//.test(absolute)) {
+            const resp = await page.goto(absolute, {
+              waitUntil: "domcontentloaded",
+              timeout: 20_000,
+            });
+            const finalUrl = page.url();
+            // Se ci ha rimandato su adzuna ancora, fallimento
+            if (/\badzuna\./i.test(finalUrl)) {
+              console.warn(
+                "[adzuna-resolve] landed back on adzuna:",
+                finalUrl.slice(0, 100),
+              );
+              return null;
+            }
+            return finalUrl;
+          }
+          return absolute;
+        }
+      } catch {
+        // prova il prossimo selector
+      }
+    }
+    return null;
   } finally {
     if (browser) await browser.close().catch(() => void 0);
   }

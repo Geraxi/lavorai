@@ -1,11 +1,12 @@
 /**
- * Segue il redirect Adzuna (o qualunque short-URL) per ottenere l'URL
- * finale del job posting reale — quello che ci dice davvero su quale
- * portale dovremmo candidarci.
+ * Segue i redirect HTTP per ottenere l'URL finale del job posting reale.
  *
- * Adzuna restituisce URL tipo https://www.adzuna.it/land/ad/12345?... che
- * redirigono (302/301) verso boards.greenhouse.io/.../, jobs.lever.co/...,
- * apply.workable.com/..., linkedin.com/jobs/..., ecc.
+ * NOTA su Adzuna: il loro wrapper `/details/<id>` NON fa redirect HTTP —
+ * è un client-side React app che mostra il job e monetizza il click-through.
+ * L'URL `/land/ad/<id>?aztt=...` restituisce "Accesso Negato" al nostro
+ * fetch server-side (bot detection). Quindi per job Adzuna questa funzione
+ * ritorna l'URL originale senza cambio — serve Playwright per risolverli
+ * (vedi resolveWithPlaywright in application-worker.ts).
  */
 
 export async function resolveFinalUrl(
