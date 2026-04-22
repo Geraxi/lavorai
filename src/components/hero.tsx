@@ -4,21 +4,12 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AuroraBackground } from "@/components/aurora-background";
 import { CVMockup } from "@/components/cv-mockup";
 import { TrustRow } from "@/components/trust-row";
 
 export function Hero() {
   return (
     <section className="relative overflow-hidden">
-      <AuroraBackground variant="hero" />
-
-      {/* Grid pattern sottile */}
-      <div
-        aria-hidden
-        className="grid-bg pointer-events-none absolute inset-0 opacity-40 [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
-      />
-
       <div className="container relative z-10 pt-16 md:pt-24">
         <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
           {/* Colonna sinistra: copy + CTA */}
