@@ -33,7 +33,7 @@ export default async function JobsPage({
   const user = await getCurrentUser();
 
   // Default filters dalle preferenze dell'utente (se non override via querystring)
-  let defaultWhat = "";
+  let prefRoles: string[] = [];
   let defaultWhere = "";
   let userSalaryMin: number | undefined;
   let avoidSet = new Set<string>();
@@ -47,9 +47,8 @@ export default async function JobsPage({
       }),
     ]);
     if (prefs) {
-      const roles = safeParseArray(prefs.rolesJson);
+      prefRoles = safeParseArray(prefs.rolesJson);
       const locations = safeParseArray(prefs.locationsJson);
-      defaultWhat = roles[0] ?? "";
       defaultWhere =
         locations.find((l) => l.toLowerCase() !== "remoto") ??
         locations[0] ??
@@ -64,15 +63,53 @@ export default async function JobsPage({
     );
   }
 
-  const what = sp.what ?? defaultWhat;
+  const what = sp.what ?? "";
   const where = sp.where ?? defaultWhere;
   const remoteOnly = sp.remote === "1";
 
-  const jobsRaw = await searchAndCacheJobs({
-    what: what || undefined,
-    where: where || undefined,
-    remoteOnly,
-  });
+  // Se l'utente ha esplicitamente cercato (sp.what), usa solo quello.
+  // Altrimenti, se ha preferenze multi-ruolo, query una volta per ciascun
+  // ruolo e dedupa per non mostrare solo il primo.
+  let jobsRaw: Awaited<ReturnType<typeof searchAndCacheJobs>> = [];
+  if (what) {
+    jobsRaw = await searchAndCacheJobs({
+      what,
+      where: where || undefined,
+      remoteOnly,
+    });
+  } else if (prefRoles.length > 0) {
+    // Cap a 5 ruoli per contenere il consumo dell'API (Adzuna free: 1000/mese)
+    const rolesToQuery = prefRoles.slice(0, 5);
+    const results = await Promise.all(
+      rolesToQuery.map((r) =>
+        searchAndCacheJobs({
+          what: r,
+          where: where || undefined,
+          remoteOnly,
+        }),
+      ),
+    );
+    const seen = new Set<string>();
+    for (const list of results) {
+      for (const j of list) {
+        if (seen.has(j.id)) continue;
+        seen.add(j.id);
+        jobsRaw.push(j);
+      }
+    }
+    // Ordina per data pubblicazione più recente
+    jobsRaw.sort((a, b) => {
+      const aTime = a.postedAt ? a.postedAt.getTime() : 0;
+      const bTime = b.postedAt ? b.postedAt.getTime() : 0;
+      return bTime - aTime;
+    });
+  } else {
+    // Nessuna preferenza e nessuna ricerca → mostra una generica
+    jobsRaw = await searchAndCacheJobs({
+      where: where || undefined,
+      remoteOnly,
+    });
+  }
 
   // Filtra per salary minima utente (se nota)
   const jobs: JobRow[] = jobsRaw
@@ -119,8 +156,8 @@ export default async function JobsPage({
             Job board
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
-            {defaultWhat && !sp.what
-              ? `Filtrato sulle tue preferenze · ${jobs.length} posizioni`
+            {!sp.what && prefRoles.length > 0
+              ? `Filtrato sulle tue preferenze (${prefRoles.slice(0, 5).join(", ")}) · ${jobs.length} posizioni`
               : `${jobs.length} posizioni trovate`}
           </p>
         </div>
