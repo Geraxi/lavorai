@@ -45,6 +45,7 @@ export async function GET() {
       hasCoverLetterDocx: Boolean(a.coverLetterPath),
       hasCvPdf: Boolean(a.cvPdfPath),
       cvLanguage: a.cvLanguage,
+      userStatus: a.userStatus,
       job: a.job,
     })),
   });

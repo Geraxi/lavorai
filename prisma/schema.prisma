@@ -241,6 +241,10 @@ model Application {
   coverLetterText String?  @db.Text
   cvPdfPath       String?
   cvLanguage      String?  // "it" | "en"
+  // Stato impostato manualmente dall'utente (es. "vista", "colloquio", "offerta",
+  // "rifiutata") quando ha info esterne (risposta via email, LinkedIn, ecc.).
+  // Ortogonale a `status` che è lo stato del pipeline interno.
+  userStatus      String?
   createdAt       DateTime  @default(now())
   startedAt       DateTime?
   completedAt     DateTime?
