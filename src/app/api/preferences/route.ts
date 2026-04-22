@@ -15,7 +15,7 @@ const Schema = z.object({
     sede: z.boolean(),
   }),
   autoApplyOn: z.boolean().optional(),
-  autoApplyMode: z.enum(["off", "hybrid", "auto"]).optional(),
+  autoApplyMode: z.enum(["off", "manual", "hybrid", "auto"]).optional(),
   dailyCap: z.number().int().min(1).max(100).optional(),
   matchMin: z.number().int().min(0).max(100).optional(),
   excludedCompanies: z.array(z.string().trim().min(1).max(100)).max(100).optional(),

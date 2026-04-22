@@ -10,7 +10,7 @@ import {
   SectionHead,
 } from "@/components/design/section-card";
 
-type AutoMode = "off" | "hybrid" | "auto";
+type AutoMode = "off" | "manual" | "hybrid" | "auto";
 
 interface Initial {
   roles: string[];
@@ -162,11 +162,11 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                 title="Modalità auto-apply"
               />
               <SectionBody flush={false}>
-                {/* Mode picker — 3 card, attiva quella selezionata */}
+                {/* Mode picker — 4 card, attiva quella selezionata */}
                 <div
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gridTemplateColumns: "repeat(2, 1fr)",
                     gap: 8,
                     marginBottom: 20,
                   }}
@@ -180,15 +180,21 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                         icon: "pause-circle" as const,
                       },
                       {
-                        id: "hybrid",
-                        title: "Ibrido",
-                        sub: "Prepariamo tutto. Tu confermi prima dell'invio.",
+                        id: "manual",
+                        title: "Manuale",
+                        sub: "Ogni candidatura richiede il tuo consenso.",
                         icon: "check" as const,
                       },
                       {
+                        id: "hybrid",
+                        title: "Ibrido",
+                        sub: `Auto se match ≥ ${matchMin}%, altrimenti chiede consenso.`,
+                        icon: "sparkles" as const,
+                      },
+                      {
                         id: "auto",
-                        title: "Automatico",
-                        sub: "LavorAI candida da sé, senza chiedere.",
+                        title: "Full auto",
+                        sub: "LavorAI candida da sé. Salta job sotto soglia match.",
                         icon: "zap" as const,
                       },
                     ] as const
@@ -235,7 +241,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                     );
                   })}
                 </div>
-                {autoMode === "hybrid" && (
+                {(autoMode === "manual" || autoMode === "hybrid") && (
                   <div
                     style={{
                       background: "var(--bg-sunken)",
@@ -248,12 +254,24 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                       lineHeight: 1.5,
                     }}
                   >
-                    In modalità <strong style={{ color: "var(--fg)" }}>Ibrido</strong>{" "}
-                    ogni candidatura finisce in coda su{" "}
-                    <strong style={{ color: "var(--fg)" }}>/applications</strong> con
-                    stato &ldquo;in attesa di consenso&rdquo;. Premi{" "}
-                    <strong style={{ color: "var(--fg)" }}>Consenti</strong> per
-                    confermarne l&apos;invio.
+                    {autoMode === "manual" ? (
+                      <>
+                        Ogni candidatura finisce su{" "}
+                        <strong style={{ color: "var(--fg)" }}>/applications</strong>{" "}
+                        con stato &ldquo;attesa consenso&rdquo;. Premi{" "}
+                        <strong style={{ color: "var(--fg)" }}>Consenti</strong>{" "}
+                        (o &ldquo;Consenti tutte&rdquo;) per autorizzarne
+                        l&apos;invio.
+                      </>
+                    ) : (
+                      <>
+                        I job con match ≥{" "}
+                        <strong style={{ color: "var(--fg)" }}>{matchMin}%</strong>{" "}
+                        vengono inviati automaticamente. Quelli con match inferiore
+                        restano in attesa del tuo consenso su{" "}
+                        <strong style={{ color: "var(--fg)" }}>/applications</strong>.
+                      </>
+                    )}
                   </div>
                 )}
                 <div
@@ -579,10 +597,12 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                     Modalità attuale:{" "}
                     <strong style={{ color: "var(--fg)" }}>
                       {autoMode === "off"
-                        ? "Off"
-                        : autoMode === "hybrid"
-                          ? "Ibrido (richiede consenso)"
-                          : `Automatica (fino a ${dailyCap}/giorno)`}
+                        ? "Off — nessun invio"
+                        : autoMode === "manual"
+                          ? "Manuale — consenso per ogni candidatura"
+                          : autoMode === "hybrid"
+                            ? `Ibrido — auto se match ≥ ${matchMin}%`
+                            : `Full auto — fino a ${dailyCap}/giorno sopra ${matchMin}%`}
                     </strong>
                     .
                   </li>

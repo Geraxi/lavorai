@@ -35,8 +35,13 @@ export default async function PreferencesPage() {
     salaryMin: prefs?.salaryMin ?? 30,
     autoApplyOn: prefs?.autoApplyOn ?? true,
     autoApplyMode:
-      (prefs?.autoApplyMode as "off" | "hybrid" | "auto" | undefined) ??
-      (prefs?.autoApplyOn ? "auto" : "hybrid"),
+      (prefs?.autoApplyMode as
+        | "off"
+        | "manual"
+        | "hybrid"
+        | "auto"
+        | undefined) ??
+      (prefs?.autoApplyOn ? "auto" : "manual"),
     dailyCap: prefs?.dailyCap ?? 25,
     matchMin: prefs?.matchMin ?? 75,
     modeSel: {

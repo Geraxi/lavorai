@@ -134,8 +134,8 @@ export async function POST(request: NextRequest) {
       }),
       prisma.cVProfile.findUnique({ where: { userId: user.id } }),
     ]);
-    const mode: "off" | "hybrid" | "auto" =
-      (prefs?.autoApplyMode as "off" | "hybrid" | "auto") ?? "hybrid";
+    type Mode = "off" | "manual" | "hybrid" | "auto";
+    const mode: Mode = (prefs?.autoApplyMode as Mode) ?? "manual";
 
     if (mode === "off") {
       return NextResponse.json(
@@ -148,32 +148,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // --- Match score threshold ---
+    // --- Match score ---
     const matchMin = prefs?.matchMin ?? 0;
     let score = 100;
-    if (matchMin > 0 && profileRow) {
+    if (profileRow) {
       const profile = rowToProfile(profileRow);
       score = quickMatchScore(
         profile,
         `${job.title}\n${job.company ?? ""}\n${job.description}`,
       );
-      if (score < matchMin) {
-        return NextResponse.json(
-          {
-            error: "below_match_threshold",
-            message: `Match ${score}% sotto la soglia minima ${matchMin}%. Abbassa la soglia in Preferenze o scegli un altro annuncio.`,
-            score,
-            matchMin,
-          },
-          { status: 409 },
-        );
-      }
+    }
+    // Modalità auto: match sotto soglia → blocca (non applica mai sotto soglia)
+    if (mode === "auto" && matchMin > 0 && score < matchMin) {
+      return NextResponse.json(
+        {
+          error: "below_match_threshold",
+          message: `Match ${score}% sotto la soglia minima ${matchMin}%. Passa a modalità Ibrido o Manuale se vuoi applicare comunque, o abbassa la soglia.`,
+          score,
+          matchMin,
+        },
+        { status: 409 },
+      );
     }
 
     // --- Crea la candidatura ---
-    // mode=auto → status queued, worker la pesca subito
-    // mode=hybrid → status awaiting_consent, worker NON la pesca
-    const initialStatus = mode === "hybrid" ? "awaiting_consent" : "queued";
+    // mode=auto    → status queued (worker processa subito)
+    // mode=manual  → status awaiting_consent (utente deve premere "Consenti")
+    // mode=hybrid  → queued se score >= matchMin, altrimenti awaiting_consent
+    const needsConsent =
+      mode === "manual" ||
+      (mode === "hybrid" && matchMin > 0 && score < matchMin);
+    const initialStatus = needsConsent ? "awaiting_consent" : "queued";
     const application = await prisma.application.create({
       data: {
         userId: user.id,
@@ -185,7 +190,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (mode === "auto") {
+    if (!needsConsent) {
       await enqueueApplication(application.id);
     }
 
@@ -194,6 +199,8 @@ export async function POST(request: NextRequest) {
       applicationId: application.id,
       mode,
       status: initialStatus,
+      score,
+      matchMin,
       remaining:
         limits.monthlyApplications === Infinity
           ? null

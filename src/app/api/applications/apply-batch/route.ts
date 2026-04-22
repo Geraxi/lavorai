@@ -142,8 +142,8 @@ export async function POST(request: NextRequest) {
       }),
       prisma.cVProfile.findUnique({ where: { userId: user.id } }),
     ]);
-    const mode: "off" | "hybrid" | "auto" =
-      (prefs?.autoApplyMode as "off" | "hybrid" | "auto") ?? "hybrid";
+    type Mode = "off" | "manual" | "hybrid" | "auto";
+    const mode: Mode = (prefs?.autoApplyMode as Mode) ?? "manual";
     const matchMin = prefs?.matchMin ?? 0;
     const profile = profileRow ? rowToProfile(profileRow) : null;
     if (mode === "off") {
@@ -156,26 +156,39 @@ export async function POST(request: NextRequest) {
         { status: 409 },
       );
     }
-    const initialStatus = mode === "hybrid" ? "awaiting_consent" : "queued";
 
-    let enqueued = 0;
-    let belowThreshold = 0;
+    let enqueued = 0;             // inviate direttamente
+    let awaitingConsent = 0;      // messe in coda "attesa consenso"
+    let belowThreshold = 0;       // auto: saltate perché sotto soglia
     const errors: Array<{ jobId: string; error: string }> = [];
 
     for (const job of capped) {
       try {
-        // Match score threshold — saltiamo i job sotto la soglia utente
         let score = 100;
-        if (matchMin > 0 && profile) {
+        if (profile) {
           score = quickMatchScore(
             profile,
             `${job.title}\n${job.company ?? ""}\n${job.description}`,
           );
-          if (score < matchMin) {
+        }
+
+        // Routing per modalità
+        let initialStatus: "queued" | "awaiting_consent";
+        if (mode === "auto") {
+          // Auto: sotto soglia → skip (mai applicare sotto soglia in auto)
+          if (matchMin > 0 && score < matchMin) {
             belowThreshold++;
             continue;
           }
+          initialStatus = "queued";
+        } else if (mode === "manual") {
+          initialStatus = "awaiting_consent";
+        } else {
+          // hybrid: se ≥ soglia → queued, altrimenti awaiting_consent
+          initialStatus =
+            matchMin > 0 && score < matchMin ? "awaiting_consent" : "queued";
         }
+
         const portal = portalOf(job.url);
         const application = await prisma.application.create({
           data: {
@@ -187,10 +200,12 @@ export async function POST(request: NextRequest) {
             atsScore: score,
           },
         });
-        if (mode === "auto") {
+        if (initialStatus === "queued") {
           await enqueueApplication(application.id);
+          enqueued++;
+        } else {
+          awaitingConsent++;
         }
-        enqueued++;
       } catch (err) {
         errors.push({
           jobId: job.id,
@@ -202,16 +217,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       enqueued,
+      awaitingConsent,
       skipped: jobs.length - capped.length,
       alreadyApplied: alreadySet.size,
       excludedByCompany,
       belowThreshold,
       matchMin,
+      mode,
       errors,
       remaining:
         remainingQuota === Infinity
           ? null
-          : Math.max(0, remainingQuota - enqueued),
+          : Math.max(0, remainingQuota - enqueued - awaitingConsent),
     });
   } catch (err) {
     console.error("[api/applications/apply-batch]", err);
