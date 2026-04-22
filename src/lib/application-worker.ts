@@ -15,6 +15,7 @@ import {
 import { profileToRow, rowToProfile } from "@/lib/cv-profile-types";
 import { detectLanguage } from "@/lib/lang-detect";
 import { renderCVPdf } from "@/lib/cv-pdf";
+import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
 
 /**
  * Worker: processa una candidatura fino a consegna al utente.
@@ -74,9 +75,14 @@ export async function processApplication(applicationId: string): Promise<void> {
 
   try {
     // 1. Claude: ottimizza CV + cover letter per questo job specifico
+    const coverLetterHints = coverLetterHintsFor(app.user.email, {
+      title: app.job.title,
+      category: app.job.category,
+    });
     result = await optimizeCV({
       cvText: cv.extractedText,
       jobPosting,
+      coverLetterHints,
     });
 
     // 2. Genera DOCX

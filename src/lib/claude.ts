@@ -29,6 +29,12 @@ function getClient(): Anthropic {
 export interface OptimizeCVInput {
   cvText: string;
   jobPosting: string;
+  /** Frasi/concetti extra da intrecciare nella cover letter (non nel CV).
+   *  Esempio: un founder che vuole menzionare che sta candidandosi dalla
+   *  sua stessa piattaforma. Claude le integra in modo naturale, non copia
+   *  letterale. Ogni elemento è una istruzione/idea in linguaggio naturale.
+   */
+  coverLetterHints?: string[];
 }
 
 /**
@@ -57,7 +63,9 @@ export async function optimizeCV(
     messages: [
       {
         role: "user",
-        content: USER_PROMPT_TEMPLATE(input.cvText, input.jobPosting),
+        content:
+          USER_PROMPT_TEMPLATE(input.cvText, input.jobPosting) +
+          buildCoverLetterHintsBlock(input.coverLetterHints),
       },
     ],
   });
@@ -88,6 +96,17 @@ export async function optimizeCV(
       "Claude ha risposto con un formato non valido. Riprova tra qualche secondo.",
     );
   }
+}
+
+function buildCoverLetterHintsBlock(hints: string[] | undefined): string {
+  if (!hints || hints.length === 0) return "";
+  return `\n\n---\nCOVER LETTER — CONCETTI EXTRA DA INTEGRARE:
+Integra i seguenti punti nella cover letter in modo naturale e professionale.
+NON copiarli letterali, non farli sembrare un inserto. Intrecciali nel flusso
+come se fossero tuoi pensieri (prima persona, coerenti con il resto del testo).
+Se un concetto non è pertinente al ruolo/settore dell'annuncio, ignoralo.
+
+${hints.map((h, i) => `${i + 1}. ${h}`).join("\n")}`;
 }
 
 function stripCodeFence(text: string): string {
