@@ -18,29 +18,29 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
         padding: "12px 24px",
       }}
     >
-      <div className="flex items-center gap-2" style={{ fontSize: 14, fontWeight: 600 }}>
+      <div className="flex items-center gap-2" style={{ fontSize: 15, fontWeight: 600 }}>
         {breadcrumb && (
           <>
             <span style={{ color: "var(--fg-subtle)", fontWeight: 400 }}>
               {breadcrumb}
             </span>
-            <Icon name="chevron-right" size={14} style={{ opacity: 0.5 }} />
+            <Icon name="chevron-right" size={15} style={{ opacity: 0.5 }} />
           </>
         )}
         <span>{title}</span>
       </div>
       <div className="flex items-center gap-1.5">
         <div
-          className="flex items-center gap-2 rounded border px-2.5 py-1.5"
+          className="flex items-center gap-2 rounded border px-2.5 py-1.5 hidden md:flex"
           style={{
             minWidth: 260,
             background: "var(--bg-elev)",
             borderColor: "var(--border-ds)",
-            fontSize: 13,
+            fontSize: 13.5,
             color: "var(--fg-subtle)",
           }}
         >
-          <Icon name="search" size={14} />
+          <Icon name="search" size={15} />
           <input
             placeholder="Cerca candidature, aziende..."
             style={{
@@ -49,12 +49,12 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
               background: "transparent",
               flex: 1,
               color: "var(--fg)",
+              fontSize: 13.5,
             }}
           />
-          <span className="ds-kbd">⌘K</span>
         </div>
-        <button className="ds-btn ds-btn-ghost" type="button">
-          <Icon name="bell" size={15} />
+        <button className="ds-btn ds-btn-ghost" type="button" aria-label="Notifiche">
+          <Icon name="bell" size={16} />
         </button>
         {actions}
       </div>

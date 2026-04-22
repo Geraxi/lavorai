@@ -78,7 +78,7 @@ export function AppShell({
             onClick={() => setOpen(true)}
             style={{ padding: 8 }}
           >
-            <Icon name="more" size={18} style={{ transform: "rotate(90deg)" }} />
+            <Icon name="menu" size={20} />
           </button>
           <Link
             href="/dashboard"

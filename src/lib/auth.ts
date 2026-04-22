@@ -37,7 +37,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   // Credentials richiede strategy "jwt" — il Prisma adapter continua
   // a funzionare per email magic link + Account/User lookup.
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 giorni
+    updateAge: 24 * 60 * 60,   // refresh ogni 24h
+  },
+  // Dietro il proxy Vercel (custom domain lavorai.it) serve trustHost per
+  // evitare che NextAuth rifiuti cookie/redirect con host "non fidati".
+  // Questo è il fix principale per "non mantiene la sessione di login".
+  trustHost: true,
   pages: {
     signIn: "/login",
     verifyRequest: "/login?check=1",

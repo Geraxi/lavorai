@@ -181,6 +181,9 @@ model CVProfile {
   pdfPath        String?
   pdfLanguage    String?  // "it" | "en" | null
 
+  // Foto profilo CV (opzionale)
+  photoPath      String?
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

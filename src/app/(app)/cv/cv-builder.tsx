@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/design/icon";
 import {
@@ -49,6 +49,9 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
   }
 
   function save() {
+    // Optimistic: chiudi subito lo stato dirty + feedback immediato, rollback se errore
+    setDirty(false);
+    const savingToast = toast.loading("Salvataggio...");
     startTransition(async () => {
       try {
         const res = await fetch("/api/cv-profile", {
@@ -58,13 +61,14 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
         });
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          toast.error(body?.message ?? "Errore salvataggio");
+          toast.error(body?.message ?? "Errore salvataggio", { id: savingToast });
+          setDirty(true);
           return;
         }
-        toast.success("Profilo CV salvato");
-        setDirty(false);
+        toast.success("Profilo CV salvato", { id: savingToast });
       } catch {
-        toast.error("Errore di rete");
+        toast.error("Errore di rete", { id: savingToast });
+        setDirty(true);
       }
     });
   }
@@ -194,7 +198,7 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
               }}
             />
           )}
-          onAdd={() => update("experiences", [...profile.experiences, emptyExp()])}
+          onAdd={() => update("experiences", [emptyExp(), ...profile.experiences])}
           emptyLabel="Aggiungi la prima esperienza"
         />
       )}
@@ -217,7 +221,7 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
               }}
             />
           )}
-          onAdd={() => update("education", [...profile.education, emptyEdu()])}
+          onAdd={() => update("education", [emptyEdu(), ...profile.education])}
           emptyLabel="Aggiungi un titolo di studio"
         />
       )}
@@ -241,21 +245,147 @@ function PersonalSection({
     <SectionCard>
       <SectionHead icon={<Icon name="user" size={14} />} title="Informazioni personali" />
       <SectionBody>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Nome" value={profile.firstName} onChange={(v) => update("firstName", v)} />
-          <Field label="Cognome" value={profile.lastName} onChange={(v) => update("lastName", v)} />
-          <Field label="Email" value={profile.email} onChange={(v) => update("email", v)} type="email" />
-          <Field label="Telefono" value={profile.phone} onChange={(v) => update("phone", v)} />
-          <Field label="Città" value={profile.city} onChange={(v) => update("city", v)} />
-          <Field
-            label="Titolo professionale (headline)"
-            value={profile.title}
-            onChange={(v) => update("title", v)}
-            placeholder="es. Senior Product Designer"
-          />
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+          <PhotoUploader />
+          <div style={{ flex: 1, minWidth: 240, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Nome" value={profile.firstName} onChange={(v) => update("firstName", v)} />
+            <Field label="Cognome" value={profile.lastName} onChange={(v) => update("lastName", v)} />
+            <Field label="Email" value={profile.email} onChange={(v) => update("email", v)} type="email" />
+            <Field label="Telefono" value={profile.phone} onChange={(v) => update("phone", v)} />
+            <Field label="Città" value={profile.city} onChange={(v) => update("city", v)} />
+            <Field
+              label="Titolo professionale"
+              value={profile.title}
+              onChange={(v) => update("title", v)}
+              placeholder="es. Senior Product Designer"
+            />
+          </div>
         </div>
       </SectionBody>
     </SectionCard>
+  );
+}
+
+function PhotoUploader() {
+  const [photoUrl, setPhotoUrl] = useState<string>(
+    `/api/cv-profile/photo?t=${Date.now()}`,
+  );
+  const [hasPhoto, setHasPhoto] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("photo", file);
+      const res = await fetch("/api/cv-profile/photo", {
+        method: "POST",
+        body: fd,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body?.message ?? "Upload fallito");
+        return;
+      }
+      setPhotoUrl(`/api/cv-profile/photo?t=${Date.now()}`);
+      setHasPhoto(true);
+      toast.success("Foto aggiornata");
+    } finally {
+      setLoading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function onRemove() {
+    setLoading(true);
+    try {
+      await fetch("/api/cv-profile/photo", { method: "DELETE" });
+      setHasPhoto(false);
+      toast.success("Foto rimossa");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <div
+        onClick={() => inputRef.current?.click()}
+        style={{
+          width: 110,
+          height: 110,
+          borderRadius: "50%",
+          border: "1px dashed var(--border-ds)",
+          background: "var(--bg-elev)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          overflow: "hidden",
+          position: "relative",
+        }}
+      >
+        {hasPhoto ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            src={photoUrl}
+            alt="Foto profilo"
+            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            onError={() => setHasPhoto(false)}
+          />
+        ) : (
+          <Icon name="user" size={32} style={{ color: "var(--fg-subtle)" }} />
+        )}
+        {loading && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0,0,0,0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              fontSize: 11,
+            }}
+          >
+            …
+          </div>
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        onChange={onChange}
+        hidden
+      />
+      <div style={{ display: "flex", gap: 6 }}>
+        <button
+          type="button"
+          className="ds-btn ds-btn-sm ds-btn-ghost"
+          onClick={() => inputRef.current?.click()}
+          disabled={loading}
+          style={{ fontSize: 11.5 }}
+        >
+          {hasPhoto ? "Cambia" : "Carica foto"}
+        </button>
+        {hasPhoto && (
+          <button
+            type="button"
+            className="ds-btn ds-btn-sm ds-btn-ghost"
+            onClick={onRemove}
+            disabled={loading}
+            style={{ fontSize: 11.5 }}
+          >
+            Rimuovi
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -550,7 +680,7 @@ function LanguagesSection({
   update: <T extends keyof CVProfile>(k: T, v: CVProfile[T]) => void;
 }) {
   const add = () =>
-    update("languages", [...profile.languages, { name: "", level: "" } satisfies Language]);
+    update("languages", [{ name: "", level: "" } satisfies Language, ...profile.languages]);
   return (
     <SectionCard>
       <SectionHead
@@ -621,7 +751,7 @@ function LinksSection({
   update: <T extends keyof CVProfile>(k: T, v: CVProfile[T]) => void;
 }) {
   const add = () =>
-    update("links", [...profile.links, { label: "", url: "" } satisfies CvLink]);
+    update("links", [{ label: "", url: "" } satisfies CvLink, ...profile.links]);
   return (
     <SectionCard>
       <SectionHead

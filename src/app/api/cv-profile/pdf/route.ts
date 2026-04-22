@@ -59,7 +59,21 @@ export async function GET(request: NextRequest) {
 
   async function renderAndSave(): Promise<Buffer> {
     const profile = rowToProfile(row!);
-    const buf = await renderCVPdf(profile, lang);
+    let photoBuffer: Buffer | null = null;
+    let photoMime: string | undefined;
+    if (row!.photoPath) {
+      try {
+        photoBuffer = await readUserFile(row!.photoPath);
+        photoMime = row!.photoPath.endsWith(".png")
+          ? "image/png"
+          : row!.photoPath.endsWith(".webp")
+            ? "image/webp"
+            : "image/jpeg";
+      } catch {
+        photoBuffer = null;
+      }
+    }
+    const buf = await renderCVPdf(profile, lang, photoBuffer, photoMime);
     const path = await saveUserFile(
       user!.id,
       "cv-profile",

@@ -851,4 +851,42 @@
     }
     .ob-main { padding: 24px 20px 32px; }
   }
+
+  /* ============================================================
+     Mobile app pass (bug report 2026-04-22):
+     - stack grids 1fr+sidebar to single column
+     - shrink paddings for tighter use of horizontal space
+     - bigger tap targets
+     ============================================================ */
+  @media (max-width: 900px) {
+    /* Dashboard/Preferences/Jobs right-sidebar grid → stack */
+    .ds-kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+    /* Section cards inline-style 1fr 320px or 340px grids */
+    [style*="gridTemplateColumns: \"1fr 320px\""],
+    [style*="gridTemplateColumns: \"1fr 340px\""],
+    [style*="gridTemplateColumns: \"1fr 360px\""],
+    [style*="gridTemplateColumns: \"1.1fr 1fr\""],
+    [style*="grid-template-columns: 1fr 320px"],
+    [style*="grid-template-columns: 1fr 340px"],
+    [style*="grid-template-columns: 1fr 360px"] {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .ds-kpi-grid {
+      grid-template-columns: 1fr !important;
+    }
+    /* Topbar collapses padding on mobile */
+    main > div[class*="sticky"][class*="top-0"] {
+      padding-left: 16px !important;
+      padding-right: 16px !important;
+    }
+    /* Buttons touch-size */
+    .ds-btn {
+      min-height: 38px;
+    }
+  }
 }

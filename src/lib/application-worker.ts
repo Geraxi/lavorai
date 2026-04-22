@@ -133,7 +133,21 @@ export async function processApplication(applicationId: string): Promise<void> {
       jobPosting,
       lang: jobLang,
     });
-    const pdfBuffer = await renderCVPdf(tailored, jobLang);
+    let photoBuffer: Buffer | null = null;
+    let photoMime: string | undefined;
+    if (profileRow.photoPath) {
+      try {
+        photoBuffer = await readUserFile(profileRow.photoPath);
+        photoMime = profileRow.photoPath.endsWith(".png")
+          ? "image/png"
+          : profileRow.photoPath.endsWith(".webp")
+            ? "image/webp"
+            : "image/jpeg";
+      } catch {
+        photoBuffer = null;
+      }
+    }
+    const pdfBuffer = await renderCVPdf(tailored, jobLang, photoBuffer, photoMime);
     cvPdfPath = await saveUserFile(
       app.userId,
       `applications/${applicationId}`,
