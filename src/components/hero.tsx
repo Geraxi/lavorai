@@ -19,79 +19,72 @@ export function Hero() {
         className="grid-bg pointer-events-none absolute inset-0 opacity-40 [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
       />
 
-      {/* Green gradient stripe — pure CSS, animated horizontal sweep.
-          Sits behind hero copy (z-0) with screen blend so it mixes with
-          the aurora instead of covering it. */}
-      <div
+      {/* Green laser beam — sweeps horizontally across hero, mix-blend so
+          it sits naturally over the aurora. Looped, non-blocking. */}
+      <motion.div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-[38%] z-0 hidden md:block"
+        className="pointer-events-none absolute inset-x-0 top-[35%] z-0 hidden md:block"
         style={{
-          height: 180,
+          height: 360,
           mixBlendMode: "screen",
+          filter: "saturate(1.15)",
           maskImage:
-            "linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)",
+            "linear-gradient(to right, transparent 0%, black 20%, black 80%, transparent 100%)",
           WebkitMaskImage:
-            "linear-gradient(to right, transparent 0%, black 15%, black 85%, transparent 100%)",
+            "linear-gradient(to right, transparent 0%, black 20%, black 80%, transparent 100%)",
+        }}
+        initial={{ opacity: 0, scaleX: 0.7, x: "-8%" }}
+        animate={{
+          opacity: [0, 0.9, 0.8, 0.9, 0.8],
+          scaleX: [0.7, 1.05, 1, 1.03, 1],
+          x: ["-8%", "0%", "1%", "0%", "0%"],
+        }}
+        transition={{
+          duration: 6,
+          times: [0, 0.2, 0.5, 0.75, 1],
+          ease: "easeOut",
+          repeat: Infinity,
+          repeatType: "mirror",
         }}
       >
-        {/* Core stripe: thin, bright, luminous */}
-        <motion.div
-          className="absolute left-0 right-0 top-1/2 -translate-y-1/2"
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/hero-beam.png"
+          alt=""
           style={{
-            height: 4,
-            background:
-              "linear-gradient(90deg, transparent 0%, #22c55e 25%, #4ade80 50%, #22c55e 75%, transparent 100%)",
-            filter: "blur(0.5px)",
-            backgroundSize: "200% 100%",
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            objectPosition: "center",
           }}
-          animate={{
-            backgroundPositionX: ["0%", "200%"],
-            opacity: [0.85, 1, 0.85],
-          }}
-          transition={{
-            backgroundPositionX: { duration: 4, ease: "linear", repeat: Infinity },
-            opacity: { duration: 2.4, ease: "easeInOut", repeat: Infinity },
+          onError={(e) => {
+            // File non presente: nascondi senza rompere il render
+            (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
-        {/* Outer halo: soft, wide, glow */}
+        {/* Pulsing glow sitting on top of the beam's bright core */}
         <motion.div
-          className="absolute left-0 right-0 top-1/2 -translate-y-1/2"
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            height: 180,
+            width: 160,
+            height: 160,
             background:
-              "linear-gradient(90deg, transparent 0%, rgba(34,197,94,0.35) 30%, rgba(74,222,128,0.55) 50%, rgba(34,197,94,0.35) 70%, transparent 100%)",
-            filter: "blur(32px)",
-            backgroundSize: "200% 100%",
-          }}
-          animate={{
-            backgroundPositionX: ["0%", "200%"],
-            opacity: [0.55, 0.85, 0.55],
-          }}
-          transition={{
-            backgroundPositionX: { duration: 6, ease: "linear", repeat: Infinity },
-            opacity: { duration: 3.2, ease: "easeInOut", repeat: Infinity },
-          }}
-        />
-        {/* Travelling highlight: brighter pulse that traverses left→right */}
-        <motion.div
-          className="absolute top-1/2 -translate-y-1/2 rounded-full"
-          style={{
-            width: 220,
-            height: 220,
-            left: "-10%",
-            background:
-              "radial-gradient(circle, rgba(163,255,186,0.9) 0%, rgba(74,222,128,0.5) 30%, transparent 65%)",
+              "radial-gradient(circle, rgba(74, 222, 128, 0.55) 0%, rgba(34, 197, 94, 0.25) 40%, transparent 70%)",
             filter: "blur(6px)",
           }}
-          animate={{ left: ["-15%", "115%"] }}
+          animate={{
+            opacity: [0.6, 1, 0.7, 1, 0.6],
+            scale: [0.9, 1.1, 1, 1.08, 0.9],
+          }}
           transition={{
-            duration: 5,
+            duration: 3,
             ease: "easeInOut",
             repeat: Infinity,
-            repeatDelay: 1.5,
           }}
         />
-      </div>
+      </motion.div>
 
       <div className="container relative z-10 pt-16 md:pt-24">
         <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
