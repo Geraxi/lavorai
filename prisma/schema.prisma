@@ -133,8 +133,9 @@ model User {
   portalSessions PortalSession[]
   applications   Application[]
   cvDocuments    CVDocument[]
-  preferences    UserPreferences?
-  cvProfile      CVProfile?
+  preferences         UserPreferences?
+  cvProfile           CVProfile?
+  applicationSessions ApplicationSession[]
   resetTokens    PasswordResetToken[]
   verifyTokens   EmailVerificationToken[]
 }
@@ -230,6 +231,29 @@ model Job {
   @@unique([externalId, source])
 }
 
+/// Application Session: raggruppa candidature simili (stesso ruolo + settore)
+/// per permettere pause/resume di intere "campagne". Ogni utente vede
+/// le sessioni attive su /preferences.
+model ApplicationSession {
+  id        String   @id @default(cuid())
+  userId    String
+  /// chiave canonica usata per il find-or-create (category::role normalizzati)
+  key       String
+  /// label human-readable mostrata in UI (es. "IT · Front-End Developer")
+  label     String
+  /// "auto" = parte in automatico (default), "paused" = candidature
+  /// finiscono in awaiting_consent
+  status    String   @default("auto")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@unique([userId, key])
+  @@index([userId, status])
+}
+
 model Application {
   id              String    @id @default(cuid())
   userId          String
@@ -244,6 +268,7 @@ model Application {
   coverLetterText String?  @db.Text
   cvPdfPath       String?
   cvLanguage      String?  // "it" | "en"
+  sessionId       String?
   // Stato impostato manualmente dall'utente (es. "vista", "colloquio", "offerta",
   // "rifiutata") quando ha info esterne (risposta via email, LinkedIn, ecc.).
   // Ortogonale a `status` che è lo stato del pipeline interno.
@@ -256,10 +281,12 @@ model Application {
   startedAt       DateTime?
   completedAt     DateTime?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job     Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  session ApplicationSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+  @@index([sessionId])
 }
 
 /// CV staged BEFORE user account exists (from /optimize public form).

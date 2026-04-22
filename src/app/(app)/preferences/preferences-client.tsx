@@ -9,6 +9,7 @@ import {
   SectionCard,
   SectionHead,
 } from "@/components/design/section-card";
+import { SessionsBlock } from "@/components/sessions-block";
 
 type AutoMode = "off" | "manual" | "hybrid" | "auto";
 
@@ -155,6 +156,9 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
           style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}
         >
           <div className="flex flex-col" style={{ gap: 16 }}>
+            {/* Sessioni di candidatura */}
+            <SessionsBlock />
+
             {/* Auto-apply */}
             <SectionCard>
               <SectionHead

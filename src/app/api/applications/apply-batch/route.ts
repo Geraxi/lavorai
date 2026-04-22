@@ -6,6 +6,7 @@ import { enqueueApplication } from "@/lib/application-queue";
 import { getLimits, effectiveTier } from "@/lib/billing";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
+import { resolveSession } from "@/lib/apply-session";
 import { applyLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -172,10 +173,15 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // Routing per modalità
+        // Routing per modalità — la sessione può forzare awaiting_consent
+        const session = await resolveSession(user.id, {
+          title: job.title,
+          category: job.category,
+        });
         let initialStatus: "queued" | "awaiting_consent";
-        if (mode === "auto") {
-          // Auto: sotto soglia → skip (mai applicare sotto soglia in auto)
+        if (session.status === "paused") {
+          initialStatus = "awaiting_consent";
+        } else if (mode === "auto") {
           if (matchMin > 0 && score < matchMin) {
             belowThreshold++;
             continue;
@@ -198,6 +204,7 @@ export async function POST(request: NextRequest) {
             status: initialStatus,
             trackingToken: randomToken(),
             atsScore: score,
+            sessionId: session.id,
           },
         });
         if (initialStatus === "queued") {

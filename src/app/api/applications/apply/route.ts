@@ -7,6 +7,7 @@ import { getLimits, effectiveTier } from "@/lib/billing";
 import { applyLimiter } from "@/lib/rate-limit";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
+import { resolveSession } from "@/lib/apply-session";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -171,11 +172,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- Resolve application session ---
+    // Raggruppa candidature per categoria+ruolo. Se la sessione è "paused"
+    // l'utente ha premuto Pausa → va sempre in awaiting_consent.
+    const session = await resolveSession(user.id, {
+      title: job.title,
+      category: job.category,
+    });
+
     // --- Crea la candidatura ---
-    // mode=auto    → status queued (worker processa subito)
-    // mode=manual  → status awaiting_consent (utente deve premere "Consenti")
-    // mode=hybrid  → queued se score >= matchMin, altrimenti awaiting_consent
+    // Routing:
+    // 1. session.status === "paused" → awaiting_consent (override globale)
+    // 2. mode === "manual" → awaiting_consent
+    // 3. mode === "hybrid" + score < matchMin → awaiting_consent
+    // 4. altrimenti → queued
     const needsConsent =
+      session.status === "paused" ||
       mode === "manual" ||
       (mode === "hybrid" && matchMin > 0 && score < matchMin);
     const initialStatus = needsConsent ? "awaiting_consent" : "queued";
@@ -187,6 +199,7 @@ export async function POST(request: NextRequest) {
         status: initialStatus,
         trackingToken: randomToken(),
         atsScore: score, // pre-stima; il worker la sovrascrive con score Claude
+        sessionId: session.id,
       },
     });
 
@@ -201,6 +214,7 @@ export async function POST(request: NextRequest) {
       status: initialStatus,
       score,
       matchMin,
+      session: { id: session.id, label: session.label, status: session.status },
       remaining:
         limits.monthlyApplications === Infinity
           ? null
