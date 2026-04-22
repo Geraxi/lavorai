@@ -10,11 +10,14 @@ import {
   SectionHead,
 } from "@/components/design/section-card";
 
+type AutoMode = "off" | "hybrid" | "auto";
+
 interface Initial {
   roles: string[];
   locations: string[];
   salaryMin: number;
   autoApplyOn: boolean;
+  autoApplyMode: AutoMode;
   dailyCap: number;
   matchMin: number;
   modeSel: { remoto: boolean; ibrido: boolean; sede: boolean };
@@ -27,7 +30,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
   const [roles, setRoles] = useState<string[]>(initial.roles);
   const [locations, setLocations] = useState<string[]>(initial.locations);
   const [salary, setSalary] = useState<number>(initial.salaryMin);
-  const [autoApply, setAutoApply] = useState<boolean>(initial.autoApplyOn);
+  const [autoMode, setAutoMode] = useState<AutoMode>(initial.autoApplyMode);
   const [dailyCap, setDailyCap] = useState<number>(initial.dailyCap);
   const [matchMin, setMatchMin] = useState<number>(initial.matchMin);
   const [modeSel, setModeSel] = useState(initial.modeSel);
@@ -75,7 +78,8 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
             locations,
             salaryMin: salary,
             modeSel,
-            autoApplyOn: autoApply,
+            autoApplyOn: autoMode !== "off",
+            autoApplyMode: autoMode,
             dailyCap,
             matchMin,
             excludedCompanies: excluded,
@@ -155,20 +159,103 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
             <SectionCard>
               <SectionHead
                 icon={<Icon name="zap" size={14} />}
-                title="Auto-apply"
-                actions={
-                  <button
-                    type="button"
-                    className={`ds-toggle${autoApply ? " on" : ""}`}
-                    onClick={() => {
-                      setAutoApply((v) => !v);
-                      mark();
-                    }}
-                    aria-label="Toggle auto-apply"
-                  />
-                }
+                title="Modalità auto-apply"
               />
               <SectionBody flush={false}>
+                {/* Mode picker — 3 card, attiva quella selezionata */}
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gap: 8,
+                    marginBottom: 20,
+                  }}
+                >
+                  {(
+                    [
+                      {
+                        id: "off",
+                        title: "Off",
+                        sub: "Stop totale. Nessuna candidatura verrà inviata.",
+                        icon: "pause-circle" as const,
+                      },
+                      {
+                        id: "hybrid",
+                        title: "Ibrido",
+                        sub: "Prepariamo tutto. Tu confermi prima dell'invio.",
+                        icon: "check" as const,
+                      },
+                      {
+                        id: "auto",
+                        title: "Automatico",
+                        sub: "LavorAI candida da sé, senza chiedere.",
+                        icon: "zap" as const,
+                      },
+                    ] as const
+                  ).map((opt) => {
+                    const active = autoMode === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          setAutoMode(opt.id);
+                          mark();
+                        }}
+                        className="ds-pref-card"
+                        style={{
+                          textAlign: "left",
+                          padding: 12,
+                          cursor: "pointer",
+                          border: active
+                            ? "1.5px solid var(--primary-ds)"
+                            : "1px solid var(--border-ds)",
+                          background: active
+                            ? "var(--primary-weak)"
+                            : "var(--bg)",
+                        }}
+                      >
+                        <div
+                          className="flex items-center gap-1.5"
+                          style={{ fontSize: 13, fontWeight: 600 }}
+                        >
+                          <Icon name={opt.icon} size={13} /> {opt.title}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11.5,
+                            color: "var(--fg-muted)",
+                            marginTop: 4,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {opt.sub}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {autoMode === "hybrid" && (
+                  <div
+                    style={{
+                      background: "var(--bg-sunken)",
+                      border: "1px solid var(--border-ds)",
+                      borderRadius: 8,
+                      padding: "10px 12px",
+                      fontSize: 12,
+                      color: "var(--fg-muted)",
+                      marginBottom: 14,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    In modalità <strong style={{ color: "var(--fg)" }}>Ibrido</strong>{" "}
+                    ogni candidatura finisce in coda su{" "}
+                    <strong style={{ color: "var(--fg)" }}>/applications</strong> con
+                    stato &ldquo;in attesa di consenso&rdquo;. Premi{" "}
+                    <strong style={{ color: "var(--fg)" }}>Consenti</strong> per
+                    confermarne l&apos;invio.
+                  </div>
+                )}
                 <div
                   style={{
                     display: "grid",
@@ -489,11 +576,15 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                     Le tue preferenze filtrano le posizioni nel job board.
                   </li>
                   <li>
-                    Con Auto-apply ON, LavorAI candida fino a{" "}
-                    <span className="mono" style={{ color: "var(--fg)" }}>
-                      {dailyCap}
-                    </span>{" "}
-                    posizioni/giorno corrispondenti.
+                    Modalità attuale:{" "}
+                    <strong style={{ color: "var(--fg)" }}>
+                      {autoMode === "off"
+                        ? "Off"
+                        : autoMode === "hybrid"
+                          ? "Ibrido (richiede consenso)"
+                          : `Automatica (fino a ${dailyCap}/giorno)`}
+                    </strong>
+                    .
                   </li>
                   <li>Le aziende escluse vengono sempre saltate.</li>
                   <li>

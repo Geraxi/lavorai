@@ -15,6 +15,7 @@ const Schema = z.object({
     sede: z.boolean(),
   }),
   autoApplyOn: z.boolean().optional(),
+  autoApplyMode: z.enum(["off", "hybrid", "auto"]).optional(),
   dailyCap: z.number().int().min(1).max(100).optional(),
   matchMin: z.number().int().min(0).max(100).optional(),
   excludedCompanies: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
@@ -41,6 +42,7 @@ export async function PUT(request: NextRequest) {
     salaryMin,
     modeSel,
     autoApplyOn,
+    autoApplyMode,
     dailyCap,
     matchMin,
     excludedCompanies,
@@ -56,7 +58,8 @@ export async function PUT(request: NextRequest) {
     where: { userId: user.id },
     create: {
       userId: user.id,
-      autoApplyOn: autoApplyOn ?? true,
+      autoApplyOn: autoApplyOn ?? autoApplyMode !== "off",
+      autoApplyMode: autoApplyMode ?? "hybrid",
       dailyCap: dailyCap ?? 25,
       matchMin: matchMin ?? 75,
       salaryMin,
@@ -66,6 +69,7 @@ export async function PUT(request: NextRequest) {
     },
     update: {
       ...(autoApplyOn != null ? { autoApplyOn } : {}),
+      ...(autoApplyMode != null ? { autoApplyMode } : {}),
       ...(dailyCap != null ? { dailyCap } : {}),
       ...(matchMin != null ? { matchMin } : {}),
       salaryMin,

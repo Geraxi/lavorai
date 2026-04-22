@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { toast } from "sonner";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
@@ -70,6 +71,7 @@ type Row = (typeof MOCK)[number] & {
   hasCoverLetterDocx?: boolean;
   hasCvPdf?: boolean;
   cvLanguage?: string | null;
+  backendStatus?: string; // raw status from API ("awaiting_consent" etc.)
 };
 
 export default function ApplicationsPage() {
@@ -101,11 +103,16 @@ export default function ApplicationsPage() {
       hasCoverLetterDocx: a.hasCoverLetterDocx,
       hasCvPdf: a.hasCvPdf,
       cvLanguage: a.cvLanguage,
+      backendStatus: a.status,
     })) ?? [];
 
   // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).
   const allRows: Row[] = realRows;
   const filtered = filter === "all" ? allRows : allRows.filter((a) => a.status === filter);
+
+  const awaitingCount = allRows.filter(
+    (a) => a.backendStatus === "awaiting_consent",
+  ).length;
 
   const counts = {
     all: allRows.length,
@@ -114,7 +121,48 @@ export default function ApplicationsPage() {
     colloquio: allRows.filter((a) => a.status === "colloquio").length,
     offerta: allRows.filter((a) => a.status === "offerta").length,
     rifiutata: allRows.filter((a) => a.status === "rifiutata").length,
+    awaiting: awaitingCount,
   };
+
+  async function consentAll() {
+    if (awaitingCount === 0) return;
+    const ok = window.confirm(
+      `Confermi l'invio di ${awaitingCount} candidature in attesa?`,
+    );
+    if (!ok) return;
+    try {
+      const res = await fetch("/api/applications/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(body?.message ?? "Errore");
+        return;
+      }
+      toast.success(`${body.enqueued} candidature accodate`);
+    } catch {
+      toast.error("Errore di rete");
+    }
+  }
+
+  async function consentOne(id: string) {
+    try {
+      const res = await fetch("/api/applications/consent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [id] }),
+      });
+      if (!res.ok) {
+        toast.error("Errore");
+        return;
+      }
+      toast.success("Candidatura accodata");
+    } catch {
+      toast.error("Errore di rete");
+    }
+  }
 
   return (
     <>
@@ -142,6 +190,36 @@ export default function ApplicationsPage() {
             </button>
           </div>
         </div>
+
+        {awaitingCount > 0 && (
+          <div
+            className="mb-4 flex items-center justify-between gap-3 flex-wrap"
+            style={{
+              padding: "12px 16px",
+              background: "var(--primary-weak)",
+              border: "1px solid var(--primary-ds)",
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ fontSize: 13, color: "var(--fg)" }}>
+              <strong>{awaitingCount}</strong>{" "}
+              {awaitingCount === 1
+                ? "candidatura in attesa del tuo consenso"
+                : "candidature in attesa del tuo consenso"}
+              {" · "}
+              <span style={{ color: "var(--fg-muted)" }}>
+                (modalità ibrida attiva)
+              </span>
+            </div>
+            <button
+              type="button"
+              className="ds-btn ds-btn-accent"
+              onClick={consentAll}
+            >
+              <Icon name="check" size={13} /> Consenti tutte
+            </button>
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 2, marginBottom: 16, flexWrap: "wrap" }}>
           <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>
@@ -218,15 +296,39 @@ export default function ApplicationsPage() {
                   </td>
                   <td style={{ color: "var(--fg-muted)", fontSize: 12 }}>{a.source}</td>
                   <td>
-                    <StatusChip status={a.status} />
+                    {a.backendStatus === "awaiting_consent" ? (
+                      <span
+                        className="ds-chip"
+                        style={{
+                          background: "var(--primary-weak)",
+                          color: "var(--primary-ds)",
+                          fontWeight: 500,
+                        }}
+                      >
+                        attesa consenso
+                      </span>
+                    ) : (
+                      <StatusChip status={a.status} />
+                    )}
                   </td>
                   <td style={{ color: "var(--fg-muted)", fontSize: 12 }}>{a.applied}</td>
-                  <td>
-                    <Icon
-                      name="chevron-right"
-                      size={14}
-                      style={{ color: "var(--fg-subtle)" }}
-                    />
+                  <td onClick={(e) => e.stopPropagation()}>
+                    {a.backendStatus === "awaiting_consent" ? (
+                      <button
+                        type="button"
+                        className="ds-btn ds-btn-sm ds-btn-primary"
+                        onClick={() => consentOne(a.id)}
+                        style={{ fontSize: 11.5, padding: "4px 10px" }}
+                      >
+                        <Icon name="check" size={11} /> Consenti
+                      </button>
+                    ) : (
+                      <Icon
+                        name="chevron-right"
+                        size={14}
+                        style={{ color: "var(--fg-subtle)" }}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}

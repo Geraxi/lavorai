@@ -9,6 +9,14 @@ import { applyLimiter } from "@/lib/rate-limit";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
+function randomToken(): string {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 const bodySchema = z.object({
   jobId: z.string().min(1),
   portal: z.string().min(1),
@@ -116,17 +124,48 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // --- Crea + enqueue ---
+    // --- Leggi auto-apply mode dalle preferenze ---
+    const prefs = await prisma.userPreferences.findUnique({
+      where: { userId: user.id },
+      select: { autoApplyMode: true },
+    });
+    const mode: "off" | "hybrid" | "auto" =
+      (prefs?.autoApplyMode as "off" | "hybrid" | "auto") ?? "hybrid";
+
+    if (mode === "off") {
+      return NextResponse.json(
+        {
+          error: "auto_apply_off",
+          message:
+            "L'auto-apply è disattivato. Vai in Preferenze per riattivarlo.",
+        },
+        { status: 409 },
+      );
+    }
+
+    // --- Crea la candidatura ---
+    // mode=auto → status queued, worker la pesca subito
+    // mode=hybrid → status awaiting_consent, worker NON la pesca
+    const initialStatus = mode === "hybrid" ? "awaiting_consent" : "queued";
     const application = await prisma.application.create({
-      data: { userId: user.id, jobId, portal, status: "queued" },
+      data: {
+        userId: user.id,
+        jobId,
+        portal,
+        status: initialStatus,
+        trackingToken: randomToken(),
+      },
     });
 
-    // Delega al queue abstraction: Inngest/QStash in prod, in-process in dev
-    await enqueueApplication(application.id);
+    if (mode === "auto") {
+      await enqueueApplication(application.id);
+    }
 
     return NextResponse.json({
       ok: true,
       applicationId: application.id,
+      mode,
+      status: initialStatus,
       remaining:
         limits.monthlyApplications === Infinity
           ? null

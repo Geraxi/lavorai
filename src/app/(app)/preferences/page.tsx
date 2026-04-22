@@ -34,6 +34,9 @@ export default async function PreferencesPage() {
     locations: safeArray(prefs?.locationsJson ?? "[]"),
     salaryMin: prefs?.salaryMin ?? 30,
     autoApplyOn: prefs?.autoApplyOn ?? true,
+    autoApplyMode:
+      (prefs?.autoApplyMode as "off" | "hybrid" | "auto" | undefined) ??
+      (prefs?.autoApplyOn ? "auto" : "hybrid"),
     dailyCap: prefs?.dailyCap ?? 25,
     matchMin: prefs?.matchMin ?? 75,
     modeSel: {

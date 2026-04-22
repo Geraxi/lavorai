@@ -46,6 +46,7 @@ export async function GET() {
       hasCvPdf: Boolean(a.cvPdfPath),
       cvLanguage: a.cvLanguage,
       userStatus: a.userStatus,
+      viewedAt: a.viewedAt?.toISOString() ?? null,
       job: a.job,
     })),
   });

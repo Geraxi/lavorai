@@ -9,6 +9,14 @@ import { applyLimiter } from "@/lib/rate-limit";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+function randomToken(): string {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 const bodySchema = z.object({
   jobIds: z.array(z.string().min(1)).min(1).max(100),
 });
@@ -124,6 +132,25 @@ export async function POST(request: NextRequest) {
     const capped =
       remainingQuota === Infinity ? toApply : toApply.slice(0, remainingQuota);
 
+    // --- Auto-apply mode ---
+    const prefs = await prisma.userPreferences.findUnique({
+      where: { userId: user.id },
+      select: { autoApplyMode: true },
+    });
+    const mode: "off" | "hybrid" | "auto" =
+      (prefs?.autoApplyMode as "off" | "hybrid" | "auto") ?? "hybrid";
+    if (mode === "off") {
+      return NextResponse.json(
+        {
+          error: "auto_apply_off",
+          message:
+            "L'auto-apply è disattivato. Vai in Preferenze per riattivarlo.",
+        },
+        { status: 409 },
+      );
+    }
+    const initialStatus = mode === "hybrid" ? "awaiting_consent" : "queued";
+
     let enqueued = 0;
     const errors: Array<{ jobId: string; error: string }> = [];
 
@@ -131,9 +158,17 @@ export async function POST(request: NextRequest) {
       try {
         const portal = portalOf(job.url);
         const application = await prisma.application.create({
-          data: { userId: user.id, jobId: job.id, portal, status: "queued" },
+          data: {
+            userId: user.id,
+            jobId: job.id,
+            portal,
+            status: initialStatus,
+            trackingToken: randomToken(),
+          },
         });
-        await enqueueApplication(application.id);
+        if (mode === "auto") {
+          await enqueueApplication(application.id);
+        }
         enqueued++;
       } catch (err) {
         errors.push({
