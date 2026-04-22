@@ -18,6 +18,7 @@ import { renderCVPdf } from "@/lib/cv-pdf";
 import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { scrapeRecruiterEmail } from "@/lib/recruiter-email";
+import { findPortalAdapter } from "@/lib/portal-adapters";
 
 /**
  * Worker: processa una candidatura fino a consegna al utente.
@@ -193,9 +194,58 @@ export async function processApplication(applicationId: string): Promise<void> {
     console.error(`[worker] ${applicationId} email to user failed`, err);
   });
 
-  // 6. DELIVERY AL RECRUITER — invia davvero la candidatura
-  //    Strategia: scrape job.url per trovare l'email del recruiter,
-  //    poi invia via Resend con Reply-To = utente, allegati, pixel tracking.
+  // 6. DELIVERY — priorità in ordine:
+  //    (a) Portal adapter (Greenhouse/Lever/Workable): submit diretto nel form ATS
+  //    (b) Email recruiter (scraped dall'annuncio)
+  //    (c) Manual: ready_to_apply con istruzioni
+  const portalSubmitEnabled = process.env.PORTAL_SUBMIT_ENABLED === "true";
+  const adapter = portalSubmitEnabled ? findPortalAdapter(app.job.url) : null;
+
+  if (adapter) {
+    const outcome = await attemptPortalAdapterSubmit({
+      applicationId,
+      adapter,
+      jobUrl: app.job.url,
+      cvPath,
+      clPath,
+      coverLetterText: result.coverLetter,
+      userId: app.userId,
+    }).catch((err) => {
+      console.error(`[worker] ${applicationId} adapter ${adapter.id} failed`, err);
+      return {
+        ok: false as const,
+        status: "unknown_error" as const,
+        error: err instanceof Error ? err.message : "unknown",
+      };
+    });
+
+    if (outcome.ok) {
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: {
+          status: "success",
+          submittedVia: `portal_${adapter.id}`,
+          completedAt: new Date(),
+        },
+      });
+      await notifyApplicationSent(applicationId).catch((err) =>
+        console.error(`[worker] ${applicationId} notify email failed`, err),
+      );
+      return; // fatto
+    }
+    // se l'adapter non ci è riuscito (form cambiato / captcha / …) proseguiamo
+    // al fallback email. Logghiamo l'errore sull'Application per debugging.
+    console.warn(
+      `[worker] ${applicationId} adapter ${adapter.id} → ${outcome.status}: ${outcome.error}`,
+    );
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: {
+        errorMessage: `Portal ${adapter.label}: ${outcome.error}`,
+      },
+    });
+  }
+
   let recruiterEmail = app.job.recruiterEmail;
   if (!recruiterEmail) {
     recruiterEmail = await scrapeRecruiterEmail(
@@ -243,7 +293,11 @@ export async function processApplication(applicationId: string): Promise<void> {
     if (delivered) {
       await prisma.application.update({
         where: { id: applicationId },
-        data: { status: "success", completedAt: new Date() },
+        data: {
+          status: "success",
+          submittedVia: "email_recruiter",
+          completedAt: new Date(),
+        },
       });
       await notifyApplicationSent(applicationId).catch((err) =>
         console.error(`[worker] ${applicationId} notify email failed`, err),
@@ -765,4 +819,77 @@ function renderRecruiterEmail(d: {
     ${d.pixelUrl ? `<img src="${d.pixelUrl}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;overflow:hidden;"/>` : ""}
   </div>
 </body></html>`;
+}
+
+// ---------- Portal adapter submit (Greenhouse / Lever / Workable / ...) ----------
+
+interface AdapterSubmitInput {
+  applicationId: string;
+  adapter: ReturnType<typeof import("@/lib/portal-adapters").findPortalAdapter> extends infer T
+    ? T extends null
+      ? never
+      : T
+    : never;
+  jobUrl: string;
+  cvPath: string;
+  clPath: string;
+  coverLetterText: string;
+  userId: string;
+}
+
+async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
+  import("@/lib/portal-adapters").ApplyOutcome
+> {
+  const { applicationId, adapter, jobUrl, cvPath, clPath, userId } = input;
+
+  await prisma.application.update({
+    where: { id: applicationId },
+    data: { status: "applying" },
+  });
+
+  // Profilo utente per compilare i campi del form
+  const profileRow = await prisma.cVProfile.findUnique({
+    where: { userId },
+  });
+  if (!profileRow) {
+    return {
+      ok: false,
+      status: "missing_field",
+      error: "Profilo CV mancante — vai su /cv per compilarlo.",
+    };
+  }
+  const profile = rowToProfile(profileRow);
+
+  // Scarica i file localmente se storage remoto (Blob/Supabase)
+  const [cvLocalPath, clLocalPath] = await Promise.all([
+    ensureLocalPath(cvPath, "cv.docx"),
+    ensureLocalPath(clPath, "cover_letter.docx"),
+  ]);
+
+  const { chromium } = await import("playwright");
+  let browser: import("playwright").Browser | undefined;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+    });
+    const context = await browser.newContext({
+      locale: "it-IT",
+      timezoneId: "Europe/Rome",
+      userAgent:
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    });
+    const page = await context.newPage();
+    const outcome = await adapter.apply(page, {
+      profile,
+      cvLocalPath,
+      clLocalPath,
+      coverLetterText: input.coverLetterText,
+      jobUrl,
+      dryRun: process.env.PORTAL_SUBMIT_DRY_RUN === "true",
+    });
+    return outcome;
+  } finally {
+    if (browser) await browser.close().catch(() => void 0);
+  }
 }
