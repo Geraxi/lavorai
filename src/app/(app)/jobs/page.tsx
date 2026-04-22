@@ -71,8 +71,19 @@ export default async function JobsPage({
   // Altrimenti, se ha preferenze multi-ruolo, query una volta per ciascun
   // ruolo e dedupa per non mostrare solo il primo.
   let jobsRaw: Awaited<ReturnType<typeof searchAndCacheJobs>> = [];
+  async function safeSearch(
+    params: Parameters<typeof searchAndCacheJobs>[0],
+  ): Promise<Awaited<ReturnType<typeof searchAndCacheJobs>>> {
+    try {
+      return await searchAndCacheJobs(params);
+    } catch (err) {
+      console.error("[jobs] search failed for", params, err);
+      return [];
+    }
+  }
+
   if (what) {
-    jobsRaw = await searchAndCacheJobs({
+    jobsRaw = await safeSearch({
       what,
       where: where || undefined,
       remoteOnly,
@@ -82,7 +93,7 @@ export default async function JobsPage({
     const rolesToQuery = prefRoles.slice(0, 5);
     const results = await Promise.all(
       rolesToQuery.map((r) =>
-        searchAndCacheJobs({
+        safeSearch({
           what: r,
           where: where || undefined,
           remoteOnly,
@@ -105,7 +116,7 @@ export default async function JobsPage({
     });
   } else {
     // Nessuna preferenza e nessuna ricerca → mostra una generica
-    jobsRaw = await searchAndCacheJobs({
+    jobsRaw = await safeSearch({
       where: where || undefined,
       remoteOnly,
     });
