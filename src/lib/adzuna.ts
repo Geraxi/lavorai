@@ -103,6 +103,8 @@ function toJobListItem(a: AdzunaJob): JobListItem {
     salaryMax: a.salary_max ? Math.round(a.salary_max) : null,
     category: a.category?.label ?? null,
     postedAt: a.created ? new Date(a.created) : null,
+    recruiterEmail: null,
+    recruiterScrapedAt: null,
   };
 }
 
@@ -125,6 +127,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 38000,
       category: "IT Jobs",
       postedAt: new Date(Date.now() - 2 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
     {
       id: "",
@@ -141,6 +145,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 70000,
       category: "IT Jobs",
       postedAt: new Date(Date.now() - 1 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
     {
       id: "",
@@ -157,6 +163,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 65000,
       category: "IT Jobs",
       postedAt: new Date(Date.now() - 3 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
     {
       id: "",
@@ -173,6 +181,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 75000,
       category: "Design Jobs",
       postedAt: new Date(Date.now() - 4 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
     {
       id: "",
@@ -189,6 +199,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 22000,
       category: "Hospitality",
       postedAt: new Date(Date.now() - 5 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
     {
       id: "",
@@ -205,6 +217,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 65000,
       category: "IT Jobs",
       postedAt: new Date(Date.now() - 6 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
     {
       id: "",
@@ -221,6 +235,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 26000,
       category: "Logistics",
       postedAt: new Date(Date.now() - 7 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
     {
       id: "",
@@ -237,6 +253,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 95000,
       category: "IT Jobs",
       postedAt: new Date(Date.now() - 1 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
     {
       id: "",
@@ -253,6 +271,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 48000,
       category: "Design Jobs",
       postedAt: new Date(Date.now() - 2 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
     {
       id: "",
@@ -269,6 +289,8 @@ function mockJobs(params: AdzunaSearchParams): JobListItem[] {
       salaryMax: 60000,
       category: "IT Jobs",
       postedAt: new Date(Date.now() - 3 * 86400_000),
+      recruiterEmail: null,
+      recruiterScrapedAt: null,
     },
   ];
 

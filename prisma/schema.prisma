@@ -225,6 +225,9 @@ model Job {
   category      String?
   postedAt      DateTime?
   cachedAt      DateTime  @default(now())
+  // Email del recruiter estratta scrapando il job.url. Null se non trovata.
+  recruiterEmail String?
+  recruiterScrapedAt DateTime?
 
   applications Application[]
 

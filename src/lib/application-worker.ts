@@ -17,6 +17,7 @@ import { detectLanguage } from "@/lib/lang-detect";
 import { renderCVPdf } from "@/lib/cv-pdf";
 import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
 import { sendWithinQuota } from "@/lib/email-quota";
+import { scrapeRecruiterEmail } from "@/lib/recruiter-email";
 
 /**
  * Worker: processa una candidatura fino a consegna al utente.
@@ -180,7 +181,7 @@ export async function processApplication(applicationId: string): Promise<void> {
     },
   });
 
-  // 5. Email con allegati (best-effort; app.status già "ready_to_apply")
+  // 5. Email all'utente con allegati (copia di backup + conferma interna)
   await sendApplicationEmail({
     to: app.user.email,
     userName: app.user.name,
@@ -189,22 +190,98 @@ export async function processApplication(applicationId: string): Promise<void> {
     clBuffer,
     atsScore: result.atsScore,
   }).catch((err) => {
-    console.error(`[worker] ${applicationId} email delivery failed`, err);
+    console.error(`[worker] ${applicationId} email to user failed`, err);
   });
 
-  // 6. Playwright auto-submit (SOLO se feature flag esplicito)
-  if (process.env.AUTO_APPLY_ENABLED === "true") {
-    await attemptAutoSubmit({
-      applicationId,
-      portal: app.portal,
-      jobUrl: app.job.url,
-      userSessions: app.user.portalSessions,
-      cvPath,
-      clPath,
-    });
+  // 6. DELIVERY AL RECRUITER — invia davvero la candidatura
+  //    Strategia: scrape job.url per trovare l'email del recruiter,
+  //    poi invia via Resend con Reply-To = utente, allegati, pixel tracking.
+  let recruiterEmail = app.job.recruiterEmail;
+  if (!recruiterEmail) {
+    recruiterEmail = await scrapeRecruiterEmail(
+      app.job.url,
+      app.job.company,
+    );
+    if (recruiterEmail) {
+      await prisma.job.update({
+        where: { id: app.job.id },
+        data: {
+          recruiterEmail,
+          recruiterScrapedAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.job.update({
+        where: { id: app.job.id },
+        data: { recruiterScrapedAt: new Date() },
+      });
+    }
   }
-  // Altrimenti lascia lo stato "ready_to_apply": l'utente ha i file e
-  // può cliccare apply sul portale dalla dashboard.
+
+  if (recruiterEmail) {
+    const appRow = await prisma.application.findUnique({
+      where: { id: applicationId },
+      select: { trackingToken: true },
+    });
+    const trackingToken = appRow?.trackingToken ?? null;
+    const delivered = await deliverApplicationToRecruiter({
+      applicationId,
+      to: recruiterEmail,
+      replyTo: app.user.email,
+      userName: app.user.name,
+      job: app.job,
+      cvBuffer,
+      clBuffer,
+      cvLanguage: jobLang,
+      coverLetterText: result.coverLetter,
+      trackingToken,
+    }).catch((err) => {
+      console.error(`[worker] ${applicationId} recruiter delivery failed`, err);
+      return false;
+    });
+
+    if (delivered) {
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: { status: "success", completedAt: new Date() },
+      });
+      await notifyApplicationSent(applicationId).catch((err) =>
+        console.error(`[worker] ${applicationId} notify email failed`, err),
+      );
+    } else {
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: {
+          status: "failed",
+          errorMessage:
+            "Consegna email al recruiter fallita. Apri l'annuncio per candidarti manualmente.",
+          completedAt: new Date(),
+        },
+      });
+    }
+  } else {
+    // Nessuna email del recruiter trovata nell'annuncio → fallback: se
+    // AUTO_APPLY_ENABLED + portal session → prova Playwright; altrimenti
+    // resta ready_to_apply con errorMessage esplicito.
+    if (process.env.AUTO_APPLY_ENABLED === "true") {
+      await attemptAutoSubmit({
+        applicationId,
+        portal: app.portal,
+        jobUrl: app.job.url,
+        userSessions: app.user.portalSessions,
+        cvPath,
+        clPath,
+      });
+    } else {
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: {
+          errorMessage:
+            "Non siamo riusciti a trovare l'email del recruiter in questo annuncio. Apri il link e invia manualmente — CV e lettera sono pronti.",
+        },
+      });
+    }
+  }
 }
 
 async function markFailed(id: string, message: string): Promise<void> {
@@ -552,6 +629,140 @@ function renderSentEmail(data: {
       Vedrai tutte le candidature su lavorai.it/applications<br/>
       Hai domande? Rispondi a questa email.
     </p>
+  </div>
+</body></html>`;
+}
+
+// ---------- DELIVERY: email la candidatura al recruiter ----------
+
+interface DeliverInput {
+  applicationId: string;
+  to: string;
+  replyTo: string;
+  userName: string | null;
+  job: { title: string; company: string | null; url: string };
+  cvBuffer: Buffer;
+  clBuffer: Buffer;
+  cvLanguage: "it" | "en";
+  coverLetterText: string;
+  trackingToken: string | null;
+}
+
+async function deliverApplicationToRecruiter(
+  input: DeliverInput,
+): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `\n📨 [recruiter-delivery DEV] Avrei inviato a ${input.to} (reply-to ${input.replyTo}) — "${input.job.title}" @ ${input.job.company ?? "—"}\n`,
+      );
+      return false; // in dev senza resend, non conta come delivered
+    }
+    console.error("[worker] RESEND_API_KEY mancante — no delivery");
+    return false;
+  }
+
+  const resend = new Resend(apiKey);
+  const from =
+    process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
+  const pixel = input.trackingToken
+    ? `${siteUrl}/api/track/open/${input.trackingToken}`
+    : null;
+
+  const candidateName = (input.userName ?? "").trim() || input.replyTo;
+  const subject = input.cvLanguage === "en"
+    ? `Application for ${input.job.title}${input.job.company ? ` — ${input.job.company}` : ""}`
+    : `Candidatura — ${input.job.title}${input.job.company ? ` · ${input.job.company}` : ""}`;
+
+  const result = await sendWithinQuota("application_sent", input.to, async () => {
+    await resend.emails.send({
+      from,
+      to: input.to,
+      replyTo: input.replyTo,
+      subject,
+      html: renderRecruiterEmail({
+        candidateName,
+        candidateEmail: input.replyTo,
+        jobTitle: input.job.title,
+        company: input.job.company,
+        jobUrl: input.job.url,
+        coverLetterText: input.coverLetterText,
+        lang: input.cvLanguage,
+        pixelUrl: pixel,
+      }),
+      text:
+        input.cvLanguage === "en"
+          ? `${input.coverLetterText}\n\n---\nCV and cover letter attached.\nSent via LavorAI on behalf of ${candidateName} (${input.replyTo}).\nReply directly to this email to reach ${candidateName}.`
+          : `${input.coverLetterText}\n\n---\nCV e lettera motivazionale in allegato.\nInviato tramite LavorAI per conto di ${candidateName} (${input.replyTo}).\nRispondi direttamente a questa email per contattare ${candidateName}.`,
+      attachments: [
+        {
+          filename: `CV_${slugName(candidateName)}.docx`,
+          content: input.cvBuffer,
+        },
+        {
+          filename: `${input.cvLanguage === "en" ? "Cover_Letter" : "Lettera_Motivazionale"}_${slugName(candidateName)}.docx`,
+          content: input.clBuffer,
+        },
+      ],
+      headers: {
+        "X-Lavorai-App-Id": input.applicationId,
+      },
+    });
+  });
+  return result.sent;
+}
+
+function slugName(name: string): string {
+  return (
+    name
+      .replace(/[^a-zA-Z0-9\s-]/g, "")
+      .trim()
+      .replace(/\s+/g, "_")
+      .slice(0, 40) || "candidato"
+  );
+}
+
+function renderRecruiterEmail(d: {
+  candidateName: string;
+  candidateEmail: string;
+  jobTitle: string;
+  company: string | null;
+  jobUrl: string;
+  coverLetterText: string;
+  lang: "it" | "en";
+  pixelUrl: string | null;
+}): string {
+  const isIt = d.lang === "it";
+  const clHtml = escapeHtml(d.coverLetterText).replace(/\n/g, "<br/>");
+  const footer = isIt
+    ? `Inviato tramite <a href="https://lavorai.it" style="color:#16a34a;text-decoration:none;">LavorAI</a> per conto di <strong>${escapeHtml(d.candidateName)}</strong> · Rispondi a questa email per contattare direttamente il candidato.`
+    : `Sent via <a href="https://lavorai.it" style="color:#16a34a;text-decoration:none;">LavorAI</a> on behalf of <strong>${escapeHtml(d.candidateName)}</strong> · Reply to this email to reach the candidate directly.`;
+  const subjectHeader = isIt
+    ? `Candidatura per <strong>${escapeHtml(d.jobTitle)}</strong>${d.company ? ` · ${escapeHtml(d.company)}` : ""}`
+    : `Application for <strong>${escapeHtml(d.jobTitle)}</strong>${d.company ? ` · ${escapeHtml(d.company)}` : ""}`;
+  const docsLine = isIt
+    ? "CV e lettera motivazionale in allegato."
+    : "CV and cover letter attached.";
+
+  return `<!doctype html>
+<html lang="${d.lang}"><body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,Inter,Helvetica,sans-serif;color:#0F1012;line-height:1.55;">
+  <div style="max-width:640px;margin:0 auto;padding:32px 24px;">
+    <p style="font-size:13px;color:#5B5D61;margin:0 0 18px;">
+      ${subjectHeader}
+    </p>
+    <div style="font-size:14.5px;color:#0F1012;">
+      ${clHtml}
+    </div>
+    <hr style="border:none;border-top:1px solid #E6E4DD;margin:28px 0 12px;"/>
+    <p style="font-size:12.5px;color:#5B5D61;margin:0 0 6px;">
+      ${docsLine}
+    </p>
+    <p style="font-size:12px;color:#8A8C90;margin:0;">
+      ${footer}
+    </p>
+    ${d.pixelUrl ? `<img src="${d.pixelUrl}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;overflow:hidden;"/>` : ""}
   </div>
 </body></html>`;
 }
