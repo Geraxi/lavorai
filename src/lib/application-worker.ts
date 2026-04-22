@@ -19,6 +19,7 @@ import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { scrapeRecruiterEmail } from "@/lib/recruiter-email";
 import { findPortalAdapter } from "@/lib/portal-adapters";
+import { resolveFinalUrl } from "@/lib/resolve-job-url";
 
 /**
  * Worker: processa una candidatura fino a consegna al utente.
@@ -199,13 +200,28 @@ export async function processApplication(applicationId: string): Promise<void> {
   //    (b) Email recruiter (scraped dall'annuncio)
   //    (c) Manual: ready_to_apply con istruzioni
   const portalSubmitEnabled = process.env.PORTAL_SUBMIT_ENABLED === "true";
-  const adapter = portalSubmitEnabled ? findPortalAdapter(app.job.url) : null;
+  // Adzuna restituisce short-URL che redirigono al vero ATS (greenhouse/
+  // lever/workable/linkedin/ecc.). Seguiamo i 302 per trovare l'URL finale.
+  let resolvedUrl = app.job.url;
+  try {
+    resolvedUrl = await resolveFinalUrl(app.job.url);
+    if (resolvedUrl !== app.job.url) {
+      console.log(
+        `[worker] ${applicationId} resolved ${app.job.url} → ${resolvedUrl}`,
+      );
+    }
+  } catch (err) {
+    console.warn(`[worker] ${applicationId} URL resolve failed`, err);
+  }
+  const adapter = portalSubmitEnabled
+    ? findPortalAdapter(resolvedUrl) ?? findPortalAdapter(app.job.url)
+    : null;
 
   if (adapter) {
     const outcome = await attemptPortalAdapterSubmit({
       applicationId,
       adapter,
-      jobUrl: app.job.url,
+      jobUrl: resolvedUrl,
       cvPath,
       clPath,
       coverLetterText: result.coverLetter,
@@ -258,7 +274,7 @@ export async function processApplication(applicationId: string): Promise<void> {
   let recruiterEmail = app.job.recruiterEmail;
   if (!recruiterEmail) {
     recruiterEmail = await scrapeRecruiterEmail(
-      app.job.url,
+      resolvedUrl,
       app.job.company,
     );
     if (recruiterEmail) {
