@@ -21,6 +21,24 @@ const Schema = z.object({
   excludedCompanies: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
 });
 
+/**
+ * GET /api/preferences — snapshot minimale usato da widget (pausa auto-apply, ecc.)
+ */
+export async function GET() {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+  const prefs = await prisma.userPreferences.findUnique({
+    where: { userId: user.id },
+    select: { autoApplyMode: true, matchMin: true },
+  });
+  return NextResponse.json({
+    autoApplyMode: prefs?.autoApplyMode ?? "manual",
+    matchMin: prefs?.matchMin ?? 75,
+  });
+}
+
 export async function PUT(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {

@@ -8,6 +8,7 @@ import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import { StatusChip } from "@/components/design/status-chip";
 import { DetailDrawer } from "@/components/design/detail-drawer";
+import { AutoApplyToggle } from "@/components/auto-apply-toggle";
 
 interface ApiApplication {
   id: string;
@@ -179,7 +180,8 @@ export default function ApplicationsPage() {
               {allRows.length} {allRows.length === 1 ? "candidatura" : "candidature"}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <AutoApplyToggle />
             <button
               className="ds-btn"
               type="button"
