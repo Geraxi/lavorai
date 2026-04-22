@@ -220,17 +220,26 @@ export async function processApplication(applicationId: string): Promise<void> {
     });
 
     if (outcome.ok) {
+      const isDryRun =
+        "confirmation" in outcome && outcome.confirmation === "DRY_RUN";
       await prisma.application.update({
         where: { id: applicationId },
         data: {
-          status: "success",
-          submittedVia: `portal_${adapter.id}`,
-          completedAt: new Date(),
+          // In dry-run non marchiamo come success: il form è stato compilato
+          // ma NON è stato inviato. Lo stato resta ready_to_apply.
+          status: isDryRun ? "ready_to_apply" : "success",
+          submittedVia: isDryRun ? null : `portal_${adapter.id}`,
+          completedAt: isDryRun ? null : new Date(),
+          errorMessage: isDryRun
+            ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
+            : null,
         },
       });
-      await notifyApplicationSent(applicationId).catch((err) =>
-        console.error(`[worker] ${applicationId} notify email failed`, err),
-      );
+      if (!isDryRun) {
+        await notifyApplicationSent(applicationId).catch((err) =>
+          console.error(`[worker] ${applicationId} notify email failed`, err),
+        );
+      }
       return; // fatto
     }
     // se l'adapter non ci è riuscito (form cambiato / captcha / …) proseguiamo
@@ -462,20 +471,37 @@ interface AutoSubmitInput {
 async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
   const { applicationId, portal, jobUrl } = input;
 
-  // Job mock/demo: simula successo per demo end-to-end senza browser reale
+  // Job mock/demo ESPLICITO: solo URL di sviluppo (example.com/org).
+  // NON facciamo più fake-success su job reali con portale sconosciuto
+  // — lasciamo ready_to_apply con messaggio chiaro.
   const isMockOrDemo =
-    jobUrl.includes("example.com") ||
-    jobUrl.includes("example.org") ||
-    !isPortalId(portal);
+    jobUrl.includes("example.com") || jobUrl.includes("example.org");
   if (isMockOrDemo) {
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 500));
     await prisma.application.update({
       where: { id: applicationId },
-      data: { status: "success", completedAt: new Date() },
+      data: {
+        status: "success",
+        submittedVia: "mock_demo",
+        completedAt: new Date(),
+      },
     });
     await notifyApplicationSent(applicationId).catch((err) =>
       console.error(`[worker] ${applicationId} notify email failed`, err),
     );
+    return;
+  }
+
+  // Portal sconosciuto (non nei nostri adapter né in infojobs): no-op,
+  // lascio ready_to_apply con errorMessage esplicito
+  if (!isPortalId(portal)) {
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: {
+        errorMessage:
+          "Questo portale non è supportato per invio automatico. Apri l'annuncio e candidati manualmente — CV e lettera sono pronti nella sezione Materiali.",
+      },
+    });
     return;
   }
 
