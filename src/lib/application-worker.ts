@@ -16,6 +16,7 @@ import { profileToRow, rowToProfile } from "@/lib/cv-profile-types";
 import { detectLanguage } from "@/lib/lang-detect";
 import { renderCVPdf } from "@/lib/cv-pdf";
 import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
+import { sendWithinQuota } from "@/lib/email-quota";
 
 /**
  * Worker: processa una candidatura fino a consegna al utente.
@@ -244,22 +245,24 @@ async function sendApplicationEmail(input: {
   const firstName = (input.userName ?? "").split(/\s+/)[0] || "";
   const company = input.job.company ?? "l'azienda";
 
-  await resend.emails.send({
-    from,
-    to: input.to,
-    subject: `CV pronto per "${input.job.title}" — ${company}`,
-    html: renderEmail({
-      firstName,
-      jobTitle: input.job.title,
-      company,
-      jobUrl: input.job.url,
-      atsScore: input.atsScore,
-    }),
-    text: `Ciao ${firstName},\n\nIl tuo CV ottimizzato per "${input.job.title}" è pronto. ATS score: ${input.atsScore}/100.\n\nIn allegato trovi CV + lettera motivazionale già adattati.\nApri l'annuncio: ${input.job.url}\n\n— LavorAI`,
-    attachments: [
-      { filename: "CV_Ottimizzato.docx", content: input.cvBuffer },
-      { filename: "Lettera_Motivazionale.docx", content: input.clBuffer },
-    ],
+  await sendWithinQuota("cv_ready", input.to, async () => {
+    await resend.emails.send({
+      from,
+      to: input.to,
+      subject: `CV pronto per "${input.job.title}" — ${company}`,
+      html: renderEmail({
+        firstName,
+        jobTitle: input.job.title,
+        company,
+        jobUrl: input.job.url,
+        atsScore: input.atsScore,
+      }),
+      text: `Ciao ${firstName},\n\nIl tuo CV ottimizzato per "${input.job.title}" è pronto. ATS score: ${input.atsScore}/100.\n\nIn allegato trovi CV + lettera motivazionale già adattati.\nApri l'annuncio: ${input.job.url}\n\n— LavorAI`,
+      attachments: [
+        { filename: "CV_Ottimizzato.docx", content: input.cvBuffer },
+        { filename: "Lettera_Motivazionale.docx", content: input.clBuffer },
+      ],
+    });
   });
 }
 
@@ -507,12 +510,14 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
   const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
 
-  await resend.emails.send({
-    from,
-    to: app.user.email,
-    subject: `Candidatura inviata a ${company} ✓`,
-    html: renderSentEmail({ firstName, jobTitle, company, jobUrl }),
-    text: `Ciao ${firstName},\n\nLa tua candidatura per "${jobTitle}" è stata consegnata a ${company}.\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`,
+  await sendWithinQuota("application_sent", app.user.email, async () => {
+    await resend.emails.send({
+      from,
+      to: app.user.email,
+      subject: `Candidatura inviata a ${company} ✓`,
+      html: renderSentEmail({ firstName, jobTitle, company, jobUrl }),
+      text: `Ciao ${firstName},\n\nLa tua candidatura per "${jobTitle}" è stata consegnata a ${company}.\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`,
+    });
   });
 }
 

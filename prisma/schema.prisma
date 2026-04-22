@@ -289,6 +289,20 @@ model Application {
   @@index([sessionId])
 }
 
+/// Log platform-wide di ogni email effettivamente consegnata via Resend.
+/// Usato per stimare il consumo quota giornaliera/mensile e skippare
+/// l'invio quando ci avviciniamo al limite (mantiene solo il conteggio,
+/// no content / allegati / PII non necessarie).
+model EmailLog {
+  id        String   @id @default(cuid())
+  kind      String   // "cv_ready" | "application_sent" | "signup_verify" | "password_reset" | "welcome" | "magic_link" | "other"
+  to        String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([kind, createdAt])
+}
+
 /// CV staged BEFORE user account exists (from /optimize public form).
 /// When the user completes email magic-link, the signIn event adopts the row
 /// into CVDocument + sets User.privacyConsentAt, then deletes the staging row.
