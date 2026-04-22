@@ -5,7 +5,7 @@ import { Resend } from "resend";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { moveFile } from "@/lib/storage";
-import { normalizeTier, type Tier } from "@/lib/billing";
+import { effectiveTier, type Tier } from "@/lib/billing";
 
 /**
  * NextAuth v5 config — Email magic link via Resend.
@@ -143,7 +143,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           where: { id: userId },
           select: { tier: true, subscriptionStatus: true, email: true, name: true },
         });
-        session.user.tier = normalizeTier(dbUser?.tier);
+        session.user.tier = effectiveTier({
+          tier: dbUser?.tier,
+          email: dbUser?.email,
+        });
         session.user.subscriptionStatus = dbUser?.subscriptionStatus ?? null;
         if (dbUser?.email) session.user.email = dbUser.email;
         if (dbUser?.name) session.user.name = dbUser.name;

@@ -4,7 +4,7 @@ import { CommandPalette } from "@/components/design/command-palette";
 import { ThemeScript } from "@/components/design/theme-script";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { normalizeTier } from "@/lib/billing";
+import { effectiveTier } from "@/lib/billing";
 
 export default async function AppLayout({
   children,
@@ -28,7 +28,7 @@ export default async function AppLayout({
     }),
   ]);
 
-  const tier = normalizeTier(user.tier);
+  const tier = effectiveTier(user);
   const dailyCap = tier === "free" ? 3 : tier === "pro" ? 50 : 100;
 
   return (

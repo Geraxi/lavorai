@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
-import { getLimits, normalizeTier } from "@/lib/billing";
+import { getLimits, effectiveTier } from "@/lib/billing";
 import { applyLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Paywall per-tier ---
-    const tier = normalizeTier(user.tier);
+    const tier = effectiveTier(user);
     const limits = getLimits(tier);
     const monthStart = new Date();
     monthStart.setDate(1);

@@ -138,3 +138,32 @@ export function normalizeTier(t: string | null | undefined): Tier {
   if (t === "pro" || t === "pro_plus") return t;
   return "free";
 }
+
+/**
+ * Whitelist di email con accesso Pro+ permanente senza pagamento.
+ * Bypassa paywall, rate limit mensile, gate di feature premium.
+ * Aggiungere email SOLO qui (lowercase) — non in DB — così non c'è modo
+ * di trasformarsi in Pro+ senza un deploy.
+ */
+const LIFETIME_PRO_PLUS_EMAILS = new Set<string>([
+  "antonella.lasalandra.07@gmail.com",
+  "umbertogeraci0@gmail.com",
+]);
+
+export function isLifetimeProPlus(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return LIFETIME_PRO_PLUS_EMAILS.has(email.trim().toLowerCase());
+}
+
+/**
+ * Ritorna il tier effettivo per un utente, considerando la whitelist.
+ * Usare questo ovunque si prenda la decisione "può l'utente X fare Y?"
+ * invece di `normalizeTier(user.tier)`.
+ */
+export function effectiveTier(user: {
+  tier?: string | null;
+  email?: string | null;
+}): Tier {
+  if (isLifetimeProPlus(user.email)) return "pro_plus";
+  return normalizeTier(user.tier);
+}

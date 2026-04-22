@@ -7,7 +7,7 @@ import {
   SectionHead,
 } from "@/components/design/section-card";
 import { getCurrentUser } from "@/lib/session";
-import { TIERS, normalizeTier } from "@/lib/billing";
+import { TIERS, effectiveTier } from "@/lib/billing";
 import {
   SubscriptionActions,
   GdprExportButton,
@@ -23,7 +23,7 @@ export default async function SettingsPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const tier = normalizeTier(user.tier);
+  const tier = effectiveTier(user);
   const cfg = TIERS[tier];
   const me = await prisma.user.findUnique({
     where: { id: user.id },
