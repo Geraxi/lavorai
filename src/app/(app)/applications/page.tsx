@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import useSWR, { mutate as swrMutate } from "swr";
-import { toast } from "sonner";
+import useSWR from "swr";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
+import { StatusChip } from "@/components/design/status-chip";
 import { DetailDrawer } from "@/components/design/detail-drawer";
 
 interface ApiApplication {
@@ -150,17 +150,8 @@ export default function ApplicationsPage() {
           <FilterButton active={filter === "inviata"} onClick={() => setFilter("inviata")}>
             Inviate <FilterCount>{counts.inviata}</FilterCount>
           </FilterButton>
-          <FilterButton active={filter === "vista"} onClick={() => setFilter("vista")}>
-            Viste <FilterCount>{counts.vista}</FilterCount>
-          </FilterButton>
-          <FilterButton active={filter === "colloquio"} onClick={() => setFilter("colloquio")}>
-            Colloquio <FilterCount>{counts.colloquio}</FilterCount>
-          </FilterButton>
-          <FilterButton active={filter === "offerta"} onClick={() => setFilter("offerta")}>
-            Offerta <FilterCount>{counts.offerta}</FilterCount>
-          </FilterButton>
           <FilterButton active={filter === "rifiutata"} onClick={() => setFilter("rifiutata")}>
-            Rifiutate <FilterCount>{counts.rifiutata}</FilterCount>
+            Non riuscite <FilterCount>{counts.rifiutata}</FilterCount>
           </FilterButton>
         </div>
 
@@ -226,8 +217,8 @@ export default function ApplicationsPage() {
                     </div>
                   </td>
                   <td style={{ color: "var(--fg-muted)", fontSize: 12 }}>{a.source}</td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <StatusSelect id={a.id} value={a.status} />
+                  <td>
+                    <StatusChip status={a.status} />
                   </td>
                   <td style={{ color: "var(--fg-muted)", fontSize: 12 }}>{a.applied}</td>
                   <td>
@@ -326,73 +317,3 @@ function relativeTime(d: Date): string {
   return `${diffD} giorni fa`;
 }
 
-type StatusValue = "inviata" | "vista" | "colloquio" | "offerta" | "rifiutata";
-
-const STATUS_LABELS: Record<StatusValue, string> = {
-  inviata: "Inviata",
-  vista: "Vista",
-  colloquio: "Colloquio",
-  offerta: "Offerta",
-  rifiutata: "Rifiutata",
-};
-
-const STATUS_COLORS: Record<StatusValue, { bg: string; fg: string }> = {
-  inviata: { bg: "var(--bg-sunken)", fg: "var(--fg)" },
-  vista: { bg: "#dbeafe", fg: "#1e40af" },
-  colloquio: { bg: "#fef3c7", fg: "#92400e" },
-  offerta: { bg: "#dcfce7", fg: "#166534" },
-  rifiutata: { bg: "#fee2e2", fg: "#991b1b" },
-};
-
-function StatusSelect({ id, value }: { id: string; value: string }) {
-  const safe = (STATUS_LABELS as Record<string, string>)[value]
-    ? (value as StatusValue)
-    : "inviata";
-  const style = STATUS_COLORS[safe];
-  async function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    const next = e.target.value as StatusValue;
-    try {
-      const res = await fetch(`/api/applications/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userStatus: next }),
-      });
-      if (!res.ok) {
-        toast.error("Impossibile aggiornare lo stato");
-        return;
-      }
-      toast.success(`Stato: ${STATUS_LABELS[next]}`);
-      swrMutate("/api/applications");
-    } catch {
-      toast.error("Errore di rete");
-    }
-  }
-  return (
-    <select
-      value={safe}
-      onChange={onChange}
-      style={{
-        appearance: "none",
-        border: "1px solid var(--border-ds)",
-        background: style.bg,
-        color: style.fg,
-        fontSize: 11.5,
-        fontWeight: 500,
-        padding: "3px 22px 3px 10px",
-        borderRadius: 999,
-        cursor: "pointer",
-        backgroundImage:
-          "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>\")",
-        backgroundRepeat: "no-repeat",
-        backgroundPosition: "right 7px center",
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {(Object.keys(STATUS_LABELS) as StatusValue[]).map((s) => (
-        <option key={s} value={s} style={{ color: "initial" }}>
-          {STATUS_LABELS[s]}
-        </option>
-      ))}
-    </select>
-  );
-}
