@@ -66,6 +66,10 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         setPaywallOpen(true);
         return;
       }
+      if (res.status === 409 && body?.error === "below_match_threshold") {
+        toast.error(body?.message ?? "Match sotto la soglia.");
+        return;
+      }
       if (!res.ok) {
         toast.error(body?.message ?? "Errore. Riprova.");
         return;
@@ -115,11 +119,16 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         remainingJobs.slice(0, body.enqueued).forEach((j) => next.add(j.id));
         return next;
       });
-      toast.success(
-        `${body.enqueued} candidature in coda${
-          body.remaining != null ? ` · ${body.remaining} rimaste nel piano` : ""
-        }`,
-      );
+      const bits: string[] = [`${body.enqueued} candidature in coda`];
+      if (body.belowThreshold > 0) {
+        bits.push(
+          `${body.belowThreshold} saltate (match < ${body.matchMin}%)`,
+        );
+      }
+      if (body.remaining != null) {
+        bits.push(`${body.remaining} rimaste nel piano`);
+      }
+      toast.success(bits.join(" · "));
       setTimeout(() => router.push("/applications"), 1200);
     } catch {
       toast.error("Errore di rete.");

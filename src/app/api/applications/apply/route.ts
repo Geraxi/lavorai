@@ -5,6 +5,8 @@ import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
 import { getLimits, effectiveTier } from "@/lib/billing";
 import { applyLimiter } from "@/lib/rate-limit";
+import { quickMatchScore } from "@/lib/match-score";
+import { rowToProfile } from "@/lib/cv-profile-types";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -124,11 +126,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // --- Leggi auto-apply mode dalle preferenze ---
-    const prefs = await prisma.userPreferences.findUnique({
-      where: { userId: user.id },
-      select: { autoApplyMode: true },
-    });
+    // --- Leggi preferenze (mode + matchMin) e profilo CV per match score ---
+    const [prefs, profileRow] = await Promise.all([
+      prisma.userPreferences.findUnique({
+        where: { userId: user.id },
+        select: { autoApplyMode: true, matchMin: true },
+      }),
+      prisma.cVProfile.findUnique({ where: { userId: user.id } }),
+    ]);
     const mode: "off" | "hybrid" | "auto" =
       (prefs?.autoApplyMode as "off" | "hybrid" | "auto") ?? "hybrid";
 
@@ -143,6 +148,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // --- Match score threshold ---
+    const matchMin = prefs?.matchMin ?? 0;
+    let score = 100;
+    if (matchMin > 0 && profileRow) {
+      const profile = rowToProfile(profileRow);
+      score = quickMatchScore(
+        profile,
+        `${job.title}\n${job.company ?? ""}\n${job.description}`,
+      );
+      if (score < matchMin) {
+        return NextResponse.json(
+          {
+            error: "below_match_threshold",
+            message: `Match ${score}% sotto la soglia minima ${matchMin}%. Abbassa la soglia in Preferenze o scegli un altro annuncio.`,
+            score,
+            matchMin,
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     // --- Crea la candidatura ---
     // mode=auto → status queued, worker la pesca subito
     // mode=hybrid → status awaiting_consent, worker NON la pesca
@@ -154,6 +181,7 @@ export async function POST(request: NextRequest) {
         portal,
         status: initialStatus,
         trackingToken: randomToken(),
+        atsScore: score, // pre-stima; il worker la sovrascrive con score Claude
       },
     });
 

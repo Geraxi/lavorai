@@ -32,58 +32,66 @@ function stripCodeFence(text: string): string {
 
 // ------------------------- EXTRACTION -------------------------
 
-const EXTRACT_SYSTEM = `Sei un parser di CV. Estrai TUTTE le informazioni oggettive dal testo CV in un JSON valido.
+const EXTRACT_SYSTEM = `Sei un parser di CV ad alta precisione. Estrai ASSOLUTAMENTE TUTTE le informazioni oggettive dal testo del CV in un JSON valido, senza lasciare nulla indietro.
 
-REGOLA FERREA: se un campo non è nel CV, lascialo stringa vuota o array vuoto. NON inventare MAI.
+REGOLE FERREE (non negoziabili):
+1. Se un campo non è nel CV → stringa vuota o array vuoto. MAI inventare.
+2. Cattura OGNI esperienza, OGNI titolo di studio, OGNI skill, OGNI lingua, OGNI link presente nel CV — anche se il CV è lungo.
+3. Per i bullet delle esperienze: includi sempre metriche numeriche quando presenti ("aumento del 35%", "gestito team di 8 persone", "budget €250k") e nomi specifici di tool/tecnologie/metodologie.
+4. Date: formato esatto come nel CV ("Gen 2023", "2020", "03/2021"). Se il CV dice "Presente/Oggi/Attuale" o "Present/Current", lascia endDate = "".
+5. Skill: estrai tutto — lingue di programmazione, framework, tool, metodologie, soft skill se ne nomina — senza duplicare.
 
-Schema esatto (rispondi SOLO con JSON, nessun markdown):
+Schema esatto (rispondi SOLO con JSON valido, nessun markdown):
+
 {
   "firstName": string,
   "lastName": string,
   "email": string,
   "phone": string,
-  "city": string,
-  "title": string,             // Titolo professionale attuale come scritto nel CV
-  "summary": string,           // Breve (2-4 frasi). Se il CV ha un "About/Summary" usalo come base. Altrimenti derivalo.
-  "experiences": [             // Ordinate dalla più recente
+  "city": string,                  // Città di residenza (NON dal nome azienda)
+  "title": string,                 // Titolo professionale attuale come scritto
+  "summary": string,               // 3-5 frasi. Se c'è un About/Summary/Profilo nel CV, usalo letterale o sintetizzato. Altrimenti deriva dalle esperienze principali.
+  "experiences": [                 // OGNI esperienza, ordinate dalla più recente
     {
-      "role": string,
-      "company": string,
-      "location": string,
-      "startDate": string,     // "MM/YYYY" o "YYYY" come nel CV. "" se assente.
-      "endDate": string,       // stesso formato, o "" se tuttora in corso
-      "description": string,   // 1-2 frasi descrittive
-      "bullets": string[]      // 3-6 bullet point dalle responsabilità/achievements nel CV
+      "role": string,              // Titolo ruolo come scritto
+      "company": string,           // Nome azienda
+      "location": string,          // Città/paese se specificato
+      "startDate": string,         // Come scritto nel CV ("Mar 2023", "2020", "03/2021")
+      "endDate": string,           // Stesso formato, "" se tuttora (Presente/Current)
+      "description": string,       // 1-2 frasi riassuntive del ruolo
+      "bullets": string[]          // TUTTI i bullet/achievements dal CV — 4-8 per ruolo se il CV li fornisce. Includi metriche e tool specifici.
     }
   ],
   "education": [
     {
-      "degree": string,
-      "school": string,
+      "degree": string,            // Es. "Laurea Triennale in Informatica", "Master in Business Administration"
+      "school": string,            // Università/istituto
       "location": string,
       "startDate": string,
       "endDate": string,
-      "notes": string
+      "notes": string              // Voto/GPA/tesi/specializzazione/progetti rilevanti se menzionati
     }
   ],
-  "skills": [ { "name": string } ],  // Skill tecniche estratte dal CV (max 40)
+  "skills": [ { "name": string } ],  // TUTTE le skill tecniche/tool/metodologie dal CV (cap 40)
   "languages": [
-    { "name": string, "level": string }  // es. "Italiano" / "Madrelingua", "Inglese" / "C1"
+    { "name": string, "level": string }  // Es. "Italiano" / "Madrelingua", "Inglese" / "C1 (IELTS 7.5)"
   ],
   "links": [
-    { "label": string, "url": string }   // LinkedIn, GitHub, portfolio — solo se presenti nel CV
+    { "label": string, "url": string }   // LinkedIn, GitHub, portfolio, behance, sito personale
   ]
-}`;
+}
+
+NOTA su sezioni aggiuntive del CV: certificazioni, corsi, pubblicazioni, volontariato, progetti personali → aggiungi come esperienza separata in "experiences" (role = nome certificazione/corso/progetto, company = ente emittente/contesto) oppure come bullet dell'esperienza/istruzione più rilevante. NON perdere questa informazione.`;
 
 export async function extractFullProfile(cvText: string): Promise<CVProfile> {
   const c = client();
   if (!c) return { ...EMPTY_PROFILE };
 
-  const clipped = cvText.slice(0, 16000);
+  const clipped = cvText.slice(0, 24000);
   try {
     const resp = await c.messages.create({
       model: MODEL,
-      max_tokens: 3000,
+      max_tokens: 6000,
       system: [
         {
           type: "text",

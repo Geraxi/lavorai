@@ -198,51 +198,93 @@ function formatRange(start: string, end: string, lang: Lang): string {
 }
 
 /**
- * Stima grossolana di "quanto contenuto sta davvero su 1 pagina".
- * Ritorna una versione sintetizzata se il contenuto rischia l'overflow.
+ * Densità approssimata del profilo (caratteri totali) per modulare
+ * quanto aggressivamente ridimensionare font e trimming.
+ */
+function contentDensity(profile: CVProfile): number {
+  const expChars = profile.experiences.reduce(
+    (s, e) =>
+      s +
+      (e.role.length + e.company.length + e.description.length) +
+      (e.bullets ?? []).reduce((a, b) => a + b.length, 0),
+    0,
+  );
+  const eduChars = profile.education.reduce(
+    (s, e) => s + e.degree.length + e.school.length + (e.notes?.length ?? 0),
+    0,
+  );
+  const skillChars = profile.skills.reduce((s, x) => s + x.name.length, 0);
+  return profile.summary.length + expChars + eduChars + skillChars;
+}
+
+/**
+ * Trimming adattivo: più esperienze → meno bullet per esperienza, più
+ * aggressiva la troncatura delle descrizioni. Obiettivo: mai più di 1 pagina.
  */
 function fitToOnePage(profile: CVProfile): CVProfile {
-  // Max bullet visibili per experience se ci sono più di 3 esperienze
-  const maxBulletsPerExp = profile.experiences.length > 3 ? 3 : 5;
-  const experiences = profile.experiences.slice(0, 6).map((e) => ({
+  const nExp = profile.experiences.length;
+  const maxExp = nExp > 7 ? 6 : nExp;
+  const maxBullets = nExp > 5 ? 2 : nExp > 3 ? 3 : 5;
+  const descMax = nExp > 5 ? 140 : 220;
+  const bulletMax = nExp > 5 ? 120 : 180;
+
+  const experiences = profile.experiences.slice(0, maxExp).map((e) => ({
     ...e,
-    bullets: (e.bullets ?? []).slice(0, maxBulletsPerExp),
-    description: e.description && e.description.length > 240
-      ? e.description.slice(0, 237) + "…"
-      : e.description,
+    description: clip(e.description, descMax),
+    bullets: (e.bullets ?? [])
+      .slice(0, maxBullets)
+      .map((b) => clip(b, bulletMax)),
   }));
   const education = profile.education.slice(0, 3).map((e) => ({
     ...e,
-    notes: e.notes && e.notes.length > 140 ? e.notes.slice(0, 137) + "…" : e.notes,
+    notes: clip(e.notes ?? "", 110),
   }));
-  const skills = profile.skills.slice(0, 18);
+  const skills = profile.skills.slice(0, nExp > 5 ? 14 : 18);
   const languages = profile.languages.slice(0, 5);
   const links = profile.links.slice(0, 4);
-  const summary =
-    profile.summary && profile.summary.length > 420
-      ? profile.summary.slice(0, 417) + "…"
-      : profile.summary;
+  const summary = clip(profile.summary, nExp > 5 ? 280 : 400);
 
-  return {
-    ...profile,
-    summary,
-    experiences,
-    education,
-    skills,
-    languages,
-    links,
-  };
+  return { ...profile, summary, experiences, education, skills, languages, links };
 }
+
+function clip(s: string, n: number): string {
+  if (!s) return "";
+  return s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s;
+}
+
+// Deriva una versione "compact" degli stili — stessa geometria, font ridotti
+// del ~15% e photo leggermente più piccola. Usata quando il profilo è denso.
+const compactStyles = StyleSheet.create({
+  ...styles,
+  page: { ...styles.page, fontSize: 8.2, lineHeight: 1.3 },
+  photo: { ...styles.photo, width: 92, height: 92, borderRadius: 46 },
+  name: { ...styles.name, fontSize: 19 },
+  title: { ...styles.title, fontSize: 10 },
+  sidebarTitle: { ...styles.sidebarTitle, fontSize: 8.5, marginTop: 12, marginBottom: 4 },
+  contactRow: { ...styles.contactRow, fontSize: 8 },
+  sectionTitle: { ...styles.sectionTitle, fontSize: 9, marginTop: 8, marginBottom: 4 },
+  summary: { ...styles.summary, fontSize: 8.4 },
+  expRole: { ...styles.expRole, fontSize: 9.2 },
+  expDates: { ...styles.expDates, fontSize: 7.8 },
+  expCompany: { ...styles.expCompany, fontSize: 8.2 },
+  expDesc: { ...styles.expDesc, fontSize: 8.2 },
+  bullet: { ...styles.bullet, fontSize: 7.9, marginTop: 1 },
+  skillPill: { ...styles.skillPill, fontSize: 7.8, paddingTop: 1.5, paddingBottom: 1.5 },
+  expRow: { ...styles.expRow, marginTop: 6 },
+});
 
 function CVDocument({
   profile,
   lang,
   photoDataUri,
+  compact,
 }: {
   profile: CVProfile;
   lang: Lang;
   photoDataUri: string | null;
+  compact: boolean;
 }) {
+  const st = compact ? compactStyles : styles;
   const t = L[lang];
   const fullName =
     [profile.firstName, profile.lastName].filter(Boolean).join(" ") || " ";
@@ -250,20 +292,20 @@ function CVDocument({
 
   return (
     <Document>
-      <Page size="A4" style={styles.page} wrap={false}>
+      <Page size="A4" style={st.page} wrap={false}>
         {/* SIDEBAR */}
-        <View style={styles.sidebar}>
+        <View style={st.sidebar}>
           {photoDataUri ? (
-            <View style={styles.photoWrap}>
-              <Image src={photoDataUri} style={styles.photo} />
+            <View style={st.photoWrap}>
+              <Image src={photoDataUri} style={st.photo} />
             </View>
           ) : null}
 
           {contacts.length > 0 ? (
             <>
-              <Text style={styles.sidebarTitle}>{t.contact}</Text>
+              <Text style={st.sidebarTitle}>{t.contact}</Text>
               {contacts.map((c, i) => (
-                <Text key={i} style={styles.contactRow}>
+                <Text key={i} style={st.contactRow}>
                   {c}
                 </Text>
               ))}
@@ -272,10 +314,10 @@ function CVDocument({
 
           {profile.skills.length > 0 ? (
             <>
-              <Text style={styles.sidebarTitle}>{t.skills}</Text>
-              <View style={styles.skillRow}>
+              <Text style={st.sidebarTitle}>{t.skills}</Text>
+              <View style={st.skillRow}>
                 {profile.skills.map((s, i) => (
-                  <Text key={i} style={styles.skillPill}>
+                  <Text key={i} style={st.skillPill}>
                     {s.name}
                   </Text>
                 ))}
@@ -285,9 +327,9 @@ function CVDocument({
 
           {profile.languages.length > 0 ? (
             <>
-              <Text style={styles.sidebarTitle}>{t.languages}</Text>
+              <Text style={st.sidebarTitle}>{t.languages}</Text>
               {profile.languages.map((lng, i) => (
-                <View key={i} style={styles.langRow}>
+                <View key={i} style={st.langRow}>
                   <Text>{lng.name || " "}</Text>
                   <Text style={{ color: FG_MUTED }}>{lng.level || ""}</Text>
                 </View>
@@ -297,9 +339,9 @@ function CVDocument({
 
           {profile.links.length > 0 ? (
             <>
-              <Text style={styles.sidebarTitle}>{t.links}</Text>
+              <Text style={st.sidebarTitle}>{t.links}</Text>
               {profile.links.map((l, i) => (
-                <Link key={i} src={l.url} style={styles.link}>
+                <Link key={i} src={l.url} style={st.link}>
                   {l.label || l.url}
                 </Link>
               ))}
@@ -308,41 +350,41 @@ function CVDocument({
         </View>
 
         {/* MAIN */}
-        <View style={styles.main}>
-          <Text style={styles.name}>{fullName}</Text>
-          {profile.title ? <Text style={styles.title}>{profile.title.toUpperCase()}</Text> : null}
-          <View style={styles.accentBar} />
+        <View style={st.main}>
+          <Text style={st.name}>{fullName}</Text>
+          {profile.title ? <Text style={st.title}>{profile.title.toUpperCase()}</Text> : null}
+          <View style={st.accentBar} />
 
           {profile.summary ? (
             <>
-              <Text style={styles.sectionTitle}>{t.profile}</Text>
-              <Text style={styles.summary}>{profile.summary}</Text>
+              <Text style={st.sectionTitle}>{t.profile}</Text>
+              <Text style={st.summary}>{profile.summary}</Text>
             </>
           ) : null}
 
           {profile.experiences.length > 0 ? (
             <>
-              <Text style={styles.sectionTitle}>{t.experience}</Text>
+              <Text style={st.sectionTitle}>{t.experience}</Text>
               {profile.experiences.map((e, i) => (
-                <View key={i} style={styles.expRow} wrap={false}>
-                  <View style={styles.expHead}>
-                    <Text style={styles.expRole}>{e.role || " "}</Text>
-                    <Text style={styles.expDates}>
+                <View key={i} style={st.expRow} wrap={false}>
+                  <View style={st.expHead}>
+                    <Text style={st.expRole}>{e.role || " "}</Text>
+                    <Text style={st.expDates}>
                       {formatRange(e.startDate, e.endDate, lang)}
                     </Text>
                   </View>
                   {e.company || e.location ? (
-                    <Text style={styles.expCompany}>
+                    <Text style={st.expCompany}>
                       {[e.company, e.location].filter(Boolean).join(" · ")}
                     </Text>
                   ) : null}
                   {e.description ? (
-                    <Text style={styles.expDesc}>{e.description}</Text>
+                    <Text style={st.expDesc}>{e.description}</Text>
                   ) : null}
                   {e.bullets && e.bullets.length > 0 ? (
                     <View style={{ marginTop: 2 }}>
                       {e.bullets.map((b, j) => (
-                        <Text key={j} style={styles.bullet}>
+                        <Text key={j} style={st.bullet}>
                           • {b}
                         </Text>
                       ))}
@@ -355,22 +397,22 @@ function CVDocument({
 
           {profile.education.length > 0 ? (
             <>
-              <Text style={styles.sectionTitle}>{t.education}</Text>
+              <Text style={st.sectionTitle}>{t.education}</Text>
               {profile.education.map((e, i) => (
-                <View key={i} style={styles.expRow} wrap={false}>
-                  <View style={styles.expHead}>
-                    <Text style={styles.expRole}>{e.degree || " "}</Text>
-                    <Text style={styles.expDates}>
+                <View key={i} style={st.expRow} wrap={false}>
+                  <View style={st.expHead}>
+                    <Text style={st.expRole}>{e.degree || " "}</Text>
+                    <Text style={st.expDates}>
                       {formatRange(e.startDate, e.endDate, lang)}
                     </Text>
                   </View>
                   {e.school || e.location ? (
-                    <Text style={styles.expCompany}>
+                    <Text style={st.expCompany}>
                       {[e.school, e.location].filter(Boolean).join(" · ")}
                     </Text>
                   ) : null}
                   {e.notes ? (
-                    <Text style={styles.expDesc}>{e.notes}</Text>
+                    <Text style={st.expDesc}>{e.notes}</Text>
                   ) : null}
                 </View>
               ))}
@@ -389,12 +431,21 @@ export async function renderCVPdf(
   photoMime?: string,
 ): Promise<Buffer> {
   const trimmed = fitToOnePage(profile);
+  const density = contentDensity(trimmed);
+  // Scala i font se il profilo è denso (soglia empirica: >2500 char trimmati)
+  const compact = density > 2500;
+
   let photoDataUri: string | null = null;
   if (photoBuffer && photoBuffer.length > 0) {
     const mime = photoMime ?? "image/jpeg";
     photoDataUri = `data:${mime};base64,${photoBuffer.toString("base64")}`;
   }
   return await renderToBuffer(
-    <CVDocument profile={trimmed} lang={lang} photoDataUri={photoDataUri} />,
+    <CVDocument
+      profile={trimmed}
+      lang={lang}
+      photoDataUri={photoDataUri}
+      compact={compact}
+    />,
   );
 }

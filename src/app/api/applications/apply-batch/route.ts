@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
 import { getLimits, effectiveTier } from "@/lib/billing";
+import { quickMatchScore } from "@/lib/match-score";
+import { rowToProfile } from "@/lib/cv-profile-types";
 import { applyLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -132,13 +134,18 @@ export async function POST(request: NextRequest) {
     const capped =
       remainingQuota === Infinity ? toApply : toApply.slice(0, remainingQuota);
 
-    // --- Auto-apply mode ---
-    const prefs = await prisma.userPreferences.findUnique({
-      where: { userId: user.id },
-      select: { autoApplyMode: true },
-    });
+    // --- Auto-apply mode + match threshold + CV profile ---
+    const [prefs, profileRow] = await Promise.all([
+      prisma.userPreferences.findUnique({
+        where: { userId: user.id },
+        select: { autoApplyMode: true, matchMin: true },
+      }),
+      prisma.cVProfile.findUnique({ where: { userId: user.id } }),
+    ]);
     const mode: "off" | "hybrid" | "auto" =
       (prefs?.autoApplyMode as "off" | "hybrid" | "auto") ?? "hybrid";
+    const matchMin = prefs?.matchMin ?? 0;
+    const profile = profileRow ? rowToProfile(profileRow) : null;
     if (mode === "off") {
       return NextResponse.json(
         {
@@ -152,10 +159,23 @@ export async function POST(request: NextRequest) {
     const initialStatus = mode === "hybrid" ? "awaiting_consent" : "queued";
 
     let enqueued = 0;
+    let belowThreshold = 0;
     const errors: Array<{ jobId: string; error: string }> = [];
 
     for (const job of capped) {
       try {
+        // Match score threshold — saltiamo i job sotto la soglia utente
+        let score = 100;
+        if (matchMin > 0 && profile) {
+          score = quickMatchScore(
+            profile,
+            `${job.title}\n${job.company ?? ""}\n${job.description}`,
+          );
+          if (score < matchMin) {
+            belowThreshold++;
+            continue;
+          }
+        }
         const portal = portalOf(job.url);
         const application = await prisma.application.create({
           data: {
@@ -164,6 +184,7 @@ export async function POST(request: NextRequest) {
             portal,
             status: initialStatus,
             trackingToken: randomToken(),
+            atsScore: score,
           },
         });
         if (mode === "auto") {
@@ -184,6 +205,8 @@ export async function POST(request: NextRequest) {
       skipped: jobs.length - capped.length,
       alreadyApplied: alreadySet.size,
       excludedByCompany,
+      belowThreshold,
+      matchMin,
       errors,
       remaining:
         remainingQuota === Infinity
