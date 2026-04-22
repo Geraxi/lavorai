@@ -153,6 +153,74 @@ export async function moveFile(
   }
 }
 
+/**
+ * Elimina un singolo file. Best-effort: non lancia se non esiste.
+ */
+export async function deleteFile(storagePath: string): Promise<void> {
+  const drv = driver();
+  try {
+    if (drv === "vercel") {
+      const { del } = await import("@vercel/blob");
+      await del(storagePath);
+      return;
+    }
+    if (drv === "supabase") {
+      await sb().storage.from(bucket()).remove([storagePath]);
+      return;
+    }
+    // fs
+    const { unlink } = await import("node:fs/promises");
+    await unlink(storagePath);
+  } catch (err) {
+    console.warn("[storage.deleteFile]", storagePath, err);
+  }
+}
+
+/**
+ * Elimina TUTTI i file dell'utente (prefisso users/<userId>/).
+ * Usato al flow di cancellazione account GDPR.
+ */
+export async function deleteAllUserFiles(userId: string): Promise<void> {
+  const drv = driver();
+  try {
+    if (drv === "vercel") {
+      const { list, del } = await import("@vercel/blob");
+      // list restituisce fino a 1000 blob per chiamata; paginiamo se serve
+      let cursor: string | undefined;
+      do {
+        const { blobs, cursor: next, hasMore } = await list({
+          prefix: `users/${userId}/`,
+          cursor,
+          limit: 1000,
+        });
+        if (blobs.length > 0) {
+          await del(blobs.map((b) => b.url));
+        }
+        cursor = hasMore ? next : undefined;
+      } while (cursor);
+      return;
+    }
+    if (drv === "supabase") {
+      // Supabase non ha prefix-delete; list + remove
+      const prefix = `users/${userId}`;
+      const { data, error } = await sb().storage.from(bucket()).list(prefix, {
+        limit: 1000,
+      });
+      if (error || !data) return;
+      const keys = data.map((f) => `${prefix}/${f.name}`);
+      if (keys.length > 0) {
+        await sb().storage.from(bucket()).remove(keys);
+      }
+      return;
+    }
+    // fs: rm -rf della cartella utente
+    const { rm } = await import("node:fs/promises");
+    await rm(join(FS_ROOT, userId), { recursive: true, force: true });
+  } catch (err) {
+    console.warn("[storage.deleteAllUserFiles]", userId, err);
+  }
+}
+
 function sanitize(name: string): string {
   return name.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 180);
 }

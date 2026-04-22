@@ -74,3 +74,24 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
     console.error("[queue] in-process worker error", err);
   });
 }
+
+/**
+ * Cancella un job dalla coda (se ancora in waiting/active/delayed).
+ * Best-effort: con backends diversi da BullMQ oggi non abbiamo cancel API
+ * nativo, loggiamo e basta — il worker comunque salterà l'update perché
+ * il record Application non esisterà più dopo la cancellazione account.
+ */
+export async function cancelApplication(applicationId: string): Promise<void> {
+  if (!process.env.REDIS_URL) return;
+  try {
+    const { getApplicationsQueue } = await import("@/lib/bullmq-queue");
+    const q = getApplicationsQueue();
+    // jobId === applicationId per via della dedup in enqueue
+    const job = await q.getJob(applicationId);
+    if (job) {
+      await job.remove();
+    }
+  } catch (err) {
+    console.warn("[queue.cancel]", applicationId, err);
+  }
+}

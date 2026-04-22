@@ -4,8 +4,11 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { checkOrigin } from "@/lib/csrf";
+import { deleteAllUserFiles } from "@/lib/storage";
+import { cancelApplication } from "@/lib/application-queue";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 const Schema = z.object({
   confirm: z.literal("ELIMINA"),
@@ -64,7 +67,45 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // 1. Cancella i job BullMQ delle candidature in coda/processing (queued /
+  //    awaiting_consent / optimizing / applying). L'update che il worker
+  //    tenterebbe fallirebbe comunque dopo il delete user, ma rimuovere
+  //    esplicitamente evita retry inutili e liberia la coda.
+  const activeApps = await prisma.application.findMany({
+    where: {
+      userId: user.id,
+      status: {
+        in: [
+          "awaiting_consent",
+          "queued",
+          "optimizing",
+          "applying",
+          "needs_session",
+          "ready_to_apply",
+        ],
+      },
+    },
+    select: { id: true },
+  });
+  await Promise.allSettled(
+    activeApps.map((a) => cancelApplication(a.id)),
+  );
+
+  // 2. Cancella tutti i file utente dallo storage (CV sorgente + CV ottimizzati
+  //    per candidatura + cover letter DOCX + PDF tailored + foto profilo).
+  //    Best-effort: se Blob/Supabase è giù, continuiamo comunque con il
+  //    delete DB (GDPR Art.17 è priorità assoluta).
+  await deleteAllUserFiles(user.id).catch((err) => {
+    console.error("[account/delete] storage wipe failed, continuing", err);
+  });
+
+  // 3. Hard delete utente — cascade Prisma elimina: Account, Session,
+  //    EmailVerificationToken, PasswordResetToken, UserPreferences, CVProfile,
+  //    PortalSession, Application, CVDocument.
   await prisma.user.delete({ where: { id: user.id } });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    cancelledApplications: activeApps.length,
+  });
 }
