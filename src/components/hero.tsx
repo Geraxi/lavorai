@@ -19,6 +19,26 @@ export function Hero() {
         className="grid-bg pointer-events-none absolute inset-0 opacity-40 [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
       />
 
+      {/* Gradient verde animato — sfondo morbido che pulsa */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 70% 55% at 50% 40%, rgba(34,197,94,0.28) 0%, rgba(34,197,94,0.12) 35%, transparent 70%)",
+          mixBlendMode: "screen",
+        }}
+        animate={{
+          opacity: [0.7, 1, 0.85, 1, 0.7],
+          scale: [1, 1.04, 1.02, 1.05, 1],
+        }}
+        transition={{
+          duration: 8,
+          ease: "easeInOut",
+          repeat: Infinity,
+        }}
+      />
+
       {/* Green laser beam — sweeps horizontally across hero, mix-blend so
           it sits naturally over the aurora. Looped, non-blocking. */}
       <motion.div
