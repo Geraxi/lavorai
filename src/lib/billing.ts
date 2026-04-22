@@ -144,15 +144,41 @@ export function normalizeTier(t: string | null | undefined): Tier {
  * Bypassa paywall, rate limit mensile, gate di feature premium.
  * Aggiungere email SOLO qui (lowercase) — non in DB — così non c'è modo
  * di trasformarsi in Pro+ senza un deploy.
+ *
+ * Le email vengono canonicalizzate prima del match (vedi canonicalEmail):
+ *  - Gmail: punti e "+tag" sono ignorati → foo.bar+x@gmail.com == foobar@gmail.com
+ *  - googlemail.com trattato come gmail.com
+ *  - Altri provider: solo lowercase + trim
  */
-const LIFETIME_PRO_PLUS_EMAILS = new Set<string>([
-  "antonella.lasalandra.07@gmail.com",
+const LIFETIME_PRO_PLUS_EMAILS_RAW = [
+  "antonella.lasalandra07@gmail.com",
   "umbertogeraci0@gmail.com",
-]);
+];
+
+function canonicalEmail(raw: string): string {
+  const trimmed = raw.trim().toLowerCase();
+  const at = trimmed.lastIndexOf("@");
+  if (at < 0) return trimmed;
+  let local = trimmed.slice(0, at);
+  let domain = trimmed.slice(at + 1);
+  // Strip +tag (Gmail-style plus addressing) — valido su molti provider
+  const plus = local.indexOf("+");
+  if (plus >= 0) local = local.slice(0, plus);
+  if (domain === "googlemail.com") domain = "gmail.com";
+  if (domain === "gmail.com") {
+    // Gmail ignora i punti nel local part
+    local = local.replace(/\./g, "");
+  }
+  return `${local}@${domain}`;
+}
+
+const LIFETIME_PRO_PLUS_EMAILS = new Set<string>(
+  LIFETIME_PRO_PLUS_EMAILS_RAW.map(canonicalEmail),
+);
 
 export function isLifetimeProPlus(email: string | null | undefined): boolean {
   if (!email) return false;
-  return LIFETIME_PRO_PLUS_EMAILS.has(email.trim().toLowerCase());
+  return LIFETIME_PRO_PLUS_EMAILS.has(canonicalEmail(email));
 }
 
 /**
