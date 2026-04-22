@@ -70,13 +70,22 @@ export function DetailDrawer({
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <button className="ds-btn ds-btn-sm ds-btn-ghost" type="button">
-                  <Icon name="external" size={13} />
-                </button>
+                {app.jobUrl && (
+                  <a
+                    className="ds-btn ds-btn-sm ds-btn-ghost"
+                    href={app.jobUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Apri annuncio"
+                  >
+                    <Icon name="external" size={13} />
+                  </a>
+                )}
                 <button
                   className="ds-btn ds-btn-sm ds-btn-ghost"
                   type="button"
                   onClick={onClose}
+                  aria-label="Chiudi"
                 >
                   <Icon name="x" size={14} />
                 </button>
@@ -122,25 +131,6 @@ export function DetailDrawer({
                 </div>
               </div>
 
-              {/* Match breakdown */}
-              <div className="ds-section-card mb-6">
-                <div className="ds-section-head">
-                  <div className="ds-section-head-title">
-                    <Icon name="sparkles" size={13} />
-                    Perché è un match {app.match}%
-                  </div>
-                </div>
-                <div className="ds-section-body">
-                  <div style={{ display: "grid", gap: 6, fontSize: 12.5 }}>
-                    <MatchRow label="Competenze allineate" value="18 / 22" good />
-                    <MatchRow label="Esperienza richiesta (5+ anni)" value="7 anni" good />
-                    <MatchRow label="Settore" value="Fintech · match perfetto" good />
-                    <MatchRow label="Sede" value={`${app.location} — ${app.mode.toLowerCase()}`} good />
-                    <MatchRow label="Inglese" value="C1 richiesto · C1" good />
-                    <MatchRow label="Certificazione AWS" value="Non presente" warn />
-                  </div>
-                </div>
-              </div>
 
               {/* Documents */}
               <div className="ds-section-card mb-6">
@@ -223,63 +213,29 @@ export function DetailDrawer({
                 </div>
               )}
 
-              {/* Timeline */}
-              <div className="ds-section-card">
-                <div className="ds-section-head">
-                  <div className="ds-section-head-title">
-                    <Icon name="clock" size={13} />
-                    Timeline
-                  </div>
-                </div>
-                <div className="ds-section-body flush">
-                  <TimelineItem
-                    time="oggi · 09:32"
-                    title={`${app.company} ha aperto la tua candidatura`}
-                    icon="eye"
-                    accent
-                  />
-                  <TimelineItem
-                    time="oggi · 09:14"
-                    title="Candidatura inviata"
-                    sub="via LinkedIn Easy Apply"
-                    icon="send"
-                  />
-                  <TimelineItem
-                    time="oggi · 09:13"
-                    title="Lettera motivazionale generata"
-                    sub="384 parole · tono professionale"
-                    icon="sparkles"
-                  />
-                  <TimelineItem
-                    time="oggi · 09:13"
-                    title="CV adattato al JD"
-                    sub="+12% match dopo l'adattamento"
-                    icon="file"
-                  />
-                  <TimelineItem
-                    time="oggi · 09:12"
-                    title="Annuncio rilevato"
-                    sub="pubblicato 2 ore fa · LinkedIn"
-                    icon="zap"
-                    last
-                  />
-                </div>
-              </div>
 
               <div className="flex gap-2" style={{ marginTop: 22 }}>
-                <button className="ds-btn" style={{ flex: 1 }} type="button">
-                  <Icon name="external" size={13} /> Vedi annuncio
-                </button>
-                <button className="ds-btn" style={{ flex: 1 }} type="button">
-                  <Icon name="pause-circle" size={13} /> Ritira
-                </button>
-                <button
-                  className="ds-btn ds-btn-primary"
-                  style={{ flex: 1 }}
-                  type="button"
-                >
-                  <Icon name="send" size={13} /> Contatta recruiter
-                </button>
+                {app.jobUrl ? (
+                  <a
+                    className="ds-btn"
+                    style={{ flex: 1 }}
+                    href={app.jobUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Icon name="external" size={13} /> Vedi annuncio
+                  </a>
+                ) : (
+                  <button
+                    className="ds-btn"
+                    style={{ flex: 1 }}
+                    type="button"
+                    disabled
+                    title="Link annuncio non disponibile"
+                  >
+                    <Icon name="external" size={13} /> Vedi annuncio
+                  </button>
+                )}
               </div>
             </div>
           </>
@@ -321,37 +277,6 @@ function MiniStat({
       >
         {value}
       </div>
-    </div>
-  );
-}
-
-function MatchRow({
-  label,
-  value,
-  good,
-  warn,
-}: {
-  label: string;
-  value: string;
-  good?: boolean;
-  warn?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <Icon
-        name={good ? "check" : "x"}
-        size={13}
-        style={{
-          color: good
-            ? "var(--primary-ds)"
-            : warn
-              ? "var(--amber)"
-              : "var(--red-ds)",
-          flexShrink: 0,
-        }}
-      />
-      <span style={{ flex: 1 }}>{label}</span>
-      <span style={{ color: "var(--fg-muted)", fontSize: 12 }}>{value}</span>
     </div>
   );
 }
@@ -420,65 +345,3 @@ function DocRow({
   );
 }
 
-function TimelineItem({
-  time,
-  title,
-  sub,
-  icon,
-  accent,
-  last,
-}: {
-  time: string;
-  title: string;
-  sub?: string;
-  icon: Parameters<typeof Icon>[0]["name"];
-  accent?: boolean;
-  last?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        gap: 12,
-        padding: "12px 16px",
-        borderBottom: last ? "none" : "1px solid var(--border-ds)",
-      }}
-    >
-      <div
-        style={{
-          width: 26,
-          height: 26,
-          borderRadius: "50%",
-          background: accent ? "var(--primary-weak)" : "var(--bg-sunken)",
-          color: accent ? "var(--primary-ds)" : "var(--fg-muted)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <Icon name={icon} size={13} />
-      </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 13, fontWeight: 500 }}>{title}</div>
-        {sub && (
-          <div
-            style={{
-              fontSize: 11.5,
-              color: "var(--fg-muted)",
-              marginTop: 1,
-            }}
-          >
-            {sub}
-          </div>
-        )}
-      </div>
-      <div
-        className="mono"
-        style={{ fontSize: 11, color: "var(--fg-subtle)" }}
-      >
-        {time}
-      </div>
-    </div>
-  );
-}

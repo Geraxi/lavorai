@@ -127,14 +127,16 @@ export default function ApplicationsPage() {
               Candidature
             </h1>
             <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
-              {allRows.length} totali · 3 nuove risposte oggi
+              {allRows.length} {allRows.length === 1 ? "candidatura" : "candidature"}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button className="ds-btn" type="button">
-              <Icon name="filter" size={13} /> Filtri
-            </button>
-            <button className="ds-btn" type="button">
+            <button
+              className="ds-btn"
+              type="button"
+              disabled={allRows.length === 0}
+              onClick={() => exportCsv(allRows)}
+            >
               <Icon name="download" size={13} /> Esporta CSV
             </button>
           </div>
@@ -275,6 +277,34 @@ function FilterCount({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
+}
+
+function exportCsv(rows: Row[]): void {
+  if (rows.length === 0) return;
+  const header = ["Azienda", "Ruolo", "Luogo", "Modalità", "Fonte", "Stato", "Match", "Inviata"];
+  const body = rows.map((r) => [
+    r.company,
+    r.role,
+    r.location,
+    r.mode,
+    r.source,
+    r.status,
+    String(r.match),
+    r.applied,
+  ]);
+  const escape = (v: string) =>
+    /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  const csv = [header, ...body]
+    .map((row) => row.map(escape).join(","))
+    .join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const today = new Date().toISOString().slice(0, 10);
+  a.download = `lavorai-candidature-${today}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function backendToStatus(b: string): Row["status"] {

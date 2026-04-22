@@ -53,9 +53,6 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
             }}
           />
         </div>
-        <button className="ds-btn ds-btn-ghost" type="button" aria-label="Notifiche">
-          <Icon name="bell" size={16} />
-        </button>
         {actions}
       </div>
     </div>

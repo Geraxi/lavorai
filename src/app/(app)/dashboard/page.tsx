@@ -102,9 +102,9 @@ export default async function DashboardPage() {
         actions={
           <>
             <ThemeToggle />
-            <button className="ds-btn" type="button">
+            <Link href="/jobs" className="ds-btn">
               <Icon name="plus" size={14} /> Nuova ricerca
-            </button>
+            </Link>
           </>
         }
       />
@@ -147,17 +147,6 @@ export default async function DashboardPage() {
                   </>
                 )}
               </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="ds-toggle-group">
-                <button className="active" type="button">Oggi</button>
-                <button type="button">7g</button>
-                <button type="button">30g</button>
-                <button type="button">Tutto</button>
-              </div>
-              <button className="ds-btn" type="button">
-                <Icon name="download" size={13} /> Esporta
-              </button>
             </div>
           </div>
         </div>
@@ -224,14 +213,9 @@ export default async function DashboardPage() {
                   </>
                 }
                 actions={
-                  <>
-                    <button className="ds-btn ds-btn-sm ds-btn-ghost" type="button">
-                      <Icon name="filter" size={12} /> Filtra
-                    </button>
-                    <Link href="/applications" className="ds-btn ds-btn-sm">
-                      Vedi tutto <Icon name="arrow-right" size={12} />
-                    </Link>
-                  </>
+                  <Link href="/applications" className="ds-btn ds-btn-sm">
+                    Vedi tutto <Icon name="arrow-right" size={12} />
+                  </Link>
                 }
               />
               <SectionBody flush>
