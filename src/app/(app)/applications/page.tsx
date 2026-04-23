@@ -9,6 +9,7 @@ import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import { StatusChip } from "@/components/design/status-chip";
 import { DetailDrawer } from "@/components/design/detail-drawer";
 import { AutoApplyToggle } from "@/components/auto-apply-toggle";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 interface ApiApplication {
   id: string;
@@ -125,12 +126,16 @@ export default function ApplicationsPage() {
     awaiting: awaitingCount,
   };
 
-  async function consentAll() {
+  const [consentConfirmOpen, setConsentConfirmOpen] = useState(false);
+
+  function askConsentAll() {
     if (awaitingCount === 0) return;
-    const ok = window.confirm(
-      `Confermi l'invio di ${awaitingCount} candidature in attesa?`,
-    );
-    if (!ok) return;
+    setConsentConfirmOpen(true);
+  }
+
+  async function consentAll() {
+    setConsentConfirmOpen(false);
+    if (awaitingCount === 0) return;
     try {
       const res = await fetch("/api/applications/consent", {
         method: "POST",
@@ -216,7 +221,7 @@ export default function ApplicationsPage() {
             <button
               type="button"
               className="ds-btn ds-btn-accent"
-              onClick={consentAll}
+              onClick={askConsentAll}
             >
               <Icon name="check" size={13} /> Consenti tutte
             </button>
@@ -340,6 +345,16 @@ export default function ApplicationsPage() {
       </div>
 
       <DetailDrawer app={selected} onClose={() => setSelected(null)} />
+      <ConfirmDialog
+        open={consentConfirmOpen}
+        title={`Confermi l'invio di ${awaitingCount} candidature?`}
+        message="Tutte le candidature in attesa di consenso verranno accodate e inviate ai rispettivi portali o recruiter."
+        confirmLabel="Sì, invia tutte"
+        cancelLabel="Annulla"
+        variant="accent"
+        onConfirm={consentAll}
+        onCancel={() => setConsentConfirmOpen(false)}
+      />
     </>
   );
 }

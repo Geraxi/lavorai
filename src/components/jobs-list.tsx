@@ -11,6 +11,7 @@ import {
   SectionCard,
 } from "@/components/design/section-card";
 import { PaywallDialog } from "@/components/paywall-dialog";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 export interface JobRow {
   id: string;
@@ -43,6 +44,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
+  const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
 
   const remainingJobs = useMemo(
     () => jobs.filter((j) => !appliedIds.has(j.id)),
@@ -86,13 +88,14 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
     }
   }
 
-  async function applyAll() {
+  function askApplyAll() {
     if (remainingJobs.length === 0) return;
-    const confirmed = window.confirm(
-      `Candidarsi automaticamente a ${remainingJobs.length} posizioni?`,
-    );
-    if (!confirmed) return;
+    setBatchConfirmOpen(true);
+  }
 
+  async function applyAll() {
+    setBatchConfirmOpen(false);
+    if (remainingJobs.length === 0) return;
     setBatchLoading(true);
     try {
       const res = await fetch("/api/applications/apply-batch", {
@@ -165,7 +168,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         </div>
         <button
           type="button"
-          onClick={applyAll}
+          onClick={askApplyAll}
           disabled={batchLoading || remainingJobs.length === 0}
           className="ds-btn ds-btn-accent"
           style={{ padding: "8px 14px", fontSize: 13 }}
@@ -310,6 +313,16 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         onClose={() => setPaywallOpen(false)}
         variant="limit"
         sub={paywallMessage ?? undefined}
+      />
+      <ConfirmDialog
+        open={batchConfirmOpen}
+        title={`Candidati a ${remainingJobs.length} posizioni?`}
+        message="LavorAI ottimizzerà CV e cover letter per ogni annuncio e invierà la candidatura al portale (o al recruiter) per te."
+        confirmLabel="Candidati a tutte"
+        cancelLabel="Annulla"
+        variant="accent"
+        onConfirm={applyAll}
+        onCancel={() => setBatchConfirmOpen(false)}
       />
     </>
   );
