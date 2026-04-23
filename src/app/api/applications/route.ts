@@ -1,19 +1,37 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+/**
+ * GET /api/applications?range=today|week|month|all
+ * Default: all (nessun cap) così l'utente vede tutto lo storico.
+ */
+export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ applications: [] });
   }
 
+  const range = request.nextUrl.searchParams.get("range") ?? "all";
+  let since: Date | null = null;
+  const now = new Date();
+  if (range === "today") {
+    since = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  } else if (range === "week") {
+    since = new Date(now.getTime() - 7 * 86400_000);
+  } else if (range === "month") {
+    since = new Date(now.getTime() - 30 * 86400_000);
+  }
+
   const applications = await prisma.application.findMany({
-    where: { userId: user.id },
+    where: {
+      userId: user.id,
+      ...(since ? { createdAt: { gte: since } } : {}),
+    },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 500, // safety upper bound
     include: {
       job: {
         select: {

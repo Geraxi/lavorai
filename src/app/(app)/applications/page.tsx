@@ -76,9 +76,12 @@ type Row = (typeof MOCK)[number] & {
   backendStatus?: string; // raw status from API ("awaiting_consent" etc.)
 };
 
+type Range = "today" | "week" | "month" | "all";
+
 export default function ApplicationsPage() {
+  const [range, setRange] = useState<Range>("all");
   const { data } = useSWR<{ applications: ApiApplication[] }>(
-    "/api/applications",
+    `/api/applications?range=${range}`,
     fetcher,
     { refreshInterval: 5000 },
   );
@@ -182,10 +185,36 @@ export default function ApplicationsPage() {
               Candidature
             </h1>
             <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
-              {allRows.length} {allRows.length === 1 ? "candidatura" : "candidature"}
+              {allRows.length}{" "}
+              {allRows.length === 1 ? "candidatura" : "candidature"}
+              {" · "}
+              {rangeLabel(range)}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <div
+              className="ds-toggle-group"
+              style={{ display: "inline-flex", fontSize: 12.5 }}
+            >
+              {(
+                [
+                  ["today", "Oggi"],
+                  ["week", "7g"],
+                  ["month", "30g"],
+                  ["all", "Tutto"],
+                ] as const
+              ).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setRange(k)}
+                  className={range === k ? "active" : undefined}
+                  style={{ padding: "6px 10px" }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <AutoApplyToggle />
             <button
               className="ds-btn"
@@ -436,3 +465,10 @@ function relativeTime(d: Date): string {
   return `${diffD} giorni fa`;
 }
 
+
+function rangeLabel(r: "today" | "week" | "month" | "all"): string {
+  if (r === "today") return "oggi";
+  if (r === "week") return "ultimi 7 giorni";
+  if (r === "month") return "ultimi 30 giorni";
+  return "tutto lo storico";
+}
