@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/sync-jobs",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/auto-apply",
+      "schedule": "0 */2 * * *"
     }
   ]
 }
