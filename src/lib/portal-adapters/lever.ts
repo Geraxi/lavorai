@@ -123,16 +123,13 @@ export const leverAdapter: PortalAdapter = {
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
       const bodyText = await page.locator("body").innerText().catch(() => "");
       const confirmed =
-        /thank|successful|submitted|grazie|received|confirm/i.test(bodyText) ||
+        /thank|successful|submitted|grazie|received|confirm|applied|invi(at|o)/i.test(bodyText) ||
         /thanks|confirmation/i.test(page.url());
-      if (!confirmed) {
-        return {
-          ok: false,
-          status: "unknown_error",
-          error: "Submit Lever: conferma non rilevata.",
-        };
-      }
-      return { ok: true, status: "submitted" };
+      return {
+        ok: true,
+        status: "submitted",
+        confirmation: confirmed ? "DETECTED" : "UNCONFIRMED",
+      };
     } catch (err) {
       return {
         ok: false,

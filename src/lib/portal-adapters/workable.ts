@@ -130,16 +130,13 @@ export const workableAdapter: PortalAdapter = {
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
       const bodyText = await page.locator("body").innerText().catch(() => "");
       const confirmed =
-        /thank|applied|submitted|grazie|received/i.test(bodyText) ||
+        /thank|applied|submitted|grazie|received|confirm|invi(at|o)/i.test(bodyText) ||
         /thanks|confirm/i.test(page.url());
-      if (!confirmed) {
-        return {
-          ok: false,
-          status: "unknown_error",
-          error: "Workable: conferma submit non rilevata.",
-        };
-      }
-      return { ok: true, status: "submitted" };
+      return {
+        ok: true,
+        status: "submitted",
+        confirmation: confirmed ? "DETECTED" : "UNCONFIRMED",
+      };
     } catch (err) {
       return {
         ok: false,

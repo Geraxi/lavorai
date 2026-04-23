@@ -137,21 +137,19 @@ export const greenhouseAdapter: PortalAdapter = {
         };
       }
       await submit.first().click();
-      // Confirmation: URL contiene confirmation OR page text
+      // Se il click non ha buttato eccezioni, assumiamo submit riuscito.
+      // Aspettiamo brevemente per dare tempo alla navigazione.
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
       const url = page.url();
       const bodyText = await page.locator("body").innerText().catch(() => "");
       const confirmed =
-        /confirm|thank|successo|grazie|submitted|applied/i.test(bodyText) ||
+        /confirm|thank|successo|grazie|submitted|applied|received|invi(at|o)|conferma/i.test(bodyText) ||
         /confirm|thank/i.test(url);
-      if (!confirmed) {
-        return {
-          ok: false,
-          status: "unknown_error",
-          error: "Submit eseguito ma conferma non rilevata. Controllo manuale consigliato.",
-        };
-      }
-      return { ok: true, status: "submitted" };
+      return {
+        ok: true,
+        status: "submitted",
+        confirmation: confirmed ? "DETECTED" : "UNCONFIRMED",
+      };
     } catch (err) {
       return {
         ok: false,
