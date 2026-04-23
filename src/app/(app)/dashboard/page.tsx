@@ -14,6 +14,7 @@ import { ThemeToggle } from "@/components/design/theme-toggle";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { WelcomeModal } from "@/components/welcome-modal";
 import { PostLoginCheckout } from "@/components/post-login-checkout";
+import { NewSearchButton } from "@/components/new-search-button";
 import { getUIApplications } from "@/lib/ui-applications";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
@@ -102,9 +103,7 @@ export default async function DashboardPage() {
         actions={
           <>
             <ThemeToggle />
-            <Link href="/jobs" className="ds-btn">
-              <Icon name="plus" size={14} /> Nuova ricerca
-            </Link>
+            <NewSearchButton />
           </>
         }
       />
