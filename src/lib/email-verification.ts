@@ -62,7 +62,6 @@ function renderVerifyEmail(url: string): string {
 <html lang="it"><body style="margin:0;padding:0;background:#FAFAF7;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;color:#0F1012;">
   <div style="max-width:560px;margin:0 auto;padding:40px 24px;">
     <div style="font-size:18px;font-weight:700;margin-bottom:32px;">
-      <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#0F1012;color:#fff;font-size:12px;border-radius:5px;margin-right:8px;vertical-align:-4px;font-family:ui-monospace,monospace;">L</span>
       LavorAI
     </div>
     <h1 style="font-size:22px;font-weight:600;margin:0 0 12px;">Verifica la tua email</h1>

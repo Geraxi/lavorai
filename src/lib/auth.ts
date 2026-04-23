@@ -273,7 +273,6 @@ function renderWelcomeEmail(siteUrl: string): string {
   <body style="margin:0;padding:0;background:#FAFAF7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;color:#0F1012;">
     <div style="max-width:560px;margin:0 auto;padding:48px 24px;">
       <div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;margin-bottom:32px;">
-        <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#0F1012;color:#fff;font-size:12px;border-radius:5px;font-family:ui-monospace,monospace;margin-right:8px;vertical-align:-4px;">L</span>
         LavorAI
       </div>
       <h1 style="font-size:26px;font-weight:600;margin:0 0 14px;letter-spacing:-0.02em;">Benvenuto in LavorAI 🎯</h1>
@@ -311,7 +310,6 @@ function renderLoginEmail(url: string): string {
   <body style="margin:0;padding:0;background:#FAFAF7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;color:#0F1012;">
     <div style="max-width:560px;margin:0 auto;padding:40px 24px;">
       <div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;margin-bottom:32px;">
-        <span style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;background:#0F1012;color:#fff;font-size:12px;border-radius:5px;font-family:ui-monospace,monospace;margin-right:8px;vertical-align:-4px;">L</span>
         LavorAI
       </div>
       <h1 style="font-size:22px;font-weight:600;margin:0 0 12px;">Accedi al tuo account</h1>
