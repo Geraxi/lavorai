@@ -9,6 +9,8 @@ import { JobsList, type JobRow } from "@/components/jobs-list";
 import { searchAndCacheJobs } from "@/lib/jobs-repo";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
+import { rowToProfile } from "@/lib/cv-profile-types";
+import { quickMatchScore } from "@/lib/match-score";
 
 export const metadata: Metadata = { title: "Job board" };
 export const dynamic = "force-dynamic";
@@ -37,14 +39,17 @@ export default async function JobsPage({
   let defaultWhere = "";
   let userSalaryMin: number | undefined;
   let avoidSet = new Set<string>();
+  let matchMin = 0;
+  let userProfile: ReturnType<typeof rowToProfile> | null = null;
 
   if (user) {
-    const [prefs, full] = await Promise.all([
+    const [prefs, full, profileRow] = await Promise.all([
       prisma.userPreferences.findUnique({ where: { userId: user.id } }),
       prisma.user.findUnique({
         where: { id: user.id },
         select: { avoidCompanies: true },
       }),
+      prisma.cVProfile.findUnique({ where: { userId: user.id } }),
     ]);
     if (prefs) {
       prefRoles = safeParseArray(prefs.rolesJson);
@@ -54,6 +59,7 @@ export default async function JobsPage({
         locations[0] ??
         "";
       userSalaryMin = prefs.salaryMin ? prefs.salaryMin * 1000 : undefined;
+      matchMin = prefs.matchMin ?? 0;
     }
     avoidSet = new Set(
       (full?.avoidCompanies ?? "")
@@ -61,6 +67,7 @@ export default async function JobsPage({
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean),
     );
+    if (profileRow) userProfile = rowToProfile(profileRow);
   }
 
   const what = sp.what ?? "";
@@ -122,14 +129,28 @@ export default async function JobsPage({
     });
   }
 
-  // Filtra per salary minima utente (se nota)
+  let belowMatchCount = 0;
   const jobs: JobRow[] = jobsRaw
     .filter((j) => {
+      // 1. aziende escluse
       if (j.company && avoidSet.has(j.company.toLowerCase())) return false;
-      if (!userSalaryMin) return true;
-      if (!j.salaryMax && !j.salaryMin) return true; // dato mancante → non scartare
-      const top = j.salaryMax ?? j.salaryMin ?? 0;
-      return top >= userSalaryMin;
+      // 2. salario minimo (solo se noto)
+      if (userSalaryMin) {
+        const top = j.salaryMax ?? j.salaryMin ?? 0;
+        if (top > 0 && top < userSalaryMin) return false;
+      }
+      // 3. match score minimo (se profilo + soglia settati)
+      if (matchMin > 0 && userProfile) {
+        const score = quickMatchScore(
+          userProfile,
+          `${j.title}\n${j.company ?? ""}\n${j.description}`,
+        );
+        if (score < matchMin) {
+          belowMatchCount++;
+          return false;
+        }
+      }
+      return true;
     })
     .map((j) => ({
       id: j.id,
@@ -168,7 +189,7 @@ export default async function JobsPage({
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
             {!sp.what && prefRoles.length > 0
-              ? `Filtrato sulle tue preferenze (${prefRoles.slice(0, 5).join(", ")}) · ${jobs.length} posizioni`
+              ? `${jobs.length} posizioni compatibili${matchMin > 0 ? ` (match ≥ ${matchMin}%)` : ""}${belowMatchCount > 0 ? ` · ${belowMatchCount} nascoste sotto soglia` : ""}`
               : `${jobs.length} posizioni trovate`}
           </p>
         </div>

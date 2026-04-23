@@ -44,7 +44,9 @@ export async function fetchGreenhouseJobs(
     const data = (await res.json()) as { jobs: GreenhouseJob[] };
     const jobs = Array.isArray(data.jobs) ? data.jobs : [];
     const display = companyName ?? prettySlug(companySlug);
-    return jobs.map((j) => mapJob(j, display, companySlug));
+    return jobs
+      .map((j) => mapJob(j, display, companySlug))
+      .filter((j): j is JobListItem => j !== null);
   } catch (err) {
     console.warn(`[greenhouse] ${companySlug} fetch failed`, err);
     return [];
@@ -74,9 +76,12 @@ function mapJob(
   j: GreenhouseJob,
   companyName: string,
   companySlug: string,
-): JobListItem {
+): JobListItem | null {
   const cleanHtml = (j.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const description = cleanHtml.slice(0, 2000);
+  // Filtro geo: vogliamo solo Italia, Europa o Remoto
+  const loc = j.location?.name ?? "";
+  if (!isRelevantLocation(loc, description)) return null;
   // Priorità URL: canonico boards.greenhouse.io (più affidabile per adapter).
   // absolute_url spesso redirige su careers.<company>.com con iframe — rischio.
   const canonicalUrl = `https://boards.greenhouse.io/${companySlug}/jobs/${j.id}`;
@@ -109,4 +114,30 @@ function prettySlug(s: string): string {
     .split(/[-_]/)
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
     .join(" ");
+}
+
+/**
+ * Italia / Europa / Remoto only. Accetta tutto ciò che non è
+ * chiaramente fuori area (US-only, APAC, LATAM).
+ */
+function isRelevantLocation(loc: string, description: string): boolean {
+  const combined = `${loc} ${description.slice(0, 400)}`.toLowerCase();
+  const yes = [
+    "italy", "italia", "italian", "milan", "milano", "rome", "roma", "napoli", "naples",
+    "torino", "turin", "firenze", "florence", "bologna", "genova", "venezia", "padova", "verona",
+    "europe", "europa", "eu ", "emea",
+    "germany", "germania", "france", "francia", "spain", "spagna", "netherlands", "paesi bassi",
+    "portugal", "portogallo", "ireland", "irlanda", "belgium", "belgio", "austria", "switzerland",
+    "svizzera", "denmark", "danimarca", "sweden", "svezia", "finland", "finlandia", "poland",
+    "polonia", "czech", "repubblica ceca",
+    "uk", "united kingdom", "london", "londra",
+  ];
+  const no = [
+    "united states only", "us only", "usa only", "canada only",
+    "apac only", "brazil", "mexico", "singapore only", "japan only", "india only",
+    "anywhere in the us", "us-based",
+  ];
+  if (/\bremote\b/.test(combined) && !no.some((n) => combined.includes(n))) return true;
+  if (yes.some((y) => combined.includes(y))) return true;
+  return false;
 }

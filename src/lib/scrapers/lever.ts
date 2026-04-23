@@ -47,7 +47,9 @@ export async function fetchLeverJobs(
     const data = (await res.json()) as LeverPosting[];
     if (!Array.isArray(data)) return [];
     const display = companyName ?? prettySlug(companySlug);
-    return data.map((p) => mapPosting(p, display, companySlug));
+    return data
+      .map((p) => mapPosting(p, display, companySlug))
+      .filter((p): p is JobListItem => p !== null);
   } catch (err) {
     console.warn(`[lever] ${companySlug} fetch failed`, err);
     return [];
@@ -76,7 +78,7 @@ function mapPosting(
   p: LeverPosting,
   companyName: string,
   companySlug?: string,
-): JobListItem {
+): JobListItem | null {
   const description =
     (p.descriptionPlain ?? p.description ?? "")
       .replace(/<[^>]+>/g, " ")
@@ -87,6 +89,11 @@ function mapPosting(
     p.categories?.location ??
     (p.categories?.allLocations && p.categories.allLocations[0]) ??
     null;
+  const allLocs = [
+    ...(p.categories?.allLocations ?? []),
+    p.categories?.location ?? "",
+  ].join(" ");
+  if (!isRelevantLocation(allLocs, description)) return null;
   return {
     id: "",
     externalId: p.id,
@@ -116,4 +123,26 @@ function prettySlug(s: string): string {
     .split(/[-_]/)
     .map((w) => (w ? w[0].toUpperCase() + w.slice(1) : ""))
     .join(" ");
+}
+
+function isRelevantLocation(loc: string, description: string): boolean {
+  const combined = `${loc} ${description.slice(0, 400)}`.toLowerCase();
+  const yes = [
+    "italy", "italia", "italian", "milan", "milano", "rome", "roma", "napoli", "naples",
+    "torino", "turin", "firenze", "florence", "bologna", "genova", "venezia", "padova", "verona",
+    "europe", "europa", "eu ", "emea",
+    "germany", "germania", "france", "francia", "spain", "spagna", "netherlands", "paesi bassi",
+    "portugal", "portogallo", "ireland", "irlanda", "belgium", "belgio", "austria", "switzerland",
+    "svizzera", "denmark", "danimarca", "sweden", "svezia", "finland", "finlandia", "poland",
+    "polonia", "czech", "repubblica ceca",
+    "uk", "united kingdom", "london", "londra",
+  ];
+  const no = [
+    "united states only", "us only", "usa only", "canada only",
+    "apac only", "brazil", "mexico", "singapore only", "japan only", "india only",
+    "anywhere in the us", "us-based",
+  ];
+  if (/\bremote\b/.test(combined) && !no.some((n) => combined.includes(n))) return true;
+  if (yes.some((y) => combined.includes(y))) return true;
+  return false;
 }
