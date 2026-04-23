@@ -3,5 +3,11 @@
   "framework": "nextjs",
   "buildCommand": "prisma generate && prisma db push --accept-data-loss --skip-generate && next build",
   "installCommand": "npm install",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/cron/sync-jobs",
+      "schedule": "0 */6 * * *"
+    }
+  ]
 }

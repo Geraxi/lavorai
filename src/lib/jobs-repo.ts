@@ -20,59 +20,103 @@ export interface JobsFilter extends AdzunaSearchParams {
 export async function searchAndCacheJobs(
   filter: JobsFilter = {},
 ): Promise<Job[]> {
+  // 1. Fetch fresco da Adzuna + upsert in DB (come prima)
   const items = await searchJobs(filter);
   const filtered = filter.remoteOnly ? items.filter((j) => j.remote) : items;
 
-  // Upsert batch — singola transaction per minimizzare round-trips SQLite
-  await prisma.$transaction(
-    filtered.map((j) =>
-      prisma.job.upsert({
-        where: {
-          externalId_source: {
+  if (filtered.length > 0) {
+    await prisma.$transaction(
+      filtered.map((j) =>
+        prisma.job.upsert({
+          where: {
+            externalId_source: {
+              externalId: j.externalId,
+              source: j.source,
+            },
+          },
+          update: {
+            title: j.title,
+            company: j.company,
+            location: j.location,
+            description: j.description,
+            url: j.url,
+            contractType: j.contractType,
+            remote: j.remote,
+            salaryMin: j.salaryMin,
+            salaryMax: j.salaryMax,
+            category: j.category,
+            postedAt: j.postedAt,
+            cachedAt: new Date(),
+          },
+          create: {
             externalId: j.externalId,
             source: j.source,
+            title: j.title,
+            company: j.company,
+            location: j.location,
+            description: j.description,
+            url: j.url,
+            contractType: j.contractType,
+            remote: j.remote,
+            salaryMin: j.salaryMin,
+            salaryMax: j.salaryMax,
+            category: j.category,
+            postedAt: j.postedAt,
           },
-        },
-        update: {
-          title: j.title,
-          company: j.company,
-          location: j.location,
-          description: j.description,
-          url: j.url,
-          contractType: j.contractType,
-          remote: j.remote,
-          salaryMin: j.salaryMin,
-          salaryMax: j.salaryMax,
-          category: j.category,
-          postedAt: j.postedAt,
-          cachedAt: new Date(),
-        },
-        create: {
-          externalId: j.externalId,
-          source: j.source,
-          title: j.title,
-          company: j.company,
-          location: j.location,
-          description: j.description,
-          url: j.url,
-          contractType: j.contractType,
-          remote: j.remote,
-          salaryMin: j.salaryMin,
-          salaryMax: j.salaryMax,
-          category: j.category,
-          postedAt: j.postedAt,
-        },
-      }),
-    ),
-  );
+        }),
+      ),
+    );
+  }
 
-  // Ritorniamo i Job come sono in DB (inclusi id generati)
+  // 2. Query unificata su TUTTI i source (adzuna + greenhouse + lever + …)
+  //    con filtri applicati direttamente in DB.
+  type WhereClause = Parameters<typeof prisma.job.findMany>[0] extends
+    | { where?: infer W }
+    | undefined
+    ? NonNullable<W>
+    : never;
+  const and: WhereClause[] = [];
+  if (filter.what) {
+    const q = filter.what.trim();
+    and.push({
+      OR: [
+        { title: { contains: q, mode: "insensitive" } },
+        { company: { contains: q, mode: "insensitive" } },
+        { description: { contains: q, mode: "insensitive" } },
+        { category: { contains: q, mode: "insensitive" } },
+      ],
+    });
+  }
+  if (filter.where) {
+    const loc = filter.where.trim();
+    and.push({
+      OR: [
+        { location: { contains: loc, mode: "insensitive" } },
+        { remote: true },
+      ],
+    });
+  }
+  if (filter.remoteOnly) {
+    and.push({ remote: true });
+  }
+  if (filter.salaryMin) {
+    and.push({
+      OR: [
+        { salaryMin: { gte: filter.salaryMin } },
+        { salaryMax: { gte: filter.salaryMin } },
+      ],
+    });
+  }
+  const finalWhere = and.length > 0 ? { AND: and } : {};
+
   return prisma.job.findMany({
-    where: {
-      externalId: { in: filtered.map((j) => j.externalId) },
-      source: { in: Array.from(new Set(filtered.map((j) => j.source))) },
-    },
-    orderBy: { postedAt: "desc" },
+    where: finalWhere,
+    orderBy: [
+      // Priorità: Greenhouse/Lever (submit diretto) prima di Adzuna (scraping fragile)
+      { source: "asc" },
+      { postedAt: "desc" },
+    ],
+    take: 200,
   });
 }
 
