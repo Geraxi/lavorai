@@ -181,15 +181,12 @@ export async function POST(request: NextRequest) {
     });
 
     // --- Crea la candidatura ---
-    // Routing:
-    // 1. session.status === "paused" → awaiting_consent (override globale)
-    // 2. mode === "manual" → awaiting_consent
-    // 3. mode === "hybrid" + score < matchMin → awaiting_consent
-    // 4. altrimenti → queued
-    const needsConsent =
-      session.status === "paused" ||
-      mode === "manual" ||
-      (mode === "hybrid" && matchMin > 0 && score < matchMin);
+    // Single-apply route: è un click ESPLICITO dell'utente su quel job
+    // specifico. Trattiamo il click come consenso implicito; saltiamo
+    // awaiting_consent anche in modalità hybrid/manual per evitare il
+    // "consenti due volte" segnalato.
+    // Eccezione: sessione in pausa → rispettiamo la pausa.
+    const needsConsent = session.status === "paused";
     const initialStatus = needsConsent ? "awaiting_consent" : "queued";
     const application = await prisma.application.create({
       data: {

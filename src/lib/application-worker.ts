@@ -236,15 +236,21 @@ export async function processApplication(applicationId: string): Promise<void> {
       console.warn(`[worker] ${applicationId} URL resolve failed`, err);
     }
   }
-  const adapter = portalSubmitEnabled
-    ? findPortalAdapter(resolvedUrl) ?? findPortalAdapter(app.job.url)
-    : null;
+  // Prova il match sull'URL canonico (Job.url) PRIMA di quello risolto:
+  // alcuni ATS (Greenhouse) redirigono a career page custom dove il form
+  // non è raggiungibile. L'URL canonico porta al form puro dell'ATS.
+  let adapterUrl = app.job.url;
+  let adapter = portalSubmitEnabled ? findPortalAdapter(app.job.url) : null;
+  if (!adapter && portalSubmitEnabled) {
+    adapter = findPortalAdapter(resolvedUrl);
+    if (adapter) adapterUrl = resolvedUrl;
+  }
 
   if (adapter) {
     const outcome = await attemptPortalAdapterSubmit({
       applicationId,
       adapter,
-      jobUrl: resolvedUrl,
+      jobUrl: adapterUrl,
       cvPath,
       clPath,
       coverLetterText: result.coverLetter,
