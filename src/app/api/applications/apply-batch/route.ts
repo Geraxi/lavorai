@@ -28,6 +28,9 @@ function portalOf(url: string): string {
   const u = url.toLowerCase();
   if (u.includes("linkedin")) return "linkedin";
   if (u.includes("indeed")) return "indeed";
+  if (u.includes("greenhouse")) return "greenhouse";
+  if (u.includes("lever.co")) return "lever";
+  if (u.includes("workable.com")) return "workable";
   if (u.includes("infojobs")) return "infojobs";
   return "other";
 }

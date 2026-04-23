@@ -33,11 +33,23 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   if (!job) notFound();
 
   const color = companyColor(job.company ?? job.title);
-  const portal = job.url.toLowerCase().includes("linkedin")
+  // Determina il portale (usato come tag informativo + per l'old attemptAutoSubmit
+  // legacy path). Il submit reale passa dagli adapter Greenhouse/Lever/Workable
+  // basati su URL matching, non sul campo `portal`.
+  const urlLower = job.url.toLowerCase();
+  const portal = urlLower.includes("linkedin")
     ? "linkedin"
-    : job.url.toLowerCase().includes("indeed")
+    : urlLower.includes("indeed")
       ? "indeed"
-      : "infojobs";
+      : urlLower.includes("greenhouse")
+        ? "greenhouse"
+        : urlLower.includes("lever.co")
+          ? "lever"
+          : urlLower.includes("workable.com")
+            ? "workable"
+            : urlLower.includes("infojobs")
+              ? "infojobs"
+              : "other";
 
   return (
     <>

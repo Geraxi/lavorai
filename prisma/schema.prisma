@@ -228,6 +228,10 @@ model Job {
   // Email del recruiter estratta scrapando il job.url. Null se non trovata.
   recruiterEmail String?
   recruiterScrapedAt DateTime?
+  // Slug dell'ATS (es. "stripe" per boards.greenhouse.io/stripe/...)
+  // Usato per costruire l'URL canonico del form quando il job è linkato
+  // da una career page custom (es. stripe.com/jobs?gh_jid=...)
+  sourceSlug String?
 
   applications Application[]
 

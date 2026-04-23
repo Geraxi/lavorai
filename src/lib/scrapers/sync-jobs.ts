@@ -60,6 +60,7 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
               salaryMax: j.salaryMax,
               category: j.category,
               postedAt: j.postedAt,
+              sourceSlug: (j as { sourceSlug?: string | null }).sourceSlug ?? null,
               cachedAt: new Date(),
             },
             create: {
@@ -76,6 +77,7 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
               salaryMax: j.salaryMax,
               category: j.category,
               postedAt: j.postedAt,
+              sourceSlug: (j as { sourceSlug?: string | null }).sourceSlug ?? null,
             },
           })
           .then(() => {

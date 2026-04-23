@@ -77,15 +77,19 @@ function mapJob(
 ): JobListItem {
   const cleanHtml = (j.content ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const description = cleanHtml.slice(0, 2000);
+  // Priorità URL: canonico boards.greenhouse.io (più affidabile per adapter).
+  // absolute_url spesso redirige su careers.<company>.com con iframe — rischio.
+  const canonicalUrl = `https://boards.greenhouse.io/${companySlug}/jobs/${j.id}`;
   return {
     id: "", // Prisma assegnerà via cuid() in upsert
     externalId: String(j.id),
     source: "greenhouse",
+    sourceSlug: companySlug,
     title: j.title,
     company: companyName,
     location: j.location?.name ?? null,
     description,
-    url: j.absolute_url,
+    url: canonicalUrl,
     contractType: null,
     remote: /\bremote|remoto\b/i.test(j.location?.name ?? ""),
     salaryMin: null,

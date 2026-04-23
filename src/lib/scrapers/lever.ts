@@ -47,7 +47,7 @@ export async function fetchLeverJobs(
     const data = (await res.json()) as LeverPosting[];
     if (!Array.isArray(data)) return [];
     const display = companyName ?? prettySlug(companySlug);
-    return data.map((p) => mapPosting(p, display));
+    return data.map((p) => mapPosting(p, display, companySlug));
   } catch (err) {
     console.warn(`[lever] ${companySlug} fetch failed`, err);
     return [];
@@ -72,7 +72,11 @@ export async function fetchLeverMulti(
   return out;
 }
 
-function mapPosting(p: LeverPosting, companyName: string): JobListItem {
+function mapPosting(
+  p: LeverPosting,
+  companyName: string,
+  companySlug?: string,
+): JobListItem {
   const description =
     (p.descriptionPlain ?? p.description ?? "")
       .replace(/<[^>]+>/g, " ")
@@ -87,6 +91,7 @@ function mapPosting(p: LeverPosting, companyName: string): JobListItem {
     id: "",
     externalId: p.id,
     source: "lever",
+    sourceSlug: companySlug ?? null,
     title: p.text,
     company: companyName,
     location,
