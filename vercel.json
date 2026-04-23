@@ -11,7 +11,7 @@
     },
     {
       "path": "/api/cron/auto-apply",
-      "schedule": "0 */2 * * *"
+      "schedule": "*/30 * * * *"
     }
   ]
 }

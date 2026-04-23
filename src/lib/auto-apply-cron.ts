@@ -4,6 +4,7 @@ import { quickMatchScore } from "@/lib/match-score";
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
 import { effectiveTier, getLimits } from "@/lib/billing";
+import { titleMatchesAnyRole } from "@/lib/role-match";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -36,6 +37,7 @@ interface RunStats {
   skippedDailyCap: number;
   skippedMonthlyPaywall: number;
   skippedMatchThreshold: number;
+  skippedRoleMismatch: number;
   skippedAlreadyApplied: number;
   skippedAvoidedCompany: number;
   skippedSessionPaused: number;
@@ -49,6 +51,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     skippedDailyCap: 0,
     skippedMonthlyPaywall: 0,
     skippedMatchThreshold: 0,
+    skippedRoleMismatch: 0,
     skippedAlreadyApplied: 0,
     skippedAvoidedCompany: 0,
     skippedSessionPaused: 0,
@@ -177,9 +180,21 @@ async function processUser(
   const jobs = await prisma.job.findMany({
     where: {
       source: { in: ["greenhouse", "lever"] },
-      OR: roles.slice(0, 5).map((r) => ({
-        title: { contains: r, mode: "insensitive" },
-      })),
+      // URL canoniche vanilla: gli adapter Playwright funzionano solo
+      // su boards.greenhouse.io e jobs.lever.co. Aziende con career
+      // page custom (es. stripe.com/jobs) falliscono sempre → skip.
+      OR: [
+        { url: { contains: "boards.greenhouse.io" } },
+        { url: { contains: "job-boards.greenhouse.io" } },
+        { url: { contains: "jobs.lever.co" } },
+      ],
+      AND: [
+        {
+          OR: roles.slice(0, 5).map((r) => ({
+            title: { contains: r, mode: "insensitive" },
+          })),
+        },
+      ],
       // Skip job già candidati da questo utente
       NOT: {
         applications: { some: { userId: user.id } },
@@ -194,6 +209,14 @@ async function processUser(
   let enqueued = 0;
   for (const job of jobs) {
     if (enqueued >= remainingToday) break;
+
+    // Match STRETTO sul titolo: tutti i token significativi del ruolo
+    // devono essere presenti. "Product Designer" → sì "Senior Product
+    // Designer", no "Product Engineer".
+    if (!titleMatchesAnyRole(job.title, roles)) {
+      stats.skippedRoleMismatch++;
+      continue;
+    }
 
     // Azienda esclusa?
     if (job.company && avoidSet.has(job.company.toLowerCase())) {

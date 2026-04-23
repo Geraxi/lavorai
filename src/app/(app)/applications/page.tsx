@@ -37,8 +37,7 @@ interface ApiApplication {
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-// Fallback mock per UI demo quando non ci sono candidature reali
-const MOCK: Array<{
+interface Row {
   id: string;
   company: string;
   color: string;
@@ -51,22 +50,6 @@ const MOCK: Array<{
   match: number;
   source: string;
   stage: number;
-}> = [
-  { id: "m1", company: "Satispay", color: "#EF3E42", role: "Product Designer", location: "Milano", mode: "Ibrido", salary: "€45k–55k", applied: "2 ore fa", status: "inviata", match: 94, source: "LinkedIn", stage: 1 },
-  { id: "m2", company: "Scalapay", color: "#FE5FA3", role: "Senior UX Designer", location: "Milano", mode: "Remoto", salary: "€55k–68k", applied: "4 ore fa", status: "vista", match: 91, source: "Indeed", stage: 2 },
-  { id: "m3", company: "Nexi", color: "#1B3C89", role: "Product Designer — Pagamenti", location: "Roma", mode: "Ibrido", salary: "€48k–60k", applied: "5 ore fa", status: "colloquio", match: 88, source: "LinkedIn", stage: 3 },
-  { id: "m4", company: "Bending Spoons", color: "#0A0A0A", role: "Senior Product Designer", location: "Milano", mode: "In sede", salary: "€70k–90k", applied: "Ieri", status: "inviata", match: 86, source: "Sito azienda", stage: 1 },
-  { id: "m5", company: "Docebo", color: "#7E3FF2", role: "UX Designer", location: "Biassono", mode: "Ibrido", salary: "€42k–52k", applied: "Ieri", status: "rifiutata", match: 78, source: "LinkedIn", stage: 0 },
-  { id: "m6", company: "Casavo", color: "#1F6BFF", role: "Product Designer II", location: "Milano", mode: "Remoto", salary: "€50k–62k", applied: "Ieri", status: "vista", match: 89, source: "Welcome to the Jungle", stage: 2 },
-  { id: "m7", company: "Lastminute", color: "#F7235C", role: "Senior UI/UX Designer", location: "Chiasso/Milano", mode: "Ibrido", salary: "€48k–58k", applied: "2 giorni fa", status: "colloquio", match: 82, source: "LinkedIn", stage: 3 },
-  { id: "m8", company: "Everli", color: "#FF2954", role: "Lead Product Designer", location: "Milano", mode: "Remoto", salary: "€75k–95k", applied: "2 giorni fa", status: "offerta", match: 96, source: "Referral", stage: 4 },
-  { id: "m9", company: "Subito", color: "#DD0000", role: "Senior UX Designer", location: "Milano", mode: "Ibrido", salary: "€52k–65k", applied: "3 giorni fa", status: "vista", match: 87, source: "Welcome to the Jungle", stage: 2 },
-  { id: "m10", company: "Treatwell", color: "#FF3A9E", role: "Product Designer", location: "Milano", mode: "Remoto", salary: "€46k–58k", applied: "3 giorni fa", status: "rifiutata", match: 74, source: "LinkedIn", stage: 0 },
-  { id: "m11", company: "MoneyFarm", color: "#0E4C92", role: "Senior Product Designer", location: "Milano/Londra", mode: "Ibrido", salary: "€60k–75k", applied: "4 giorni fa", status: "colloquio", match: 90, source: "Referral", stage: 3 },
-  { id: "m12", company: "Young Platform", color: "#00D084", role: "Product Designer", location: "Torino", mode: "Ibrido", salary: "€45k–55k", applied: "5 giorni fa", status: "vista", match: 85, source: "AngelList", stage: 2 },
-];
-
-type Row = (typeof MOCK)[number] & {
   jobUrl?: string;
   coverLetterText?: string | null;
   hasCvDocx?: boolean;
@@ -74,7 +57,7 @@ type Row = (typeof MOCK)[number] & {
   hasCvPdf?: boolean;
   cvLanguage?: string | null;
   backendStatus?: string; // raw status from API ("awaiting_consent" etc.)
-};
+}
 
 type Range = "today" | "week" | "month" | "all";
 

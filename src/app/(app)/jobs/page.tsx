@@ -11,6 +11,7 @@ import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
+import { titleMatchesAnyRole } from "@/lib/role-match";
 
 export const metadata: Metadata = { title: "Job board" };
 export const dynamic = "force-dynamic";
@@ -130,8 +131,16 @@ export default async function JobsPage({
   }
 
   let belowMatchCount = 0;
+  let roleMismatchCount = 0;
+  const enforceRoles = !sp.what && prefRoles.length > 0;
   const jobs: JobRow[] = jobsRaw
     .filter((j) => {
+      // 0. titolo deve matchare uno dei ruoli dichiarati (solo quando
+      //    non c'è una query esplicita dell'utente)
+      if (enforceRoles && !titleMatchesAnyRole(j.title, prefRoles)) {
+        roleMismatchCount++;
+        return false;
+      }
       // 1. aziende escluse
       if (j.company && avoidSet.has(j.company.toLowerCase())) return false;
       // 2. salario minimo (solo se noto)
@@ -189,7 +198,7 @@ export default async function JobsPage({
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
             {!sp.what && prefRoles.length > 0
-              ? `${jobs.length} posizioni compatibili${matchMin > 0 ? ` (match ≥ ${matchMin}%)` : ""}${belowMatchCount > 0 ? ` · ${belowMatchCount} nascoste sotto soglia` : ""}`
+              ? `${jobs.length} posizioni compatibili${matchMin > 0 ? ` (match ≥ ${matchMin}%)` : ""}${belowMatchCount > 0 ? ` · ${belowMatchCount} nascoste sotto soglia` : ""}${roleMismatchCount > 0 ? ` · ${roleMismatchCount} fuori ruolo` : ""}`
               : `${jobs.length} posizioni trovate`}
           </p>
         </div>

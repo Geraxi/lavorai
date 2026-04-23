@@ -90,7 +90,6 @@ export default function OnboardingClient({
     }
     return ROLE_PREFERENCES.map((r) => ({
       title: r.title,
-      count: r.count,
       selected: r.selected,
     }));
   });
@@ -101,7 +100,6 @@ export default function OnboardingClient({
     }
     return LOCATION_PREFS.map((l) => ({
       city: l.city,
-      count: l.count,
       selected: l.selected,
     }));
   });
