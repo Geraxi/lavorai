@@ -267,6 +267,11 @@ export async function processApplication(applicationId: string): Promise<void> {
     if (outcome.ok) {
       const isDryRun =
         "confirmation" in outcome && outcome.confirmation === "DRY_RUN";
+      const confState =
+        "confirmation" in outcome ? outcome.confirmation : "DETECTED";
+      console.log(
+        `[worker] ${applicationId} adapter ${adapter.id} → submitted (${confState})`,
+      );
       await prisma.application.update({
         where: { id: applicationId },
         data: {
