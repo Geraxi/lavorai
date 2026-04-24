@@ -20,10 +20,10 @@ const stats = [
     sub: "CV + lettera cuciti su misura",
   },
   {
-    value: "4",
-    suffix: "",
-    label: "ATS integrati",
-    sub: "Greenhouse · Lever · Workable · BambooHR",
+    value: "100",
+    suffix: "+",
+    label: "Aziende monitorate",
+    sub: "tech, fintech, design — Italia ed EU",
   },
   {
     value: "100",
