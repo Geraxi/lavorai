@@ -3,10 +3,10 @@
 import {
   Zap,
   FileText,
-  Mail,
-  MessageSquare,
-  Headphones,
-  Languages,
+  Send,
+  Eye,
+  PauseCircle,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -21,33 +21,33 @@ interface Feature {
 const features: Feature[] = [
   {
     icon: Zap,
-    title: "Auto-Apply",
-    body: "Automatizza la tua ricerca di lavoro. LavorAI si candida a centinaia di posizioni compatibili al giorno mentre ti concentri sulla preparazione ai colloqui.",
+    title: "Auto-Apply ogni 30 minuti",
+    body: "Un cron su GitHub Actions scansiona Greenhouse e Lever ogni 30 minuti, seleziona gli annunci col tuo match più alto e li accoda — anche se sei offline. Rispetta daily cap, soglia di match e aziende bloccate.",
   },
   {
     icon: FileText,
-    title: "CV Builder AI",
-    body: "CV ATS-friendly cuciti su ogni descrizione di lavoro. L'AI valorizza le tue skill più rilevanti per massimizzare i colloqui.",
+    title: "CV riscritto per ogni annuncio",
+    body: "Claude legge il testo dell'annuncio e riscrive CV e cover letter in italiano nativo, allineati alle keyword ATS. Output DOCX + PDF mono-pagina pronto all'invio.",
   },
   {
-    icon: Mail,
-    title: "Cover Letter AI",
-    body: "Lettere motivazionali personalizzate in pochi secondi. Ogni lettera allineata ai requisiti dell'annuncio, per mostrare perché sei il candidato giusto.",
+    icon: Send,
+    title: "Submit diretto su ATS",
+    body: "Playwright compila e invia il modulo direttamente su Greenhouse, Lever, Workable e BambooHR. Niente reindirizzamenti, niente login: la candidatura arriva come l'hai mandata tu.",
   },
   {
-    icon: MessageSquare,
-    title: "AI Interview Practice",
-    body: "Simula colloqui reali con l'AI. Domande specifiche per il tuo ruolo, feedback istantaneo e la sicurezza per affrontare il prossimo colloquio.",
+    icon: Eye,
+    title: "Tracking apertura reale",
+    body: "Pixel 1×1 + webhook Resend: vedi il momento esatto in cui il recruiter apre la mail. Stato \"Vista\" reale, non inventato.",
   },
   {
-    icon: Headphones,
-    title: "Interview Buddy",
-    body: "Coaching AI live durante il colloquio. Suggerimenti di risposta in tempo reale via auricolare o schermo — come avere un senior in tasca.",
+    icon: PauseCircle,
+    title: "Sessioni pausabili",
+    body: "Le candidature si raggruppano automaticamente per ruolo (es. \"Frontend · IT\"). Metti in pausa una singola sessione senza fermare le altre: le candidature restano in coda consenso invece di partire.",
   },
   {
-    icon: Languages,
-    title: "Resume Translator",
-    body: "Apri opportunità in tutta Europa e nel mondo. Traduci il CV in 50+ lingue preservando formattazione e impatto.",
+    icon: ShieldCheck,
+    title: "GDPR-first, made in EU",
+    body: "Dati in server UE (Neon · Frankfurt). Export integrale dei tuoi dati in un click, cancellazione completa in cascata (profilo, CV, file, code di lavoro).",
   },
 ];
 

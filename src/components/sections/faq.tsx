@@ -12,19 +12,19 @@ import { Reveal } from "@/components/reveal";
 const faq = [
   {
     q: "Come funziona l'auto-candidatura?",
-    a: "Carichi il CV (o lo crei da zero con l'AI), imposti le preferenze (ruoli, città, RAL, modalità), e LavorAI scansiona i portali 24/7. Quando trova un match, adatta CV + cover letter all'annuncio e invia la candidatura per te. Tu ricevi solo le risposte dei recruiter.",
+    a: "Carichi il CV, imposti ruoli + soglia di match. Un cron GitHub Actions ogni 30 minuti scansiona Greenhouse e Lever: quando trova un annuncio sopra la tua soglia, Claude riscrive CV + cover letter per quella specifica posizione, e Playwright compila il form ATS e invia. Tu vedi solo lo stato sulla dashboard.",
   },
   {
-    q: "Non ho un CV — posso crearlo sulla piattaforma?",
-    a: "Sì. Inserisci il tuo LinkedIn (o fornisci esperienze/competenze a testo libero) e l'AI ti costruisce un CV ATS-friendly in formato DOCX/PDF pronto all'uso.",
+    q: "Posso candidarmi senza caricare un CV?",
+    a: "No, serve un CV di partenza (PDF o DOCX). L'AI estrae il profilo strutturato (esperienze, skill, lingue) e lo riutilizza per ogni annuncio. Sul CV Builder puoi poi editare tutto.",
   },
   {
-    q: "Su quali portali vi candidate?",
-    a: "InfoJobs, LinkedIn, Indeed, Subito Lavoro, Monster e diversi portali verticali italiani + internazionali. L'elenco cresce costantemente.",
+    q: "Su quali portali vi candidate davvero?",
+    a: "Submit reale via Playwright su Greenhouse, Lever, Workable e BambooHR — ATS senza login pubblici, molto usati in EU. Scansione annunci anche da Adzuna (che aggrega InfoJobs, Subito e altri). LinkedIn e Indeed sono esclusi per policy: i loro ToS vietano l'automazione e il rischio di ban sull'account è concreto.",
   },
   {
     q: "Posso controllare dove candidarmi?",
-    a: "Sì. Imposti filtri su ruoli, sedi, RAL minima, modalità (remoto/ibrido/in sede), seniority e aziende da evitare. LavorAI candida solo ai match che rispettano i tuoi criteri.",
+    a: "Sì. Filtri su ruoli, città, RAL minima, modalità, aziende da evitare e soglia di match (es. min 75%). Tre modalità: Off (niente), Hybrid (serve il tuo ok per ogni candidatura), Auto (zero-touch). Daily cap configurabile.",
   },
   {
     q: "Cos'è un ATS e perché conta?",

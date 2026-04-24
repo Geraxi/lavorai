@@ -3,13 +3,12 @@
 import { motion } from "motion/react";
 import { Reveal } from "@/components/reveal";
 
-// Metriche ispirate al framing aiapply.co: impatto tangibile del
-// tempo risparmiato e volume di candidature processate.
+// Metriche concrete della pipeline: mostra cosa fa realmente il sistema.
 const stats = [
-  { value: "80%", label: "più probabilità di trovare lavoro usando LavorAI" },
-  { value: "30s", label: "per generare CV + cover letter su misura" },
-  { value: "24/7", label: "auto-apply attivo anche mentre dormi" },
-  { value: "★★★★★", label: "esperienza dei primi utenti early access" },
+  { value: "30 min", label: "cadenza del cron auto-apply" },
+  { value: "4 ATS", label: "submit diretto: Greenhouse, Lever, Workable, BambooHR" },
+  { value: "1 pag.", label: "CV PDF ATS-friendly generato da Claude" },
+  { value: "🇪🇺", label: "dati in server UE, GDPR nativo" },
 ];
 
 export function SectionStats() {

@@ -4,29 +4,29 @@ import { Target, Upload, Zap, ArrowRight } from "lucide-react";
 import { motion } from "motion/react";
 import { Reveal, RevealItem, RevealStagger } from "@/components/reveal";
 
-// Triade aiapply.co: Prepare → Apply → Succeed, adattata in italiano
-// e ai nostri nomi prodotto.
+// Triade Prepara → Candidati → Monitora, descritta sul funzionamento
+// reale della pipeline (CV extraction → auto-apply cron → tracking pixel).
 const steps = [
   {
     n: "01",
     icon: Upload,
     title: "Prepara",
-    text: "Carica il CV o generalo da zero. LavorAI crea CV e cover letter su misura per ogni annuncio, basandosi su competenze ed esperienza.",
-    meta: "Prepare",
+    text: "Carichi il CV (PDF/DOCX). Claude lo destruttura in profilo: esperienze, skill, lingue. Scegli ruoli, città, RAL minima e soglia di match.",
+    meta: "≈3 min",
   },
   {
     n: "02",
     icon: Target,
     title: "Candidati",
-    text: "Lascia che LavorAI si candidi per te a migliaia di posizioni compatibili, in automatico. Risparmi tempo e arrivi prima al colloquio.",
-    meta: "Apply",
+    text: "Ogni 30 minuti LavorAI trova nuovi annunci su Greenhouse e Lever che superano la tua soglia, riscrive CV + cover letter e invia direttamente sul form ATS.",
+    meta: "24/7",
   },
   {
     n: "03",
     icon: Zap,
-    title: "Conquista",
-    text: "Interview Buddy ti accompagna dal vivo durante il colloquio — domande probabili, risposte suggerite, coaching in tempo reale.",
-    meta: "Succeed",
+    title: "Monitora",
+    text: "Nella dashboard vedi stato in tempo reale, match score, data di apertura della mail da parte del recruiter. Pausa una sessione quando basta.",
+    meta: "Live",
   },
 ];
 
@@ -48,7 +48,7 @@ export function SectionComeFunziona() {
           </p>
           <h2 className="mt-3 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
             Prepara, candidati,{" "}
-            <span className="text-gradient-accent">conquista.</span>
+            <span className="text-gradient-accent">monitora.</span>
           </h2>
           <p className="mt-5 text-lg text-muted-foreground">
             Un unico copilota per ogni fase: dal primo CV al colloquio finale.

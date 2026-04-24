@@ -72,13 +72,12 @@ export function Hero() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="mt-6 max-w-xl text-balance text-lg text-muted-foreground md:text-xl"
             >
-              LavorAI trova le posizioni più compatibili,{" "}
+              LavorAI scansiona Greenhouse e Lever ogni 30 minuti,{" "}
               <strong className="text-foreground">
-                riscrive CV e lettera motivazionale per ogni annuncio,
-                si candida in automatico
+                riscrive CV e cover letter per ogni annuncio
               </strong>{" "}
-              e ti prepara al colloquio dal vivo — così passi da invio ad
-              assunzione nel tempo di un caffè.
+              e invia direttamente sul form ATS — con pixel che ti dice quando
+              il recruiter apre la mail.
             </motion.p>
 
             <motion.div
