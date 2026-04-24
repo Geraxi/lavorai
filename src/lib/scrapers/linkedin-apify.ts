@@ -220,19 +220,33 @@ export async function fetchLinkedinViaApify(
  */
 export const DEFAULT_LINKEDIN_QUERIES: { search: string; location?: string }[] =
   [
-    // Employee-style
+    // Italia città principali — massima priorità per il pool italiano
+    { search: "Product Designer", location: "Milan, Italy" },
+    { search: "Frontend Developer", location: "Milan, Italy" },
+    { search: "Full Stack Engineer", location: "Milan, Italy" },
+    { search: "Product Manager", location: "Milan, Italy" },
+    { search: "Backend Engineer", location: "Milan, Italy" },
+    { search: "UX Designer", location: "Milan, Italy" },
+    { search: "Software Engineer", location: "Milan, Italy" },
+    { search: "Data Engineer", location: "Milan, Italy" },
+    { search: "Product Designer", location: "Rome, Italy" },
+    { search: "Software Engineer", location: "Rome, Italy" },
+    { search: "Product Manager", location: "Rome, Italy" },
+    { search: "Product Designer", location: "Turin, Italy" },
+    { search: "Software Engineer", location: "Bologna, Italy" },
+    // Italia (nazionale / remoto)
     { search: "Product Designer", location: "Italy" },
     { search: "Frontend Developer", location: "Italy" },
     { search: "Full Stack Engineer", location: "Italy" },
     { search: "Product Manager", location: "Italy" },
-    { search: "Data Engineer", location: "Italy" },
     { search: "DevOps Engineer", location: "Italy" },
+    // EU fallback — aziende Italia-friendly
     { search: "Product Designer", location: "European Union" },
     { search: "Software Engineer", location: "European Union" },
     // Freelance / contract / P.IVA
     { search: "Freelance Product Designer", location: "Italy" },
-    { search: "Contract Frontend Developer", location: "Italy" },
-    { search: "Freelance Full Stack", location: "Italy" },
+    { search: "Freelance Frontend Developer", location: "Italy" },
+    { search: "Contract Full Stack", location: "Italy" },
+    { search: "Consulente informatico", location: "Milan, Italy" },
     { search: "Project Product Designer", location: "European Union" },
-    { search: "Consultant Software Engineer", location: "European Union" },
   ];

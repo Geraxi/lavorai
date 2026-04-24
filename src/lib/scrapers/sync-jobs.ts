@@ -28,7 +28,9 @@ export async function syncAtsJobs(): Promise<{
     // LinkedIn via Apify: fallisce silente se APIFY_TOKEN non è settato.
     // I job tenuti hanno applyUrl su Greenhouse/Lever/Workable/BambooHR,
     // quindi il submit resta sul form ATS reale — niente automazione su LinkedIn.
-    fetchLinkedinViaApify(DEFAULT_LINKEDIN_QUERIES, 50),
+    // 25 query × 25 righe = ~625 scan max. Il filtro ATS-supportati in
+    // genere tiene il 2-10% → 15-60 job utili per sync.
+    fetchLinkedinViaApify(DEFAULT_LINKEDIN_QUERIES, 25),
   ]);
   console.log(
     `[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}  linkedin=${li.length}`,
