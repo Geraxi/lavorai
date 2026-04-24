@@ -148,7 +148,7 @@ model UserPreferences {
   // "off" (nessuna candidatura), "hybrid" (richiede conferma utente per singola), "auto" (candida direttamente)
   autoApplyMode String @default("hybrid")
   dailyCap    Int    @default(25)
-  matchMin    Int    @default(75)
+  matchMin    Int    @default(50)
   salaryMin   Int    @default(30)
   rolesJson   String @default("[]")
   locationsJson String @default("[]")

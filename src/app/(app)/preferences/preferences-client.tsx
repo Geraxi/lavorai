@@ -25,7 +25,7 @@ interface Initial {
   excludedCompanies: string[];
 }
 
-const MATCH_STEPS = [70, 75, 80, 85] as const;
+const MATCH_STEPS = [30, 50, 65, 75, 85] as const;
 
 export function PreferencesClient({ initial }: { initial: Initial }) {
   const [roles, setRoles] = useState<string[]>(initial.roles);
@@ -337,6 +337,18 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                         </button>
                       ))}
                     </div>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: "var(--fg-muted)",
+                        marginTop: 6,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Consigliato <strong>50%</strong> per cominciare.
+                      Alzalo se vedi candidature a ruoli poco pertinenti;
+                      abbassalo se non arrivano candidature.
+                    </p>
                   </div>
                 </div>
               </SectionBody>
