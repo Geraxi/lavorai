@@ -98,6 +98,10 @@ const BLACKLIST_DOMAIN = new Set([
   "adzuna.co.uk",
   "sentry.io",
   "sentry.wixpress.com",
+  "ingest.sentry.io",
+  "o153781.ingest.sentry.io",
+  "ingest.de.sentry.io",
+  "ingest.us.sentry.io",
   "google-analytics.com",
   "googleapis.com",
   "schema.org",
@@ -136,11 +140,20 @@ function score(email: string, companySlug: string | null): number {
   if (!local || !domain) return -1;
   if (BLACKLIST_FULL.has(email)) return -1000;
   if (BLACKLIST_DOMAIN.has(domain)) return -1000;
+  // Blocca qualsiasi sottodominio sentry (*.ingest.sentry.io, *.ingest.de.sentry.io, ecc.)
+  if (/(^|\.)ingest(\.[a-z]+)?\.sentry\.io$/i.test(domain)) return -1000;
+  if (/(^|\.)sentry\.io$/i.test(domain)) return -1000;
   if (BLACKLIST_LOCAL.has(local)) return -100;
   // Regex-level filters su local part palesemente finti
   if (/^(tu|you)(a|r)?[._-]?e?mail$/i.test(local)) return -1000;
   if (/^nome[._-]?cognome$/i.test(local)) return -1000;
   if (/^first[._-]?last$/i.test(local)) return -1000;
+  // DSN Sentry: hash hex di 24-40 caratteri come local part
+  if (/^[0-9a-f]{24,}$/i.test(local)) return -1000;
+  // Artefatti di unicode-escape non deconvertiti (\u003e, \u0027, ecc.)
+  if (/u[0-9a-f]{4}/i.test(local)) return -1000;
+  // Local part che sembra pezzo di codice/JSON: apici, backslash, parentesi
+  if (/[\\"'<>(){}[\]]/.test(local)) return -1000;
 
   let s = 0;
   if (PREFERRED_LOCAL.has(local)) s += 50;
