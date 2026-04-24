@@ -40,18 +40,27 @@ export default async function DashboardPage() {
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const thirtyStart = new Date(todayStart.getTime() - 29 * 86400_000);
 
-  const [totalCount, todayCount, successCount, failedCount, last7Count, thisMonthCount, prevMonthCount, last30] = await Promise.all([
-    prisma.application.count({ where: { userId: user.id } }),
-    prisma.application.count({ where: { userId: user.id, createdAt: { gte: todayStart } } }),
-    prisma.application.count({ where: { userId: user.id, status: "success" } }),
-    prisma.application.count({ where: { userId: user.id, status: "failed" } }),
-    prisma.application.count({ where: { userId: user.id, createdAt: { gte: week1Start } } }),
-    prisma.application.count({ where: { userId: user.id, createdAt: { gte: monthStart } } }),
+  // I conteggi mostrati in dashboard si riferiscono SOLO alle candidature
+  // realmente consegnate (status=success). Le altre fasi della pipeline
+  // (applying, ready_to_apply, awaiting_consent, failed) non contano come
+  // "inviate" e non devono apparire nei numeri di testa.
+  const deliveredWhere = {
+    userId: user.id,
+    status: "success",
+    submittedVia: { not: null },
+  } as const;
+
+  const [totalCount, todayCount, viewedCount, last7Count, thisMonthCount, prevMonthCount, last30] = await Promise.all([
+    prisma.application.count({ where: deliveredWhere }),
+    prisma.application.count({ where: { ...deliveredWhere, createdAt: { gte: todayStart } } }),
+    prisma.application.count({ where: { ...deliveredWhere, viewedAt: { not: null } } }),
+    prisma.application.count({ where: { ...deliveredWhere, createdAt: { gte: week1Start } } }),
+    prisma.application.count({ where: { ...deliveredWhere, createdAt: { gte: monthStart } } }),
     prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: prevMonthStart, lt: monthStart } },
+      where: { ...deliveredWhere, createdAt: { gte: prevMonthStart, lt: monthStart } },
     }),
     prisma.application.findMany({
-      where: { userId: user.id, createdAt: { gte: thirtyStart } },
+      where: { ...deliveredWhere, createdAt: { gte: thirtyStart } },
       select: { createdAt: true },
     }),
   ]);
@@ -67,10 +76,12 @@ export default async function DashboardPage() {
   const daily30Max = Math.max(1, ...daily30);
 
   const isEmpty = totalCount === 0;
-  const successRate =
+  // "Tasso risposta" = percentuale di candidature in cui il recruiter
+  // ha aperto l'email (via pixel tracking). Valore reale, non inventato.
+  const responseRate =
     totalCount === 0
       ? "—"
-      : `${Math.round((successCount / totalCount) * 100)}%`;
+      : `${Math.round((viewedCount / totalCount) * 100)}%`;
   // Stima tempo risparmiato: ~15 minuti per candidatura
   const savedMinutes = totalCount * 15;
   const savedLabel =
@@ -130,8 +141,14 @@ export default async function DashboardPage() {
               >
                 {totalCount > 0 ? (
                   <>
-                    Hai inviato <strong style={{ color: "var(--fg)" }}>{totalCount} candidature</strong>{" "}
-                    · {successCount} riuscite, {failedCount} fallite.
+                    Hai inviato{" "}
+                    <strong style={{ color: "var(--fg)" }}>
+                      {totalCount}{" "}
+                      {totalCount === 1 ? "candidatura" : "candidature"}
+                    </strong>
+                    {viewedCount > 0
+                      ? ` · ${viewedCount} ${viewedCount === 1 ? "aperta" : "aperte"} dai recruiter.`
+                      : "."}
                   </>
                 ) : (
                   <>
@@ -174,14 +191,16 @@ export default async function DashboardPage() {
           />
           <Kpi
             index={2}
-            label="Tasso successo"
-            value={successRate}
+            label="Aperte dai recruiter"
+            value={responseRate}
             delta={
               isEmpty
                 ? "In attesa dati"
-                : `${successCount} riuscite · ${failedCount} fallite`
+                : viewedCount > 0
+                  ? `${viewedCount} su ${totalCount} aperte`
+                  : "Nessuna ancora aperta"
             }
-            up={successCount > failedCount}
+            up={viewedCount > 0}
             sparkColor="var(--primary-ds)"
           />
           <Kpi

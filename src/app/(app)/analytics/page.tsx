@@ -22,13 +22,21 @@ export default async function AnalyticsPage() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
+  // Solo candidature effettivamente consegnate (status=success + submittedVia
+  // non nullo). Evitiamo di gonfiare le metriche con quelle stuck o fallite.
+  const deliveredWhere = {
+    userId: user.id,
+    status: "success",
+    submittedVia: { not: null },
+  } as const;
+
   const [totalApps, thisMonth, prevMonth] = await Promise.all([
-    prisma.application.count({ where: { userId: user.id } }),
+    prisma.application.count({ where: deliveredWhere }),
     prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: monthStart } },
+      where: { ...deliveredWhere, createdAt: { gte: monthStart } },
     }),
     prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: prevMonthStart, lt: monthStart } },
+      where: { ...deliveredWhere, createdAt: { gte: prevMonthStart, lt: monthStart } },
     }),
   ]);
 

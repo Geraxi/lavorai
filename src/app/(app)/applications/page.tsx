@@ -63,12 +63,18 @@ type Range = "today" | "week" | "month" | "all";
 
 export default function ApplicationsPage() {
   const [range, setRange] = useState<Range>("all");
+  // Due fetch: sent = solo candidature consegnate (success) → vista principale
+  // awaiting = solo in attesa di consenso → banner "Consenti tutte"
   const { data } = useSWR<{ applications: ApiApplication[] }>(
     `/api/applications?range=${range}`,
     fetcher,
     { refreshInterval: 5000 },
   );
-  const [filter, setFilter] = useState<string>("all");
+  const { data: awaitingData } = useSWR<{ applications: ApiApplication[] }>(
+    `/api/applications?range=all&includeAll=1`,
+    fetcher,
+    { refreshInterval: 15000 },
+  );
   const [selected, setSelected] = useState<Row | null>(null);
 
   const realRows: Row[] =
@@ -96,21 +102,11 @@ export default function ApplicationsPage() {
 
   // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).
   const allRows: Row[] = realRows;
-  const filtered = filter === "all" ? allRows : allRows.filter((a) => a.status === filter);
+  const filtered = allRows;
 
-  const awaitingCount = allRows.filter(
-    (a) => a.backendStatus === "awaiting_consent",
-  ).length;
-
-  const counts = {
-    all: allRows.length,
-    inviata: allRows.filter((a) => a.status === "inviata").length,
-    vista: allRows.filter((a) => a.status === "vista").length,
-    colloquio: allRows.filter((a) => a.status === "colloquio").length,
-    offerta: allRows.filter((a) => a.status === "offerta").length,
-    rifiutata: allRows.filter((a) => a.status === "rifiutata").length,
-    awaiting: awaitingCount,
-  };
+  const awaitingCount =
+    awaitingData?.applications.filter((a) => a.status === "awaiting_consent")
+      .length ?? 0;
 
   const [consentConfirmOpen, setConsentConfirmOpen] = useState(false);
 
@@ -169,7 +165,9 @@ export default function ApplicationsPage() {
             </h1>
             <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
               {allRows.length}{" "}
-              {allRows.length === 1 ? "candidatura" : "candidature"}
+              {allRows.length === 1
+                ? "candidatura inviata"
+                : "candidature inviate"}
               {" · "}
               {rangeLabel(range)}
             </p>
@@ -239,18 +237,6 @@ export default function ApplicationsPage() {
             </button>
           </div>
         )}
-
-        <div style={{ display: "flex", gap: 2, marginBottom: 16, flexWrap: "wrap" }}>
-          <FilterButton active={filter === "all"} onClick={() => setFilter("all")}>
-            Tutte <FilterCount>{counts.all}</FilterCount>
-          </FilterButton>
-          <FilterButton active={filter === "inviata"} onClick={() => setFilter("inviata")}>
-            Inviate <FilterCount>{counts.inviata}</FilterCount>
-          </FilterButton>
-          <FilterButton active={filter === "rifiutata"} onClick={() => setFilter("rifiutata")}>
-            Non riuscite <FilterCount>{counts.rifiutata}</FilterCount>
-          </FilterButton>
-        </div>
 
         <div className="ds-section-card">
           <table className="ds-tbl">
@@ -368,37 +354,6 @@ export default function ApplicationsPage() {
         onCancel={() => setConsentConfirmOpen(false)}
       />
     </>
-  );
-}
-
-function FilterButton({
-  active,
-  children,
-  onClick,
-}: {
-  active: boolean;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`ds-btn ds-btn-sm ${active ? "ds-btn-primary" : "ds-btn-ghost"}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function FilterCount({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="mono"
-      style={{ opacity: 0.6, fontSize: 11, marginLeft: 6 }}
-    >
-      {children}
-    </span>
   );
 }
 
