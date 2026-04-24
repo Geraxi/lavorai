@@ -21,7 +21,7 @@ import type { JobListItem } from "@/lib/adzuna";
  */
 
 const APIFY_ACTOR =
-  process.env.APIFY_LINKEDIN_ACTOR ?? "bebity~linkedin-jobs-scraper";
+  process.env.APIFY_LINKEDIN_ACTOR ?? "apimaestro~linkedin-jobs-scraper-api";
 
 /**
  * Domini ATS che sappiamo compilare via Playwright
@@ -46,33 +46,43 @@ function isSupportedAts(url: string): boolean {
  * Forma del job restituito dall'attore Apify. I nomi dei campi variano
  * leggermente tra attori diversi — qui cerchiamo tutte le varianti note.
  */
+/**
+ * Shape restituita da apimaestro/linkedin-jobs-scraper-api.
+ * Alcuni alias extra (camelCase) coperti per compatibilità con altri attori.
+ */
 interface ApifyRaw {
-  id?: string;
-  jobId?: string;
-  trackingId?: string;
-  title?: string;
-  companyName?: string;
+  // apimaestro — snake_case
+  job_id?: string;
+  job_title?: string;
+  job_url?: string; // LinkedIn internal — skip
+  apply_url?: string; // external (ATS) apply link
   company?: string;
   location?: string;
   description?: string;
-  descriptionHtml?: string;
-  descriptionText?: string;
-  link?: string; // LinkedIn URL
-  jobUrl?: string;
+  work_type?: string;
+  posted_at?: string;
+  posted_at_epoch?: number;
+  is_easy_apply?: boolean;
+  // generic/camelCase fallbacks (bebity, altri attori)
+  id?: string;
+  title?: string;
+  companyName?: string;
   applyUrl?: string;
   applyLink?: string;
   externalApplyLink?: string;
   externalApplyUrl?: string;
-  postedAt?: string;
-  postedTime?: string;
-  listedAt?: string | number;
+  jobUrl?: string;
+  descriptionHtml?: string;
+  descriptionText?: string;
   workType?: string;
-  contractType?: string;
   employmentType?: string;
+  postedAt?: string;
+  listedAt?: string | number;
 }
 
 function pickExternalApplyUrl(j: ApifyRaw): string | null {
   const candidates = [
+    j.apply_url,
     j.externalApplyUrl,
     j.externalApplyLink,
     j.applyUrl,
@@ -89,15 +99,15 @@ function pickExternalApplyUrl(j: ApifyRaw): string | null {
 
 function pickExternalId(j: ApifyRaw, fallbackUrl: string): string {
   return (
+    j.job_id ??
     j.id ??
-    j.jobId ??
-    j.trackingId ??
     fallbackUrl.replace(/^https?:\/\//, "").slice(0, 120)
   );
 }
 
 function parsePostedAt(j: ApifyRaw): Date {
-  const v = j.postedAt ?? j.postedTime ?? j.listedAt;
+  if (j.posted_at_epoch) return new Date(j.posted_at_epoch);
+  const v = j.posted_at ?? j.postedAt ?? j.listedAt;
   if (!v) return new Date();
   if (typeof v === "number") return new Date(v);
   const d = new Date(v);
@@ -120,14 +130,16 @@ export async function fetchLinkedinViaApify(
 
   const all: JobListItem[] = [];
   for (const q of queries) {
-    const runUrl = `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${token}`;
+    const runUrl = `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items?token=${token}&timeout=180`;
     const body = {
-      queries: [q.search],
-      searchQueries: [q.search],
+      // apimaestro shape
+      keywords: q.search,
       location: q.location ?? "Italy",
+      rows: maxPerQuery,
+      // fallback per altri attori (bebity/misceres)
+      searchQueries: [q.search],
       locationName: q.location ?? "Italy",
       datePosted: "r604800", // last 7 days
-      rows: maxPerQuery,
       count: maxPerQuery,
       proxy: { useApifyProxy: true },
     };
@@ -152,22 +164,27 @@ export async function fetchLinkedinViaApify(
       for (const j of raw) {
         const applyUrl = pickExternalApplyUrl(j);
         if (!applyUrl) continue;
-        if (!j.title) continue;
+        const title = j.job_title ?? j.title;
+        if (!title) continue;
 
         const id = pickExternalId(j, applyUrl);
-        const desc = (j.description ?? j.descriptionText ?? "").slice(0, 4000);
+        const desc = (
+          j.description ?? j.descriptionText ?? j.descriptionHtml ?? ""
+        ).slice(0, 4000);
+        const location = j.location ?? null;
+        const workType = j.work_type ?? j.workType ?? j.employmentType ?? null;
         all.push({
           externalId: id,
           source: "linkedin",
           sourceSlug: null,
-          title: j.title,
-          company: j.companyName ?? j.company ?? "",
-          location: j.location ?? null,
+          title,
+          company: j.company ?? j.companyName ?? "",
+          location,
           description: desc,
           url: applyUrl, // ← submitterà sul ATS reale, non su LinkedIn
-          contractType: j.employmentType ?? j.contractType ?? j.workType ?? null,
+          contractType: workType,
           remote: /remote|remoto|smart working/i.test(
-            `${j.title} ${j.location ?? ""}`,
+            `${title} ${location ?? ""} ${workType ?? ""}`,
           ),
           salaryMin: null,
           salaryMax: null,
