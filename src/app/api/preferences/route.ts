@@ -19,6 +19,10 @@ const Schema = z.object({
   dailyCap: z.number().int().min(1).max(100).optional(),
   matchMin: z.number().int().min(0).max(100).optional(),
   employmentType: z.enum(["employee", "piva", "both"]).optional(),
+  dailyRate: z.number().int().min(0).max(5000).nullable().optional(),
+  availableFrom: z.string().trim().max(60).nullable().optional(),
+  vatNumber: z.string().trim().max(30).nullable().optional(),
+  portfolioUrl: z.string().trim().max(300).url().nullable().optional(),
   excludedCompanies: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
 });
 
@@ -65,6 +69,10 @@ export async function PUT(request: NextRequest) {
     dailyCap,
     matchMin,
     employmentType,
+    dailyRate,
+    availableFrom,
+    vatNumber,
+    portfolioUrl,
     excludedCompanies,
   } = parsed.data;
 
@@ -83,6 +91,10 @@ export async function PUT(request: NextRequest) {
       dailyCap: dailyCap ?? 25,
       matchMin: matchMin ?? 50,
       employmentType: employmentType ?? "employee",
+      dailyRate: dailyRate ?? null,
+      availableFrom: availableFrom ?? null,
+      vatNumber: vatNumber ?? null,
+      portfolioUrl: portfolioUrl ?? null,
       salaryMin,
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),
@@ -94,6 +106,10 @@ export async function PUT(request: NextRequest) {
       ...(dailyCap != null ? { dailyCap } : {}),
       ...(matchMin != null ? { matchMin } : {}),
       ...(employmentType != null ? { employmentType } : {}),
+      ...(dailyRate !== undefined ? { dailyRate } : {}),
+      ...(availableFrom !== undefined ? { availableFrom } : {}),
+      ...(vatNumber !== undefined ? { vatNumber } : {}),
+      ...(portfolioUrl !== undefined ? { portfolioUrl } : {}),
       salaryMin,
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),

@@ -22,6 +22,10 @@ interface Initial {
   dailyCap: number;
   matchMin: number;
   employmentType: "employee" | "piva" | "both";
+  dailyRate: number | null;
+  availableFrom: string | null;
+  vatNumber: string | null;
+  portfolioUrl: string | null;
   modeSel: { remoto: boolean; ibrido: boolean; sede: boolean };
   excludedCompanies: string[];
 }
@@ -38,6 +42,16 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
   const [employmentType, setEmploymentType] = useState<
     "employee" | "piva" | "both"
   >(initial.employmentType);
+  const [dailyRate, setDailyRate] = useState<string>(
+    initial.dailyRate != null ? String(initial.dailyRate) : "",
+  );
+  const [availableFrom, setAvailableFrom] = useState<string>(
+    initial.availableFrom ?? "",
+  );
+  const [vatNumber, setVatNumber] = useState<string>(initial.vatNumber ?? "");
+  const [portfolioUrl, setPortfolioUrl] = useState<string>(
+    initial.portfolioUrl ?? "",
+  );
   const [modeSel, setModeSel] = useState(initial.modeSel);
   const [excluded, setExcluded] = useState<string[]>(initial.excludedCompanies);
   const [roleInput, setRoleInput] = useState("");
@@ -88,6 +102,12 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
             dailyCap,
             matchMin,
             employmentType,
+            dailyRate: dailyRate.trim()
+              ? Math.max(0, Math.min(5000, parseInt(dailyRate, 10) || 0))
+              : null,
+            availableFrom: availableFrom.trim() || null,
+            vatNumber: vatNumber.trim() || null,
+            portfolioUrl: portfolioUrl.trim() || null,
             excludedCompanies: excluded,
           }),
         });
@@ -399,6 +419,122 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                           : "Cerchiamo solo posizioni full-time da dipendente."}
                     </p>
                   </div>
+
+                  {(employmentType === "piva" ||
+                    employmentType === "both") && (
+                    <div
+                      style={{
+                        marginTop: 16,
+                        padding: 16,
+                        borderRadius: 8,
+                        background: "var(--bg-elev)",
+                        border: "1px solid var(--border-ds)",
+                        display: "grid",
+                        gap: 14,
+                      }}
+                    >
+                      <div>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 500,
+                            marginBottom: 2,
+                          }}
+                        >
+                          Profilo P.IVA
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "var(--fg-muted)",
+                          }}
+                        >
+                          Dettagli usati nel pitch commerciale generato per
+                          ogni progetto freelance. Tutti opzionali ma
+                          consigliati — un pitch con tariffa e disponibilità
+                          converte meglio.
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 12,
+                        }}
+                      >
+                        <div>
+                          <label className="ds-label">
+                            Tariffa giornaliera (€)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="5000"
+                            step="50"
+                            placeholder="es. 450"
+                            value={dailyRate}
+                            onChange={(e) => {
+                              setDailyRate(e.target.value);
+                              mark();
+                            }}
+                            className="ds-input"
+                          />
+                        </div>
+                        <div>
+                          <label className="ds-label">Disponibile dal</label>
+                          <input
+                            type="text"
+                            placeholder="es. immediata, 2 settimane, 1/6/2026"
+                            value={availableFrom}
+                            onChange={(e) => {
+                              setAvailableFrom(e.target.value);
+                              mark();
+                            }}
+                            className="ds-input"
+                            maxLength={60}
+                          />
+                        </div>
+                        <div>
+                          <label className="ds-label">
+                            Partita IVA{" "}
+                            <span
+                              style={{
+                                fontWeight: 400,
+                                color: "var(--fg-muted)",
+                              }}
+                            >
+                              (opzionale)
+                            </span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="IT12345678901"
+                            value={vatNumber}
+                            onChange={(e) => {
+                              setVatNumber(e.target.value);
+                              mark();
+                            }}
+                            className="ds-input"
+                            maxLength={30}
+                          />
+                        </div>
+                        <div>
+                          <label className="ds-label">Portfolio URL</label>
+                          <input
+                            type="url"
+                            placeholder="https://..."
+                            value={portfolioUrl}
+                            onChange={(e) => {
+                              setPortfolioUrl(e.target.value);
+                              mark();
+                            }}
+                            className="ds-input"
+                            maxLength={300}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </SectionBody>
             </SectionCard>

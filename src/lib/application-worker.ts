@@ -47,6 +47,7 @@ export async function processApplication(applicationId: string): Promise<void> {
         include: {
           cvDocuments: { orderBy: { createdAt: "desc" }, take: 1 },
           portalSessions: true,
+          preferences: true,
         },
       },
     },
@@ -83,10 +84,39 @@ export async function processApplication(applicationId: string): Promise<void> {
       title: app.job.title,
       category: app.job.category,
     });
+    // Se l'utente è in modalità P.IVA/both E l'annuncio sembra freelance,
+    // passiamo a Claude il contesto commerciale per generare un pitch B2B
+    // invece di una classica cover letter motivazionale.
+    const prefs = app.user.preferences;
+    const empType = prefs?.employmentType ?? "employee";
+    const looksFreelance =
+      /\b(freelance|freelancer|contract|contractor|p\.?\s?iva|partita\s?iva|consultant|consulente|project-based|ad hoc|short[-\s]?term|6\s?months?|12\s?months?)\b/i.test(
+        `${app.job.title} ${app.job.contractType ?? ""} ${app.job.description ?? ""}`.slice(
+          0,
+          2000,
+        ),
+      );
+    const usePivaPitch =
+      empType !== "employee" &&
+      (empType === "piva" || looksFreelance) &&
+      (prefs?.dailyRate != null ||
+        prefs?.availableFrom != null ||
+        prefs?.vatNumber != null ||
+        prefs?.portfolioUrl != null);
+
     result = await optimizeCV({
       cvText: cv.extractedText,
       jobPosting,
       coverLetterHints,
+      pivaContext: usePivaPitch
+        ? {
+            dailyRate: prefs?.dailyRate ?? null,
+            availableFrom: prefs?.availableFrom ?? null,
+            vatNumber: prefs?.vatNumber ?? null,
+            portfolioUrl: prefs?.portfolioUrl ?? null,
+            candidateName: app.user.name ?? null,
+          }
+        : undefined,
     });
 
     // 2. Genera DOCX

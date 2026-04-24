@@ -112,6 +112,9 @@ export default function OnboardingClient({
   const [employmentType, setEmploymentType] = useState<
     "employee" | "piva" | "both"
   >("employee");
+  const [dailyRate, setDailyRate] = useState<string>("");
+  const [availableFrom, setAvailableFrom] = useState<string>("");
+  const [portfolioUrl, setPortfolioUrl] = useState<string>("");
   const [details, setDetails] = useState<Details>({
     seniority: initial.profile?.seniority ?? null,
     yearsExperience:
@@ -199,6 +202,11 @@ export default function OnboardingClient({
         salaryMin: salary,
         modeSel,
         employmentType,
+        dailyRate: dailyRate.trim()
+          ? Math.max(0, Math.min(5000, parseInt(dailyRate, 10) || 0))
+          : null,
+        availableFrom: availableFrom.trim() || null,
+        portfolioUrl: portfolioUrl.trim() || null,
       }),
     }).catch(() => null);
 
@@ -336,6 +344,12 @@ export default function OnboardingClient({
               setModeSel={setModeSel}
               employmentType={employmentType}
               setEmploymentType={setEmploymentType}
+              dailyRate={dailyRate}
+              setDailyRate={setDailyRate}
+              availableFrom={availableFrom}
+              setAvailableFrom={setAvailableFrom}
+              portfolioUrl={portfolioUrl}
+              setPortfolioUrl={setPortfolioUrl}
             />
           )}
           {step === 4 && (
@@ -1154,6 +1168,12 @@ function StepPreferences({
   setModeSel,
   employmentType,
   setEmploymentType,
+  dailyRate,
+  setDailyRate,
+  availableFrom,
+  setAvailableFrom,
+  portfolioUrl,
+  setPortfolioUrl,
 }: {
   roles: RolePref[];
   setRoles: React.Dispatch<React.SetStateAction<RolePref[]>>;
@@ -1167,6 +1187,12 @@ function StepPreferences({
   setEmploymentType: React.Dispatch<
     React.SetStateAction<"employee" | "piva" | "both">
   >;
+  dailyRate: string;
+  setDailyRate: React.Dispatch<React.SetStateAction<string>>;
+  availableFrom: string;
+  setAvailableFrom: React.Dispatch<React.SetStateAction<string>>;
+  portfolioUrl: string;
+  setPortfolioUrl: React.Dispatch<React.SetStateAction<string>>;
 }) {
   return (
     <>
@@ -1225,6 +1251,77 @@ function StepPreferences({
             ))}
           </div>
         </div>
+
+        {(employmentType === "piva" || employmentType === "both") && (
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 8,
+              background: "var(--bg-elev)",
+              border: "1px solid var(--border-ds)",
+              display: "grid",
+              gap: 12,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>Profilo P.IVA</div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: "var(--fg-subtle)",
+                  marginTop: 2,
+                }}
+              >
+                Usato per generare un pitch commerciale. Puoi completarlo ora
+                o dopo in Preferenze.
+              </div>
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 10,
+              }}
+            >
+              <div>
+                <label className="ds-label">Tariffa giornaliera (€)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="5000"
+                  step="50"
+                  placeholder="es. 450"
+                  value={dailyRate}
+                  onChange={(e) => setDailyRate(e.target.value)}
+                  className="ds-input"
+                />
+              </div>
+              <div>
+                <label className="ds-label">Disponibile dal</label>
+                <input
+                  type="text"
+                  placeholder="immediata, 2 settimane…"
+                  value={availableFrom}
+                  onChange={(e) => setAvailableFrom(e.target.value)}
+                  className="ds-input"
+                  maxLength={60}
+                />
+              </div>
+              <div style={{ gridColumn: "1 / span 2" }}>
+                <label className="ds-label">Portfolio URL</label>
+                <input
+                  type="url"
+                  placeholder="https://…"
+                  value={portfolioUrl}
+                  onChange={(e) => setPortfolioUrl(e.target.value)}
+                  className="ds-input"
+                  maxLength={300}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="ds-label">
             Ruoli · {roles.filter((r) => r.selected).length} selezionati

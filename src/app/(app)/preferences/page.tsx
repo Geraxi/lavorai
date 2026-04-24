@@ -48,6 +48,18 @@ export default async function PreferencesPage() {
       ((prefs as { employmentType?: string } | null | undefined)
         ?.employmentType as "employee" | "piva" | "both" | undefined) ??
       "employee",
+    dailyRate:
+      ((prefs as { dailyRate?: number | null } | null | undefined)
+        ?.dailyRate ?? null) as number | null,
+    availableFrom:
+      ((prefs as { availableFrom?: string | null } | null | undefined)
+        ?.availableFrom ?? null) as string | null,
+    vatNumber:
+      ((prefs as { vatNumber?: string | null } | null | undefined)
+        ?.vatNumber ?? null) as string | null,
+    portfolioUrl:
+      ((prefs as { portfolioUrl?: string | null } | null | undefined)
+        ?.portfolioUrl ?? null) as string | null,
     modeSel: {
       remoto: modes.includes("remoto"),
       ibrido: modes.includes("ibrido"),

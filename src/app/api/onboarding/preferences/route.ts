@@ -15,6 +15,16 @@ const Schema = z.object({
     sede: z.boolean(),
   }),
   employmentType: z.enum(["employee", "piva", "both"]).optional(),
+  dailyRate: z.number().int().min(0).max(5000).nullable().optional(),
+  availableFrom: z.string().trim().max(60).nullable().optional(),
+  portfolioUrl: z
+    .string()
+    .trim()
+    .max(300)
+    .url()
+    .nullable()
+    .optional()
+    .or(z.literal("").transform(() => null)),
 });
 
 export async function POST(request: NextRequest) {
@@ -32,8 +42,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { roles, locations, salaryMin, modeSel, employmentType } =
-    parsed.data;
+  const {
+    roles,
+    locations,
+    salaryMin,
+    modeSel,
+    employmentType,
+    dailyRate,
+    availableFrom,
+    portfolioUrl,
+  } = parsed.data;
   const sources = [
     modeSel.remoto && "remoto",
     modeSel.ibrido && "ibrido",
@@ -47,6 +65,9 @@ export async function POST(request: NextRequest) {
       autoApplyOn: true,
       salaryMin,
       employmentType: employmentType ?? "employee",
+      dailyRate: dailyRate ?? null,
+      availableFrom: availableFrom ?? null,
+      portfolioUrl: portfolioUrl ?? null,
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),
       sourcesJson: JSON.stringify(sources),
@@ -54,6 +75,9 @@ export async function POST(request: NextRequest) {
     update: {
       salaryMin,
       ...(employmentType != null ? { employmentType } : {}),
+      ...(dailyRate !== undefined ? { dailyRate } : {}),
+      ...(availableFrom !== undefined ? { availableFrom } : {}),
+      ...(portfolioUrl !== undefined ? { portfolioUrl } : {}),
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),
       sourcesJson: JSON.stringify(sources),

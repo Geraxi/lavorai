@@ -35,6 +35,16 @@ export interface OptimizeCVInput {
    *  letterale. Ogni elemento è una istruzione/idea in linguaggio naturale.
    */
   coverLetterHints?: string[];
+  /** Contesto P.IVA: se presente, Claude scrive un PITCH B2B invece di
+   *  una classica cover letter da dipendente. Include tariffa,
+   *  disponibilità, partita IVA, portfolio. */
+  pivaContext?: {
+    dailyRate?: number | null;
+    availableFrom?: string | null;
+    vatNumber?: string | null;
+    portfolioUrl?: string | null;
+    candidateName?: string | null;
+  };
 }
 
 /**
@@ -65,6 +75,7 @@ export async function optimizeCV(
         role: "user",
         content:
           USER_PROMPT_TEMPLATE(input.cvText, input.jobPosting) +
+          buildPivaBlock(input.pivaContext) +
           buildCoverLetterHintsBlock(input.coverLetterHints),
       },
     ],
@@ -96,6 +107,51 @@ export async function optimizeCV(
       "Claude ha risposto con un formato non valido. Riprova tra qualche secondo.",
     );
   }
+}
+
+function buildPivaBlock(ctx: OptimizeCVInput["pivaContext"]): string {
+  if (!ctx) return "";
+  const lines: string[] = [];
+  if (ctx.dailyRate) lines.push(`• Tariffa giornaliera indicativa: €${ctx.dailyRate}`);
+  if (ctx.availableFrom) lines.push(`• Disponibilità: ${ctx.availableFrom}`);
+  if (ctx.vatNumber) lines.push(`• Partita IVA: ${ctx.vatNumber} (italiana, fattura elettronica)`);
+  if (ctx.portfolioUrl) lines.push(`• Portfolio: ${ctx.portfolioUrl}`);
+  const bio = lines.length > 0 ? lines.join("\n") : "(nessun dato aggiuntivo fornito)";
+
+  return `\n\n---
+CANDIDATURA COME FREELANCE / P.IVA — MODALITÀ PITCH B2B
+
+Non si tratta di una candidatura da dipendente. Il candidato è un
+professionista con P.IVA italiana e si propone come consulente esterno
+su un progetto/contract. Riscrivi di conseguenza:
+
+1. coverLetter = pitch commerciale B2B, NON lettera motivazionale:
+   - Prima persona, tono professionale ma diretto (come un consulente
+     che risponde a un invito a offerta).
+   - Apertura: posizionamento ("Sono un {ruolo} indipendente basato in
+     Italia con P.IVA…") invece di "Sono entusiasta di candidarmi".
+   - Corpo: 2-3 progetti passati rilevanti come prova di capacità
+     (sintesi, outcome, metriche). NON dare per scontato continuity
+     lavorativa.
+   - Chiusura: offerta concreta con tariffa, disponibilità e prossimo
+     passo ("Possiamo sentirci 20 minuti questa settimana per allineare
+     scope e timeline?"). Niente "resto a disposizione".
+   - Lunghezza: max 180-220 parole. Asciutto.
+   - Lingua: italiano nativo (o inglese se l'annuncio è in inglese).
+
+2. optimizedCV = stesso output strutturato ATS-friendly, MA:
+   - Se il title del profilo è "Dipendente presso X", riscrivilo come
+     "{Ruolo} — Freelance / Consulente" o simile.
+   - Nelle experiences, quando possibile, inquadra le esperienze come
+     "collaborazione" / "contract" / "consulenza" invece che "employee".
+   - Non inventare: se il CV è chiaramente da dipendente, lascia le
+     esperienze come sono ma aggiungi un'indicazione di apertura a
+     progetti P.IVA nel summary.
+
+3. Dati commerciali da integrare nel pitch (coverLetter):
+${bio}
+
+4. atsScore e suggestions restano come da schema.`;
 }
 
 function buildCoverLetterHintsBlock(hints: string[] | undefined): string {
