@@ -42,14 +42,6 @@ interface RunStats {
   skippedAvoidedCompany: number;
   skippedSessionPaused: number;
   errors: number;
-  // Debug: primi 5 score calcolati per ogni utente, per capire perché il
-  // threshold filtra. Rimuovere dopo debug UX stabilizzato.
-  debugScores?: Array<{
-    userEmail: string;
-    matchMin: number;
-    sampleRoles: string[];
-    jobs: Array<{ title: string; company: string; score: number }>;
-  }>;
 }
 
 export async function runAutoApplyCron(): Promise<RunStats> {
@@ -64,7 +56,6 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     skippedAvoidedCompany: 0,
     skippedSessionPaused: 0,
     errors: 0,
-    debugScores: [],
   };
 
   // Utenti in modalità auto con CV + preferenze
@@ -262,25 +253,6 @@ async function processUser(
       scoreProfile,
       `${job.title}\n${job.company ?? ""}\n${job.description}`,
     );
-    // Raccolta debug (primi 10 per utente)
-    let userDebug = stats.debugScores!.find((d) => d.userEmail === user.email);
-    if (!userDebug) {
-      userDebug = {
-        userEmail: user.email,
-        matchMin: prefs.matchMin,
-        sampleRoles: roles.slice(0, 5),
-        jobs: [],
-      };
-      stats.debugScores!.push(userDebug);
-    }
-    if (userDebug.jobs.length < 10) {
-      userDebug.jobs.push({
-        title: job.title,
-        company: job.company ?? "",
-        score,
-      });
-    }
-
     if (prefs.matchMin > 0 && score < prefs.matchMin) {
       stats.skippedMatchThreshold++;
       continue;
