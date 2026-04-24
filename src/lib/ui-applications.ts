@@ -29,27 +29,41 @@ export async function getUIApplications(
   userId?: string,
 ): Promise<UIApplication[]> {
   const uid = userId ?? (await getDemoUser()).id;
+  // Solo candidature realmente consegnate (success + submittedVia).
+  // Le altre fasi pipeline (queued/applying/ready_to_apply/failed/
+  // awaiting_consent) non sono "inviate" e non vanno mostrate come tali
+  // nella dashboard.
   const rows = await prisma.application.findMany({
-    where: { userId: uid },
+    where: {
+      userId: uid,
+      status: "success",
+      submittedVia: { not: null },
+    },
     orderBy: { createdAt: "desc" },
     include: { job: true },
   });
 
-  return rows.map((row) => ({
-    id: row.id,
-    company: row.job.company ?? "—",
-    color: companyColor(row.job.company ?? row.job.title),
-    role: row.job.title,
-    location: row.job.location ?? "—",
-    mode: row.job.remote ? "Remoto" : "Ibrido",
-    salary: formatSalary(row.job.salaryMin, row.job.salaryMax),
-    applied: relativeTime(row.createdAt),
-    status: mapStatus(row.status),
-    match: row.atsScore ?? 80,
-    source: capitalize(row.job.source),
-    stage: stageFromStatus(row.status),
-    isReal: true,
-  }));
+  return rows.map((row) => {
+    // viewedAt > userStatus override > backend status. Se il recruiter ha
+    // aperto la mail (pixel Resend o webhook), upgrade da "inviata" a "vista".
+    const userOverride = row.userStatus as UIApplication["status"] | null;
+    const baseStatus = row.viewedAt ? "vista" : mapStatus(row.status);
+    return {
+      id: row.id,
+      company: row.job.company ?? "—",
+      color: companyColor(row.job.company ?? row.job.title),
+      role: row.job.title,
+      location: row.job.location ?? "—",
+      mode: row.job.remote ? "Remoto" : "Ibrido",
+      salary: formatSalary(row.job.salaryMin, row.job.salaryMax),
+      applied: relativeTime(row.createdAt),
+      status: userOverride ?? baseStatus,
+      match: row.atsScore ?? 80,
+      source: capitalize(row.job.source),
+      stage: stageFromStatus(row.status),
+      isReal: true,
+    };
+  });
 }
 
 function mapStatus(backend: string): UIApplication["status"] {
