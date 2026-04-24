@@ -4,9 +4,9 @@ import {
   Zap,
   FileText,
   Mail,
-  BarChart3,
-  Sparkles,
-  Target,
+  MessageSquare,
+  Headphones,
+  Languages,
   type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -21,33 +21,33 @@ interface Feature {
 const features: Feature[] = [
   {
     icon: Zap,
-    title: "Auto-apply in background",
-    body: "Un cron controlla i nuovi annunci ogni 30 minuti e invia le candidature che matchano. Non devi essere online.",
+    title: "Auto-Apply",
+    body: "Automatizza la tua ricerca di lavoro. LavorAI si candida a centinaia di posizioni compatibili al giorno mentre ti concentri sulla preparazione ai colloqui.",
   },
   {
     icon: FileText,
-    title: "CV riscritto per annuncio",
-    body: "Claude adatta bullet, keyword e summary al testo della posizione. Output DOCX e PDF ATS-compatibili.",
+    title: "CV Builder AI",
+    body: "CV ATS-friendly cuciti su ogni descrizione di lavoro. L'AI valorizza le tue skill più rilevanti per massimizzare i colloqui.",
   },
   {
     icon: Mail,
-    title: "Cover letter in italiano",
-    body: "Scritta in italiano nativo, non tradotta. Lunghezza e tono modulati sul ruolo e sull&apos;azienda.",
+    title: "Cover Letter AI",
+    body: "Lettere motivazionali personalizzate in pochi secondi. Ogni lettera allineata ai requisiti dell'annuncio, per mostrare perché sei il candidato giusto.",
   },
   {
-    icon: Target,
-    title: "Submit diretto su ATS",
-    body: "Playwright compila e invia direttamente su Greenhouse, Lever e Workable. Niente reindirizzamenti manuali.",
+    icon: MessageSquare,
+    title: "AI Interview Practice",
+    body: "Simula colloqui reali con l'AI. Domande specifiche per il tuo ruolo, feedback istantaneo e la sicurezza per affrontare il prossimo colloquio.",
   },
   {
-    icon: BarChart3,
-    title: "Tracker reale",
-    body: "Pixel di apertura via Resend + webhook. Vedi quando il recruiter apre l&apos;email, non statistiche inventate.",
+    icon: Headphones,
+    title: "Interview Buddy",
+    body: "Coaching AI live durante il colloquio. Suggerimenti di risposta in tempo reale via auricolare o schermo — come avere un senior in tasca.",
   },
   {
-    icon: Sparkles,
-    title: "Filtri precisi",
-    body: "Ruoli, città, RAL minima, aziende da escludere, soglia di match. Le candidature partono solo dove ha senso.",
+    icon: Languages,
+    title: "Resume Translator",
+    body: "Apri opportunità in tutta Europa e nel mondo. Traduci il CV in 50+ lingue preservando formattazione e impatto.",
   },
 ];
 
@@ -66,12 +66,13 @@ export function SectionFeatures() {
           <p className="text-xs uppercase tracking-[0.2em] text-primary">
             Cosa puoi fare
           </p>
-          <h2 className="mt-3 text-balance text-4xl font-semibold tracking-tight sm:text-5xl" style={{ letterSpacing: "-0.03em" }}>
-            Cosa fa, in pratica.
+          <h2 className="mt-3 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
+            Il tuo copilota AI per la{" "}
+            <span className="text-gradient-accent">ricerca di lavoro.</span>
           </h2>
           <p className="mt-5 text-lg text-muted-foreground">
-            CV builder, cover letter, ATS optimizer, auto-apply e tracking.
-            Tutto in un&apos;app, senza saltare da un sito all&apos;altro.
+            Dalla prima bozza del CV all&apos;invito al colloquio finale —
+            LavorAI ti accompagna in ogni passaggio.
           </p>
         </Reveal>
 
@@ -81,10 +82,40 @@ export function SectionFeatures() {
         >
           {features.map(({ icon: Icon, title, body }) => (
             <RevealItem key={title}>
-              <div className="group relative h-full rounded-lg border border-border/60 bg-card p-6 transition-colors hover:border-border">
+              <motion.div
+                whileHover={{ y: -4 }}
+                transition={{ type: "spring", stiffness: 300, damping: 22 }}
+                className="group relative h-full rounded-2xl border border-border/70 bg-card/40 p-6 backdrop-blur-sm"
+                style={{
+                  boxShadow:
+                    "0 1px 0 hsl(var(--foreground) / 0.04) inset, 0 10px 30px -12px hsl(var(--foreground) / 0.14)",
+                }}
+              >
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, hsl(var(--primary)/0.25), transparent 40%, hsl(var(--primary)/0.10))",
+                    padding: 1,
+                    WebkitMask:
+                      "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+                    WebkitMaskComposite: "xor",
+                    maskComposite: "exclude",
+                  }}
+                />
+
                 <div className="relative">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-                    <Icon className="h-5 w-5 text-primary" strokeWidth={2} />
+                  <div
+                    className="relative flex h-12 w-12 items-center justify-center rounded-xl border border-primary/30"
+                    style={{
+                      background:
+                        "linear-gradient(145deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.05))",
+                      boxShadow:
+                        "0 1px 0 hsl(var(--primary) / 0.25) inset, 0 6px 16px -4px hsl(var(--primary) / 0.30)",
+                    }}
+                  >
+                    <Icon className="h-5 w-5 text-primary" strokeWidth={2.2} />
                   </div>
                   <h3 className="mt-5 text-xl font-semibold tracking-tight">
                     {title}
@@ -93,7 +124,7 @@ export function SectionFeatures() {
                     {body}
                   </p>
                 </div>
-              </div>
+              </motion.div>
             </RevealItem>
           ))}
         </RevealStagger>

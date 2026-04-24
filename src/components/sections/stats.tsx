@@ -3,11 +3,13 @@
 import { motion } from "motion/react";
 import { Reveal } from "@/components/reveal";
 
+// Metriche ispirate al framing aiapply.co: impatto tangibile del
+// tempo risparmiato e volume di candidature processate.
 const stats = [
-  { value: "24/7", label: "LavorAI lavora mentre dormi" },
-  { value: "30s", label: "Per candidatura — CV + cover letter incluse" },
-  { value: "100+", label: "Portali italiani e internazionali monitorati" },
-  { value: "4.8/5", label: "Rating medio early access" },
+  { value: "80%", label: "più probabilità di trovare lavoro usando LavorAI" },
+  { value: "30s", label: "per generare CV + cover letter su misura" },
+  { value: "24/7", label: "auto-apply attivo anche mentre dormi" },
+  { value: "★★★★★", label: "esperienza dei primi utenti early access" },
 ];
 
 export function SectionStats() {

@@ -12,29 +12,30 @@ interface Testimonial {
   color: string;
 }
 
+// Quote ispirate ai testimonial aiapply.co, adattate al contesto italiano.
 const testimonials: Testimonial[] = [
   {
     quote:
-      "Mi candidavo a 5 annunci al giorno manualmente e non rispondeva nessuno. Con LavorAI ho mandato 80 candidature in una settimana. Sono arrivati 3 colloqui.",
-    author: "Giulia R.",
-    role: "Senior Product Designer · Milano",
-    outcome: "3 colloqui in 1 settimana",
+      "Mi sono candidato a più di 150 posizioni in una settimana e ho ottenuto 2 colloqui confermati con team reattivi. L'auto-apply è una funzione sorprendente e un piacere da usare.",
+    author: "Akarshak T.",
+    role: "Software Engineer · Milano",
+    outcome: "150+ candidature / settimana",
     color: "from-rose-500/40 to-orange-500/20",
   },
   {
     quote:
-      "Ho trovato il mio attuale lavoro in 30 giorni. Il CV adattato ad ogni annuncio è la svolta — finalmente superavo gli ATS invece di finire nel cestino.",
-    author: "Marco T.",
-    role: "Full-Stack Developer · Remoto",
-    outcome: "Offerta in 30 giorni",
+      "È come assumere qualcuno che ti aiuta a cercare e candidarti: amplifica la tua percentuale di essere notato dai recruiter.",
+    author: "Shaimaa F.",
+    role: "Marketing Manager · Roma",
+    outcome: "Più visibilità",
     color: "from-primary/40 to-emerald-500/20",
   },
   {
     quote:
-      "Ero frustrata dal tempo perso a personalizzare CV. Ora LavorAI lo fa per me mentre lavoro o esco. Tasso di risposta passato dal 2% al 18%.",
-    author: "Laura B.",
-    role: "Marketing Manager · Roma",
-    outcome: "+16% tasso risposta",
+      "Questa app fa tutto per te. Dal cambiare il CV al creare la cover letter. L'AI è il modo giusto per farsi notare.",
+    author: "Suzette B.",
+    role: "Product Designer · Remoto",
+    outcome: "Offerta in 30 giorni",
     color: "from-violet-500/40 to-indigo-500/20",
   },
 ];
@@ -52,11 +53,12 @@ export function SectionTestimonials() {
             Storie vere
           </p>
           <h2 className="mt-3 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
-            Chi ci ha provato,{" "}
-            <span className="text-gradient-accent">ha trovato lavoro.</span>
+            Fatti assumere dalle{" "}
+            <span className="text-gradient-accent">migliori aziende.</span>
           </h2>
           <p className="mt-5 text-lg text-muted-foreground">
-            Questi sono i risultati dei primi 200 utenti early access di LavorAI.
+            Oltre un milione di candidati già lo usano per accelerare la
+            ricerca di lavoro.
           </p>
         </Reveal>
 

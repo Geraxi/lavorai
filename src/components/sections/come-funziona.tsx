@@ -1,26 +1,32 @@
 "use client";
 
-import { Target, Upload, Zap } from "lucide-react";
+import { Target, Upload, Zap, ArrowRight } from "lucide-react";
+import { motion } from "motion/react";
 import { Reveal, RevealItem, RevealStagger } from "@/components/reveal";
 
+// Triade aiapply.co: Prepare → Apply → Succeed, adattata in italiano
+// e ai nostri nomi prodotto.
 const steps = [
   {
     n: "01",
     icon: Upload,
-    title: "Carica il CV",
-    text: "PDF o DOCX. Claude estrae esperienze, skill e lingue in profilo strutturato.",
+    title: "Prepara",
+    text: "Carica il CV o generalo da zero. LavorAI crea CV e cover letter su misura per ogni annuncio, basandosi su competenze ed esperienza.",
+    meta: "Prepare",
   },
   {
     n: "02",
     icon: Target,
-    title: "Imposta le preferenze",
-    text: "Ruoli, città, RAL minima, modalità di lavoro, aziende da evitare, soglia di match.",
+    title: "Candidati",
+    text: "Lascia che LavorAI si candidi per te a migliaia di posizioni compatibili, in automatico. Risparmi tempo e arrivi prima al colloquio.",
+    meta: "Apply",
   },
   {
     n: "03",
     icon: Zap,
-    title: "Lascia che giri",
-    text: "Ogni 30 min LavorAI scansiona Greenhouse e Lever, adatta CV e cover letter, e invia.",
+    title: "Conquista",
+    text: "Interview Buddy ti accompagna dal vivo durante il colloquio — domande probabili, risposte suggerite, coaching in tempo reale.",
+    meta: "Succeed",
   },
 ];
 
@@ -28,48 +34,158 @@ export function SectionComeFunziona() {
   return (
     <section
       id="come-funziona"
-      className="border-t border-border/60 py-24 md:py-32"
+      className="relative border-t border-border/60 py-24 md:py-32"
     >
-      <div className="container">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,hsl(var(--primary)/0.07),transparent_60%)]"
+      />
+
+      <div className="container relative">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <h2
-            className="text-balance text-4xl font-semibold tracking-tight sm:text-5xl"
-            style={{ letterSpacing: "-0.03em" }}
-          >
-            Come funziona.
+          <p className="text-xs uppercase tracking-[0.2em] text-primary">
+            Come funziona
+          </p>
+          <h2 className="mt-3 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
+            Prepara, candidati,{" "}
+            <span className="text-gradient-accent">conquista.</span>
           </h2>
           <p className="mt-5 text-lg text-muted-foreground">
-            Setup una volta, tre minuti. Poi gira in background finché non lo
-            metti in pausa.
+            Un unico copilota per ogni fase: dal primo CV al colloquio finale.
           </p>
         </Reveal>
 
         <RevealStagger
-          staggerDelay={0.1}
-          className="mx-auto mt-16 grid max-w-5xl gap-6 md:grid-cols-3"
+          staggerDelay={0.12}
+          className="relative mt-20 grid gap-6 md:grid-cols-3 md:gap-4"
         >
-          {steps.map(({ n, icon: Icon, title, text }) => (
+          {steps.map(({ n, icon: Icon, title, text, meta }, i) => (
             <RevealItem key={n}>
-              <div className="h-full rounded-lg border border-border/60 bg-card p-6">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary/10">
-                    <Icon className="h-4.5 w-4.5 text-primary" strokeWidth={2} />
-                  </div>
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {n}
-                  </span>
-                </div>
-                <h3 className="mt-5 text-lg font-semibold tracking-tight">
-                  {title}
-                </h3>
-                <p className="mt-2 text-[14.5px] leading-relaxed text-muted-foreground">
-                  {text}
-                </p>
+              <div className="relative flex items-stretch">
+                <StepCard
+                  n={n}
+                  icon={Icon}
+                  title={title}
+                  text={text}
+                  meta={meta}
+                />
+                {i < steps.length - 1 && <Connector />}
               </div>
             </RevealItem>
           ))}
         </RevealStagger>
       </div>
     </section>
+  );
+}
+
+function StepCard({
+  n,
+  icon: Icon,
+  title,
+  text,
+  meta,
+}: {
+  n: string;
+  icon: React.ElementType;
+  title: string;
+  text: string;
+  meta: string;
+}) {
+  return (
+    <motion.div
+      whileHover={{ y: -6 }}
+      transition={{ type: "spring", stiffness: 300, damping: 22 }}
+      className="group relative w-full overflow-hidden rounded-2xl border border-border/70 bg-card/40 p-7 backdrop-blur-sm"
+      style={{
+        boxShadow:
+          "0 1px 0 hsl(var(--foreground) / 0.04) inset, 0 10px 30px -12px hsl(var(--foreground) / 0.18)",
+      }}
+    >
+      {/* Gradient border on hover */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 rounded-2xl opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        style={{
+          background:
+            "linear-gradient(135deg, hsl(var(--primary)/0.35), transparent 40%, hsl(var(--primary)/0.15))",
+          padding: 1,
+          WebkitMask:
+            "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+          WebkitMaskComposite: "xor",
+          maskComposite: "exclude",
+        }}
+      />
+
+      {/* Icon orb */}
+      <div className="relative">
+        <div
+          aria-hidden
+          className="absolute -inset-4 rounded-full opacity-60 blur-2xl transition-all duration-500 group-hover:opacity-100 group-hover:blur-3xl"
+          style={{
+            background:
+              "radial-gradient(circle, hsl(var(--primary) / 0.35), transparent 70%)",
+          }}
+        />
+        <motion.div
+          whileHover={{ rotate: 6, scale: 1.05 }}
+          transition={{ type: "spring", stiffness: 300, damping: 18 }}
+          className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/40"
+          style={{
+            background:
+              "linear-gradient(145deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.05))",
+            boxShadow:
+              "0 1px 0 hsl(var(--primary) / 0.25) inset, 0 8px 20px -6px hsl(var(--primary) / 0.35)",
+          }}
+        >
+          <Icon className="h-6 w-6 text-primary" strokeWidth={2.2} />
+        </motion.div>
+      </div>
+
+      {/* Content */}
+      <div className="relative mt-6">
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+            Step {n}
+          </span>
+          <span
+            className="rounded-full border border-border/60 bg-background/40 px-2 py-0.5 font-mono text-[10px] text-muted-foreground"
+            style={{ letterSpacing: "0.04em" }}
+          >
+            {meta}
+          </span>
+        </div>
+        <h3 className="mt-3 text-xl font-semibold tracking-tight">{title}</h3>
+        <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">
+          {text}
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+function Connector() {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute top-1/2 z-10 hidden -translate-y-1/2 md:flex"
+      style={{ right: -22 }}
+    >
+      <motion.div
+        initial={{ opacity: 0, x: -6 }}
+        whileInView={{ opacity: 1, x: 0 }}
+        viewport={{ once: true, amount: 0.6 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+        className="flex h-11 w-11 items-center justify-center rounded-full border border-primary/30 bg-background shadow-[0_4px_16px_-4px_hsl(var(--primary)/0.4)]"
+      >
+        <motion.span
+          animate={{ x: [0, 3, 0] }}
+          transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+          className="text-primary"
+        >
+          <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        </motion.span>
+      </motion.div>
+    </div>
   );
 }
