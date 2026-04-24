@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/db";
 import { fetchGreenhouseMulti } from "./greenhouse";
 import { fetchLeverMulti } from "./lever";
+import {
+  fetchLinkedinViaApify,
+  DEFAULT_LINKEDIN_QUERIES,
+} from "./linkedin-apify";
 import { GREENHOUSE_COMPANIES, LEVER_COMPANIES } from "./ats-companies";
 import type { JobListItem } from "@/lib/adzuna";
 
@@ -14,20 +18,28 @@ import type { JobListItem } from "@/lib/adzuna";
 export async function syncAtsJobs(): Promise<{
   greenhouse: number;
   lever: number;
+  linkedin: number;
   total: number;
 }> {
-  console.log("[sync-jobs] starting Greenhouse + Lever fetch...");
-  const [gh, lv] = await Promise.all([
+  console.log("[sync-jobs] starting Greenhouse + Lever + LinkedIn(Apify) fetch...");
+  const [gh, lv, li] = await Promise.all([
     fetchGreenhouseMulti(GREENHOUSE_COMPANIES, 4),
     fetchLeverMulti(LEVER_COMPANIES, 4),
+    // LinkedIn via Apify: fallisce silente se APIFY_TOKEN non è settato.
+    // I job tenuti hanno applyUrl su Greenhouse/Lever/Workable/BambooHR,
+    // quindi il submit resta sul form ATS reale — niente automazione su LinkedIn.
+    fetchLinkedinViaApify(DEFAULT_LINKEDIN_QUERIES, 50),
   ]);
-  console.log(`[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}`);
+  console.log(
+    `[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}  linkedin=${li.length}`,
+  );
 
-  const all = [...gh, ...lv];
+  const all = [...gh, ...lv, ...li];
   const upserted = await upsertJobs(all);
   return {
     greenhouse: gh.length,
     lever: lv.length,
+    linkedin: li.length,
     total: upserted,
   };
 }

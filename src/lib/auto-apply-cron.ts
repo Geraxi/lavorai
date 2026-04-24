@@ -179,7 +179,11 @@ async function processUser(
   // fragile per auto-apply senza intervento utente.
   const jobs = await prisma.job.findMany({
     where: {
-      source: { in: ["greenhouse", "lever"] },
+      // "linkedin" = job scovato da Apify il cui applyUrl è già stato
+      // filtrato a un ATS supportato (vedi linkedin-apify.ts), quindi
+      // il submit avviene sul form Greenhouse/Lever/Workable/BambooHR
+      // originale — zero automazione su linkedin.com.
+      source: { in: ["greenhouse", "lever", "linkedin"] },
       // URL canoniche vanilla: gli adapter Playwright funzionano solo
       // su boards.greenhouse.io e jobs.lever.co. Aziende con career
       // page custom (es. stripe.com/jobs) falliscono sempre → skip.
@@ -187,6 +191,8 @@ async function processUser(
         { url: { contains: "boards.greenhouse.io" } },
         { url: { contains: "job-boards.greenhouse.io" } },
         { url: { contains: "jobs.lever.co" } },
+        { url: { contains: "workable.com/j/" } },
+        { url: { contains: "apply.workable.com" } },
       ],
       AND: [
         {
