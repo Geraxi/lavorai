@@ -255,7 +255,17 @@ async function processUser(
     );
     if (prefs.matchMin > 0 && score < prefs.matchMin) {
       stats.skippedMatchThreshold++;
+      if (stats.skippedMatchThreshold <= 5) {
+        console.log(
+          `[auto-apply-cron] SKIP match: score=${score} < matchMin=${prefs.matchMin} | "${job.title}" @ ${job.company}`,
+        );
+      }
       continue;
+    }
+    if (stats.applicationsEnqueued + 1 <= 3) {
+      console.log(
+        `[auto-apply-cron] PASS match: score=${score} ≥ matchMin=${prefs.matchMin} | "${job.title}" @ ${job.company}`,
+      );
     }
 
     // Salary filter (se impostato)
