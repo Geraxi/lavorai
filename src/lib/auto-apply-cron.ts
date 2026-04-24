@@ -230,9 +230,27 @@ async function processUser(
       continue;
     }
 
-    // Match threshold
+    // Match threshold. Arricchiamo il profilo con i ruoli dichiarati
+    // nelle preferenze (roles): così chi cerca "Product Designer" ma sul
+    // CV ha solo esperienze da studente vede comunque scattare il
+    // role-title boost.
+    const scoreProfile = {
+      ...profile,
+      experiences: [
+        ...(profile.experiences ?? []),
+        ...roles.map((r) => ({
+          role: r,
+          company: "",
+          location: "",
+          startDate: "",
+          endDate: "",
+          description: "",
+          bullets: [] as string[],
+        })),
+      ],
+    };
     const score = quickMatchScore(
-      profile,
+      scoreProfile,
       `${job.title}\n${job.company ?? ""}\n${job.description}`,
     );
     if (prefs.matchMin > 0 && score < prefs.matchMin) {
