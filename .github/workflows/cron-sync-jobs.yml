@@ -1,0 +1,21 @@
+name: sync-jobs cron
+
+# Sostituisce il cron Vercel (non disponibile su piano Hobby).
+# Chiama /api/cron/sync-jobs ogni 6 ore usando CRON_SECRET.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit sync-jobs endpoint
+        run: |
+          curl -sS -o /tmp/out -w "HTTP %{http_code} in %{time_total}s\n" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://lavorai.it/api/cron/sync-jobs
+          echo "--- response body ---"
+          cat /tmp/out

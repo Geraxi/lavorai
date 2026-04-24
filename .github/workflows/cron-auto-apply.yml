@@ -1,0 +1,22 @@
+name: auto-apply cron
+
+# Sostituisce il cron Vercel (non disponibile su piano Hobby).
+# Chiama /api/cron/auto-apply ogni 30 minuti usando CRON_SECRET.
+# Richiede: Settings → Secrets and variables → Actions → New secret → CRON_SECRET
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit auto-apply endpoint
+        run: |
+          curl -sS -o /tmp/out -w "HTTP %{http_code} in %{time_total}s\n" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://lavorai.it/api/cron/auto-apply
+          echo "--- response body ---"
+          cat /tmp/out
