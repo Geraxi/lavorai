@@ -109,6 +109,9 @@ export default function OnboardingClient({
     ibrido: true,
     sede: false,
   });
+  const [employmentType, setEmploymentType] = useState<
+    "employee" | "piva" | "both"
+  >("employee");
   const [details, setDetails] = useState<Details>({
     seniority: initial.profile?.seniority ?? null,
     yearsExperience:
@@ -195,6 +198,7 @@ export default function OnboardingClient({
         locations: selectedCities,
         salaryMin: salary,
         modeSel,
+        employmentType,
       }),
     }).catch(() => null);
 
@@ -330,6 +334,8 @@ export default function OnboardingClient({
               setSalary={setSalary}
               modeSel={modeSel}
               setModeSel={setModeSel}
+              employmentType={employmentType}
+              setEmploymentType={setEmploymentType}
             />
           )}
           {step === 4 && (
@@ -1146,6 +1152,8 @@ function StepPreferences({
   setSalary,
   modeSel,
   setModeSel,
+  employmentType,
+  setEmploymentType,
 }: {
   roles: RolePref[];
   setRoles: React.Dispatch<React.SetStateAction<RolePref[]>>;
@@ -1155,6 +1163,10 @@ function StepPreferences({
   setSalary: (v: number) => void;
   modeSel: { remoto: boolean; ibrido: boolean; sede: boolean };
   setModeSel: React.Dispatch<React.SetStateAction<{ remoto: boolean; ibrido: boolean; sede: boolean }>>;
+  employmentType: "employee" | "piva" | "both";
+  setEmploymentType: React.Dispatch<
+    React.SetStateAction<"employee" | "piva" | "both">
+  >;
 }) {
   return (
     <>
@@ -1164,6 +1176,55 @@ function StepPreferences({
         Puoi modificarli quando vuoi.
       </p>
       <div style={{ display: "grid", gap: 22 }}>
+        <div>
+          <label className="ds-label">Tipologia di lavoro</label>
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--fg-subtle)",
+              margin: "4px 0 8px",
+            }}
+          >
+            Contratto da dipendente o progetti freelance con P.IVA?
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[
+              {
+                k: "employee" as const,
+                title: "Dipendente",
+                sub: "Full-time, contratto subordinato",
+              },
+              {
+                k: "piva" as const,
+                title: "P.IVA / Freelance",
+                sub: "Progetti, consulenza, contract",
+              },
+              {
+                k: "both" as const,
+                title: "Entrambi",
+                sub: "Qualsiasi opportunità",
+              },
+            ].map((o) => (
+              <div
+                key={o.k}
+                className={`ds-pref-card${employmentType === o.k ? " selected" : ""}`}
+                style={{ flex: 1, cursor: "pointer" }}
+                onClick={() => setEmploymentType(o.k)}
+              >
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{o.title}</div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--fg-subtle)",
+                    marginTop: 2,
+                  }}
+                >
+                  {o.sub}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
         <div>
           <label className="ds-label">
             Ruoli · {roles.filter((r) => r.selected).length} selezionati

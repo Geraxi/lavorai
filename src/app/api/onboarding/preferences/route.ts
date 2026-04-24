@@ -14,6 +14,7 @@ const Schema = z.object({
     ibrido: z.boolean(),
     sede: z.boolean(),
   }),
+  employmentType: z.enum(["employee", "piva", "both"]).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -31,7 +32,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { roles, locations, salaryMin, modeSel } = parsed.data;
+  const { roles, locations, salaryMin, modeSel, employmentType } =
+    parsed.data;
   const sources = [
     modeSel.remoto && "remoto",
     modeSel.ibrido && "ibrido",
@@ -44,12 +46,14 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       autoApplyOn: true,
       salaryMin,
+      employmentType: employmentType ?? "employee",
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),
       sourcesJson: JSON.stringify(sources),
     },
     update: {
       salaryMin,
+      ...(employmentType != null ? { employmentType } : {}),
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),
       sourcesJson: JSON.stringify(sources),
