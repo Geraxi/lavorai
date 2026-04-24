@@ -18,6 +18,7 @@ const Schema = z.object({
   autoApplyMode: z.enum(["off", "manual", "hybrid", "auto"]).optional(),
   dailyCap: z.number().int().min(1).max(100).optional(),
   matchMin: z.number().int().min(0).max(100).optional(),
+  employmentType: z.enum(["employee", "piva", "both"]).optional(),
   excludedCompanies: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
 });
 
@@ -63,6 +64,7 @@ export async function PUT(request: NextRequest) {
     autoApplyMode,
     dailyCap,
     matchMin,
+    employmentType,
     excludedCompanies,
   } = parsed.data;
 
@@ -79,7 +81,8 @@ export async function PUT(request: NextRequest) {
       autoApplyOn: autoApplyOn ?? autoApplyMode !== "off",
       autoApplyMode: autoApplyMode ?? "hybrid",
       dailyCap: dailyCap ?? 25,
-      matchMin: matchMin ?? 75,
+      matchMin: matchMin ?? 50,
+      employmentType: employmentType ?? "employee",
       salaryMin,
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),
@@ -90,6 +93,7 @@ export async function PUT(request: NextRequest) {
       ...(autoApplyMode != null ? { autoApplyMode } : {}),
       ...(dailyCap != null ? { dailyCap } : {}),
       ...(matchMin != null ? { matchMin } : {}),
+      ...(employmentType != null ? { employmentType } : {}),
       salaryMin,
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),

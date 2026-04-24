@@ -21,6 +21,7 @@ interface Initial {
   autoApplyMode: AutoMode;
   dailyCap: number;
   matchMin: number;
+  employmentType: "employee" | "piva" | "both";
   modeSel: { remoto: boolean; ibrido: boolean; sede: boolean };
   excludedCompanies: string[];
 }
@@ -34,6 +35,9 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
   const [autoMode, setAutoMode] = useState<AutoMode>(initial.autoApplyMode);
   const [dailyCap, setDailyCap] = useState<number>(initial.dailyCap);
   const [matchMin, setMatchMin] = useState<number>(initial.matchMin);
+  const [employmentType, setEmploymentType] = useState<
+    "employee" | "piva" | "both"
+  >(initial.employmentType);
   const [modeSel, setModeSel] = useState(initial.modeSel);
   const [excluded, setExcluded] = useState<string[]>(initial.excludedCompanies);
   const [roleInput, setRoleInput] = useState("");
@@ -83,6 +87,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
             autoApplyMode: autoMode,
             dailyCap,
             matchMin,
+            employmentType,
             excludedCompanies: excluded,
           }),
         });
@@ -348,6 +353,50 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                       Consigliato <strong>50%</strong> per cominciare.
                       Alzalo se vedi candidature a ruoli poco pertinenti;
                       abbassalo se non arrivano candidature.
+                    </p>
+                  </div>
+                  <div style={{ marginTop: 16 }}>
+                    <label className="ds-label">
+                      Tipologia di lavoro
+                    </label>
+                    <div
+                      className="ds-toggle-group"
+                      style={{ display: "flex", width: "100%" }}
+                    >
+                      {[
+                        { v: "employee", label: "Dipendente" },
+                        { v: "piva", label: "P.IVA / Freelance" },
+                        { v: "both", label: "Entrambi" },
+                      ].map((o) => (
+                        <button
+                          key={o.v}
+                          type="button"
+                          className={
+                            employmentType === o.v ? "active" : undefined
+                          }
+                          style={{ flex: 1 }}
+                          onClick={() => {
+                            setEmploymentType(o.v as typeof employmentType);
+                            mark();
+                          }}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: "var(--fg-muted)",
+                        marginTop: 6,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {employmentType === "piva"
+                        ? "Cerchiamo solo contract / freelance / progetti (P.IVA)."
+                        : employmentType === "both"
+                          ? "Cerchiamo sia posizioni da dipendente sia progetti P.IVA."
+                          : "Cerchiamo solo posizioni full-time da dipendente."}
                     </p>
                   </div>
                 </div>

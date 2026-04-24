@@ -215,10 +215,12 @@ export async function fetchLinkedinViaApify(
 
 /**
  * Query di default per il cron — ruoli tech/design/product italiani + EU.
+ * Mix posizioni dipendente + gig freelance/contract (per utenti P.IVA).
  * In produzione si può spostare in DB / env.
  */
 export const DEFAULT_LINKEDIN_QUERIES: { search: string; location?: string }[] =
   [
+    // Employee-style
     { search: "Product Designer", location: "Italy" },
     { search: "Frontend Developer", location: "Italy" },
     { search: "Full Stack Engineer", location: "Italy" },
@@ -227,4 +229,10 @@ export const DEFAULT_LINKEDIN_QUERIES: { search: string; location?: string }[] =
     { search: "DevOps Engineer", location: "Italy" },
     { search: "Product Designer", location: "European Union" },
     { search: "Software Engineer", location: "European Union" },
+    // Freelance / contract / P.IVA
+    { search: "Freelance Product Designer", location: "Italy" },
+    { search: "Contract Frontend Developer", location: "Italy" },
+    { search: "Freelance Full Stack", location: "Italy" },
+    { search: "Project Product Designer", location: "European Union" },
+    { search: "Consultant Software Engineer", location: "European Union" },
   ];

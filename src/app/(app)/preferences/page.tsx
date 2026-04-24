@@ -43,7 +43,11 @@ export default async function PreferencesPage() {
         | undefined) ??
       (prefs?.autoApplyOn ? "auto" : "manual"),
     dailyCap: prefs?.dailyCap ?? 25,
-    matchMin: prefs?.matchMin ?? 75,
+    matchMin: prefs?.matchMin ?? 50,
+    employmentType:
+      ((prefs as { employmentType?: string } | null | undefined)
+        ?.employmentType as "employee" | "piva" | "both" | undefined) ??
+      "employee",
     modeSel: {
       remoto: modes.includes("remoto"),
       ibrido: modes.includes("ibrido"),

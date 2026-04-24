@@ -41,6 +41,7 @@ interface RunStats {
   skippedAlreadyApplied: number;
   skippedAvoidedCompany: number;
   skippedSessionPaused: number;
+  skippedEmploymentMismatch: number;
   errors: number;
 }
 
@@ -55,6 +56,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     skippedAlreadyApplied: 0,
     skippedAvoidedCompany: 0,
     skippedSessionPaused: 0,
+    skippedEmploymentMismatch: 0,
     errors: 0,
   };
 
@@ -78,6 +80,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
           rolesJson: true,
           locationsJson: true,
           salaryMin: true,
+          employmentType: true,
         },
       },
       cvProfile: true,
@@ -114,6 +117,7 @@ async function processUser(
       rolesJson: string;
       locationsJson: string;
       salaryMin: number;
+      employmentType: string;
     } | null;
     cvProfile: Parameters<typeof rowToProfile>[0] | null;
   },
@@ -228,6 +232,28 @@ async function processUser(
     if (job.company && avoidSet.has(job.company.toLowerCase())) {
       stats.skippedAvoidedCompany++;
       continue;
+    }
+
+    // Filtro tipologia contratto (employee/piva/both).
+    // Usiamo il titolo + descrizione + contractType come segnali.
+    const emp = prefs.employmentType ?? "employee";
+    if (emp !== "both") {
+      const haystack =
+        `${job.title} ${job.contractType ?? ""} ${job.description ?? ""}`
+          .toLowerCase()
+          .slice(0, 1500);
+      const isFreelance =
+        /\b(freelance|freelancer|contract|contractor|p\.?\s?iva|partita\s?iva|consultant|consulente|project-based|ad hoc|short[-\s]?term|6\s?months?|12\s?months?)\b/.test(
+          haystack,
+        );
+      if (emp === "piva" && !isFreelance) {
+        stats.skippedEmploymentMismatch++;
+        continue;
+      }
+      if (emp === "employee" && isFreelance) {
+        stats.skippedEmploymentMismatch++;
+        continue;
+      }
     }
 
     // Match threshold. Arricchiamo il profilo con i ruoli dichiarati
