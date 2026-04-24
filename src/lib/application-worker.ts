@@ -416,11 +416,16 @@ export async function processApplication(applicationId: string): Promise<void> {
         clPath,
       });
     } else {
+      // Nessuna email recruiter, adapter fallito o non disponibile → stato
+      // finale ready_to_apply così la candidatura non resta "applying" per
+      // sempre (l'utente la vede chiaramente come "da fare a mano").
       await prisma.application.update({
         where: { id: applicationId },
         data: {
+          status: "ready_to_apply",
           errorMessage:
             "Non siamo riusciti a trovare l'email del recruiter in questo annuncio. Apri il link e invia manualmente — CV e lettera sono pronti.",
+          completedAt: new Date(),
         },
       });
     }
@@ -577,8 +582,10 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
     await prisma.application.update({
       where: { id: applicationId },
       data: {
+        status: "ready_to_apply",
         errorMessage:
           "Questo portale non è supportato per invio automatico. Apri l'annuncio e candidati manualmente — CV e lettera sono pronti nella sezione Materiali.",
+        completedAt: new Date(),
       },
     });
     return;
