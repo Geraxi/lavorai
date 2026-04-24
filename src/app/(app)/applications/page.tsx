@@ -25,6 +25,8 @@ interface ApiApplication {
   hasCvPdf: boolean;
   cvLanguage: string | null;
   userStatus: string | null;
+  viewedAt: string | null;
+  submittedVia: string | null;
   job: {
     id: string;
     title: string;
@@ -57,6 +59,8 @@ interface Row {
   hasCvPdf?: boolean;
   cvLanguage?: string | null;
   backendStatus?: string; // raw status from API ("awaiting_consent" etc.)
+  viewedAt?: string | null;
+  submittedVia?: string | null;
 }
 
 type Range = "today" | "week" | "month" | "all";
@@ -87,7 +91,10 @@ export default function ApplicationsPage() {
       mode: "Ibrido",
       salary: "—",
       applied: relativeTime(new Date(a.createdAt)),
-      status: (a.userStatus as Row["status"]) ?? backendToStatus(a.status),
+      // Priorità: userStatus (override manuale) → viewedAt (pixel) → backend status.
+      status:
+        (a.userStatus as Row["status"]) ??
+        (a.viewedAt ? "vista" : backendToStatus(a.status)),
       match: a.atsScore ?? 80,
       source: a.job.source === "mock" ? "Demo" : cap(a.job.source),
       stage: 1,
@@ -98,6 +105,8 @@ export default function ApplicationsPage() {
       hasCvPdf: a.hasCvPdf,
       cvLanguage: a.cvLanguage,
       backendStatus: a.status,
+      viewedAt: a.viewedAt,
+      submittedVia: a.submittedVia,
     })) ?? [];
 
   // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).
@@ -313,7 +322,28 @@ export default function ApplicationsPage() {
                         attesa consenso
                       </span>
                     ) : (
-                      <StatusChip status={a.status} />
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                        }}
+                      >
+                        <StatusChip status={a.status} />
+                        {a.submittedVia?.startsWith("portal_") &&
+                          a.status === "inviata" && (
+                            <span
+                              title="Submit diretto sul form ATS dell'azienda. Apertura email non tracciabile — riceverai conferme sul tuo Gmail."
+                              style={{
+                                fontSize: 10,
+                                color: "var(--fg-subtle)",
+                                cursor: "help",
+                              }}
+                            >
+                              ⓘ
+                            </span>
+                          )}
+                      </span>
                     )}
                   </td>
                   <td style={{ color: "var(--fg-muted)", fontSize: 12 }}>{a.applied}</td>

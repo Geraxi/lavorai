@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
       cvLanguage: a.cvLanguage,
       userStatus: a.userStatus,
       viewedAt: a.viewedAt?.toISOString() ?? null,
+      submittedVia: a.submittedVia,
       job: a.job,
     })),
   });
