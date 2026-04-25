@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/reveal";
 
@@ -38,9 +37,8 @@ export function SectionCtaFinal() {
               className="group relative h-14 overflow-hidden px-8 text-base"
             >
               <Link href="/optimize">
-                <span className="relative z-10 inline-flex items-center gap-2">
+                <span className="relative z-10">
                   Avvia l&apos;auto-apply
-                  <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
                 </span>
                 <span
                   aria-hidden

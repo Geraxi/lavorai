@@ -321,7 +321,7 @@ export default async function DashboardPage() {
             actions={
               applications.length > 0 ? (
                 <Link href="/applications" className="ds-btn ds-btn-sm">
-                  Vedi tutto <Icon name="arrow-right" size={12} />
+                  Vedi tutto
                 </Link>
               ) : null
             }

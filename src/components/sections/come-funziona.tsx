@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Upload, Target, Zap, ArrowRight } from "lucide-react";
+import { Upload, Target, Zap } from "lucide-react";
 import { Reveal, RevealItem, RevealStagger } from "@/components/reveal";
 
 const steps = [
@@ -132,12 +132,9 @@ export function SectionComeFunziona() {
               padding: "0 24px",
               fontSize: 15,
               fontWeight: 600,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
             }}
           >
-            Avvia l&apos;auto-apply <ArrowRight size={16} />
+            Avvia l&apos;auto-apply
           </Link>
         </Reveal>
       </div>

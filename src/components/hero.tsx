@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-import { ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuroraBackground } from "@/components/aurora-background";
 import { DashboardMockup } from "@/components/dashboard-mockup";
@@ -105,9 +104,8 @@ function ShineButton() {
   return (
     <Button asChild size="lg" className="group relative overflow-hidden" style={{ minHeight: 52, paddingLeft: 24, paddingRight: 24 }}>
       <Link href="/optimize">
-        <span className="relative z-10 inline-flex items-center gap-2 text-base font-semibold">
+        <span className="relative z-10 text-base font-semibold">
           Avvia l&apos;auto-apply
-          <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
         </span>
         <span
           aria-hidden

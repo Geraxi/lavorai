@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
-import { Check, ArrowRight } from "lucide-react";
+import { Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -124,10 +124,7 @@ function TierCard({ tier }: { tier: TierConfig }) {
             )}
           >
             <Link href={href}>
-              <span className="relative z-10 inline-flex items-center gap-2">
-                {tier.cta}
-                {tier.highlight && <ArrowRight className="h-4 w-4" />}
-              </span>
+              <span className="relative z-10">{tier.cta}</span>
               {tier.highlight && (
                 <span
                   aria-hidden
