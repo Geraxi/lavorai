@@ -26,6 +26,16 @@ export function SectionCtaFinal() {
           <p className="mt-6 text-lg text-muted-foreground md:text-xl">
             Setup in 30 secondi. 3 candidature gratis, nessuna carta richiesta.
           </p>
+          <p
+            style={{
+              marginTop: 18,
+              fontSize: 13,
+              color: "var(--fg-subtle)",
+            }}
+          >
+            Pausa o annulla in qualsiasi momento · Dati su server UE · No login
+            ai tuoi account
+          </p>
           <motion.div
             whileHover={{ scale: 1.02 }}
             transition={{ duration: 0.25 }}

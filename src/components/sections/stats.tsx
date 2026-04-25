@@ -8,16 +8,10 @@ import { Reveal } from "@/components/reveal";
 // stretto, label minuscola low-key, divider verticali tra le colonne.
 const stats = [
   {
-    value: "50",
-    suffix: "+",
-    label: "Candidature/giorno",
-    sub: "in automatico, mentre dormi",
-  },
-  {
     value: "30",
     suffix: "s",
     label: "Setup totale",
-    sub: "dal CV al primo invio",
+    sub: "dal CV alla prima candidatura",
   },
   {
     value: "1.400",
@@ -27,9 +21,15 @@ const stats = [
   },
   {
     value: "100",
-    suffix: "%",
-    label: "Made in EU",
-    sub: "dati su server europei, GDPR nativo",
+    suffix: "+",
+    label: "Aziende monitorate",
+    sub: "tech, fintech, design — Italia ed EU",
+  },
+  {
+    value: "0",
+    suffix: "",
+    label: "Account compromessi",
+    sub: "non chiediamo mai i tuoi login",
   },
 ];
 

@@ -11,36 +11,32 @@ import { Reveal } from "@/components/reveal";
 
 const faq = [
   {
-    q: "Come funziona l'auto-candidatura?",
-    a: "Carichi il CV, imposti ruoli + soglia di match. Un cron GitHub Actions ogni 30 minuti scansiona Greenhouse e Lever: quando trova un annuncio sopra la tua soglia, Claude riscrive CV + cover letter per quella specifica posizione, e Playwright compila il form ATS e invia. Tu vedi solo lo stato sulla dashboard.",
+    q: "Si candida davvero per me, in automatico?",
+    a: "Sì. Imposti ruoli, città, soglia di match. Ogni 30 minuti LavorAI scansiona gli annunci freschi: quando ne trova uno compatibile, riscrive CV e cover letter per quella posizione e invia direttamente sul form ATS dell'azienda. Tu vedi solo lo stato e ricevi gli inviti ai colloqui.",
   },
   {
-    q: "Posso candidarmi senza caricare un CV?",
-    a: "No, serve un CV di partenza (PDF o DOCX). L'AI estrae il profilo strutturato (esperienze, skill, lingue) e lo riutilizza per ogni annuncio. Sul CV Builder puoi poi editare tutto.",
+    q: "Mi serve il login a LinkedIn / Indeed / altri profili?",
+    a: "No, mai. Non chiediamo né conserviamo credenziali di portali. Compiliamo solo form pubblici di Greenhouse, Lever e Workable — gli stessi che riempiresti tu cliccando \"Apply\". Nessun rischio di ban sui tuoi account.",
   },
   {
-    q: "Su quali portali vi candidate davvero?",
-    a: "Submit reale via Playwright su Greenhouse, Lever, Workable e BambooHR — ATS senza login pubblici, molto usati in EU. Scansione annunci anche da Adzuna (che aggrega InfoJobs, Subito e altri). LinkedIn e Indeed sono esclusi per policy: i loro ToS vietano l'automazione e il rischio di ban sull'account è concreto.",
+    q: "Devo scrivere io le cover letter?",
+    a: "No. Vengono generate automaticamente in italiano nativo, su misura per ogni annuncio. In modalità ibrida puoi rivedere ogni candidatura prima dell'invio; in modalità auto parte tutto da solo.",
   },
   {
-    q: "Posso controllare dove candidarmi?",
-    a: "Sì. Filtri su ruoli, città, RAL minima, modalità, aziende da evitare e soglia di match (es. min 75%). Tre modalità: Off (niente), Hybrid (serve il tuo ok per ogni candidatura), Auto (zero-touch). Daily cap configurabile.",
+    q: "Posso decidere dove candidarmi?",
+    a: "Sì. Filtri precisi su ruoli, città, RAL minima, dipendente vs P.IVA, aziende da escludere, soglia di match. Tre modalità: Off (nessun invio), Hybrid (chiede ok prima di ogni invio), Auto (zero-touch). Cambio in un click dalle preferenze.",
   },
   {
-    q: "Cos'è un ATS e perché conta?",
-    a: "ATS (Applicant Tracking System) sono software usati dall'80% delle aziende medio-grandi per filtrare CV prima del recruiter umano. Ogni CV generato da LavorAI è ottimizzato per passare questi filtri.",
+    q: "Ricevo solo gli inviti ai colloqui?",
+    a: "Esatto. La dashboard mostra in tempo reale lo stato delle candidature (in coda, in invio, inviata, vista). Ricevi notifica solo quando un recruiter risponde — nient'altro.",
   },
   {
-    q: "Il mio CV viene condiviso con qualcuno?",
-    a: "No. I dati sono processati solo per generare candidature tue. Non vendiamo né condividiamo nulla. Puoi esportare o cancellare tutto in un click dalle impostazioni.",
+    q: "Posso annullare in qualsiasi momento?",
+    a: "Sì, con un click. Nessun vincolo, nessuna penale, nessuna domanda. Pausa l'auto-apply quando vuoi e riavvialo quando ti serve.",
   },
   {
-    q: "Posso cancellare l'abbonamento in qualsiasi momento?",
-    a: "Sì, con un click dal tuo account. Nessun vincolo, nessuna penale.",
-  },
-  {
-    q: "Come gestite i miei dati personali?",
-    a: "GDPR-compliant. Dati crittografati at-rest, hosting in UE. Export JSON + cancellazione account disponibili dalle impostazioni.",
+    q: "Cosa succede ai miei dati?",
+    a: "Stanno su server europei (Neon · Frankfurt), GDPR-first. Export integrale in JSON e cancellazione completa con un click — pulisce profilo, CV, file, code di lavoro. Non vendiamo nulla, non condividiamo con nessuno.",
   },
 ];
 

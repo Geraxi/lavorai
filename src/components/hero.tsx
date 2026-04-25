@@ -48,8 +48,8 @@ export function Hero() {
               className="text-balance text-5xl font-bold tracking-tight text-foreground sm:text-6xl md:text-7xl"
               style={{ letterSpacing: "-0.035em", lineHeight: 1.02 }}
             >
-              Candidati a 50 lavori{" "}
-              <span className="text-gradient-accent">con un click.</span>
+              Candidati a 50 lavori con un click.{" "}
+              <span className="text-gradient-accent">In automatico.</span>
             </motion.h1>
 
             <motion.p
@@ -58,8 +58,8 @@ export function Hero() {
               transition={{ duration: 0.55, delay: 0.2 }}
               className="mt-6 max-w-xl text-balance text-lg text-muted-foreground md:text-xl"
             >
-              LavorAI trova, compila e invia le candidature al posto tuo —
-              automaticamente.
+              LavorAI trova, compila e invia le candidature al posto tuo.
+              Niente form, niente lettere, niente tempo perso.
             </motion.p>
 
             <motion.div
@@ -70,9 +70,32 @@ export function Hero() {
             >
               <ShineButton />
               <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-                Nessuna carta richiesta · 3 candidature gratis
+                3 candidature gratis · Nessuna carta richiesta · Pausa o annulla
+                quando vuoi
               </span>
             </motion.div>
+
+            {/* 3 checkmark — promesse vere e verificabili */}
+            <motion.ul
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.5 }}
+              className="mt-8 flex flex-col gap-2"
+              style={{ fontSize: 14 }}
+            >
+              <li className="flex items-center gap-2.5">
+                <span className="text-primary">✓</span>
+                <span>Solo annunci veri di Greenhouse, Lever, Workable</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <span className="text-primary">✓</span>
+                <span>CV e lettera in italiano nativo, su misura per ogni job</span>
+              </li>
+              <li className="flex items-center gap-2.5">
+                <span className="text-primary">✓</span>
+                <span>Nessun login ai tuoi account — zero rischio ban</span>
+              </li>
+            </motion.ul>
           </div>
 
           {/* Colonna destra: dashboard preview live */}

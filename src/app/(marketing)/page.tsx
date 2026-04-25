@@ -2,6 +2,7 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { Hero } from "@/components/hero";
 import { SectionComeFunziona } from "@/components/sections/come-funziona";
+import { SectionProblema } from "@/components/sections/problema";
 import { SectionStats } from "@/components/sections/stats";
 import { SectionPricing } from "@/components/sections/pricing";
 import { SectionFaq } from "@/components/sections/faq";
@@ -14,6 +15,7 @@ export default function Home() {
       <main className="flex-1">
         <Hero />
         <SectionComeFunziona />
+        <SectionProblema />
         <SectionStats />
         <SectionPricing />
         <SectionFaq />
