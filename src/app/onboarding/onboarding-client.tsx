@@ -26,12 +26,14 @@ interface Details {
   avoidCompanies: string;
 }
 
+// 3 step come da specs: CV → Ruolo+Città → Avvia (= dashboard).
+// Profilo/Esperienza rimosse: il profilo viene auto-estratto da Claude
+// dal CV; gli Esperienza/Notice period si possono editare in Preferenze
+// dopo (opzionale, non blocca il valore principale).
 const STEPS: StepDef[] = [
   { key: "cv", label: "CV", icon: "file" },
-  { key: "profile", label: "Profilo", icon: "user" },
-  { key: "details", label: "Esperienza", icon: "star" },
-  { key: "prefs", label: "Preferenze", icon: "target" },
-  { key: "confirm", label: "Conferma", icon: "check" },
+  { key: "prefs", label: "Ruolo & Città", icon: "target" },
+  { key: "confirm", label: "Avvia", icon: "zap" },
 ];
 
 interface RolePref {
@@ -180,10 +182,6 @@ export default function OnboardingClient({
   }
 
   const next = async () => {
-    // Quando esci dallo step "details" (indice 2), salva
-    if (STEPS[step]?.key === "details") {
-      await saveDetails();
-    }
     setStep((s) => Math.min(STEPS.length - 1, s + 1));
   };
   const prev = () => setStep((s) => Math.max(0, s - 1));
@@ -328,11 +326,7 @@ export default function OnboardingClient({
               onUpload={onUpload}
             />
           )}
-          {step === 1 && <StepProfile profile={profile} />}
-          {step === 2 && (
-            <StepDetails details={details} setDetails={setDetails} />
-          )}
-          {step === 3 && (
+          {step === 1 && (
             <StepPreferences
               roles={roles}
               setRoles={setRoles}
@@ -352,7 +346,7 @@ export default function OnboardingClient({
               setPortfolioUrl={setPortfolioUrl}
             />
           )}
-          {step === 4 && (
+          {step === 2 && (
             <StepConfirm
               salary={salary}
               rolesSelected={roles.filter((r) => r.selected).length}

@@ -8,22 +8,22 @@ import { Reveal } from "@/components/reveal";
 // stretto, label minuscola low-key, divider verticali tra le colonne.
 const stats = [
   {
-    value: "1.400+",
-    suffix: "",
-    label: "Annunci attivi",
-    sub: "aggiornati ogni 6 ore",
+    value: "50",
+    suffix: "+",
+    label: "Candidature/giorno",
+    sub: "in automatico, mentre dormi",
   },
   {
     value: "30",
     suffix: "s",
-    label: "Per candidatura",
-    sub: "CV + lettera cuciti su misura",
+    label: "Setup totale",
+    sub: "dal CV al primo invio",
   },
   {
-    value: "100",
+    value: "1.400",
     suffix: "+",
-    label: "Aziende monitorate",
-    sub: "tech, fintech, design — Italia ed EU",
+    label: "Annunci attivi",
+    sub: "aggiornati ogni 6 ore",
   },
   {
     value: "100",

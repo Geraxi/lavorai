@@ -22,9 +22,9 @@ const workItems: NavItem[] = [
 ];
 
 const setupItems: NavItem[] = [
-  { href: "/cv", label: "CV", icon: "file" },
   { href: "/preferences", label: "Preferenze", icon: "target" },
-  { href: "/settings", label: "Impostazioni", icon: "settings" },
+  { href: "/cv", label: "Materiali", icon: "file" },
+  { href: "/settings", label: "Account", icon: "settings" },
 ];
 
 export interface SidebarProps {

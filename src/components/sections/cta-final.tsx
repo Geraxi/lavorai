@@ -21,11 +21,11 @@ export function SectionCtaFinal() {
       <div className="container relative">
         <Reveal className="mx-auto max-w-3xl text-center">
           <h2 className="text-balance text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl">
-            Pronto a{" "}
-            <span className="text-gradient-accent">candidarti meglio?</span>
+            Smetti di candidarti.{" "}
+            <span className="text-gradient-accent">Inizia a fare colloqui.</span>
           </h2>
           <p className="mt-6 text-lg text-muted-foreground md:text-xl">
-            3 candidature gratis, nessuna carta richiesta.
+            Setup in 30 secondi. 3 candidature gratis, nessuna carta richiesta.
           </p>
           <motion.div
             whileHover={{ scale: 1.02 }}
@@ -39,7 +39,7 @@ export function SectionCtaFinal() {
             >
               <Link href="/optimize">
                 <span className="relative z-10 inline-flex items-center gap-2">
-                  Prova ora LavorAI
+                  Avvia l&apos;auto-apply
                   <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
                 </span>
                 <span
