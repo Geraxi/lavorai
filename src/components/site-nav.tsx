@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 import { cn } from "@/lib/utils";
@@ -45,10 +44,18 @@ export function SiteNav() {
           : "border-b border-transparent bg-transparent",
       )}
     >
-      <div className="container flex h-16 items-center justify-between">
-        <Logo size="md" />
+      <div
+        className="flex items-center justify-between"
+        style={{
+          maxWidth: 1480,
+          margin: "0 auto",
+          padding: "0 40px",
+          height: 76,
+        }}
+      >
+        <Logo size="lg" />
 
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden items-center gap-2 md:flex">
           {navLinks.map((link) => {
             const active =
               isApp &&
@@ -59,11 +66,16 @@ export function SiteNav() {
                 key={link.href}
                 href={link.href}
                 className={cn(
-                  "rounded-md px-3 py-1.5 text-sm transition-colors",
+                  "rounded-md transition-colors",
                   active
                     ? "bg-card text-foreground"
                     : "text-muted-foreground hover:bg-card hover:text-foreground",
                 )}
+                style={{
+                  padding: "10px 16px",
+                  fontSize: 15,
+                  fontWeight: 500,
+                }}
               >
                 {link.label}
               </Link>
@@ -71,20 +83,32 @@ export function SiteNav() {
           })}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {isApp ? (
-            <Button asChild size="sm" variant="outline">
+            <Button
+              asChild
+              variant="outline"
+              style={{ height: 44, paddingLeft: 18, paddingRight: 18, fontSize: 15 }}
+            >
               <Link href="/onboarding/cv">Aggiorna CV</Link>
             </Button>
           ) : (
             <>
-              <Button asChild size="sm" variant="ghost" className="hidden sm:inline-flex">
+              <Button
+                asChild
+                variant="ghost"
+                className="hidden sm:inline-flex"
+                style={{ height: 44, paddingLeft: 18, paddingRight: 18, fontSize: 15 }}
+              >
                 <Link href="/login">Accedi</Link>
               </Button>
-              <Button asChild size="sm" className="group">
+              <Button
+                asChild
+                className="group"
+                style={{ height: 44, paddingLeft: 22, paddingRight: 22, fontSize: 15 }}
+              >
                 <Link href="/signup">
-                  <span>Registrati</span>
-                  <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
+                  <span style={{ fontWeight: 600 }}>Registrati</span>
                 </Link>
               </Button>
             </>
