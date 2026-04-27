@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const email = url.searchParams.get("email")?.trim().toLowerCase();
-  const limit = Math.min(50, parseInt(url.searchParams.get("limit") ?? "20", 10));
+  const limit = Math.min(500, parseInt(url.searchParams.get("limit") ?? "20", 10));
   if (!email) {
     return NextResponse.json({ error: "missing_email" }, { status: 400 });
   }
