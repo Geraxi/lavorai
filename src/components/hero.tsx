@@ -48,6 +48,39 @@ export function Hero() {
         <div className="grid items-center gap-14 lg:grid-cols-[1.15fr_1fr] lg:gap-20">
           {/* Colonna sinistra: copy + CTA */}
           <div className="flex flex-col items-start text-left">
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="mb-5 inline-flex items-center gap-2 rounded-full border px-3 py-1"
+              style={{
+                borderColor: "hsl(var(--primary) / 0.4)",
+                background: "hsl(var(--primary) / 0.08)",
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: "hsl(var(--primary))",
+                  boxShadow: "0 0 8px hsl(var(--primary) / 0.6)",
+                }}
+              />
+              <span
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  fontWeight: 500,
+                  letterSpacing: "0.18em",
+                  color: "hsl(var(--primary))",
+                  textTransform: "uppercase",
+                }}
+              >
+                100% automatico · zero click
+              </span>
+            </motion.div>
+
             <motion.h1
               initial={{ opacity: 0, y: 20, filter: "blur(6px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -74,8 +107,10 @@ export function Hero() {
                 lineHeight: 1.5,
               }}
             >
-              LavorAI trova le posizioni compatibili, riscrive il CV per
-              ognuna, e invia tutto al posto tuo. Tu pensa solo ai colloqui.
+              LavorAI cerca le posizioni giuste, scrive il CV su misura per
+              ognuna e <strong style={{ color: "var(--fg)" }}>si candida
+              al posto tuo</strong> — 24/7, senza che tu clicchi un solo
+              form. Tu pensi solo ai colloqui.
             </motion.p>
 
             <motion.div
@@ -103,21 +138,28 @@ export function Hero() {
                 <span className="text-primary" style={{ fontSize: 17 }}>
                   ✓
                 </span>
-                <span>Solo annunci veri di Greenhouse, Lever, Workable</span>
+                <span>
+                  <strong style={{ color: "var(--fg)" }}>Si candida da solo</strong>{" "}
+                  ogni 30 minuti, anche mentre dormi
+                </span>
               </li>
               <li className="flex items-center gap-3">
                 <span className="text-primary" style={{ fontSize: 17 }}>
                   ✓
                 </span>
                 <span>
-                  CV e lettera in italiano nativo, su misura per ogni job
+                  CV e lettera{" "}
+                  <strong style={{ color: "var(--fg)" }}>riscritti dall&apos;AI</strong>{" "}
+                  per ogni annuncio, in italiano nativo
                 </span>
               </li>
               <li className="flex items-center gap-3">
                 <span className="text-primary" style={{ fontSize: 17 }}>
                   ✓
                 </span>
-                <span>Nessun login ai tuoi account — zero rischio ban</span>
+                <span>
+                  Submit reale sui form ATS — nessun login ai tuoi account
+                </span>
               </li>
             </motion.ul>
           </div>

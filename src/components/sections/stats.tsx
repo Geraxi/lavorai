@@ -53,13 +53,13 @@ export function SectionStats() {
             className="mono text-[10.5px] uppercase tracking-[0.32em] text-primary/80"
             style={{ fontWeight: 500 }}
           >
-            By the numbers
+            Auto-apply by the numbers
           </p>
           <h2
             className="mt-4 text-balance text-3xl font-semibold tracking-tight sm:text-4xl"
             style={{ letterSpacing: "-0.025em" }}
           >
-            Pensato per chi non ha tempo da perdere.
+            Tu apri l&apos;app una volta. Le candidature partono da sole.
           </h2>
         </Reveal>
 

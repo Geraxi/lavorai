@@ -9,19 +9,19 @@ const steps = [
     n: "01",
     icon: Upload,
     title: "Carica il CV",
-    text: "PDF o DOCX. Bastano 10 secondi.",
+    text: "PDF o DOCX. Bastano 10 secondi. L'AI estrae il profilo.",
   },
   {
     n: "02",
     icon: Target,
-    title: "Scegli ruolo e città",
-    text: "Es. Product Designer · Milano. Una riga.",
+    title: "Scegli il ruolo",
+    text: "Una riga: \"Product Designer · Milano\". Avvii il round.",
   },
   {
     n: "03",
     icon: Zap,
-    title: "Avvia l'auto-apply",
-    text: "LavorAI candida per te 24/7. Tu fai colloqui.",
+    title: "Da qui non tocchi più nulla",
+    text: "Ogni 30 min LavorAI trova nuovi annunci, riscrive il CV e si candida per te. Tu pensi solo ai colloqui.",
   },
 ];
 
@@ -42,13 +42,14 @@ export function SectionComeFunziona() {
             className="mono text-[10.5px] uppercase tracking-[0.32em] text-primary/80"
             style={{ fontWeight: 500 }}
           >
-            Setup in 30 secondi
+            Setup una volta · gira da solo per sempre
           </p>
           <h2
             className="mt-4 text-balance text-4xl font-semibold tracking-tight sm:text-5xl"
             style={{ letterSpacing: "-0.03em" }}
           >
-            Tre step. <span className="text-gradient-accent">Zero forms.</span>
+            Tre step. Poi{" "}
+            <span className="text-gradient-accent">non tocchi più nulla.</span>
           </h2>
         </Reveal>
 

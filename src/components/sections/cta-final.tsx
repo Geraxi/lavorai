@@ -21,10 +21,12 @@ export function SectionCtaFinal() {
         <Reveal className="mx-auto max-w-3xl text-center">
           <h2 className="text-balance text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl">
             Smetti di candidarti.{" "}
-            <span className="text-gradient-accent">Inizia a fare colloqui.</span>
+            <span className="text-gradient-accent">Lavorai lo fa per te.</span>
           </h2>
           <p className="mt-6 text-lg text-muted-foreground md:text-xl">
-            Setup in 30 secondi. 3 candidature gratis, nessuna carta richiesta.
+            Setup in 30 secondi. Da lì in poi candida da solo, ogni 30
+            minuti, finché non lo metti in pausa. 3 candidature gratis,
+            nessuna carta richiesta.
           </p>
           <p
             style={{
