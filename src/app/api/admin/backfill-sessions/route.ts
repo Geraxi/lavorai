@@ -49,6 +49,16 @@ export async function POST(req: NextRequest) {
   // Tieni solo i primi 3 ruoli
   roles = roles.slice(0, 3);
 
+  // Opzionale: cancella le sessioni legacy "auto" prima del backfill
+  // (lascia stare quelle status="active" già round-style).
+  if (url.searchParams.get("cleanLegacy") === "1") {
+    const r = await prisma.applicationSession.updateMany({
+      where: { userId: user.id, status: "auto" },
+      data: { status: "cancelled", completedAt: new Date() },
+    });
+    console.log(`[backfill-sessions] legacy cancelled: ${r.count}`);
+  }
+
   // Conta sessioni attive esistenti
   const existing = await prisma.applicationSession.findMany({
     where: {
