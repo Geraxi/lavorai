@@ -106,6 +106,22 @@ export const greenhouseAdapter: PortalAdapter = {
         }
       }
 
+      // Fill custom questions usando le risposte standard dell'utente
+      // (work auth, salary, notice period, LinkedIn, EEO, ecc).
+      // Eseguito PRIMA di check/submit così le validazioni required
+      // non bloccano i campi vuoti.
+      try {
+        const { fillCustomQuestions } = await import("./generic-fill");
+        const r = await fillCustomQuestions(page, input.answers);
+        if (r.filled > 0) {
+          console.log(
+            `[greenhouse] custom questions filled: ${r.filled} (${r.matched.slice(0, 4).join(", ")})`,
+          );
+        }
+      } catch (err) {
+        console.warn("[greenhouse] generic-fill failed", err);
+      }
+
       // GDPR/consenso + accetta termini (best-effort)
       for (const sel of [
         'input[type="checkbox"][name*="privacy" i]',

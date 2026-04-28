@@ -94,6 +94,19 @@ export const leverAdapter: PortalAdapter = {
         await clTextarea.first().fill(input.coverLetterText).catch(() => void 0);
       }
 
+      // Fill custom questions usando le risposte standard dell'utente
+      try {
+        const { fillCustomQuestions } = await import("./generic-fill");
+        const r = await fillCustomQuestions(page, input.answers);
+        if (r.filled > 0) {
+          console.log(
+            `[lever] custom questions filled: ${r.filled} (${r.matched.slice(0, 4).join(", ")})`,
+          );
+        }
+      } catch (err) {
+        console.warn("[lever] generic-fill failed", err);
+      }
+
       // Consenso privacy
       const consent = page.locator(
         'input[type="checkbox"][name*="consent" i], input[type="checkbox"][name*="gdpr" i], input[type="checkbox"][name*="privacy" i]',

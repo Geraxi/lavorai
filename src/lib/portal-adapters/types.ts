@@ -1,5 +1,6 @@
 import type { Browser, Page } from "playwright";
 import type { CVProfile } from "@/lib/cv-profile-types";
+import type { ApplicationAnswers } from "@/lib/application-answers";
 
 /**
  * Portal Adapter: plug-in che sa come compilare il form di candidatura
@@ -25,6 +26,10 @@ export interface ApplyInput {
   jobUrl: string;
   /** "dryRun" → non preme submit, solo verifica che il form si compili */
   dryRun: boolean;
+  /** Risposte standard pre-compilate dall'utente (work auth, salary,
+   *  notice period, LinkedIn, EEO, ecc). L'adapter le inietta nei
+   *  campi custom che riconosce via fuzzy-match label. */
+  answers?: ApplicationAnswers;
 }
 
 export type ApplyOutcome =

@@ -26,6 +26,7 @@ interface Initial {
   availableFrom: string | null;
   vatNumber: string | null;
   portfolioUrl: string | null;
+  applicationAnswers: import("@/lib/application-answers").ApplicationAnswers;
   modeSel: { remoto: boolean; ibrido: boolean; sede: boolean };
   excludedCompanies: string[];
 }
@@ -52,6 +53,16 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
   const [portfolioUrl, setPortfolioUrl] = useState<string>(
     initial.portfolioUrl ?? "",
   );
+  const [answers, setAnswers] = useState<
+    import("@/lib/application-answers").ApplicationAnswers
+  >(initial.applicationAnswers);
+  const setAnswer = <K extends keyof typeof answers>(
+    k: K,
+    v: (typeof answers)[K] | undefined,
+  ) => {
+    setAnswers((a) => ({ ...a, [k]: v }));
+    mark();
+  };
   const [modeSel, setModeSel] = useState(initial.modeSel);
   const [excluded, setExcluded] = useState<string[]>(initial.excludedCompanies);
   const [roleInput, setRoleInput] = useState("");
@@ -108,6 +119,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
             availableFrom: availableFrom.trim() || null,
             vatNumber: vatNumber.trim() || null,
             portfolioUrl: portfolioUrl.trim() || null,
+            applicationAnswers: answers,
             excludedCompanies: excluded,
           }),
         });
@@ -535,6 +547,264 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                       </div>
                     </div>
                   )}
+                </div>
+              </SectionBody>
+            </SectionCard>
+
+            {/* Risposte standard candidature */}
+            <SectionCard>
+              <SectionHead
+                icon={<Icon name="check" size={14} />}
+                title="Risposte standard candidature"
+              />
+              <SectionBody>
+                <p style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 18 }}>
+                  Domande tipiche dei form ATS — riempite in automatico ad ogni candidatura. Tutto opzionale, ma più ne compili, più candidature passeranno il filtro recruiter.
+                </p>
+                <div style={{ display: "grid", gap: 18 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                    <div>
+                      <label className="ds-label">Autorizzazione lavoro UE</label>
+                      <select
+                        className="ds-input"
+                        value={answers.workAuthEU ?? ""}
+                        onChange={(e) =>
+                          setAnswer(
+                            "workAuthEU",
+                            (e.target.value || undefined) as
+                              | typeof answers.workAuthEU
+                              | undefined,
+                          )
+                        }
+                      >
+                        <option value="">— non specificato —</option>
+                        <option value="yes_eu_citizen">Cittadino UE</option>
+                        <option value="yes_permit">Ho permesso di lavoro UE</option>
+                        <option value="no_needs_sponsorship">Mi serve sponsorship</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="ds-label">Notice period</label>
+                      <select
+                        className="ds-input"
+                        value={answers.noticePeriod ?? ""}
+                        onChange={(e) =>
+                          setAnswer(
+                            "noticePeriod",
+                            (e.target.value || undefined) as
+                              | typeof answers.noticePeriod
+                              | undefined,
+                          )
+                        }
+                      >
+                        <option value="">— non specificato —</option>
+                        <option value="immediate">Immediata</option>
+                        <option value="2weeks">2 settimane</option>
+                        <option value="1month">1 mese</option>
+                        <option value="2months">2 mesi</option>
+                        <option value="3months_plus">3 mesi o più</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="ds-label">Aspettativa RAL (€/anno)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="500000"
+                        step="1000"
+                        className="ds-input"
+                        placeholder="es. 60000"
+                        value={answers.salaryExpectationEur ?? ""}
+                        onChange={(e) =>
+                          setAnswer(
+                            "salaryExpectationEur",
+                            e.target.value
+                              ? Math.max(0, parseInt(e.target.value, 10) || 0)
+                              : undefined,
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="ds-label">Disponibile a trasferirti</label>
+                      <select
+                        className="ds-input"
+                        value={
+                          answers.relocate === undefined
+                            ? ""
+                            : answers.relocate
+                              ? "yes"
+                              : "no"
+                        }
+                        onChange={(e) =>
+                          setAnswer(
+                            "relocate",
+                            e.target.value === ""
+                              ? undefined
+                              : e.target.value === "yes",
+                          )
+                        }
+                      >
+                        <option value="">— non specificato —</option>
+                        <option value="yes">Sì</option>
+                        <option value="no">No</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="ds-label">LinkedIn URL</label>
+                      <input
+                        type="url"
+                        className="ds-input"
+                        placeholder="https://linkedin.com/in/..."
+                        value={answers.linkedinUrl ?? ""}
+                        onChange={(e) =>
+                          setAnswer("linkedinUrl", e.target.value || undefined)
+                        }
+                        maxLength={300}
+                      />
+                    </div>
+                    <div>
+                      <label className="ds-label">GitHub URL</label>
+                      <input
+                        type="url"
+                        className="ds-input"
+                        placeholder="https://github.com/..."
+                        value={answers.githubUrl ?? ""}
+                        onChange={(e) =>
+                          setAnswer("githubUrl", e.target.value || undefined)
+                        }
+                        maxLength={300}
+                      />
+                    </div>
+                    <div>
+                      <label className="ds-label">Come ci hai conosciuto</label>
+                      <select
+                        className="ds-input"
+                        value={answers.howHeard ?? ""}
+                        onChange={(e) =>
+                          setAnswer(
+                            "howHeard",
+                            (e.target.value || undefined) as
+                              | typeof answers.howHeard
+                              | undefined,
+                          )
+                        }
+                      >
+                        <option value="">— non specificato —</option>
+                        <option value="linkedin">LinkedIn</option>
+                        <option value="google">Google / Search</option>
+                        <option value="referral">Referral / Passaparola</option>
+                        <option value="other">Altro</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="ds-label">
+                      Perché ti interessa questo tipo di ruolo (1-2 frasi)
+                    </label>
+                    <textarea
+                      className="ds-input"
+                      rows={3}
+                      maxLength={500}
+                      placeholder="es. Mi piace lavorare a prodotti che semplificano la vita degli utenti. Cerco un team che mette la qualità del design al centro."
+                      value={answers.whyInterested ?? ""}
+                      onChange={(e) =>
+                        setAnswer("whyInterested", e.target.value || undefined)
+                      }
+                    />
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "var(--fg-muted)",
+                        marginTop: 4,
+                      }}
+                    >
+                      Generica, non per uno specifico annuncio. Claude la
+                      riadatta nel cover letter.
+                    </p>
+                  </div>
+                  {/* EEO collapsible */}
+                  <details
+                    style={{
+                      borderTop: "1px solid var(--border-ds)",
+                      paddingTop: 14,
+                    }}
+                  >
+                    <summary
+                      style={{
+                        cursor: "pointer",
+                        fontSize: 13,
+                        color: "var(--fg-muted)",
+                      }}
+                    >
+                      Domande EEO US-style (opzionali, default = preferisco non
+                      rispondere)
+                    </summary>
+                    <div
+                      style={{
+                        marginTop: 14,
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 1fr",
+                        gap: 14,
+                      }}
+                    >
+                      {(
+                        [
+                          {
+                            k: "eeoGender",
+                            label: "Genere",
+                            options: [
+                              ["", "—"],
+                              ["male", "Uomo"],
+                              ["female", "Donna"],
+                              ["non_binary", "Non binario"],
+                              ["prefer_not", "Preferisco non rispondere"],
+                            ],
+                          },
+                          {
+                            k: "eeoVeteran",
+                            label: "Stato veterano",
+                            options: [
+                              ["", "—"],
+                              ["yes", "Sì"],
+                              ["no", "No"],
+                              ["prefer_not", "Preferisco non rispondere"],
+                            ],
+                          },
+                          {
+                            k: "eeoDisability",
+                            label: "Disabilità",
+                            options: [
+                              ["", "—"],
+                              ["yes", "Sì"],
+                              ["no", "No"],
+                              ["prefer_not", "Preferisco non rispondere"],
+                            ],
+                          },
+                        ] as const
+                      ).map((f) => (
+                        <div key={f.k}>
+                          <label className="ds-label">{f.label}</label>
+                          <select
+                            className="ds-input"
+                            value={(answers[f.k] as string | undefined) ?? ""}
+                            onChange={(e) =>
+                              setAnswer(
+                                f.k,
+                                (e.target.value || undefined) as never,
+                              )
+                            }
+                          >
+                            {f.options.map(([v, l]) => (
+                              <option key={v} value={v}>
+                                {l}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
                 </div>
               </SectionBody>
             </SectionCard>

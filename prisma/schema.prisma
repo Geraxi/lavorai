@@ -162,6 +162,14 @@ model UserPreferences {
   availableFrom  String?    // stringa libera: "immediate" | "2 settimane" | "2026-06-01"
   vatNumber      String?    // partita IVA (opzionale, per firma professionale)
   portfolioUrl   String?    // link portfolio / sito / LinkedIn
+  // Risposte standard alle domande tipiche dei form ATS — il worker
+  // legge questo blob e lo inietta nei custom field di Greenhouse/Lever
+  // (work auth, salary, notice period, LinkedIn, EEO, ecc).
+  // Schema atteso (vedi src/lib/application-answers.ts):
+  //   { workAuthEU, salaryExpectationEur, relocate, linkedinUrl,
+  //     githubUrl, howHeard, whyInterested, noticePeriod,
+  //     eeoGender, eeoVeteran, eeoDisability }
+  applicationAnswersJson String @default("{}")
   rolesJson   String @default("[]")
   locationsJson String @default("[]")
   sourcesJson String @default("[]")

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { PreferencesClient } from "./preferences-client";
+import { parseAnswers } from "@/lib/application-answers";
 
 export const metadata: Metadata = { title: "Preferenze" };
 export const dynamic = "force-dynamic";
@@ -60,6 +61,10 @@ export default async function PreferencesPage() {
     portfolioUrl:
       ((prefs as { portfolioUrl?: string | null } | null | undefined)
         ?.portfolioUrl ?? null) as string | null,
+    applicationAnswers: parseAnswers(
+      (prefs as { applicationAnswersJson?: string } | null | undefined)
+        ?.applicationAnswersJson ?? null,
+    ),
     modeSel: {
       remoto: modes.includes("remoto"),
       ibrido: modes.includes("ibrido"),

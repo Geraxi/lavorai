@@ -277,6 +277,11 @@ export async function processApplication(applicationId: string): Promise<void> {
   }
 
   if (adapter) {
+    const { parseAnswers } = await import("@/lib/application-answers");
+    const userAnswers = parseAnswers(
+      (app.user.preferences as { applicationAnswersJson?: string } | null)
+        ?.applicationAnswersJson ?? null,
+    );
     const outcome = await attemptPortalAdapterSubmit({
       applicationId,
       adapter,
@@ -285,6 +290,7 @@ export async function processApplication(applicationId: string): Promise<void> {
       clPath,
       coverLetterText: result.coverLetter,
       userId: app.userId,
+      answers: userAnswers,
     }).catch((err) => {
       console.error(`[worker] ${applicationId} adapter ${adapter.id} failed`, err);
       return {
@@ -946,6 +952,7 @@ interface AdapterSubmitInput {
   clPath: string;
   coverLetterText: string;
   userId: string;
+  answers?: import("@/lib/application-answers").ApplicationAnswers;
 }
 
 async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
@@ -998,6 +1005,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       coverLetterText: input.coverLetterText,
       jobUrl,
       dryRun: process.env.PORTAL_SUBMIT_DRY_RUN === "true",
+      answers: input.answers,
     });
     return outcome;
   } finally {

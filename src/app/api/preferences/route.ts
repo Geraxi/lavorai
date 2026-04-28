@@ -23,6 +23,33 @@ const Schema = z.object({
   availableFrom: z.string().trim().max(60).nullable().optional(),
   vatNumber: z.string().trim().max(30).nullable().optional(),
   portfolioUrl: z.string().trim().max(300).url().nullable().optional(),
+  applicationAnswers: z
+    .object({
+      workAuthEU: z
+        .enum(["yes_eu_citizen", "yes_permit", "no_needs_sponsorship"])
+        .nullable()
+        .optional(),
+      salaryExpectationEur: z.number().int().min(0).max(500000).nullable().optional(),
+      relocate: z.boolean().nullable().optional(),
+      noticePeriod: z
+        .enum(["immediate", "2weeks", "1month", "2months", "3months_plus"])
+        .nullable()
+        .optional(),
+      linkedinUrl: z.string().trim().max(300).nullable().optional(),
+      githubUrl: z.string().trim().max(300).nullable().optional(),
+      howHeard: z
+        .enum(["linkedin", "google", "referral", "other"])
+        .nullable()
+        .optional(),
+      whyInterested: z.string().trim().max(500).nullable().optional(),
+      eeoGender: z
+        .enum(["male", "female", "non_binary", "prefer_not"])
+        .nullable()
+        .optional(),
+      eeoVeteran: z.enum(["yes", "no", "prefer_not"]).nullable().optional(),
+      eeoDisability: z.enum(["yes", "no", "prefer_not"]).nullable().optional(),
+    })
+    .optional(),
   excludedCompanies: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
 });
 
@@ -73,6 +100,7 @@ export async function PUT(request: NextRequest) {
     availableFrom,
     vatNumber,
     portfolioUrl,
+    applicationAnswers,
     excludedCompanies,
   } = parsed.data;
 
@@ -95,6 +123,9 @@ export async function PUT(request: NextRequest) {
       availableFrom: availableFrom ?? null,
       vatNumber: vatNumber ?? null,
       portfolioUrl: portfolioUrl ?? null,
+      applicationAnswersJson: applicationAnswers
+        ? JSON.stringify(stripNulls(applicationAnswers))
+        : "{}",
       salaryMin,
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),
@@ -110,6 +141,13 @@ export async function PUT(request: NextRequest) {
       ...(availableFrom !== undefined ? { availableFrom } : {}),
       ...(vatNumber !== undefined ? { vatNumber } : {}),
       ...(portfolioUrl !== undefined ? { portfolioUrl } : {}),
+      ...(applicationAnswers !== undefined
+        ? {
+            applicationAnswersJson: JSON.stringify(
+              stripNulls(applicationAnswers),
+            ),
+          }
+        : {}),
       salaryMin,
       rolesJson: JSON.stringify(roles),
       locationsJson: JSON.stringify(locations),
@@ -131,4 +169,14 @@ export async function PUT(request: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
+}
+
+function stripNulls<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === "string" && v.trim() === "") continue;
+    out[k] = v;
+  }
+  return out as Partial<T>;
 }
