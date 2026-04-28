@@ -17,8 +17,13 @@ export async function GET() {
     return NextResponse.json({ sessions: [] });
   }
 
+  // Di default escludiamo cancelled (rumore legacy); puoi includerle con
+  // ?includeCancelled=1 per pagine analytics/audit.
   const sessions = await prisma.applicationSession.findMany({
-    where: { userId: user.id },
+    where: {
+      userId: user.id,
+      status: { in: ["active", "auto", "paused", "completed"] },
+    },
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     include: {
       _count: { select: { applications: true } },
