@@ -264,14 +264,37 @@ model Job {
 model ApplicationSession {
   id        String   @id @default(cuid())
   userId    String
-  /// chiave canonica usata per il find-or-create (category::role normalizzati)
+  /// (legacy) chiave canonica usata dal vecchio find-or-create. Tenuta
+  /// per back-compat con sessioni create prima del refactor "round".
   key       String
-  /// label human-readable mostrata in UI (es. "IT · Front-End Developer")
+  /// label human-readable mostrata in UI (es. "Round Product Designer")
   label     String
-  /// "auto" = parte in automatico (default), "paused" = candidature
-  /// finiscono in awaiting_consent
-  status    String   @default("auto")
+  /// Job title canonico del round (es. "Senior Product Designer").
+  /// Null sulle sessioni legacy: il cron usa label come fallback.
+  title     String?
+  /// Quante candidature questo round vuole inviare prima di chiudersi.
+  /// Default 30. Configurabile alla creazione.
+  targetCount Int @default(30)
+  /// Counter delle candidature consegnate (status=success). Aggiornato
+  /// dal worker on-success.
+  sentCount Int @default(0)
+  /// Contesto/esperienza extra fornito dall'utente alla creazione del
+  /// round. Iniettato in Claude nel cover letter / CV ottimizzazione
+  /// per personalizzare il CV alle peculiarità di questo round.
+  customContext String?
+  /// Stato del round:
+  ///   "active"     = il cron pesca job per questa sessione
+  ///   "paused"     = stand-by, nessun nuovo invio
+  ///   "completed"  = sentCount >= targetCount, pronto per chiedere
+  ///                  all'utente se avviare un altro round
+  ///   "cancelled"  = utente ha annullato manualmente
+  ///   (legacy "auto" è equivalente ad "active")
+  status    String   @default("active")
+  /// True quando l'utente ha visto il prompt "round completato" sulla
+  /// dashboard, così non riapparirà.
+  completedAcknowledgedAt DateTime?
   createdAt DateTime @default(now())
+  completedAt DateTime?
   updatedAt DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)

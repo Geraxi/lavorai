@@ -129,14 +129,49 @@ async function processUser(
   const prefs = user.preferences;
   const profile = rowToProfile(user.cvProfile);
 
-  // Ruoli attesi
+  // Round attivi (sessioni status=active|auto, non completate). I "round"
+  // sono la nuova source-of-truth: ognuno ha un title + targetCount.
+  // Fallback legacy: se l'utente non ha sessioni attive, leggiamo
+  // preferences.rolesJson come prima (back-compat per account
+  // pre-refactor). I nuovi utenti useranno solo le sessioni.
+  const activeSessions = await prisma.applicationSession.findMany({
+    where: {
+      userId: user.id,
+      status: { in: ["active", "auto"] },
+    },
+    select: {
+      id: true,
+      title: true,
+      label: true,
+      targetCount: true,
+      sentCount: true,
+      customContext: true,
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
   let roles: string[] = [];
-  try {
-    const arr = JSON.parse(prefs.rolesJson);
-    if (Array.isArray(arr))
-      roles = arr.filter((s: unknown) => typeof s === "string" && s.length > 0);
-  } catch {
-    /* noop */
+  let sessionByRole = new Map<string, (typeof activeSessions)[number]>();
+
+  if (activeSessions.length > 0) {
+    for (const s of activeSessions) {
+      if (s.sentCount >= s.targetCount) continue; // round già pieno
+      const t = (s.title ?? s.label).trim();
+      if (!t) continue;
+      roles.push(t);
+      sessionByRole.set(t.toLowerCase(), s);
+    }
+  } else {
+    // Legacy: nessuna sessione attiva → usa rolesJson preferences.
+    try {
+      const arr = JSON.parse(prefs.rolesJson);
+      if (Array.isArray(arr))
+        roles = arr.filter(
+          (s: unknown) => typeof s === "string" && s.length > 0,
+        );
+    } catch {
+      /* noop */
+    }
   }
   if (roles.length === 0) return;
 
@@ -301,12 +336,33 @@ async function processUser(
       if (jobTop > 0 && jobTop < salaryCap) continue;
     }
 
-    // Resolve session + check paused
-    const session = await resolveSession(user.id, {
-      title: job.title,
-      category: job.category,
-    });
-    if (session.status === "paused") {
+    // Trova la sessione (round) a cui appartiene questo job. Se è
+    // partito da un round attivo (sessionByRole popolato), usa quello.
+    // Altrimenti fallback al vecchio resolveSession (backward compat).
+    let sessionId: string;
+    let sessionStatus: string;
+    const matchedRoundRole = roles.find((r) =>
+      job.title.toLowerCase().includes(r.toLowerCase()),
+    );
+    const matchedRound = matchedRoundRole
+      ? sessionByRole.get(matchedRoundRole.toLowerCase())
+      : null;
+    if (matchedRound) {
+      sessionId = matchedRound.id;
+      sessionStatus = "active";
+      // Hard cap: se il round è già al target, salta
+      if (matchedRound.sentCount >= matchedRound.targetCount) {
+        continue;
+      }
+    } else {
+      const legacy = await resolveSession(user.id, {
+        title: job.title,
+        category: job.category,
+      });
+      sessionId = legacy.id;
+      sessionStatus = legacy.status;
+    }
+    if (sessionStatus === "paused") {
       stats.skippedSessionPaused++;
       continue;
     }
@@ -322,12 +378,18 @@ async function processUser(
           status: "queued",
           trackingToken: randomToken(),
           atsScore: score,
-          sessionId: session.id,
+          sessionId,
         },
       });
       await enqueueApplication(app.id);
       enqueued++;
       stats.applicationsEnqueued++;
+      // Bump sentCount in-memory così entro lo stesso run il cap
+      // targetCount è rispettato. (Il counter persistito viene aggiornato
+      // dal worker on-success.)
+      if (matchedRound) {
+        matchedRound.sentCount = (matchedRound.sentCount ?? 0) + 1;
+      }
     } catch (err) {
       console.error(
         `[auto-apply-cron] user ${user.id} job ${job.id} create failed`,

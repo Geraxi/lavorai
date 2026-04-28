@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/design/theme-toggle";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { WelcomeModal } from "@/components/welcome-modal";
 import { DashboardLiveRefresh } from "@/components/dashboard-live-refresh";
+import { SessionsStatus } from "@/components/sessions-status";
 import { PostLoginCheckout } from "@/components/post-login-checkout";
 import { AutoApplyToggle } from "@/components/auto-apply-toggle";
 import { getUIApplications } from "@/lib/ui-applications";
@@ -180,6 +181,11 @@ export default async function DashboardPage() {
             <OnboardingChecklist state={onboarding} />
           </div>
         )}
+
+        {/* Round attivi + prompt round completati */}
+        <div className="mb-6" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <SessionsStatus />
+        </div>
 
         {/* PROGRESS HERO — il cuore della dashboard */}
         <div

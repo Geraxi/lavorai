@@ -35,6 +35,12 @@ export interface OptimizeCVInput {
    *  letterale. Ogni elemento è una istruzione/idea in linguaggio naturale.
    */
   coverLetterHints?: string[];
+  /** Contesto/esperienza extra fornito dall'utente alla creazione del
+   *  round (ApplicationSession.customContext). Iniettato in Claude per
+   *  arricchire il CV con informazioni che il CV originale non contiene
+   *  (es. side project, esperienze freelance non menzionate, ecc).
+   *  Mai inventare: usa solo se l'utente l'ha scritto esplicitamente. */
+  sessionContext?: string | null;
   /** Contesto P.IVA: se presente, Claude scrive un PITCH B2B invece di
    *  una classica cover letter da dipendente. Include tariffa,
    *  disponibilità, partita IVA, portfolio. */
@@ -75,6 +81,7 @@ export async function optimizeCV(
         role: "user",
         content:
           USER_PROMPT_TEMPLATE(input.cvText, input.jobPosting) +
+          buildSessionContextBlock(input.sessionContext) +
           buildPivaBlock(input.pivaContext) +
           buildCoverLetterHintsBlock(input.coverLetterHints),
       },
@@ -107,6 +114,30 @@ export async function optimizeCV(
       "Claude ha risposto con un formato non valido. Riprova tra qualche secondo.",
     );
   }
+}
+
+function buildSessionContextBlock(ctx: string | null | undefined): string {
+  if (!ctx || !ctx.trim()) return "";
+  return `\n\n---
+CONTESTO EXTRA DEL ROUND CORRENTE
+
+L'utente ha avviato un round di candidature per uno specifico tipo di
+ruolo e ha fornito questo contesto/esperienza extra da considerare
+nella generazione del CV e della cover letter:
+
+"""
+${ctx.trim().slice(0, 2000)}
+"""
+
+Linee guida:
+- Integra questo contesto nel CV ottimizzato in modo naturale, come se
+  facesse parte del background del candidato. Aggiungi bullet
+  pertinenti nelle experiences esistenti o, se chiaramente un'esperienza
+  separata, crea una nuova entry "freelance/side project" sintetica.
+- Usa il contesto anche nella cover letter, dove rilevante.
+- NON inventare oltre quanto scritto: se manca un dato (durata, output,
+  metriche), lascia generico invece di fabbricare.
+`;
 }
 
 function buildPivaBlock(ctx: OptimizeCVInput["pivaContext"]): string {

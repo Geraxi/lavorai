@@ -43,6 +43,7 @@ export async function processApplication(applicationId: string): Promise<void> {
     where: { id: applicationId },
     include: {
       job: true,
+      session: { select: { id: true, title: true, customContext: true } },
       user: {
         include: {
           cvDocuments: { orderBy: { createdAt: "desc" }, take: 1 },
@@ -108,6 +109,7 @@ export async function processApplication(applicationId: string): Promise<void> {
       cvText: cv.extractedText,
       jobPosting,
       coverLetterHints,
+      sessionContext: app.session?.customContext ?? null,
       pivaContext: usePivaPitch
         ? {
             dailyRate: prefs?.dailyRate ?? null,
@@ -322,6 +324,7 @@ export async function processApplication(applicationId: string): Promise<void> {
         },
       });
       if (!isDryRun) {
+        await markSessionSentSuccess(applicationId);
         await notifyApplicationSent(applicationId).catch((err) =>
           console.error(`[worker] ${applicationId} notify email failed`, err),
         );
@@ -394,6 +397,7 @@ export async function processApplication(applicationId: string): Promise<void> {
           completedAt: new Date(),
         },
       });
+      await markSessionSentSuccess(applicationId);
       await notifyApplicationSent(applicationId).catch((err) =>
         console.error(`[worker] ${applicationId} notify email failed`, err),
       );
@@ -435,6 +439,42 @@ export async function processApplication(applicationId: string): Promise<void> {
         },
       });
     }
+  }
+}
+
+/**
+ * On success: bump sentCount sulla sessione collegata. Se raggiunge
+ * targetCount, transition status="completed" così la dashboard mostra
+ * il prompt "avvia un altro round?".
+ */
+async function markSessionSentSuccess(applicationId: string): Promise<void> {
+  try {
+    const app = await prisma.application.findUnique({
+      where: { id: applicationId },
+      select: { sessionId: true },
+    });
+    if (!app?.sessionId) return;
+    const updated = await prisma.applicationSession.update({
+      where: { id: app.sessionId },
+      data: { sentCount: { increment: 1 } },
+      select: { sentCount: true, targetCount: true, status: true },
+    });
+    // Se ha appena toccato il target e non era già completed → mark completed
+    if (
+      updated.sentCount >= updated.targetCount &&
+      updated.status !== "completed" &&
+      updated.status !== "cancelled"
+    ) {
+      await prisma.applicationSession.update({
+        where: { id: app.sessionId },
+        data: { status: "completed", completedAt: new Date() },
+      });
+      console.log(
+        `[worker] session ${app.sessionId} → completed (${updated.sentCount}/${updated.targetCount})`,
+      );
+    }
+  } catch (err) {
+    console.warn("[worker] markSessionSentSuccess failed", err);
   }
 }
 
