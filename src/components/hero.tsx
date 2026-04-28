@@ -60,8 +60,8 @@ export function Hero() {
                 fontWeight: 700,
               }}
             >
-              Candidati a 50 lavori con un click.{" "}
-              <span className="text-gradient-accent">In automatico.</span>
+              Candidarsi non è più{" "}
+              <span className="text-gradient-accent">il tuo lavoro.</span>
             </motion.h1>
 
             <motion.p
@@ -74,8 +74,8 @@ export function Hero() {
                 lineHeight: 1.5,
               }}
             >
-              LavorAI trova, compila e invia le candidature al posto tuo.
-              Niente form, niente lettere, niente tempo perso.
+              LavorAI trova le posizioni compatibili, riscrive il CV per
+              ognuna, e invia tutto al posto tuo. Tu pensa solo ai colloqui.
             </motion.p>
 
             <motion.div
