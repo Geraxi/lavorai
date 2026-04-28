@@ -65,6 +65,20 @@ export function SessionsStatus() {
     toast.success(next === "paused" ? "Round in pausa" : "Round ripreso");
   }
 
+  async function cancelRound(s: ApiSession) {
+    const ok = window.confirm(
+      `Annullare il round "${s.title}"? Le ${s.sentCount} candidature già inviate restano. Nessuna nuova candidatura partirà per questo titolo.`,
+    );
+    if (!ok) return;
+    const res = await fetch(`/api/sessions/${s.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error("Errore annullamento round");
+      return;
+    }
+    mutate();
+    toast.success("Round annullato");
+  }
+
   if (sessions.length === 0 && justCompleted.length === 0) {
     // Nessuna sessione: mostra solo il CTA
     return (
@@ -156,15 +170,29 @@ export function SessionsStatus() {
           <div style={{ fontSize: 14, fontWeight: 600 }}>
             Round attivi ({active.length}/3)
           </div>
-          <button
-            type="button"
-            className="ds-btn ds-btn-sm ds-btn-primary"
-            onClick={() => setDialogOpen(true)}
-            disabled={active.length >= 3}
-            title={active.length >= 3 ? "Massimo 3 round in parallelo" : ""}
-          >
-            <Icon name="plus" size={11} /> Nuovo
-          </button>
+          {active.length >= 3 ? (
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm"
+              onClick={() =>
+                toast.info(
+                  "Massimo 3 round in parallelo. Annulla o aspetta che uno completi prima di crearne un altro.",
+                )
+              }
+              title="Massimo 3 round in parallelo"
+              style={{ opacity: 0.7 }}
+            >
+              <Icon name="plus" size={11} /> Nuovo (3/3)
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="ds-btn ds-btn-sm ds-btn-primary"
+              onClick={() => setDialogOpen(true)}
+            >
+              <Icon name="plus" size={11} /> Nuovo
+            </button>
+          )}
         </div>
 
         {active.length === 0 && (
@@ -194,7 +222,7 @@ export function SessionsStatus() {
                     </span>
                   )}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span className="mono" style={{ fontSize: 12, color: "var(--fg-muted)" }}>
                     {s.sentCount} / {s.targetCount}
                   </span>
@@ -205,6 +233,28 @@ export function SessionsStatus() {
                     style={{ fontSize: 11, padding: "3px 9px" }}
                   >
                     {s.status === "paused" ? "Riprendi" : "Pausa"}
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Annulla round"
+                    title="Annulla round"
+                    onClick={() => cancelRound(s)}
+                    style={{
+                      width: 24,
+                      height: 24,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: 6,
+                      border: "1px solid var(--border-ds)",
+                      background: "transparent",
+                      color: "var(--fg-muted)",
+                      cursor: "pointer",
+                      fontSize: 14,
+                      lineHeight: 1,
+                    }}
+                  >
+                    ✕
                   </button>
                 </div>
               </div>
