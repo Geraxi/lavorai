@@ -64,10 +64,10 @@ export function SectionProblema() {
                   lineHeight: 1.5,
                 }}
               >
-                <li>— Stesse risposte in form diversi, per ore</li>
-                <li>— Cover letter generiche che nessuno legge</li>
-                <li>— Settimane di silenzio, zero risposte</li>
-                <li>— ATS che filtra il CV prima dell&apos;umano</li>
+                <li>— 2 ore per candidarti a 5 posizioni. Ogni giorno.</li>
+                <li>— Cover letter copia-incolla che i recruiter riconoscono subito</li>
+                <li>— Mandi 30 candidature, ricevi 2 risposte. Se va bene.</li>
+                <li>— L&apos;ATS scarta il tuo CV prima che un umano lo veda</li>
               </ul>
             </div>
 
@@ -116,20 +116,20 @@ export function SectionProblema() {
                 }}
               >
                 <li>
-                  <span className="text-primary">✓</span> CV cucito su misura
-                  per ogni annuncio
+                  <span className="text-primary">✓</span> CV riscritto per ogni
+                  annuncio in 45 secondi
                 </li>
                 <li>
-                  <span className="text-primary">✓</span> Cover letter in
-                  italiano nativo, mai generica
+                  <span className="text-primary">✓</span> Cover letter che cita
+                  il nome dell&apos;azienda e il ruolo
                 </li>
                 <li>
-                  <span className="text-primary">✓</span> Submit diretto sul
-                  form ATS — passa il filtro
+                  <span className="text-primary">✓</span> LavorAI compila il
+                  form ATS per te — zero copia-incolla
                 </li>
                 <li>
-                  <span className="text-primary">✓</span> Ricevi solo gli inviti
-                  ai colloqui
+                  <span className="text-primary">✓</span> La tua unica attività:
+                  accettare i colloqui
                 </li>
               </ul>
             </div>

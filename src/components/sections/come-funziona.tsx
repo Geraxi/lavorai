@@ -9,19 +9,19 @@ const steps = [
     n: "01",
     icon: Upload,
     title: "Carica il CV",
-    text: "PDF o DOCX. Bastano 10 secondi. L'AI estrae il profilo.",
+    text: "Carica il tuo CV in PDF o DOCX. LavorAI legge tutto — esperienze, skills, tono — e costruisce il tuo profilo AI.",
   },
   {
     n: "02",
     icon: Target,
     title: "Scegli il ruolo",
-    text: "Una riga: \"Product Designer · Milano\". Avvii il round.",
+    text: "Scrivi il ruolo che cerchi e la città. Puoi aggiungere filtri: solo remote, solo startup, solo big tech.",
   },
   {
     n: "03",
     icon: Zap,
     title: "Da qui non tocchi più nulla",
-    text: "Ogni 30 min LavorAI trova nuovi annunci, riscrive il CV e si candida per te. Tu pensi solo ai colloqui.",
+    text: "Da qui LavorAI gira da solo. Ogni 30 minuti cerca nuovi annunci, riscrive il CV su misura, compila il form ATS e invia. Tu ricevi solo gli inviti ai colloqui.",
   },
 ];
 
@@ -29,7 +29,7 @@ export function SectionComeFunziona() {
   return (
     <section
       id="come-funziona"
-      className="relative border-t border-border/60 py-24 md:py-32"
+      className="relative border-t border-border/60 py-16 md:py-20"
     >
       <div
         aria-hidden
@@ -48,8 +48,8 @@ export function SectionComeFunziona() {
             className="mt-4 text-balance text-4xl font-semibold tracking-tight sm:text-5xl"
             style={{ letterSpacing: "-0.03em" }}
           >
-            Tre step. Poi{" "}
-            <span className="text-gradient-accent">non tocchi più nulla.</span>
+            Tre minuti di setup. Poi{" "}
+            <span className="text-gradient-accent">LavorAI lavora per te — per sempre.</span>
           </h2>
         </Reveal>
 
@@ -135,7 +135,7 @@ export function SectionComeFunziona() {
               fontWeight: 600,
             }}
           >
-            Avvia l&apos;auto-apply
+            Inizia gratis — 3 candidature subito
           </Link>
         </Reveal>
       </div>

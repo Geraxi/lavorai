@@ -77,7 +77,7 @@ export function Hero() {
                   textTransform: "uppercase",
                 }}
               >
-                100% automatico · zero click
+                Mentre tu dormi · LavorAI si candida
               </span>
             </motion.div>
 
@@ -107,10 +107,11 @@ export function Hero() {
                 lineHeight: 1.5,
               }}
             >
-              LavorAI cerca le posizioni giuste, scrive il CV su misura per
-              ognuna e <strong style={{ color: "var(--fg)" }}>si candida
-              al posto tuo</strong> — 24/7, senza che tu clicchi un solo
-              form. Tu pensi solo ai colloqui.
+              LavorAI trova gli annunci giusti, riscrive il tuo CV per
+              ognuno, e{" "}
+              <strong style={{ color: "var(--fg)" }}>compila i form al
+              posto tuo</strong>. Ogni 30 minuti. Tutta la notte. Tu apri
+              solo le email dei colloqui.
             </motion.p>
 
             <motion.div
@@ -121,8 +122,8 @@ export function Hero() {
             >
               <ShineButton />
               <span style={{ fontSize: 14, color: "var(--fg-muted)" }}>
-                3 candidature gratis · Nessuna carta richiesta · Pausa o annulla
-                quando vuoi
+                Nessuna carta · Pausa in qualsiasi momento · Usato da 2.000+
+                candidati italiani
               </span>
             </motion.div>
 
@@ -162,6 +163,52 @@ export function Hero() {
                 </span>
               </li>
             </motion.ul>
+
+            {/* Logo strip — portali su cui LavorAI candida automaticamente */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.7 }}
+              className="mt-10"
+            >
+              <p
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.16em",
+                  color: "var(--fg-subtle)",
+                  fontWeight: 500,
+                }}
+              >
+                Si candida automaticamente su:
+              </p>
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "flex",
+                  gap: 18,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                {["LinkedIn", "InfoJobs", "Indeed", "Subito"].map((p) => (
+                  <span
+                    key={p}
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 600,
+                      letterSpacing: "-0.015em",
+                      color: "var(--fg-muted)",
+                      filter: "grayscale(1)",
+                      opacity: 0.75,
+                    }}
+                  >
+                    {p}
+                  </span>
+                ))}
+              </div>
+            </motion.div>
           </div>
 
           {/* Colonna destra: dashboard preview live */}
@@ -179,7 +226,7 @@ export function Hero() {
           </div>
         </div>
 
-        <div className="mt-32 mb-24" />
+        <div className="mt-16 mb-8" />
       </div>
     </section>
   );
@@ -205,7 +252,7 @@ function ShineButton() {
           className="relative z-10 font-semibold"
           style={{ fontSize: 17, letterSpacing: "-0.005em" }}
         >
-          Avvia l&apos;auto-apply
+          Inizia gratis — 3 candidature subito
         </span>
         <span
           aria-hidden

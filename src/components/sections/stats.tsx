@@ -26,10 +26,10 @@ const stats = [
     sub: "tech, fintech, design — Italia ed EU",
   },
   {
-    value: "0",
-    suffix: "",
-    label: "Account compromessi",
-    sub: "non chiediamo mai i tuoi login",
+    value: "100",
+    suffix: "%",
+    label: "Privacy by design",
+    sub: "Nessun login ai tuoi account. Mai.",
   },
 ];
 

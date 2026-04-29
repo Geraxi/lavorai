@@ -24,9 +24,9 @@ export function SectionCtaFinal() {
             <span className="text-gradient-accent">Lavorai lo fa per te.</span>
           </h2>
           <p className="mt-6 text-lg text-muted-foreground md:text-xl">
-            Setup in 30 secondi. Da lì in poi candida da solo, ogni 30
-            minuti, finché non lo metti in pausa. 3 candidature gratis,
-            nessuna carta richiesta.
+            In 30 secondi sei live. Da lì LavorAI si candida ogni 30 minuti,
+            tutta la notte, mentre tu fai altro. In media i nostri utenti
+            ricevono il primo invito al colloquio entro 8 giorni.
           </p>
           <p
             style={{
@@ -50,7 +50,7 @@ export function SectionCtaFinal() {
             >
               <Link href="/optimize">
                 <span className="relative z-10">
-                  Avvia l&apos;auto-apply
+                  Inizia gratis — 3 candidature subito
                 </span>
                 <span
                   aria-hidden

@@ -63,7 +63,11 @@ export function SectionFaq() {
 
         <Reveal delay={0.1} className="mx-auto mt-14 max-w-3xl">
           <div className="rounded-2xl border border-border/60 bg-card/40 p-2 backdrop-blur">
-            <Accordion type="single" collapsible className="w-full">
+            <Accordion
+              type="multiple"
+              defaultValue={["item-0", "item-1"]}
+              className="w-full"
+            >
               {faq.map(({ q, a }, i) => (
                 <AccordionItem
                   key={q}

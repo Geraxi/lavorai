@@ -44,8 +44,8 @@ export function SectionPricing() {
 
         <Reveal className="mx-auto mt-10 max-w-xl text-center">
           <p className="text-xs text-muted-foreground">
-            Tutti i piani includono IVA applicabile. Cancelli con un click dal
-            portale Stripe.
+            IVA inclusa. Cancelli in 1 click da Stripe — senza email, senza
+            attese. Nessun vincolo.
           </p>
         </Reveal>
       </div>
@@ -73,9 +73,20 @@ function TierCard({ tier }: { tier: TierConfig }) {
         className={cn(
           "card-hover-glow relative h-full backdrop-blur",
           tier.highlight
-            ? "border-primary/50 bg-card/95 shadow-2xl"
+            ? "bg-card/95 shadow-2xl"
             : "border-border/60 bg-card/60",
         )}
+        style={
+          tier.highlight
+            ? {
+                borderWidth: 2,
+                borderStyle: "solid",
+                borderColor: "hsl(var(--primary))",
+                boxShadow:
+                  "0 0 0 1px hsl(var(--primary) / 0.4), 0 24px 60px -20px hsl(var(--primary) / 0.35)",
+              }
+            : undefined
+        }
       >
         {tier.badge && (
           <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -120,7 +131,8 @@ function TierCard({ tier }: { tier: TierConfig }) {
             variant={tier.highlight ? "default" : "outline"}
             className={cn(
               "mt-auto",
-              tier.highlight && "group relative overflow-hidden",
+              tier.highlight &&
+                "group relative overflow-hidden bg-primary text-primary-foreground hover:bg-primary/90",
             )}
           >
             <Link href={href}>
