@@ -256,14 +256,55 @@ async function processUser(
       },
     },
     orderBy: { postedAt: "desc" },
-    take: 50,
+    take: 200, // pesca largo, poi diversifichiamo per azienda lato app
   });
 
   if (jobs.length === 0) return;
 
+  // Diversificazione: per ogni candidatura già consegnata dall'utente,
+  // contiamo quanti invii ha già ricevuto ciascuna azienda. Sortiamo i
+  // job in base a (a) candidature passate verso quell'azienda ASC, poi
+  // (b) postedAt DESC. Così le aziende mai contattate finiscono prima,
+  // e Intercom (20 invii) finisce in fondo. Naturale, niente cap rigido.
+  const pastByCompany = await prisma.application.groupBy({
+    by: ["jobId"],
+    where: { userId: user.id, status: "success" },
+    _count: { _all: true },
+  });
+  const pastJobIds = pastByCompany.map((r) => r.jobId);
+  const pastJobs =
+    pastJobIds.length > 0
+      ? await prisma.job.findMany({
+          where: { id: { in: pastJobIds } },
+          select: { company: true },
+        })
+      : [];
+  const companyApplyCount = new Map<string, number>();
+  for (const j of pastJobs) {
+    const c = (j.company ?? "").toLowerCase();
+    if (!c) continue;
+    companyApplyCount.set(c, (companyApplyCount.get(c) ?? 0) + 1);
+  }
+
+  jobs.sort((a, b) => {
+    const ca = companyApplyCount.get((a.company ?? "").toLowerCase()) ?? 0;
+    const cb = companyApplyCount.get((b.company ?? "").toLowerCase()) ?? 0;
+    if (ca !== cb) return ca - cb; // mai contattate per prime
+    const ta = a.postedAt?.getTime() ?? 0;
+    const tb = b.postedAt?.getTime() ?? 0;
+    return tb - ta;
+  });
+
+  // Per-run: max 1 candidatura per azienda nel primo passaggio, poi
+  // se ci sono ancora slot riapriamo. Garantisce che 5 invii in un run
+  // tocchino 5 aziende diverse quando possibile.
+  const usedThisRun = new Set<string>();
   let enqueued = 0;
   for (const job of jobs) {
     if (enqueued >= remainingToday) break;
+    const cKey = (job.company ?? "").toLowerCase();
+    if (cKey && usedThisRun.has(cKey)) continue; // pass 1: skip duplicates
+    void cKey;
 
     // Match STRETTO sul titolo: tutti i token significativi del ruolo
     // devono essere presenti. "Product Designer" → sì "Senior Product
@@ -384,6 +425,9 @@ async function processUser(
       await enqueueApplication(app.id);
       enqueued++;
       stats.applicationsEnqueued++;
+      // Marca azienda usata nel run (diversificazione)
+      const usedKey = (job.company ?? "").toLowerCase();
+      if (usedKey) usedThisRun.add(usedKey);
       // Bump sentCount in-memory così entro lo stesso run il cap
       // targetCount è rispettato. (Il counter persistito viene aggiornato
       // dal worker on-success.)
@@ -398,6 +442,101 @@ async function processUser(
       stats.errors++;
     }
   }
+
+  // Pass 2: se non abbiamo riempito il cap (poche aziende uniche nel
+  // pool), allenta il vincolo e ammetti ripetizioni.
+  if (enqueued < remainingToday) {
+    for (const job of jobs) {
+      if (enqueued >= remainingToday) break;
+      // Salta job già processati nel pass 1 (rate-limited per company)
+      // — verifichiamo via "applications.some" come per gli altri filtri.
+      if (!titleMatchesAnyRole(job.title, roles)) continue;
+      if (job.company && avoidSet.has(job.company.toLowerCase())) continue;
+
+      const score = quickMatchScore(
+        scoreProfileForRoles(profile, roles),
+        `${job.title}\n${job.company ?? ""}\n${job.description}`,
+      );
+      if (prefs.matchMin > 0 && score < prefs.matchMin) continue;
+
+      // Salta se già candidato a questo job (pass 1)
+      const exists = await prisma.application.findFirst({
+        where: { userId: user.id, jobId: job.id },
+        select: { id: true },
+      });
+      if (exists) continue;
+
+      const matchedRoundRole = roles.find((r) =>
+        job.title.toLowerCase().includes(r.toLowerCase()),
+      );
+      const matchedRound = matchedRoundRole
+        ? sessionByRole.get(matchedRoundRole.toLowerCase())
+        : null;
+      let sessionId: string;
+      if (matchedRound) {
+        if (matchedRound.sentCount >= matchedRound.targetCount) continue;
+        sessionId = matchedRound.id;
+      } else {
+        const legacy = await resolveSession(user.id, {
+          title: job.title,
+          category: job.category,
+        });
+        if (legacy.status === "paused") continue;
+        sessionId = legacy.id;
+      }
+
+      try {
+        const app = await prisma.application.create({
+          data: {
+            userId: user.id,
+            jobId: job.id,
+            portal: portalOf(job.url),
+            status: "queued",
+            trackingToken: randomToken(),
+            atsScore: score,
+            sessionId,
+          },
+        });
+        await enqueueApplication(app.id);
+        enqueued++;
+        stats.applicationsEnqueued++;
+        if (matchedRound) {
+          matchedRound.sentCount = (matchedRound.sentCount ?? 0) + 1;
+        }
+      } catch (err) {
+        console.error(
+          `[auto-apply-cron] pass2 user ${user.id} job ${job.id} failed`,
+          err,
+        );
+        stats.errors++;
+      }
+    }
+  }
+}
+
+/**
+ * Pass2 helper — produce un profilo arricchito con i ruoli dichiarati
+ * (stesso del primo passaggio, definito inline lì).
+ */
+function scoreProfileForRoles(
+  profile: ReturnType<typeof rowToProfile>,
+  roles: string[],
+): Parameters<typeof quickMatchScore>[0] {
+  return {
+    ...profile,
+    experiences: [
+      ...(profile.experiences ?? []),
+      ...roles.map((r) => ({
+        role: r,
+        company: "",
+        location: "",
+        startDate: "",
+        endDate: "",
+        description: "",
+        bullets: [] as string[],
+      })),
+    ],
+  };
 }
 
 function portalOf(url: string): string {
