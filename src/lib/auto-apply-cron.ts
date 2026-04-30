@@ -250,9 +250,28 @@ async function processUser(
           })),
         },
       ],
-      // Skip job già candidati da questo utente
+      // Skip SOLO i job già consegnati (status=success). I "ready_to_apply"
+      // e "failed" vecchi di 14+ giorni tornano eligibili: la pipeline è
+      // cambiata (Adzuna resolver, scraper recruiter email, ecc) e quei
+      // job potrebbero ora andare a buon fine. Le applicazioni in volo
+      // (queued/optimizing/applying) vengono escluse anche loro per
+      // evitare doppioni.
       NOT: {
-        applications: { some: { userId: user.id } },
+        applications: {
+          some: {
+            userId: user.id,
+            OR: [
+              { status: "success" },
+              {
+                status: { in: ["queued", "optimizing", "applying"] },
+              },
+              {
+                status: { in: ["ready_to_apply", "failed", "needs_session"] },
+                createdAt: { gte: new Date(Date.now() - 14 * 86400_000) },
+              },
+            ],
+          },
+        },
       },
     },
     orderBy: { postedAt: "desc" },
