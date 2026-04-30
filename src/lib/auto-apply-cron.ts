@@ -250,26 +250,19 @@ async function processUser(
           })),
         },
       ],
-      // Skip SOLO i job già consegnati (status=success). I "ready_to_apply"
-      // e "failed" vecchi di 14+ giorni tornano eligibili: la pipeline è
-      // cambiata (Adzuna resolver, scraper recruiter email, ecc) e quei
-      // job potrebbero ora andare a buon fine. Le applicazioni in volo
-      // (queued/optimizing/applying) vengono escluse anche loro per
-      // evitare doppioni.
+      // Skip solo i job dove l'utente ha già una candidatura
+      //   - success (consegnata) → mai ricandidare
+      //   - queued/optimizing/applying (in volo) → evitare doppioni nella stessa run
+      // Tutto il resto (ready_to_apply, failed, needs_session) viene
+      // rimesso nel pool: la pipeline è migliorata da quelle attempt
+      // (Adzuna resolver, scraper recruiter email, generic-fill ATS)
+      // → potrebbero andare a buon fine ora. Il cap aziendale si occupa
+      // di non ripetere troppo Stripe-style.
       NOT: {
         applications: {
           some: {
             userId: user.id,
-            OR: [
-              { status: "success" },
-              {
-                status: { in: ["queued", "optimizing", "applying"] },
-              },
-              {
-                status: { in: ["ready_to_apply", "failed", "needs_session"] },
-                createdAt: { gte: new Date(Date.now() - 14 * 86400_000) },
-              },
-            ],
+            status: { in: ["success", "queued", "optimizing", "applying"] },
           },
         },
       },
