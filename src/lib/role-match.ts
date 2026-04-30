@@ -53,16 +53,45 @@ function tokenize(s: string): string[] {
     .filter(Boolean);
 }
 
+/**
+ * Stem leggero italiano + inglese: rimuove desinenze comuni così che
+ * "designer" matchi "design", "designers"; "engineer" matchi "engineering",
+ * ecc. NON aggressivo: solo le terminazioni più frequenti.
+ */
+function stem(t: string): string {
+  if (t.length < 5) return t;
+  // -ers, -ors, -ings, -ions plurale
+  if (t.endsWith("ers")) return t.slice(0, -3);
+  if (t.endsWith("ors")) return t.slice(0, -3);
+  if (t.endsWith("ings")) return t.slice(0, -4);
+  if (t.endsWith("ions")) return t.slice(0, -4);
+  // -er, -or → -e (designer → design, engineer → enginee → cap a 5+)
+  if (t.endsWith("er") && t.length > 5) return t.slice(0, -2);
+  if (t.endsWith("or") && t.length > 5) return t.slice(0, -2);
+  // -ing, -ion
+  if (t.endsWith("ing") && t.length > 5) return t.slice(0, -3);
+  if (t.endsWith("ion") && t.length > 5) return t.slice(0, -3);
+  // plurali italiani semplici (-i / -e finale dopo radice ≥4)
+  if ((t.endsWith("i") || t.endsWith("e")) && t.length > 5) return t.slice(0, -1);
+  // plurale inglese -s
+  if (t.endsWith("s") && t.length > 4) return t.slice(0, -1);
+  return t;
+}
+
 function significantTokens(s: string): string[] {
   return tokenize(s).filter((t) => t.length >= 3 && !STOPWORDS.has(t));
 }
 
-/** True se il titolo contiene tutti i token significativi del ruolo. */
+/**
+ * True se il titolo contiene tutti i token significativi del ruolo.
+ * Match con stemming leggero — "Product Designer" matcha "Product Design
+ * Lead", "Product Designers", "Product Design Manager".
+ */
 export function titleMatchesRole(title: string, role: string): boolean {
   const roleTokens = significantTokens(role);
   if (roleTokens.length === 0) return false;
-  const titleTokens = new Set(tokenize(title));
-  return roleTokens.every((t) => titleTokens.has(t));
+  const titleStems = new Set(tokenize(title).map(stem));
+  return roleTokens.every((rt) => titleStems.has(stem(rt)));
 }
 
 /** True se almeno uno dei ruoli combacia col titolo. */
