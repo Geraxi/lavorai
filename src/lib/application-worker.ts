@@ -215,17 +215,10 @@ export async function processApplication(applicationId: string): Promise<void> {
     },
   });
 
-  // 5. Email all'utente con allegati (copia di backup + conferma interna)
-  await sendApplicationEmail({
-    to: app.user.email,
-    userName: app.user.name,
-    job: app.job,
-    cvBuffer,
-    clBuffer,
-    atsScore: result.atsScore,
-  }).catch((err) => {
-    console.error(`[worker] ${applicationId} email to user failed`, err);
-  });
+  // 5. (rimossa) Email "CV pronto" prematura — era fuorviante: usciva
+  // PRIMA del tentativo di submit, dando all'utente l'impressione che
+  // la candidatura fosse stata inviata. Ora inviamo UNA SOLA email alla
+  // fine, con l'esito reale (success / ready_to_apply manuale / failed).
 
   // 6. DELIVERY — priorità in ordine:
   //    (a) Portal adapter (Greenhouse/Lever/Workable): submit diretto nel form ATS
@@ -438,6 +431,9 @@ export async function processApplication(applicationId: string): Promise<void> {
           completedAt: new Date(),
         },
       });
+      await notifyApplicationManual(applicationId).catch((err) =>
+        console.error(`[worker] ${applicationId} notify manual failed`, err),
+      );
     }
   }
 }
@@ -634,6 +630,9 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
         completedAt: new Date(),
       },
     });
+    await notifyApplicationManual(applicationId).catch((err) =>
+      console.error(`[worker] ${applicationId} notify manual failed`, err),
+    );
     return;
   }
 
@@ -838,6 +837,89 @@ function renderSentEmail(data: {
     <hr style="border:none;border-top:1px solid #E6E4DD;margin:32px 0 16px;"/>
     <p style="font-size:11px;color:#8A8C90;line-height:1.5;margin:0;">
       Vedrai tutte le candidature su lavorai.it/applications<br/>
+      Hai domande? Rispondi a questa email.
+    </p>
+  </div>
+</body></html>`;
+}
+
+/**
+ * Notifica all'utente che la candidatura NON è stata inviata in
+ * automatico (career page custom, no recruiter email, ecc) — il CV
+ * è pronto, deve cliccare il link e candidarsi a mano.
+ *
+ * Una sola email per applicationId. Ha priorità sull'email "CV pronto"
+ * (che ora è rimossa dal flusso).
+ */
+async function notifyApplicationManual(applicationId: string): Promise<void> {
+  const app = await prisma.application.findUnique({
+    where: { id: applicationId },
+    include: {
+      job: { select: { title: true, company: true, url: true } },
+      user: { select: { email: true, name: true } },
+    },
+  });
+  if (!app) return;
+
+  const apiKey = process.env.RESEND_API_KEY;
+  const firstName = (app.user.name ?? "").split(/\s+/)[0] || "";
+  const company = app.job.company ?? "l'azienda";
+  const jobTitle = app.job.title;
+  const jobUrl = app.job.url;
+
+  if (!apiKey) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `\n📧 [manual-email DEV] Avrei avvisato ${app.user.email} — candidatura per "${jobTitle}" pronta, manuale\n`,
+      );
+    }
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
+
+  await sendWithinQuota("application_manual", app.user.email, async () => {
+    await resend.emails.send({
+      from,
+      to: app.user.email,
+      subject: `📄 CV pronto per ${company} — candidati a mano (1 click)`,
+      html: renderManualEmail({ firstName, jobTitle, company, jobUrl }),
+      text: `Ciao ${firstName},\n\nIl tuo CV per "${jobTitle}" presso ${company} è pronto, ma non sono riuscito a inviarlo in automatico (career page custom o form non standard).\n\nApri l'annuncio e clicca "Apply" — i file sono già allegati: ${jobUrl}\n\n— LavorAI`,
+    });
+  });
+}
+
+function renderManualEmail(data: {
+  firstName: string;
+  jobTitle: string;
+  company: string;
+  jobUrl: string;
+}): string {
+  return `<!doctype html>
+<html lang="it"><body style="margin:0;padding:0;background:#FAFAF7;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;color:#0F1012;">
+  <div style="max-width:560px;margin:0 auto;padding:40px 24px;">
+    <div style="font-size:18px;font-weight:700;margin-bottom:32px;">
+      LavorAI
+    </div>
+    <h1 style="font-size:22px;font-weight:600;margin:0 0 8px;">CV pronto${data.firstName ? `, ${data.firstName}` : ""} 📄</h1>
+    <p style="font-size:15px;line-height:1.55;color:#5B5D61;margin:0 0 16px;">
+      Non sono riuscito a inviare la candidatura in automatico — questo
+      annuncio usa una career page custom che non gestisco. Ma il CV e
+      la lettera sono pronti.
+    </p>
+    <div style="padding:16px 18px;border:1px solid #E6E4DD;border-radius:8px;margin-bottom:20px;">
+      <div style="font-weight:600;font-size:15px;">${escapeHtml(data.jobTitle)}</div>
+      <div style="font-size:13px;color:#5B5D61;margin-top:2px;">${escapeHtml(data.company)}</div>
+    </div>
+    <p style="font-size:14px;line-height:1.55;color:#5B5D61;margin:0 0 20px;">
+      Apri l&apos;annuncio, clicca <strong>Apply</strong>, e carica i file
+      che trovi sulla tua dashboard nella sezione Materiali.
+    </p>
+    <a href="${data.jobUrl}" style="display:inline-block;background:#16A34A;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">Apri annuncio →</a>
+    <hr style="border:none;border-top:1px solid #E6E4DD;margin:32px 0 16px;"/>
+    <p style="font-size:11px;color:#8A8C90;line-height:1.5;margin:0;">
+      Tutti i file della candidatura sono salvati su lavorai.it/applications<br/>
       Hai domande? Rispondi a questa email.
     </p>
   </div>

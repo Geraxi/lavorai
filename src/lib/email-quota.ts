@@ -76,6 +76,7 @@ export async function canSendEmail(): Promise<{
 export type EmailKind =
   | "cv_ready"
   | "application_sent"
+  | "application_manual"
   | "signup_verify"
   | "password_reset"
   | "welcome"

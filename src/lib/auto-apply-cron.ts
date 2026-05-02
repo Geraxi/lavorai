@@ -250,19 +250,20 @@ async function processUser(
           })),
         },
       ],
-      // Skip solo i job dove l'utente ha già una candidatura
-      //   - success (consegnata) → mai ricandidare
-      //   - queued/optimizing/applying (in volo) → evitare doppioni nella stessa run
-      // Tutto il resto (ready_to_apply, failed, needs_session) viene
-      // rimesso nel pool: la pipeline è migliorata da quelle attempt
-      // (Adzuna resolver, scraper recruiter email, generic-fill ATS)
-      // → potrebbero andare a buon fine ora. Il cap aziendale si occupa
-      // di non ripetere troppo Stripe-style.
+      // Skip jobs dove l'utente ha:
+      //   - una candidatura consegnata (success) → mai ricandidare
+      //   - una in volo (queued/optimizing/applying) → no doppioni
+      //   - una qualsiasi recente (< 24h) → cooldown anti-spam-retry
+      // I ready_to_apply / failed più vecchi di 24h tornano nel pool ma
+      // solo una volta al giorno, non ogni 30 minuti.
       NOT: {
         applications: {
           some: {
             userId: user.id,
-            status: { in: ["success", "queued", "optimizing", "applying"] },
+            OR: [
+              { status: { in: ["success", "queued", "optimizing", "applying"] } },
+              { createdAt: { gte: new Date(Date.now() - 24 * 3600_000) } },
+            ],
           },
         },
       },
@@ -307,6 +308,28 @@ async function processUser(
     return tb - ta;
   });
 
+  // Blacklist aziende con 3+ ready_to_apply negli ultimi 30 giorni.
+  // Tipicamente: career page custom (Stripe) o redirect Adzuna che non
+  // arriva a un ATS gestibile. Smetti di sprecare Claude+Playwright
+  // su company strutturalmente non submit-abili.
+  const recentRta = await prisma.application.findMany({
+    where: {
+      userId: user.id,
+      status: "ready_to_apply",
+      createdAt: { gte: new Date(Date.now() - 30 * 86400_000) },
+    },
+    select: { job: { select: { company: true } } },
+  });
+  const rtaByCompany = new Map<string, number>();
+  for (const r of recentRta) {
+    const c = (r.job.company ?? "").toLowerCase();
+    if (!c) continue;
+    rtaByCompany.set(c, (rtaByCompany.get(c) ?? 0) + 1);
+  }
+  const blacklistedCompanies = new Set(
+    [...rtaByCompany.entries()].filter(([, n]) => n >= 3).map(([c]) => c),
+  );
+
   // Per-run: max 1 candidatura per azienda nel primo passaggio, poi
   // se ci sono ancora slot riapriamo. Garantisce che 5 invii in un run
   // tocchino 5 aziende diverse quando possibile.
@@ -326,8 +349,17 @@ async function processUser(
       continue;
     }
 
-    // Azienda esclusa?
+    // Azienda esclusa esplicitamente?
     if (job.company && avoidSet.has(job.company.toLowerCase())) {
+      stats.skippedAvoidedCompany++;
+      continue;
+    }
+
+    // Azienda blacklisted (3+ ready_to_apply negli ultimi 30gg)?
+    if (
+      job.company &&
+      blacklistedCompanies.has(job.company.toLowerCase())
+    ) {
       stats.skippedAvoidedCompany++;
       continue;
     }
