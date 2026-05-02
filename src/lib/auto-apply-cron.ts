@@ -222,10 +222,9 @@ async function processUser(
       // filtrato a un ATS supportato (vedi linkedin-apify.ts), quindi
       // il submit avviene sul form Greenhouse/Lever/Workable/BambooHR
       // originale — zero automazione su linkedin.com.
-      // "adzuna" = aggregatore; il worker risolve l'URL via Playwright
-      // prima di tentare l'adapter ATS. Aggiunto per sbloccare il pool
-      // Italia (~300 Adzuna jobs) per l'auto-apply.
-      source: { in: ["greenhouse", "lever", "linkedin", "adzuna"] },
+      // Adzuna è anti-bot blocked (Cloudflare): page.goto su adzuna.*
+      // va in timeout 30s, ogni job sprecato. Solo source nativi.
+      source: { in: ["greenhouse", "lever", "linkedin"] },
       // URL canoniche vanilla: gli adapter Playwright funzionano solo
       // su boards.greenhouse.io e jobs.lever.co. Aziende con career
       // page custom (es. stripe.com/jobs) falliscono sempre → skip.
@@ -235,13 +234,6 @@ async function processUser(
         { url: { contains: "jobs.lever.co" } },
         { url: { contains: "workable.com/j/" } },
         { url: { contains: "apply.workable.com" } },
-        // Adzuna: il worker ha resolveAdzunaViaBrowser() che naviga su
-        // Playwright e risolve il redirect al vero ATS. Se la risoluzione
-        // porta a greenhouse/lever/workable l'adapter parte, altrimenti
-        // cade sul fallback email recruiter / ready_to_apply.
-        { url: { contains: "adzuna.it" } },
-        { url: { contains: "adzuna.com" } },
-        { url: { contains: "adzuna.co.uk" } },
       ],
       AND: [
         {
