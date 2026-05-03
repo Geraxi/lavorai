@@ -26,33 +26,63 @@ export const greenhouseAdapter: PortalAdapter = {
     }
   },
   async apply(page, input: ApplyInput): Promise<ApplyOutcome> {
-    await page.goto(input.jobUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: 60_000,
-    });
-
-    // Molti form Greenhouse sono embed iframe. Cerca sia in top-level che
-    // nell'iframe. Saliamo sul form sull'URL /apply se presente.
-    const applyLink = page.locator('a[href*="/apply"], a:has-text("Apply")');
-    if ((await applyLink.count()) > 0) {
-      await applyLink.first().click().catch(() => void 0);
-      await page.waitForLoadState("domcontentloaded").catch(() => void 0);
+    // Le aziende moderne (Stripe, SumUp, ecc) configurano boards.greenhouse.io
+    // per redirezionare alla loro career page custom. Il form puro Greenhouse
+    // resta accessibile via:
+    //   1. <jobUrl>/apply  → spesso bypassa il redirect lato Greenhouse
+    //   2. boards.greenhouse.io/embed/job_app?for=<slug>&token=<id> → form puro
+    // Proviamo (1) per primo; se anche /apply redirige a career custom,
+    // fallback su (2).
+    const candidates = buildApplyUrlCandidates(input.jobUrl);
+    let formFound = false;
+    let lastUrlTried = "";
+    for (const tryUrl of candidates) {
+      lastUrlTried = tryUrl;
+      try {
+        await page.goto(tryUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 45_000,
+        });
+      } catch {
+        continue;
+      }
+      // Verifica subito se siamo finiti su una career page custom
+      // (hostname diverso da greenhouse.io)
+      const finalHost = (() => {
+        try {
+          return new URL(page.url()).hostname.toLowerCase();
+        } catch {
+          return "";
+        }
+      })();
+      if (!finalHost.includes("greenhouse.io")) {
+        // redirect fuori da Greenhouse → prova URL successivo
+        continue;
+      }
+      // Cerca firma form (input first_name) — se c'è, abbiamo trovato
+      const fnProbe = page.locator(
+        'input[name="first_name"], input#first_name, input[aria-label*="First" i]',
+      );
+      try {
+        await fnProbe.first().waitFor({ timeout: 8_000 });
+        formFound = true;
+        break;
+      } catch {
+        // niente form qui, prossimo
+      }
     }
 
-    // Firma di un form Greenhouse
-    const firstName = page.locator(
-      'input[name="first_name"], input#first_name, input[aria-label*="First" i]',
-    );
-    const timeout = 15_000;
-    try {
-      await firstName.first().waitFor({ timeout });
-    } catch {
+    if (!formFound) {
       return {
         ok: false,
         status: "form_not_found",
-        error: "Form Greenhouse non rilevato entro 15s.",
+        error: `Form Greenhouse non rilevato (provati ${candidates.length} URL, ultimo: ${lastUrlTried}). Probabile career page custom dell'azienda.`,
       };
     }
+
+    const firstName = page.locator(
+      'input[name="first_name"], input#first_name, input[aria-label*="First" i]',
+    );
 
     try {
       await firstName.first().fill(input.profile.firstName || "");
@@ -175,3 +205,37 @@ export const greenhouseAdapter: PortalAdapter = {
     }
   },
 };
+
+/**
+ * Genera URL candidati per raggiungere il form puro Greenhouse,
+ * bypassando il redirect alla career page custom dell'azienda.
+ *
+ * Esempio input: https://boards.greenhouse.io/sumup/jobs/8427124002
+ * Output:
+ *   1. https://boards.greenhouse.io/sumup/jobs/8427124002/apply
+ *   2. https://boards.greenhouse.io/embed/job_app?for=sumup&token=8427124002
+ *   3. https://boards.greenhouse.io/sumup/jobs/8427124002 (originale)
+ */
+function buildApplyUrlCandidates(jobUrl: string): string[] {
+  const candidates: string[] = [];
+  try {
+    const u = new URL(jobUrl);
+    if (!u.hostname.includes("greenhouse.io")) return [jobUrl];
+
+    // Path tipico: /<slug>/jobs/<id> o /jobs/<id>
+    const m = u.pathname.match(/^\/([^/]+)\/jobs\/(\d+)/);
+    if (m) {
+      const slug = m[1];
+      const id = m[2];
+      candidates.push(`${u.origin}/${slug}/jobs/${id}/apply`);
+      candidates.push(
+        `${u.origin}/embed/job_app?for=${encodeURIComponent(slug)}&token=${id}`,
+      );
+    }
+    // Fallback: URL originale (potrebbe ridirigere ma proviamo)
+    candidates.push(jobUrl);
+  } catch {
+    candidates.push(jobUrl);
+  }
+  return candidates;
+}
