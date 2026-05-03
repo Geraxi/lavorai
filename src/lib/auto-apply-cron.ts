@@ -328,7 +328,7 @@ async function processUser(
     rtaByCompany.set(c, (rtaByCompany.get(c) ?? 0) + 1);
   }
   const blacklistedCompanies = new Set(
-    [...rtaByCompany.entries()].filter(([, n]) => n >= 5).map(([c]) => c),
+    [...rtaByCompany.entries()].filter(([, n]) => n >= 15).map(([c]) => c),
   );
 
   // Per-run: max 1 candidatura per azienda nel primo passaggio, poi
