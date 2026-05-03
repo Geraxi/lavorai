@@ -235,10 +235,20 @@ async function processUser(
         { url: { contains: "workable.com/j/" } },
         { url: { contains: "apply.workable.com" } },
       ],
+      // Match title largo: per ogni ruolo, title deve contenere TUTTI
+      // i token significativi (≥3 char). Es: "Product Designer" matcha
+      // "Senior Product Designer", "Product Design Lead", "Designer
+      // Product Innovation". Il post-filter titleMatchesAnyRole con
+      // stemming garantisce ulteriore precisione.
       AND: [
         {
           OR: roles.slice(0, 5).map((r) => ({
-            title: { contains: r, mode: "insensitive" },
+            AND: r
+              .split(/\s+/)
+              .filter((tok) => tok.length >= 3)
+              .map((tok) => ({
+                title: { contains: tok, mode: "insensitive" as const },
+              })),
           })),
         },
       ],
@@ -327,9 +337,11 @@ async function processUser(
     if (!c) continue;
     rtaByCompany.set(c, (rtaByCompany.get(c) ?? 0) + 1);
   }
-  const blacklistedCompanies = new Set(
-    [...rtaByCompany.entries()].filter(([, n]) => n >= 15).map(([c]) => c),
-  );
+  // Temporaneamente disabilitata mentre debuggo l'adapter Greenhouse
+  // (SumUp restituisce ready_to_apply ma URL è vanilla Greenhouse).
+  // Riattiveremo dopo aver isolato la causa.
+  const blacklistedCompanies = new Set<string>();
+  void rtaByCompany;
 
   // Per-run: max 1 candidatura per azienda nel primo passaggio, poi
   // se ci sono ancora slot riapriamo. Garantisce che 5 invii in un run
