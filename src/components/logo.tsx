@@ -20,14 +20,15 @@ const sizes = {
   lg: { mark: 30, text: "text-3xl", gap: 10 },
 };
 
-const ACCENT = "#C49A5C"; // bronzo / oro caldo
+const ACCENT = "#34D399"; // emerald — accento brand
 
 function Mark({ size }: { size: number }) {
-  // Tre rettangoli stacked che formano una L:
-  //   1. Top: barra verticale (bianco/foreground)
-  //   2. Middle: piccolo blocco bronzo (accento)
-  //   3. Bottom: base orizzontale che si estende a destra (bianco)
-  // Nessun overlap, leggera spaziatura tra i blocchi.
+  // 4 blocchi separati che formano una L stilizzata:
+  //   1. Top: piccolo rettangolo (bianco/foreground)
+  //   2. Verde: blocco accento brand
+  //   3. White: piccolo rettangolo bianco sotto il verde
+  //   4. Base: lunga barra orizzontale (bianco) che esce a destra
+  // Gap visibili tra ogni blocco.
   return (
     <svg
       width={size}
@@ -37,12 +38,10 @@ function Mark({ size }: { size: number }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden
     >
-      {/* 1. vertical top */}
-      <rect x="4" y="3" width="6" height="9" rx="0.5" fill="currentColor" />
-      {/* 2. bronze accent */}
-      <rect x="4" y="13" width="6" height="4" rx="0.5" fill={ACCENT} />
-      {/* 3. horizontal base */}
-      <rect x="4" y="18" width="16" height="3.5" rx="0.5" fill="currentColor" />
+      <rect x="3" y="2" width="6" height="3" rx="0.4" fill="currentColor" />
+      <rect x="3" y="6" width="6" height="4" rx="0.4" fill={ACCENT} />
+      <rect x="3" y="11" width="6" height="3" rx="0.4" fill="currentColor" />
+      <rect x="3" y="18" width="18" height="4" rx="0.4" fill="currentColor" />
     </svg>
   );
 }
