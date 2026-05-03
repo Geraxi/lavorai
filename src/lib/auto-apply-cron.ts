@@ -300,15 +300,24 @@ async function processUser(
     return tb - ta;
   });
 
-  // Blacklist aziende con 3+ ready_to_apply negli ultimi 30 giorni.
-  // Tipicamente: career page custom (Stripe) o redirect Adzuna che non
-  // arriva a un ATS gestibile. Smetti di sprecare Claude+Playwright
-  // su company strutturalmente non submit-abili.
+  // Blacklist aziende strutturalmente non submittabili: 5+ ready_to_apply
+  // negli ultimi 30 giorni MA SOLO contando RTA su URL ATS supportati
+  // (Greenhouse/Lever/Workable). Le RTA da fallimenti Adzuna timeout
+  // non contano: era un problema di resolver, non di company.
   const recentRta = await prisma.application.findMany({
     where: {
       userId: user.id,
       status: "ready_to_apply",
       createdAt: { gte: new Date(Date.now() - 30 * 86400_000) },
+      job: {
+        OR: [
+          { url: { contains: "boards.greenhouse.io" } },
+          { url: { contains: "job-boards.greenhouse.io" } },
+          { url: { contains: "jobs.lever.co" } },
+          { url: { contains: "workable.com/j/" } },
+          { url: { contains: "apply.workable.com" } },
+        ],
+      },
     },
     select: { job: { select: { company: true } } },
   });
@@ -319,7 +328,7 @@ async function processUser(
     rtaByCompany.set(c, (rtaByCompany.get(c) ?? 0) + 1);
   }
   const blacklistedCompanies = new Set(
-    [...rtaByCompany.entries()].filter(([, n]) => n >= 3).map(([c]) => c),
+    [...rtaByCompany.entries()].filter(([, n]) => n >= 5).map(([c]) => c),
   );
 
   // Per-run: max 1 candidatura per azienda nel primo passaggio, poi
