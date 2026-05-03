@@ -16,17 +16,21 @@ export default function AppleIcon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#16a34a",
-          color: "#ffffff",
-          fontSize: 120,
-          fontWeight: 700,
-          letterSpacing: "-0.05em",
-          fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Arial, sans-serif",
+          background: "#0F1012",
           borderRadius: 36,
         }}
       >
-        L
+        <svg
+          width="120"
+          height="120"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <rect x="6" y="3" width="5" height="13" rx="0.6" fill="#FAFAF7" />
+          <rect x="6" y="17" width="14" height="4" rx="0.6" fill="#FAFAF7" />
+          <rect x="6" y="13" width="5" height="4" rx="0.6" fill="#C49A5C" />
+        </svg>
       </div>
     ),
     { ...size },
