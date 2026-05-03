@@ -27,9 +27,9 @@ export default function AppleIcon() {
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <rect x="6" y="3" width="5" height="13" rx="0.6" fill="#FAFAF7" />
-          <rect x="6" y="17" width="14" height="4" rx="0.6" fill="#FAFAF7" />
-          <rect x="6" y="13" width="5" height="4" rx="0.6" fill="#C49A5C" />
+          <rect x="4" y="3" width="6" height="9" rx="0.5" fill="#FAFAF7" />
+          <rect x="4" y="13" width="6" height="4" rx="0.5" fill="#C49A5C" />
+          <rect x="4" y="18" width="16" height="3.5" rx="0.5" fill="#FAFAF7" />
         </svg>
       </div>
     ),

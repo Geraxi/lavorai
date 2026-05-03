@@ -23,6 +23,11 @@ const sizes = {
 const ACCENT = "#C49A5C"; // bronzo / oro caldo
 
 function Mark({ size }: { size: number }) {
+  // Tre rettangoli stacked che formano una L:
+  //   1. Top: barra verticale (bianco/foreground)
+  //   2. Middle: piccolo blocco bronzo (accento)
+  //   3. Bottom: base orizzontale che si estende a destra (bianco)
+  // Nessun overlap, leggera spaziatura tra i blocchi.
   return (
     <svg
       width={size}
@@ -32,12 +37,12 @@ function Mark({ size }: { size: number }) {
       xmlns="http://www.w3.org/2000/svg"
       aria-hidden
     >
-      {/* vertical bar */}
-      <rect x="6" y="3" width="5" height="13" rx="0.6" fill="currentColor" />
-      {/* base bar */}
-      <rect x="6" y="17" width="14" height="4" rx="0.6" fill="currentColor" />
-      {/* accent block */}
-      <rect x="6" y="13" width="5" height="4" rx="0.6" fill={ACCENT} />
+      {/* 1. vertical top */}
+      <rect x="4" y="3" width="6" height="9" rx="0.5" fill="currentColor" />
+      {/* 2. bronze accent */}
+      <rect x="4" y="13" width="6" height="4" rx="0.5" fill={ACCENT} />
+      {/* 3. horizontal base */}
+      <rect x="4" y="18" width="16" height="3.5" rx="0.5" fill="currentColor" />
     </svg>
   );
 }
