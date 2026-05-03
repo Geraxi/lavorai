@@ -107,18 +107,8 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  // Target = dailyCap × giorni del mese (24h). Stima realistica.
-  const dailyCap = prefs?.dailyCap ?? 25;
-  const daysInMonth = new Date(
-    now.getFullYear(),
-    now.getMonth() + 1,
-    0,
-  ).getDate();
-  const monthlyTarget = Math.min(dailyCap * daysInMonth, 1000);
-  const progressPct = Math.min(
-    100,
-    Math.round((deliveredMonth / Math.max(1, monthlyTarget)) * 100),
-  );
+  // Niente target mensile fittizio: il progresso reale è per-round
+  // nel widget SessionsStatus sotto. Qui mostriamo solo il counter.
   const autoMode = prefs?.autoApplyMode ?? "manual";
   const isLive = autoMode === "auto" || autoMode === "hybrid";
 
@@ -254,16 +244,7 @@ export default async function DashboardPage() {
                   fontFeatureSettings: '"tnum"',
                 }}
               >
-                {deliveredMonth}{" "}
-                <span
-                  style={{
-                    color: "var(--fg-subtle)",
-                    fontWeight: 500,
-                    fontSize: 24,
-                  }}
-                >
-                  / {monthlyTarget}
-                </span>
+                {deliveredMonth}
               </div>
               <div
                 style={{
@@ -272,7 +253,7 @@ export default async function DashboardPage() {
                   marginTop: 2,
                 }}
               >
-                candidature inviate questo mese · target {monthlyTarget}/mese
+                candidature inviate questo mese
               </div>
             </div>
 
@@ -291,27 +272,6 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* Progress bar */}
-          <div
-            style={{
-              marginTop: 22,
-              height: 8,
-              background: "var(--bg-sunken)",
-              borderRadius: 999,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                width: `${progressPct}%`,
-                height: "100%",
-                background:
-                  "linear-gradient(90deg, hsl(var(--primary)/0.85), hsl(var(--primary)))",
-                borderRadius: 999,
-                transition: "width 0.6s cubic-bezier(0.22, 1, 0.36, 1)",
-              }}
-            />
-          </div>
         </div>
 
         {/* Live applications list */}
