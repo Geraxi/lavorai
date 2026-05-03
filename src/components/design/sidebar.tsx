@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { motion } from "motion/react";
@@ -55,27 +56,9 @@ export function AppSidebar({
       }}
     >
       {/* Brand */}
-      <Link
-        href="/dashboard"
-        className="flex items-center gap-2.5 px-2 pb-3.5 pt-1"
-        style={{ fontWeight: 600, fontSize: 14.5, letterSpacing: "-0.02em" }}
-      >
-        <span
-          className="mono inline-flex items-center justify-center rounded-[5px]"
-          style={{
-            width: 22,
-            height: 22,
-            background: "var(--fg)",
-            color: "var(--bg)",
-            fontWeight: 700,
-            fontSize: 12,
-            letterSpacing: "-0.04em",
-          }}
-        >
-          L
-        </span>
-        LavorAI
-      </Link>
+      <div className="px-2 pb-3.5 pt-1">
+        <Logo href="/dashboard" size="sm" />
+      </div>
 
       <SectionLabel>Lavoro</SectionLabel>
       {workItems.map((it) => (

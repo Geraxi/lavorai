@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Icon, type IconName } from "@/components/design/icon";
+import { Logo } from "@/components/logo";
 import { LOCATION_PREFS, ROLE_PREFERENCES } from "@/lib/ui-applications";
 
 type StepDef = {
@@ -222,21 +223,7 @@ export default function OnboardingClient({
       {/* ===== Mobile / tablet: progress bar orizzontale in alto ===== */}
       <div className="ob-mobile-bar">
         <div className="ob-mobile-brand">
-          <span
-            className="mono inline-flex items-center justify-center"
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 5,
-              background: "var(--fg)",
-              color: "var(--bg)",
-              fontWeight: 700,
-              fontSize: 12,
-            }}
-          >
-            L
-          </span>
-          LavorAI
+          <Logo size="sm" />
         </div>
         <div className="ob-mobile-progress">
           {STEPS.map((_, i) => (
@@ -258,24 +245,7 @@ export default function OnboardingClient({
 
       {/* ===== Desktop: Rail sinistro con stepper verticale ===== */}
       <aside className="ob-rail">
-        <div className="flex items-center gap-2.5" style={{ fontWeight: 600, fontSize: 15, letterSpacing: "-0.02em" }}>
-          <span
-            className="mono inline-flex items-center justify-center"
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 5,
-              background: "var(--fg)",
-              color: "var(--bg)",
-              fontWeight: 700,
-              fontSize: 12,
-              letterSpacing: "-0.04em",
-            }}
-          >
-            L
-          </span>
-          LavorAI
-        </div>
+        <Logo size="sm" />
 
         <div className="ob-stepper">
           {STEPS.map((s, i) => {

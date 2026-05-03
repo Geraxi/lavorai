@@ -2,6 +2,7 @@
 
 import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Icon } from "@/components/design/icon";
@@ -88,33 +89,7 @@ function LoginContent() {
     <div className="lavorai-login font-sans">
       {/* LEFT — Form */}
       <div className="lavorai-login-left">
-        <Link
-          href="/"
-          className="flex items-center gap-2.5"
-          style={{
-            fontWeight: 600,
-            fontSize: 15,
-            letterSpacing: "-0.02em",
-            color: "var(--fg)",
-          }}
-        >
-          <span
-            className="mono inline-flex items-center justify-center"
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 5,
-              background: "var(--fg)",
-              color: "var(--bg)",
-              fontWeight: 700,
-              fontSize: 12,
-              letterSpacing: "-0.04em",
-            }}
-          >
-            L
-          </span>
-          LavorAI
-        </Link>
+        <Logo size="md" />
 
         <div
           style={{

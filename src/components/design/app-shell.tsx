@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { AppSidebar, type SidebarProps } from "@/components/design/sidebar";
 import { Icon } from "@/components/design/icon";
@@ -80,32 +81,7 @@ export function AppShell({
           >
             <Icon name="menu" size={20} />
           </button>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2"
-            style={{
-              fontWeight: 600,
-              fontSize: 15,
-              letterSpacing: "-0.02em",
-              color: "var(--fg)",
-            }}
-          >
-            <span
-              className="mono inline-flex items-center justify-center"
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: 5,
-                background: "var(--fg)",
-                color: "var(--bg)",
-                fontWeight: 700,
-                fontSize: 12,
-              }}
-            >
-              L
-            </span>
-            LavorAI
-          </Link>
+          <Logo href="/dashboard" size="sm" />
           <Link
             href="/settings"
             className="ds-btn ds-btn-ghost"
