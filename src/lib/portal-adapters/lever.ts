@@ -45,17 +45,19 @@ export const leverAdapter: PortalAdapter = {
       .trim();
 
     try {
+      const emailToUse = input.profile.email?.trim() || input.userEmail;
+      const phoneToUse = input.profile.phone?.trim() || input.userPhone;
       await page.locator('input[name="name"]').first().fill(fullName);
       await page
         .locator('input[name="email"], input[type="email"]')
         .first()
-        .fill(input.profile.email || "")
+        .fill(emailToUse)
         .catch(() => void 0);
-      if (input.profile.phone) {
+      if (phoneToUse) {
         await page
           .locator('input[name="phone"], input[type="tel"]')
           .first()
-          .fill(input.profile.phone)
+          .fill(phoneToUse)
           .catch(() => void 0);
       }
 

@@ -285,6 +285,7 @@ export async function processApplication(applicationId: string): Promise<void> {
       clPath,
       coverLetterText: result.coverLetter,
       userId: app.userId,
+      userEmail: app.user.email,
       answers: userAnswers,
     }).catch((err) => {
       console.error(`[worker] ${applicationId} adapter ${adapter.id} failed`, err);
@@ -1074,6 +1075,7 @@ interface AdapterSubmitInput {
   clPath: string;
   coverLetterText: string;
   userId: string;
+  userEmail: string;
   answers?: import("@/lib/application-answers").ApplicationAnswers;
 }
 
@@ -1122,6 +1124,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     const page = await context.newPage();
     const outcome = await adapter.apply(page, {
       profile,
+      userEmail: input.userEmail,
       cvLocalPath,
       clLocalPath,
       coverLetterText: input.coverLetterText,

@@ -16,6 +16,12 @@ import type { ApplicationAnswers } from "@/lib/application-answers";
 
 export interface ApplyInput {
   profile: CVProfile;
+  /** Email dell'account utente — fallback quando profile.email è vuoto.
+   *  Sempre presente. Garantisce che il form ATS abbia un'email valida
+   *  altrimenti la conferma del recruiter non arriva mai. */
+  userEmail: string;
+  /** Telefono fallback (account/preferences) se profile.phone vuoto. */
+  userPhone?: string;
   /** Path locale del CV (assicurato via ensureLocalPath nel worker) */
   cvLocalPath: string;
   /** Path locale della cover letter (opzionale per alcuni ATS) */

@@ -60,13 +60,14 @@ export const workableAdapter: PortalAdapter = {
       await page
         .locator('input[name="email"], input[type="email"]')
         .first()
-        .fill(input.profile.email || "")
+        .fill(input.profile.email?.trim() || input.userEmail)
         .catch(() => void 0);
-      if (input.profile.phone) {
+      const phoneToUse = input.profile.phone?.trim() || input.userPhone;
+      if (phoneToUse) {
         await page
           .locator('input[name="phone"], input[type="tel"]')
           .first()
-          .fill(input.profile.phone)
+          .fill(phoneToUse)
           .catch(() => void 0);
       }
       if (input.profile.title) {

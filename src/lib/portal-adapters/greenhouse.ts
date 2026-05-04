@@ -85,6 +85,12 @@ export const greenhouseAdapter: PortalAdapter = {
     );
 
     try {
+      // Fallback obbligatorio: se profile.email è vuoto (Claude non
+      // l'ha estratto dal CV), uso l'email dell'account. Senza email il
+      // recruiter non può rispondere.
+      const emailToUse = input.profile.email?.trim() || input.userEmail;
+      const phoneToUse = input.profile.phone?.trim() || input.userPhone;
+
       await firstName.first().fill(input.profile.firstName || "");
       await page
         .locator(
@@ -96,15 +102,15 @@ export const greenhouseAdapter: PortalAdapter = {
       await page
         .locator('input[name="email"], input#email, input[type="email"]')
         .first()
-        .fill(input.profile.email || "")
+        .fill(emailToUse)
         .catch(() => void 0);
-      if (input.profile.phone) {
+      if (phoneToUse) {
         await page
           .locator(
             'input[name="phone"], input#phone, input[type="tel"], input[aria-label*="Phone" i]',
           )
           .first()
-          .fill(input.profile.phone)
+          .fill(phoneToUse)
           .catch(() => void 0);
       }
 
