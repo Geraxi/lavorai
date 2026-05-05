@@ -156,17 +156,33 @@ export const leverAdapter: PortalAdapter = {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
 
+      // hCaptcha detect: i Lever moderni mettono il submit reale dietro
+      // hcaptcha. Se trovato → skip, non possiamo risolverlo.
+      const hcaptcha = await page
+        .locator('iframe[src*="hcaptcha"], div[class*="h-captcha"], #hcaptchaSubmitBtn')
+        .count()
+        .catch(() => 0);
+      if (hcaptcha > 0) {
+        return {
+          ok: false,
+          status: "captcha",
+          error:
+            "Form Lever protetto da hCaptcha — submit automatico bloccato. Apri l'annuncio e candidati manualmente.",
+        };
+      }
+
+      // Submit "vero" — escludi i bottoni hidden (hcaptchaSubmitBtn)
       const submit = page.locator(
-        'button[type="submit"], button:has-text("Submit"), button:has-text("Apply"), button:has-text("Invia"), input[type="submit"]',
+        'button[type="submit"]:visible, button:visible:has-text("Submit"), button:visible:has-text("Apply"), button:visible:has-text("Invia"), input[type="submit"]:visible',
       );
       if ((await submit.count()) === 0) {
         return {
           ok: false,
           status: "missing_field",
-          error: "Bottone submit non trovato (Lever).",
+          error: "Bottone submit visibile non trovato (Lever).",
         };
       }
-      await submit.first().click();
+      await submit.first().click({ timeout: 5_000 });
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
       const bodyText = await page.locator("body").innerText().catch(() => "");
       const confirmed =
