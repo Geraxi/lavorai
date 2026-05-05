@@ -150,29 +150,40 @@ async function processUser(
     orderBy: { createdAt: "asc" },
   });
 
-  let roles: string[] = [];
-  let sessionByRole = new Map<string, (typeof activeSessions)[number]>();
+  // UNION delle source: i ruoli da cercare sono l'unione di
+  // (a) titles delle sessioni attive non piene, e
+  // (b) preferences.rolesJson scelti dall'utente in onboarding/preferenze.
+  // Le sessioni servono per il tracking (sentCount/targetCount/customContext).
+  // I ruoli senza sessione associata vengono comunque applicati e useranno
+  // il fallback `resolveSession()` per assegnare una sessione virtuale.
+  const rolesSet = new Map<string, string>(); // lowercase -> display
+  const sessionByRole = new Map<string, (typeof activeSessions)[number]>();
 
-  if (activeSessions.length > 0) {
-    for (const s of activeSessions) {
-      if (s.sentCount >= s.targetCount) continue; // round già pieno
-      const t = (s.title ?? s.label).trim();
-      if (!t) continue;
-      roles.push(t);
-      sessionByRole.set(t.toLowerCase(), s);
-    }
-  } else {
-    // Legacy: nessuna sessione attiva → usa rolesJson preferences.
-    try {
-      const arr = JSON.parse(prefs.rolesJson);
-      if (Array.isArray(arr))
-        roles = arr.filter(
-          (s: unknown) => typeof s === "string" && s.length > 0,
-        );
-    } catch {
-      /* noop */
-    }
+  for (const s of activeSessions) {
+    if (s.sentCount >= s.targetCount) continue; // round già pieno
+    const t = (s.title ?? s.label).trim();
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (!rolesSet.has(key)) rolesSet.set(key, t);
+    sessionByRole.set(key, s);
   }
+
+  try {
+    const arr = JSON.parse(prefs.rolesJson);
+    if (Array.isArray(arr)) {
+      for (const r of arr) {
+        if (typeof r !== "string") continue;
+        const t = r.trim();
+        if (!t) continue;
+        const key = t.toLowerCase();
+        if (!rolesSet.has(key)) rolesSet.set(key, t);
+      }
+    }
+  } catch {
+    /* noop */
+  }
+
+  const roles: string[] = Array.from(rolesSet.values());
   if (roles.length === 0) return;
 
   // Daily cap = quante già create oggi
