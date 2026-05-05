@@ -264,7 +264,7 @@ async function processUser(
             userId: user.id,
             OR: [
               { status: { in: ["success", "queued", "optimizing", "applying"] } },
-              { createdAt: { gte: new Date(Date.now() - 24 * 3600_000) } },
+              { createdAt: { gte: new Date(Date.now() - 12 * 3600_000) } },
             ],
           },
         },
