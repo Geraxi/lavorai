@@ -20,22 +20,54 @@ export const leverAdapter: PortalAdapter = {
     }
   },
   async apply(page, input: ApplyInput): Promise<ApplyOutcome> {
-    const applyUrl = input.jobUrl.endsWith("/apply")
-      ? input.jobUrl
-      : `${input.jobUrl.replace(/\/$/, "")}/apply`;
+    // Provo sia /apply (form puro) sia URL nudo. Le aziende moderne
+    // possono redirezionare il base URL alla loro career page custom,
+    // ma /apply resta sul dominio Lever in molti setup.
+    const base = input.jobUrl.replace(/\/$/, "").replace(/\/apply$/, "");
+    const candidates = [`${base}/apply`, base];
 
-    await page.goto(applyUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: 60_000,
-    });
+    let formFound = false;
+    let lastTriedUrl = "";
+    for (const tryUrl of candidates) {
+      lastTriedUrl = tryUrl;
+      try {
+        await page.goto(tryUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 45_000,
+        });
+      } catch {
+        continue;
+      }
+      // Verifica che siamo ancora su Lever (no redirect career page custom)
+      const finalHost = (() => {
+        try {
+          return new URL(page.url()).hostname.toLowerCase();
+        } catch {
+          return "";
+        }
+      })();
+      if (!finalHost.includes("lever.co")) continue;
 
-    try {
-      await page.locator('input[name="name"]').first().waitFor({ timeout: 15_000 });
-    } catch {
+      // Lever ha 2-3 form layout: signature input "name" sempre presente
+      try {
+        await page
+          .locator(
+            'input[name="name"], input[name="firstName"], input[name="resume"]',
+          )
+          .first()
+          .waitFor({ timeout: 8_000 });
+        formFound = true;
+        break;
+      } catch {
+        // niente form qui, prossimo
+      }
+    }
+
+    if (!formFound) {
       return {
         ok: false,
         status: "form_not_found",
-        error: "Form Lever non rilevato.",
+        error: `Form Lever non rilevato (provati ${candidates.length} URL, ultimo: ${lastTriedUrl}). Probabile career page custom dell'azienda.`,
       };
     }
 
