@@ -2,6 +2,8 @@ import type { PortalAdapter } from "./types";
 import { greenhouseAdapter } from "./greenhouse";
 import { leverAdapter } from "./lever";
 import { workableAdapter } from "./workable";
+import { ashbyAdapter } from "./ashby";
+import { smartrecruitersAdapter } from "./smartrecruiters";
 
 /**
  * Registry di tutti i portali supportati. Aggiungere un nuovo ATS =
@@ -15,6 +17,8 @@ export const PORTAL_ADAPTERS: PortalAdapter[] = [
   greenhouseAdapter,
   leverAdapter,
   workableAdapter,
+  ashbyAdapter,
+  smartrecruitersAdapter,
 ];
 
 export function findPortalAdapter(url: string): PortalAdapter | null {

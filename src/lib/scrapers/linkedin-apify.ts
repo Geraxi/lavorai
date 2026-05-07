@@ -35,6 +35,10 @@ const SUPPORTED_ATS_HOSTS = [
   "jobs.eu.lever.co",
   "apply.workable.com",
   ".workable.com/j/",
+  "jobs.ashbyhq.com",
+  "ashbyhq.com",
+  "jobs.smartrecruiters.com",
+  "careers.smartrecruiters.com",
 ];
 
 function isSupportedAts(url: string): boolean {

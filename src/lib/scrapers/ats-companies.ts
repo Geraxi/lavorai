@@ -263,3 +263,122 @@ export const LEVER_COMPANIES: AtsCompany[] = [
   { slug: "cazoo", name: "Cazoo" },
   { slug: "auto1", name: "Auto1" },
 ];
+
+/**
+ * Ashby (`jobs.ashbyhq.com/<slug>`). Tante startup tech moderne, YC, AI.
+ * Slug = primo segmento del path su jobs.ashbyhq.com.
+ */
+export const ASHBY_COMPANIES: AtsCompany[] = [
+  // Vercel ecosystem & dev-tools
+  { slug: "vercel", name: "Vercel" },
+  { slug: "linear", name: "Linear" },
+  { slug: "ramp", name: "Ramp" },
+  { slug: "posthog", name: "PostHog" },
+  { slug: "replicate", name: "Replicate" },
+  { slug: "modal", name: "Modal" },
+  { slug: "neon", name: "Neon" },
+  { slug: "railway", name: "Railway" },
+  { slug: "supabase", name: "Supabase" },
+  { slug: "browserbase", name: "Browserbase" },
+  { slug: "resend", name: "Resend" },
+  { slug: "trigger", name: "Trigger.dev" },
+  { slug: "inngest", name: "Inngest" },
+  { slug: "warp", name: "Warp" },
+  { slug: "cursor", name: "Cursor" },
+  { slug: "windsurf", name: "Windsurf" },
+  { slug: "raycast", name: "Raycast" },
+  // AI labs
+  { slug: "openai", name: "OpenAI" },
+  { slug: "anthropic", name: "Anthropic" },
+  { slug: "perplexity", name: "Perplexity" },
+  { slug: "huggingface", name: "Hugging Face" },
+  { slug: "mistral", name: "Mistral AI" },
+  { slug: "cohere", name: "Cohere" },
+  { slug: "elevenlabs", name: "ElevenLabs" },
+  { slug: "runway", name: "Runway" },
+  { slug: "midjourney", name: "Midjourney" },
+  { slug: "scale", name: "Scale AI" },
+  { slug: "weights-and-biases", name: "Weights & Biases" },
+  // Fintech
+  { slug: "mercury", name: "Mercury" },
+  { slug: "brex", name: "Brex" },
+  { slug: "wise", name: "Wise" },
+  { slug: "revolut", name: "Revolut" },
+  { slug: "monzo", name: "Monzo" },
+  { slug: "starlingbank", name: "Starling Bank" },
+  { slug: "n26", name: "N26" },
+  { slug: "qonto", name: "Qonto" },
+  { slug: "tide", name: "Tide" },
+  // SaaS / Productivity
+  { slug: "notion", name: "Notion" },
+  { slug: "figma", name: "Figma" },
+  { slug: "loom", name: "Loom" },
+  { slug: "airtable", name: "Airtable" },
+  { slug: "miro", name: "Miro" },
+  { slug: "clickup", name: "ClickUp" },
+  { slug: "retool", name: "Retool" },
+  { slug: "deel", name: "Deel" },
+  { slug: "rippling", name: "Rippling" },
+  { slug: "gusto", name: "Gusto" },
+  { slug: "lattice", name: "Lattice" },
+  // EU startup
+  { slug: "doctolib", name: "Doctolib", country: "FR" },
+  { slug: "alma", name: "Alma", country: "FR" },
+  { slug: "swan", name: "Swan", country: "FR" },
+  { slug: "spendesk", name: "Spendesk", country: "FR" },
+  { slug: "tabby", name: "Tabby" },
+  { slug: "tamara", name: "Tamara" },
+  // Italian tech (alcuni adottano Ashby)
+  { slug: "young-platform", name: "Young Platform", country: "IT" },
+  { slug: "satispay", name: "Satispay", country: "IT" },
+];
+
+/**
+ * SmartRecruiters (`jobs.smartrecruiters.com/<companyId>`). Enterprise EU,
+ * tantissime aziende tradizionali. companyId è case-sensitive.
+ */
+export const SMARTRECRUITERS_COMPANIES: AtsCompany[] = [
+  // Enterprise EU big
+  { slug: "BoschGroup", name: "Bosch", country: "DE" },
+  { slug: "Visa", name: "Visa" },
+  { slug: "PublicisGroupe", name: "Publicis Groupe", country: "FR" },
+  { slug: "IKEA", name: "IKEA", country: "SE" },
+  { slug: "McDonalds", name: "McDonald's" },
+  { slug: "SocieteGenerale", name: "Société Générale", country: "FR" },
+  { slug: "Allianz", name: "Allianz", country: "DE" },
+  { slug: "DeutscheBank", name: "Deutsche Bank", country: "DE" },
+  { slug: "ING", name: "ING", country: "NL" },
+  { slug: "Atos", name: "Atos", country: "FR" },
+  { slug: "Capgemini", name: "Capgemini", country: "FR" },
+  { slug: "Accenture", name: "Accenture" },
+  { slug: "DeloitteUK", name: "Deloitte UK", country: "UK" },
+  { slug: "PwC", name: "PwC" },
+  { slug: "Equinix", name: "Equinix" },
+  { slug: "Ubisoft", name: "Ubisoft", country: "FR" },
+  { slug: "TVH", name: "TVH", country: "BE" },
+  { slug: "BalfourBeatty", name: "Balfour Beatty", country: "UK" },
+  { slug: "Skanska", name: "Skanska", country: "SE" },
+  { slug: "Heineken", name: "Heineken", country: "NL" },
+  { slug: "DanoneAG", name: "Danone", country: "FR" },
+  { slug: "Nestle", name: "Nestlé", country: "CH" },
+  { slug: "L'Oreal", name: "L'Oréal", country: "FR" },
+  { slug: "Pirelli", name: "Pirelli", country: "IT" },
+  { slug: "Generali", name: "Generali", country: "IT" },
+  { slug: "Eni", name: "Eni", country: "IT" },
+  { slug: "TIM", name: "TIM", country: "IT" },
+  { slug: "Vodafone", name: "Vodafone" },
+  { slug: "Orange", name: "Orange", country: "FR" },
+  // Tech & SaaS via SmartRecruiters
+  { slug: "Twilio", name: "Twilio" },
+  { slug: "Square", name: "Square" },
+  { slug: "Compass", name: "Compass" },
+  { slug: "Glassdoor", name: "Glassdoor" },
+  { slug: "Booking", name: "Booking.com", country: "NL" },
+  { slug: "GetYourGuide", name: "GetYourGuide", country: "DE" },
+  { slug: "Skyscanner", name: "Skyscanner", country: "UK" },
+  // Italian companies su SmartRecruiters
+  { slug: "OVS", name: "OVS", country: "IT" },
+  { slug: "Generali1", name: "Generali (alt)", country: "IT" },
+  { slug: "UniCredit", name: "UniCredit", country: "IT" },
+  { slug: "IntesaSanpaolo", name: "Intesa Sanpaolo", country: "IT" },
+];

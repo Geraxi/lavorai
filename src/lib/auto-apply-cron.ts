@@ -235,16 +235,28 @@ async function processUser(
       // originale — zero automazione su linkedin.com.
       // Adzuna è anti-bot blocked (Cloudflare): page.goto su adzuna.*
       // va in timeout 30s, ogni job sprecato. Solo source nativi.
-      source: { in: ["greenhouse", "lever", "linkedin"] },
+      source: {
+        in: [
+          "greenhouse",
+          "lever",
+          "ashby",
+          "smartrecruiters",
+          "linkedin",
+        ],
+      },
       // URL canoniche vanilla: gli adapter Playwright funzionano solo
-      // su boards.greenhouse.io e jobs.lever.co. Aziende con career
-      // page custom (es. stripe.com/jobs) falliscono sempre → skip.
+      // sui domini ATS noti. Aziende con career page custom
+      // (es. stripe.com/jobs) falliscono sempre → skip.
       OR: [
         { url: { contains: "boards.greenhouse.io" } },
         { url: { contains: "job-boards.greenhouse.io" } },
         { url: { contains: "jobs.lever.co" } },
         { url: { contains: "workable.com/j/" } },
         { url: { contains: "apply.workable.com" } },
+        { url: { contains: "jobs.ashbyhq.com" } },
+        { url: { contains: "ashbyhq.com" } },
+        { url: { contains: "jobs.smartrecruiters.com" } },
+        { url: { contains: "careers.smartrecruiters.com" } },
       ],
       // Match title largo: per ogni ruolo, title deve contenere TUTTI
       // i token significativi (≥3 char). Es: "Product Designer" matcha
@@ -612,6 +624,8 @@ function portalOf(url: string): string {
   if (u.includes("greenhouse")) return "greenhouse";
   if (u.includes("lever.co")) return "lever";
   if (u.includes("workable.com")) return "workable";
+  if (u.includes("ashbyhq.com")) return "ashby";
+  if (u.includes("smartrecruiters.com")) return "smartrecruiters";
   if (u.includes("linkedin")) return "linkedin";
   if (u.includes("indeed")) return "indeed";
   if (u.includes("infojobs")) return "infojobs";
