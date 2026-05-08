@@ -168,7 +168,10 @@ function sanitizePdfText(input: string): string {
 function looksGarbledExtraction(text: string): boolean {
   const garbledPattern = /[a-zàèéìòù][;<>?@#$%^*][a-zàèéìòù]/gi;
   const matches = text.match(garbledPattern);
-  return (matches?.length ?? 0) > 5;
+  // Threshold a 4: il QA report mostrava 4 esempi distinti. False positive
+  // costano solo una passata in più di pdfjs (~150ms), false negative
+  // mostrano testo corrotto in produzione → preferiamo essere aggressivi.
+  return (matches?.length ?? 0) >= 4;
 }
 
 async function parseDocx(buffer: Buffer): Promise<string> {
