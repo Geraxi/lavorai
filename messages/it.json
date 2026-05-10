@@ -26,15 +26,68 @@
     "check3": "Submit reale sui form ATS — nessun login ai tuoi account",
     "portalsLabel": "Si candida automaticamente su:"
   },
+  "pricing": {
+    "eyebrow": "Prezzi",
+    "title1": "Trasparenti,",
+    "title2": "senza sorprese.",
+    "subtitle": "Niente crediti. Niente add-on. Scegli il piano, cambia quando vuoi.",
+    "footnote": "IVA inclusa. Cancelli in 1 click da Stripe — senza email, senza attese. Nessun vincolo."
+  },
+  "faq": {
+    "heading": "Domande frequenti",
+    "notFound": "Se non trovi la risposta,",
+    "contactUs": "scrivici",
+    "q1Question": "Si candida davvero per me, in automatico?",
+    "q1Answer": "Sì. Imposti ruoli, città, soglia di match. Ogni 30 minuti LavorAI scansiona gli annunci freschi: quando ne trova uno compatibile, riscrive CV e cover letter per quella posizione e invia direttamente sul form ATS dell'azienda. Tu vedi solo lo stato e ricevi gli inviti ai colloqui.",
+    "q2Question": "Mi serve il login a LinkedIn / Indeed / altri profili?",
+    "q2Answer": "No, mai. Non chiediamo né conserviamo credenziali di portali. Compiliamo solo form pubblici di Greenhouse, Lever e Workable — gli stessi che riempiresti tu cliccando \"Apply\". Nessun rischio di ban sui tuoi account.",
+    "q3Question": "Devo scrivere io le cover letter?",
+    "q3Answer": "No. Vengono generate automaticamente in italiano nativo (o in inglese se l'annuncio è in inglese), su misura per ogni annuncio. In modalità ibrida puoi rivedere ogni candidatura prima dell'invio; in modalità auto parte tutto da solo.",
+    "q4Question": "Posso decidere dove candidarmi?",
+    "q4Answer": "Sì. Filtri precisi su ruoli, città, RAL minima, dipendente vs P.IVA, aziende da escludere, soglia di match. Tre modalità: Off (nessun invio), Hybrid (chiede ok prima di ogni invio), Auto (zero-touch). Cambio in un click dalle preferenze.",
+    "q5Question": "Ricevo solo gli inviti ai colloqui?",
+    "q5Answer": "Esatto. La dashboard mostra in tempo reale lo stato delle candidature (in coda, in invio, inviata, vista). Ricevi notifica solo quando un recruiter risponde — nient'altro.",
+    "q6Question": "Posso annullare in qualsiasi momento?",
+    "q6Answer": "Sì, con un click. Nessun vincolo, nessuna penale, nessuna domanda. Pausa l'auto-apply quando vuoi e riavvialo quando ti serve.",
+    "q7Question": "Cosa succede ai miei dati?",
+    "q7Answer": "Stanno su server europei (Neon · Frankfurt), GDPR-first. Export integrale in JSON e cancellazione completa con un click — pulisce profilo, CV, file, code di lavoro. Non vendiamo nulla, non condividiamo con nessuno."
+  },
+  "howItWorks": {
+    "eyebrow": "Setup una volta · gira da solo per sempre",
+    "title1": "Tre minuti di setup. Poi",
+    "title2": "LavorAI lavora per te — per sempre.",
+    "step1Title": "Carica il CV",
+    "step1Text": "Carica il tuo CV in PDF o DOCX. LavorAI legge tutto — esperienze, skills, tono — e costruisce il tuo profilo AI.",
+    "step2Title": "Scegli il ruolo",
+    "step2Text": "Scrivi il ruolo che cerchi e la città. Puoi aggiungere filtri: solo remote, solo startup, solo big tech.",
+    "step3Title": "Da qui non tocchi più nulla",
+    "step3Text": "Da qui LavorAI gira da solo. Ogni 30 minuti cerca nuovi annunci, riscrive il CV su misura, compila il form ATS e invia. Tu ricevi solo gli inviti ai colloqui.",
+    "cta": "Inizia gratis — 3 candidature subito"
+  },
+  "ctaFinal": {
+    "title1": "Smetti di candidarti.",
+    "title2": "LavorAI lo fa per te.",
+    "subtitle": "In 30 secondi sei live. Da lì LavorAI si candida ogni 30 minuti, tutta la notte, mentre tu fai altro. In media i nostri utenti ricevono il primo invito al colloquio entro 8 giorni.",
+    "caption": "Pausa o annulla in qualsiasi momento · Dati su server UE · No login ai tuoi account",
+    "cta": "Inizia gratis — 3 candidature subito"
+  },
+  "stickyCta": {
+    "message": "LavorAI si sta candidando per <strong>centinaia di persone adesso.</strong>",
+    "cta": "Inizia gratis",
+    "dismiss": "Chiudi banner"
+  },
   "footer": {
-    "tagline": "Il copilota italiano per la ricerca del lavoro.",
+    "tagline": "Il copilota italiano per la ricerca del lavoro. Carica il CV, imposta le preferenze, LavorAI candida in automatico per te.",
     "product": "Prodotto",
     "legal": "Legale",
     "company": "Azienda",
     "contact": "Contatti",
     "privacy": "Privacy",
     "terms": "Termini",
-    "rights": "Tutti i diritti riservati."
+    "rights": "Tutti i diritti riservati.",
+    "optimizeCv": "Ottimizza CV",
+    "hostedIn": "Hosted in Frankfurt · GDPR compliant",
+    "builtWith": "Built with Next.js, Claude AI."
   },
   "auth": {
     "loginTitle": "Bentornato",

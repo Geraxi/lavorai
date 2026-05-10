@@ -7,55 +7,35 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { useTranslations } from "next-intl";
 import { Reveal } from "@/components/reveal";
 
-const faq = [
-  {
-    q: "Si candida davvero per me, in automatico?",
-    a: "Sì. Imposti ruoli, città, soglia di match. Ogni 30 minuti LavorAI scansiona gli annunci freschi: quando ne trova uno compatibile, riscrive CV e cover letter per quella posizione e invia direttamente sul form ATS dell'azienda. Tu vedi solo lo stato e ricevi gli inviti ai colloqui.",
-  },
-  {
-    q: "Mi serve il login a LinkedIn / Indeed / altri profili?",
-    a: "No, mai. Non chiediamo né conserviamo credenziali di portali. Compiliamo solo form pubblici di Greenhouse, Lever e Workable — gli stessi che riempiresti tu cliccando \"Apply\". Nessun rischio di ban sui tuoi account.",
-  },
-  {
-    q: "Devo scrivere io le cover letter?",
-    a: "No. Vengono generate automaticamente in italiano nativo, su misura per ogni annuncio. In modalità ibrida puoi rivedere ogni candidatura prima dell'invio; in modalità auto parte tutto da solo.",
-  },
-  {
-    q: "Posso decidere dove candidarmi?",
-    a: "Sì. Filtri precisi su ruoli, città, RAL minima, dipendente vs P.IVA, aziende da escludere, soglia di match. Tre modalità: Off (nessun invio), Hybrid (chiede ok prima di ogni invio), Auto (zero-touch). Cambio in un click dalle preferenze.",
-  },
-  {
-    q: "Ricevo solo gli inviti ai colloqui?",
-    a: "Esatto. La dashboard mostra in tempo reale lo stato delle candidature (in coda, in invio, inviata, vista). Ricevi notifica solo quando un recruiter risponde — nient'altro.",
-  },
-  {
-    q: "Posso annullare in qualsiasi momento?",
-    a: "Sì, con un click. Nessun vincolo, nessuna penale, nessuna domanda. Pausa l'auto-apply quando vuoi e riavvialo quando ti serve.",
-  },
-  {
-    q: "Cosa succede ai miei dati?",
-    a: "Stanno su server europei (Neon · Frankfurt), GDPR-first. Export integrale in JSON e cancellazione completa con un click — pulisce profilo, CV, file, code di lavoro. Non vendiamo nulla, non condividiamo con nessuno.",
-  },
-];
-
 export function SectionFaq() {
+  const t = useTranslations("faq");
+  const faq = [
+    { q: t("q1Question"), a: t("q1Answer") },
+    { q: t("q2Question"), a: t("q2Answer") },
+    { q: t("q3Question"), a: t("q3Answer") },
+    { q: t("q4Question"), a: t("q4Answer") },
+    { q: t("q5Question"), a: t("q5Answer") },
+    { q: t("q6Question"), a: t("q6Answer") },
+    { q: t("q7Question"), a: t("q7Answer") },
+  ];
   return (
     <section id="faq" className="relative border-t border-border/60 py-24 md:py-32">
       <div className="container">
         <Reveal className="mx-auto max-w-2xl text-center">
           <p className="text-xs uppercase tracking-[0.2em] text-primary">FAQ</p>
           <h2 className="mt-3 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
-            Domande frequenti
+            {t("heading")}
           </h2>
           <p className="mt-5 text-lg text-muted-foreground">
-            Se non trovi la risposta,{" "}
+            {t("notFound")}{" "}
             <Link
               href="/contatti"
               className="text-foreground underline-offset-4 hover:underline"
             >
-              scrivici
+              {t("contactUs")}
             </Link>
             .
           </p>

@@ -26,15 +26,68 @@
     "check3": "Real submits on ATS forms — never asks for your account passwords",
     "portalsLabel": "Auto-applies on:"
   },
+  "pricing": {
+    "eyebrow": "Pricing",
+    "title1": "Transparent,",
+    "title2": "no surprises.",
+    "subtitle": "No credits. No add-ons. Pick a plan, change anytime.",
+    "footnote": "VAT included. Cancel in 1 click via Stripe — no email, no wait. No lock-in."
+  },
+  "faq": {
+    "heading": "Frequently asked questions",
+    "notFound": "Can't find your answer?",
+    "contactUs": "contact us",
+    "q1Question": "Does it really apply for me, automatically?",
+    "q1Answer": "Yes. You set roles, location, match threshold. Every 30 minutes LavorAI scans fresh listings: when it finds a fit, it rewrites your CV and cover letter for that role and submits directly to the company's ATS form. You only see the status and get the interview invites.",
+    "q2Question": "Do I need to give LavorAI my LinkedIn / Indeed login?",
+    "q2Answer": "Never. We don't ask for or store any portal credentials. We only fill public Greenhouse, Lever, Ashby, SmartRecruiters and Workable forms — the same ones you'd fill yourself by clicking \"Apply\". Zero risk of account bans.",
+    "q3Question": "Do I have to write the cover letters?",
+    "q3Answer": "No. They're generated automatically in native English (or Italian when the job is in Italian), tailored to each listing. In hybrid mode you can review every application before sending; in auto mode everything ships on its own.",
+    "q4Question": "Can I decide where to apply?",
+    "q4Answer": "Yes. Precise filters on roles, location, minimum salary, employee vs freelance, companies to exclude, match threshold. Three modes: Off (no sends), Hybrid (asks before each send), Auto (zero-touch). One click in preferences.",
+    "q5Question": "Will I only get interview invites?",
+    "q5Answer": "Exactly. The dashboard shows live application status (queued, sending, sent, viewed). You only get notified when a recruiter replies — nothing else.",
+    "q6Question": "Can I cancel anytime?",
+    "q6Answer": "Yes, in one click. No lock-in, no fees, no questions. Pause auto-apply whenever you want and restart whenever you need.",
+    "q7Question": "What happens to my data?",
+    "q7Answer": "It lives on EU servers (Neon · Frankfurt), GDPR-first. Full JSON export and complete deletion in one click — wipes profile, CV, files, job queues. We never sell anything, never share with anyone."
+  },
+  "howItWorks": {
+    "eyebrow": "Set up once · runs forever",
+    "title1": "Three minutes of setup. Then",
+    "title2": "LavorAI works for you — forever.",
+    "step1Title": "Upload your CV",
+    "step1Text": "Upload your CV as PDF or DOCX. LavorAI reads everything — experience, skills, tone — and builds your AI profile.",
+    "step2Title": "Choose the role",
+    "step2Text": "Type the role you want and the city. Add filters if you like: remote only, startups only, big tech only.",
+    "step3Title": "From here, you do nothing",
+    "step3Text": "From here LavorAI runs on its own. Every 30 minutes it finds new listings, rewrites your CV for each, fills the ATS form and submits. You only handle the interview invitations.",
+    "cta": "Get started free — 3 applications now"
+  },
+  "ctaFinal": {
+    "title1": "Stop applying.",
+    "title2": "LavorAI does it for you.",
+    "subtitle": "30 seconds to go live. From there LavorAI applies every 30 minutes, all night long, while you do something else. Our users get their first interview invitation in 8 days on average.",
+    "caption": "Pause or cancel anytime · EU servers · Never asks for your account passwords",
+    "cta": "Get started free — 3 applications now"
+  },
+  "stickyCta": {
+    "message": "LavorAI is applying for <strong>hundreds of people right now.</strong>",
+    "cta": "Get started free",
+    "dismiss": "Close banner"
+  },
   "footer": {
-    "tagline": "The auto-apply copilot for your job search.",
+    "tagline": "The auto-apply copilot for your job search. Upload your CV, set preferences, LavorAI applies for you automatically.",
     "product": "Product",
     "legal": "Legal",
     "company": "Company",
     "contact": "Contact",
     "privacy": "Privacy",
     "terms": "Terms",
-    "rights": "All rights reserved."
+    "rights": "All rights reserved.",
+    "optimizeCv": "Optimize CV",
+    "hostedIn": "Hosted in Frankfurt · GDPR compliant",
+    "builtWith": "Built with Next.js, Claude AI."
   },
   "auth": {
     "loginTitle": "Welcome back",

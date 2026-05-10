@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/reveal";
 
 export function SectionCtaFinal() {
+  const t = useTranslations("ctaFinal");
   return (
     <section className="relative overflow-hidden border-t border-border/60 py-24 md:py-32">
       {/* Gradient dramatico */}
@@ -20,13 +22,11 @@ export function SectionCtaFinal() {
       <div className="container relative">
         <Reveal className="mx-auto max-w-3xl text-center">
           <h2 className="text-balance text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl">
-            Smetti di candidarti.{" "}
-            <span className="text-gradient-accent">Lavorai lo fa per te.</span>
+            {t("title1")}{" "}
+            <span className="text-gradient-accent">{t("title2")}</span>
           </h2>
           <p className="mt-6 text-lg text-muted-foreground md:text-xl">
-            In 30 secondi sei live. Da lì LavorAI si candida ogni 30 minuti,
-            tutta la notte, mentre tu fai altro. In media i nostri utenti
-            ricevono il primo invito al colloquio entro 8 giorni.
+            {t("subtitle")}
           </p>
           <p
             style={{
@@ -35,8 +35,7 @@ export function SectionCtaFinal() {
               color: "var(--fg-subtle)",
             }}
           >
-            Pausa o annulla in qualsiasi momento · Dati su server UE · No login
-            ai tuoi account
+            {t("caption")}
           </p>
           <motion.div
             whileHover={{ scale: 1.02 }}
@@ -49,9 +48,7 @@ export function SectionCtaFinal() {
               className="group relative h-14 overflow-hidden px-8 text-base"
             >
               <Link href="/optimize">
-                <span className="relative z-10">
-                  Inizia gratis — 3 candidature subito
-                </span>
+                <span className="relative z-10">{t("cta")}</span>
                 <span
                   aria-hidden
                   className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full"

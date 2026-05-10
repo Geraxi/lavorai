@@ -1,28 +1,34 @@
+"use client";
+
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Logo } from "@/components/logo";
 import { Separator } from "@/components/ui/separator";
 
-const linkGroups = [
-  {
-    title: "Prodotto",
-    links: [
-      { href: "/optimize", label: "Ottimizza CV" },
-      { href: "/#prezzi", label: "Prezzi" },
-      { href: "/#come-funziona", label: "Come funziona" },
-      { href: "/#faq", label: "FAQ" },
-    ],
-  },
-  {
-    title: "Legale",
-    links: [
-      { href: "/privacy", label: "Privacy" },
-      { href: "/termini", label: "Termini" },
-      { href: "/contatti", label: "Contatti" },
-    ],
-  },
-];
-
 export function SiteFooter() {
+  const t = useTranslations("footer");
+  const tNav = useTranslations("nav");
+
+  const linkGroups = [
+    {
+      title: t("product"),
+      links: [
+        { href: "/optimize", label: t("optimizeCv") },
+        { href: "/#prezzi", label: tNav("pricing") },
+        { href: "/#come-funziona", label: tNav("howItWorks") },
+        { href: "/#faq", label: tNav("faq") },
+      ],
+    },
+    {
+      title: t("legal"),
+      links: [
+        { href: "/privacy", label: t("privacy") },
+        { href: "/termini", label: t("terms") },
+        { href: "/contatti", label: t("contact") },
+      ],
+    },
+  ];
+
   return (
     <footer className="relative border-t border-border/60 bg-background">
       <div className="container py-16">
@@ -30,12 +36,11 @@ export function SiteFooter() {
           <div className="max-w-sm space-y-4">
             <Logo size="lg" />
             <p className="text-sm leading-relaxed text-muted-foreground">
-              Il copilota italiano per la ricerca del lavoro. Carica il CV,
-              imposta le preferenze, LavorAI candida in automatico per te.
+              {t("tagline")}
             </p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="flex h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
-              <span>Hosted in Frankfurt · GDPR compliant</span>
+              <span>{t("hostedIn")}</span>
             </div>
           </div>
 
@@ -62,10 +67,8 @@ export function SiteFooter() {
         <Separator className="my-10" />
 
         <div className="flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>© 2026 LavorAI · P.IVA 01452520776 · Made in Italy 🇮🇹</p>
-          <p className="text-muted-foreground/60">
-            Built with Next.js, Claude AI · Shipped in Italy.
-          </p>
+          <p>© 2026 LavorAI · P.IVA 01452520776</p>
+          <p className="text-muted-foreground/60">{t("builtWith")}</p>
         </div>
       </div>
     </footer>

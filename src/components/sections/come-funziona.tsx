@@ -2,30 +2,16 @@
 
 import Link from "next/link";
 import { Upload, Target, Zap } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Reveal, RevealItem, RevealStagger } from "@/components/reveal";
 
-const steps = [
-  {
-    n: "01",
-    icon: Upload,
-    title: "Carica il CV",
-    text: "Carica il tuo CV in PDF o DOCX. LavorAI legge tutto — esperienze, skills, tono — e costruisce il tuo profilo AI.",
-  },
-  {
-    n: "02",
-    icon: Target,
-    title: "Scegli il ruolo",
-    text: "Scrivi il ruolo che cerchi e la città. Puoi aggiungere filtri: solo remote, solo startup, solo big tech.",
-  },
-  {
-    n: "03",
-    icon: Zap,
-    title: "Da qui non tocchi più nulla",
-    text: "Da qui LavorAI gira da solo. Ogni 30 minuti cerca nuovi annunci, riscrive il CV su misura, compila il form ATS e invia. Tu ricevi solo gli inviti ai colloqui.",
-  },
-];
-
 export function SectionComeFunziona() {
+  const t = useTranslations("howItWorks");
+  const steps = [
+    { n: "01", icon: Upload, title: t("step1Title"), text: t("step1Text") },
+    { n: "02", icon: Target, title: t("step2Title"), text: t("step2Text") },
+    { n: "03", icon: Zap, title: t("step3Title"), text: t("step3Text") },
+  ];
   return (
     <section
       id="come-funziona"
@@ -42,14 +28,14 @@ export function SectionComeFunziona() {
             className="mono text-[10.5px] uppercase tracking-[0.32em] text-primary/80"
             style={{ fontWeight: 500 }}
           >
-            Setup una volta · gira da solo per sempre
+            {t("eyebrow")}
           </p>
           <h2
             className="mt-4 text-balance text-4xl font-semibold tracking-tight sm:text-5xl"
             style={{ letterSpacing: "-0.03em" }}
           >
-            Tre minuti di setup. Poi{" "}
-            <span className="text-gradient-accent">LavorAI lavora per te — per sempre.</span>
+            {t("title1")}{" "}
+            <span className="text-gradient-accent">{t("title2")}</span>
           </h2>
         </Reveal>
 
@@ -135,7 +121,7 @@ export function SectionComeFunziona() {
               fontWeight: 600,
             }}
           >
-            Inizia gratis — 3 candidature subito
+            {t("cta")}
           </Link>
         </Reveal>
       </div>

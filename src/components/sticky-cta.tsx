@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 /**
  * Sticky bottom bar che appare quando l'utente scrolla oltre il 60%
  * della pagina. Dismissible con la X (memorizzato in sessionStorage).
  */
 export function StickyCta() {
+  const t = useTranslations("stickyCta");
   const [show, setShow] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
@@ -66,19 +68,20 @@ export function StickyCta() {
         }}
       />
       <span style={{ flex: 1, lineHeight: 1.4 }}>
-        LavorAI si sta candidando per{" "}
-        <strong>centinaia di persone adesso.</strong>
+        {t.rich("message", {
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
       </span>
       <Link
         href="/optimize"
         className="ds-btn ds-btn-sm ds-btn-primary"
         style={{ flex: "none", whiteSpace: "nowrap" }}
       >
-        Inizia gratis
+        {t("cta")}
       </Link>
       <button
         type="button"
-        aria-label="Chiudi banner"
+        aria-label={t("dismiss")}
         onClick={() => {
           setDismissed(true);
           if (typeof sessionStorage !== "undefined") {

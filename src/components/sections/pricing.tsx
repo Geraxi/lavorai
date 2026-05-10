@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import { Check } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +12,7 @@ import { TIER_LIST, type TierConfig } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 
 export function SectionPricing() {
+  const t = useTranslations("pricing");
   return (
     <section
       id="prezzi"
@@ -23,14 +25,14 @@ export function SectionPricing() {
       <div className="container relative">
         <Reveal className="mx-auto max-w-2xl text-center">
           <p className="text-xs uppercase tracking-[0.2em] text-primary">
-            Prezzi
+            {t("eyebrow")}
           </p>
           <h2 className="mt-3 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
-            Trasparenti,{" "}
-            <span className="text-gradient-accent">senza sorprese.</span>
+            {t("title1")}{" "}
+            <span className="text-gradient-accent">{t("title2")}</span>
           </h2>
           <p className="mt-5 text-lg text-muted-foreground">
-            Niente crediti. Niente add-on. Scegli il piano, cambia quando vuoi.
+            {t("subtitle")}
           </p>
         </Reveal>
 
@@ -43,10 +45,7 @@ export function SectionPricing() {
         </div>
 
         <Reveal className="mx-auto mt-10 max-w-xl text-center">
-          <p className="text-xs text-muted-foreground">
-            IVA inclusa. Cancelli in 1 click da Stripe — senza email, senza
-            attese. Nessun vincolo.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("footnote")}</p>
         </Reveal>
       </div>
     </section>
