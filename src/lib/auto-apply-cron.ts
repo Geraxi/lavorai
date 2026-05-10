@@ -163,6 +163,10 @@ async function processUser(
     if (s.sentCount >= s.targetCount) continue; // round già pieno
     const t = (s.title ?? s.label).trim();
     if (!t) continue;
+    // Skip session "garbage" con titolo concatenato `category · role`
+    // generato da una vecchia versione: inquina roleTerms e abbassa
+    // quickMatchScore. I round puliti hanno solo il role title.
+    if (t.includes("·")) continue;
     const key = t.toLowerCase();
     if (!rolesSet.has(key)) rolesSet.set(key, t);
     sessionByRole.set(key, s);
