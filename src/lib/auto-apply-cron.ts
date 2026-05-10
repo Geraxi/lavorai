@@ -389,6 +389,36 @@ async function processUser(
   const blacklistedCompanies = new Set<string>();
   void rtaByCompany;
 
+  // Hard cap per company nel rolling window 30gg.
+  // Senza questo, una company con 60 job aperti (es. Wunderman, Dropbox)
+  // si prendeva 20+ candidature mentre 50+ altre aziende non vedevano
+  // niente. Limite ragionevole: 3 candidature/azienda/30gg = abbastanza
+  // per coprire i ruoli più rilevanti senza spam.
+  const COMPANY_CAP_30D = 3;
+  const recentByCompany30d = await prisma.application.groupBy({
+    by: ["jobId"],
+    where: {
+      userId: user.id,
+      createdAt: { gte: new Date(Date.now() - 30 * 86400_000) },
+      status: { in: ["success", "queued", "optimizing", "applying", "ready_to_apply"] },
+    },
+    _count: { _all: true },
+  });
+  const recentJobIds30d = recentByCompany30d.map((r) => r.jobId);
+  const recentJobs30d =
+    recentJobIds30d.length > 0
+      ? await prisma.job.findMany({
+          where: { id: { in: recentJobIds30d } },
+          select: { company: true },
+        })
+      : [];
+  const companyCount30d = new Map<string, number>();
+  for (const j of recentJobs30d) {
+    const c = (j.company ?? "").toLowerCase();
+    if (!c) continue;
+    companyCount30d.set(c, (companyCount30d.get(c) ?? 0) + 1);
+  }
+
   // Per-run: max 1 candidatura per azienda nel primo passaggio, poi
   // se ci sono ancora slot riapriamo. Garantisce che 5 invii in un run
   // tocchino 5 aziende diverse quando possibile.
@@ -398,6 +428,11 @@ async function processUser(
     if (enqueued >= remainingToday) break;
     const cKey = (job.company ?? "").toLowerCase();
     if (cKey && usedThisRun.has(cKey)) continue; // pass 1: skip duplicates
+    // Hard cap 30gg: max COMPANY_CAP_30D per azienda
+    if (cKey && (companyCount30d.get(cKey) ?? 0) >= COMPANY_CAP_30D) {
+      stats.skippedAvoidedCompany++;
+      continue;
+    }
     void cKey;
 
     // Match STRETTO sul titolo: tutti i token significativi del ruolo
@@ -530,7 +565,12 @@ async function processUser(
       stats.applicationsEnqueued++;
       // Marca azienda usata nel run (diversificazione)
       const usedKey = (job.company ?? "").toLowerCase();
-      if (usedKey) usedThisRun.add(usedKey);
+      if (usedKey) {
+        usedThisRun.add(usedKey);
+        // Aggiorna counter 30d in-memory così multi-run consecutivi
+        // rispettano il cap senza dover ri-leggere il DB.
+        companyCount30d.set(usedKey, (companyCount30d.get(usedKey) ?? 0) + 1);
+      }
       // Bump sentCount in-memory così entro lo stesso run il cap
       // targetCount è rispettato. (Il counter persistito viene aggiornato
       // dal worker on-success.)
@@ -555,6 +595,11 @@ async function processUser(
       // — verifichiamo via "applications.some" come per gli altri filtri.
       if (!titleMatchesAnyRole(job.title, roles)) continue;
       if (job.company && avoidSet.has(job.company.toLowerCase())) continue;
+      // Cap 30gg anche nel pass 2: senza questo, riprenderemmo le
+      // company già viste pass 1.
+      const cKey2 = (job.company ?? "").toLowerCase();
+      if (cKey2 && (companyCount30d.get(cKey2) ?? 0) >= COMPANY_CAP_30D)
+        continue;
 
       const score = quickMatchScore(
         scoreProfileForRoles(profile, roles),
@@ -603,6 +648,9 @@ async function processUser(
         await enqueueApplication(app.id);
         enqueued++;
         stats.applicationsEnqueued++;
+        if (cKey2) {
+          companyCount30d.set(cKey2, (companyCount30d.get(cKey2) ?? 0) + 1);
+        }
         if (matchedRound) {
           matchedRound.sentCount = (matchedRound.sentCount ?? 0) + 1;
         }
