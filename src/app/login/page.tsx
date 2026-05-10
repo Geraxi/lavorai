@@ -2,6 +2,7 @@
 
 import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Logo } from "@/components/logo";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
@@ -16,6 +17,7 @@ export default function LoginPage() {
 }
 
 function LoginContent() {
+  const t = useTranslations("auth");
   const params = useSearchParams();
   const next = params.get("next") ?? "/dashboard";
   const plan = params.get("plan");
@@ -56,15 +58,15 @@ function LoginContent() {
           .catch(() => null);
         if (status?.needsVerify) {
           setNeedsVerify(true);
-          setErr("Email non verificata. Clicca il link nell'email o richiedine uno nuovo.");
+          setErr(t("errorEmailNotVerified"));
         } else {
-          setErr("Email o password non corretti.");
+          setErr(t("errorInvalidCredentials"));
         }
         return;
       }
       window.location.href = res.url ?? callbackUrl;
     } catch {
-      setErr("Errore di rete. Riprova.");
+      setErr(t("errorNetwork"));
     } finally {
       setLoading(false);
     }
@@ -110,7 +112,7 @@ function LoginContent() {
                   lineHeight: 1.1,
                 }}
               >
-                {plan ? "Pochi secondi per iniziare." : "Bentornato."}
+                {plan ? t("loginHeadingCheckout") : t("loginHeadingDefault")}
               </h1>
               <p
                 style={{
@@ -120,9 +122,7 @@ function LoginContent() {
                   margin: "0 0 28px",
                 }}
               >
-                {plan
-                  ? "Accedi per continuare al checkout."
-                  : "Accedi al tuo account."}
+                {plan ? t("loginSubtitleCheckout") : t("loginSubtitleDefault")}
               </p>
 
               {error && (
@@ -140,7 +140,7 @@ function LoginContent() {
                   }}
                 >
                   <Icon name="x" size={14} style={{ marginTop: 2, flexShrink: 0 }} />
-                  <span>Link non valido o scaduto. Richiedi un nuovo link.</span>
+                  <span>{t("errorLinkInvalid")}</span>
                 </div>
               )}
 
@@ -155,7 +155,7 @@ function LoginContent() {
                     marginBottom: 6,
                   }}
                 >
-                  Email
+                  {t("email")}
                 </label>
                 <input
                   id="email"
@@ -165,7 +165,7 @@ function LoginContent() {
                   autoComplete="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="mario.rossi@esempio.it"
+                  placeholder={t("emailPlaceholderExample")}
                   className="ds-input"
                   style={{ padding: "10px 12px", fontSize: 14, marginBottom: 14 }}
                 />
@@ -185,7 +185,7 @@ function LoginContent() {
                       color: "var(--fg-muted)",
                     }}
                   >
-                    Password
+                    {t("password")}
                   </label>
                   <Link
                     href="/forgot-password"
@@ -196,7 +196,7 @@ function LoginContent() {
                       textUnderlineOffset: 2,
                     }}
                   >
-                    Dimenticata?
+                    {t("passwordForgotShort")}
                   </Link>
                 </div>
                 <input
@@ -205,7 +205,7 @@ function LoginContent() {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder={t("passwordPlaceholderDots")}
                   className="ds-input"
                   style={{ padding: "10px 12px", fontSize: 14 }}
                 />
@@ -231,7 +231,7 @@ function LoginContent() {
                     }}
                   >
                     {resendDone ? (
-                      <span>Email inviata. Controlla la posta (anche spam).</span>
+                      <span>{t("verifyEmailSent")}</span>
                     ) : (
                       <button
                         type="button"
@@ -247,7 +247,7 @@ function LoginContent() {
                           fontSize: 12.5,
                         }}
                       >
-                        {resending ? "Invio..." : "Reinvia link di verifica"}
+                        {resending ? t("verifyResending") : t("verifyResend")}
                       </button>
                     )}
                   </div>
@@ -265,11 +265,11 @@ function LoginContent() {
                 >
                   {loading ? (
                     <>
-                      <Icon name="refresh" size={14} /> Accesso...
+                      <Icon name="refresh" size={14} /> {t("loginSubmitting")}
                     </>
                   ) : (
                     <>
-                      Accedi <Icon name="arrow-right" size={14} />
+                      {t("submitLogin")} <Icon name="arrow-right" size={14} />
                     </>
                   )}
                 </button>
@@ -283,7 +283,7 @@ function LoginContent() {
                   textAlign: "center",
                 }}
               >
-                Non hai un account?{" "}
+                {t("noAccountQuestion")}{" "}
                 <Link
                   href={`/signup${plan ? `?plan=${plan}` : ""}`}
                   style={{
@@ -293,7 +293,7 @@ function LoginContent() {
                     textUnderlineOffset: 3,
                   }}
                 >
-                  Registrati gratis
+                  {t("signupFree")}
                 </Link>
               </p>
 

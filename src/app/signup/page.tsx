@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Logo } from "@/components/logo";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/design/icon";
@@ -16,6 +17,7 @@ export default function SignupPage() {
 }
 
 function SignupContent() {
+  const t = useTranslations("auth");
   const params = useSearchParams();
   const plan = params.get("plan");
 
@@ -105,7 +107,7 @@ function SignupContent() {
                   margin: "0 0 10px",
                 }}
               >
-                Controlla la tua email
+                {t("verifyEmailTitle")}
               </h1>
               <p
                 style={{
@@ -114,11 +116,11 @@ function SignupContent() {
                   lineHeight: 1.5,
                 }}
               >
-                Ti abbiamo inviato un link di verifica a{" "}
+                {t("verifyEmailBody1")}{" "}
                 <span style={{ color: "var(--fg)", fontWeight: 500 }}>
                   {email}
                 </span>
-                . Clicca il link per attivare l&apos;account e accedere. Il link scade tra 24 ore.
+                . {t("verifyEmailBody2")}
               </p>
               <div
                 style={{
@@ -130,14 +132,14 @@ function SignupContent() {
                 }}
               >
                 <Link href="/login" className="ds-btn">
-                  ← Torna al login
+                  {t("backToLogin")}
                 </Link>
                 <button
                   type="button"
                   className="ds-btn ds-btn-ghost"
                   onClick={() => setPaywallOpen(true)}
                 >
-                  Scegli il piano
+                  {t("choosePlan")}
                 </button>
               </div>
             </>
@@ -152,7 +154,7 @@ function SignupContent() {
               lineHeight: 1.1,
             }}
           >
-            Crea il tuo account
+            {t("signupHeading")}
           </h1>
           <p
             style={{
@@ -162,23 +164,23 @@ function SignupContent() {
               margin: "0 0 28px",
             }}
           >
-            3 candidature gratis per provare — niente carta richiesta.
+            {t("signupSubheading")}
           </p>
 
           <form onSubmit={onSubmit}>
-            <Label htmlFor="name">Nome</Label>
+            <Label htmlFor="name">{t("name")}</Label>
             <input
               id="name"
               type="text"
               autoComplete="given-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Mario Rossi"
+              placeholder={t("namePlaceholder")}
               className="ds-input"
               style={{ padding: "10px 12px", fontSize: 14, marginBottom: 14 }}
             />
 
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{t("email")}</Label>
             <input
               id="email"
               type="email"
@@ -186,12 +188,12 @@ function SignupContent() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="mario.rossi@esempio.it"
+              placeholder={t("emailPlaceholderExample")}
               className="ds-input"
               style={{ padding: "10px 12px", fontSize: 14, marginBottom: 14 }}
             />
 
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("password")}</Label>
             <input
               id="password"
               type="password"
@@ -200,7 +202,7 @@ function SignupContent() {
               minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Min 8 char · 1 maiuscola · 1 numero"
+              placeholder={t("passwordPlaceholderSignup")}
               className="ds-input"
               style={{ padding: "10px 12px", fontSize: 14 }}
             />
@@ -224,14 +226,14 @@ function SignupContent() {
                 style={{ marginTop: 2, accentColor: "var(--fg)" }}
               />
               <span>
-                Ho letto la{" "}
+                {t("consentRead")}{" "}
                 <Link
                   href="/privacy"
                   style={{ color: "var(--fg)", textDecoration: "underline" }}
                 >
                   privacy policy
                 </Link>{" "}
-                e autorizzo il trattamento dei dati.
+                {t("consentAuthorize")}
               </span>
             </label>
 
@@ -260,11 +262,11 @@ function SignupContent() {
             >
               {loading ? (
                 <>
-                  <Icon name="refresh" size={14} /> Creazione account...
+                  <Icon name="refresh" size={14} /> {t("creating")}
                 </>
               ) : (
                 <>
-                  Crea account <Icon name="arrow-right" size={14} />
+                  {t("submitSignup")} <Icon name="arrow-right" size={14} />
                 </>
               )}
             </button>
