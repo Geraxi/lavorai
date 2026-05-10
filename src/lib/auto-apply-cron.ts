@@ -5,6 +5,7 @@ import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
 import { effectiveTier, getLimits } from "@/lib/billing";
 import { titleMatchesAnyRole } from "@/lib/role-match";
+import { runSelfHeal } from "@/lib/auto-apply-self-heal";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -46,6 +47,24 @@ interface RunStats {
 }
 
 export async function runAutoApplyCron(): Promise<RunStats> {
+  // Self-heal PRIMA di processare gli utenti: archivia sessioni garbage,
+  // re-enqueue stuck apps, auto-lower matchMin per zero-throughput, alert
+  // admin su credit exhaustion. Idempotente, gira ogni tick (~30min).
+  try {
+    const heal = await runSelfHeal();
+    if (
+      heal.garbageSessionsArchived +
+        heal.stuckAppsRequeued +
+        heal.matchMinAutoLowered.length +
+        heal.creditExhaustedUsers.length >
+      0
+    ) {
+      console.log("[auto-apply-cron] self-heal report", heal);
+    }
+  } catch (err) {
+    console.error("[auto-apply-cron] self-heal crashed (non-fatal)", err);
+  }
+
   const stats: RunStats = {
     usersProcessed: 0,
     applicationsEnqueued: 0,
