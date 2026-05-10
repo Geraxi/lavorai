@@ -97,49 +97,96 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
     setBatchConfirmOpen(false);
     if (remainingJobs.length === 0) return;
     setBatchLoading(true);
+
+    // Chunk a 100 per request: il server accetta fino a 500 ma a 100
+    // mantieni la singola request <2s e dai feedback progressivo.
+    const CHUNK_SIZE = 100;
+    const allIds = remainingJobs.map((j) => j.id);
+    const chunks: string[][] = [];
+    for (let i = 0; i < allIds.length; i += CHUNK_SIZE) {
+      chunks.push(allIds.slice(i, i + CHUNK_SIZE));
+    }
+
+    let totalEnqueued = 0;
+    let totalAwaitingConsent = 0;
+    let totalBelowThreshold = 0;
+    let lastMatchMin = 0;
+    let lastRemaining: number | null = null;
+    const enqueuedJobIds: string[] = [];
+
     try {
-      const res = await fetch("/api/applications/apply-batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobIds: remainingJobs.map((j) => j.id) }),
-      });
-      const body = await res.json().catch(() => ({}));
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        const res = await fetch("/api/applications/apply-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobIds: chunk }),
+        });
+        const body = await res.json().catch(() => ({}));
 
-      if (res.status === 409 && body?.error === "missing_cv") {
-        toast.error("Carica prima il tuo CV.");
-        router.push("/onboarding");
-        return;
-      }
-      if (res.status === 402) {
-        setPaywallMessage(body?.message ?? null);
-        setPaywallOpen(true);
-        return;
-      }
-      if (!res.ok) {
-        toast.error(body?.message ?? "Errore batch.");
-        return;
+        if (res.status === 409 && body?.error === "missing_cv") {
+          toast.error("Carica prima il tuo CV.");
+          router.push("/onboarding");
+          return;
+        }
+        if (res.status === 402) {
+          // Quota mensile esaurita: smetti di chunkare ma mostra
+          // quello già inviato, poi paywall.
+          setPaywallMessage(body?.message ?? null);
+          setPaywallOpen(true);
+          break;
+        }
+        if (res.status === 429) {
+          toast.error(
+            body?.message ?? "Troppe richieste. Aspetta qualche minuto.",
+          );
+          break;
+        }
+        if (!res.ok) {
+          toast.error(body?.message ?? `Errore al batch ${i + 1}/${chunks.length}.`);
+          break;
+        }
+
+        totalEnqueued += body.enqueued ?? 0;
+        totalAwaitingConsent += body.awaitingConsent ?? 0;
+        totalBelowThreshold += body.belowThreshold ?? 0;
+        lastMatchMin = body.matchMin ?? lastMatchMin;
+        lastRemaining = body.remaining ?? lastRemaining;
+        // ID effettivamente accettati: i primi `body.enqueued` del chunk
+        for (let k = 0; k < (body.enqueued ?? 0); k++)
+          enqueuedJobIds.push(chunk[k]);
+
+        if (chunks.length > 1) {
+          toast.message(
+            `Batch ${i + 1}/${chunks.length} · ${totalEnqueued} inviate`,
+          );
+        }
       }
 
-      setAppliedIds((s) => {
-        const next = new Set(s);
-        remainingJobs.slice(0, body.enqueued).forEach((j) => next.add(j.id));
-        return next;
-      });
+      if (enqueuedJobIds.length > 0) {
+        setAppliedIds((s) => {
+          const next = new Set(s);
+          for (const id of enqueuedJobIds) next.add(id);
+          return next;
+        });
+      }
+
       const bits: string[] = [];
-      if (body.enqueued > 0) bits.push(`${body.enqueued} inviate`);
-      if (body.awaitingConsent > 0) {
-        bits.push(`${body.awaitingConsent} in attesa consenso`);
-      }
-      if (body.belowThreshold > 0) {
+      if (totalEnqueued > 0) bits.push(`${totalEnqueued} inviate`);
+      if (totalAwaitingConsent > 0)
+        bits.push(`${totalAwaitingConsent} in attesa consenso`);
+      if (totalBelowThreshold > 0)
         bits.push(
-          `${body.belowThreshold} saltate (match < ${body.matchMin}%)`,
+          `${totalBelowThreshold} saltate (match < ${lastMatchMin}%)`,
         );
+      if (lastRemaining != null) bits.push(`${lastRemaining} rimaste nel piano`);
+      if (bits.length > 0) toast.success(bits.join(" · "));
+      else if (totalEnqueued + totalAwaitingConsent === 0)
+        toast.error("Nessuna candidatura inviata.");
+
+      if (totalEnqueued > 0) {
+        setTimeout(() => router.push("/applications"), 1200);
       }
-      if (body.remaining != null) {
-        bits.push(`${body.remaining} rimaste nel piano`);
-      }
-      toast.success(bits.length > 0 ? bits.join(" · ") : "Operazione completata");
-      setTimeout(() => router.push("/applications"), 1200);
     } catch {
       toast.error("Errore di rete.");
     } finally {

@@ -7,7 +7,7 @@ import { getLimits, effectiveTier } from "@/lib/billing";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { resolveSession } from "@/lib/apply-session";
-import { applyLimiter } from "@/lib/rate-limit";
+import { applyBatchLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,7 +21,9 @@ function randomToken(): string {
 }
 
 const bodySchema = z.object({
-  jobIds: z.array(z.string().min(1)).min(1).max(100),
+  // 500 max per request — abbastanza per la job board del giorno;
+  // batch più grandi vanno chunkati lato client.
+  jobIds: z.array(z.string().min(1)).min(1).max(500),
 });
 
 function portalOf(url: string): string {
@@ -46,7 +48,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Rate limit globale (conta una sola chiamata, il limite reale è monthly)
-    const rl = await applyLimiter.limit(`user:${user.id}:batch`);
+    const rl = await applyBatchLimiter.limit(`user:${user.id}:batch`);
     if (!rl.success) {
       return NextResponse.json(
         {
@@ -61,8 +63,15 @@ export async function POST(request: NextRequest) {
     const json = await request.json().catch(() => null);
     const parsed = bodySchema.safeParse(json);
     if (!parsed.success) {
+      const tooMany = parsed.error.issues.some((i) => i.code === "too_big");
       return NextResponse.json(
-        { error: "validation", issues: parsed.error.issues },
+        {
+          error: "validation",
+          message: tooMany
+            ? "Troppi job in una sola richiesta (max 500). Processiamo a batch."
+            : "Richiesta non valida.",
+          issues: parsed.error.issues,
+        },
         { status: 400 },
       );
     }

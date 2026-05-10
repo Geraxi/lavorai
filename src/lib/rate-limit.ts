@@ -79,5 +79,8 @@ function buildLimiter(
 }
 
 export const applyLimiter: Limiter = buildLimiter(10, 60 * 60 * 1000, "lavorai:apply");
+// Apply-batch può fare molti chunk consecutivi sull'azione "applica a tutti".
+// Limite generoso per supportare job board grandi (43 chunk × 100 job = 4300).
+export const applyBatchLimiter: Limiter = buildLimiter(60, 60 * 60 * 1000, "lavorai:apply-batch");
 export const authLimiter: Limiter = buildLimiter(5, 60 * 60 * 1000, "lavorai:auth");
 export const uploadLimiter: Limiter = buildLimiter(10, 60 * 60 * 1000, "lavorai:upload");
