@@ -5,6 +5,7 @@ import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/design/icon";
 import { cn } from "@/lib/utils";
 
@@ -14,19 +15,6 @@ interface NavItem {
   icon: IconName;
   count?: string | number | null;
 }
-
-const workItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { href: "/applications", label: "Candidature", icon: "briefcase", count: null },
-  { href: "/jobs", label: "Job board", icon: "inbox" },
-  { href: "/analytics", label: "Analisi", icon: "chart" },
-];
-
-const setupItems: NavItem[] = [
-  { href: "/preferences", label: "Preferenze", icon: "target" },
-  { href: "/cv", label: "Materiali", icon: "file" },
-  { href: "/settings", label: "Account", icon: "settings" },
-];
 
 export interface SidebarProps {
   applicationsCount?: number;
@@ -43,8 +31,23 @@ export function AppSidebar({
   autoApplyToday = 22,
   autoApplyRemaining = 78,
   userName = "Demo User",
-  userPlan = "Piano Pro",
+  userPlan = "Pro plan",
 }: SidebarProps) {
+  const t = useTranslations("appShell");
+
+  const workItems: NavItem[] = [
+    { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
+    { href: "/applications", label: t("applications"), icon: "briefcase", count: null },
+    { href: "/jobs", label: t("jobs"), icon: "inbox" },
+    { href: "/analytics", label: t("analytics"), icon: "chart" },
+  ];
+
+  const setupItems: NavItem[] = [
+    { href: "/preferences", label: t("preferences"), icon: "target" },
+    { href: "/cv", label: t("materials"), icon: "file" },
+    { href: "/settings", label: t("account"), icon: "settings" },
+  ];
+
   const pathname = usePathname();
 
   return (
@@ -60,7 +63,7 @@ export function AppSidebar({
         <Logo href="/dashboard" size="sm" />
       </div>
 
-      <SectionLabel>Lavoro</SectionLabel>
+      <SectionLabel>{t("sectionWork")}</SectionLabel>
       {workItems.map((it) => (
         <NavItem
           key={it.href}
@@ -75,7 +78,7 @@ export function AppSidebar({
         />
       ))}
 
-      <SectionLabel>Profilo</SectionLabel>
+      <SectionLabel>{t("sectionProfile")}</SectionLabel>
       {setupItems.map((it) => (
         <NavItem key={it.href} item={it} active={isActive(pathname, it.href)} />
       ))}
@@ -101,14 +104,14 @@ export function AppSidebar({
             <span
               style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}
             >
-              Auto-apply · {autoApplyOn ? "ON" : "OFF"}
+              {t("autoApply")} · {autoApplyOn ? "ON" : "OFF"}
             </span>
           </div>
           <div
             className="mono mt-1"
             style={{ fontSize: 11, color: "var(--fg-muted)" }}
           >
-            {autoApplyToday} candidature oggi · {autoApplyRemaining} rimaste
+            {t("appsToday", { count: autoApplyToday })} · {t("remaining", { count: autoApplyRemaining })}
           </div>
           <div
             className="mt-2.5 overflow-hidden rounded"
@@ -238,6 +241,7 @@ function NavItem({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 function LogoutButton() {
+  const t = useTranslations("appShell");
   return (
     <button
       type="button"
@@ -266,7 +270,7 @@ function LogoutButton() {
           size={15}
           style={{ flexShrink: 0, opacity: 0.75 }}
         />
-        <span>Esci</span>
+        <span>{t("logout")}</span>
       </span>
     </button>
   );

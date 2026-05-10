@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Icon, type IconName } from "@/components/design/icon";
 import { Logo } from "@/components/logo";
@@ -31,10 +32,11 @@ interface Details {
 // Profilo/Esperienza rimosse: il profilo viene auto-estratto da Claude
 // dal CV; gli Esperienza/Notice period si possono editare in Preferenze
 // dopo (opzionale, non blocca il valore principale).
+// STEPS labels are localized inside the component via useTranslations
 const STEPS: StepDef[] = [
   { key: "cv", label: "CV", icon: "file" },
-  { key: "prefs", label: "Ruolo & Città", icon: "target" },
-  { key: "confirm", label: "Avvia", icon: "zap" },
+  { key: "prefs", label: "Role & Location", icon: "target" },
+  { key: "confirm", label: "Launch", icon: "zap" },
 ];
 
 interface RolePref {
@@ -78,8 +80,14 @@ export default function OnboardingClient({
 }: {
   initial: InitialState;
 }) {
+  const t = useTranslations("onboarding");
   const router = useRouter();
   const [step, setStep] = useState(0);
+  // Steps localized — usiamo questo array invece di STEPS in render
+  const stepsLocalized: StepDef[] = STEPS.map((s, i) => ({
+    ...s,
+    label: i === 0 ? t("stepCv") : i === 1 ? t("stepPrefs") : t("stepLaunch"),
+  }));
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [cvInfo, setCvInfo] = useState<InitialCvState | null>(initial.cv);
@@ -145,7 +153,7 @@ export default function OnboardingClient({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(body?.message ?? "Errore caricamento CV");
+        toast.error(body?.message ?? t("errorUpload"));
         return;
       }
       setCvInfo({
@@ -153,7 +161,7 @@ export default function OnboardingClient({
         chars: body.chars,
         preview: body.preview ?? "",
       });
-      toast.success("CV caricato!");
+      toast.success(t("cvUploaded"));
     } finally {
       setUploading(false);
     }
@@ -183,7 +191,7 @@ export default function OnboardingClient({
   }
 
   const next = async () => {
-    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+    setStep((s) => Math.min(stepsLocalized.length - 1, s + 1));
   };
   const prev = () => setStep((s) => Math.max(0, s - 1));
   const finish = async () => {
@@ -238,7 +246,7 @@ export default function OnboardingClient({
             className="mono"
             style={{ fontSize: 11, color: "var(--fg-muted)", marginLeft: 6 }}
           >
-            {step + 1}/{STEPS.length} · {STEPS[step].label}
+            {step + 1}/{stepsLocalized.length} · {stepsLocalized[step].label}
           </div>
         </div>
       </div>
@@ -248,7 +256,7 @@ export default function OnboardingClient({
         <Logo size="sm" />
 
         <div className="ob-stepper">
-          {STEPS.map((s, i) => {
+          {stepsLocalized.map((s, i) => {
             const done = i < step;
             const current = i === step;
             return (
@@ -346,19 +354,19 @@ export default function OnboardingClient({
             style={{ visibility: step === 0 ? "hidden" : "visible" }}
             onClick={prev}
           >
-            ← Indietro
+            ← {t("back")}
           </button>
           <button
             type="button"
             className="ds-btn ds-btn-primary"
-            onClick={step === STEPS.length - 1 ? finish : next}
+            onClick={step === stepsLocalized.length - 1 ? finish : next}
             disabled={step === 0 && !canContinueStep0}
             style={{
               opacity: step === 0 && !canContinueStep0 ? 0.5 : 1,
               cursor: step === 0 && !canContinueStep0 ? "not-allowed" : "pointer",
             }}
           >
-            {step === STEPS.length - 1 ? "Attiva auto-apply" : "Continua"}{" "}
+            {step === stepsLocalized.length - 1 ? t("activateAutoApply") : t("continue")}{" "}
             <Icon name="arrow-right" size={13} />
           </button>
         </div>
@@ -418,17 +426,13 @@ function StepCvUpload({
   uploading: boolean;
   onUpload: (e: FormEvent<HTMLFormElement>) => void;
 }) {
+  const t = useTranslations("onboarding");
   // Se il CV è già stato adottato server-side, mostriamo uno stato "ready"
   if (cvInfo) {
     return (
       <>
-        <h1 style={stepTitle}>
-          CV già pronto ✨
-        </h1>
-        <p style={stepLead}>
-          Abbiamo caricato il CV che hai inviato prima del login.
-          Controlla che sia giusto e procedi.
-        </p>
+        <h1 style={stepTitle}>{t("cvReadyTitle")}</h1>
+        <p style={stepLead}>{t("cvReadyBody")}</p>
         <div
           className="ds-card"
           style={{
@@ -458,7 +462,7 @@ function StepCvUpload({
               {cvInfo.filename}
             </div>
             <div className="mono" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>
-              {cvInfo.chars.toLocaleString("it-IT")} caratteri estratti
+              {t("charsExtracted", { count: cvInfo.chars.toLocaleString() })}
             </div>
           </div>
           <span
@@ -470,11 +474,11 @@ function StepCvUpload({
             }}
           >
             <Icon name="check" size={11} />
-            Analizzato
+            {t("cvAnalyzed")}
           </span>
         </div>
         <p style={{ fontSize: 12, color: "var(--fg-subtle)", marginTop: 14 }}>
-          Vuoi usare un CV diverso? Potrai sostituirlo dalle impostazioni in qualsiasi momento.
+          {t("cvChangeHint")}
         </p>
       </>
     );
@@ -482,11 +486,8 @@ function StepCvUpload({
 
   return (
     <>
-      <h1 style={stepTitle}>Inizia caricando il tuo CV</h1>
-      <p style={stepLead}>
-        Lo analizziamo e lo usiamo come base per ogni candidatura — adattato al
-        singolo annuncio.
-      </p>
+      <h1 style={stepTitle}>{t("cvStartTitle")}</h1>
+      <p style={stepLead}>{t("cvStartBody")}</p>
 
       <form onSubmit={onUpload}>
         <label
@@ -572,7 +573,7 @@ function StepCvUpload({
             style={{ marginTop: 14, width: "100%" }}
             disabled={uploading}
           >
-            {uploading ? "Analisi in corso..." : "Analizza CV"}
+            {uploading ? t("analyzing") : t("analyzeCv")}
           </button>
         )}
       </form>
@@ -1158,13 +1159,11 @@ function StepPreferences({
   portfolioUrl: string;
   setPortfolioUrl: React.Dispatch<React.SetStateAction<string>>;
 }) {
+  const t = useTranslations("onboarding");
   return (
     <>
-      <h1 style={stepTitle}>Cosa stai cercando?</h1>
-      <p style={stepLead}>
-        LavorAI applicherà solo ad annunci che corrispondono a questi criteri.
-        Puoi modificarli quando vuoi.
-      </p>
+      <h1 style={stepTitle}>{t("prefsTitle")}</h1>
+      <p style={stepLead}>{t("prefsBody")}</p>
       <div style={{ display: "grid", gap: 22 }}>
         <div>
           <label className="ds-label">Tipologia di lavoro</label>
@@ -1388,6 +1387,7 @@ function StepConfirm({
   locationsSummary: string;
   details: Details;
 }) {
+  const t = useTranslations("onboarding");
   const seniorityLabel: Record<Seniority, string> = {
     junior: "Junior",
     mid: "Mid",
@@ -1396,56 +1396,54 @@ function StepConfirm({
     principal: "Principal",
   };
   const noticeLabel: Record<Notice, string> = {
-    immediate: "Subito",
-    "1m": "1 mese",
-    "2m": "2 mesi",
-    "3m_plus": "3+ mesi",
+    immediate: t("noticeImmediate"),
+    "1m": t("notice1m"),
+    "2m": t("notice2m"),
+    "3m_plus": t("notice3mPlus"),
   };
 
   return (
     <>
-      <h1 style={stepTitle}>Tutto pronto 🎯</h1>
-      <p style={stepLead}>
-        LavorAI inizierà ad applicare automaticamente. Riceverai notifiche solo
-        quando un recruiter risponde.
-      </p>
+      <h1 style={stepTitle}>{t("confirmTitle")}</h1>
+      <p style={stepLead}>{t("confirmBody")}</p>
       <div
         className="ds-card"
         style={{ padding: 18, background: "var(--bg-sunken)" }}
       >
         <div style={{ display: "grid", gap: 12 }}>
-          <ConfirmRow label="Candidature stimate / settimana" value="~60–80" />
+          <ConfirmRow label={t("rowEstimatedApps")} value="~60–80" />
           <ConfirmRow
-            label="Ruoli monitorati"
-            value={`${rolesSelected} titoli`}
+            label={t("rowRoles")}
+            value={t("rolesCount", { count: rolesSelected })}
           />
-          <ConfirmRow label="Sedi" value={locationsSummary || "—"} />
-          <ConfirmRow label="RAL minima" value={`€${salary}k`} />
+          <ConfirmRow label={t("rowLocations")} value={locationsSummary || "—"} />
+          <ConfirmRow label={t("rowMinSalary")} value={`€${salary}k`} />
           <ConfirmRow
-            label="Seniority"
-            value={details.seniority ? seniorityLabel[details.seniority] : "Non specificata"}
+            label={t("rowSeniority")}
+            value={details.seniority ? seniorityLabel[details.seniority] : t("notSpecified")}
           />
           <ConfirmRow
-            label="Inglese"
+            label={t("rowEnglish")}
             value={details.englishLevel === "none" ? "—" : details.englishLevel.toUpperCase()}
           />
           <ConfirmRow
-            label="Preavviso"
+            label={t("rowNotice")}
             value={details.noticePeriod ? noticeLabel[details.noticePeriod] : "—"}
           />
           {details.avoidCompanies && (
             <ConfirmRow
-              label="Aziende escluse"
-              value={details.avoidCompanies
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean)
-                .length + " aziende"}
+              label={t("rowExcluded")}
+              value={t("companiesCount", {
+                count: details.avoidCompanies
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean).length,
+              })}
             />
           )}
           <ConfirmRow
-            label="Fonti"
-            value="LinkedIn · Indeed · WTTJ · +12"
+            label={t("rowSources")}
+            value="LinkedIn · Greenhouse · Lever · Ashby · +5"
           />
         </div>
       </div>
