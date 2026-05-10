@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import { Toaster } from "@/components/ui/sonner";
 import { CookieBanner } from "@/components/cookie-banner";
 import { Providers } from "@/app/providers";
@@ -77,21 +79,25 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
   return (
     <html
-      lang="it"
+      lang={locale}
       className={`${inter.variable} ${jetbrains.variable}`}
       suppressHydrationWarning
     >
       <body className="min-h-screen antialiased">
-        <Providers>{children}</Providers>
-        <Toaster richColors position="top-center" />
-        <CookieBanner />
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <Providers>{children}</Providers>
+          <Toaster richColors position="top-center" />
+          <CookieBanner />
+        </NextIntlClientProvider>
       </body>
     </html>
   );

@@ -3,24 +3,25 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { cn } from "@/lib/utils";
-
-const marketingLinks = [
-  { href: "/#come-funziona", label: "Come funziona" },
-  { href: "/#prezzi", label: "Prezzi" },
-  { href: "/#faq", label: "FAQ" },
-];
-
-const appLinks = [
-  { href: "/jobs", label: "Job board" },
-  { href: "/applications", label: "Candidature" },
-];
 
 export function SiteNav() {
   const [scrolled, setScrolled] = useState(false);
   const pathname = usePathname();
+  const t = useTranslations("nav");
+  const marketingLinks = [
+    { href: "/#come-funziona", label: t("howItWorks") },
+    { href: "/#prezzi", label: t("pricing") },
+    { href: "/#faq", label: t("faq") },
+  ];
+  const appLinks = [
+    { href: "/jobs", label: "Job board" },
+    { href: "/applications", label: t("dashboard") },
+  ];
   const isApp =
     pathname?.startsWith("/jobs") ||
     pathname?.startsWith("/applications") ||
@@ -100,7 +101,7 @@ export function SiteNav() {
                 className="hidden sm:inline-flex"
                 style={{ height: 44, paddingLeft: 18, paddingRight: 18, fontSize: 15 }}
               >
-                <Link href="/login">Accedi</Link>
+                <Link href="/login">{t("login")}</Link>
               </Button>
               <Button
                 asChild
@@ -108,11 +109,12 @@ export function SiteNav() {
                 style={{ height: 44, paddingLeft: 22, paddingRight: 22, fontSize: 15 }}
               >
                 <Link href="/signup">
-                  <span style={{ fontWeight: 600 }}>Registrati</span>
+                  <span style={{ fontWeight: 600 }}>{t("signup")}</span>
                 </Link>
               </Button>
             </>
           )}
+          <LanguageSwitcher />
         </div>
       </div>
     </header>

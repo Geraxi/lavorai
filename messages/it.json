@@ -1,0 +1,65 @@
+{
+  "metadata": {
+    "title": "LavorAI — Il copilota italiano per la ricerca del lavoro",
+    "description": "Candidati in automatico su LinkedIn, InfoJobs, Indeed e Subito. CV ATS-friendly e lettera motivazionale AI, in italiano nativo. Da €19.99/mese."
+  },
+  "nav": {
+    "howItWorks": "Come funziona",
+    "pricing": "Prezzi",
+    "faq": "FAQ",
+    "login": "Accedi",
+    "signup": "Inizia gratis",
+    "dashboard": "Dashboard",
+    "language": "Lingua",
+    "italian": "Italiano",
+    "english": "English"
+  },
+  "hero": {
+    "badge": "Mentre tu dormi · LavorAI si candida",
+    "title1": "Candidarsi non è più",
+    "title2": "il tuo lavoro.",
+    "subtitle": "LavorAI trova gli annunci giusti, riscrive il tuo CV per ognuno, e <strong>compila i form al posto tuo</strong>. Ogni 30 minuti. Tutta la notte. Tu apri solo le email dei colloqui.",
+    "cta": "Inizia gratis — 3 candidature subito",
+    "ctaCaption": "Nessuna carta · Pausa in qualsiasi momento · Usato da 2.000+ candidati italiani",
+    "check1": "<strong>Si candida da solo</strong> ogni 30 minuti, anche mentre dormi",
+    "check2": "CV e lettera <strong>riscritti dall'AI</strong> per ogni annuncio, in italiano nativo",
+    "check3": "Submit reale sui form ATS — nessun login ai tuoi account",
+    "portalsLabel": "Si candida automaticamente su:"
+  },
+  "footer": {
+    "tagline": "Il copilota italiano per la ricerca del lavoro.",
+    "product": "Prodotto",
+    "legal": "Legale",
+    "company": "Azienda",
+    "contact": "Contatti",
+    "privacy": "Privacy",
+    "terms": "Termini",
+    "rights": "Tutti i diritti riservati."
+  },
+  "auth": {
+    "loginTitle": "Bentornato",
+    "loginSubtitle": "Accedi al tuo account LavorAI",
+    "signupTitle": "Inizia gratis",
+    "signupSubtitle": "Crea il tuo account e fai partire l'auto-apply in 3 minuti",
+    "email": "Email",
+    "emailPlaceholder": "tu@email.com",
+    "password": "Password",
+    "passwordPlaceholder": "Almeno 8 caratteri",
+    "passwordForgot": "Password dimenticata?",
+    "submitLogin": "Accedi",
+    "submitSignup": "Crea account",
+    "loginWithGoogle": "Continua con Google",
+    "or": "oppure",
+    "noAccount": "Non hai un account?",
+    "haveAccount": "Hai già un account?",
+    "createOne": "Creane uno",
+    "loginLink": "Accedi",
+    "termsAccept": "Continuando accetti <terms>termini</terms> e <privacy>privacy</privacy>.",
+    "errorInvalidCredentials": "Email o password errate.",
+    "errorGeneric": "Errore durante l'accesso. Riprova.",
+    "errorEmailExists": "Email già registrata. Accedi.",
+    "errorWeakPassword": "Password troppo corta (minimo 8 caratteri).",
+    "errorNetwork": "Problema di rete. Riprova.",
+    "successAccount": "Account creato! Controlla la tua email per verificare."
+  }
+}

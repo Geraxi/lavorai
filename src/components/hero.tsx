@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { motion } from "motion/react";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { AuroraBackground } from "@/components/aurora-background";
 import { DashboardMockup } from "@/components/dashboard-mockup";
 
 export function Hero() {
+  const t = useTranslations("hero");
   return (
     <section className="relative overflow-hidden">
       <AuroraBackground variant="hero" />
@@ -77,7 +79,7 @@ export function Hero() {
                   textTransform: "uppercase",
                 }}
               >
-                Mentre tu dormi · LavorAI si candida
+                {t("badge")}
               </span>
             </motion.div>
 
@@ -93,8 +95,8 @@ export function Hero() {
                 fontWeight: 700,
               }}
             >
-              Candidarsi non è più{" "}
-              <span className="text-gradient-accent">il tuo lavoro.</span>
+              {t("title1")}{" "}
+              <span className="text-gradient-accent">{t("title2")}</span>
             </motion.h1>
 
             <motion.p
@@ -107,11 +109,11 @@ export function Hero() {
                 lineHeight: 1.5,
               }}
             >
-              LavorAI trova gli annunci giusti, riscrive il tuo CV per
-              ognuno, e{" "}
-              <strong style={{ color: "var(--fg)" }}>compila i form al
-              posto tuo</strong>. Ogni 30 minuti. Tutta la notte. Tu apri
-              solo le email dei colloqui.
+              {t.rich("subtitle", {
+                strong: (chunks) => (
+                  <strong style={{ color: "var(--fg)" }}>{chunks}</strong>
+                ),
+              })}
             </motion.p>
 
             <motion.div
@@ -120,10 +122,9 @@ export function Hero() {
               transition={{ duration: 0.55, delay: 0.35 }}
               className="mt-10 flex flex-col items-start gap-3"
             >
-              <ShineButton />
+              <ShineButton label={t("cta")} />
               <span style={{ fontSize: 14, color: "var(--fg-muted)" }}>
-                Nessuna carta · Pausa in qualsiasi momento · Usato da 2.000+
-                candidati italiani
+                {t("ctaCaption")}
               </span>
             </motion.div>
 
@@ -135,33 +136,20 @@ export function Hero() {
               className="mt-9 flex flex-col gap-2.5"
               style={{ fontSize: 15.5 }}
             >
-              <li className="flex items-center gap-3">
-                <span className="text-primary" style={{ fontSize: 17 }}>
-                  ✓
-                </span>
-                <span>
-                  <strong style={{ color: "var(--fg)" }}>Si candida da solo</strong>{" "}
-                  ogni 30 minuti, anche mentre dormi
-                </span>
-              </li>
-              <li className="flex items-center gap-3">
-                <span className="text-primary" style={{ fontSize: 17 }}>
-                  ✓
-                </span>
-                <span>
-                  CV e lettera{" "}
-                  <strong style={{ color: "var(--fg)" }}>riscritti dall&apos;AI</strong>{" "}
-                  per ogni annuncio, in italiano nativo
-                </span>
-              </li>
-              <li className="flex items-center gap-3">
-                <span className="text-primary" style={{ fontSize: 17 }}>
-                  ✓
-                </span>
-                <span>
-                  Submit reale sui form ATS — nessun login ai tuoi account
-                </span>
-              </li>
+              {(["check1", "check2", "check3"] as const).map((k) => (
+                <li key={k} className="flex items-center gap-3">
+                  <span className="text-primary" style={{ fontSize: 17 }}>
+                    ✓
+                  </span>
+                  <span>
+                    {t.rich(k, {
+                      strong: (chunks) => (
+                        <strong style={{ color: "var(--fg)" }}>{chunks}</strong>
+                      ),
+                    })}
+                  </span>
+                </li>
+              ))}
             </motion.ul>
 
             {/* Logo strip — portali su cui LavorAI candida automaticamente */}
@@ -181,7 +169,7 @@ export function Hero() {
                   fontWeight: 500,
                 }}
               >
-                Si candida automaticamente su:
+                {t("portalsLabel")}
               </p>
               <div
                 style={{
@@ -235,7 +223,7 @@ export function Hero() {
 /**
  * CTA primario unico — "Avvia l'auto-apply". Più grande e tangibile.
  */
-function ShineButton() {
+function ShineButton({ label }: { label: string }) {
   return (
     <Button
       asChild
@@ -252,7 +240,7 @@ function ShineButton() {
           className="relative z-10 font-semibold"
           style={{ fontSize: 17, letterSpacing: "-0.005em" }}
         >
-          Inizia gratis — 3 candidature subito
+          {label}
         </span>
         <span
           aria-hidden

@@ -1,0 +1,65 @@
+{
+  "metadata": {
+    "title": "LavorAI — Auto-apply copilot for your job search",
+    "description": "Auto-apply to jobs on LinkedIn, Greenhouse, Lever, Ashby and more. ATS-optimized CV and AI cover letter, written natively for each posting. From €19.99/month."
+  },
+  "nav": {
+    "howItWorks": "How it works",
+    "pricing": "Pricing",
+    "faq": "FAQ",
+    "login": "Sign in",
+    "signup": "Get started free",
+    "dashboard": "Dashboard",
+    "language": "Language",
+    "italian": "Italiano",
+    "english": "English"
+  },
+  "hero": {
+    "badge": "While you sleep · LavorAI applies",
+    "title1": "Job hunting isn't",
+    "title2": "your job anymore.",
+    "subtitle": "LavorAI finds the right openings, rewrites your CV for each one, and <strong>fills in the application forms for you</strong>. Every 30 minutes. All night long. You only open the interview emails.",
+    "cta": "Get started free — 3 applications now",
+    "ctaCaption": "No credit card · Pause anytime · Trusted by 2,000+ candidates",
+    "check1": "<strong>Applies on its own</strong> every 30 minutes, even while you sleep",
+    "check2": "CV and cover letter <strong>rewritten by AI</strong> for every listing, in native English",
+    "check3": "Real submits on ATS forms — never asks for your account passwords",
+    "portalsLabel": "Auto-applies on:"
+  },
+  "footer": {
+    "tagline": "The auto-apply copilot for your job search.",
+    "product": "Product",
+    "legal": "Legal",
+    "company": "Company",
+    "contact": "Contact",
+    "privacy": "Privacy",
+    "terms": "Terms",
+    "rights": "All rights reserved."
+  },
+  "auth": {
+    "loginTitle": "Welcome back",
+    "loginSubtitle": "Sign in to your LavorAI account",
+    "signupTitle": "Get started free",
+    "signupSubtitle": "Create your account and launch auto-apply in 3 minutes",
+    "email": "Email",
+    "emailPlaceholder": "you@email.com",
+    "password": "Password",
+    "passwordPlaceholder": "At least 8 characters",
+    "passwordForgot": "Forgot password?",
+    "submitLogin": "Sign in",
+    "submitSignup": "Create account",
+    "loginWithGoogle": "Continue with Google",
+    "or": "or",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "createOne": "Create one",
+    "loginLink": "Sign in",
+    "termsAccept": "By continuing you accept the <terms>terms</terms> and <privacy>privacy policy</privacy>.",
+    "errorInvalidCredentials": "Invalid email or password.",
+    "errorGeneric": "Sign in failed. Please try again.",
+    "errorEmailExists": "Email already registered. Sign in instead.",
+    "errorWeakPassword": "Password too short (minimum 8 characters).",
+    "errorNetwork": "Network error. Please try again.",
+    "successAccount": "Account created! Check your email to verify."
+  }
+}
