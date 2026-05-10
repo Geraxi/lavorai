@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
@@ -66,6 +67,7 @@ interface Row {
 type Range = "today" | "week" | "month" | "all";
 
 export default function ApplicationsPage() {
+  const t = useTranslations("applicationsPage");
   const [range, setRange] = useState<Range>("all");
   // Due fetch: sent = solo candidature consegnate (success) → vista principale
   // awaiting = solo in attesa di consenso → banner "Consenti tutte"
@@ -135,12 +137,12 @@ export default function ApplicationsPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(body?.message ?? "Errore");
+        toast.error(body?.message ?? t("genericError"));
         return;
       }
       toast.success(`${body.enqueued} candidature accodate`);
     } catch {
-      toast.error("Errore di rete");
+      toast.error(t("networkError"));
     }
   }
 
@@ -152,33 +154,30 @@ export default function ApplicationsPage() {
         body: JSON.stringify({ ids: [id] }),
       });
       if (!res.ok) {
-        toast.error("Errore");
+        toast.error(t("genericError"));
         return;
       }
-      toast.success("Candidatura accodata");
+      toast.success(t("appQueued"));
     } catch {
-      toast.error("Errore di rete");
+      toast.error(t("networkError"));
     }
   }
 
   return (
     <>
-      <AppTopbar title="Candidature" breadcrumb="Lavoro" />
+      <AppTopbar title={t("title")} breadcrumb={t("breadcrumb")} />
       <div style={{ padding: "24px 32px 80px", maxWidth: 1480, width: "100%", margin: "0 auto" }}>
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
             <h1
               style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.022em", margin: 0 }}
             >
-              Candidature
+              {t("title")}
             </h1>
             <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
-              {allRows.length}{" "}
-              {allRows.length === 1
-                ? "candidatura inviata"
-                : "candidature inviate"}
+              {t("totalSent", { count: allRows.length })}
               {" · "}
-              {rangeLabel(range)}
+              {rangeLabel(range, t)}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -188,10 +187,10 @@ export default function ApplicationsPage() {
             >
               {(
                 [
-                  ["today", "Oggi"],
-                  ["week", "7g"],
-                  ["month", "30g"],
-                  ["all", "Tutto"],
+                  ["today", t("today")],
+                  ["week", t("week")],
+                  ["month", t("month")],
+                  ["all", t("all")],
                 ] as const
               ).map(([k, label]) => (
                 <button
@@ -212,7 +211,7 @@ export default function ApplicationsPage() {
               disabled={allRows.length === 0}
               onClick={() => exportCsv(allRows)}
             >
-              <Icon name="download" size={13} /> Esporta CSV
+              <Icon name="download" size={13} /> {t("exportCsv")}
             </button>
           </div>
         </div>
@@ -228,13 +227,13 @@ export default function ApplicationsPage() {
             }}
           >
             <div style={{ fontSize: 13, color: "var(--fg)" }}>
-              <strong>{awaitingCount}</strong>{" "}
-              {awaitingCount === 1
-                ? "candidatura in attesa del tuo consenso"
-                : "candidature in attesa del tuo consenso"}
+              {t.rich("awaitingConsent", {
+                count: awaitingCount,
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })}
               {" · "}
               <span style={{ color: "var(--fg-muted)" }}>
-                (modalità ibrida attiva)
+                {t("hybridMode")}
               </span>
             </div>
             <button
@@ -242,7 +241,7 @@ export default function ApplicationsPage() {
               className="ds-btn ds-btn-accent"
               onClick={askConsentAll}
             >
-              <Icon name="check" size={13} /> Consenti tutte
+              <Icon name="check" size={13} /> {t("allowAll")}
             </button>
           </div>
         )}
@@ -251,12 +250,12 @@ export default function ApplicationsPage() {
           <table className="ds-tbl">
             <thead>
               <tr>
-                <th style={{ width: "30%" }}>Azienda · Ruolo</th>
-                <th>Luogo</th>
-                <th>RAL</th>
-                <th>Match</th>
-                <th>Fonte</th>
-                <th>Stato</th>
+                <th style={{ width: "30%" }}>{t("colCompanyRole")}</th>
+                <th>{t("colLocation")}</th>
+                <th>{t("colSalary")}</th>
+                <th>{t("colMatch")}</th>
+                <th>{t("colSource")}</th>
+                <th>{t("colStatus")}</th>
                 <th>Inviata</th>
                 <th style={{ width: 40 }}></th>
               </tr>
@@ -375,10 +374,10 @@ export default function ApplicationsPage() {
       <DetailDrawer app={selected} onClose={() => setSelected(null)} />
       <ConfirmDialog
         open={consentConfirmOpen}
-        title={`Confermi l'invio di ${awaitingCount} candidature?`}
-        message="Tutte le candidature in attesa di consenso verranno accodate e inviate ai rispettivi portali o recruiter."
-        confirmLabel="Sì, invia tutte"
-        cancelLabel="Annulla"
+        title={t("consentConfirmTitle", { count: awaitingCount })}
+        message={t("consentConfirmMessage")}
+        confirmLabel={t("yesSendAll")}
+        cancelLabel={t("cancel")}
         variant="accent"
         onConfirm={consentAll}
         onCancel={() => setConsentConfirmOpen(false)}
@@ -434,9 +433,12 @@ function relativeTime(d: Date): string {
 }
 
 
-function rangeLabel(r: "today" | "week" | "month" | "all"): string {
-  if (r === "today") return "oggi";
-  if (r === "week") return "ultimi 7 giorni";
-  if (r === "month") return "ultimi 30 giorni";
-  return "tutto lo storico";
+function rangeLabel(
+  r: "today" | "week" | "month" | "all",
+  t: (key: string) => string,
+): string {
+  if (r === "today") return t("rangeToday");
+  if (r === "week") return t("rangeWeek");
+  if (r === "month") return t("rangeMonth");
+  return t("rangeAll");
 }
