@@ -117,6 +117,10 @@ export async function POST(request: NextRequest) {
 
     // 4. Email
     const firstName = result.optimizedCV.fullName.split(/\s+/)[0] ?? "";
+    // Locale dall'NEXT_LOCALE cookie (geo-detect proxy lo setta).
+    // Per il free-tier /optimize l'utente non è ancora registrato →
+    // basta leggere il cookie corrente.
+    const localeCookie = request.cookies.get("NEXT_LOCALE")?.value;
     await sendOptimizedCVEmail({
       to: formData2.email,
       firstName,
@@ -125,6 +129,7 @@ export async function POST(request: NextRequest) {
       atsScore: result.atsScore,
       suggestions: result.suggestions,
       jobTitle: extractJobTitle(formData2.jobPosting),
+      locale: localeCookie === "en" ? "en" : "it",
     });
 
     // 5. Incrementa cookie

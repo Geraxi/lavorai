@@ -81,6 +81,11 @@ export async function POST(request: NextRequest) {
     const passwordHash = await bcrypt.hash(password, 10);
     const privacyConsentAt = new Date();
 
+    // Locale dal cookie NEXT_LOCALE settato dal proxy geo-detect.
+    // Salvato in DB così il worker sa in che lingua mandare le email.
+    const cookieLocale = request.cookies.get("NEXT_LOCALE")?.value;
+    const locale = cookieLocale === "en" ? "en" : "it";
+
     const user = await prisma.user.create({
       data: {
         email,
@@ -88,12 +93,13 @@ export async function POST(request: NextRequest) {
         passwordHash,
         emailVerified: null,
         privacyConsentAt,
+        locale,
       },
-      select: { id: true, email: true },
+      select: { id: true, email: true, locale: true },
     });
 
     // Invia email di verifica (best-effort; non blocca signup se fallisce)
-    await sendVerificationEmail(user.id, user.email);
+    await sendVerificationEmail(user.id, user.email, user.locale);
 
     return NextResponse.json({ ok: true, verifyRequired: true });
   } catch (err) {

@@ -776,7 +776,7 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
     where: { id: applicationId },
     include: {
       job: { select: { title: true, company: true, url: true } },
-      user: { select: { email: true, name: true } },
+      user: { select: { email: true, name: true, locale: true } },
     },
   });
   if (!app) return;
@@ -799,13 +799,23 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
   const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
 
+  const locale = app.user.locale === "en" ? "en" : "it";
+  const subject =
+    locale === "en"
+      ? `Application sent to ${company} ✓`
+      : `Candidatura inviata a ${company} ✓`;
+  const textBody =
+    locale === "en"
+      ? `Hi ${firstName},\n\nYour application for "${jobTitle}" was delivered to ${company}.\n\nJob link: ${jobUrl}\n\n— LavorAI`
+      : `Ciao ${firstName},\n\nLa tua candidatura per "${jobTitle}" è stata consegnata a ${company}.\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`;
+
   await sendWithinQuota("application_sent", app.user.email, async () => {
     await resend.emails.send({
       from,
       to: app.user.email,
-      subject: `Candidatura inviata a ${company} ✓`,
-      html: renderSentEmail({ firstName, jobTitle, company, jobUrl }),
-      text: `Ciao ${firstName},\n\nLa tua candidatura per "${jobTitle}" è stata consegnata a ${company}.\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`,
+      subject,
+      html: renderSentEmail({ firstName, jobTitle, company, jobUrl, locale }),
+      text: textBody,
     });
   });
 }
@@ -815,30 +825,51 @@ function renderSentEmail(data: {
   jobTitle: string;
   company: string;
   jobUrl: string;
+  locale: "it" | "en";
 }): string {
+  const m =
+    data.locale === "en"
+      ? {
+          title: `Application sent${data.firstName ? `, ${data.firstName}` : ""} ✓`,
+          delivered: "We delivered your application to:",
+          updates:
+            "We'll notify you as soon as there are updates (views, recruiter replies). Meanwhile you can track everything from your dashboard.",
+          openCta: "Open job →",
+          dashboardHint: "View all your applications at lavorai.it/applications",
+          questions: "Questions? Just reply to this email.",
+        }
+      : {
+          title: `Candidatura inviata${data.firstName ? `, ${data.firstName}` : ""} ✓`,
+          delivered: "Abbiamo consegnato la tua candidatura a:",
+          updates:
+            "Ti avviseremo non appena ci saranno novità (visualizzazioni, risposte dei recruiter). Nel frattempo puoi monitorare lo stato dalla tua dashboard.",
+          openCta: "Apri annuncio →",
+          dashboardHint:
+            "Vedrai tutte le candidature su lavorai.it/applications",
+          questions: "Hai domande? Rispondi a questa email.",
+        };
   return `<!doctype html>
-<html lang="it"><body style="margin:0;padding:0;background:#FAFAF7;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;color:#0F1012;">
+<html lang="${data.locale}"><body style="margin:0;padding:0;background:#FAFAF7;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;color:#0F1012;">
   <div style="max-width:560px;margin:0 auto;padding:40px 24px;">
     <div style="font-size:18px;font-weight:700;margin-bottom:32px;">
       LavorAI
     </div>
-    <h1 style="font-size:22px;font-weight:600;margin:0 0 8px;">Candidatura inviata${data.firstName ? `, ${data.firstName}` : ""} ✓</h1>
+    <h1 style="font-size:22px;font-weight:600;margin:0 0 8px;">${m.title}</h1>
     <p style="font-size:15px;line-height:1.55;color:#5B5D61;margin:0 0 20px;">
-      Abbiamo consegnato la tua candidatura a:
+      ${m.delivered}
     </p>
     <div style="padding:16px 18px;border:1px solid #E6E4DD;border-radius:8px;margin-bottom:20px;">
       <div style="font-weight:600;font-size:15px;">${escapeHtml(data.jobTitle)}</div>
       <div style="font-size:13px;color:#5B5D61;margin-top:2px;">${escapeHtml(data.company)}</div>
     </div>
     <p style="font-size:14px;line-height:1.55;color:#5B5D61;margin:0 0 20px;">
-      Ti avviseremo non appena ci saranno novità (visualizzazioni, risposte dei recruiter).
-      Nel frattempo puoi monitorare lo stato dalla tua dashboard.
+      ${m.updates}
     </p>
-    <a href="${data.jobUrl}" style="display:inline-block;background:#0F1012;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">Apri annuncio →</a>
+    <a href="${data.jobUrl}" style="display:inline-block;background:#0F1012;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">${m.openCta}</a>
     <hr style="border:none;border-top:1px solid #E6E4DD;margin:32px 0 16px;"/>
     <p style="font-size:11px;color:#8A8C90;line-height:1.5;margin:0;">
-      Vedrai tutte le candidature su lavorai.it/applications<br/>
-      Hai domande? Rispondi a questa email.
+      ${m.dashboardHint}<br/>
+      ${m.questions}
     </p>
   </div>
 </body></html>`;
@@ -857,7 +888,7 @@ async function notifyApplicationManual(applicationId: string): Promise<void> {
     where: { id: applicationId },
     include: {
       job: { select: { title: true, company: true, url: true } },
-      user: { select: { email: true, name: true } },
+      user: { select: { email: true, name: true, locale: true } },
     },
   });
   if (!app) return;
@@ -880,13 +911,23 @@ async function notifyApplicationManual(applicationId: string): Promise<void> {
   const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
 
+  const locale = app.user.locale === "en" ? "en" : "it";
+  const subject =
+    locale === "en"
+      ? `📄 CV ready for ${company} — apply manually (1 click)`
+      : `📄 CV pronto per ${company} — candidati a mano (1 click)`;
+  const textBody =
+    locale === "en"
+      ? `Hi ${firstName},\n\nYour CV for "${jobTitle}" at ${company} is ready, but I couldn't submit it automatically (custom career page or non-standard form).\n\nOpen the job and click "Apply" — the files are already attached: ${jobUrl}\n\n— LavorAI`
+      : `Ciao ${firstName},\n\nIl tuo CV per "${jobTitle}" presso ${company} è pronto, ma non sono riuscito a inviarlo in automatico (career page custom o form non standard).\n\nApri l'annuncio e clicca "Apply" — i file sono già allegati: ${jobUrl}\n\n— LavorAI`;
+
   await sendWithinQuota("application_manual", app.user.email, async () => {
     await resend.emails.send({
       from,
       to: app.user.email,
-      subject: `📄 CV pronto per ${company} — candidati a mano (1 click)`,
-      html: renderManualEmail({ firstName, jobTitle, company, jobUrl }),
-      text: `Ciao ${firstName},\n\nIl tuo CV per "${jobTitle}" presso ${company} è pronto, ma non sono riuscito a inviarlo in automatico (career page custom o form non standard).\n\nApri l'annuncio e clicca "Apply" — i file sono già allegati: ${jobUrl}\n\n— LavorAI`,
+      subject,
+      html: renderManualEmail({ firstName, jobTitle, company, jobUrl, locale }),
+      text: textBody,
     });
   });
 }
@@ -896,32 +937,54 @@ function renderManualEmail(data: {
   jobTitle: string;
   company: string;
   jobUrl: string;
+  locale: "it" | "en";
 }): string {
+  const m =
+    data.locale === "en"
+      ? {
+          title: `CV ready${data.firstName ? `, ${data.firstName}` : ""} 📄`,
+          intro:
+            "I couldn't submit the application automatically — this listing uses a custom career page I can't handle. But the CV and cover letter are ready.",
+          instruction:
+            'Open the job, click <strong>Apply</strong>, and upload the files you\'ll find in the Materials section of your dashboard.',
+          cta: "Open job →",
+          dashboardHint:
+            "All application files are saved at lavorai.it/applications",
+          questions: "Questions? Just reply to this email.",
+        }
+      : {
+          title: `CV pronto${data.firstName ? `, ${data.firstName}` : ""} 📄`,
+          intro:
+            "Non sono riuscito a inviare la candidatura in automatico — questo annuncio usa una career page custom che non gestisco. Ma il CV e la lettera sono pronti.",
+          instruction:
+            "Apri l'annuncio, clicca <strong>Apply</strong>, e carica i file che trovi sulla tua dashboard nella sezione Materiali.",
+          cta: "Apri annuncio →",
+          dashboardHint:
+            "Tutti i file della candidatura sono salvati su lavorai.it/applications",
+          questions: "Hai domande? Rispondi a questa email.",
+        };
   return `<!doctype html>
-<html lang="it"><body style="margin:0;padding:0;background:#FAFAF7;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;color:#0F1012;">
+<html lang="${data.locale}"><body style="margin:0;padding:0;background:#FAFAF7;font-family:-apple-system,BlinkMacSystemFont,Inter,sans-serif;color:#0F1012;">
   <div style="max-width:560px;margin:0 auto;padding:40px 24px;">
     <div style="font-size:18px;font-weight:700;margin-bottom:32px;">
       LavorAI
     </div>
-    <h1 style="font-size:22px;font-weight:600;margin:0 0 8px;">CV pronto${data.firstName ? `, ${data.firstName}` : ""} 📄</h1>
+    <h1 style="font-size:22px;font-weight:600;margin:0 0 8px;">${m.title}</h1>
     <p style="font-size:15px;line-height:1.55;color:#5B5D61;margin:0 0 16px;">
-      Non sono riuscito a inviare la candidatura in automatico — questo
-      annuncio usa una career page custom che non gestisco. Ma il CV e
-      la lettera sono pronti.
+      ${m.intro}
     </p>
     <div style="padding:16px 18px;border:1px solid #E6E4DD;border-radius:8px;margin-bottom:20px;">
       <div style="font-weight:600;font-size:15px;">${escapeHtml(data.jobTitle)}</div>
       <div style="font-size:13px;color:#5B5D61;margin-top:2px;">${escapeHtml(data.company)}</div>
     </div>
     <p style="font-size:14px;line-height:1.55;color:#5B5D61;margin:0 0 20px;">
-      Apri l&apos;annuncio, clicca <strong>Apply</strong>, e carica i file
-      che trovi sulla tua dashboard nella sezione Materiali.
+      ${m.instruction}
     </p>
-    <a href="${data.jobUrl}" style="display:inline-block;background:#16A34A;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">Apri annuncio →</a>
+    <a href="${data.jobUrl}" style="display:inline-block;background:#16A34A;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">${m.cta}</a>
     <hr style="border:none;border-top:1px solid #E6E4DD;margin:32px 0 16px;"/>
     <p style="font-size:11px;color:#8A8C90;line-height:1.5;margin:0;">
-      Tutti i file della candidatura sono salvati su lavorai.it/applications<br/>
-      Hai domande? Rispondi a questa email.
+      ${m.dashboardHint}<br/>
+      ${m.questions}
     </p>
   </div>
 </body></html>`;

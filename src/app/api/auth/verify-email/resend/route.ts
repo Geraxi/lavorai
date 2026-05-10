@@ -35,13 +35,13 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: parsed.data.email },
-      select: { id: true, email: true, emailVerified: true, passwordHash: true },
+      select: { id: true, email: true, emailVerified: true, passwordHash: true, locale: true },
     });
     if (!user || !user.passwordHash || user.emailVerified) {
       return NextResponse.json({ ok: true });
     }
 
-    await sendVerificationEmail(user.id, user.email);
+    await sendVerificationEmail(user.id, user.email, user.locale);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[/api/auth/verify-email/resend]", err);

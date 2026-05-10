@@ -128,6 +128,12 @@ model User {
   noticePeriod     String?  // "immediate" | "1m" | "2m" | "3m_plus"
   avoidCompanies   String?  // comma-separated lowercase
 
+  // UI language preference. "it" o "en". Settato al primo signup dal
+  // cookie NEXT_LOCALE (impostato dal proxy geo-detect). Usato per:
+  //  - Email transazionali (verifica, CV pronto, conferma candidatura)
+  //  - Eventuale routing futuro nelle preferenze
+  locale           String   @default("it")
+
   accounts       Account[]
   sessions       Session[]
   portalSessions PortalSession[]
