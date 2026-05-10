@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import {
@@ -38,6 +39,7 @@ function portalOf(url: string): string {
 }
 
 export function JobsList({ jobs }: { jobs: JobRow[] }) {
+  const t = useTranslations("jobsList");
   const router = useRouter();
   const [applyingId, setApplyingId] = useState<string | null>(null);
   const [batchLoading, setBatchLoading] = useState(false);
@@ -62,7 +64,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
       const body = await res.json().catch(() => ({}));
 
       if (res.status === 409 && body?.error === "missing_cv") {
-        toast.error("Carica prima il tuo CV.");
+        toast.error(t("uploadCvFirst"));
         router.push("/onboarding");
         return;
       }
@@ -72,17 +74,17 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         return;
       }
       if (res.status === 409 && body?.error === "below_match_threshold") {
-        toast.error(body?.message ?? "Match sotto la soglia.");
+        toast.error(body?.message ?? t("belowMatch"));
         return;
       }
       if (!res.ok) {
-        toast.error(body?.message ?? "Errore. Riprova.");
+        toast.error(body?.message ?? t("retryError"));
         return;
       }
       setAppliedIds((s) => new Set(s).add(job.id));
-      toast.success(`Candidatura inviata per ${job.title}`);
+      toast.success(t("applicationSent", { title: job.title }));
     } catch {
-      toast.error("Errore di rete.");
+      toast.error(t("networkError"));
     } finally {
       setApplyingId(null);
     }
@@ -125,7 +127,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         const body = await res.json().catch(() => ({}));
 
         if (res.status === 409 && body?.error === "missing_cv") {
-          toast.error("Carica prima il tuo CV.");
+          toast.error(t("uploadCvFirst"));
           router.push("/onboarding");
           return;
         }
@@ -158,7 +160,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
 
         if (chunks.length > 1) {
           toast.message(
-            `Batch ${i + 1}/${chunks.length} · ${totalEnqueued} inviate`,
+            t("batchProgress", { current: i + 1, total: chunks.length, sent: totalEnqueued }),
           );
         }
       }
@@ -172,23 +174,24 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
       }
 
       const bits: string[] = [];
-      if (totalEnqueued > 0) bits.push(`${totalEnqueued} inviate`);
+      if (totalEnqueued > 0) bits.push(t("toastSent", { count: totalEnqueued }));
       if (totalAwaitingConsent > 0)
-        bits.push(`${totalAwaitingConsent} in attesa consenso`);
+        bits.push(t("toastAwaitingConsent", { count: totalAwaitingConsent }));
       if (totalBelowThreshold > 0)
         bits.push(
-          `${totalBelowThreshold} saltate (match < ${lastMatchMin}%)`,
+          t("toastSkippedMatch", { count: totalBelowThreshold, pct: lastMatchMin }),
         );
-      if (lastRemaining != null) bits.push(`${lastRemaining} rimaste nel piano`);
+      if (lastRemaining != null)
+        bits.push(t("toastRemaining", { count: lastRemaining }));
       if (bits.length > 0) toast.success(bits.join(" · "));
       else if (totalEnqueued + totalAwaitingConsent === 0)
-        toast.error("Nessuna candidatura inviata.");
+        toast.error(t("noneSent"));
 
       if (totalEnqueued > 0) {
         setTimeout(() => router.push("/applications"), 1200);
       }
     } catch {
-      toast.error("Errore di rete.");
+      toast.error(t("networkError"));
     } finally {
       setBatchLoading(false);
     }
@@ -222,12 +225,11 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         >
           {batchLoading ? (
             <>
-              <Icon name="refresh" size={13} /> Invio in corso...
+              <Icon name="refresh" size={13} /> {t("sending")}
             </>
           ) : (
             <>
-              <Icon name="sparkles" size={13} /> Candidati a tutte (
-              {remainingJobs.length})
+              <Icon name="sparkles" size={13} /> {t("applyToAll", { count: remainingJobs.length })}
             </>
           )}
         </button>
@@ -282,7 +284,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
                       </div>
                     </div>
                     {j.remote && (
-                      <span className="ds-chip ds-chip-green">Remoto</span>
+                      <span className="ds-chip ds-chip-green">{t("remote")}</span>
                     )}
                   </div>
                   <div
@@ -298,7 +300,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
                       <span className="inline-flex items-center gap-1">
                         <Icon name="clock" size={11} />{" "}
                         {j.contractType === "permanent"
-                          ? "Indeterminato"
+                          ? t("permanent")
                           : j.contractType}
                       </span>
                     )}
@@ -338,15 +340,15 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
                 >
                   {isApplied ? (
                     <>
-                      <Icon name="check" size={12} /> In coda
+                      <Icon name="check" size={12} /> {t("queued")}
                     </>
                   ) : isApplying ? (
                     <>
-                      <Icon name="refresh" size={12} /> Invio...
+                      <Icon name="refresh" size={12} /> {t("sendingShort")}
                     </>
                   ) : (
                     <>
-                      <Icon name="sparkles" size={12} /> Candidati
+                      <Icon name="sparkles" size={12} /> {t("apply")}
                     </>
                   )}
                 </button>
@@ -363,10 +365,10 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
       />
       <ConfirmDialog
         open={batchConfirmOpen}
-        title={`Candidati a ${remainingJobs.length} posizioni?`}
-        message="LavorAI ottimizzerà CV e cover letter per ogni annuncio e invierà la candidatura al portale (o al recruiter) per te."
-        confirmLabel="Candidati a tutte"
-        cancelLabel="Annulla"
+        title={t("confirmTitle", { count: remainingJobs.length })}
+        message={t("confirmMessage")}
+        confirmLabel={t("confirmAll")}
+        cancelLabel={t("cancel")}
         variant="accent"
         onConfirm={applyAll}
         onCancel={() => setBatchConfirmOpen(false)}

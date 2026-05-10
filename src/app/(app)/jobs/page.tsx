@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
 import {
@@ -34,6 +35,7 @@ export default async function JobsPage({
 }) {
   const sp = await searchParams;
   const user = await getCurrentUser();
+  const t = await getTranslations("jobsPage");
 
   // Default filters dalle preferenze dell'utente (se non override via querystring)
   let prefRoles: string[] = [];
@@ -176,7 +178,7 @@ export default async function JobsPage({
 
   return (
     <>
-      <AppTopbar title="Job board" breadcrumb="Lavoro" />
+      <AppTopbar title={t("title")} breadcrumb={t("breadcrumb")} />
       <div
         style={{
           padding: "24px 32px 80px",
@@ -194,12 +196,12 @@ export default async function JobsPage({
               margin: 0,
             }}
           >
-            Job board
+            {t("title")}
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
             {!sp.what && prefRoles.length > 0
-              ? `${jobs.length} posizioni compatibili${matchMin > 0 ? ` (match ≥ ${matchMin}%)` : ""}${belowMatchCount > 0 ? ` · ${belowMatchCount} nascoste sotto soglia` : ""}${roleMismatchCount > 0 ? ` · ${roleMismatchCount} fuori ruolo` : ""}`
-              : `${jobs.length} posizioni trovate`}
+              ? `${t("compatiblePositions", { count: jobs.length })}${matchMin > 0 ? ` (${t("matchAtLeast", { pct: matchMin })})` : ""}${belowMatchCount > 0 ? ` · ${t("hiddenBelowThreshold", { count: belowMatchCount })}` : ""}${roleMismatchCount > 0 ? ` · ${t("outOfRole", { count: roleMismatchCount })}` : ""}`
+              : t("foundPositions", { count: jobs.length })}
           </p>
         </div>
 
@@ -226,7 +228,7 @@ export default async function JobsPage({
               name="what"
               defaultValue={what}
               className="ds-input"
-              placeholder="Ruolo, azienda, keyword..."
+              placeholder={t("searchPlaceholder")}
               style={{ paddingLeft: 32 }}
             />
           </div>
@@ -246,7 +248,7 @@ export default async function JobsPage({
               name="where"
               defaultValue={where}
               className="ds-input"
-              placeholder="Città"
+              placeholder={t("locationPlaceholder")}
               style={{ paddingLeft: 32 }}
             />
           </div>
@@ -260,10 +262,10 @@ export default async function JobsPage({
               value="1"
               defaultChecked={remoteOnly}
             />{" "}
-            Solo remoto
+            {t("remoteOnly")}
           </label>
           <button type="submit" className="ds-btn ds-btn-primary">
-            Cerca
+            {t("search")}
           </button>
         </form>
 
@@ -279,7 +281,7 @@ export default async function JobsPage({
                   style={{ color: "var(--fg-subtle)" }}
                 />
                 <div style={{ marginTop: 12, fontWeight: 500 }}>
-                  Nessun annuncio trovato
+                  {t("noResults")}
                 </div>
                 <div
                   style={{
@@ -288,8 +290,7 @@ export default async function JobsPage({
                     marginTop: 4,
                   }}
                 >
-                  Prova a rimuovere qualche filtro o a modificare le tue
-                  preferenze.
+                  {t("noResultsHint")}
                 </div>
               </div>
             </SectionBody>
