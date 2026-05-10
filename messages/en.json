@@ -65,6 +65,20 @@
     "notice2m": "2 months",
     "notice3mPlus": "3+ months"
   },
+  "dashboardPage": {
+    "title": "Dashboard",
+    "greeting": "Hi, {name}.",
+    "subtitleSentOnly": "{sent, plural, =1 {1 application sent} other {# applications sent}} this month.",
+    "subtitleWithViews": "{sent, plural, =1 {1 application sent} other {# applications sent}} this month · {viewed, plural, =1 {1 opened} other {# opened}}.",
+    "subtitleEmpty": "Set your roles and turn on auto-apply to get started.",
+    "autoApplyActive": "Auto-apply active",
+    "autoApplyPaused": "Auto-apply paused",
+    "appsThisMonth": "applications sent this month",
+    "statToday": "Today",
+    "statQueued": "Queued",
+    "statSending": "Sending",
+    "statOpened": "Opened"
+  },
   "applicationsPage": {
     "title": "Applications",
     "breadcrumb": "Work",

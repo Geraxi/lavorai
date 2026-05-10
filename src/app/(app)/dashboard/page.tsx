@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo } from "@/components/design/company-logo";
@@ -30,6 +31,7 @@ export const dynamic = "force-dynamic";
  * Niente KPI grid, niente checklist se completata, niente fronzoli.
  */
 export default async function DashboardPage() {
+  const t = await getTranslations("dashboardPage");
   const user = await getCurrentUser();
   if (!user) return null;
 
@@ -123,7 +125,7 @@ export default async function DashboardPage() {
       <PostLoginCheckout />
       <DashboardLiveRefresh />
       <AppTopbar
-        title="Dashboard"
+        title={t("title")}
         actions={
           <>
             <ThemeToggle />
@@ -150,7 +152,7 @@ export default async function DashboardPage() {
               margin: 0,
             }}
           >
-            Ciao, {greetingName}.
+            {t("greeting", { name: greetingName })}
           </h1>
           <p
             style={{
@@ -160,8 +162,13 @@ export default async function DashboardPage() {
             }}
           >
             {deliveredMonth > 0
-              ? `${deliveredMonth} ${deliveredMonth === 1 ? "candidatura inviata" : "candidature inviate"} questo mese${viewedMonth > 0 ? ` · ${viewedMonth} ${viewedMonth === 1 ? "aperta" : "aperte"}` : ""}.`
-              : "Imposta i tuoi ruoli e attiva l'auto-apply per iniziare."}
+              ? viewedMonth > 0
+                ? t("subtitleWithViews", {
+                    sent: deliveredMonth,
+                    viewed: viewedMonth,
+                  })
+                : t("subtitleSentOnly", { sent: deliveredMonth })
+              : t("subtitleEmpty")}
           </p>
         </div>
 
@@ -231,7 +238,7 @@ export default async function DashboardPage() {
                       : "none",
                   }}
                 />
-                {isLive ? "Auto-apply attivo" : "Auto-apply in pausa"}
+                {isLive ? t("autoApplyActive") : t("autoApplyPaused")}
               </div>
 
               <div
@@ -253,7 +260,7 @@ export default async function DashboardPage() {
                   marginTop: 2,
                 }}
               >
-                candidature inviate questo mese
+                {t("appsThisMonth")}
               </div>
             </div>
 
@@ -265,10 +272,10 @@ export default async function DashboardPage() {
                 flexWrap: "wrap",
               }}
             >
-              <MiniStat label="Oggi" value={deliveredToday} />
-              <MiniStat label="In coda" value={pendingCount} />
-              <MiniStat label="In invio" value={applyingCount} live />
-              <MiniStat label="Aperte" value={viewedMonth} />
+              <MiniStat label={t("statToday")} value={deliveredToday} />
+              <MiniStat label={t("statQueued")} value={pendingCount} />
+              <MiniStat label={t("statSending")} value={applyingCount} live />
+              <MiniStat label={t("statOpened")} value={viewedMonth} />
             </div>
           </div>
 

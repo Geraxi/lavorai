@@ -65,6 +65,20 @@
     "notice2m": "2 mesi",
     "notice3mPlus": "3+ mesi"
   },
+  "dashboardPage": {
+    "title": "Dashboard",
+    "greeting": "Ciao, {name}.",
+    "subtitleSentOnly": "{sent, plural, =1 {1 candidatura inviata} other {# candidature inviate}} questo mese.",
+    "subtitleWithViews": "{sent, plural, =1 {1 candidatura inviata} other {# candidature inviate}} questo mese · {viewed, plural, =1 {1 aperta} other {# aperte}}.",
+    "subtitleEmpty": "Imposta i tuoi ruoli e attiva l'auto-apply per iniziare.",
+    "autoApplyActive": "Auto-apply attivo",
+    "autoApplyPaused": "Auto-apply in pausa",
+    "appsThisMonth": "candidature inviate questo mese",
+    "statToday": "Oggi",
+    "statQueued": "In coda",
+    "statSending": "In invio",
+    "statOpened": "Aperte"
+  },
   "applicationsPage": {
     "title": "Candidature",
     "breadcrumb": "Lavoro",
