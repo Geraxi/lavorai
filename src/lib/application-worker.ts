@@ -121,10 +121,17 @@ export async function processApplication(applicationId: string): Promise<void> {
         : undefined,
     });
 
-    // 2. Genera DOCX
+    // 2. Genera DOCX — passiamo trackingToken + locale alla cover letter
+    // così embedda il link `lavorai.it/r/<token>` cliccabile dal recruiter
+    // dentro l'ATS. È l'unica vera fonte di "view" per portal submissions.
     [cvBuffer, clBuffer] = await Promise.all([
       generateOptimizedCVDocx(result.optimizedCV),
-      generateCoverLetterDocx(result.coverLetter),
+      generateCoverLetterDocx(
+        result.coverLetter,
+        undefined,
+        app.trackingToken ?? undefined,
+        app.user.locale === "en" ? "en" : "it",
+      ),
     ]);
 
     // 3. Salva DOCX su storage

@@ -77,7 +77,7 @@
     "statToday": "Today",
     "statQueued": "Queued",
     "statSending": "Sending",
-    "statOpened": "Opened",
+    "statOpened": "Viewed",
     "weeklyChartAriaLabel": "Applications sent in the last 7 days",
     "dailyCapLabel": "{sent} of {cap} applications today"
   },

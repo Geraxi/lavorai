@@ -3,6 +3,7 @@ import {
   BorderStyle,
   convertInchesToTwip,
   Document,
+  ExternalHyperlink,
   HeadingLevel,
   Packer,
   Paragraph,
@@ -175,6 +176,16 @@ export async function generateOptimizedCVDocx(
 export async function generateCoverLetterDocx(
   text: string,
   recipientName?: string,
+  /**
+   * Token tracking dell'Application. Quando passato, viene aggiunto un
+   * link breve "Portfolio: lavorai.it/r/<token>" alla fine della cover
+   * letter. Il click dal recruiter (dentro l'ATS) logga `viewedAt` e
+   * redirige al portfolio dell'utente. Unico modo di tracciare le views
+   * per portal submissions dove il pixel email non si può mettere.
+   */
+  trackingToken?: string,
+  /** "it" | "en" — locale per la label "Portfolio" */
+  locale: "it" | "en" = "it",
 ): Promise<Buffer> {
   const paragraphs: Paragraph[] = [];
 
@@ -211,6 +222,41 @@ export async function generateCoverLetterDocx(
             text: chunk,
             size: BODY_SIZE,
             font: FONT,
+          }),
+        ],
+      }),
+    );
+  }
+
+  // Tracking link sopra la privacy clause. Cliccabile direttamente dal
+  // PDF/DOCX dentro l'ATS del recruiter → unica vera fonte di "viewed"
+  // signal per portal submissions.
+  if (trackingToken) {
+    const siteUrl = (
+      process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it"
+    ).replace(/\/$/, "");
+    const label = locale === "en" ? "Portfolio:" : "Portfolio:";
+    paragraphs.push(
+      new Paragraph({
+        spacing: { before: 320 },
+        children: [
+          new TextRun({
+            text: `${label} `,
+            size: SMALL_SIZE,
+            color: MUTED_COLOR,
+            font: FONT,
+          }),
+          new ExternalHyperlink({
+            link: `${siteUrl}/r/${trackingToken}`,
+            children: [
+              new TextRun({
+                text: `${siteUrl.replace(/^https?:\/\//, "")}/r/${trackingToken}`,
+                size: SMALL_SIZE,
+                color: "1A56DB",
+                font: FONT,
+                style: "Hyperlink",
+              }),
+            ],
           }),
         ],
       }),

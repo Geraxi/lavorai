@@ -328,7 +328,16 @@ export default async function DashboardPage() {
               value={applyingCount}
               live
             />
-            <PipelineStat label={t("statOpened")} value={viewedMonth} />
+            {/* "Viste" mostrato solo quando > 0: il dato arriva quando il
+                recruiter clicca il tracking link `lavorai.it/r/<token>`
+                dentro la cover letter dall'ATS. Mostrare uno 0 statico
+                quando non c'è ancora alcun click dà un segnale fuorviante. */}
+            {viewedMonth > 0 && (
+              <PipelineStat
+                label={t("statOpened")}
+                value={viewedMonth}
+              />
+            )}
           </div>
         </div>
 
