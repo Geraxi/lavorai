@@ -24,8 +24,23 @@
     --fg-subtle: #8A9590;
     --border-ds: #E2EAE5;      /* border con tint verde */
     --border-strong: #C8D5CE;
-    /* Green più saturo, leggermente più chiaro per coverage on white */
-    --primary-ds: oklch(0.58 0.15 155);
+    /* GREEN PALETTE — 3 ruoli distinti.
+       Ogni livello ha SATURAZIONE e LUMINOSITÀ diversa così
+       icons/cards/background non si confondono visivamente.
+
+       Background → leggera, atmosferica (saturazione bassa)
+       Cards       → medio, surface verde tinta (saturazione media)
+       Icons/text  → vivido, saturato (saturazione alta) per il "pop"
+       Solid CTA   → versione più scura per contrasto su white text */
+    --green-bg: oklch(0.88 0.06 155);        /* page bg + atmospheric washes */
+    --green-card: oklch(0.72 0.10 155);      /* card surfaces, mid-tone */
+    --green-icon: oklch(0.55 0.20 155);      /* ICONS — vivido, saturato */
+    --green-deep: oklch(0.42 0.16 155);      /* solid CTA, text emphasis */
+    --green-edge: oklch(0.50 0.18 155);      /* borders, accent lines */
+
+    /* Primary token kept for backward compat — punta al green-icon
+       (il più "vivo" per CTA / accent / icone). */
+    --primary-ds: var(--green-icon);
     --primary-weak: oklch(0.94 0.05 155);
     --primary-fg-ds: #FFFFFF;
     --amber: oklch(0.72 0.13 75);
@@ -85,18 +100,18 @@
     scroll-behavior: smooth;
   }
   body {
-    /* Background VERDE pieno con varianza tonale tramite gradients.
-       Più ricco del precedente, niente highlights bianchi che spegnessero
-       il verde. Le surfaces glass elevano per traslucenza, non per
-       contrasto bianco/verde. */
+    /* Background VERDE atmosferico — usa --green-bg (saturazione
+       bassa) per non competere con il vivido --green-icon usato sui
+       contenuti. I cards usano --green-card (mid). Tre livelli, tre
+       toni di verde diversi. */
     background:
-      /* Wash verde più scuro a centro per profondità */
-      radial-gradient(circle at 50% 30%, hsl(var(--primary) / 0.28), transparent 60%),
-      radial-gradient(circle at 10% 90%, hsl(var(--primary) / 0.20), transparent 55%),
-      radial-gradient(circle at 95% 70%, hsl(var(--primary) / 0.18), transparent 55%),
-      /* Highlights solo lievi, non aggressivi */
-      radial-gradient(circle at 25% 15%, rgba(255,255,255,0.35), transparent 45%),
-      /* Base verde — visibilmente brand */
+      /* Wash atmosferico con --green-bg (soft) */
+      radial-gradient(circle at 50% 30%, color-mix(in oklch, var(--green-bg) 70%, transparent), transparent 60%),
+      radial-gradient(circle at 10% 90%, color-mix(in oklch, var(--green-bg) 55%, transparent), transparent 55%),
+      radial-gradient(circle at 95% 70%, color-mix(in oklch, var(--green-bg) 50%, transparent), transparent 55%),
+      /* Highlight bianco morbido top-left per "luce" */
+      radial-gradient(circle at 25% 15%, rgba(255,255,255,0.30), transparent 45%),
+      /* Base verde brand chiara */
       linear-gradient(135deg, #CCE5D5 0%, #E0EFE5 50%, #D2EBDC 100%);
     background-attachment: fixed;
     color: var(--fg);
@@ -267,21 +282,21 @@
   .ds-btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
   .ds-btn-lg { padding: 12px 20px; font-size: 15px; border-radius: 12px; }
 
-  /* iOS Glass utility: green-tinted glass più visibile.
-     Era subtle (white-with-hint-of-green) → ora chiaramente verde
-     pur restando traslucido. */
+  /* iOS Glass utility: usa --green-card (medio) per il tint glass.
+     Il bordo usa --green-card a 0.25 — distinguibile ma non aggressivo
+     come il green-icon che è riservato a icone/accent vividi. */
   .ds-glass {
     background:
-      linear-gradient(135deg, hsl(var(--primary) / 0.16), hsl(var(--primary) / 0.06)),
+      linear-gradient(135deg, color-mix(in oklch, var(--green-card) 22%, transparent), color-mix(in oklch, var(--green-card) 10%, transparent)),
       rgba(255,255,255,0.45);
-    border: 1px solid hsl(var(--primary) / 0.20);
+    border: 1px solid color-mix(in oklch, var(--green-card) 30%, transparent);
     backdrop-filter: blur(40px) saturate(200%);
     -webkit-backdrop-filter: blur(40px) saturate(200%);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,0.80),
-      inset 0 -1px 0 hsl(var(--primary) / 0.06),
-      0 2px 8px hsl(var(--primary) / 0.08),
-      0 16px 40px -12px hsl(var(--primary) / 0.18);
+      inset 0 -1px 0 color-mix(in oklch, var(--green-card) 10%, transparent),
+      0 2px 8px color-mix(in oklch, var(--green-card) 14%, transparent),
+      0 16px 40px -12px color-mix(in oklch, var(--green-card) 25%, transparent);
     border-radius: 18px;
   }
   /* GREEN glass variant — tint primary più visibile, per hero blocks
@@ -355,34 +370,35 @@
     100% { transform: scale(2.2); opacity: 0; }
   }
 
-  /* iOS Glass card — chiaramente VERDE, glass su green field */
+  /* Card surfaces — usano --green-card (mid-tone), distinto dal
+     verde icone vivido e dal verde bg atmosferico. */
   .ds-card {
     position: relative;
     background:
-      linear-gradient(135deg, hsl(var(--primary) / 0.16), hsl(var(--primary) / 0.06)),
+      linear-gradient(135deg, color-mix(in oklch, var(--green-card) 22%, transparent), color-mix(in oklch, var(--green-card) 10%, transparent)),
       rgba(255,255,255,0.50);
-    border: 1px solid hsl(var(--primary) / 0.20);
+    border: 1px solid color-mix(in oklch, var(--green-card) 30%, transparent);
     border-radius: 16px;
     backdrop-filter: blur(36px) saturate(190%);
     -webkit-backdrop-filter: blur(36px) saturate(190%);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,0.85),
-      inset 0 -1px 0 hsl(var(--primary) / 0.06),
-      0 2px 6px hsl(var(--primary) / 0.08),
-      0 20px 50px -16px hsl(var(--primary) / 0.20);
+      inset 0 -1px 0 color-mix(in oklch, var(--green-card) 10%, transparent),
+      0 2px 6px color-mix(in oklch, var(--green-card) 14%, transparent),
+      0 20px 50px -16px color-mix(in oklch, var(--green-card) 28%, transparent);
     transition: transform 0.35s var(--ease-premium), box-shadow 0.35s var(--ease-premium), background 0.25s ease;
   }
   .ds-card:hover {
     transform: translateY(-2px);
     background:
-      linear-gradient(135deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.10)),
+      linear-gradient(135deg, color-mix(in oklch, var(--green-card) 30%, transparent), color-mix(in oklch, var(--green-card) 15%, transparent)),
       rgba(255,255,255,0.55);
-    border-color: hsl(var(--primary) / 0.30);
+    border-color: color-mix(in oklch, var(--green-card) 40%, transparent);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,0.95),
-      inset 0 -1px 0 hsl(var(--primary) / 0.10),
-      0 4px 10px hsl(var(--primary) / 0.12),
-      0 28px 60px -18px hsl(var(--primary) / 0.28);
+      inset 0 -1px 0 color-mix(in oklch, var(--green-card) 15%, transparent),
+      0 4px 10px color-mix(in oklch, var(--green-card) 18%, transparent),
+      0 28px 60px -18px color-mix(in oklch, var(--green-card) 35%, transparent);
   }
 
   .ds-kbd {
@@ -604,12 +620,12 @@
   .ds-kpi-delta.down { color: var(--red-ds); }
   .ds-kpi-spark { margin-top: 10px; height: 28px; }
 
-  /* iOS Glass section card — chiaramente VERDE */
+  /* Section card — usa --green-card per il tint */
   .ds-section-card {
     background:
-      linear-gradient(135deg, hsl(var(--primary) / 0.16), hsl(var(--primary) / 0.06)),
+      linear-gradient(135deg, color-mix(in oklch, var(--green-card) 22%, transparent), color-mix(in oklch, var(--green-card) 10%, transparent)),
       rgba(255,255,255,0.50);
-    border: 1px solid hsl(var(--primary) / 0.20);
+    border: 1px solid color-mix(in oklch, var(--green-card) 30%, transparent);
     border-radius: 16px;
     overflow: hidden;
     display: flex; flex-direction: column;
@@ -617,9 +633,9 @@
     -webkit-backdrop-filter: blur(32px) saturate(190%);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,0.85),
-      inset 0 -1px 0 hsl(var(--primary) / 0.06),
-      0 1px 3px hsl(var(--primary) / 0.06),
-      0 14px 40px -12px hsl(var(--primary) / 0.18);
+      inset 0 -1px 0 color-mix(in oklch, var(--green-card) 10%, transparent),
+      0 1px 3px color-mix(in oklch, var(--green-card) 10%, transparent),
+      0 14px 40px -12px color-mix(in oklch, var(--green-card) 25%, transparent);
   }
   .ds-section-head {
     display: flex; align-items: center; justify-content: space-between;
