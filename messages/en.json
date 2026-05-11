@@ -15,16 +15,22 @@
     "english": "English"
   },
   "hero": {
-    "badge": "While you sleep · LavorAI applies",
-    "title1": "Job hunting isn't",
-    "title2": "your job anymore.",
-    "subtitle": "LavorAI finds the right openings, rewrites your CV for each one, and <strong>fills in the application forms for you</strong>. Every 30 minutes. All night long. You only open the interview emails.",
-    "cta": "Get started free — 3 applications now",
-    "ctaCaption": "No credit card · Pause anytime · Trusted by 2,000+ candidates",
-    "check1": "<strong>Applies on its own</strong> every 30 minutes, even while you sleep",
-    "check2": "CV and cover letter <strong>rewritten by AI</strong> for every listing, in native English",
-    "check3": "Real submits on ATS forms — never asks for your account passwords",
-    "portalsLabel": "Auto-applies on:"
+    "badge": "Auto-apply, native English · 3 daily batches",
+    "title1": "Send more quality applications",
+    "title2": "without burning your evenings on copy-paste.",
+    "subtitle": "LavorAI <strong>finds the right openings</strong>, <strong>rewrites your CV for each one</strong>, and <strong>fills the ATS forms for you</strong>. You only review recruiter replies.",
+    "cta": "Try free — 3 applications now",
+    "ctaSecondary": "Audit my CV free",
+    "ctaCaption": "No credit card · Pause anytime · GDPR-first",
+    "check1": "<strong>Real submits</strong> on ATS forms (Greenhouse, Lever, Ashby) — no LinkedIn login required",
+    "check2": "CV and cover letter <strong>tailored to each listing</strong>, in native English or Italian",
+    "check3": "<strong>You stay in control</strong>: auto, hybrid (consent per submit) or off — toggle in 1 click",
+    "portalsLabel": "Discovers jobs on:",
+    "portalsApplyLabel": "Auto-fills ATS forms on:",
+    "trustStrip1": "GDPR-first · EU servers",
+    "trustStrip2": "Delete everything in 1 click",
+    "trustStrip3": "No LinkedIn credentials needed",
+    "trustStrip4": "Pause anytime"
   },
   "onboarding": {
     "stepCv": "CV",
@@ -193,7 +199,10 @@
     "title1": "Transparent,",
     "title2": "no surprises.",
     "subtitle": "No credits. No add-ons. Pick a plan, change anytime.",
-    "footnote": "VAT included. Cancel in 1 click via Stripe — no email, no wait. No lock-in."
+    "footnote": "VAT included. Cancel in 1 click via Stripe — no email, no wait. No lock-in.",
+    "riskReducer1": "3 free applications to test before you pay",
+    "riskReducer2": "Self-service cancellation, anytime",
+    "riskReducer3": "Zero setup fee, no hidden costs"
   },
   "faq": {
     "heading": "Frequently asked questions",
@@ -213,6 +222,72 @@
     "q6Answer": "Yes, in one click. No lock-in, no fees, no questions. Pause auto-apply whenever you want and restart whenever you need.",
     "q7Question": "What happens to my data?",
     "q7Answer": "It lives on EU servers (Neon · Frankfurt), GDPR-first. Full JSON export and complete deletion in one click — wipes profile, CV, files, job queues. We never sell anything, never share with anyone."
+  },
+  "boundaries": {
+    "eyebrow": "No AI magic · clear roles",
+    "title1": "What's automatic,",
+    "title2": "and what you decide.",
+    "subtitle": "No \"AI that does it all\" — explicit boundaries, always reversible.",
+    "autoEyebrow": "Automatic",
+    "autoTitle": "LavorAI handles",
+    "autoItem1": "Discovers new openings every 2 hours from public ATS (Greenhouse, Lever, Ashby, SmartRecruiters, Workable)",
+    "autoItem2": "Filters by your roles, location, salary range and company blacklist",
+    "autoItem3": "Rewrites CV and cover letter for each listing via Claude (no templates)",
+    "autoItem4": "Fills public ATS forms and submits the application",
+    "consentEyebrow": "You confirm",
+    "consentTitle": "Hybrid mode: asks for ok",
+    "consentItem1": "Each application shown in dashboard before sending (24h to click Send or Skip)",
+    "consentItem2": "Email notification on milestones (e.g., 50 applications sent)",
+    "consentItem3": "Explicit consent to first-time auto-apply activation",
+    "controlEyebrow": "You're in charge",
+    "controlTitle": "You set the rules",
+    "controlItem1": "3 modes in 1 click: Off, Hybrid (per-submit consent), Auto (zero-touch)",
+    "controlItem2": "Minimum match threshold: below X% no application is sent",
+    "controlItem3": "Company blacklist, excluded cities, salary range, contract type",
+    "controlItem4": "Instant pause from dashboard, full export, total deletion",
+    "footnote": "Default at signup: Hybrid mode on, Auto off. Change anytime in preferences — nothing is silently opted-in."
+  },
+  "leadMagnet": {
+    "eyebrow": "Free trial",
+    "title": "Want to see it work first?",
+    "subtitle": "Upload your CV and a job posting. We'll rewrite your CV and cover letter in 60 seconds — free, no card.",
+    "cta": "Try now · 3 free audits",
+    "bulletsTitle": "What you get",
+    "bullet1": "ATS readability score (out of 100)",
+    "bullet2": "Optimized CV in DOCX",
+    "bullet3": "Cover letter written by Claude for that listing",
+    "bullet4": "3-5 actionable suggestions"
+  },
+  "trustSection": {
+    "eyebrow": "Privacy · Security",
+    "title1": "Your data,",
+    "title2": "handled like we'd want ours handled.",
+    "subtitle": "Not security as a slogan: verifiable technical setup, EU servers, concrete controls.",
+    "readPolicy": "Read the full privacy policy"
+  },
+  "personas": {
+    "eyebrow": "Who it's for",
+    "title1": "Built for people who",
+    "title2": "take the job search seriously.",
+    "subtitle": "LavorAI works best when you know what you're looking for but hate the repetitive work."
+  },
+  "whyNotChatGpt": {
+    "eyebrow": "Why not ChatGPT",
+    "title1": "Why ChatGPT alone",
+    "title2": "isn't enough for job applications.",
+    "subtitle": "ChatGPT is a writing tool. LavorAI is an execution system."
+  },
+  "afterSignup": {
+    "eyebrow": "First 3 days",
+    "title1": "What happens",
+    "title2": "after signup.",
+    "subtitle": "From zero to your first sent application in under 4 hours. Here's how."
+  },
+  "referral": {
+    "eyebrow": "Coming soon",
+    "title": "Invite a friend, 2 weeks free for both",
+    "body": "When your friend signs up from your link and activates a Pro plan, you both get 2 weeks of credit. Referral program in beta — join the waitlist.",
+    "cta": "Join the referral beta"
   },
   "howItWorks": {
     "eyebrow": "Set up once · runs forever",

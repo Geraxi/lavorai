@@ -270,6 +270,24 @@ function SignupContent() {
                 </>
               )}
             </button>
+
+            {/* Trust microcopy SOTTO il submit — riduce abbandono carrello */}
+            <p
+              style={{
+                fontSize: 11.5,
+                color: "var(--fg-subtle)",
+                marginTop: 10,
+                textAlign: "center",
+                lineHeight: 1.5,
+              }}
+            >
+              <Icon name="check" size={10} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+              3 candidature gratuite ·{" "}
+              <Icon name="check" size={10} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+              No carta ·{" "}
+              <Icon name="check" size={10} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
+              Cancelli in 1 click
+            </p>
           </form>
 
           <p
@@ -294,18 +312,112 @@ function SignupContent() {
             </Link>
           </p>
 
+          {/* What happens next — checklist post-signup. Riduce ansia da
+              "cosa firmo?" mostrando ESATTAMENTE i 4 step (numerati,
+              tempi stimati) prima di candidare la prima volta. */}
           <div
             style={{
               marginTop: 28,
               paddingTop: 20,
               borderTop: "1px solid var(--border-ds)",
-              display: "grid",
-              gap: 10,
             }}
           >
-            <Benefit icon="zap" text="Candidati in automatico su portali italiani e internazionali" />
-            <Benefit icon="sparkles" text="CV e cover letter adattati ad ogni annuncio" />
-            <Benefit icon="target" text="3 candidature gratis per provare — no carta" />
+            <div
+              className="mono"
+              style={{
+                fontSize: 10.5,
+                textTransform: "uppercase",
+                letterSpacing: "0.16em",
+                color: "var(--fg-subtle)",
+                fontWeight: 500,
+                marginBottom: 12,
+              }}
+            >
+              Cosa succede dopo
+            </div>
+            <ol
+              style={{
+                listStyle: "none",
+                padding: 0,
+                margin: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              {[
+                { d: "60s", t: "Verifica email", b: "Link sicuro nella tua casella" },
+                { d: "2 min", t: "Carichi il CV", b: "Claude estrae profilo + skill" },
+                { d: "1 min", t: "Confermi ruoli e città", b: "Modificabili sempre" },
+                { d: "≤ 4h", t: "Prima candidatura inviata", b: "Su un job che matcha al ≥ 50%" },
+              ].map((s, i) => (
+                <li
+                  key={i}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "auto 1fr auto",
+                    gap: 12,
+                    alignItems: "center",
+                    fontSize: 12.5,
+                  }}
+                >
+                  <div
+                    className="mono"
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: 999,
+                      background: "var(--bg-sunken)",
+                      color: "var(--fg)",
+                      border: "1px solid var(--border-ds)",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 10.5,
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {i + 1}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 500, color: "var(--fg)" }}>{s.t}</div>
+                    <div style={{ color: "var(--fg-muted)", fontSize: 11.5 }}>
+                      {s.b}
+                    </div>
+                  </div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 10.5,
+                      color: "var(--fg-subtle)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {s.d}
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            {/* Modalità review vs auto — chiarimento esplicito */}
+            <div
+              style={{
+                marginTop: 18,
+                padding: "12px 14px",
+                borderRadius: 8,
+                background: "var(--bg-sunken)",
+                border: "1px solid var(--border-ds)",
+                fontSize: 11.5,
+                color: "var(--fg-muted)",
+                lineHeight: 1.5,
+              }}
+            >
+              <strong style={{ color: "var(--fg)", fontWeight: 500 }}>
+                Default sicuro:
+              </strong>{" "}
+              al primo signup parte in modalità Hybrid (ti chiede ok prima di ogni candidatura). Auto si attiva solo se lo decidi tu dalle preferenze.
+            </div>
           </div>
             </>
           )}

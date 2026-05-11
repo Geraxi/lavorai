@@ -15,16 +15,22 @@
     "english": "English"
   },
   "hero": {
-    "badge": "Mentre tu dormi · LavorAI si candida",
-    "title1": "Candidarsi non è più",
-    "title2": "il tuo lavoro.",
-    "subtitle": "LavorAI trova gli annunci giusti, riscrive il tuo CV per ognuno, e <strong>compila i form al posto tuo</strong>. Ogni 30 minuti. Tutta la notte. Tu apri solo le email dei colloqui.",
-    "cta": "Inizia gratis — 3 candidature subito",
-    "ctaCaption": "Nessuna carta · Pausa in qualsiasi momento · Usato da 2.000+ candidati italiani",
-    "check1": "<strong>Si candida da solo</strong> ogni 30 minuti, anche mentre dormi",
-    "check2": "CV e lettera <strong>riscritti dall'AI</strong> per ogni annuncio, in italiano nativo",
-    "check3": "Submit reale sui form ATS — nessun login ai tuoi account",
-    "portalsLabel": "Si candida automaticamente su:"
+    "badge": "Auto-apply in italiano · 3 batch al giorno",
+    "title1": "Manda più candidature di qualità",
+    "title2": "senza passare le serate a ricopiare il CV.",
+    "subtitle": "LavorAI <strong>trova le offerte giuste</strong>, <strong>riscrive il tuo CV per ognuna</strong> e <strong>compila i form ATS al posto tuo</strong>. Tu rivedi solo le risposte dei recruiter.",
+    "cta": "Prova gratis — 3 candidature subito",
+    "ctaSecondary": "Analizza il mio CV gratis",
+    "ctaCaption": "Nessuna carta · Pausa in qualsiasi momento · GDPR-first",
+    "check1": "<strong>Submit reale</strong> sui form ATS (Greenhouse, Lever, Ashby) — niente login ai tuoi account",
+    "check2": "CV e cover letter <strong>specifici per ogni annuncio</strong>, in italiano o inglese nativo",
+    "check3": "<strong>Tu decidi</strong>: auto, ibrido (consenso prima dell'invio) o off — in 1 click",
+    "portalsLabel": "Scopre annunci su:",
+    "portalsApplyLabel": "Compila i form ATS di:",
+    "trustStrip1": "GDPR-first · server EU",
+    "trustStrip2": "Cancella tutto in 1 click",
+    "trustStrip3": "Niente credenziali LinkedIn richieste",
+    "trustStrip4": "Pausa quando vuoi"
   },
   "onboarding": {
     "stepCv": "CV",
@@ -193,7 +199,10 @@
     "title1": "Trasparenti,",
     "title2": "senza sorprese.",
     "subtitle": "Niente crediti. Niente add-on. Scegli il piano, cambia quando vuoi.",
-    "footnote": "IVA inclusa. Cancelli in 1 click da Stripe — senza email, senza attese. Nessun vincolo."
+    "footnote": "IVA inclusa. Cancelli in 1 click da Stripe — senza email, senza attese. Nessun vincolo.",
+    "riskReducer1": "3 candidature gratuite per testare prima di pagare",
+    "riskReducer2": "Cancellazione self-service, sempre",
+    "riskReducer3": "Setup fee zero, no costi nascosti"
   },
   "faq": {
     "heading": "Domande frequenti",
@@ -213,6 +222,72 @@
     "q6Answer": "Sì, con un click. Nessun vincolo, nessuna penale, nessuna domanda. Pausa l'auto-apply quando vuoi e riavvialo quando ti serve.",
     "q7Question": "Cosa succede ai miei dati?",
     "q7Answer": "Stanno su server europei (Neon · Frankfurt), GDPR-first. Export integrale in JSON e cancellazione completa con un click — pulisce profilo, CV, file, code di lavoro. Non vendiamo nulla, non condividiamo con nessuno."
+  },
+  "boundaries": {
+    "eyebrow": "Niente magia AI · ruoli chiari",
+    "title1": "Cosa è automatico,",
+    "title2": "e cosa decidi tu.",
+    "subtitle": "Niente \"AI che fa tutto\" — confini espliciti, sempre reversibili.",
+    "autoEyebrow": "Automatico",
+    "autoTitle": "LavorAI fa da solo",
+    "autoItem1": "Scopre nuovi annunci ogni 2 ore su ATS pubblici (Greenhouse, Lever, Ashby, SmartRecruiters, Workable)",
+    "autoItem2": "Filtra per ruoli, sede, salary range e blacklist aziende che hai impostato",
+    "autoItem3": "Riscrive CV e cover letter per ogni singolo annuncio usando Claude (no template)",
+    "autoItem4": "Compila i form ATS pubblici e invia la candidatura",
+    "consentEyebrow": "Tu confermi",
+    "consentTitle": "Modalità Hybrid: ti chiede ok",
+    "consentItem1": "Ogni candidatura mostrata in dashboard prima dell'invio (24h per cliccare \"Invia\" o \"Salta\")",
+    "consentItem2": "Email di notifica al raggiungimento di soglie (es. 50 candidature inviate)",
+    "consentItem3": "Conferma esplicita all'attivazione iniziale dell'auto-apply",
+    "controlEyebrow": "Tu controlli",
+    "controlTitle": "Tu decidi le regole",
+    "controlItem1": "3 modalità in 1 click: Off, Hybrid (consenso ogni invio), Auto (zero touch)",
+    "controlItem2": "Soglia di match minima: sotto X% non parte una candidatura",
+    "controlItem3": "Blacklist aziende, città escluse, salary range, tipo contratto",
+    "controlItem4": "Pausa istantanea da dashboard, export integrale, cancellazione totale",
+    "footnote": "Default al primo signup: modalità Hybrid attiva, Auto disattivata. Cambi quando vuoi dalle preferenze — niente è opt-in nascosto."
+  },
+  "leadMagnet": {
+    "eyebrow": "Test gratuito",
+    "title": "Vuoi vedere prima come funziona?",
+    "subtitle": "Carica il tuo CV e un annuncio. Ti riscriviamo CV e cover letter in 60 secondi — gratis, niente carta.",
+    "cta": "Prova ora · 3 audit gratuiti",
+    "bulletsTitle": "Cosa ricevi",
+    "bullet1": "ATS readability score (su 100)",
+    "bullet2": "CV ottimizzato in DOCX",
+    "bullet3": "Cover letter scritta da Claude per quell'annuncio",
+    "bullet4": "3-5 suggerimenti per migliorare"
+  },
+  "trustSection": {
+    "eyebrow": "Privacy · Sicurezza",
+    "title1": "I tuoi dati,",
+    "title2": "trattati come se fossero nostri.",
+    "subtitle": "Sicurezza non come slogan: setup tecnico verificabile, server UE, controlli concreti.",
+    "readPolicy": "Leggi la privacy policy completa"
+  },
+  "personas": {
+    "eyebrow": "Per chi è",
+    "title1": "Costruito per",
+    "title2": "chi prende sul serio la ricerca lavoro.",
+    "subtitle": "LavorAI funziona meglio se sai cosa stai cercando ma odi il lavoro ripetitivo."
+  },
+  "whyNotChatGpt": {
+    "eyebrow": "Differenza vs ChatGPT",
+    "title1": "Perché non basta",
+    "title2": "ChatGPT per candidarsi.",
+    "subtitle": "ChatGPT è uno strumento di scrittura. LavorAI è un sistema di esecuzione."
+  },
+  "afterSignup": {
+    "eyebrow": "I primi 3 giorni",
+    "title1": "Cosa succede",
+    "title2": "dopo la registrazione.",
+    "subtitle": "Da 0 alla prima candidatura inviata in meno di 4 ore. Ecco gli step."
+  },
+  "referral": {
+    "eyebrow": "Presto disponibile",
+    "title": "Invita un amico, 2 settimane gratis per entrambi",
+    "body": "Quando un tuo amico si registra dal tuo link e attiva un piano Pro, ricevete entrambi 2 settimane di credito. Programma referral in beta — vai in lista d'attesa.",
+    "cta": "Iscriviti alla beta referral"
   },
   "howItWorks": {
     "eyebrow": "Setup una volta · gira da solo per sempre",

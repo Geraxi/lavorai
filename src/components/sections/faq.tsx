@@ -7,20 +7,48 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { useTranslations } from "next-intl";
+import { useTranslations, useLocale } from "next-intl";
 import { Reveal } from "@/components/reveal";
+import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
+import { FAQ_OBJECTIONS } from "@/lib/marketing-content";
+
+// EN FAQ — speculare alle 7 italiane di marketing-content.ts.
+// Mantenuto qui inline per evitare un'altra struttura locale-aware.
+const FAQ_OBJECTIONS_EN = [
+  {
+    q: "Is my data safe?",
+    a: "Yes. Your CV is encrypted at rest on EU servers (Neon · Frankfurt), GDPR-first. Never sold, never shared. You can export everything to JSON or delete account+CV+applications in 1 click from settings.",
+  },
+  {
+    q: "Do I stay in control of what's sent?",
+    a: "Yes, 3 modes you choose from preferences: Off (no sends), Hybrid (asks for ok before each application), Auto (runs on its own above a match threshold you set). One-click toggle, always reversible.",
+  },
+  {
+    q: "Does it actually work on major portals?",
+    a: "Yes on public ATS forms — Greenhouse, Lever, Ashby, SmartRecruiters, Workable — the same ones you'd fill clicking Apply. For LinkedIn/Indeed we scrape openings then redirect to the underlying ATS form. We never ask for or store your LinkedIn/Indeed credentials.",
+  },
+  {
+    q: "Will applications look generic or templated?",
+    a: "Every application has CV and cover letter rewritten by Claude for that specific posting: the system reads the job description, identifies ATS keywords, reformulates your existing experience. Nothing made up — only your real material, reordered per listing.",
+  },
+  {
+    q: "Can I review before sending?",
+    a: "Yes — in Hybrid mode you get a summary for each application before sending and click 'Send' or 'Skip'. In Auto mode you can still see full history in dashboard and flag any issues on individual sends.",
+  },
+  {
+    q: "Who is LavorAI for?",
+    a: "Professionals looking for tech, design, marketing, product or sales roles — in Italy, EU or remote. Works best if you have 1+ years experience and a CV in English or Italian. Doesn't replace networking, but takes the repetitive work off your evenings.",
+  },
+  {
+    q: "What happens after signup?",
+    a: "1) Verify your email (60 seconds). 2) Upload your CV — Claude extracts profile, experience, roles. 3) Confirm 1-2 target roles and locations. 4) LavorAI starts applying 3 times a day (morning, lunch, afternoon) on matching jobs. You only get emails for recruiter replies.",
+  },
+];
 
 export function SectionFaq() {
   const t = useTranslations("faq");
-  const faq = [
-    { q: t("q1Question"), a: t("q1Answer") },
-    { q: t("q2Question"), a: t("q2Answer") },
-    { q: t("q3Question"), a: t("q3Answer") },
-    { q: t("q4Question"), a: t("q4Answer") },
-    { q: t("q5Question"), a: t("q5Answer") },
-    { q: t("q6Question"), a: t("q6Answer") },
-    { q: t("q7Question"), a: t("q7Answer") },
-  ];
+  const locale = useLocale();
+  const faq = locale === "en" ? FAQ_OBJECTIONS_EN : FAQ_OBJECTIONS;
   return (
     <section id="faq" className="relative border-t border-border/60 py-24 md:py-32">
       <div className="container">
@@ -47,6 +75,18 @@ export function SectionFaq() {
               type="multiple"
               defaultValue={["item-0", "item-1"]}
               className="w-full"
+              onValueChange={(open: string[]) => {
+                // Traccia ogni FAQ aperta (UNA volta per item)
+                for (const v of open) {
+                  const idx = parseInt(v.replace("item-", ""), 10);
+                  if (Number.isFinite(idx) && faq[idx]) {
+                    trackEvent(AnalyticsEvent.FAQ_EXPAND, {
+                      index: idx,
+                      question: faq[idx].q,
+                    });
+                  }
+                }
+              }}
             >
               {faq.map(({ q, a }, i) => (
                 <AccordionItem

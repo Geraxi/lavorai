@@ -34,6 +34,40 @@ export function SectionPricing() {
           <p className="mt-5 text-lg text-muted-foreground">
             {t("subtitle")}
           </p>
+
+          {/* Risk reducer chips — riducono frizione cliccando "Crea account" */}
+          <div
+            className="mt-6 flex flex-wrap justify-center gap-2"
+            style={{ fontSize: 12, color: "var(--fg-muted)" }}
+          >
+            {(["riskReducer1", "riskReducer2", "riskReducer3"] as const).map(
+              (k) => (
+                <span
+                  key={k}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "5px 12px",
+                    borderRadius: 999,
+                    background: "var(--bg-elev)",
+                    border: "1px solid var(--border-ds)",
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: 999,
+                      background: "hsl(var(--primary))",
+                    }}
+                  />
+                  {t(k)}
+                </span>
+              ),
+            )}
+          </div>
         </Reveal>
 
         <div className="mx-auto mt-16 grid max-w-6xl gap-6 md:grid-cols-3">

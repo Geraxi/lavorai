@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { AuroraBackground } from "@/components/aurora-background";
 import { DashboardMockup } from "@/components/dashboard-mockup";
+import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
+import { SUPPORTED_PORTALS } from "@/lib/marketing-content";
 
 export function Hero() {
   const t = useTranslations("hero");
@@ -122,10 +124,70 @@ export function Hero() {
               transition={{ duration: 0.55, delay: 0.35 }}
               className="mt-10 flex flex-col items-start gap-3"
             >
-              <ShineButton label={t("cta")} />
+              <div
+                className="flex flex-wrap items-center gap-3"
+              >
+                <ShineButton
+                  label={t("cta")}
+                  onClick={() =>
+                    trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, {
+                      label: "signup",
+                    })
+                  }
+                />
+                <Link
+                  href="/optimize"
+                  onClick={() =>
+                    trackEvent(AnalyticsEvent.HERO_CTA_SECONDARY, {
+                      label: "lead_magnet",
+                    })
+                  }
+                  className="ds-btn"
+                  style={{
+                    minHeight: 60,
+                    paddingLeft: 24,
+                    paddingRight: 24,
+                    fontSize: 15,
+                    fontWeight: 600,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  {t("ctaSecondary")} →
+                </Link>
+              </div>
               <span style={{ fontSize: 14, color: "var(--fg-muted)" }}>
                 {t("ctaCaption")}
               </span>
+            </motion.div>
+
+            {/* Trust strip — 4 reassurance concrete sotto il CTA.
+                Rispondono alle obiezioni più frequenti PRIMA che vengano
+                fatte (data safety, controllo, no credenziali, reversibilità). */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.45 }}
+              className="mt-6 flex flex-wrap gap-x-5 gap-y-2"
+              style={{ fontSize: 12.5, color: "var(--fg-muted)" }}
+            >
+              {(["trustStrip1", "trustStrip2", "trustStrip3", "trustStrip4"] as const).map(
+                (k) => (
+                  <span key={k} className="inline-flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 5,
+                        height: 5,
+                        borderRadius: 999,
+                        background: "hsl(var(--primary))",
+                      }}
+                    />
+                    {t(k)}
+                  </span>
+                ),
+              )}
             </motion.div>
 
             {/* 3 checkmark — promesse vere e verificabili */}
@@ -152,49 +214,91 @@ export function Hero() {
               ))}
             </motion.ul>
 
-            {/* Logo strip — portali su cui LavorAI candida automaticamente */}
+            {/* Logo strips — onesta distinzione tra discovery (LinkedIn,
+                Indeed) e submit reale (Greenhouse, Lever, Ashby).
+                Differenzia da competitor che claim "candida su LinkedIn"
+                quando in realtà non possono (TOS + anti-bot). */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.7 }}
-              className="mt-10"
+              className="mt-10 flex flex-col gap-4"
             >
-              <p
-                className="mono"
-                style={{
-                  fontSize: 11,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.16em",
-                  color: "var(--fg-subtle)",
-                  fontWeight: 500,
-                }}
-              >
-                {t("portalsLabel")}
-              </p>
-              <div
-                style={{
-                  marginTop: 12,
-                  display: "flex",
-                  gap: 18,
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                }}
-              >
-                {["LinkedIn", "InfoJobs", "Indeed", "Subito"].map((p) => (
-                  <span
-                    key={p}
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 600,
-                      letterSpacing: "-0.015em",
-                      color: "var(--fg-muted)",
-                      filter: "grayscale(1)",
-                      opacity: 0.75,
-                    }}
-                  >
-                    {p}
-                  </span>
-                ))}
+              <div>
+                <p
+                  className="mono"
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.16em",
+                    color: "var(--fg-subtle)",
+                    fontWeight: 500,
+                  }}
+                >
+                  {t("portalsLabel")}
+                </p>
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: "flex",
+                    gap: 18,
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                  }}
+                >
+                  {SUPPORTED_PORTALS.discovery.map((p) => (
+                    <span
+                      key={p}
+                      style={{
+                        fontSize: 15,
+                        fontWeight: 600,
+                        letterSpacing: "-0.015em",
+                        color: "var(--fg-muted)",
+                        filter: "grayscale(1)",
+                        opacity: 0.75,
+                      }}
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p
+                  className="mono"
+                  style={{
+                    fontSize: 11,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.16em",
+                    color: "hsl(var(--primary))",
+                    fontWeight: 500,
+                  }}
+                >
+                  {t("portalsApplyLabel")}
+                </p>
+                <div
+                  style={{
+                    marginTop: 8,
+                    display: "flex",
+                    gap: 18,
+                    flexWrap: "wrap",
+                    alignItems: "center",
+                  }}
+                >
+                  {SUPPORTED_PORTALS.apply.map((p) => (
+                    <span
+                      key={p}
+                      style={{
+                        fontSize: 15,
+                        fontWeight: 600,
+                        letterSpacing: "-0.015em",
+                        color: "var(--fg)",
+                      }}
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </div>
               </div>
             </motion.div>
           </div>
@@ -223,7 +327,13 @@ export function Hero() {
 /**
  * CTA primario unico — "Avvia l'auto-apply". Più grande e tangibile.
  */
-function ShineButton({ label }: { label: string }) {
+function ShineButton({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick?: () => void;
+}) {
   return (
     <Button
       asChild
@@ -235,7 +345,7 @@ function ShineButton({ label }: { label: string }) {
         paddingRight: 32,
       }}
     >
-      <Link href="/optimize">
+      <Link href="/signup" onClick={onClick}>
         <span
           className="relative z-10 font-semibold"
           style={{ fontSize: 17, letterSpacing: "-0.005em" }}
