@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { AppTopbar } from "@/components/design/topbar";
-import { Icon } from "@/components/design/icon";
+import { Icon, type IconName } from "@/components/design/icon";
 import {
   SectionBody,
   SectionCard,
@@ -33,7 +33,10 @@ interface Initial {
 
 const MATCH_STEPS = [30, 50, 65, 75, 85] as const;
 
+type TabKey = "auto" | "rounds" | "answers" | "locations" | "compensation" | "excluded";
+
 export function PreferencesClient({ initial }: { initial: Initial }) {
+  const [activeTab, setActiveTab] = useState<TabKey>("auto");
   const [roles, setRoles] = useState<string[]>(initial.roles);
   const [locations, setLocations] = useState<string[]>(initial.locations);
   const [salary, setSalary] = useState<number>(initial.salaryMin);
@@ -189,14 +192,16 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
           </button>
         </div>
 
-        <div
-          style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }}
-        >
-          <div className="flex flex-col" style={{ gap: 16 }}>
-            {/* Sessioni di candidatura */}
-            <SessionsBlock />
+        {/* TABS NAV — riduce overload sostituendo lo scroll lungo con
+            sezioni navigabili. Ogni tab mostra un sottoinsieme coerente
+            di preferenze; default su "auto-apply" che è il setting più
+            critico per il funzionamento. */}
+        <PreferencesTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-            {/* Auto-apply */}
+        <div className="flex flex-col" style={{ gap: 16, marginTop: 16 }}>
+          {activeTab === "rounds" && <SessionsBlock />}
+
+          {activeTab === "auto" && (
             <SectionCard>
               <SectionHead
                 icon={<Icon name="zap" size={14} />}
@@ -550,8 +555,9 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                 </div>
               </SectionBody>
             </SectionCard>
+          )}
 
-            {/* Risposte standard candidature */}
+          {activeTab === "answers" && (
             <SectionCard>
               <SectionHead
                 icon={<Icon name="check" size={14} />}
@@ -808,8 +814,9 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                 </div>
               </SectionBody>
             </SectionCard>
+          )}
 
-            {/* Ruoli */}
+          {activeTab === "rounds" && (
             <SectionCard>
               <SectionHead
                 icon={<Icon name="briefcase" size={14} />}
@@ -857,8 +864,9 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                 </div>
               </SectionBody>
             </SectionCard>
+          )}
 
-            {/* Sedi & modalità */}
+          {activeTab === "locations" && (
             <SectionCard>
               <SectionHead
                 icon={<Icon name="map-pin" size={14} />}
@@ -944,8 +952,9 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                 </div>
               </SectionBody>
             </SectionCard>
+          )}
 
-            {/* Compenso */}
+          {activeTab === "compensation" && (
             <SectionCard>
               <SectionHead
                 icon={<Icon name="euro" size={14} />}
@@ -983,8 +992,9 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                 </div>
               </SectionBody>
             </SectionCard>
+          )}
 
-            {/* Aziende escluse */}
+          {activeTab === "excluded" && (
             <SectionCard>
               <SectionHead
                 icon={<Icon name="x" size={14} />}
@@ -1043,51 +1053,131 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                 </div>
               </SectionBody>
             </SectionCard>
-          </div>
+          )}
 
-          <div className="flex flex-col" style={{ gap: 16 }}>
-            <SectionCard>
-              <SectionHead
-                icon={<Icon name="target" size={14} />}
-                title="Come funziona"
-              />
-              <SectionBody>
-                <ul
-                  style={{
-                    fontSize: 12.5,
-                    color: "var(--fg-muted)",
-                    lineHeight: 1.6,
-                    paddingLeft: 16,
-                    margin: 0,
-                  }}
-                >
-                  <li>
-                    Le tue preferenze filtrano le posizioni nel job board.
-                  </li>
-                  <li>
-                    Modalità attuale:{" "}
-                    <strong style={{ color: "var(--fg)" }}>
-                      {autoMode === "off"
-                        ? "Off — nessun invio"
-                        : autoMode === "manual"
-                          ? "Manuale — consenso per ogni candidatura"
-                          : autoMode === "hybrid"
-                            ? `Ibrido — auto se match ≥ ${matchMin}%`
-                            : `Full auto — fino a ${dailyCap}/giorno sopra ${matchMin}%`}
-                    </strong>
-                    .
-                  </li>
-                  <li>Le aziende escluse vengono sempre saltate.</li>
-                  <li>
-                    Ogni modifica qui richiede il bottone "Salva" in alto a
-                    destra.
-                  </li>
-                </ul>
-              </SectionBody>
-            </SectionCard>
+          {/* Footer helper line — sostituisce il vecchio info card laterale.
+              Cambia in base al tab attivo per dare contesto puntuale. */}
+          <div
+            style={{
+              fontSize: 12.5,
+              color: "var(--fg-muted)",
+              padding: "12px 16px",
+              borderRadius: 8,
+              background: "var(--bg-sunken)",
+              border: "1px solid var(--border-ds)",
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 10,
+            }}
+          >
+            <Icon
+              name="target"
+              size={14}
+              style={{ marginTop: 1, flexShrink: 0, opacity: 0.7 }}
+            />
+            <span>
+              {activeTab === "auto" && (
+                <>
+                  Modalità attuale:{" "}
+                  <strong style={{ color: "var(--fg)" }}>
+                    {autoMode === "off"
+                      ? "Off — nessun invio"
+                      : autoMode === "manual"
+                        ? "Manuale — consenso per ogni candidatura"
+                        : autoMode === "hybrid"
+                          ? `Ibrido — auto se match ≥ ${matchMin}%`
+                          : `Full auto — fino a ${dailyCap}/giorno sopra ${matchMin}%`}
+                  </strong>
+                  . Ricorda di cliccare "Salva" in alto a destra.
+                </>
+              )}
+              {activeTab === "rounds" &&
+                "I round attivi definiscono i ruoli per cui l'auto-apply gira ogni 30 minuti."}
+              {activeTab === "answers" &&
+                "Queste risposte vengono pre-compilate sui form ATS quando vengono richieste (visa, salary range, EEO, ecc)."}
+              {activeTab === "locations" &&
+                "Filtra le città e le modalità di lavoro accettate. LavorAI candida solo se il job matcha."}
+              {activeTab === "compensation" &&
+                "RAL minima e tipologia contrattuale. Annunci sotto soglia o di tipo errato vengono ignorati."}
+              {activeTab === "excluded" &&
+                "Le aziende escluse vengono sempre saltate, anche se il match è alto."}
+            </span>
           </div>
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Tab navigation per le preferenze. Sostituisce lo scroll lungo
+ * monolitico con 6 sezioni selezionabili: auto-apply, round attivi,
+ * risposte ai form, sedi, compenso, aziende escluse.
+ *
+ * Layout responsive: horizontal scroll su mobile, full wrap su desktop.
+ */
+function PreferencesTabs({
+  activeTab,
+  onTabChange,
+}: {
+  activeTab: TabKey;
+  onTabChange: (t: TabKey) => void;
+}) {
+  const tabs: Array<{ key: TabKey; label: string; icon: IconName }> = [
+    { key: "auto", label: "Auto-apply", icon: "zap" },
+    { key: "rounds", label: "Round attivi", icon: "briefcase" },
+    { key: "answers", label: "Form risposte", icon: "check" },
+    { key: "locations", label: "Sedi", icon: "map-pin" },
+    { key: "compensation", label: "Compenso", icon: "euro" },
+    { key: "excluded", label: "Escluse", icon: "x" },
+  ];
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Sezioni preferenze"
+      style={{
+        display: "flex",
+        gap: 4,
+        padding: 4,
+        background: "var(--bg-elev)",
+        border: "1px solid var(--border-ds)",
+        borderRadius: 10,
+        overflowX: "auto",
+        scrollbarWidth: "none",
+      }}
+    >
+      {tabs.map((t) => {
+        const isActive = t.key === activeTab;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onTabChange(t.key)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 7,
+              padding: "9px 14px",
+              border: "none",
+              borderRadius: 7,
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: isActive ? 600 : 500,
+              whiteSpace: "nowrap",
+              transition: "background 0.12s, color 0.12s",
+              background: isActive ? "var(--bg)" : "transparent",
+              color: isActive ? "var(--fg)" : "var(--fg-muted)",
+              boxShadow: isActive ? "var(--shadow-sm)" : "none",
+            }}
+          >
+            <Icon name={t.icon} size={13} />
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
