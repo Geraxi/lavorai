@@ -42,11 +42,11 @@ export function Hero() {
       />
 
       <div
-        className="relative z-10 pt-16 md:pt-24"
+        className="relative z-10"
         style={{
           maxWidth: 1480,
           margin: "0 auto",
-          padding: "64px 40px 0",
+          padding: "48px 40px 0",
         }}
       >
         <div className="grid items-center gap-14 lg:grid-cols-[1.15fr_1fr] lg:gap-20">
@@ -91,10 +91,13 @@ export function Hero() {
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
               className="text-balance font-bold tracking-tight text-foreground"
               style={{
-                fontSize: "clamp(3rem, 6.4vw, 5.5rem)",
-                letterSpacing: "-0.04em",
-                lineHeight: 1.02,
+                // Capped più basso (era 5.5rem → 4rem) per stare dentro
+                // il fold su 13" laptop. Headline ora 2 righe max.
+                fontSize: "clamp(2.25rem, 4.5vw, 4rem)",
+                letterSpacing: "-0.035em",
+                lineHeight: 1.05,
                 fontWeight: 700,
+                maxWidth: "16ch",
               }}
             >
               {t("title1")}{" "}
@@ -105,24 +108,20 @@ export function Hero() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.2 }}
-              className="mt-7 max-w-2xl text-balance text-muted-foreground"
+              className="mt-5 max-w-xl text-muted-foreground"
               style={{
-                fontSize: "clamp(1.125rem, 1.5vw, 1.4rem)",
-                lineHeight: 1.5,
+                fontSize: "clamp(1rem, 1.1vw, 1.125rem)",
+                lineHeight: 1.55,
               }}
             >
-              {t.rich("subtitle", {
-                strong: (chunks) => (
-                  <strong style={{ color: "var(--fg)" }}>{chunks}</strong>
-                ),
-              })}
+              {t("subtitle")}
             </motion.p>
 
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.35 }}
-              className="mt-10 flex flex-col items-start gap-3"
+              className="mt-7 flex flex-col items-start gap-3"
             >
               <div
                 className="flex flex-wrap items-center gap-3"
@@ -169,7 +168,7 @@ export function Hero() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.45 }}
-              className="mt-6 flex flex-wrap gap-x-5 gap-y-2"
+              className="mt-5 flex flex-wrap gap-x-5 gap-y-2"
               style={{ fontSize: 12.5, color: "var(--fg-muted)" }}
             >
               {(["trustStrip1", "trustStrip2", "trustStrip3", "trustStrip4"] as const).map(
@@ -190,29 +189,10 @@ export function Hero() {
               )}
             </motion.div>
 
-            {/* 3 checkmark — promesse vere e verificabili */}
-            <motion.ul
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.5 }}
-              className="mt-9 flex flex-col gap-2.5"
-              style={{ fontSize: 15.5 }}
-            >
-              {(["check1", "check2", "check3"] as const).map((k) => (
-                <li key={k} className="flex items-center gap-3">
-                  <span className="text-primary" style={{ fontSize: 17 }}>
-                    ✓
-                  </span>
-                  <span>
-                    {t.rich(k, {
-                      strong: (chunks) => (
-                        <strong style={{ color: "var(--fg)" }}>{chunks}</strong>
-                      ),
-                    })}
-                  </span>
-                </li>
-              ))}
-            </motion.ul>
+            {/* I 3 checkmark redundant rimossi: il trust strip sopra
+                già copre le stesse promesse in formato più compatto.
+                Le claim più dettagliate sono nelle sezioni Boundaries +
+                Trust block più sotto. Questo hero ora cape nel fold. */}
 
             {/* Logo strips — onesta distinzione tra discovery (LinkedIn,
                 Indeed) e submit reale (Greenhouse, Lever, Ashby).
@@ -221,8 +201,8 @@ export function Hero() {
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.7 }}
-              className="mt-10 flex flex-col gap-4"
+              transition={{ duration: 0.55, delay: 0.55 }}
+              className="mt-7 flex flex-col gap-3"
             >
               <div>
                 <p
@@ -312,13 +292,13 @@ export function Hero() {
         </div>
 
         {/* Mobile preview */}
-        <div className="mt-16 flex justify-center lg:hidden">
+        <div className="mt-10 flex justify-center lg:hidden">
           <div className="w-full max-w-[440px]">
             <DashboardMockup />
           </div>
         </div>
 
-        <div className="mt-16 mb-8" />
+        <div className="mt-10 mb-4" />
       </div>
     </section>
   );
