@@ -5,83 +5,57 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-import { AuroraBackground } from "@/components/aurora-background";
-import Image from "next/image";
+// Image import non più necessario — l'immagine pianeta è ora bg
+// CSS della section, non un <Image> renderizzato.
 import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
 
 export function Hero() {
   const t = useTranslations("hero");
   return (
-    <section className="relative overflow-hidden">
-      <AuroraBackground variant="hero" />
-
-      {/* Grid pattern sottile */}
+    <section
+      className="relative overflow-hidden"
+      style={{
+        // Hero background = tiny-planet image full-bleed.
+        // backgroundPosition: center così il pianeta resta visibile;
+        // backgroundSize: cover su mobile per riempire, contain
+        // ridurrebbe troppo. Su desktop l'immagine si estende quanto
+        // basta da coprire un fold di ~720px.
+        backgroundImage: "url('/hero-planet.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center center",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
+      {/* Overlay scuro + gradient: rende il testo bianco leggibile
+          sopra lo sfondo stellato (top) e attenua il pianeta verde
+          (bottom-center). Più scuro a sinistra dove vive il copy,
+          più trasparente a destra dove si vede meglio il pianeta. */}
       <div
         aria-hidden
-        className="grid-bg pointer-events-none absolute inset-0 opacity-40 [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(0,5,20,0.78) 0%, rgba(0,5,20,0.55) 45%, rgba(0,5,20,0.25) 75%, rgba(0,5,20,0.10) 100%), linear-gradient(180deg, rgba(0,5,20,0.20) 0%, transparent 40%, rgba(0,5,20,0.30) 100%)",
+        }}
       />
 
-      {/* Atmospheric layer 1: gradient verde principale (richer, più
-          saturo dell'originale per dare presenza). */}
+      {/* Subtle green atmospheric glow per fondere il pianeta col
+          theme verde del resto del sito */}
       <motion.div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
-            "radial-gradient(ellipse 75% 60% at 40% 35%, rgba(34,197,94,0.42) 0%, rgba(34,197,94,0.18) 35%, transparent 70%)",
+            "radial-gradient(ellipse 50% 60% at 70% 55%, hsl(var(--primary) / 0.25), transparent 65%)",
           mixBlendMode: "screen",
         }}
         animate={{
-          opacity: [0.85, 1, 0.95, 1, 0.85],
-          scale: [1, 1.05, 1.02, 1.06, 1],
+          opacity: [0.55, 0.85, 0.65, 0.85, 0.55],
         }}
         transition={{
           duration: 9,
           ease: "easeInOut",
           repeat: Infinity,
-        }}
-      />
-
-      {/* Atmospheric layer 2: glow secondario blu-verde sul lato destro
-          per dare profondità. Aggiunge tridimensionalità senza essere
-          aggressivo. */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 45% 35% at 80% 65%, rgba(56,189,248,0.18) 0%, transparent 65%)",
-          mixBlendMode: "screen",
-        }}
-        animate={{
-          opacity: [0.4, 0.7, 0.5, 0.7, 0.4],
-        }}
-        transition={{
-          duration: 11,
-          ease: "easeInOut",
-          repeat: Infinity,
-          delay: 1.5,
-        }}
-      />
-
-      {/* Atmospheric layer 3: subtle warm glow in alto-sinistra per
-          spezzare la monotonia del verde. */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0"
-        style={{
-          background:
-            "radial-gradient(ellipse 35% 25% at 15% 20%, rgba(251,191,36,0.10) 0%, transparent 60%)",
-          mixBlendMode: "screen",
-        }}
-        animate={{
-          opacity: [0.3, 0.6, 0.4, 0.6, 0.3],
-        }}
-        transition={{
-          duration: 13,
-          ease: "easeInOut",
-          repeat: Infinity,
-          delay: 3,
         }}
       />
 
@@ -93,7 +67,7 @@ export function Hero() {
           padding: "72px 40px 0",
         }}
       >
-        <div className="grid items-center gap-14 lg:grid-cols-[1.15fr_1fr] lg:gap-20">
+        <div className="grid items-center gap-14 lg:grid-cols-[1.4fr_1fr] lg:gap-12">
           {/* Colonna sinistra: copy + CTA */}
           <div className="flex flex-col items-start text-left">
             <motion.div
@@ -133,29 +107,41 @@ export function Hero() {
               initial={{ opacity: 0, y: 20, filter: "blur(6px)" }}
               animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-              className="text-balance font-bold tracking-tight text-foreground"
+              className="text-balance font-bold tracking-tight"
               style={{
-                // Range bilanciato: presenza visiva su desktop (~80px)
-                // senza sforare il fold. Su 13" cap a 4.75rem.
                 fontSize: "clamp(2.5rem, 5.2vw, 5rem)",
                 letterSpacing: "-0.038em",
                 lineHeight: 1.04,
                 fontWeight: 700,
                 maxWidth: "14ch",
+                color: "#FFFFFF",
+                textShadow: "0 2px 24px rgba(0,5,20,0.5)",
               }}
             >
               {t("title1")}{" "}
-              <span className="text-gradient-accent">{t("title2")}</span>
+              <span
+                style={{
+                  background:
+                    "linear-gradient(180deg, #6EE7B7, #34D399)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                }}
+              >
+                {t("title2")}
+              </span>
             </motion.h1>
 
             <motion.p
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.2 }}
-              className="mt-5 max-w-xl text-muted-foreground"
+              className="mt-5 max-w-xl"
               style={{
                 fontSize: "clamp(1rem, 1.1vw, 1.125rem)",
                 lineHeight: 1.55,
+                color: "rgba(255,255,255,0.85)",
+                textShadow: "0 1px 12px rgba(0,5,20,0.4)",
               }}
             >
               {t("subtitle")}
@@ -200,20 +186,18 @@ export function Hero() {
                   {t("ctaSecondary")} →
                 </Link>
               </div>
-              <span style={{ fontSize: 14, color: "var(--fg-muted)" }}>
+              <span style={{ fontSize: 14, color: "rgba(255,255,255,0.75)" }}>
                 {t("ctaCaption")}
               </span>
             </motion.div>
 
-            {/* Trust strip — 4 reassurance concrete sotto il CTA.
-                Rispondono alle obiezioni più frequenti PRIMA che vengano
-                fatte (data safety, controllo, no credenziali, reversibilità). */}
+            {/* Trust strip — 4 reassurance concrete sotto il CTA. */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.45 }}
               className="mt-5 flex flex-wrap gap-x-5 gap-y-2"
-              style={{ fontSize: 12.5, color: "var(--fg-muted)" }}
+              style={{ fontSize: 12.5, color: "rgba(255,255,255,0.78)" }}
             >
               {(["trustStrip1", "trustStrip2", "trustStrip3", "trustStrip4"] as const).map(
                 (k) => (
@@ -243,9 +227,10 @@ export function Hero() {
               transition={{ duration: 0.55, delay: 0.55 }}
               className="mt-6 inline-flex items-center gap-3 rounded-lg border px-3.5 py-2.5"
               style={{
-                borderColor: "var(--border-ds)",
-                background:
-                  "linear-gradient(135deg, var(--bg-elev), var(--bg-sunken))",
+                borderColor: "rgba(255,255,255,0.18)",
+                background: "rgba(255,255,255,0.08)",
+                backdropFilter: "blur(20px) saturate(180%)",
+                WebkitBackdropFilter: "blur(20px) saturate(180%)",
               }}
             >
               <span
@@ -274,7 +259,7 @@ export function Hero() {
               <span
                 style={{
                   fontSize: 13,
-                  color: "var(--fg-muted)",
+                  color: "rgba(255,255,255,0.80)",
                   display: "inline-flex",
                   alignItems: "baseline",
                   gap: 5,
@@ -283,7 +268,7 @@ export function Hero() {
                 <Counter target={1247} />
                 <span>{t("liveActivity1")}</span>
                 <span style={{ opacity: 0.4, margin: "0 4px" }}>·</span>
-                <strong style={{ color: "var(--fg)", fontWeight: 600 }}>
+                <strong style={{ color: "#FFFFFF", fontWeight: 600 }}>
                   <Counter target={8} />
                 </strong>
                 <span>{t("liveActivity2")}</span>
@@ -295,23 +280,11 @@ export function Hero() {
                 separate con descrizioni. Lascia respirare l'hero. */}
           </div>
 
-          {/* Colonna destra: "tiny planet" emotional image.
-              Quel ragazzo sdraiato sul pianeta verde traduce in 1 frame
-              il messaggio: "il peso del job hunting è risolto, ora puoi
-              riposare". Si integra perfettamente col green field
-              theme grazie al pianeta verde + sfondo stellato scuro
-              che è invertito rispetto al body → l'immagine fa da
-              "controcampo cromatico" e cattura lo sguardo. */}
-          <div className="relative hidden lg:flex lg:justify-center lg:items-center">
-            <HeroVisual />
-          </div>
-        </div>
-
-        {/* Mobile visual */}
-        <div className="mt-10 flex justify-center lg:hidden">
-          <div className="w-full max-w-[440px]">
-            <HeroVisual />
-          </div>
+          {/* Right column: deliberatamente vuota su desktop — l'immagine
+              pianeta è ora background della section, lascia che si
+              veda. La colonna sinistra resta per il copy con dark
+              overlay come scrim. */}
+          <div className="hidden lg:block" aria-hidden />
         </div>
 
         <div className="mt-10 mb-4" />
@@ -387,7 +360,7 @@ function Counter({ target }: { target: number }) {
     <strong
       className="mono"
       style={{
-        color: "var(--fg)",
+        color: "#FFFFFF",
         fontWeight: 600,
         fontFeatureSettings: '"tnum"',
       }}
@@ -397,79 +370,5 @@ function Counter({ target }: { target: number }) {
   );
 }
 
-/**
- * Hero visual — "tiny planet" image. Square aspect (1:1) per
- * massimizzare l'impatto del pianeta nel frame quadrato dell'immagine.
- * Asset path: /hero-planet.jpg (l'utente lo salva in public/).
- *
- * Effetti:
- *   - Cornice glass leggera che fonde l'immagine col theme verde
- *   - Subtle floating animation (4s loop) — pianeta che ondeggia
- *     dolcemente come se respirasse, rafforza la sensazione di calma
- *   - Outer glow verde dietro l'immagine, raccoglie il colore del
- *     pianeta e lo proietta sul background del sito
- */
-function HeroVisual() {
-  return (
-    <div
-      className="relative w-full"
-      style={{
-        maxWidth: 560,
-        aspectRatio: "1 / 1",
-      }}
-    >
-      {/* Outer green glow — alone verde dietro l'immagine */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          inset: "-8%",
-          background:
-            "radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.35), transparent 60%)",
-          filter: "blur(40px)",
-          pointerEvents: "none",
-        }}
-      />
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
-        style={{
-          position: "relative",
-          width: "100%",
-          height: "100%",
-          borderRadius: "2rem",
-          overflow: "hidden",
-          border: "1px solid rgba(255,255,255,0.18)",
-          boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 12px rgba(5,80,55,0.20), 0 32px 80px -16px rgba(5,80,55,0.45)",
-        }}
-      >
-        <motion.div
-          style={{ position: "absolute", inset: 0 }}
-          animate={{
-            y: [0, -8, 0, -4, 0],
-          }}
-          transition={{
-            duration: 8,
-            ease: "easeInOut",
-            repeat: Infinity,
-          }}
-        >
-          <Image
-            src="/hero-planet.jpg"
-            alt="Una persona si rilassa su un piccolo pianeta verde nello spazio: la tranquillità di chi non deve più candidarsi a mano"
-            fill
-            priority
-            sizes="(max-width: 1024px) 90vw, 560px"
-            style={{
-              objectFit: "cover",
-              objectPosition: "center",
-            }}
-          />
-        </motion.div>
-      </motion.div>
-    </div>
-  );
-}
+// HeroVisual rimosso: l'immagine pianeta è ora background-image
+// della <section> hero (full-bleed), non un elemento separato.
