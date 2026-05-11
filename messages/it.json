@@ -77,7 +77,9 @@
     "statToday": "Oggi",
     "statQueued": "In coda",
     "statSending": "In invio",
-    "statOpened": "Aperte"
+    "statOpened": "Aperte",
+    "weeklyChartAriaLabel": "Candidature inviate negli ultimi 7 giorni",
+    "dailyCapLabel": "{sent} di {cap} candidature oggi"
   },
   "applicationsPage": {
     "title": "Candidature",

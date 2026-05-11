@@ -109,10 +109,39 @@ export default async function DashboardPage() {
     }),
   ]);
 
+  // 7-day daily count per la mini bar chart. Sostituisce i 4 MiniStat
+  // affollati con una visualizzazione che dice "stai performando meglio
+  // o peggio degli ultimi giorni" a colpo d'occhio.
+  const sevenDaysAgo = new Date(todayStart);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const lastWeekApps = await prisma.application.findMany({
+    where: {
+      userId: user.id,
+      status: "success",
+      submittedVia: { not: null },
+      createdAt: { gte: sevenDaysAgo },
+    },
+    select: { createdAt: true },
+  });
+  const dailyCounts = Array.from({ length: 7 }, (_, i) => {
+    const day = new Date(sevenDaysAgo);
+    day.setDate(day.getDate() + i);
+    const next = new Date(day);
+    next.setDate(next.getDate() + 1);
+    const count = lastWeekApps.filter(
+      (a) => a.createdAt >= day && a.createdAt < next,
+    ).length;
+    const dayLabel = day
+      .toLocaleDateString("it-IT", { weekday: "short" })
+      .slice(0, 3);
+    return { day: dayLabel, count, isToday: i === 6 };
+  });
+
   // Niente target mensile fittizio: il progresso reale è per-round
   // nel widget SessionsStatus sotto. Qui mostriamo solo il counter.
   const autoMode = prefs?.autoApplyMode ?? "manual";
   const isLive = autoMode === "auto" || autoMode === "hybrid";
+  const dailyCap = prefs?.dailyCap ?? 25;
 
   const allChecklistDone =
     onboarding.hasUploadedCv &&
@@ -264,21 +293,43 @@ export default async function DashboardPage() {
               </div>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 18,
-                marginTop: 4,
-                flexWrap: "wrap",
-              }}
-            >
-              <MiniStat label={t("statToday")} value={deliveredToday} />
-              <MiniStat label={t("statQueued")} value={pendingCount} />
-              <MiniStat label={t("statSending")} value={applyingCount} live />
-              <MiniStat label={t("statOpened")} value={viewedMonth} />
-            </div>
+            {/* Mini bar chart 7 giorni — sostituisce le 4 MiniStat
+                inline che affollavano la riga. A colpo d'occhio: trend
+                settimanale + posizione di oggi rispetto agli altri giorni. */}
+            <WeeklyChart
+              data={dailyCounts}
+              ariaLabel={t("weeklyChartAriaLabel")}
+            />
           </div>
 
+          {/* Daily cap progress bar — visuale del consumo del cap
+              giornaliero. Sostituisce la lettura mentale "deliveredToday
+              / dailyCap". */}
+          <DailyCapBar
+            sent={deliveredToday}
+            cap={dailyCap}
+            label={t("dailyCapLabel", { sent: deliveredToday, cap: dailyCap })}
+          />
+
+          {/* Pipeline secondaria — più piccola, sotto la cap bar */}
+          <div
+            style={{
+              display: "flex",
+              gap: 22,
+              marginTop: 18,
+              flexWrap: "wrap",
+              fontSize: 12,
+              color: "var(--fg-muted)",
+            }}
+          >
+            <PipelineStat label={t("statQueued")} value={pendingCount} />
+            <PipelineStat
+              label={t("statSending")}
+              value={applyingCount}
+              live
+            />
+            <PipelineStat label={t("statOpened")} value={viewedMonth} />
+          </div>
         </div>
 
         {/* Live applications list */}
@@ -348,7 +399,7 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <div>
-                {applications.slice(0, 8).map((a) => (
+                {applications.slice(0, 5).map((a) => (
                   <Link
                     href={`/applications`}
                     key={a.id}
@@ -442,7 +493,146 @@ export default async function DashboardPage() {
   );
 }
 
-function MiniStat({
+/**
+ * 7-day bar chart compatto delle candidature inviate. Sostituisce
+ * 4 MiniStat lineari con UNA visualizzazione che dice trend + posizione
+ * di oggi a colpo d'occhio. Pure-CSS (nessuna libreria charting → 0 KB
+ * di overhead).
+ */
+function WeeklyChart({
+  data,
+  ariaLabel,
+}: {
+  data: Array<{ day: string; count: number; isToday: boolean }>;
+  ariaLabel: string;
+}) {
+  const max = Math.max(1, ...data.map((d) => d.count));
+  return (
+    <div
+      role="img"
+      aria-label={ariaLabel}
+      style={{
+        display: "flex",
+        alignItems: "flex-end",
+        gap: 6,
+        height: 60,
+        marginTop: 16,
+        flexWrap: "nowrap",
+      }}
+    >
+      {data.map((d, i) => {
+        const heightPct = (d.count / max) * 100;
+        return (
+          <div
+            key={i}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 4,
+              minWidth: 0,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 10,
+                color: "var(--fg-subtle)",
+                fontFeatureSettings: '"tnum"',
+                opacity: d.count > 0 ? 1 : 0.4,
+                lineHeight: 1,
+              }}
+            >
+              {d.count}
+            </div>
+            <div
+              title={`${d.day}: ${d.count}`}
+              style={{
+                width: "100%",
+                maxWidth: 28,
+                height: `${Math.max(2, heightPct * 0.4)}px`,
+                minHeight: 2,
+                background: d.isToday
+                  ? "hsl(var(--primary))"
+                  : d.count > 0
+                    ? "hsl(var(--primary) / 0.35)"
+                    : "var(--border-ds)",
+                borderRadius: 3,
+                transition: "background 0.2s",
+              }}
+            />
+            <div
+              style={{
+                fontSize: 10,
+                color: d.isToday ? "var(--fg)" : "var(--fg-subtle)",
+                fontWeight: d.isToday ? 600 : 400,
+                textTransform: "lowercase",
+                lineHeight: 1,
+              }}
+            >
+              {d.day}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * Progress bar visiva dell'utilizzo del cap giornaliero. Più immediato
+ * di "22 / 33 oggi" testuale.
+ */
+function DailyCapBar({
+  sent,
+  cap,
+  label,
+}: {
+  sent: number;
+  cap: number;
+  label: string;
+}) {
+  const pct = Math.min(100, cap > 0 ? (sent / cap) * 100 : 0);
+  return (
+    <div style={{ marginTop: 24 }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: 6,
+          fontSize: 11.5,
+          color: "var(--fg-muted)",
+        }}
+      >
+        <span>{label}</span>
+      </div>
+      <div
+        style={{
+          height: 6,
+          borderRadius: 999,
+          background: "var(--border-ds)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${pct}%`,
+            background: "hsl(var(--primary))",
+            transition: "width 0.4s ease",
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Compact secondary pipeline stat — più piccolo del vecchio MiniStat,
+ * sta su una riga senza occupare lo spazio del numero hero.
+ */
+function PipelineStat({
   label,
   value,
   live,
@@ -452,41 +642,31 @@ function MiniStat({
   live?: boolean;
 }) {
   return (
-    <div style={{ minWidth: 64 }}>
-      <div
-        style={{
-          fontSize: 22,
-          fontWeight: 600,
-          letterSpacing: "-0.02em",
-          fontFeatureSettings: '"tnum"',
-          display: "inline-flex",
-          alignItems: "baseline",
-          gap: 6,
-        }}
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        fontFeatureSettings: '"tnum"',
+      }}
+    >
+      <strong
+        style={{ color: "var(--fg)", fontWeight: 600, fontSize: 13 }}
       >
         {value}
-        {live && value > 0 && (
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "hsl(38 92% 60%)",
-              animation: "pulse-dot 1.6s ease-in-out infinite",
-              alignSelf: "center",
-            }}
-          />
-        )}
-      </div>
-      <div
-        style={{
-          fontSize: 11.5,
-          color: "var(--fg-muted)",
-          marginTop: 2,
-        }}
-      >
-        {label}
-      </div>
-    </div>
+      </strong>
+      {live && value > 0 && (
+        <span
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            background: "hsl(38 92% 60%)",
+            animation: "pulse-dot 1.6s ease-in-out infinite",
+          }}
+        />
+      )}
+      <span>{label.toLowerCase()}</span>
+    </span>
   );
 }
