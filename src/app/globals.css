@@ -16,9 +16,9 @@
        Bg da cream (#FAFAF7) → bianco puro con micro-tint verde per
        calore e identità brand. Green primary più saturo per matchare
        aiapply / Linear / Vercel aesthetic. */
-    --bg: #FCFDFC;             /* white con micro-tint verde 0.5% */
-    --bg-elev: #FFFFFF;        /* surface su bg */
-    --bg-sunken: #F4F7F4;      /* sunken con tint verde leggera */
+    --bg: #E0EFE5;             /* verde chiaro: il colore della pagina */
+    --bg-elev: #FFFFFF;        /* surface bianca su bg verde (max contrasto) */
+    --bg-sunken: #CCDFD3;      /* verde più scuro per sezioni "incassate" */
     --fg: #0A1410;             /* near-black con micro-tint verde */
     --fg-muted: #4A5552;
     --fg-subtle: #8A9590;
@@ -85,19 +85,17 @@
     scroll-behavior: smooth;
   }
   body {
-    /* Background: green-tinted gradient field + atmospheric washes.
-       Aggressivo abbastanza da dare la sensazione di stare dentro
-       una "vetrata verde" alla iOS Sequoia, senza compromettere la
-       leggibilità del testo dark-on-light. */
+    /* Background VERDE come colore primario della pagina.
+       Non più "bianco con washes verdi" — ora "verde con highlights
+       chiari". Il glass white traslucido sopra crea il contrasto. */
     background:
-      /* Atmospheric radial washes — più presenti, più alti in opacità */
-      radial-gradient(circle at 10% 5%, hsl(var(--primary) / 0.22), transparent 45%),
-      radial-gradient(circle at 95% 15%, hsl(var(--primary) / 0.18), transparent 40%),
-      radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.06), transparent 60%),
-      radial-gradient(circle at 5% 90%, hsl(var(--primary) / 0.16), transparent 45%),
-      radial-gradient(circle at 90% 95%, hsl(var(--primary) / 0.14), transparent 45%),
-      /* Linear field underneath — green-tinted white base */
-      linear-gradient(135deg, #F0F7F2 0%, #FCFDFC 50%, #F4F8F5 100%);
+      /* Highlights chiari per dare luce e profondità */
+      radial-gradient(circle at 20% 10%, rgba(255,255,255,0.55), transparent 50%),
+      radial-gradient(circle at 85% 90%, rgba(255,255,255,0.40), transparent 50%),
+      /* Wash verde più scuro per dare ricchezza al campo */
+      radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.20), transparent 65%),
+      /* Base verde chiara — è QUESTO il colore della pagina */
+      linear-gradient(135deg, #D9EBDE 0%, #E8F3EC 50%, #DCEDE2 100%);
     background-attachment: fixed;
     color: var(--fg);
     font-family: var(--font-inter), -apple-system, "system-ui", sans-serif;
