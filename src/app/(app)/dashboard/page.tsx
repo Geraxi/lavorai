@@ -233,19 +233,28 @@ export default async function DashboardPage() {
           <SessionsStatus />
         </div>
 
-        {/* PROGRESS HERO — il cuore della dashboard */}
+        {/* PROGRESS HERO — il cuore della dashboard, liquid glass */}
         <div
+          className="ds-glass"
           style={{
             position: "relative",
-            padding: "26px 28px",
-            borderRadius: 16,
-            border: "1px solid var(--border-ds)",
-            background:
-              "linear-gradient(180deg, hsl(var(--primary)/0.08), transparent 90%)",
+            padding: "28px 30px",
             marginBottom: 24,
             overflow: "hidden",
           }}
         >
+          {/* Tint primary verde sottile sopra il glass — dà personalità
+              senza rompere l'effetto liquido. */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(180deg, hsl(var(--primary)/0.10), transparent 90%)",
+              pointerEvents: "none",
+            }}
+          />
           <div
             style={{
               display: "flex",
@@ -253,6 +262,8 @@ export default async function DashboardPage() {
               justifyContent: "space-between",
               gap: 16,
               flexWrap: "wrap",
+              position: "relative",
+              zIndex: 1,
             }}
           >
             <div style={{ flex: 1, minWidth: 240 }}>

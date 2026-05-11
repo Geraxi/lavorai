@@ -86,13 +86,13 @@ export function AppSidebar({
       <LogoutButton />
 
 
-      {/* Auto-apply status + user card */}
+      {/* Auto-apply status + user card — liquid glass */}
       <div className="mt-auto pt-3">
         <div
-          className="rounded-lg border p-3"
+          className="ds-glass"
           style={{
-            background: "var(--bg-sunken)",
-            borderColor: "var(--border-ds)",
+            padding: 14,
+            borderRadius: 12,
           }}
         >
           <div className="flex items-center gap-2">
@@ -206,10 +206,14 @@ function NavItem({ item, active }: { item: NavItem; active: boolean }) {
           layoutId="sidebar-active-pill"
           className="pointer-events-none absolute inset-0"
           style={{
-            borderRadius: "var(--radius-sm)",
-            background: "var(--bg-elev)",
-            border: "1px solid var(--border-ds)",
-            boxShadow: "var(--shadow-sm)",
+            borderRadius: 10,
+            background:
+              "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01)), var(--bg-elev)",
+            border: "1px solid rgba(255,255,255,0.10)",
+            backdropFilter: "blur(12px) saturate(150%)",
+            WebkitBackdropFilter: "blur(12px) saturate(150%)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.18), 0 8px 24px -10px rgba(0,0,0,0.40)",
             zIndex: 0,
           }}
           transition={{ type: "spring", stiffness: 420, damping: 36 }}

@@ -160,36 +160,143 @@
   .ds-scroll::-webkit-scrollbar-thumb:hover { background: var(--fg-subtle); }
 
   /* ----- Atoms ----- */
+  /* Liquid Glass system:
+     - inner top highlight (specular)
+     - inner bottom shadow (recession)
+     - layered drop shadow per depth
+     - backdrop-filter blur su superfici translucent
+     - subtle gradient invece di flat fill
+     Tutto opt-in via classe `.ds-btn` / `.ds-card`. */
   .ds-btn {
+    position: relative;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     padding: 9px 16px;
-    border-radius: var(--radius-sm);
+    border-radius: 10px;
     font-size: 14px;
     font-weight: 500;
-    border: 1px solid var(--border-strong);
-    background: var(--bg-elev);
+    border: 1px solid rgba(255,255,255,0.08);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01)),
+      var(--bg-elev);
     color: var(--fg);
-    transition: all 0.12s ease;
     white-space: nowrap;
     cursor: pointer;
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -1px 0 rgba(0,0,0,0.20),
+      0 1px 2px rgba(0,0,0,0.15),
+      0 4px 14px -4px rgba(0,0,0,0.30);
+    transition: transform 0.2s var(--ease-premium), box-shadow 0.25s var(--ease-premium), background 0.2s var(--ease-premium);
   }
-  .ds-btn { transition: background 0.2s var(--ease-premium), border-color 0.2s ease, transform 0.2s var(--ease-premium), box-shadow 0.25s var(--ease-premium); }
-  .ds-btn:hover { background: var(--bg-sunken); border-color: var(--fg-subtle); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-  .ds-btn:active { transform: translateY(0); }
+  /* In light theme: inner highlight bianco più visibile, shadow scura più morbida */
+  :root:not(.dark) .ds-btn {
+    border-color: rgba(15,16,18,0.10);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,255,255,0.55)),
+      var(--bg-elev);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.95),
+      inset 0 -1px 0 rgba(15,16,18,0.06),
+      0 1px 2px rgba(15,16,18,0.05),
+      0 6px 16px -6px rgba(15,16,18,0.12);
+  }
+  .ds-btn:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      inset 0 -1px 0 rgba(0,0,0,0.22),
+      0 2px 4px rgba(0,0,0,0.20),
+      0 12px 30px -8px rgba(0,0,0,0.40);
+  }
+  :root:not(.dark) .ds-btn:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,1),
+      inset 0 -1px 0 rgba(15,16,18,0.08),
+      0 2px 4px rgba(15,16,18,0.06),
+      0 14px 32px -10px rgba(15,16,18,0.18);
+  }
+  .ds-btn:active { transform: translateY(0); box-shadow:
+    inset 0 1px 2px rgba(0,0,0,0.25),
+    0 1px 2px rgba(0,0,0,0.20);
+  }
   .ds-btn-primary {
-    background: var(--fg); color: var(--bg); border-color: var(--fg);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0)),
+      var(--fg);
+    color: var(--bg);
+    border-color: rgba(255,255,255,0.18);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.30),
+      inset 0 -1px 0 rgba(0,0,0,0.30),
+      0 2px 4px rgba(0,0,0,0.18),
+      0 10px 30px -8px rgba(0,0,0,0.40);
   }
   .ds-btn-primary:hover {
-    background: var(--fg-muted); border-color: var(--fg-muted);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0)),
+      var(--fg);
+    border-color: rgba(255,255,255,0.25);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -1px 0 rgba(0,0,0,0.35),
+      0 3px 6px rgba(0,0,0,0.22),
+      0 14px 36px -10px rgba(0,0,0,0.48);
   }
   .ds-btn-accent {
-    background: var(--primary-ds); color: var(--primary-fg-ds); border-color: var(--primary-ds);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0)),
+      var(--primary-ds);
+    color: var(--primary-fg-ds);
+    border-color: hsl(var(--primary) / 0.5);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -1px 0 rgba(0,0,0,0.20),
+      0 2px 4px hsl(var(--primary) / 0.18),
+      0 12px 30px -8px hsl(var(--primary) / 0.40);
   }
-  .ds-btn-accent:hover { filter: brightness(1.08); }
-  .ds-btn-ghost { border-color: transparent; background: transparent; }
-  .ds-btn-ghost:hover { background: var(--bg-sunken); }
-  .ds-btn-sm { padding: 6px 12px; font-size: 13px; }
-  .ds-btn-lg { padding: 12px 20px; font-size: 15px; }
+  .ds-btn-accent:hover {
+    filter: brightness(1.08);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.50),
+      inset 0 -1px 0 rgba(0,0,0,0.22),
+      0 3px 6px hsl(var(--primary) / 0.25),
+      0 16px 38px -10px hsl(var(--primary) / 0.50);
+  }
+  .ds-btn-ghost { border-color: transparent; background: transparent; box-shadow: none; backdrop-filter: none; }
+  .ds-btn-ghost:hover { background: var(--bg-sunken); box-shadow: var(--shadow-sm); }
+  .ds-btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
+  .ds-btn-lg { padding: 12px 20px; font-size: 15px; border-radius: 12px; }
+
+  /* Standalone utility: applica liquid-glass a qualsiasi div.
+     Da usare su card "hero" che vogliono il treatment, senza imporlo
+     globalmente a ogni section card. */
+  .ds-glass {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)),
+      var(--bg-elev);
+    border: 1px solid rgba(255,255,255,0.08);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.10),
+      inset 0 -1px 0 rgba(0,0,0,0.15),
+      0 2px 6px rgba(0,0,0,0.20),
+      0 20px 60px -20px rgba(0,0,0,0.50);
+    border-radius: 16px;
+  }
+  :root:not(.dark) .ds-glass {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.65), rgba(255,255,255,0.40)),
+      var(--bg-elev);
+    border-color: rgba(15,16,18,0.08);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,1),
+      inset 0 -1px 0 rgba(15,16,18,0.05),
+      0 2px 6px rgba(15,16,18,0.06),
+      0 24px 60px -24px rgba(15,16,18,0.18);
+  }
 
   .ds-chip {
     display: inline-flex; align-items: center; gap: 5px;
@@ -224,16 +331,48 @@
   }
 
   .ds-card {
-    background: var(--bg-elev);
-    border: 1px solid var(--border-ds);
+    position: relative;
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
+      var(--bg-elev);
+    border: 1px solid rgba(255,255,255,0.07);
     border-radius: var(--radius);
-    box-shadow: var(--shadow-premium);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.08),
+      inset 0 -1px 0 rgba(0,0,0,0.18),
+      0 2px 6px rgba(0,0,0,0.18),
+      0 18px 48px -16px rgba(0,0,0,0.45);
     transition: transform 0.35s var(--ease-premium), box-shadow 0.35s var(--ease-premium), border-color 0.25s ease;
+  }
+  :root:not(.dark) .ds-card {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.85), rgba(255,255,255,0.55)),
+      var(--bg-elev);
+    border-color: rgba(15,16,18,0.06);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,1),
+      inset 0 -1px 0 rgba(15,16,18,0.04),
+      0 2px 6px rgba(15,16,18,0.04),
+      0 20px 50px -20px rgba(15,16,18,0.14);
   }
   .ds-card:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-hover);
-    border-color: var(--border-strong);
+    border-color: rgba(255,255,255,0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.14),
+      inset 0 -1px 0 rgba(0,0,0,0.22),
+      0 4px 10px rgba(0,0,0,0.22),
+      0 28px 60px -18px rgba(0,0,0,0.55);
+  }
+  :root:not(.dark) .ds-card:hover {
+    border-color: rgba(15,16,18,0.10);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,1),
+      inset 0 -1px 0 rgba(15,16,18,0.06),
+      0 4px 10px rgba(15,16,18,0.06),
+      0 32px 70px -22px rgba(15,16,18,0.22);
   }
 
   .ds-kbd {
@@ -443,13 +582,33 @@
   .ds-kpi-delta.down { color: var(--red-ds); }
   .ds-kpi-spark { margin-top: 10px; height: 28px; }
 
-  /* ----- Section card ----- */
+  /* ----- Section card (glass) ----- */
   .ds-section-card {
-    background: var(--bg-elev);
-    border: 1px solid var(--border-ds);
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
+      var(--bg-elev);
+    border: 1px solid rgba(255,255,255,0.06);
     border-radius: var(--radius);
     overflow: hidden;
     display: flex; flex-direction: column;
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.07),
+      inset 0 -1px 0 rgba(0,0,0,0.15),
+      0 1px 3px rgba(0,0,0,0.12),
+      0 12px 36px -12px rgba(0,0,0,0.35);
+  }
+  :root:not(.dark) .ds-section-card {
+    background:
+      linear-gradient(135deg, rgba(255,255,255,0.80), rgba(255,255,255,0.50)),
+      var(--bg-elev);
+    border-color: rgba(15,16,18,0.05);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,1),
+      inset 0 -1px 0 rgba(15,16,18,0.04),
+      0 1px 3px rgba(15,16,18,0.04),
+      0 14px 40px -14px rgba(15,16,18,0.12);
   }
   .ds-section-head {
     display: flex; align-items: center; justify-content: space-between;

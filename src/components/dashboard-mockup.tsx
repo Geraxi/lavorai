@@ -24,11 +24,15 @@ export function DashboardMockup() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
-      className="relative rounded-2xl border bg-card/95 backdrop-blur-md"
+      className="relative rounded-2xl"
       style={{
-        borderColor: "var(--border-ds)",
+        background:
+          "linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01)), var(--bg-elev)",
+        border: "1px solid rgba(255,255,255,0.09)",
+        backdropFilter: "blur(22px) saturate(160%)",
+        WebkitBackdropFilter: "blur(22px) saturate(160%)",
         boxShadow:
-          "0 1px 0 hsl(var(--foreground) / 0.04) inset, 0 30px 60px -20px rgba(0,0,0,0.45), 0 8px 16px -8px rgba(0,0,0,0.3)",
+          "inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.20), 0 40px 80px -20px rgba(0,0,0,0.55), 0 12px 28px -12px rgba(0,0,0,0.40)",
       }}
     >
       {/* Window chrome */}
@@ -58,14 +62,18 @@ export function DashboardMockup() {
       </div>
 
       <div style={{ padding: 22 }}>
-        {/* Progress card */}
+        {/* Progress card (inner glass) */}
         <div
           style={{
             padding: "18px 18px 16px",
             borderRadius: 12,
-            border: "1px solid var(--border-ds)",
+            border: "1px solid rgba(255,255,255,0.07)",
             background:
-              "linear-gradient(180deg, hsl(var(--primary)/0.06), transparent 80%)",
+              "linear-gradient(180deg, hsl(var(--primary)/0.10), rgba(255,255,255,0.02)), rgba(255,255,255,0.02)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            boxShadow:
+              "inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.15), 0 1px 2px rgba(0,0,0,0.15)",
             marginBottom: 16,
           }}
         >
