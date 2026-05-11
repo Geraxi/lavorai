@@ -20,7 +20,7 @@ export function Hero() {
         // backgroundSize: cover su mobile per riempire, contain
         // ridurrebbe troppo. Su desktop l'immagine si estende quanto
         // basta da coprire un fold di ~720px.
-        backgroundImage: "url('/hero-planet.jpg')",
+        backgroundImage: "url('/Lavoraiherosection.png')",
         backgroundSize: "cover",
         backgroundPosition: "center center",
         backgroundRepeat: "no-repeat",
