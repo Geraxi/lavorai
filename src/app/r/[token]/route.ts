@@ -5,27 +5,26 @@ import { prisma } from "@/lib/db";
 export const runtime = "nodejs";
 
 /**
- * GET /r/[token]
+ * GET /r/[token]?ref=portfolio|linkedin|github|email
  *
- * Short-URL tracking link incluso nella cover letter generata da Claude
- * (es. "Portfolio: lavorai.it/r/abc123"). Quando il recruiter clicca:
+ * Short-URL tracking link incluso nella cover letter (più varianti).
+ * Quando il recruiter clicca QUALSIASI variante:
  *  - Logghiamo `viewedAt` + `userStatus="vista"` sulla Application
- *  - Redirect al portfolio dell'utente (o LinkedIn, o lavorai.it come fallback)
+ *  - Redirect alla destinazione corretta in base a `ref`
  *
- * Funziona ANCHE per submit via portal ATS (Greenhouse, Lever, Ashby):
- * il file PDF/DOCX della cover letter sta dentro l'ATS del recruiter,
- * il link è cliccabile da lì. È il segnale più forte di "ha aperto la
- * candidatura" per portal submissions, dove il pixel email non si può
- * mettere.
+ * Multi-superficie: più link → più chance di un click → più segnali.
+ * Es. cover letter contiene "Portfolio: .../r/X?ref=portfolio",
+ * "LinkedIn: .../r/X?ref=linkedin", "Email: .../r/X?ref=email", ecc.
  *
- * Sempre redirect 302 — anche token invalidi vanno su lavorai.it così
- * non si rivelano info al click (privacy + difesa anti-scraper).
+ * Sempre redirect 302 — anche token/ref invalidi vanno su lavorai.it
+ * così non si rivelano info al click.
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
+  const ref = req.nextUrl.searchParams.get("ref") ?? "portfolio";
   let destination = "https://lavorai.it";
 
   if (token) {
@@ -38,6 +37,7 @@ export async function GET(
           userStatus: true,
           user: {
             select: {
+              email: true,
               cvProfile: { select: { linksJson: true } },
             },
           },
@@ -60,33 +60,7 @@ export async function GET(
             });
         }
 
-        // Risolvi destinazione: preferenze in ordine
-        //  1. Portfolio link dal CV profile
-        //  2. LinkedIn link dal CV profile
-        //  3. Fallback su lavorai.it
-        try {
-          const linksRaw = app.user?.cvProfile?.linksJson ?? "[]";
-          const links = JSON.parse(linksRaw) as Array<{
-            label?: string;
-            url?: string;
-          }>;
-          if (Array.isArray(links)) {
-            const portfolio = links.find((l) =>
-              /portfolio|behance|dribbble|github|personal|website/i.test(
-                l.label ?? "",
-              ),
-            );
-            const linkedin = links.find((l) =>
-              /linkedin/i.test(l.url ?? ""),
-            );
-            const chosen = portfolio ?? linkedin ?? null;
-            if (chosen?.url && /^https?:\/\//.test(chosen.url)) {
-              destination = chosen.url;
-            }
-          }
-        } catch {
-          // malformed json → fallback
-        }
+        destination = resolveDestination(app, ref);
       }
     } catch (err) {
       console.error("[/r/token] lookup failed", err);
@@ -94,4 +68,53 @@ export async function GET(
   }
 
   redirect(destination);
+}
+
+interface AppLookup {
+  user: {
+    email: string;
+    cvProfile: { linksJson: string } | null;
+  };
+}
+
+/**
+ * Risolve la destinazione per il redirect in base a `ref`:
+ *  - portfolio → primo link che matcha portfolio/behance/dribbble/personal
+ *  - linkedin  → primo URL che contiene linkedin.com
+ *  - github    → primo URL che contiene github.com
+ *  - email     → mailto: dell'utente
+ *  - fallback  → lavorai.it
+ */
+function resolveDestination(app: AppLookup, ref: string): string {
+  if (ref === "email" && app.user.email) {
+    return `mailto:${app.user.email}`;
+  }
+
+  try {
+    const linksRaw = app.user.cvProfile?.linksJson ?? "[]";
+    const links = JSON.parse(linksRaw) as Array<{
+      label?: string;
+      url?: string;
+    }>;
+    if (!Array.isArray(links)) return "https://lavorai.it";
+
+    const find = (re: RegExp) =>
+      links.find(
+        (l) => re.test(l.url ?? "") || re.test(l.label ?? ""),
+      )?.url;
+
+    let url: string | undefined;
+    if (ref === "linkedin") url = find(/linkedin\.com/i);
+    else if (ref === "github") url = find(/github\.com/i);
+    else if (ref === "portfolio") {
+      url =
+        find(/behance|dribbble|portfolio|personal|website/i) ??
+        find(/^https?:\/\/(?!.*(linkedin|github|twitter|facebook))/i);
+    }
+
+    if (url && /^https?:\/\//.test(url)) return url;
+  } catch {
+    /* malformed json → fallback */
+  }
+  return "https://lavorai.it";
 }

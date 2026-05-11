@@ -173,19 +173,30 @@ export async function generateOptimizedCVDocx(
 
 // ---------- Cover Letter ----------
 
+export interface CoverLetterTrackingLinks {
+  /** URL portfolio/Behance/Dribbble/website. null se utente non l'ha. */
+  hasPortfolio?: boolean;
+  /** URL LinkedIn. null se utente non l'ha. */
+  hasLinkedin?: boolean;
+  /** URL GitHub. null se utente non l'ha. */
+  hasGithub?: boolean;
+}
+
 export async function generateCoverLetterDocx(
   text: string,
   recipientName?: string,
   /**
    * Token tracking dell'Application. Quando passato, viene aggiunto un
-   * link breve "Portfolio: lavorai.it/r/<token>" alla fine della cover
-   * letter. Il click dal recruiter (dentro l'ATS) logga `viewedAt` e
-   * redirige al portfolio dell'utente. Unico modo di tracciare le views
-   * per portal submissions dove il pixel email non si può mettere.
+   * blocco "Get in touch" alla fine della cover letter con più link
+   * cliccabili (portfolio, LinkedIn, GitHub, email) tutti routati via
+   * /r/<token>?ref=... Ogni click dal recruiter dentro l'ATS logga
+   * `viewedAt`. Più link = più chance di click = più view tracciate.
    */
   trackingToken?: string,
-  /** "it" | "en" — locale per la label "Portfolio" */
+  /** "it" | "en" — locale per le label */
   locale: "it" | "en" = "it",
+  /** Quali link tracciati includere — basato su cvProfile.linksJson */
+  trackingLinks?: CoverLetterTrackingLinks,
 ): Promise<Buffer> {
   const paragraphs: Paragraph[] = [];
 
@@ -228,39 +239,94 @@ export async function generateCoverLetterDocx(
     );
   }
 
-  // Tracking link sopra la privacy clause. Cliccabile direttamente dal
-  // PDF/DOCX dentro l'ATS del recruiter → unica vera fonte di "viewed"
-  // signal per portal submissions.
+  // "Get in touch" footer block — multi-link tracciato.
+  // Più link cliccabili (portfolio, LinkedIn, GitHub, email) tutti
+  // routati via lavorai.it/r/<token>?ref=...  Ogni click dal recruiter
+  // dentro l'ATS logga viewedAt. Più link = più chance di click =
+  // più view tracciate (verified, no falsi positivi).
   if (trackingToken) {
     const siteUrl = (
       process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it"
     ).replace(/\/$/, "");
-    const label = locale === "en" ? "Portfolio:" : "Portfolio:";
+    const shortHost = siteUrl.replace(/^https?:\/\//, "");
+    const labels =
+      locale === "en"
+        ? {
+            heading: "Get in touch",
+            portfolio: "Portfolio",
+            linkedin: "LinkedIn",
+            github: "GitHub",
+            email: "Email me",
+          }
+        : {
+            heading: "Per contattarmi",
+            portfolio: "Portfolio",
+            linkedin: "LinkedIn",
+            github: "GitHub",
+            email: "Scrivimi",
+          };
+
+    const entries: Array<{ label: string; ref: string }> = [];
+    if (trackingLinks?.hasPortfolio)
+      entries.push({ label: labels.portfolio, ref: "portfolio" });
+    if (trackingLinks?.hasLinkedin)
+      entries.push({ label: labels.linkedin, ref: "linkedin" });
+    if (trackingLinks?.hasGithub)
+      entries.push({ label: labels.github, ref: "github" });
+    entries.push({ label: labels.email, ref: "email" }); // sempre
+
+    // Fallback: se l'utente non ha alcun link, almeno la riga "Portfolio"
+    // base lavora come destinazione fallback al sito.
+    if (entries.length === 1) {
+      entries.unshift({ label: labels.portfolio, ref: "portfolio" });
+    }
+
+    // Heading riga
     paragraphs.push(
       new Paragraph({
-        spacing: { before: 320 },
+        spacing: { before: 360, after: 80 },
         children: [
           new TextRun({
-            text: `${label} `,
+            text: labels.heading,
             size: SMALL_SIZE,
-            color: MUTED_COLOR,
+            color: HEADING_COLOR,
             font: FONT,
-          }),
-          new ExternalHyperlink({
-            link: `${siteUrl}/r/${trackingToken}`,
-            children: [
-              new TextRun({
-                text: `${siteUrl.replace(/^https?:\/\//, "")}/r/${trackingToken}`,
-                size: SMALL_SIZE,
-                color: "1A56DB",
-                font: FONT,
-                style: "Hyperlink",
-              }),
-            ],
+            bold: true,
           }),
         ],
       }),
     );
+
+    // Una riga per ogni link tracciato
+    for (const e of entries) {
+      const url = `${siteUrl}/r/${trackingToken}?ref=${e.ref}`;
+      const shortUrl = `${shortHost}/r/${trackingToken}?ref=${e.ref}`;
+      paragraphs.push(
+        new Paragraph({
+          spacing: { after: 40 },
+          children: [
+            new TextRun({
+              text: `${e.label}: `,
+              size: SMALL_SIZE,
+              color: MUTED_COLOR,
+              font: FONT,
+            }),
+            new ExternalHyperlink({
+              link: url,
+              children: [
+                new TextRun({
+                  text: shortUrl,
+                  size: SMALL_SIZE,
+                  color: "1A56DB",
+                  font: FONT,
+                  style: "Hyperlink",
+                }),
+              ],
+            }),
+          ],
+        }),
+      );
+    }
   }
 
   paragraphs.push(

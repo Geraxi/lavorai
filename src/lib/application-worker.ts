@@ -49,6 +49,7 @@ export async function processApplication(applicationId: string): Promise<void> {
           cvDocuments: { orderBy: { createdAt: "desc" }, take: 1 },
           portalSessions: true,
           preferences: true,
+          cvProfile: { select: { linksJson: true } },
         },
       },
     },
@@ -121,9 +122,14 @@ export async function processApplication(applicationId: string): Promise<void> {
         : undefined,
     });
 
-    // 2. Genera DOCX — passiamo trackingToken + locale alla cover letter
-    // così embedda il link `lavorai.it/r/<token>` cliccabile dal recruiter
-    // dentro l'ATS. È l'unica vera fonte di "view" per portal submissions.
+    // 2. Genera DOCX — la cover letter contiene un blocco "Get in touch"
+    // con multi-link tracciati (portfolio, LinkedIn, GitHub, email) tutti
+    // routati via lavorai.it/r/<token>?ref=... Ogni click dal recruiter
+    // dentro l'ATS logga viewedAt. Più link = più chance di tracciare
+    // una view senza falsi positivi.
+    const trackingLinks = computeTrackingLinks(
+      app.user.cvProfile?.linksJson ?? null,
+    );
     [cvBuffer, clBuffer] = await Promise.all([
       generateOptimizedCVDocx(result.optimizedCV),
       generateCoverLetterDocx(
@@ -131,6 +137,7 @@ export async function processApplication(applicationId: string): Promise<void> {
         undefined,
         app.trackingToken ?? undefined,
         app.user.locale === "en" ? "en" : "it",
+        trackingLinks,
       ),
     ]);
 
@@ -1277,5 +1284,41 @@ async function resolveAdzunaViaBrowser(adzunaUrl: string): Promise<string | null
     return null;
   } finally {
     if (browser) await browser.close().catch(() => void 0);
+  }
+}
+
+/**
+ * Determina quali tracking link includere nel footer della cover letter
+ * basandosi su cvProfile.linksJson dell'utente. Il blocco "Get in touch"
+ * mostra solo le righe per cui l'utente ha effettivamente un link.
+ * Email è sempre presente (mailto:user@email).
+ */
+function computeTrackingLinks(linksJson: string | null): {
+  hasPortfolio: boolean;
+  hasLinkedin: boolean;
+  hasGithub: boolean;
+} {
+  if (!linksJson) {
+    return { hasPortfolio: false, hasLinkedin: false, hasGithub: false };
+  }
+  try {
+    const links = JSON.parse(linksJson) as Array<{
+      label?: string;
+      url?: string;
+    }>;
+    if (!Array.isArray(links)) {
+      return { hasPortfolio: false, hasLinkedin: false, hasGithub: false };
+    }
+    const has = (re: RegExp) =>
+      links.some((l) => re.test(l.url ?? "") || re.test(l.label ?? ""));
+    return {
+      hasPortfolio: has(
+        /behance|dribbble|portfolio|personal|website|\.me\/|\.io\//i,
+      ),
+      hasLinkedin: has(/linkedin\.com/i),
+      hasGithub: has(/github\.com/i),
+    };
+  } catch {
+    return { hasPortfolio: false, hasLinkedin: false, hasGithub: false };
   }
 }
