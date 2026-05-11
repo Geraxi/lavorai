@@ -10,17 +10,23 @@
 
 @layer base {
   :root {
-    /* Design system tokens (CSS custom props) */
-    --bg: #FAFAF7;
-    --bg-elev: #FFFFFF;
-    --bg-sunken: #F4F3EE;
-    --fg: #0F1012;
-    --fg-muted: #5B5D61;
-    --fg-subtle: #8A8C90;
-    --border-ds: #E6E4DD;
-    --border-strong: #D3D0C6;
-    --primary-ds: oklch(0.52 0.10 155);
-    --primary-weak: oklch(0.95 0.03 155);
+    /* Design system tokens (CSS custom props).
+       PALETTE: white + vivid green only. Tema scuro disabilitato
+       (vedi commento sotto al blocco [data-theme="dark"]).
+       Bg da cream (#FAFAF7) → bianco puro con micro-tint verde per
+       calore e identità brand. Green primary più saturo per matchare
+       aiapply / Linear / Vercel aesthetic. */
+    --bg: #FCFDFC;             /* white con micro-tint verde 0.5% */
+    --bg-elev: #FFFFFF;        /* surface su bg */
+    --bg-sunken: #F4F7F4;      /* sunken con tint verde leggera */
+    --fg: #0A1410;             /* near-black con micro-tint verde */
+    --fg-muted: #4A5552;
+    --fg-subtle: #8A9590;
+    --border-ds: #E2EAE5;      /* border con tint verde */
+    --border-strong: #C8D5CE;
+    /* Green più saturo, leggermente più chiaro per coverage on white */
+    --primary-ds: oklch(0.58 0.15 155);
+    --primary-weak: oklch(0.94 0.05 155);
     --primary-fg-ds: #FFFFFF;
     --amber: oklch(0.72 0.13 75);
     --amber-weak: oklch(0.96 0.04 85);
@@ -43,7 +49,7 @@
     --card-foreground: 220 7% 7%;
     --popover: 0 0% 100%;
     --popover-foreground: 220 7% 7%;
-    --primary: 155 30% 40%;             /* olive ~oklch 0.52 0.10 155 */
+    --primary: 155 50% 38%;             /* green più saturo (was 30% sat → 50%) */
     --primary-foreground: 0 0% 100%;
     --secondary: 48 17% 91%;            /* bg-sunken */
     --secondary-foreground: 220 7% 7%;
@@ -61,44 +67,13 @@
     --radius-lg: 12px;
   }
 
-  [data-theme="dark"] {
-    --shadow-premium: 0 1px 0 rgba(255,255,255,0.04) inset, 0 1px 2px rgba(0,0,0,0.3), 0 4px 12px -2px rgba(0,0,0,0.4), 0 12px 32px -8px rgba(0,0,0,0.5);
-    --shadow-hover: 0 1px 0 rgba(255,255,255,0.06) inset, 0 2px 4px rgba(0,0,0,0.35), 0 8px 24px -4px rgba(0,0,0,0.5), 0 20px 48px -12px rgba(0,0,0,0.6);
-    --bg: #0B0C0E;
-    --bg-elev: #141518;
-    --bg-sunken: #07080A;
-    --fg: #F4F3EE;
-    --fg-muted: #9B9DA2;
-    --fg-subtle: #6A6C70;
-    --border-ds: #1F2125;
-    --border-strong: #2A2C30;
-    --primary-ds: oklch(0.68 0.12 155);
-    --primary-weak: oklch(0.22 0.05 155);
-    --primary-fg-ds: #0B0C0E;
-    --amber-weak: oklch(0.25 0.06 85);
-    --red-weak: oklch(0.25 0.06 25);
-    --blue-weak: oklch(0.25 0.05 240);
-
-    --background: 220 8% 5%;
-    --foreground: 48 17% 94%;
-    --card: 220 8% 9%;
-    --card-foreground: 48 17% 94%;
-    --popover: 220 8% 9%;
-    --popover-foreground: 48 17% 94%;
-    --primary: 155 30% 55%;
-    --primary-foreground: 220 8% 5%;
-    --secondary: 220 8% 3%;
-    --secondary-foreground: 48 17% 94%;
-    --muted: 220 8% 3%;
-    --muted-foreground: 220 3% 60%;
-    --accent: 155 30% 55%;
-    --accent-foreground: 220 8% 5%;
-    --destructive: 16 75% 55%;
-    --destructive-foreground: 48 17% 94%;
-    --border: 220 7% 13%;
-    --input: 220 6% 17%;
-    --ring: 155 30% 55%;
-  }
+  /* Dark theme DISABILITATO per brand direction "white + green only".
+     Il blocco [data-theme="dark"] è stato commentato — la classe non
+     viene più applicata dal toggle (vedi theme-toggle.tsx). Lasciato
+     qui solo come reference se servisse reintrodurlo. */
+  /*
+  [data-theme="dark"] { ... }
+  */
 }
 
 @layer base {
@@ -110,14 +85,13 @@
     scroll-behavior: smooth;
   }
   body {
-    /* Atmospheric background: solid base + 3 large radial green washes
-       posizionati come fixed così non si muovono in scroll. Subtle:
-       opacity 0.04 dark / 0.06 light. Aggiunge personalità "verde
-       LavorAI" senza saturare. */
+    /* Atmospheric background: white base + 3 large radial green washes
+       più visibili in tema bianco. Senza fastidiare la leggibilità del
+       testo dark-on-white. */
     background:
-      radial-gradient(ellipse 70% 50% at 15% 10%, hsl(var(--primary) / 0.06), transparent 70%),
-      radial-gradient(ellipse 60% 40% at 90% 30%, hsl(var(--primary) / 0.05), transparent 65%),
-      radial-gradient(ellipse 80% 50% at 50% 95%, hsl(var(--primary) / 0.04), transparent 70%),
+      radial-gradient(ellipse 70% 50% at 15% 10%, hsl(var(--primary) / 0.12), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 90% 30%, hsl(var(--primary) / 0.10), transparent 65%),
+      radial-gradient(ellipse 80% 50% at 50% 95%, hsl(var(--primary) / 0.08), transparent 70%),
       var(--bg);
     background-attachment: fixed;
     color: var(--fg);
@@ -128,18 +102,6 @@
     font-feature-settings: "cv11", "ss01", "ss03";
     letter-spacing: -0.005em;
   }
-  /* In dark theme i wash sono più visibili (0.06-0.09) perché bg quasi
-     nero non perde i toni; in light più sottili per non incolorare il
-     bianco editorial. */
-  .dark body {
-    background:
-      radial-gradient(ellipse 70% 50% at 15% 10%, hsl(var(--primary) / 0.09), transparent 70%),
-      radial-gradient(ellipse 60% 40% at 90% 30%, hsl(var(--primary) / 0.07), transparent 65%),
-      radial-gradient(ellipse 80% 50% at 50% 95%, hsl(var(--primary) / 0.06), transparent 70%),
-      var(--bg);
-    background-attachment: fixed;
-  }
-
   /* Ambient layer riservato per pagine specifiche (es. /optimize,
      /analizza-cv, /interview-buddy) che vogliono PIÙ verde di base.
      Da applicare via className="ambient-green" sull'elemento section

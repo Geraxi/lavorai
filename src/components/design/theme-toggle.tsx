@@ -1,40 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Icon } from "@/components/design/icon";
+import { useEffect } from "react";
 
+/**
+ * Theme toggle DISABILITATO per brand direction "white + green only".
+ *
+ * Mantengo il componente esistente per backward-compat (è ancora
+ * importato in dashboard/page.tsx), ma:
+ *   - nasconde il bottone (render null)
+ *   - rimuove eventuale `data-theme="dark"` salvato in localStorage
+ *     da una vecchia sessione, così l'utente non resta bloccato in
+ *     dark mode se ha cliccato il toggle prima del rebrand
+ *
+ * Se in futuro vuoi reintrodurre dark mode, ripristina il vecchio file
+ * dal commit precedente + uncomment il blocco [data-theme="dark"] in
+ * globals.css.
+ */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-
   useEffect(() => {
-    const saved =
-      (localStorage.getItem("lavorai-theme") as "light" | "dark" | null) ??
-      "light";
-    setTheme(saved);
-    applyTheme(saved);
+    if (typeof window === "undefined") return;
+    try {
+      // Pulisci eventuale state legacy
+      document.documentElement.removeAttribute("data-theme");
+      localStorage.removeItem("lavorai-theme");
+    } catch {
+      /* sandboxed iframe / private mode */
+    }
   }, []);
-
-  function toggle() {
-    const next = theme === "light" ? "dark" : "light";
-    setTheme(next);
-    applyTheme(next);
-    localStorage.setItem("lavorai-theme", next);
-  }
-
-  return (
-    <button
-      type="button"
-      className="ds-btn ds-btn-ghost"
-      aria-label="Cambia tema"
-      onClick={toggle}
-      style={{ width: 32, height: 32, padding: 0 }}
-    >
-      <Icon name={theme === "dark" ? "sun" : "moon"} size={14} />
-    </button>
-  );
-}
-
-function applyTheme(t: "light" | "dark") {
-  if (t === "dark") document.documentElement.setAttribute("data-theme", "dark");
-  else document.documentElement.removeAttribute("data-theme");
+  return null;
 }
