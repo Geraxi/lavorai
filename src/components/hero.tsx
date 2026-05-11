@@ -6,7 +6,7 @@ import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { AuroraBackground } from "@/components/aurora-background";
-import { DashboardMockup } from "@/components/dashboard-mockup";
+import Image from "next/image";
 import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
 
 export function Hero() {
@@ -295,18 +295,22 @@ export function Hero() {
                 separate con descrizioni. Lascia respirare l'hero. */}
           </div>
 
-          {/* Colonna destra: dashboard preview live */}
-          <div className="relative hidden lg:flex lg:justify-center">
-            <div className="relative w-full" style={{ maxWidth: 560 }}>
-              <DashboardMockup />
-            </div>
+          {/* Colonna destra: "tiny planet" emotional image.
+              Quel ragazzo sdraiato sul pianeta verde traduce in 1 frame
+              il messaggio: "il peso del job hunting è risolto, ora puoi
+              riposare". Si integra perfettamente col green field
+              theme grazie al pianeta verde + sfondo stellato scuro
+              che è invertito rispetto al body → l'immagine fa da
+              "controcampo cromatico" e cattura lo sguardo. */}
+          <div className="relative hidden lg:flex lg:justify-center lg:items-center">
+            <HeroVisual />
           </div>
         </div>
 
-        {/* Mobile preview */}
+        {/* Mobile visual */}
         <div className="mt-10 flex justify-center lg:hidden">
           <div className="w-full max-w-[440px]">
-            <DashboardMockup />
+            <HeroVisual />
           </div>
         </div>
 
@@ -390,5 +394,82 @@ function Counter({ target }: { target: number }) {
     >
       {value.toLocaleString("it-IT")}
     </strong>
+  );
+}
+
+/**
+ * Hero visual — "tiny planet" image. Square aspect (1:1) per
+ * massimizzare l'impatto del pianeta nel frame quadrato dell'immagine.
+ * Asset path: /hero-planet.jpg (l'utente lo salva in public/).
+ *
+ * Effetti:
+ *   - Cornice glass leggera che fonde l'immagine col theme verde
+ *   - Subtle floating animation (4s loop) — pianeta che ondeggia
+ *     dolcemente come se respirasse, rafforza la sensazione di calma
+ *   - Outer glow verde dietro l'immagine, raccoglie il colore del
+ *     pianeta e lo proietta sul background del sito
+ */
+function HeroVisual() {
+  return (
+    <div
+      className="relative w-full"
+      style={{
+        maxWidth: 560,
+        aspectRatio: "1 / 1",
+      }}
+    >
+      {/* Outer green glow — alone verde dietro l'immagine */}
+      <div
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: "-8%",
+          background:
+            "radial-gradient(circle at 50% 50%, hsl(var(--primary) / 0.35), transparent 60%)",
+          filter: "blur(40px)",
+          pointerEvents: "none",
+        }}
+      />
+
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+        style={{
+          position: "relative",
+          width: "100%",
+          height: "100%",
+          borderRadius: "2rem",
+          overflow: "hidden",
+          border: "1px solid rgba(255,255,255,0.18)",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.12), 0 4px 12px rgba(5,80,55,0.20), 0 32px 80px -16px rgba(5,80,55,0.45)",
+        }}
+      >
+        <motion.div
+          style={{ position: "absolute", inset: 0 }}
+          animate={{
+            y: [0, -8, 0, -4, 0],
+          }}
+          transition={{
+            duration: 8,
+            ease: "easeInOut",
+            repeat: Infinity,
+          }}
+        >
+          <Image
+            src="/hero-planet.jpg"
+            alt="Una persona si rilassa su un piccolo pianeta verde nello spazio: la tranquillità di chi non deve più candidarsi a mano"
+            fill
+            priority
+            sizes="(max-width: 1024px) 90vw, 560px"
+            style={{
+              objectFit: "cover",
+              objectPosition: "center",
+            }}
+          />
+        </motion.div>
+      </motion.div>
+    </div>
   );
 }
