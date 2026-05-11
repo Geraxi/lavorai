@@ -22,8 +22,8 @@ export function Hero() {
         // zoom aggressivo.
         backgroundColor: "#0a1820",
         backgroundImage: "url('/Lavoraiherosection.png')",
-        backgroundSize: "auto 110%",
-        backgroundPosition: "right -10% center",
+        backgroundSize: "auto 65%",
+        backgroundPosition: "right 4% center",
         backgroundRepeat: "no-repeat",
         minHeight: 720,
       }}
