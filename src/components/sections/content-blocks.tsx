@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { Reveal } from "@/components/reveal";
 import {
@@ -40,7 +41,68 @@ export function SectionPersonas() {
           <p className="mt-5 text-lg text-muted-foreground">{t("subtitle")}</p>
         </Reveal>
 
-        <div className="mx-auto mt-12 grid max-w-5xl gap-4 sm:grid-cols-2">
+        {/* People-grid hero image — mostra la diversità target prima
+            ancora di leggere i 4 personas testuali. Crop con border
+            radius generoso + leggera overlay verde per fonderla col
+            theme. Asset: /people-grid.jpg (32 ritratti di varie
+            professioni, mix etnico+età+contesto). */}
+        <Reveal delay={0.12} className="mx-auto mt-12 max-w-5xl">
+          <div
+            style={{
+              position: "relative",
+              borderRadius: "2rem",
+              overflow: "hidden",
+              aspectRatio: "16 / 7",
+              border: "1px solid rgba(255,255,255,0.18)",
+              boxShadow:
+                "0 2px 6px rgba(5,80,55,0.20), 0 24px 60px -16px rgba(5,80,55,0.40)",
+            }}
+          >
+            <Image
+              src="/people-grid.jpg"
+              alt="Professionisti italiani di ogni settore: medici, designer, sviluppatori, insegnanti, operai, chef, e altri"
+              fill
+              priority={false}
+              sizes="(max-width: 1024px) 100vw, 960px"
+              style={{
+                objectFit: "cover",
+                objectPosition: "center",
+              }}
+            />
+            {/* Overlay gradient: sfuma in verde su entrambi i bordi
+                così l'immagine si integra col theme verde + un velo
+                centrale scuro per leggibilità della caption sotto. */}
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                inset: 0,
+                background:
+                  "linear-gradient(180deg, transparent 50%, rgba(5,80,55,0.45) 100%), linear-gradient(90deg, rgba(5,80,55,0.30) 0%, transparent 15%, transparent 85%, rgba(5,80,55,0.30) 100%)",
+                pointerEvents: "none",
+              }}
+            />
+            {/* Caption finale per riportare narrative all'human level */}
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                padding: "20px 28px",
+                color: "#FFFFFF",
+                fontSize: "clamp(0.95rem, 1.1vw, 1.1rem)",
+                fontWeight: 500,
+                letterSpacing: "-0.012em",
+                textShadow: "0 2px 8px rgba(0,0,0,0.4)",
+              }}
+            >
+              {t("imageCaption")}
+            </div>
+          </div>
+        </Reveal>
+
+        <div className="mx-auto mt-10 grid max-w-5xl gap-4 sm:grid-cols-2">
           {PERSONAS.map((p, i) => (
             <Reveal key={p.title} delay={i * 0.04}>
               <article
