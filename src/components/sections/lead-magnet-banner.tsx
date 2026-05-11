@@ -74,7 +74,7 @@ export function SectionLeadMagnet() {
                 {t("subtitle")}
               </p>
               <Link
-                href="/optimize"
+                href="/analizza-cv"
                 onClick={() =>
                   trackEvent(AnalyticsEvent.LEAD_MAGNET_OPEN, {
                     source: "landing_banner",

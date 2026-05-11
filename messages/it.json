@@ -249,6 +249,47 @@
     "controlItem4": "Pausa istantanea da dashboard, export integrale, cancellazione totale",
     "footnote": "Default al primo signup: modalità Hybrid attiva, Auto disattivata. Cambi quando vuoi dalle preferenze — niente è opt-in nascosto."
   },
+  "analizzaCvPage": {
+    "badge": "Gratis · 60 secondi · no carta",
+    "title1": "Il tuo CV passa gli ATS?",
+    "title2": "Scoprilo in 60 secondi.",
+    "subtitle": "Carica il CV e un annuncio. Ti diciamo se l'ATS lo legge correttamente, dove perde keyword e cosa cambiare. Più ti diamo un CV ottimizzato + cover letter pronti da inviare.",
+    "cta": "Analizza il mio CV ora",
+    "ctaSecondary": "Vedi piani LavorAI",
+    "caption": "Niente registrazione · 3 audit gratuiti · GDPR-first",
+    "bullet1": "ATS readability score su 100 — sai dove perdi punti",
+    "bullet2": "CV riscritto in italiano (o inglese) tailored al ruolo",
+    "bullet3": "Cover letter scritta da Claude per quell'annuncio specifico",
+    "bullet4": "3-5 suggerimenti concreti, non vaghi consigli generici",
+    "getEyebrow": "Cosa ottieni",
+    "getTitle": "Tutto in un'unica chiamata, in 60 secondi.",
+    "howTitle": "Come funziona",
+    "howBody": "3 step. Niente registrazione richiesta per i primi 3 audit.",
+    "step1": "Carica il tuo CV (PDF o DOCX). Lo leggiamo localmente, mai conservato senza il tuo consenso.",
+    "step2": "Incolla l'annuncio target o il link. L'AI estrae keyword, requisiti, hard skill richieste.",
+    "step3": "Ricevi via email: CV ottimizzato + cover letter + score ATS + suggerimenti. Tutto in 60s.",
+    "finalTitle": "Smetti di domandartelo. Provalo in 60 secondi."
+  },
+  "caseStudies": {
+    "eyebrow": "Storie reali · dati anonimizzati",
+    "title1": "Da \"non rispondono\"",
+    "title2": "a colloqui ricevuti.",
+    "subtitle": "Due narrative end-to-end, prima e dopo. Stesso CV, stesse skill — diverso volume e match.",
+    "anonymousNote": "Initials e ruoli anonimizzati con consenso. Metriche verificate dal pannello LavorAI."
+  },
+  "platformCards": {
+    "discoveryEyebrow": "Da queste fonti scopre annunci",
+    "applyEyebrow": "Su questi form ATS candida realmente",
+    "linkedin": "Discovery via Apify scraper. Submit redirected al form ATS sottostante.",
+    "indeed": "Discovery via Apify scraper. Mai chiediamo password Indeed.",
+    "infojobs": "Discovery limitato — InfoJobs richiede account utente, lavoriamo solo su listing pubblici.",
+    "subito": "Discovery sui job listing pubblici. Submit manuale (no form ATS standard).",
+    "greenhouse": "Submit automatico via /embed/job_app — bypassa career page custom.",
+    "lever": "Submit automatico via /apply form pubblico.",
+    "ashby": "Submit automatico via /application endpoint pubblico.",
+    "smartrecruiters": "Submit automatico via /apply. Detect reCAPTCHA per skip safe.",
+    "workable": "Submit automatico via /j/{id}/apply form."
+  },
   "leadMagnet": {
     "eyebrow": "Test gratuito",
     "title": "Vuoi vedere prima come funziona?",
@@ -306,9 +347,13 @@
   "ctaFinal": {
     "title1": "Smetti di candidarti.",
     "title2": "LavorAI lo fa per te.",
-    "subtitle": "In 30 secondi sei live. Da lì LavorAI si candida ogni 30 minuti, tutta la notte, mentre tu fai altro. In media i nostri utenti ricevono il primo invito al colloquio entro 8 giorni.",
+    "subtitle": "In 30 secondi sei live. Da lì LavorAI si candida 3 volte al giorno sui job che matchano. In media i nostri utenti ricevono il primo invito al colloquio entro 8 giorni.",
     "caption": "Pausa o annulla in qualsiasi momento · Dati su server UE · No login ai tuoi account",
-    "cta": "Inizia gratis — 3 candidature subito"
+    "cta": "Inizia gratis — 3 candidature subito",
+    "trust1": "Consenso esplicito per ogni invio",
+    "trust2": "Cancellazione totale in 1 click",
+    "trust3": "Export integrale, sempre",
+    "trust4": "GDPR-first · server UE"
   },
   "stickyCta": {
     "message": "LavorAI si sta candidando per <strong>centinaia di persone adesso.</strong>",

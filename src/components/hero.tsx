@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { AuroraBackground } from "@/components/aurora-background";
 import { DashboardMockup } from "@/components/dashboard-mockup";
 import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
-import { SUPPORTED_PORTALS } from "@/lib/marketing-content";
 
 export function Hero() {
   const t = useTranslations("hero");
@@ -180,7 +179,7 @@ export function Hero() {
                   }
                 />
                 <Link
-                  href="/optimize"
+                  href="/analizza-cv"
                   onClick={() =>
                     trackEvent(AnalyticsEvent.HERO_CTA_SECONDARY, {
                       label: "lead_magnet",
@@ -291,93 +290,9 @@ export function Hero() {
               </span>
             </motion.div>
 
-            {/* Logo strips — onesta distinzione tra discovery (LinkedIn,
-                Indeed) e submit reale (Greenhouse, Lever, Ashby).
-                Differenzia da competitor che claim "candida su LinkedIn"
-                quando in realtà non possono (TOS + anti-bot). */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.55 }}
-              className="mt-7 flex flex-col gap-3"
-            >
-              <div>
-                <p
-                  className="mono"
-                  style={{
-                    fontSize: 11,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.16em",
-                    color: "var(--fg-subtle)",
-                    fontWeight: 500,
-                  }}
-                >
-                  {t("portalsLabel")}
-                </p>
-                <div
-                  style={{
-                    marginTop: 8,
-                    display: "flex",
-                    gap: 18,
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                  }}
-                >
-                  {SUPPORTED_PORTALS.discovery.map((p) => (
-                    <span
-                      key={p}
-                      style={{
-                        fontSize: 15,
-                        fontWeight: 600,
-                        letterSpacing: "-0.015em",
-                        color: "var(--fg-muted)",
-                        filter: "grayscale(1)",
-                        opacity: 0.75,
-                      }}
-                    >
-                      {p}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p
-                  className="mono"
-                  style={{
-                    fontSize: 11,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.16em",
-                    color: "hsl(var(--primary))",
-                    fontWeight: 500,
-                  }}
-                >
-                  {t("portalsApplyLabel")}
-                </p>
-                <div
-                  style={{
-                    marginTop: 8,
-                    display: "flex",
-                    gap: 18,
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                  }}
-                >
-                  {SUPPORTED_PORTALS.apply.map((p) => (
-                    <span
-                      key={p}
-                      style={{
-                        fontSize: 15,
-                        fontWeight: 600,
-                        letterSpacing: "-0.015em",
-                        color: "var(--fg)",
-                      }}
-                    >
-                      {p}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
+            {/* Logo strips rimossi dall'hero: spostati nella nuova
+                SectionPlatformCards che li mostra come card visuali
+                separate con descrizioni. Lascia respirare l'hero. */}
           </div>
 
           {/* Colonna destra: dashboard preview live */}

@@ -76,6 +76,62 @@ export const SUCCESS_METRICS: Array<{
 ];
 
 /**
+ * Case study anonimizzati — narrativa più lunga di una testimonial,
+ * con before/after concreti. Per high-intent visitor che vogliono
+ * "prova vera" non solo quote.
+ *
+ * ⚠️ PLACEHOLDER come tutto il resto qui. Sostituire con cohort reali
+ * dopo 50+ utenti paganti (vedi TODO-LAUNCH.md → Critical section).
+ */
+export interface CaseStudy {
+  initials: string;
+  role: string;
+  context: string;
+  beforeTitle: string;
+  beforeBody: string;
+  afterTitle: string;
+  afterBody: string;
+  metrics: Array<{ value: string; label: string }>;
+}
+
+export const CASE_STUDIES: CaseStudy[] = [
+  {
+    initials: "M.R.",
+    role: "Senior Product Designer · cerca svolta in scaleup",
+    context:
+      "3 anni in un'agenzia, voglia di passare a un prodotto SaaS. Mid-30s, ROI sul tempo > ROI sulla quantità.",
+    beforeTitle: "Prima · 2 mesi a vuoto",
+    beforeBody:
+      "Candidatura manuale su LinkedIn Easy Apply per 6-8 ore alla settimana. CV identico per ogni annuncio. 4 risposte recruiter in 8 settimane, tutte rifiuti automatici.",
+    afterTitle: "Dopo 3 settimane con LavorAI",
+    afterBody:
+      "Auto-apply attivo sui ruoli Senior Product Designer in EU. Cover letter custom per ogni annuncio (citando il prodotto target). Filtro a salary range + companies escluse (3 agency big-tech sue ex).",
+    metrics: [
+      { value: "73", label: "candidature inviate in 21gg" },
+      { value: "12", label: "colloqui prenotati" },
+      { value: "2", label: "offer ricevute" },
+    ],
+  },
+  {
+    initials: "G.S.",
+    role: "Junior Developer · neolaureata in CS",
+    context:
+      "Senza esperienza professionale formale, 2 progetti GitHub, 6 mesi a candidarsi senza risposte.",
+    beforeTitle: "Prima · CV ignorato dagli ATS",
+    beforeBody:
+      "CV in italiano accademico, nessuna keyword tech, formato grafico che gli ATS faticavano a parsare. 0 colloqui in 6 mesi su ~120 candidature.",
+    afterTitle: "Dopo 4 settimane con LavorAI",
+    afterBody:
+      "CV riformulato con keyword ATS-friendly per ogni annuncio, mantenendo il contenuto reale. Cover letter che cita il progetto GitHub rilevante per ogni azienda. Lavorai si è candidato su startup early-stage che lei non avrebbe considerato.",
+    metrics: [
+      { value: "47", label: "candidature inviate in 28gg" },
+      { value: "5", label: "primi colloqui" },
+      { value: "1", label: "offer junior accettata" },
+    ],
+  },
+];
+
+/**
  * Portali ATS supportati per submit automatico. La differenza vs il
  * marketing è importante: LinkedIn/Indeed sono fonti di scoperta job;
  * gli ATS reali (Greenhouse, Lever, Ashby, SmartRecruiters, Workable)

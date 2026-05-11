@@ -47,7 +47,7 @@ export function SectionCtaFinal() {
               size="lg"
               className="group relative h-14 overflow-hidden px-8 text-base"
             >
-              <Link href="/optimize">
+              <Link href="/signup">
                 <span className="relative z-10">{t("cta")}</span>
                 <span
                   aria-hidden
@@ -56,6 +56,31 @@ export function SectionCtaFinal() {
               </Link>
             </Button>
           </motion.div>
+
+          {/* Compact trust line direttamente sotto il CTA. Riduce
+              ansia all'ultimo momento: consenso esplicito, cancella in
+              1 click, dati EU. Stesso wording di /privacy ma compatto. */}
+          <div
+            className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2"
+            style={{ fontSize: 12.5, color: "var(--fg-muted)" }}
+          >
+            {[
+              { icon: "✓", text: t("trust1") },
+              { icon: "✓", text: t("trust2") },
+              { icon: "✓", text: t("trust3") },
+              { icon: "✓", text: t("trust4") },
+            ].map((c, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1.5"
+              >
+                <span style={{ color: "hsl(var(--primary))", fontWeight: 600 }}>
+                  {c.icon}
+                </span>
+                {c.text}
+              </span>
+            ))}
+          </div>
         </Reveal>
       </div>
     </section>

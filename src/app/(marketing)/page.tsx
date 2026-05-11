@@ -3,11 +3,13 @@ import { SiteNav } from "@/components/site-nav";
 import { Hero } from "@/components/hero";
 import { SectionComeFunziona } from "@/components/sections/come-funziona";
 import { SectionLeadMagnet } from "@/components/sections/lead-magnet-banner";
+import { SectionPlatformCards } from "@/components/sections/platform-cards";
 import { SectionAutomationBoundaries } from "@/components/sections/automation-boundaries";
 import { SectionTrustBlock } from "@/components/sections/trust-block";
 import { SectionProblema } from "@/components/sections/problema";
 import { SectionStats } from "@/components/sections/stats";
 import { SectionTestimonialsV2 } from "@/components/sections/testimonials-v2";
+import { SectionCaseStudies } from "@/components/sections/case-studies";
 import { SectionPricing } from "@/components/sections/pricing";
 import {
   SectionPersonas,
@@ -43,6 +45,7 @@ export default function Home() {
       <SiteNav />
       <main className="flex-1">
         <Hero />
+        <SectionPlatformCards />
         <SectionComeFunziona />
         <SectionLeadMagnet />
         <SectionAutomationBoundaries />
@@ -50,6 +53,7 @@ export default function Home() {
         <SectionProblema />
         <SectionStats />
         <SectionTestimonialsV2 />
+        <SectionCaseStudies />
         <SectionWhyNotChatGpt />
         <SectionTrustBlock />
         <SectionPricing />
