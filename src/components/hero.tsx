@@ -15,15 +15,18 @@ export function Hero() {
     <section
       className="relative overflow-hidden"
       style={{
-        // Hero background = tiny-planet image full-bleed.
-        // backgroundPosition: center così il pianeta resta visibile;
-        // backgroundSize: cover su mobile per riempire, contain
-        // ridurrebbe troppo. Su desktop l'immagine si estende quanto
-        // basta da coprire un fold di ~720px.
-        backgroundImage: "url('/Lavoraiherosection.png')",
+        // Hero background = full-bleed image + fallback colore scuro
+        // così se l'immagine non è ancora caricata si vede subito
+        // un campo scuro (no grey placeholder dei browser).
+        // minHeight: 720px su desktop per far rendere bene il copy +
+        // immagine. Mobile auto-flow.
+        backgroundColor: "#0a1820",
+        backgroundImage:
+          "url('/Lavoraiherosection.png')",
         backgroundSize: "cover",
         backgroundPosition: "center center",
         backgroundRepeat: "no-repeat",
+        minHeight: 720,
       }}
     >
       {/* Overlay scuro + gradient: rende il testo bianco leggibile
