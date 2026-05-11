@@ -184,7 +184,9 @@
     "uploadCvFirst": "Carica prima il tuo CV.",
     "retryError": "Errore. Riprova.",
     "networkError": "Errore di rete.",
-    "applied": "Candidatura inviata per {title}"
+    "applied": "Candidatura inviata per {title}",
+    "fullDescription": "Descrizione completa",
+    "openOriginal": "Apri annuncio originale"
   },
   "pricing": {
     "eyebrow": "Prezzi",

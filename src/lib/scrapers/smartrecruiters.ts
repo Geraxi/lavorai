@@ -1,4 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
+import { cleanHtmlText } from "./html-clean";
 
 /**
  * SmartRecruiters public posting API. Nessuna auth richiesta.
@@ -97,8 +98,7 @@ function mapJob(
     (j.jobAd?.sections?.jobDescription?.text ?? "") +
     " " +
     (j.jobAd?.sections?.qualifications?.text ?? "");
-  const cleanHtml = desc.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  const description = cleanHtml.slice(0, 2000);
+  const description = cleanHtmlText(desc).slice(0, 2000);
   const locParts = [j.location?.city, j.location?.region, j.location?.country]
     .filter(Boolean)
     .join(", ");

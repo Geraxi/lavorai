@@ -1,4 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
+import { cleanHtmlText } from "./html-clean";
 
 /**
  * Ashby public job board API. Nessuna auth richiesta.
@@ -80,11 +81,7 @@ function mapJob(
   companyName: string,
   orgSlug: string,
 ): JobListItem | null {
-  const cleanHtml = (j.descriptionHtml ?? "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  const description = cleanHtml.slice(0, 2000);
+  const description = cleanHtmlText(j.descriptionHtml).slice(0, 2000);
   const loc = j.locationName ?? "";
   if (!isRelevantLocation(loc, description, !!j.isRemote)) return null;
   return {

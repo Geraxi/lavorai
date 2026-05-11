@@ -1,4 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
+import { cleanHtmlText } from "./html-clean";
 
 /**
  * Lever public Postings API. Nessuna auth richiesta.
@@ -79,12 +80,9 @@ function mapPosting(
   companyName: string,
   companySlug?: string,
 ): JobListItem | null {
-  const description =
-    (p.descriptionPlain ?? p.description ?? "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 2000);
+  const description = cleanHtmlText(
+    p.descriptionPlain ?? p.description ?? "",
+  ).slice(0, 2000);
   const location =
     p.categories?.location ??
     (p.categories?.allLocations && p.categories.allLocations[0]) ??

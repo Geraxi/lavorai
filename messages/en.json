@@ -184,7 +184,9 @@
     "uploadCvFirst": "Upload your CV first.",
     "retryError": "Error. Please retry.",
     "networkError": "Network error.",
-    "applied": "Application sent for {title}"
+    "applied": "Application sent for {title}",
+    "fullDescription": "Full description",
+    "openOriginal": "Open original posting"
   },
   "pricing": {
     "eyebrow": "Pricing",

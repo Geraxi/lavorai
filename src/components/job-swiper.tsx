@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { motion, useMotionValue, useTransform, type PanInfo } from "motion/react";
+import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from "motion/react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import { PaywallDialog } from "@/components/paywall-dialog";
+import { cleanHtmlText } from "@/lib/scrapers/html-clean";
 import type { JobRow } from "@/components/jobs-list";
 
 /**
@@ -69,6 +70,7 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
   const [animatingId, setAnimatingId] = useState<string | null>(null);
   const [animDir, setAnimDir] = useState<"left" | "right" | null>(null);
+  const [detailJob, setDetailJob] = useState<JobRow | null>(null);
 
   // Carica skipped da localStorage solo lato client per evitare hydration mismatch
   useEffect(() => {
@@ -155,22 +157,25 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
     [t, router],
   );
 
-  // Keyboard navigation
+  // Keyboard navigation (disabilitato quando il drawer dettagli è aperto)
   useEffect(() => {
     if (!currentJob) return;
     const onKey = (e: KeyboardEvent) => {
-      if (animatingId) return;
+      if (animatingId || detailJob) return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
         apply(currentJob);
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
         skip(currentJob.id);
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setDetailJob(currentJob);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentJob, animatingId, apply, skip]);
+  }, [currentJob, animatingId, detailJob, apply, skip]);
 
   if (!currentJob) {
     return (
@@ -238,6 +243,7 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
             if (dir === "right") apply(currentJob);
             else skip(currentJob.id);
           }}
+          onTap={() => setDetailJob(currentJob)}
         />
       </div>
 
@@ -339,6 +345,25 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
         variant="limit"
         sub={paywallMessage ?? undefined}
       />
+
+      <JobDetailDrawer
+        job={detailJob}
+        onClose={() => setDetailJob(null)}
+        onApply={(j) => {
+          setDetailJob(null);
+          apply(j);
+        }}
+        onSkip={(j) => {
+          setDetailJob(null);
+          skip(j.id);
+        }}
+        labels={{
+          apply: t("apply"),
+          skip: t("skip"),
+          fullDescription: t("fullDescription"),
+          openOriginal: t("openOriginal"),
+        }}
+      />
     </>
   );
 }
@@ -377,11 +402,13 @@ function SwipeCard({
   isAnimatingOut,
   animDir,
   onSwipe,
+  onTap,
 }: {
   job: JobRow;
   isAnimatingOut: boolean;
   animDir: "left" | "right" | null;
   onSwipe: (dir: "left" | "right") => void;
+  onTap: () => void;
 }) {
   const x = useMotionValue(0);
   const rotate = useTransform(x, [-200, 0, 200], [-14, 0, 14]);
@@ -420,6 +447,7 @@ function SwipeCard({
       dragConstraints={{ left: 0, right: 0 }}
       dragElastic={0.6}
       onDragEnd={onDragEnd}
+      onTap={isAnimatingOut ? undefined : onTap}
       animate={exitAnimation}
       transition={{ duration: 0.25, ease: "easeOut" }}
       whileTap={{ cursor: "grabbing" }}
@@ -475,8 +503,30 @@ function SwipeCard({
 }
 
 /**
+ * Sintetizza la description in un riassunto leggibile (~180 char).
+ * Cerca la prima frase completa entro 200 char; in fallback tronca con …
+ * Applica `cleanHtmlText` come safety net per i job vecchi in cache che
+ * potrebbero contenere HTML entities residui ("&lt;div...").
+ */
+function summarize(text: string, max = 180): string {
+  const clean = cleanHtmlText(text);
+  if (clean.length <= max) return clean;
+  // Tronca al primo punto/punto-esclamativo dopo metà max
+  const sliced = clean.slice(0, max + 60);
+  const sentenceEnd = sliced.search(/[.!?]\s/);
+  if (sentenceEnd > max / 2 && sentenceEnd <= max) {
+    return clean.slice(0, sentenceEnd + 1);
+  }
+  // Fallback: tronca all'ultimo spazio prima di max + …
+  const trimmed = clean.slice(0, max);
+  const lastSpace = trimmed.lastIndexOf(" ");
+  return (lastSpace > 0 ? trimmed.slice(0, lastSpace) : trimmed) + "…";
+}
+
+/**
  * UI condivisa della card (sia attiva che peek). Contiene company logo,
- * titolo, location/contract/salary chips, descrizione.
+ * titolo, location/contract/salary chips, descrizione concisa.
+ * Tap sulla card → apre drawer dettagli (gestito dal parent).
  */
 function JobCardSurface({
   job,
@@ -488,6 +538,10 @@ function JobCardSurface({
   children?: React.ReactNode;
 }) {
   const color = companyColor(job.company ?? job.title);
+  const summary = useMemo(
+    () => summarize(job.description, compact ? 100 : 200),
+    [job.description, compact],
+  );
   return (
     <div
       style={{
@@ -584,23 +638,314 @@ function JobCardSurface({
         )}
       </div>
 
-      <div
+      <p
         style={{
           marginTop: 18,
-          fontSize: 13.5,
-          lineHeight: 1.55,
+          fontSize: 14,
+          lineHeight: 1.6,
           color: "var(--fg-muted)",
           flex: 1,
-          overflow: "hidden",
-          display: "-webkit-box",
-          WebkitLineClamp: compact ? 4 : 10,
-          WebkitBoxOrient: "vertical",
+          marginBottom: 0,
         }}
       >
-        {job.description}
-      </div>
+        {summary}
+      </p>
+
+      {!compact && (
+        <div
+          style={{
+            marginTop: 14,
+            fontSize: 11.5,
+            color: "var(--fg-subtle)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            alignSelf: "flex-start",
+            opacity: 0.85,
+          }}
+        >
+          <Icon name="arrow-up-right" size={11} />
+          Tocca la card per leggere tutti i dettagli
+        </div>
+      )}
 
       {children}
     </div>
+  );
+}
+
+/**
+ * Drawer dettagli — slide-in da destra. Mostra description completa,
+ * link annuncio originale, pulsanti Apply / Skip in primo piano.
+ */
+function JobDetailDrawer({
+  job,
+  onClose,
+  onApply,
+  onSkip,
+  labels,
+}: {
+  job: JobRow | null;
+  onClose: () => void;
+  onApply: (j: JobRow) => void;
+  onSkip: (j: JobRow) => void;
+  labels: {
+    apply: string;
+    skip: string;
+    fullDescription: string;
+    openOriginal: string;
+  };
+}) {
+  // Lock body scroll while open
+  useEffect(() => {
+    if (!job) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [job]);
+
+  const fullDescription = useMemo(
+    () => (job ? cleanHtmlText(job.description) : ""),
+    [job],
+  );
+
+  return (
+    <AnimatePresence>
+      {job && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.6)",
+              backdropFilter: "blur(2px)",
+              zIndex: 100,
+            }}
+          />
+          <motion.div
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 260 }}
+            style={{
+              position: "fixed",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              width: "min(560px, 100%)",
+              background: "var(--bg)",
+              borderLeft: "1px solid var(--border-ds)",
+              zIndex: 101,
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "-20px 0 50px rgba(0,0,0,0.3)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 14,
+                padding: 24,
+                borderBottom: "1px solid var(--border-ds)",
+              }}
+            >
+              <div style={{ display: "flex", gap: 14, flex: 1, minWidth: 0 }}>
+                <CompanyLogo
+                  company={job.company ?? job.title}
+                  color={companyColor(job.company ?? job.title)}
+                  size={48}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 18,
+                      fontWeight: 700,
+                      letterSpacing: "-0.015em",
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    {job.title}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 13.5,
+                      color: "var(--fg-muted)",
+                      marginTop: 2,
+                    }}
+                  >
+                    {job.company ?? "—"}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  border: "1px solid var(--border-ds)",
+                  background: "var(--bg-elev)",
+                  color: "var(--fg-muted)",
+                  cursor: "pointer",
+                  flexShrink: 0,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div
+              style={{
+                padding: "20px 24px 100px",
+                overflowY: "auto",
+                flex: 1,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 20,
+                }}
+              >
+                {job.remote && (
+                  <span className="ds-chip ds-chip-green">Remote</span>
+                )}
+                {job.location && (
+                  <span
+                    className="ds-chip"
+                    style={{
+                      display: "inline-flex",
+                      gap: 5,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Icon name="map-pin" size={11} /> {job.location}
+                  </span>
+                )}
+                {job.contractType && (
+                  <span
+                    className="ds-chip"
+                    style={{
+                      display: "inline-flex",
+                      gap: 5,
+                      alignItems: "center",
+                    }}
+                  >
+                    <Icon name="clock" size={11} />
+                    {job.contractType === "permanent"
+                      ? "Permanent"
+                      : job.contractType}
+                  </span>
+                )}
+                {(job.salaryMin || job.salaryMax) && (
+                  <span
+                    className="ds-chip mono"
+                    style={{
+                      display: "inline-flex",
+                      gap: 5,
+                      alignItems: "center",
+                      color: "var(--fg)",
+                    }}
+                  >
+                    <Icon name="euro" size={11} />
+                    {job.salaryMin
+                      ? `€${Math.round(job.salaryMin / 1000)}k`
+                      : ""}
+                    {job.salaryMin && job.salaryMax ? "–" : ""}
+                    {job.salaryMax
+                      ? `€${Math.round(job.salaryMax / 1000)}k`
+                      : ""}
+                  </span>
+                )}
+              </div>
+
+              <div
+                style={{
+                  fontSize: 11,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  color: "var(--fg-subtle)",
+                  fontWeight: 500,
+                  marginBottom: 10,
+                }}
+              >
+                {labels.fullDescription}
+              </div>
+              <p
+                style={{
+                  fontSize: 14,
+                  lineHeight: 1.65,
+                  color: "var(--fg)",
+                  whiteSpace: "pre-wrap",
+                  margin: 0,
+                }}
+              >
+                {fullDescription}
+              </p>
+
+              <a
+                href={job.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ds-btn"
+                style={{
+                  marginTop: 24,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 13,
+                }}
+              >
+                <Icon name="arrow-up-right" size={12} />
+                {labels.openOriginal}
+              </a>
+            </div>
+
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                padding: "16px 24px",
+                background: "var(--bg)",
+                borderTop: "1px solid var(--border-ds)",
+                display: "flex",
+                gap: 10,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => onSkip(job)}
+                className="ds-btn"
+                style={{ flex: 1, padding: "11px 14px", fontSize: 13.5 }}
+              >
+                ✕ {labels.skip}
+              </button>
+              <button
+                type="button"
+                onClick={() => onApply(job)}
+                className="ds-btn ds-btn-primary"
+                style={{ flex: 2, padding: "11px 14px", fontSize: 13.5 }}
+              >
+                <Icon name="zap" size={13} /> {labels.apply}
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
