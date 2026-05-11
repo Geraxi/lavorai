@@ -3,7 +3,6 @@ import { SiteNav } from "@/components/site-nav";
 import { Hero } from "@/components/hero";
 import { SectionComeFunziona } from "@/components/sections/come-funziona";
 import { SectionLeadMagnet } from "@/components/sections/lead-magnet-banner";
-import { SectionPlatformCards } from "@/components/sections/platform-cards";
 import { SectionAutomationBoundaries } from "@/components/sections/automation-boundaries";
 import { SectionTrustBlock } from "@/components/sections/trust-block";
 import { SectionProblema } from "@/components/sections/problema";
@@ -49,7 +48,6 @@ export default function Home() {
         <Hero />
         {/* RHYTHM BREAK 1: editorial — "il lavoro invisibile" */}
         <SectionInvisibleWork />
-        <SectionPlatformCards />
         <SectionComeFunziona />
         <SectionLeadMagnet />
         <SectionAutomationBoundaries />
