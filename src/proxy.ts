@@ -90,6 +90,8 @@ export const config = {
     "/login",
     "/signup",
     "/optimize",
+    "/analizza-cv",
+    "/interview-buddy",
     "/onboarding/:path*",
     "/forgot-password",
     "/reset-password",

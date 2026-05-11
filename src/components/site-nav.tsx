@@ -15,6 +15,7 @@ export function SiteNav() {
   const t = useTranslations("nav");
   const marketingLinks = [
     { href: "/#come-funziona", label: t("howItWorks") },
+    { href: "/interview-buddy", label: t("interviewBuddyNav") },
     { href: "/#prezzi", label: t("pricing") },
     { href: "/#faq", label: t("faq") },
   ];
