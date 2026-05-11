@@ -3,7 +3,7 @@
 import { Reveal } from "@/components/reveal";
 
 /**
- * Sezione "Problema → Soluzione" — band compatta, due colonne.
+ * Sezione "Problema → Soluzione" · band compatta, due colonne.
  * Niente lista di 3 punti gonfia: solo confronto secco.
  */
 export function SectionProblema() {
@@ -64,10 +64,10 @@ export function SectionProblema() {
                   lineHeight: 1.5,
                 }}
               >
-                <li>— 2 ore per candidarti a 5 posizioni. Ogni giorno.</li>
-                <li>— Cover letter copia-incolla che i recruiter riconoscono subito</li>
-                <li>— Mandi 30 candidature, ricevi 2 risposte. Se va bene.</li>
-                <li>— L&apos;ATS scarta il tuo CV prima che un umano lo veda</li>
+                <li>· 2 ore per candidarti a 5 posizioni. Ogni giorno.</li>
+                <li>· Cover letter copia-incolla che i recruiter riconoscono subito</li>
+                <li>· Mandi 30 candidature, ricevi 2 risposte. Se va bene.</li>
+                <li>· L&apos;ATS scarta il tuo CV prima che un umano lo veda</li>
               </ul>
             </div>
 
@@ -125,7 +125,7 @@ export function SectionProblema() {
                 </li>
                 <li>
                   <span className="text-primary">✓</span> LavorAI compila il
-                  form ATS per te — zero copia-incolla
+                  form ATS per te · zero copia-incolla
                 </li>
                 <li>
                   <span className="text-primary">✓</span> La tua unica attività:

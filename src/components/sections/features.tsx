@@ -22,7 +22,7 @@ const features: Feature[] = [
   {
     icon: Zap,
     title: "Auto-Apply ogni 30 minuti",
-    body: "Un cron su GitHub Actions scansiona Greenhouse e Lever ogni 30 minuti, seleziona gli annunci col tuo match più alto e li accoda — anche se sei offline. Rispetta daily cap, soglia di match e aziende bloccate.",
+    body: "Un cron su GitHub Actions scansiona Greenhouse e Lever ogni 30 minuti, seleziona gli annunci col tuo match più alto e li accoda · anche se sei offline. Rispetta daily cap, soglia di match e aziende bloccate.",
   },
   {
     icon: FileText,
@@ -71,7 +71,7 @@ export function SectionFeatures() {
             <span className="text-gradient-accent">ricerca di lavoro.</span>
           </h2>
           <p className="mt-5 text-lg text-muted-foreground">
-            Dalla prima bozza del CV all&apos;invito al colloquio finale —
+            Dalla prima bozza del CV all&apos;invito al colloquio finale.
             LavorAI ti accompagna in ogni passaggio.
           </p>
         </Reveal>

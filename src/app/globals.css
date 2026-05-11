@@ -110,16 +110,56 @@
     scroll-behavior: smooth;
   }
   body {
-    background: var(--bg);
+    /* Atmospheric background: solid base + 3 large radial green washes
+       posizionati come fixed così non si muovono in scroll. Subtle:
+       opacity 0.04 dark / 0.06 light. Aggiunge personalità "verde
+       LavorAI" senza saturare. */
+    background:
+      radial-gradient(ellipse 70% 50% at 15% 10%, hsl(var(--primary) / 0.06), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 90% 30%, hsl(var(--primary) / 0.05), transparent 65%),
+      radial-gradient(ellipse 80% 50% at 50% 95%, hsl(var(--primary) / 0.04), transparent 70%),
+      var(--bg);
+    background-attachment: fixed;
     color: var(--fg);
     font-family: var(--font-inter), -apple-system, "system-ui", sans-serif;
-    /* Bumped from 14px → 15.5px after QA: utenti reported squinting.
-       15-16px è lo standard moderno per text-heavy product UIs. */
     font-size: 15.5px;
     line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     font-feature-settings: "cv11", "ss01", "ss03";
     letter-spacing: -0.005em;
+  }
+  /* In dark theme i wash sono più visibili (0.06-0.09) perché bg quasi
+     nero non perde i toni; in light più sottili per non incolorare il
+     bianco editorial. */
+  .dark body {
+    background:
+      radial-gradient(ellipse 70% 50% at 15% 10%, hsl(var(--primary) / 0.09), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 90% 30%, hsl(var(--primary) / 0.07), transparent 65%),
+      radial-gradient(ellipse 80% 50% at 50% 95%, hsl(var(--primary) / 0.06), transparent 70%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+
+  /* Ambient layer riservato per pagine specifiche (es. /optimize,
+     /analizza-cv, /interview-buddy) che vogliono PIÙ verde di base.
+     Da applicare via className="ambient-green" sull'elemento section
+     o page wrapper. */
+  .ambient-green {
+    position: relative;
+  }
+  .ambient-green::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 50% 40% at 25% 20%, hsl(var(--primary) / 0.10), transparent 70%),
+      radial-gradient(ellipse 40% 30% at 80% 70%, hsl(var(--primary) / 0.08), transparent 65%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .ambient-green > * {
+    position: relative;
+    z-index: 1;
   }
   button {
     font-family: inherit;

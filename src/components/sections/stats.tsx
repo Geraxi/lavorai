@@ -23,7 +23,7 @@ const stats = [
     value: "100",
     suffix: "+",
     label: "Aziende monitorate",
-    sub: "tech, fintech, design — Italia ed EU",
+    sub: "tech, fintech, design · Italia ed EU",
   },
   {
     value: "100",
@@ -36,7 +36,7 @@ const stats = [
 export function SectionStats() {
   return (
     <section className="relative overflow-hidden border-t border-border/60 py-24 md:py-28">
-      {/* Subtle radial wash — solo accenno, niente gradient pesante */}
+      {/* Subtle radial wash · solo accenno, niente gradient pesante */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"

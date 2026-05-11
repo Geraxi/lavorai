@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "title": "LavorAI — Il copilota italiano per la ricerca del lavoro",
+    "title": "LavorAI · Il copilota italiano per la ricerca del lavoro",
     "description": "Candidati in automatico su LinkedIn, InfoJobs, Indeed e Subito. CV ATS-friendly e lettera motivazionale AI, in italiano nativo. Da €19.99/mese."
   },
   "nav": {
@@ -17,20 +17,20 @@
   },
   "hero": {
     "_alternateHeadlines": [
-      "OPTION B (chosen): 'Cercare lavoro è un secondo lavoro. / Solo che non lo paga nessuno.' — observational, true",
-      "OPTION A: 'Sai quanto tempo hai passato a riscrivere lo stesso CV questo mese?' — interrogative, intimate",
-      "OPTION C: 'Smetti di candidarti dopo cena. / Inizia a essere chiamata.' — relief-focused"
+      "OPTION B (chosen): 'Cercare lavoro è un secondo lavoro. / Solo che non lo paga nessuno.', observational, true",
+      "OPTION A: 'Sai quanto tempo hai passato a riscrivere lo stesso CV questo mese?', interrogative, intimate",
+      "OPTION C: 'Smetti di candidarti dopo cena. / Inizia a essere chiamata.', relief-focused"
     ],
     "badge": "Per chi cerca lavoro alle 23 di domenica",
     "title1": "Cercare lavoro è un secondo lavoro.",
     "title2": "Solo che non lo paga nessuno.",
     "subtitle": "LavorAI è il copilota che si carica il peso ripetitivo: trova le offerte giuste, riscrive il CV per ognuna, compila i form. Tu torni a fare colloqui, non a riempire campi.",
-    "cta": "Provalo — vedi se ti capisce",
+    "cta": "Provalo, vedi se ti capisce",
     "ctaSecondary": "Prima fai vedere il mio CV",
     "ctaCaption": "3 candidature gratis · niente carta · pausa quando vuoi",
-    "check1": "<strong>Submit reale</strong> sui form ATS (Greenhouse, Lever, Ashby) — niente login ai tuoi account",
+    "check1": "<strong>Submit reale</strong> sui form ATS (Greenhouse, Lever, Ashby), niente login ai tuoi account",
     "check2": "CV e cover letter <strong>specifici per ogni annuncio</strong>, in italiano o inglese nativo",
-    "check3": "<strong>Tu decidi</strong>: auto, ibrido (consenso prima dell'invio) o off — in 1 click",
+    "check3": "<strong>Tu decidi</strong>: auto, ibrido (consenso prima dell'invio) o off, in 1 click",
     "portalsLabel": "Scopre annunci su:",
     "portalsApplyLabel": "Compila i form ATS di:",
     "trustStrip1": "GDPR-first · server EU",
@@ -57,7 +57,7 @@
     "charsExtracted": "{count} caratteri estratti",
     "cvChangeHint": "Vuoi usare un CV diverso? Potrai sostituirlo dalle impostazioni in qualsiasi momento.",
     "cvStartTitle": "Inizia caricando il tuo CV",
-    "cvStartBody": "Lo analizziamo e lo usiamo come base per ogni candidatura — adattato al singolo annuncio.",
+    "cvStartBody": "Lo analizziamo e lo usiamo come base per ogni candidatura, adattato al singolo annuncio.",
     "prefsTitle": "Cosa stai cercando?",
     "prefsBody": "LavorAI applicherà solo ad annunci che corrispondono a questi criteri. Puoi modificarli quando vuoi.",
     "confirmTitle": "Tutto pronto 🎯",
@@ -193,7 +193,7 @@
     "hintKeyboard": "← skip · → candidati · oppure trascina la card",
     "queueRemaining": "{count} ancora in coda",
     "emptyTitle": "Fine della coda!",
-    "emptyBody": "Hai esaminato tutte le offerte disponibili oggi. Il cron sync-jobs pesca nuovi annunci ogni 2 ore — torna più tardi.",
+    "emptyBody": "Hai esaminato tutte le offerte disponibili oggi. Il cron sync-jobs pesca nuovi annunci ogni 2 ore, torna più tardi.",
     "resetSkipped": "Resetta gli skip",
     "uploadCvFirst": "Carica prima il tuo CV.",
     "retryError": "Errore. Riprova.",
@@ -207,7 +207,7 @@
     "title1": "Trasparenti,",
     "title2": "senza sorprese.",
     "subtitle": "Niente crediti. Niente add-on. Scegli il piano, cambia quando vuoi.",
-    "footnote": "IVA inclusa. Cancelli in 1 click da Stripe — senza email, senza attese. Nessun vincolo.",
+    "footnote": "IVA inclusa. Cancelli in 1 click da Stripe, senza email, senza attese. Nessun vincolo.",
     "riskReducer1": "3 candidature gratuite per testare prima di pagare",
     "riskReducer2": "Cancellazione self-service, sempre",
     "riskReducer3": "Setup fee zero, no costi nascosti"
@@ -219,23 +219,23 @@
     "q1Question": "Si candida davvero per me, in automatico?",
     "q1Answer": "Sì. Imposti ruoli, città, soglia di match. Ogni 30 minuti LavorAI scansiona gli annunci freschi: quando ne trova uno compatibile, riscrive CV e cover letter per quella posizione e invia direttamente sul form ATS dell'azienda. Tu vedi solo lo stato e ricevi gli inviti ai colloqui.",
     "q2Question": "Mi serve il login a LinkedIn / Indeed / altri profili?",
-    "q2Answer": "No, mai. Non chiediamo né conserviamo credenziali di portali. Compiliamo solo form pubblici di Greenhouse, Lever e Workable — gli stessi che riempiresti tu cliccando \"Apply\". Nessun rischio di ban sui tuoi account.",
+    "q2Answer": "No, mai. Non chiediamo né conserviamo credenziali di portali. Compiliamo solo form pubblici di Greenhouse, Lever e Workable, gli stessi che riempiresti tu cliccando \"Apply\". Nessun rischio di ban sui tuoi account.",
     "q3Question": "Devo scrivere io le cover letter?",
     "q3Answer": "No. Vengono generate automaticamente in italiano nativo (o in inglese se l'annuncio è in inglese), su misura per ogni annuncio. In modalità ibrida puoi rivedere ogni candidatura prima dell'invio; in modalità auto parte tutto da solo.",
     "q4Question": "Posso decidere dove candidarmi?",
     "q4Answer": "Sì. Filtri precisi su ruoli, città, RAL minima, dipendente vs P.IVA, aziende da escludere, soglia di match. Tre modalità: Off (nessun invio), Hybrid (chiede ok prima di ogni invio), Auto (zero-touch). Cambio in un click dalle preferenze.",
     "q5Question": "Ricevo solo gli inviti ai colloqui?",
-    "q5Answer": "Esatto. La dashboard mostra in tempo reale lo stato delle candidature (in coda, in invio, inviata, vista). Ricevi notifica solo quando un recruiter risponde — nient'altro.",
+    "q5Answer": "Esatto. La dashboard mostra in tempo reale lo stato delle candidature (in coda, in invio, inviata, vista). Ricevi notifica solo quando un recruiter risponde, nient'altro.",
     "q6Question": "Posso annullare in qualsiasi momento?",
     "q6Answer": "Sì, con un click. Nessun vincolo, nessuna penale, nessuna domanda. Pausa l'auto-apply quando vuoi e riavvialo quando ti serve.",
     "q7Question": "Cosa succede ai miei dati?",
-    "q7Answer": "Stanno su server europei (Neon · Frankfurt), GDPR-first. Export integrale in JSON e cancellazione completa con un click — pulisce profilo, CV, file, code di lavoro. Non vendiamo nulla, non condividiamo con nessuno."
+    "q7Answer": "Stanno su server europei (Neon · Frankfurt), GDPR-first. Export integrale in JSON e cancellazione completa con un click, pulisce profilo, CV, file, code di lavoro. Non vendiamo nulla, non condividiamo con nessuno."
   },
   "boundaries": {
     "eyebrow": "Niente magia AI · ruoli chiari",
     "title1": "Cosa è automatico,",
     "title2": "e cosa decidi tu.",
-    "subtitle": "Niente \"AI che fa tutto\" — confini espliciti, sempre reversibili.",
+    "subtitle": "Niente \"AI che fa tutto\", confini espliciti, sempre reversibili.",
     "autoEyebrow": "Automatico",
     "autoTitle": "LavorAI fa da solo",
     "autoItem1": "Scopre nuovi annunci ogni 2 ore su ATS pubblici (Greenhouse, Lever, Ashby, SmartRecruiters, Workable)",
@@ -253,14 +253,14 @@
     "controlItem2": "Soglia di match minima: sotto X% non parte una candidatura",
     "controlItem3": "Blacklist aziende, città escluse, salary range, tipo contratto",
     "controlItem4": "Pausa istantanea da dashboard, export integrale, cancellazione totale",
-    "footnote": "Default al primo signup: modalità Hybrid attiva, Auto disattivata. Cambi quando vuoi dalle preferenze — niente è opt-in nascosto."
+    "footnote": "Default al primo signup: modalità Hybrid attiva, Auto disattivata. Cambi quando vuoi dalle preferenze, niente è opt-in nascosto."
   },
   "interviewBuddy": {
     "badge": "Mock interview · gratis · senza signup",
     "title1": "Practica il colloquio,",
     "title2": "con feedback specifico.",
     "subtitleSetup": "Carica un annuncio reale (o scrivi ruolo + azienda). Conduciamo 5 domande tailored + summary finale con score e suggerimenti concreti.",
-    "subtitleChat": "Domanda {current} di {total}. Rispondi con calma — non c'è timer.",
+    "subtitleChat": "Domanda {current} di {total}. Rispondi con calma, non c'è timer.",
     "subtitleSummary": "Sessione completata. Ecco il tuo report finale.",
     "jdLabel": "Annuncio di lavoro (consigliato)",
     "jdPlaceholder": "Incolla qui la job description completa. Più dettagli = domande più specifiche.",
@@ -268,7 +268,7 @@
     "rolePlaceholder": "es. Senior Product Designer",
     "companyLabel": "Azienda (opzionale)",
     "companyPlaceholder": "es. Satispay",
-    "setupHint": "L'annuncio è opzionale — senza, facciamo un colloquio generico mid-level. Niente del tuo CV serve qui.",
+    "setupHint": "L'annuncio è opzionale, senza, facciamo un colloquio generico mid-level. Niente del tuo CV serve qui.",
     "startCta": "Inizia il mock interview",
     "starting": "Avvio...",
     "answerPlaceholder": "Scrivi la tua risposta. Usa STAR (Situation, Task, Action, Result) per le behavioral.",
@@ -292,7 +292,7 @@
     "cta": "Analizza il mio CV ora",
     "ctaSecondary": "Vedi piani LavorAI",
     "caption": "Niente registrazione · 3 audit gratuiti · GDPR-first",
-    "bullet1": "ATS readability score su 100 — sai dove perdi punti",
+    "bullet1": "ATS readability score su 100, sai dove perdi punti",
     "bullet2": "CV riscritto in italiano (o inglese) tailored al ruolo",
     "bullet3": "Cover letter scritta da Claude per quell'annuncio specifico",
     "bullet4": "3-5 suggerimenti concreti, non vaghi consigli generici",
@@ -309,7 +309,7 @@
     "eyebrow": "Storie reali · dati anonimizzati",
     "title1": "Da \"non rispondono\"",
     "title2": "a colloqui ricevuti.",
-    "subtitle": "Due narrative end-to-end, prima e dopo. Stesso CV, stesse skill — diverso volume e match.",
+    "subtitle": "Due narrative end-to-end, prima e dopo. Stesso CV, stesse skill, diverso volume e match.",
     "anonymousNote": "Initials e ruoli anonimizzati con consenso. Metriche verificate dal pannello LavorAI."
   },
   "platformCards": {
@@ -317,9 +317,9 @@
     "applyEyebrow": "Su questi form ATS candida realmente",
     "linkedin": "Discovery via Apify scraper. Submit redirected al form ATS sottostante.",
     "indeed": "Discovery via Apify scraper. Mai chiediamo password Indeed.",
-    "infojobs": "Discovery limitato — InfoJobs richiede account utente, lavoriamo solo su listing pubblici.",
+    "infojobs": "Discovery limitato. InfoJobs richiede account utente, lavoriamo solo su listing pubblici.",
     "subito": "Discovery sui job listing pubblici. Submit manuale (no form ATS standard).",
-    "greenhouse": "Submit automatico via /embed/job_app — bypassa career page custom.",
+    "greenhouse": "Submit automatico via /embed/job_app, bypassa career page custom.",
     "lever": "Submit automatico via /apply form pubblico.",
     "ashby": "Submit automatico via /application endpoint pubblico.",
     "smartrecruiters": "Submit automatico via /apply. Detect reCAPTCHA per skip safe.",
@@ -328,7 +328,7 @@
   "leadMagnet": {
     "eyebrow": "Test gratuito",
     "title": "Vuoi vedere prima come funziona?",
-    "subtitle": "Carica il tuo CV e un annuncio. Ti riscriviamo CV e cover letter in 60 secondi — gratis, niente carta.",
+    "subtitle": "Carica il tuo CV e un annuncio. Ti riscriviamo CV e cover letter in 60 secondi, gratis, niente carta.",
     "cta": "Prova ora · 3 audit gratuiti",
     "bulletsTitle": "Cosa ricevi",
     "bullet1": "ATS readability score (su 100)",
@@ -364,42 +364,42 @@
   "referral": {
     "eyebrow": "Presto disponibile",
     "title": "Invita un amico, 2 settimane gratis per entrambi",
-    "body": "Quando un tuo amico si registra dal tuo link e attiva un piano Pro, ricevete entrambi 2 settimane di credito. Programma referral in beta — vai in lista d'attesa.",
+    "body": "Quando un tuo amico si registra dal tuo link e attiva un piano Pro, ricevete entrambi 2 settimane di credito. Programma referral in beta, vai in lista d'attesa.",
     "cta": "Iscriviti alla beta referral"
   },
   "howItWorks": {
     "eyebrow": "Setup una volta · gira da solo per sempre",
     "title1": "Tre minuti di setup. Poi",
-    "title2": "LavorAI lavora per te — per sempre.",
+    "title2": "LavorAI lavora per te, per sempre.",
     "step1Title": "Carica il CV",
-    "step1Text": "Carica il tuo CV in PDF o DOCX. LavorAI legge tutto — esperienze, skills, tono — e costruisce il tuo profilo AI.",
+    "step1Text": "Carica il tuo CV in PDF o DOCX. LavorAI legge tutto, esperienze, skills, tono, e costruisce il tuo profilo AI.",
     "step2Title": "Scegli il ruolo",
     "step2Text": "Scrivi il ruolo che cerchi e la città. Puoi aggiungere filtri: solo remote, solo startup, solo big tech.",
     "step3Title": "Da qui non tocchi più nulla",
     "step3Text": "Da qui LavorAI gira da solo. Ogni 30 minuti cerca nuovi annunci, riscrive il CV su misura, compila il form ATS e invia. Tu ricevi solo gli inviti ai colloqui.",
-    "cta": "Inizia gratis — 3 candidature subito"
+    "cta": "Inizia gratis. 3 candidature subito"
   },
   "invisibleWork": {
     "_locale": "it",
     "eyebrow": "Il lavoro invisibile",
     "title": "Le ore che non racconti a nessuno.",
     "intro": "Quelle dietro ogni candidatura. Quelle che non finiscono nel curriculum. Quelle che, alla fine del mese, ti chiedi dove siano andate.",
-    "conclusion": "LavorAI fa <accent>tutto questo al posto tuo</accent>. Tu torni a fare il lavoro che racconti — non quello che nessuno vede."
+    "conclusion": "LavorAI fa <accent>tutto questo al posto tuo</accent>. Tu torni a fare il lavoro che racconti, non quello che nessuno vede."
   },
   "manifesto": {
     "eyebrow": "Perché esistiamo",
     "opening": "Ho cercato lavoro per otto mesi.",
-    "p1": "Ho mandato 312 candidature. Ho ricevuto 6 colloqui. La maggior parte delle email sono rimaste senza risposta — non perché il mio CV fosse brutto, ma perché era sempre lo stesso.",
+    "p1": "Ho mandato 312 candidature. Ho ricevuto 6 colloqui. La maggior parte delle email sono rimaste senza risposta, non perché il mio CV fosse brutto, ma perché era sempre lo stesso.",
     "p2": "Riscrivere quel CV per ogni annuncio sarebbe stato il lavoro giusto. Ma dopo dieci ore di copincolla la sera, dopo aver fissato il quinto «descrivi una situazione in cui hai mostrato leadership», <emph>smetti di farlo bene</emph>. Smetti, e basta.",
     "p3": "LavorAI è nato la sera in cui ho realizzato che stavo passando più tempo a candidarmi che a prepararmi ai colloqui. Doveva essere il contrario. Sempre dovuto essere il contrario.",
-    "p4": "Non è un'AI miracolosa. È un copilota silenzioso che fa il pezzo ripetitivo — quello che ti sfinisce — e ti lascia il pezzo umano: i colloqui, le scelte, le persone.",
+    "p4": "Non è un'AI miracolosa, È un copilota silenzioso che fa il pezzo ripetitivo, quello che ti sfinisce, e ti lascia il pezzo umano: i colloqui, le scelte, le persone.",
     "signatureName": "Umberto",
     "signatureRole": "fondatore · scrivimi a hello@lavorai.it"
   },
   "ctaFinal": {
     "title1": "Stasera non riaprire LinkedIn.",
     "title2": "Apri LavorAI.",
-    "subtitle": "Trenta secondi per il setup. Da lì in poi, il lavoro ripetitivo è nostro. Il primo invito a colloquio arriva in media entro 8 giorni — non in 8 mesi.",
+    "subtitle": "Trenta secondi per il setup. Da lì in poi, il lavoro ripetitivo è nostro. Il primo invito a colloquio arriva in media entro 8 giorni, non in 8 mesi.",
     "caption": "Pausa o annulla quando vuoi · Server UE · Niente login ai tuoi account",
     "cta": "Provalo stasera",
     "trust1": "Consenso esplicito per ogni invio",
@@ -475,7 +475,7 @@
     "creating": "Un secondo...",
     "verifyEmailTitle": "Ora controlla la posta.",
     "verifyEmailBody1": "Abbiamo inviato un link a",
-    "verifyEmailBody2": "Cliccalo entro 24 ore. Se non lo trovi, guarda nello spam — i filtri italiani sono diffidenti.",
+    "verifyEmailBody2": "Cliccalo entro 24 ore. Se non lo trovi, guarda nello spam, i filtri italiani sono diffidenti.",
     "backToLogin": "← Torna al login",
     "choosePlan": "Scegli il piano",
     "termsLink": "Creando l'account accetti i nostri"

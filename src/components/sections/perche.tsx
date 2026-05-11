@@ -18,7 +18,7 @@ const vantaggi = [
   },
   {
     title: "Lettera motivazionale in italiano nativo",
-    detail: "Adattata ad ogni annuncio — non tradotta dall'inglese.",
+    detail: "Adattata ad ogni annuncio · non tradotta dall'inglese.",
   },
   {
     title: "Nessun credito nascosto",
