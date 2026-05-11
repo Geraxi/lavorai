@@ -483,7 +483,7 @@ function SignupContent() {
           min-height: 100vh;
           display: grid;
           grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
-          background: var(--bg);
+          background: transparent;
           color: var(--fg);
         }
         .lavorai-login-left {
@@ -493,11 +493,14 @@ function SignupContent() {
         }
         .lavorai-login-right {
           position: relative;
-          background: var(--bg-sunken);
+          background:
+            linear-gradient(135deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.10)),
+            rgba(255,255,255,0.30);
+          backdrop-filter: blur(40px) saturate(180%);
           display: flex;
           align-items: center;
           padding: 64px;
-          border-left: 1px solid var(--border-ds);
+          border-left: 1px solid rgba(255,255,255,0.40);
         }
         .lavorai-login-showcase { max-width: 520px; }
         @media (max-width: 860px) {

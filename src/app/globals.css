@@ -17,7 +17,7 @@
        calore e identità brand. Green primary più saturo per matchare
        aiapply / Linear / Vercel aesthetic. */
     --bg: #E0EFE5;             /* verde chiaro: il colore della pagina */
-    --bg-elev: #FFFFFF;        /* surface bianca su bg verde (max contrasto) */
+    --bg-elev: #F2F8F4;        /* surface verde-bianca tintata (era pure white) */
     --bg-sunken: #CCDFD3;      /* verde più scuro per sezioni "incassate" */
     --fg: #0A1410;             /* near-black con micro-tint verde */
     --fg-muted: #4A5552;

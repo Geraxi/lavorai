@@ -339,7 +339,7 @@ function LoginContent() {
           min-height: 100vh;
           display: grid;
           grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
-          background: var(--bg);
+          background: transparent;
           color: var(--fg);
         }
         .lavorai-login-left {
@@ -350,7 +350,10 @@ function LoginContent() {
         .lavorai-login-right {
           position: relative;
           overflow: hidden;
-          background: var(--bg-sunken);
+          background:
+            linear-gradient(135deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.10)),
+            rgba(255,255,255,0.30);
+          backdrop-filter: blur(40px) saturate(180%);
           padding: 56px;
           display: flex;
           flex-direction: column;
