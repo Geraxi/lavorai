@@ -10,6 +10,8 @@ import { SectionProblema } from "@/components/sections/problema";
 import { SectionStats } from "@/components/sections/stats";
 import { SectionTestimonialsV2 } from "@/components/sections/testimonials-v2";
 import { SectionCaseStudies } from "@/components/sections/case-studies";
+import { SectionInvisibleWork } from "@/components/sections/invisible-work";
+import { SectionManifesto } from "@/components/sections/manifesto";
 import { SectionPricing } from "@/components/sections/pricing";
 import {
   SectionPersonas,
@@ -45,10 +47,14 @@ export default function Home() {
       <SiteNav />
       <main className="flex-1">
         <Hero />
+        {/* RHYTHM BREAK 1: editorial — "il lavoro invisibile" */}
+        <SectionInvisibleWork />
         <SectionPlatformCards />
         <SectionComeFunziona />
         <SectionLeadMagnet />
         <SectionAutomationBoundaries />
+        {/* RHYTHM BREAK 2: manifesto / founder note in serif type */}
+        <SectionManifesto />
         <SectionPersonas />
         <SectionProblema />
         <SectionStats />
