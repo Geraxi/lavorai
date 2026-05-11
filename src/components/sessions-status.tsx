@@ -36,11 +36,17 @@ export function SessionsStatus() {
     { refreshInterval: 30_000 },
   );
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Collapsed di default se ci sono > 3 round (riduce noise in dashboard
+  // per utenti con tante sessioni). User toggles via chevron nell'header.
+  const [collapsed, setCollapsed] = useState<boolean | null>(null);
 
   const sessions = data?.sessions ?? [];
   const active = sessions.filter(
     (s) => s.status === "active" || s.status === "paused",
   );
+  // Auto-collapse default: collassato se > 3 round per non affollare la
+  // dashboard. Quando l'utente clicca il chevron, sovrascriviamo lo stato.
+  const isCollapsed = collapsed ?? active.length > 3;
   const justCompleted = sessions.filter(
     (s) => s.status === "completed" && !s.completedAcknowledgedAt,
   );
@@ -167,9 +173,36 @@ export function SessionsStatus() {
         style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14 }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>
+          <button
+            type="button"
+            onClick={() => setCollapsed(!isCollapsed)}
+            disabled={active.length === 0}
+            aria-expanded={!isCollapsed}
+            aria-controls="rounds-list"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              fontSize: 14,
+              fontWeight: 600,
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              cursor: active.length > 0 ? "pointer" : "default",
+              color: "inherit",
+            }}
+          >
+            <Icon
+              name="chevron-right"
+              size={14}
+              style={{
+                transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
+                transition: "transform 0.15s ease",
+                opacity: active.length === 0 ? 0.3 : 0.7,
+              }}
+            />
             Round attivi ({active.length}/3)
-          </div>
+          </button>
           {active.length >= 3 ? (
             <button
               type="button"
@@ -201,7 +234,27 @@ export function SessionsStatus() {
           </div>
         )}
 
-        {active.map((s) => {
+        {isCollapsed && active.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(false)}
+            style={{
+              fontSize: 12.5,
+              color: "var(--fg-muted)",
+              background: "transparent",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            {active.reduce((sum, s) => sum + s.sentCount, 0)} candidature
+            su {active.reduce((sum, s) => sum + s.targetCount, 0)} totali
+            · clicca per vedere tutti
+          </button>
+        )}
+
+        {!isCollapsed && active.map((s) => {
           const pct = Math.min(
             100,
             Math.round((s.sentCount / Math.max(1, s.targetCount)) * 100),
