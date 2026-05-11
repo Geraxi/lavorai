@@ -166,7 +166,25 @@
     "autoApply": "Auto-apply",
     "appsToday": "{count} applications today",
     "remaining": "{count} remaining",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "discover": "Discover"
+  },
+  "discoverPage": {
+    "title": "Discover",
+    "breadcrumb": "Work",
+    "heading": "Swipe through opportunities",
+    "subtitle": "{count} jobs filtered for you. Swipe right to apply, left to skip.",
+    "apply": "Apply",
+    "skip": "Skip",
+    "hintKeyboard": "← skip · → apply · or drag the card",
+    "queueRemaining": "{count} still in queue",
+    "emptyTitle": "End of the queue!",
+    "emptyBody": "You've reviewed all available opportunities for today. The sync-jobs cron fetches new postings every 2 hours — come back later.",
+    "resetSkipped": "Reset skips",
+    "uploadCvFirst": "Upload your CV first.",
+    "retryError": "Error. Please retry.",
+    "networkError": "Network error.",
+    "applied": "Application sent for {title}"
   },
   "pricing": {
     "eyebrow": "Pricing",

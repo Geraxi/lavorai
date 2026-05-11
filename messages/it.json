@@ -166,7 +166,25 @@
     "autoApply": "Auto-apply",
     "appsToday": "{count} candidature oggi",
     "remaining": "{count} rimaste",
-    "logout": "Esci"
+    "logout": "Esci",
+    "discover": "Discover"
+  },
+  "discoverPage": {
+    "title": "Discover",
+    "breadcrumb": "Lavoro",
+    "heading": "Scorri le opportunità",
+    "subtitle": "{count} offerte filtrate per te. Swipe a destra per candidarti, a sinistra per saltare.",
+    "apply": "Candidati",
+    "skip": "Salta",
+    "hintKeyboard": "← skip · → candidati · oppure trascina la card",
+    "queueRemaining": "{count} ancora in coda",
+    "emptyTitle": "Fine della coda!",
+    "emptyBody": "Hai esaminato tutte le offerte disponibili oggi. Il cron sync-jobs pesca nuovi annunci ogni 2 ore — torna più tardi.",
+    "resetSkipped": "Resetta gli skip",
+    "uploadCvFirst": "Carica prima il tuo CV.",
+    "retryError": "Errore. Riprova.",
+    "networkError": "Errore di rete.",
+    "applied": "Candidatura inviata per {title}"
   },
   "pricing": {
     "eyebrow": "Prezzi",

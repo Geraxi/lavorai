@@ -37,6 +37,7 @@ export function AppSidebar({
 
   const workItems: NavItem[] = [
     { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
+    { href: "/discover", label: t("discover"), icon: "sparkles" },
     { href: "/applications", label: t("applications"), icon: "briefcase", count: null },
     { href: "/jobs", label: t("jobs"), icon: "inbox" },
     { href: "/analytics", label: t("analytics"), icon: "chart" },
