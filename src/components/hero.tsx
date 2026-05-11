@@ -15,30 +15,28 @@ export function Hero() {
     <section
       className="relative overflow-hidden"
       style={{
-        // Hero background = full-bleed image + fallback colore scuro
-        // così se l'immagine non è ancora caricata si vede subito
-        // un campo scuro (no grey placeholder dei browser).
-        // minHeight: 720px su desktop per far rendere bene il copy +
-        // immagine. Mobile auto-flow.
+        // Hero background = pianeta intero visibile (no crop) sul lato
+        // destro, fondo scuro #0a1820 che si estende a sinistra dove
+        // sta il copy bianco. L'immagine è 1254×1254 (quadrata) →
+        // background-size: contain conserva le proporzioni, niente
+        // zoom aggressivo.
         backgroundColor: "#0a1820",
-        backgroundImage:
-          "url('/Lavoraiherosection.png')",
-        backgroundSize: "cover",
-        backgroundPosition: "center center",
+        backgroundImage: "url('/Lavoraiherosection.png')",
+        backgroundSize: "auto 110%",
+        backgroundPosition: "right -10% center",
         backgroundRepeat: "no-repeat",
         minHeight: 720,
       }}
     >
-      {/* Overlay scuro + gradient: rende il testo bianco leggibile
-          sopra lo sfondo stellato (top) e attenua il pianeta verde
-          (bottom-center). Più scuro a sinistra dove vive il copy,
-          più trasparente a destra dove si vede meglio il pianeta. */}
+      {/* Overlay morbido per fondere la zona scura dello space con
+          il pianeta a destra. Light wash sul border-zone così il
+          confine planet/space non sembra tagliato. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
-            "linear-gradient(90deg, rgba(0,5,20,0.78) 0%, rgba(0,5,20,0.55) 45%, rgba(0,5,20,0.25) 75%, rgba(0,5,20,0.10) 100%), linear-gradient(180deg, rgba(0,5,20,0.20) 0%, transparent 40%, rgba(0,5,20,0.30) 100%)",
+            "linear-gradient(90deg, rgba(10,24,32,0) 0%, rgba(10,24,32,0) 40%, rgba(10,24,32,0.30) 70%, rgba(10,24,32,0) 100%), linear-gradient(180deg, rgba(10,24,32,0.20) 0%, transparent 30%, rgba(10,24,32,0.30) 100%)",
         }}
       />
 
