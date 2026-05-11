@@ -25,6 +25,8 @@ export interface JobRow {
   remote: boolean;
   salaryMin: number | null;
   salaryMax: number | null;
+  /** Solo letto dal JobSwiper per la pill "Today / 3d ago / 2w ago". */
+  postedAt?: Date | null;
 }
 
 function portalOf(url: string): string {

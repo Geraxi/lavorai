@@ -503,30 +503,113 @@ function SwipeCard({
 }
 
 /**
- * Sintetizza la description in un riassunto leggibile (~180 char).
- * Cerca la prima frase completa entro 200 char; in fallback tronca con …
- * Applica `cleanHtmlText` come safety net per i job vecchi in cache che
- * potrebbero contenere HTML entities residui ("&lt;div...").
+ * Estrae il livello di seniority dal titolo per mostrarlo come pill.
+ * Match case-insensitive su keyword comuni (head/staff > principal > lead
+ * > senior > mid > junior).
  */
-function summarize(text: string, max = 180): string {
-  const clean = cleanHtmlText(text);
-  if (clean.length <= max) return clean;
-  // Tronca al primo punto/punto-esclamativo dopo metà max
-  const sliced = clean.slice(0, max + 60);
-  const sentenceEnd = sliced.search(/[.!?]\s/);
-  if (sentenceEnd > max / 2 && sentenceEnd <= max) {
-    return clean.slice(0, sentenceEnd + 1);
-  }
-  // Fallback: tronca all'ultimo spazio prima di max + …
-  const trimmed = clean.slice(0, max);
-  const lastSpace = trimmed.lastIndexOf(" ");
-  return (lastSpace > 0 ? trimmed.slice(0, lastSpace) : trimmed) + "…";
+function seniorityFromTitle(title: string): string | null {
+  const t = title.toLowerCase();
+  if (/\bhead of\b|\bhead\b/.test(t)) return "Head";
+  if (/\bstaff\b/.test(t)) return "Staff";
+  if (/\bprincipal\b/.test(t)) return "Principal";
+  if (/\blead\b/.test(t)) return "Lead";
+  if (/\bsenior\b|\bsr\.?\b/.test(t)) return "Senior";
+  if (/\bjunior\b|\bjr\.?\b|\bentry[\s-]?level\b/.test(t)) return "Junior";
+  if (/\bintern\b|\binternship\b/.test(t)) return "Intern";
+  if (/\bmid[\s-]?level\b/.test(t)) return "Mid";
+  return null;
 }
 
 /**
- * UI condivisa della card (sia attiva che peek). Contiene company logo,
- * titolo, location/contract/salary chips, descrizione concisa.
- * Tap sulla card → apre drawer dettagli (gestito dal parent).
+ * "3d ago" / "Today" / "Yesterday" — pill di freshness.
+ */
+function relativeDateLabel(d: Date | null | undefined): string | null {
+  if (!d) return null;
+  const days = Math.floor((Date.now() - d.getTime()) / 86400_000);
+  if (days < 1) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  return `${Math.floor(days / 30)}mo ago`;
+}
+
+/**
+ * Estrae 2-3 tech/skill keywords dalla description per mostrarli come
+ * pill colorate. Whitelist ampia di skill tech comuni; ordina per
+ * frequenza, cap a 3 pill per non affollare.
+ */
+const SKILL_VOCAB = [
+  "React",
+  "TypeScript",
+  "JavaScript",
+  "Node",
+  "Python",
+  "Go",
+  "Rust",
+  "Java",
+  "Kotlin",
+  "Swift",
+  "Ruby",
+  "PHP",
+  "AWS",
+  "GCP",
+  "Azure",
+  "Kubernetes",
+  "Docker",
+  "Terraform",
+  "PostgreSQL",
+  "MongoDB",
+  "Redis",
+  "GraphQL",
+  "REST",
+  "Next.js",
+  "Vue",
+  "Angular",
+  "Figma",
+  "Sketch",
+  "Tailwind",
+  "AI",
+  "ML",
+  "LLM",
+  "SaaS",
+  "B2B",
+  "Fintech",
+  "DevOps",
+  "Frontend",
+  "Backend",
+  "Full-stack",
+  "Mobile",
+  "iOS",
+  "Android",
+  "UX",
+  "UI",
+];
+
+function extractSkills(description: string): string[] {
+  const clean = cleanHtmlText(description);
+  const found = new Map<string, number>();
+  for (const skill of SKILL_VOCAB) {
+    const re = new RegExp(`\\b${skill.replace(".", "\\.")}\\b`, "gi");
+    const matches = clean.match(re);
+    if (matches && matches.length > 0) found.set(skill, matches.length);
+  }
+  return Array.from(found.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([k]) => k);
+}
+
+/**
+ * UI Tinder-style: minimal text, pill-heavy. Solo info strutturate,
+ * niente paragrafi narrativi. Per la description completa l'utente
+ * tocca la card → drawer.
+ *
+ * Anatomy:
+ *   - Top: accent strip gradient (8px) per personalità visiva
+ *   - Header: company logo grande + title (max 2 righe) + company
+ *   - Pills cluster: remote, seniority, location, contract, salary, posted-date
+ *   - Skills cluster: 2-3 tech keyword estratte automaticamente
+ *   - Footer: "Tap for details" hint
  */
 function JobCardSurface({
   job,
@@ -538,16 +621,18 @@ function JobCardSurface({
   children?: React.ReactNode;
 }) {
   const color = companyColor(job.company ?? job.title);
-  const summary = useMemo(
-    () => summarize(job.description, compact ? 100 : 200),
+  const seniority = useMemo(() => seniorityFromTitle(job.title), [job.title]);
+  const skills = useMemo(
+    () => (compact ? [] : extractSkills(job.description)),
     [job.description, compact],
   );
+  const postedLabel = relativeDateLabel(job.postedAt ?? null);
+
   return (
     <div
       style={{
         position: "relative",
         height: "100%",
-        padding: 28,
         borderRadius: 18,
         border: "1px solid var(--border-ds)",
         background: "var(--bg-elev)",
@@ -559,119 +644,239 @@ function JobCardSurface({
         userSelect: compact ? "none" : "auto",
       }}
     >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+      {/* Accent strip in alto — gradient basato sul colore company */}
+      <div
+        aria-hidden
+        style={{
+          height: 6,
+          background: `linear-gradient(90deg, ${color}, ${color}88 60%, transparent)`,
+          flexShrink: 0,
+        }}
+      />
+
+      {/* Header: logo + title + company */}
+      <div
+        style={{
+          padding: "28px 28px 18px",
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 16,
+        }}
+      >
         <CompanyLogo
           company={job.company ?? job.title}
           color={color}
-          size={56}
+          size={64}
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontSize: 19,
+              fontSize: 20,
               fontWeight: 700,
-              letterSpacing: "-0.015em",
-              lineHeight: 1.25,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.2,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
             }}
           >
             {job.title}
           </div>
           <div
             style={{
-              fontSize: 14,
+              fontSize: 14.5,
               color: "var(--fg-muted)",
-              marginTop: 3,
+              marginTop: 5,
+              fontWeight: 500,
             }}
           >
             {job.company ?? "—"}
           </div>
         </div>
-        {job.remote && (
-          <span className="ds-chip ds-chip-green" style={{ flexShrink: 0 }}>
-            Remote
-          </span>
-        )}
       </div>
 
+      {/* Spacer flessibile per centrare verticalmente i pill */}
+      <div style={{ flex: 1, minHeight: 8 }} />
+
+      {/* PILLS: info strutturate, tutte pill-shaped */}
       <div
         style={{
+          padding: "0 28px",
           display: "flex",
           flexWrap: "wrap",
           gap: 8,
-          marginTop: 16,
         }}
       >
+        {job.remote && (
+          <Pill tone="primary" icon="zap" label="Remote" />
+        )}
+        {seniority && <Pill tone="accent" label={seniority} />}
         {job.location && (
-          <span
-            className="ds-chip"
-            style={{ display: "inline-flex", gap: 5, alignItems: "center" }}
-          >
-            <Icon name="map-pin" size={11} /> {job.location}
-          </span>
+          <Pill icon="map-pin" label={shortLocation(job.location)} />
         )}
         {job.contractType && (
-          <span
-            className="ds-chip"
-            style={{ display: "inline-flex", gap: 5, alignItems: "center" }}
-          >
-            <Icon name="clock" size={11} />
-            {job.contractType === "permanent"
-              ? "Permanent"
-              : job.contractType}
-          </span>
+          <Pill
+            icon="clock"
+            label={
+              job.contractType === "permanent" ? "Permanent" : job.contractType
+            }
+          />
         )}
         {(job.salaryMin || job.salaryMax) && (
-          <span
-            className="ds-chip mono"
-            style={{
-              display: "inline-flex",
-              gap: 5,
-              alignItems: "center",
-              color: "var(--fg)",
-            }}
-          >
-            <Icon name="euro" size={11} />
-            {job.salaryMin ? `€${Math.round(job.salaryMin / 1000)}k` : ""}
-            {job.salaryMin && job.salaryMax ? "–" : ""}
-            {job.salaryMax ? `€${Math.round(job.salaryMax / 1000)}k` : ""}
-          </span>
+          <Pill
+            icon="euro"
+            tone="strong"
+            label={formatSalary(job.salaryMin, job.salaryMax)}
+          />
         )}
+        {postedLabel && <Pill label={postedLabel} subtle />}
       </div>
 
-      <p
-        style={{
-          marginTop: 18,
-          fontSize: 14,
-          lineHeight: 1.6,
-          color: "var(--fg-muted)",
-          flex: 1,
-          marginBottom: 0,
-        }}
-      >
-        {summary}
-      </p>
+      {/* SKILLS: solo sulla card primaria, non sui peek */}
+      {!compact && skills.length > 0 && (
+        <div
+          style={{
+            padding: "14px 28px 0",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+          }}
+        >
+          {skills.map((s) => (
+            <span
+              key={s}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "4px 10px",
+                borderRadius: 999,
+                background: "hsl(var(--primary) / 0.1)",
+                color: "hsl(var(--primary))",
+                border: "1px solid hsl(var(--primary) / 0.25)",
+              }}
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
 
+      {/* Footer hint */}
       {!compact && (
         <div
           style={{
-            marginTop: 14,
+            padding: "18px 28px 24px",
             fontSize: 11.5,
             color: "var(--fg-subtle)",
             display: "inline-flex",
             alignItems: "center",
-            gap: 4,
+            gap: 6,
             alignSelf: "flex-start",
             opacity: 0.85,
           }}
         >
           <Icon name="arrow-up-right" size={11} />
-          Tocca la card per leggere tutti i dettagli
+          Tocca la card per leggere la descrizione completa
         </div>
       )}
 
       {children}
     </div>
   );
+}
+
+/**
+ * Pill atomica riusabile. Variante tonale:
+ *   default → neutro
+ *   primary → primary verde (badge importante, es. Remote)
+ *   accent  → bordo accentuato (seniority)
+ *   strong  → testo bold + colore primary (salary range)
+ *   subtle  → opacity ridotta (posted date)
+ */
+function Pill({
+  icon,
+  label,
+  tone = "default",
+  subtle,
+}: {
+  icon?: "zap" | "map-pin" | "clock" | "euro";
+  label: string;
+  tone?: "default" | "primary" | "accent" | "strong";
+  subtle?: boolean;
+}) {
+  const baseStyle = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 5,
+    padding: "5px 11px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 500,
+    lineHeight: 1.4,
+    opacity: subtle ? 0.7 : 1,
+    whiteSpace: "nowrap" as const,
+  };
+  let style: React.CSSProperties = {
+    ...baseStyle,
+    background: "var(--bg-sunken)",
+    color: "var(--fg-muted)",
+    border: "1px solid var(--border-ds)",
+  };
+  if (tone === "primary") {
+    style = {
+      ...baseStyle,
+      background: "hsl(var(--primary) / 0.12)",
+      color: "hsl(var(--primary))",
+      border: "1px solid hsl(var(--primary) / 0.3)",
+      fontWeight: 600,
+    };
+  } else if (tone === "accent") {
+    style = {
+      ...baseStyle,
+      background: "var(--bg)",
+      color: "var(--fg)",
+      border: "1px solid var(--fg-muted)",
+      fontWeight: 600,
+    };
+  } else if (tone === "strong") {
+    style = {
+      ...baseStyle,
+      background: "var(--bg-sunken)",
+      color: "var(--fg)",
+      border: "1px solid var(--border-ds)",
+      fontWeight: 600,
+    };
+  }
+  return (
+    <span style={style}>
+      {icon && <Icon name={icon} size={11} />}
+      {label}
+    </span>
+  );
+}
+
+/** Tronca "Germany (Remote) ; Ireland (Remote) ; …" a "Germany +5" */
+function shortLocation(loc: string): string {
+  // Split su `;` o `·` o `,` solo se ce ne sono multipli
+  const parts = loc
+    .split(/[;·]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (parts.length <= 1) {
+    return loc.length > 32 ? loc.slice(0, 32) + "…" : loc;
+  }
+  const first = parts[0].replace(/\s*\(.*?\)\s*/, "").trim();
+  return `${first} +${parts.length - 1}`;
+}
+
+function formatSalary(min: number | null, max: number | null): string {
+  const a = min ? Math.round(min / 1000) : null;
+  const b = max ? Math.round(max / 1000) : null;
+  if (a && b) return `€${a}k–${b}k`;
+  if (a) return `€${a}k+`;
+  if (b) return `€${b}k`;
+  return "";
 }
 
 /**

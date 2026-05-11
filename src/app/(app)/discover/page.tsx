@@ -120,6 +120,7 @@ export default async function DiscoverPage() {
       remote: j.remote,
       salaryMin: j.salaryMin,
       salaryMax: j.salaryMax,
+      postedAt: j.postedAt,
     }));
 
   return (
