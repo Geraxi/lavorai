@@ -143,6 +143,26 @@ export default async function DashboardPage() {
   const isLive = autoMode === "auto" || autoMode === "hybrid";
   const dailyCap = prefs?.dailyCap ?? 25;
 
+  // Ultima attività auto-apply: timestamp dell'ultima candidatura creata.
+  // Usata per mostrare "Ultima esecuzione: 2 ore fa" sotto l'header così
+  // l'utente vede a colpo d'occhio che il sistema sta lavorando.
+  const lastApp = await prisma.application.findFirst({
+    where: { userId: user.id },
+    select: { createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+  // Prossima run: prossima delle 3 ore tattiche (08/12/16 UTC).
+  const nextRun = (() => {
+    const nowUtc = new Date();
+    const hour = nowUtc.getUTCHours();
+    const tactical = [8, 12, 16];
+    const next = tactical.find((h) => h > hour) ?? tactical[0];
+    const nextDate = new Date(nowUtc);
+    if (next <= hour) nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    nextDate.setUTCHours(next, 0, 0, 0);
+    return nextDate;
+  })();
+
   const allChecklistDone =
     onboarding.hasUploadedCv &&
     onboarding.hasSetPreferences &&
@@ -269,6 +289,19 @@ export default async function DashboardPage() {
                 />
                 {isLive ? t("autoApplyActive") : t("autoApplyPaused")}
               </div>
+
+              {/* Activity timeline: ultima esecuzione + prossima run tattica.
+                  Mostra all'utente che il sistema sta lavorando con ritmo
+                  prevedibile (3 batch/giorno alle 08/12/16 UTC). */}
+              {isLive && (
+                <ActivityIndicator
+                  lastRunAt={lastApp?.createdAt ?? null}
+                  nextRunAt={nextRun}
+                  lastLabel={t("activityLastRun")}
+                  nextLabel={t("activityNextRun")}
+                  neverLabel={t("activityNever")}
+                />
+              )}
 
               <div
                 style={{
@@ -635,6 +668,78 @@ function DailyCapBar({
       </div>
     </div>
   );
+}
+
+/**
+ * Activity indicator: "Ultima run: 2 ore fa · Prossima: oggi 16:00".
+ * Dà all'utente un ritmo prevedibile dell'auto-apply (3 batch/giorno).
+ */
+function ActivityIndicator({
+  lastRunAt,
+  nextRunAt,
+  lastLabel,
+  nextLabel,
+  neverLabel,
+}: {
+  lastRunAt: Date | null;
+  nextRunAt: Date;
+  lastLabel: string;
+  nextLabel: string;
+  neverLabel: string;
+}) {
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        fontSize: 11.5,
+        color: "var(--fg-muted)",
+        display: "flex",
+        gap: 16,
+        flexWrap: "wrap",
+        alignItems: "center",
+      }}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+        <span
+          style={{
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            background: lastRunAt ? "hsl(var(--primary))" : "var(--fg-subtle)",
+            opacity: 0.7,
+          }}
+        />
+        {lastLabel}:{" "}
+        <strong style={{ color: "var(--fg)", fontWeight: 500 }}>
+          {lastRunAt ? formatRelativeTime(lastRunAt) : neverLabel}
+        </strong>
+      </span>
+      <span style={{ opacity: 0.4 }}>·</span>
+      <span>
+        {nextLabel}:{" "}
+        <strong style={{ color: "var(--fg)", fontWeight: 500 }}>
+          {formatNextRun(nextRunAt)}
+        </strong>
+      </span>
+    </div>
+  );
+}
+
+function formatRelativeTime(d: Date): string {
+  const diffMin = Math.round((Date.now() - d.getTime()) / 60_000);
+  if (diffMin < 1) return "ora";
+  if (diffMin < 60) return `${diffMin} min fa`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `${diffH}h fa`;
+  const diffD = Math.round(diffH / 24);
+  return diffD === 1 ? "ieri" : `${diffD}g fa`;
+}
+
+function formatNextRun(d: Date): string {
+  const isToday = d.toDateString() === new Date().toDateString();
+  const hh = d.getHours().toString().padStart(2, "0");
+  const mm = d.getMinutes().toString().padStart(2, "0");
+  return isToday ? `oggi ${hh}:${mm}` : `domani ${hh}:${mm}`;
 }
 
 /**

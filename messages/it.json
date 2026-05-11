@@ -79,7 +79,10 @@
     "statSending": "In invio",
     "statOpened": "Viste",
     "weeklyChartAriaLabel": "Candidature inviate negli ultimi 7 giorni",
-    "dailyCapLabel": "{sent} di {cap} candidature oggi"
+    "dailyCapLabel": "{sent} di {cap} candidature oggi",
+    "activityLastRun": "Ultima run",
+    "activityNextRun": "Prossima",
+    "activityNever": "mai"
   },
   "applicationsPage": {
     "title": "Candidature",

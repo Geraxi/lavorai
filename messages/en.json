@@ -79,7 +79,10 @@
     "statSending": "Sending",
     "statOpened": "Viewed",
     "weeklyChartAriaLabel": "Applications sent in the last 7 days",
-    "dailyCapLabel": "{sent} of {cap} applications today"
+    "dailyCapLabel": "{sent} of {cap} applications today",
+    "activityLastRun": "Last run",
+    "activityNextRun": "Next",
+    "activityNever": "never"
   },
   "applicationsPage": {
     "title": "Applications",

@@ -1,12 +1,20 @@
 name: auto-apply cron
 
 # Sostituisce il cron Vercel (non disponibile su piano Hobby).
-# Chiama /api/cron/auto-apply ogni 30 minuti usando CRON_SECRET.
-# Richiede: Settings → Secrets and variables → Actions → New secret → CRON_SECRET
+# Chiama /api/cron/auto-apply 3 volte al giorno in orari tattici scelti
+# per massimizzare la visibilità ai recruiter EU e per dare all'utente
+# un ritmo prevedibile di attività ("vedo che il sistema sta lavorando").
+#
+# Orari UTC → IT (CET inverno / CEST estate):
+#   08:00 UTC = 09:00 / 10:00  - Morning peak, recruiter inbox cleanup
+#   12:00 UTC = 13:00 / 14:00  - Pre-lunch check
+#   16:00 UTC = 17:00 / 18:00  - Last push before end-of-day
+#
+# Richiede: Settings → Secrets → Actions → CRON_SECRET
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 8,12,16 * * *"
   workflow_dispatch: {}
 
 jobs:
