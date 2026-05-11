@@ -20,66 +20,92 @@ export function SectionCtaFinal() {
       <div className="grid-bg pointer-events-none absolute inset-0 opacity-20 [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)]" />
 
       <div className="container relative">
-        <Reveal className="mx-auto max-w-3xl text-center">
-          <h2 className="text-balance text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl">
-            {t("title1")}{" "}
-            <span className="text-gradient-accent">{t("title2")}</span>
-          </h2>
-          <p className="mt-6 text-lg text-muted-foreground md:text-xl">
-            {t("subtitle")}
-          </p>
-          <p
+        <Reveal className="mx-auto max-w-4xl">
+          {/* Solid green block — il momento finale di branding alto */}
+          <div
+            className="ds-glass-green-solid"
             style={{
-              marginTop: 18,
-              fontSize: 13,
-              color: "var(--fg-subtle)",
+              padding: "60px 40px",
+              textAlign: "center",
+              color: "#FFFFFF",
             }}
           >
-            {t("caption")}
-          </p>
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            transition={{ duration: 0.25 }}
-            className="mt-10 inline-block"
-          >
-            <Button
-              asChild
-              size="lg"
-              className="group relative h-14 overflow-hidden px-8 text-base"
+            <h2
+              className="text-balance"
+              style={{
+                fontSize: "clamp(2rem, 4.5vw, 4rem)",
+                fontWeight: 700,
+                letterSpacing: "-0.035em",
+                lineHeight: 1.05,
+                margin: 0,
+                color: "#FFFFFF",
+              }}
             >
-              <Link href="/signup">
-                <span className="relative z-10">{t("cta")}</span>
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full"
-                />
-              </Link>
-            </Button>
-          </motion.div>
-
-          {/* Compact trust line direttamente sotto il CTA. Riduce
-              ansia all'ultimo momento: consenso esplicito, cancella in
-              1 click, dati EU. Stesso wording di /privacy ma compatto. */}
-          <div
-            className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2"
-            style={{ fontSize: 12.5, color: "var(--fg-muted)" }}
-          >
-            {[
-              { icon: "✓", text: t("trust1") },
-              { icon: "✓", text: t("trust2") },
-              { icon: "✓", text: t("trust3") },
-              { icon: "✓", text: t("trust4") },
-            ].map((c, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center gap-1.5"
+              {t("title1")}{" "}
+              <span style={{ opacity: 0.85 }}>{t("title2")}</span>
+            </h2>
+            <p
+              style={{
+                marginTop: 22,
+                fontSize: "clamp(1rem, 1.3vw, 1.25rem)",
+                lineHeight: 1.5,
+                color: "rgba(255,255,255,0.85)",
+                maxWidth: 640,
+                marginLeft: "auto",
+                marginRight: "auto",
+              }}
+            >
+              {t("subtitle")}
+            </p>
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              transition={{ duration: 0.25 }}
+              className="mt-9 inline-block"
+            >
+              <Button
+                asChild
+                size="lg"
+                className="group relative h-14 overflow-hidden px-8 text-base"
+                style={{
+                  background: "#FFFFFF",
+                  color: "hsl(var(--primary))",
+                  fontWeight: 600,
+                  border: "1px solid rgba(255,255,255,0.6)",
+                  boxShadow:
+                    "inset 0 1px 0 rgba(255,255,255,1), 0 8px 24px -6px rgba(15,40,30,0.30)",
+                }}
               >
-                <span style={{ color: "hsl(var(--primary))", fontWeight: 600 }}>
-                  {c.icon}
+                <Link href="/signup">
+                  <span className="relative z-10">{t("cta")}</span>
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/40 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+                  />
+                </Link>
+              </Button>
+            </motion.div>
+
+            {/* Trust line dentro al blocco verde, colori white-on-green */}
+            <div
+              className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2"
+              style={{ fontSize: 12.5, color: "rgba(255,255,255,0.85)" }}
+            >
+              {[
+                { text: t("trust1") },
+                { text: t("trust2") },
+                { text: t("trust3") },
+                { text: t("trust4") },
+              ].map((c, i) => (
+                <span key={i} className="inline-flex items-center gap-1.5">
+                  <span
+                    style={{ color: "#FFFFFF", fontWeight: 700, fontSize: 13 }}
+                  >
+                    ✓
+                  </span>
+                  {c.text}
                 </span>
-                {c.text}
-              </span>
-            ))}
+              ))}
+            </div>
           </div>
         </Reveal>
       </div>

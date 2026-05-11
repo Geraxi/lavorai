@@ -25,19 +25,15 @@ export function SectionLeadMagnet() {
       <div className="container">
         <Reveal>
           <div
+            className="ds-glass-green md:grid-cols-[1.4fr_1fr]"
             style={{
               maxWidth: 980,
               margin: "0 auto",
-              padding: "36px 32px",
-              borderRadius: 16,
-              border: "1px solid hsl(var(--primary) / 0.3)",
-              background:
-                "linear-gradient(135deg, hsl(var(--primary) / 0.08), transparent 70%), var(--bg-elev)",
+              padding: "40px 36px",
               display: "grid",
               gridTemplateColumns: "1fr",
               gap: 28,
             }}
-            className="md:grid-cols-[1.4fr_1fr]"
           >
             <div>
               <p

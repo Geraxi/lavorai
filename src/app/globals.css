@@ -210,29 +210,37 @@
       inset 0 1px 2px rgba(15,40,30,0.08),
       0 1px 2px rgba(15,40,30,0.05);
   }
-  /* PRIMARY: solid dark fill (high contrast su white bg + green wash) */
+  /* PRIMARY: solid GREEN fill — il brand color sta in primo piano sul
+     campo bianco-glass. Inner highlight + drop shadow verde-tinted per
+     coerenza con il green field del body. */
   .ds-btn-primary {
     background:
-      linear-gradient(180deg, rgba(255,255,255,0.20), rgba(255,255,255,0)),
-      var(--fg);
-    color: var(--bg-elev);
-    border-color: rgba(15,40,30,0.85);
+      linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0)),
+      hsl(var(--primary));
+    color: #FFFFFF;
+    border-color: hsl(var(--primary));
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.30),
-      inset 0 -1px 0 rgba(255,255,255,0.06),
-      0 1px 2px rgba(15,40,30,0.15),
-      0 8px 22px -6px rgba(15,40,30,0.30);
+      inset 0 1px 0 rgba(255,255,255,0.40),
+      inset 0 -1px 0 rgba(15,40,30,0.18),
+      0 1px 2px hsl(var(--primary) / 0.25),
+      0 8px 22px -6px hsl(var(--primary) / 0.45);
   }
   .ds-btn-primary:hover {
     background:
-      linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0.02)),
-      var(--fg);
+      linear-gradient(180deg, rgba(255,255,255,0.26), rgba(255,255,255,0.02)),
+      hsl(var(--primary));
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.40),
-      0 2px 4px rgba(15,40,30,0.20),
-      0 12px 28px -8px rgba(15,40,30,0.38);
+      inset 0 1px 0 rgba(255,255,255,0.50),
+      0 2px 6px hsl(var(--primary) / 0.30),
+      0 14px 32px -8px hsl(var(--primary) / 0.55);
+  }
+  .ds-btn-primary:active {
+    background: hsl(var(--primary));
+    box-shadow:
+      inset 0 1px 2px rgba(15,40,30,0.20),
+      0 1px 2px hsl(var(--primary) / 0.30);
   }
   .ds-btn-accent {
     background:
@@ -271,6 +279,36 @@
       inset 0 -1px 0 rgba(15,40,30,0.04),
       0 2px 8px rgba(15,40,30,0.06),
       0 16px 40px -12px rgba(15,40,30,0.14);
+    border-radius: 18px;
+  }
+  /* GREEN glass variant — tint primary più visibile, per hero blocks
+     ed elementi che vogliono brand presence. */
+  .ds-glass-green {
+    background:
+      linear-gradient(135deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.10)),
+      rgba(255,255,255,0.55);
+    border: 1px solid hsl(var(--primary) / 0.30);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.80),
+      inset 0 -1px 0 hsl(var(--primary) / 0.10),
+      0 2px 8px hsl(var(--primary) / 0.10),
+      0 16px 40px -12px hsl(var(--primary) / 0.22);
+    border-radius: 18px;
+  }
+  /* SOLID GREEN — full brand fill (per CTA finale, callouts forti) */
+  .ds-glass-green-solid {
+    background:
+      linear-gradient(135deg, hsl(var(--primary) / 0.95), hsl(var(--primary)) 60%, hsl(var(--primary) / 0.85)),
+      hsl(var(--primary));
+    border: 1px solid hsl(var(--primary) / 0.6);
+    color: #FFFFFF;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.30),
+      inset 0 -1px 0 rgba(15,40,30,0.20),
+      0 2px 8px hsl(var(--primary) / 0.25),
+      0 24px 60px -16px hsl(var(--primary) / 0.40);
     border-radius: 18px;
   }
 

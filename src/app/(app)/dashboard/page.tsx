@@ -233,9 +233,9 @@ export default async function DashboardPage() {
           <SessionsStatus />
         </div>
 
-        {/* PROGRESS HERO — il cuore della dashboard, liquid glass */}
+        {/* PROGRESS HERO — il cuore della dashboard, green glass */}
         <div
-          className="ds-glass"
+          className="ds-glass-green"
           style={{
             position: "relative",
             padding: "28px 30px",
