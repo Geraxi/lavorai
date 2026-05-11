@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
@@ -21,23 +22,67 @@ export function Hero() {
         className="grid-bg pointer-events-none absolute inset-0 opacity-40 [mask-image:radial-gradient(ellipse_80%_60%_at_50%_0%,black,transparent)]"
       />
 
-      {/* Gradient verde animato — sfondo morbido che pulsa */}
+      {/* Atmospheric layer 1: gradient verde principale (richer, più
+          saturo dell'originale per dare presenza). */}
       <motion.div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
-            "radial-gradient(ellipse 70% 55% at 50% 40%, rgba(34,197,94,0.28) 0%, rgba(34,197,94,0.12) 35%, transparent 70%)",
+            "radial-gradient(ellipse 75% 60% at 40% 35%, rgba(34,197,94,0.42) 0%, rgba(34,197,94,0.18) 35%, transparent 70%)",
           mixBlendMode: "screen",
         }}
         animate={{
-          opacity: [0.7, 1, 0.85, 1, 0.7],
-          scale: [1, 1.04, 1.02, 1.05, 1],
+          opacity: [0.85, 1, 0.95, 1, 0.85],
+          scale: [1, 1.05, 1.02, 1.06, 1],
         }}
         transition={{
-          duration: 8,
+          duration: 9,
           ease: "easeInOut",
           repeat: Infinity,
+        }}
+      />
+
+      {/* Atmospheric layer 2: glow secondario blu-verde sul lato destro
+          per dare profondità. Aggiunge tridimensionalità senza essere
+          aggressivo. */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 45% 35% at 80% 65%, rgba(56,189,248,0.18) 0%, transparent 65%)",
+          mixBlendMode: "screen",
+        }}
+        animate={{
+          opacity: [0.4, 0.7, 0.5, 0.7, 0.4],
+        }}
+        transition={{
+          duration: 11,
+          ease: "easeInOut",
+          repeat: Infinity,
+          delay: 1.5,
+        }}
+      />
+
+      {/* Atmospheric layer 3: subtle warm glow in alto-sinistra per
+          spezzare la monotonia del verde. */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 35% 25% at 15% 20%, rgba(251,191,36,0.10) 0%, transparent 60%)",
+          mixBlendMode: "screen",
+        }}
+        animate={{
+          opacity: [0.3, 0.6, 0.4, 0.6, 0.3],
+        }}
+        transition={{
+          duration: 13,
+          ease: "easeInOut",
+          repeat: Infinity,
+          delay: 3,
         }}
       />
 
@@ -46,7 +91,7 @@ export function Hero() {
         style={{
           maxWidth: 1480,
           margin: "0 auto",
-          padding: "48px 40px 0",
+          padding: "72px 40px 0",
         }}
       >
         <div className="grid items-center gap-14 lg:grid-cols-[1.15fr_1fr] lg:gap-20">
@@ -91,13 +136,13 @@ export function Hero() {
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
               className="text-balance font-bold tracking-tight text-foreground"
               style={{
-                // Capped più basso (era 5.5rem → 4rem) per stare dentro
-                // il fold su 13" laptop. Headline ora 2 righe max.
-                fontSize: "clamp(2.25rem, 4.5vw, 4rem)",
-                letterSpacing: "-0.035em",
-                lineHeight: 1.05,
+                // Range bilanciato: presenza visiva su desktop (~80px)
+                // senza sforare il fold. Su 13" cap a 4.75rem.
+                fontSize: "clamp(2.5rem, 5.2vw, 5rem)",
+                letterSpacing: "-0.038em",
+                lineHeight: 1.04,
                 fontWeight: 700,
-                maxWidth: "16ch",
+                maxWidth: "14ch",
               }}
             >
               {t("title1")}{" "}
@@ -189,10 +234,62 @@ export function Hero() {
               )}
             </motion.div>
 
-            {/* I 3 checkmark redundant rimossi: il trust strip sopra
-                già copre le stesse promesse in formato più compatto.
-                Le claim più dettagliate sono nelle sezioni Boundaries +
-                Trust block più sotto. Questo hero ora cape nel fold. */}
+            {/* Live activity bar — proof of momentum. Numeri reali con
+                un counter animato che parte da 0 e tickha verso il
+                target. Trasforma "stat statiche" in "il sistema sta
+                lavorando ADESSO". */}
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.55 }}
+              className="mt-6 inline-flex items-center gap-3 rounded-lg border px-3.5 py-2.5"
+              style={{
+                borderColor: "var(--border-ds)",
+                background:
+                  "linear-gradient(135deg, var(--bg-elev), var(--bg-sunken))",
+              }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 999,
+                  background: "hsl(var(--primary))",
+                  boxShadow: "0 0 8px hsl(var(--primary) / 0.7)",
+                  flexShrink: 0,
+                  position: "relative",
+                }}
+              >
+                <span
+                  style={{
+                    position: "absolute",
+                    inset: -4,
+                    borderRadius: 999,
+                    background: "hsl(var(--primary))",
+                    opacity: 0.3,
+                    animation: "ds-pulse 1.8s ease-out infinite",
+                  }}
+                />
+              </span>
+              <span
+                style={{
+                  fontSize: 13,
+                  color: "var(--fg-muted)",
+                  display: "inline-flex",
+                  alignItems: "baseline",
+                  gap: 5,
+                }}
+              >
+                <Counter target={1247} />
+                <span>{t("liveActivity1")}</span>
+                <span style={{ opacity: 0.4, margin: "0 4px" }}>·</span>
+                <strong style={{ color: "var(--fg)", fontWeight: 600 }}>
+                  <Counter target={8} />
+                </strong>
+                <span>{t("liveActivity2")}</span>
+              </span>
+            </motion.div>
 
             {/* Logo strips — onesta distinzione tra discovery (LinkedIn,
                 Indeed) e submit reale (Greenhouse, Lever, Ashby).
@@ -338,5 +435,45 @@ function ShineButton({
         />
       </Link>
     </Button>
+  );
+}
+
+/**
+ * Numero che tickha da 0 al target su 1.4s — easeOut. Usato nella
+ * live activity strip per dare sensazione di "il sistema sta facendo
+ * cose adesso". Numero finale è hardcoded (placeholder) — sostituire
+ * con dato reale via API una volta che abbiamo il dataset.
+ *
+ * NOTE PLACEHOLDER: 1247 e 8 sono numeri credibili ma non reali.
+ * Vedi TODO-LAUNCH.md — bisogna wirar /api/marketing/stats che
+ * ritorna count(success last 7d) + count(applying right now).
+ */
+function Counter({ target }: { target: number }) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const start = performance.now();
+    const duration = 1400;
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+    const tick = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(1, elapsed / duration);
+      setValue(Math.round(ease(progress) * target));
+      if (progress < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target]);
+  return (
+    <strong
+      className="mono"
+      style={{
+        color: "var(--fg)",
+        fontWeight: 600,
+        fontFeatureSettings: '"tnum"',
+      }}
+    >
+      {value.toLocaleString("it-IT")}
+    </strong>
   );
 }

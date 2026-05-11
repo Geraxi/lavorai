@@ -30,7 +30,9 @@
     "trustStrip1": "GDPR-first · server EU",
     "trustStrip2": "Cancella tutto in 1 click",
     "trustStrip3": "Niente credenziali LinkedIn richieste",
-    "trustStrip4": "Pausa quando vuoi"
+    "trustStrip4": "Pausa quando vuoi",
+    "liveActivity1": "candidature inviate negli ultimi 7gg",
+    "liveActivity2": "candidature in invio adesso"
   },
   "onboarding": {
     "stepCv": "CV",
