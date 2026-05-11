@@ -190,7 +190,7 @@ export default async function JobsPage({
         <div className="mb-6">
           <h1
             style={{
-              fontSize: 22,
+              fontSize: 26,
               fontWeight: 600,
               letterSpacing: "-0.022em",
               margin: 0,
@@ -198,7 +198,7 @@ export default async function JobsPage({
           >
             {t("title")}
           </h1>
-          <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
+          <p style={{ fontSize: 15, color: "var(--fg-muted)", marginTop: 6 }}>
             {!sp.what && prefRoles.length > 0
               ? `${t("compatiblePositions", { count: jobs.length })}${matchMin > 0 ? ` (${t("matchAtLeast", { pct: matchMin })})` : ""}${belowMatchCount > 0 ? ` · ${t("hiddenBelowThreshold", { count: belowMatchCount })}` : ""}${roleMismatchCount > 0 ? ` · ${t("outOfRole", { count: roleMismatchCount })}` : ""}`
               : t("foundPositions", { count: jobs.length })}

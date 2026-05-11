@@ -103,14 +103,14 @@ export function AppSidebar({
               )}
             />
             <span
-              style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}
+              style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}
             >
               {t("autoApply")} · {autoApplyOn ? "ON" : "OFF"}
             </span>
           </div>
           <div
             className="mono mt-1"
-            style={{ fontSize: 11, color: "var(--fg-muted)" }}
+            style={{ fontSize: 12, color: "var(--fg-muted)" }}
           >
             {t("appsToday", { count: autoApplyToday })} · {t("remaining", { count: autoApplyRemaining })}
           </div>
@@ -148,10 +148,10 @@ export function AppSidebar({
           <div
             className="flex items-center justify-center rounded-full font-semibold text-white"
             style={{
-              width: 26,
-              height: 26,
+              width: 30,
+              height: 30,
               background: "linear-gradient(135deg,#d9a0a0,#b0628a)",
-              fontSize: 11,
+              fontSize: 12,
               flexShrink: 0,
             }}
           >
@@ -160,7 +160,7 @@ export function AppSidebar({
           <div className="min-w-0 flex-1">
             <div
               style={{
-                fontSize: 12.5,
+                fontSize: 14,
                 fontWeight: 500,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -169,7 +169,7 @@ export function AppSidebar({
             >
               {userName}
             </div>
-            <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>
+            <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
               {userPlan}
             </div>
           </div>
@@ -194,9 +194,9 @@ function NavItem({ item, active }: { item: NavItem; active: boolean }) {
         display: "flex",
         alignItems: "center",
         gap: 10,
-        padding: "6px 8px",
+        padding: "9px 10px",
         borderRadius: "var(--radius-sm)",
-        fontSize: 13,
+        fontSize: 14.5,
         color: active ? "var(--fg)" : "var(--fg-muted)",
         transition: "color 0.2s cubic-bezier(0.22,1,0.36,1)",
       }}
@@ -220,7 +220,7 @@ function NavItem({ item, active }: { item: NavItem; active: boolean }) {
       >
         <Icon
           name={item.icon}
-          size={15}
+          size={17}
           style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }}
         />
         <span className="truncate">{item.label}</span>
@@ -229,7 +229,7 @@ function NavItem({ item, active }: { item: NavItem; active: boolean }) {
         <span
           className="relative z-10 mono"
           style={{
-            fontSize: 10.5,
+            fontSize: 12,
             color: "var(--fg-subtle)",
             flexShrink: 0,
           }}
@@ -253,9 +253,9 @@ function LogoutButton() {
         alignItems: "center",
         justifyContent: "space-between",
         gap: 10,
-        padding: "6px 8px",
+        padding: "9px 10px",
         borderRadius: "var(--radius-sm)",
-        fontSize: 13,
+        fontSize: 14.5,
         color: "var(--fg-muted)",
         background: "transparent",
         border: "1px solid transparent",
@@ -268,7 +268,7 @@ function LogoutButton() {
       <span className="flex min-w-0 items-center gap-2.5">
         <Icon
           name="arrow-up-right"
-          size={15}
+          size={17}
           style={{ flexShrink: 0, opacity: 0.75 }}
         />
         <span>{t("logout")}</span>
@@ -281,12 +281,12 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
       style={{
-        padding: "10px 8px 4px",
-        fontSize: 10.5,
-        fontWeight: 500,
+        padding: "14px 10px 6px",
+        fontSize: 11.5,
+        fontWeight: 600,
         color: "var(--fg-subtle)",
         textTransform: "uppercase",
-        letterSpacing: "0.06em",
+        letterSpacing: "0.08em",
       }}
     >
       {children}

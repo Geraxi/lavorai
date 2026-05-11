@@ -170,11 +170,11 @@ export default function ApplicationsPage() {
         <div className="mb-6 flex items-end justify-between gap-4">
           <div>
             <h1
-              style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.022em", margin: 0 }}
+              style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.022em", margin: 0 }}
             >
               {t("title")}
             </h1>
-            <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
+            <p style={{ fontSize: 15, color: "var(--fg-muted)", marginTop: 6 }}>
               {t("totalSent", { count: allRows.length })}
               {" · "}
               {rangeLabel(range, t)}

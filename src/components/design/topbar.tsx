@@ -18,7 +18,7 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
         padding: "12px 24px",
       }}
     >
-      <div className="flex items-center gap-2" style={{ fontSize: 15, fontWeight: 600 }}>
+      <div className="flex items-center gap-2" style={{ fontSize: 17, fontWeight: 600 }}>
         {breadcrumb && (
           <>
             <span style={{ color: "var(--fg-subtle)", fontWeight: 400 }}>
@@ -36,7 +36,7 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
             minWidth: 260,
             background: "var(--bg-elev)",
             borderColor: "var(--border-ds)",
-            fontSize: 13.5,
+            fontSize: 14.5,
             color: "var(--fg-subtle)",
           }}
         >
@@ -49,7 +49,7 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
               background: "transparent",
               flex: 1,
               color: "var(--fg)",
-              fontSize: 13.5,
+              fontSize: 14.5,
             }}
           />
         </div>

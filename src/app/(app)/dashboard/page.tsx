@@ -195,7 +195,7 @@ export default async function DashboardPage() {
         <div className="mb-6">
           <h1
             style={{
-              fontSize: 22,
+              fontSize: 26,
               fontWeight: 600,
               letterSpacing: "-0.022em",
               margin: 0,
@@ -205,9 +205,9 @@ export default async function DashboardPage() {
           </h1>
           <p
             style={{
-              fontSize: 13.5,
+              fontSize: 15,
               color: "var(--fg-muted)",
-              marginTop: 4,
+              marginTop: 6,
             }}
           >
             {deliveredMonth > 0

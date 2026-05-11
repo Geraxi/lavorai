@@ -113,8 +113,10 @@
     background: var(--bg);
     color: var(--fg);
     font-family: var(--font-inter), -apple-system, "system-ui", sans-serif;
-    font-size: 14px;
-    line-height: 1.5;
+    /* Bumped from 14px → 15.5px after QA: utenti reported squinting.
+       15-16px è lo standard moderno per text-heavy product UIs. */
+    font-size: 15.5px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     font-feature-settings: "cv11", "ss01", "ss03";
     letter-spacing: -0.005em;
@@ -160,9 +162,9 @@
   /* ----- Atoms ----- */
   .ds-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 8px 14px;
+    padding: 9px 16px;
     border-radius: var(--radius-sm);
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 500;
     border: 1px solid var(--border-strong);
     background: var(--bg-elev);
@@ -186,14 +188,14 @@
   .ds-btn-accent:hover { filter: brightness(1.08); }
   .ds-btn-ghost { border-color: transparent; background: transparent; }
   .ds-btn-ghost:hover { background: var(--bg-sunken); }
-  .ds-btn-sm { padding: 5px 10px; font-size: 12px; }
-  .ds-btn-lg { padding: 11px 18px; font-size: 14px; }
+  .ds-btn-sm { padding: 6px 12px; font-size: 13px; }
+  .ds-btn-lg { padding: 12px 20px; font-size: 15px; }
 
   .ds-chip {
     display: inline-flex; align-items: center; gap: 5px;
-    padding: 3px 8px;
+    padding: 4px 10px;
     border-radius: 999px;
-    font-size: 11.5px;
+    font-size: 12.5px;
     font-weight: 500;
     background: var(--bg-sunken);
     color: var(--fg-muted);
@@ -265,12 +267,12 @@
   /* Inputs */
   .ds-input, .ds-select, .ds-textarea {
     width: 100%;
-    padding: 8px 11px;
+    padding: 10px 13px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-strong);
     background: var(--bg-elev);
     color: var(--fg);
-    font-size: 13px;
+    font-size: 14.5px;
     transition: border-color 0.12s, box-shadow 0.12s;
     outline: none;
   }
@@ -279,23 +281,23 @@
     box-shadow: 0 0 0 3px var(--bg-sunken);
   }
   .ds-label {
-    font-size: 12px; font-weight: 500;
+    font-size: 13px; font-weight: 500;
     color: var(--fg-muted);
-    display: block; margin-bottom: 5px;
+    display: block; margin-bottom: 6px;
   }
 
   /* ----- Tables ----- */
-  .ds-tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ds-tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
   .ds-tbl th {
-    text-align: left; padding: 8px 12px;
-    font-size: 11px; font-weight: 500;
+    text-align: left; padding: 10px 14px;
+    font-size: 11.5px; font-weight: 500;
     text-transform: uppercase; letter-spacing: 0.05em;
     color: var(--fg-subtle);
     border-bottom: 1px solid var(--border-ds);
     background: var(--bg);
   }
   .ds-tbl td {
-    padding: 10px 12px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--border-ds);
     vertical-align: middle;
   }
