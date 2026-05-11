@@ -370,35 +370,40 @@
     100% { transform: scale(2.2); opacity: 0; }
   }
 
-  /* Card surfaces — usano --green-card (mid-tone), distinto dal
-     verde icone vivido e dal verde bg atmosferico. */
+  /* Card surfaces — solid emerald gradient (Tailwind emerald-600 →
+     emerald-800), white text, 32px radius. Tipografia inverted da
+     dark-on-light a light-on-dark. Le CSS custom props vengono
+     ridichiarate dentro la card così TUTTO il contenuto interno che
+     usa var(--fg-muted), var(--fg-subtle), var(--border-ds) cascada
+     automaticamente a versioni white-translucent appropriate. */
   .ds-card {
     position: relative;
-    background:
-      linear-gradient(135deg, color-mix(in oklch, var(--green-card) 22%, transparent), color-mix(in oklch, var(--green-card) 10%, transparent)),
-      rgba(255,255,255,0.50);
-    border: 1px solid color-mix(in oklch, var(--green-card) 30%, transparent);
-    border-radius: 16px;
-    backdrop-filter: blur(36px) saturate(190%);
-    -webkit-backdrop-filter: blur(36px) saturate(190%);
+    background: linear-gradient(to bottom right, #059669, #065F46);
+    color: #FFFFFF;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 2rem;  /* 32px — Tailwind rounded-[2rem] */
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.85),
-      inset 0 -1px 0 color-mix(in oklch, var(--green-card) 10%, transparent),
-      0 2px 6px color-mix(in oklch, var(--green-card) 14%, transparent),
-      0 20px 50px -16px color-mix(in oklch, var(--green-card) 28%, transparent);
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 -1px 0 rgba(0,0,0,0.18),
+      0 2px 6px rgba(5,80,55,0.20),
+      0 20px 50px -16px rgba(5,80,55,0.40);
     transition: transform 0.35s var(--ease-premium), box-shadow 0.35s var(--ease-premium), background 0.25s ease;
+    /* Override CSS vars per il contenuto interno white-on-emerald */
+    --fg: #FFFFFF;
+    --fg-muted: rgba(255,255,255,0.78);
+    --fg-subtle: rgba(255,255,255,0.55);
+    --border-ds: rgba(255,255,255,0.15);
+    --border-strong: rgba(255,255,255,0.22);
+    --bg-elev: rgba(255,255,255,0.08);
+    --bg-sunken: rgba(0,0,0,0.12);
   }
   .ds-card:hover {
     transform: translateY(-2px);
-    background:
-      linear-gradient(135deg, color-mix(in oklch, var(--green-card) 30%, transparent), color-mix(in oklch, var(--green-card) 15%, transparent)),
-      rgba(255,255,255,0.55);
-    border-color: color-mix(in oklch, var(--green-card) 40%, transparent);
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.95),
-      inset 0 -1px 0 color-mix(in oklch, var(--green-card) 15%, transparent),
-      0 4px 10px color-mix(in oklch, var(--green-card) 18%, transparent),
-      0 28px 60px -18px color-mix(in oklch, var(--green-card) 35%, transparent);
+      inset 0 1px 0 rgba(255,255,255,0.18),
+      inset 0 -1px 0 rgba(0,0,0,0.22),
+      0 4px 10px rgba(5,80,55,0.28),
+      0 28px 60px -18px rgba(5,80,55,0.55);
   }
 
   .ds-kbd {
@@ -620,22 +625,27 @@
   .ds-kpi-delta.down { color: var(--red-ds); }
   .ds-kpi-spark { margin-top: 10px; height: 28px; }
 
-  /* Section card — usa --green-card per il tint */
+  /* Section card — same emerald solid recipe as .ds-card.
+     Stesse override CSS-var per il contenuto white-on-emerald. */
   .ds-section-card {
-    background:
-      linear-gradient(135deg, color-mix(in oklch, var(--green-card) 22%, transparent), color-mix(in oklch, var(--green-card) 10%, transparent)),
-      rgba(255,255,255,0.50);
-    border: 1px solid color-mix(in oklch, var(--green-card) 30%, transparent);
-    border-radius: 16px;
+    background: linear-gradient(to bottom right, #059669, #065F46);
+    color: #FFFFFF;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 2rem;
     overflow: hidden;
     display: flex; flex-direction: column;
-    backdrop-filter: blur(32px) saturate(190%);
-    -webkit-backdrop-filter: blur(32px) saturate(190%);
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.85),
-      inset 0 -1px 0 color-mix(in oklch, var(--green-card) 10%, transparent),
-      0 1px 3px color-mix(in oklch, var(--green-card) 10%, transparent),
-      0 14px 40px -12px color-mix(in oklch, var(--green-card) 25%, transparent);
+      inset 0 1px 0 rgba(255,255,255,0.12),
+      inset 0 -1px 0 rgba(0,0,0,0.18),
+      0 1px 3px rgba(5,80,55,0.15),
+      0 14px 40px -12px rgba(5,80,55,0.35);
+    --fg: #FFFFFF;
+    --fg-muted: rgba(255,255,255,0.78);
+    --fg-subtle: rgba(255,255,255,0.55);
+    --border-ds: rgba(255,255,255,0.15);
+    --border-strong: rgba(255,255,255,0.22);
+    --bg-elev: rgba(255,255,255,0.08);
+    --bg-sunken: rgba(0,0,0,0.12);
   }
   .ds-section-head {
     display: flex; align-items: center; justify-content: space-between;
