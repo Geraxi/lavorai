@@ -13,24 +13,25 @@ export function Hero() {
   const t = useTranslations("hero");
   return (
     <section
-      className="relative overflow-hidden"
+      className="lavorai-hero-section relative overflow-hidden"
       style={{
         backgroundColor: "#010510",
-        minHeight: 800,
         display: "flex",
         alignItems: "center",
       }}
     >
-      {/* Animated rotating background image */}
+      {/* Desktop (lg+): planet ruota a destra come sfondo full-section.
+          Su mobile non lo mostriamo qui — il testo occuperebbe tutto
+          il width e coprirebbe il pianeta. Vedi il blocco mobile sotto. */}
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-0"
+        className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
         style={{
           backgroundImage: "url('/Lavoraiherosection.png')",
           backgroundSize: "contain",
           backgroundPosition: "right center",
           backgroundRepeat: "no-repeat",
-          transformOrigin: "75% 50%", // Anchor rotation roughly around the planet
+          transformOrigin: "75% 50%",
         }}
         animate={{
           rotate: [0, 1.5, -1.5, 0],
@@ -42,13 +43,42 @@ export function Hero() {
           repeat: Infinity,
         }}
       />
-      {/* Soft gradient to fade the left side into black, blending the image */}
+
+      {/* Mobile (<lg): pianeta visibile come "top hero" sopra il testo.
+          Niente rotazione (mantenere CPU + battery basso su device piccoli),
+          centrato sopra il blocco testo. Text container ha pt extra
+          (vedi sotto) per non sovrapporsi. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-0"
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 block lg:hidden"
+        style={{
+          height: 320,
+          backgroundImage: "url('/Lavoraiherosection.png')",
+          backgroundSize: "auto 100%",
+          backgroundPosition: "center top",
+          backgroundRepeat: "no-repeat",
+          opacity: 0.95,
+        }}
+      />
+
+      {/* Soft gradient — su desktop sfuma il bordo sinistro per blendare
+          il pianeta col nero; su mobile sfuma il bordo INFERIORE del
+          pianeta nel resto della section. Due gradient compositi. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
         style={{
           background:
             "linear-gradient(90deg, #010510 0%, rgba(1,5,16,0.8) 40%, rgba(1,5,16,0) 100%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 block lg:hidden"
+        style={{
+          height: 340,
+          background:
+            "linear-gradient(180deg, transparent 0%, transparent 55%, rgba(1,5,16,0.6) 80%, #010510 100%)",
         }}
       />
 
@@ -81,11 +111,14 @@ export function Hero() {
       >
         <div className="grid items-center gap-14 lg:grid-cols-2">
           {/* Colonna sinistra: Testo puro su dark background, senza box glassmorphism */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-10 pb-20"
+            // pt-[280px] su mobile spinge il testo SOTTO il pianeta-hero
+            // (alto 320px nel blocco bg di sopra) — su desktop torna a
+            // pt-10 perché il pianeta è laterale, non sovrastante.
+            className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-[280px] pb-16 lg:pt-10 lg:pb-20"
           >
             <motion.div
               initial={{ opacity: 0, y: 8 }}

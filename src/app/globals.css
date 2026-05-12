@@ -1063,3 +1063,16 @@
     }
   }
 }
+
+/* Hero responsive heights — su mobile lasciamo che il contenuto +
+   pianeta in alto + testo sotto definiscano l'altezza (no minHeight
+   hardcoded che lascerebbe un buco nero in fondo). Su desktop torna
+   al canonical 800px per il layout grid-cols-2 affiancato. */
+.lavorai-hero-section {
+  min-height: auto;
+}
+@media (min-width: 1024px) {
+  .lavorai-hero-section {
+    min-height: 800px;
+  }
+}
