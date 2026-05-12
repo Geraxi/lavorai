@@ -126,25 +126,72 @@ export function Hero() {
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
               className="text-balance font-bold tracking-tight"
               style={{
-                fontSize: "clamp(3rem, 5.5vw, 6rem)",
+                // Misura "base" = quella di LavorAI (l'ultima riga).
+                // Le righe precedenti sono in em per scalare in proporzione.
+                fontSize: "clamp(3.5rem, 7vw, 7.5rem)",
                 letterSpacing: "-0.03em",
-                lineHeight: 1.05,
+                lineHeight: 1.02,
                 fontWeight: 800,
                 color: "#FFFFFF",
                 textShadow: "0 2px 24px rgba(0,5,20,0.5)",
               }}
             >
-              Lavoravo.<br />
-              Lavoro.<br />
-              Lavorerò.<br />
-              <span
+              {/* Scala progressiva: il passato è piccolo, il futuro è grande.
+                  Trasmette il "build-up" tipografico fino al brand name. */}
+              <motion.span
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 0.55, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.05 }}
                 style={{
+                  display: "block",
+                  fontSize: "0.42em",
+                  letterSpacing: "-0.025em",
+                  lineHeight: 1.1,
+                }}
+              >
+                Lavoravo.
+              </motion.span>
+              <motion.span
+                initial={{ opacity: 0, x: -6 }}
+                animate={{ opacity: 0.75, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.15 }}
+                style={{
+                  display: "block",
+                  fontSize: "0.58em",
+                  letterSpacing: "-0.028em",
+                  lineHeight: 1.08,
+                  marginTop: "0.1em",
+                }}
+              >
+                Lavoro.
+              </motion.span>
+              <motion.span
+                initial={{ opacity: 0, x: -4 }}
+                animate={{ opacity: 0.92, x: 0 }}
+                transition={{ duration: 0.55, delay: 0.25 }}
+                style={{
+                  display: "block",
+                  fontSize: "0.78em",
+                  letterSpacing: "-0.03em",
+                  lineHeight: 1.05,
+                  marginTop: "0.06em",
+                }}
+              >
+                Lavorerò.
+              </motion.span>
+              <motion.span
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                style={{
+                  display: "block",
                   color: "hsl(var(--primary))",
-                  textShadow: "0 0 40px hsl(var(--primary)/0.3)",
+                  textShadow: "0 0 40px hsl(var(--primary)/0.35)",
+                  marginTop: "0.04em",
                 }}
               >
                 LavorAI.
-              </span>
+              </motion.span>
             </motion.h1>
 
             <motion.p
