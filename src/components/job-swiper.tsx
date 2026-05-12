@@ -27,6 +27,28 @@ import type { JobRow } from "@/components/jobs-list";
 
 const SWIPE_THRESHOLD = 100; // px di drag minimo per triggare l'action
 const SKIP_KEY = "lavorai-skipped-jobs";
+const SAVED_KEY = "lavorai-saved-jobs";
+
+function loadSaved(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(SAVED_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistSaved(set: Set<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SAVED_KEY, JSON.stringify(Array.from(set).slice(-500)));
+  } catch {
+    /* quota */
+  }
+}
 
 function portalOf(url: string): string {
   const u = url.toLowerCase();
@@ -66,6 +88,7 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
   const t = useTranslations("discoverPage");
   const router = useRouter();
   const [skipped, setSkipped] = useState<Set<string>>(() => new Set());
+  const [saved, setSaved] = useState<Set<string>>(() => new Set());
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
   const [animatingId, setAnimatingId] = useState<string | null>(null);
@@ -75,7 +98,26 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
   // Carica skipped da localStorage solo lato client per evitare hydration mismatch
   useEffect(() => {
     setSkipped(loadSkipped());
+    setSaved(loadSaved());
   }, []);
+
+  const toggleSave = useCallback(
+    (jobId: string, title: string) => {
+      setSaved((prev) => {
+        const next = new Set(prev);
+        if (next.has(jobId)) {
+          next.delete(jobId);
+          toast("Rimosso dai preferiti");
+        } else {
+          next.add(jobId);
+          toast.success(`Salvato: ${title}`);
+        }
+        persistSaved(next);
+        return next;
+      });
+    },
+    [],
+  );
 
   const queue = useMemo(
     () => jobs.filter((j) => !skipped.has(j.id)),
@@ -239,6 +281,8 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
           job={currentJob}
           isAnimatingOut={animatingId === currentJob.id}
           animDir={animDir}
+          isSaved={saved.has(currentJob.id)}
+          onToggleSave={() => toggleSave(currentJob.id, currentJob.title)}
           onSwipe={(dir) => {
             if (dir === "right") apply(currentJob);
             else skip(currentJob.id);
@@ -401,12 +445,16 @@ function SwipeCard({
   job,
   isAnimatingOut,
   animDir,
+  isSaved,
+  onToggleSave,
   onSwipe,
   onTap,
 }: {
   job: JobRow;
   isAnimatingOut: boolean;
   animDir: "left" | "right" | null;
+  isSaved: boolean;
+  onToggleSave: () => void;
   onSwipe: (dir: "left" | "right") => void;
   onTap: () => void;
 }) {
@@ -452,7 +500,7 @@ function SwipeCard({
       transition={{ duration: 0.25, ease: "easeOut" }}
       whileTap={{ cursor: "grabbing" }}
     >
-      <JobCardSurface job={job}>
+      <JobCardSurface job={job} isSaved={isSaved} onToggleSave={onToggleSave}>
         {/* Overlay "APPLY" verde quando draghi a destra */}
         <motion.div
           aria-hidden
@@ -614,10 +662,14 @@ function extractSkills(description: string): string[] {
 function JobCardSurface({
   job,
   compact,
+  isSaved,
+  onToggleSave,
   children,
 }: {
   job: JobRow;
   compact?: boolean;
+  isSaved?: boolean;
+  onToggleSave?: () => void;
   children?: React.ReactNode;
 }) {
   const color = companyColor(job.company ?? job.title);
@@ -626,6 +678,11 @@ function JobCardSurface({
     () => (compact ? [] : extractSkills(job.description)),
     [job.description, compact],
   );
+  const descSnippet = useMemo(() => {
+    if (compact) return "";
+    const clean = cleanHtmlText(job.description).replace(/\s+/g, " ").trim();
+    return clean.length > 180 ? clean.slice(0, 180).trimEnd() + "…" : clean;
+  }, [job.description, compact]);
   const postedLabel = relativeDateLabel(job.postedAt ?? null);
 
   return (
@@ -667,21 +724,59 @@ function JobCardSurface({
         }}
       />
 
-      {/* Header: logo + title + company */}
+      {/* Bookmark heart — top-right floating (solo card primaria) */}
+      {!compact && onToggleSave && (
+        <button
+          type="button"
+          aria-label={isSaved ? "Rimuovi dai preferiti" : "Salva nei preferiti"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSave();
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          style={{
+            position: "absolute",
+            top: 18,
+            right: 18,
+            zIndex: 5,
+            width: 40,
+            height: 40,
+            borderRadius: 999,
+            background: isSaved ? "#FFFFFF" : "rgba(255,255,255,0.18)",
+            border: "1px solid rgba(255,255,255,0.35)",
+            color: isSaved ? "#DC2626" : "#FFFFFF",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            backdropFilter: "blur(12px)",
+            transition: "transform 0.15s, background 0.15s",
+            fontSize: 18,
+            lineHeight: 1,
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+        >
+          {isSaved ? "♥" : "♡"}
+        </button>
+      )}
+
+      {/* Header: logo grande + title + company */}
       <div
         style={{
-          padding: "28px 28px 18px",
+          padding: "28px 28px 14px",
           display: "flex",
           alignItems: "flex-start",
-          gap: 16,
+          gap: 18,
         }}
       >
         <CompanyLogo
           company={job.company ?? job.title}
           color={color}
-          size={64}
+          size={72}
+          rounded={16}
         />
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, paddingRight: compact ? 0 : 44 }}>
           <div
             style={{
               fontSize: 20,
@@ -702,15 +797,45 @@ function JobCardSurface({
               color: "var(--fg-muted)",
               marginTop: 5,
               fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              flexWrap: "wrap",
             }}
           >
-            {job.company ?? "—"}
+            <span style={{ fontWeight: 600, color: "#FFFFFF" }}>
+              {job.company ?? "—"}
+            </span>
+            {job.location && (
+              <>
+                <span style={{ opacity: 0.5 }}>·</span>
+                <span style={{ fontSize: 13 }}>{shortLocation(job.location)}</span>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Spacer flessibile per centrare verticalmente i pill */}
-      <div style={{ flex: 1, minHeight: 8 }} />
+      {/* Description snippet — ridà densità informativa alla card */}
+      {!compact && descSnippet && (
+        <div
+          style={{
+            padding: "0 28px 14px",
+            fontSize: 13.5,
+            lineHeight: 1.55,
+            color: "rgba(255,255,255,0.88)",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {descSnippet}
+        </div>
+      )}
+
+      {/* Spacer flessibile per spingere pill/footer in basso */}
+      <div style={{ flex: 1, minHeight: 4 }} />
 
       {/* PILLS: info strutturate, tutte pill-shaped */}
       <div
