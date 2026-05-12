@@ -125,7 +125,7 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
   );
 
   const currentJob = queue[0];
-  const peekJobs = queue.slice(1, 3); // 2 card di profondità
+  // Peek cards (queue.slice(1,3)) rimosse — vedi commento nel JSX sotto.
 
   // Skip programmaticamente (anche da bottone o swipe)
   const skip = useCallback(
@@ -340,10 +340,12 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
           marginTop: 8,
         }}
       >
-        {/* Peek cards dietro */}
-        {peekJobs.map((j, i) => (
-          <PeekCard key={j.id} job={j} depth={i + 1} />
-        ))}
+        {/* Peek cards rimosse temporaneamente: causavano bleed-through
+            visibile del contenuto della prossima card attraverso il body
+            della corrente (anche con background bianco solido — root cause
+            non chiara). Da reintrodurre con un'animazione di stack proper
+            (next-card già montata, scala/y-shift in sync con l'uscita della
+            corrente) invece dell'attuale layer statico. */}
 
         {/* Card attiva con drag */}
         <SwipeCard
@@ -482,34 +484,11 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
   );
 }
 
-/**
- * Card di sfondo (peek) — non interagibile, leggermente scalata e
- * spostata sotto per dare percezione di profondità.
- */
-function PeekCard({ job, depth }: { job: JobRow; depth: number }) {
-  // NB: niente opacity reduction. Avevamo `1 - depth * 0.35` per dare
-  // profondità, ma durante l'animazione di swipe-out della card attiva
-  // la peek card sottostante restava visibile al 65% di opacità per
-  // ~250ms prima che la nuova SwipeCard montasse sopra — sembrava un
-  // glitch di "card trasparente". Scale + yOffset bastano per la
-  // percezione di stack senza causare il flash translucido.
-  const scale = 1 - depth * 0.04;
-  const yOffset = depth * 8;
-  return (
-    <div
-      aria-hidden
-      style={{
-        position: "absolute",
-        inset: 0,
-        transform: `scale(${scale}) translateY(${yOffset}px)`,
-        zIndex: 10 - depth,
-        pointerEvents: "none",
-      }}
-    >
-      <JobCardSurface job={job} compact />
-    </div>
-  );
-}
+// Componente PeekCard rimosso. Dava percezione di stack ma causava
+// bleed-through del contenuto della prossima card attraverso la card
+// attiva durante/dopo lo swipe. Rifare con un'AnimatePresence proper
+// (next-card già montata, scale-up + opacity-in sincronizzati con
+// l'exit della corrente) prima di re-introdurre il peek visuale.
 
 /**
  * Card attiva con gestione drag/swipe via motion. Espone callback
