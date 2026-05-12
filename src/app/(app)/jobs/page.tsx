@@ -87,7 +87,10 @@ export default async function JobsPage({
     try {
       return await searchAndCacheJobs(params);
     } catch (err) {
-      console.error("[jobs] search failed for", params, err);
+      // Downgrade a warn: errori upstream (Adzuna 429, fetch transient)
+      // sono recuperabili via fallback DB e non devono triggerare il
+      // dev error overlay di Next.js.
+      console.warn("[jobs] search failed for", params, err instanceof Error ? err.message : err);
       return [];
     }
   }

@@ -20,8 +20,18 @@ export interface JobsFilter extends AdzunaSearchParams {
 export async function searchAndCacheJobs(
   filter: JobsFilter = {},
 ): Promise<Job[]> {
-  // 1. Fetch fresco da Adzuna + upsert in DB (come prima)
-  const items = await searchJobs(filter);
+  // 1. Fetch fresco da Adzuna + upsert in DB. Se Adzuna fallisce
+  //    (429 rate-limit, network, ecc.) procediamo con i job già in DB —
+  //    la cache vale più di un crash. Logghiamo solo a warn.
+  let items: JobListItem[] = [];
+  try {
+    items = await searchJobs(filter);
+  } catch (err) {
+    console.warn(
+      "[jobs-repo] Adzuna fetch failed, falling back to DB:",
+      err instanceof Error ? err.message.slice(0, 200) : err,
+    );
+  }
   const filtered = filter.remoteOnly ? items.filter((j) => j.remote) : items;
 
   if (filtered.length > 0) {
@@ -70,6 +80,12 @@ export async function searchAndCacheJobs(
 
   // 2. Query unificata su TUTTI i source (adzuna + greenhouse + lever + …)
   //    con filtri applicati direttamente in DB.
+  // `mode: "insensitive"` è valido solo su Postgres. In locale (SQLite)
+  // viene rifiutato dal client → omettiamo quando il provider non è pg.
+  // SQLite's LIKE è già case-insensitive di default per ASCII.
+  const isPg = (process.env.DATABASE_URL ?? "").startsWith("postgres");
+  const ci = isPg ? ({ mode: "insensitive" as const }) : ({} as Record<string, never>);
+
   type WhereClause = Parameters<typeof prisma.job.findMany>[0] extends
     | { where?: infer W }
     | undefined
@@ -80,10 +96,10 @@ export async function searchAndCacheJobs(
     const q = filter.what.trim();
     and.push({
       OR: [
-        { title: { contains: q, mode: "insensitive" } },
-        { company: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
-        { category: { contains: q, mode: "insensitive" } },
+        { title: { contains: q, ...ci } },
+        { company: { contains: q, ...ci } },
+        { description: { contains: q, ...ci } },
+        { category: { contains: q, ...ci } },
       ],
     });
   }
@@ -91,7 +107,7 @@ export async function searchAndCacheJobs(
     const loc = filter.where.trim();
     and.push({
       OR: [
-        { location: { contains: loc, mode: "insensitive" } },
+        { location: { contains: loc, ...ci } },
         { remote: true },
       ],
     });
