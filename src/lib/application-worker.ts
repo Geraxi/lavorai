@@ -344,6 +344,10 @@ export async function processApplication(applicationId: string): Promise<void> {
           submittedVia:
             isDryRun || isUnconfirmed ? null : `portal_${adapter.id}`,
           completedAt: isDryRun || isUnconfirmed ? null : new Date(),
+          // Persistiamo confState (DETECTED/UNCONFIRMED/DRY_RUN) per
+          // diagnosi successive — pre-fix non c'era e non possiamo
+          // sapere retroattivamente lo stato delle vecchie candidature.
+          submitConfirmation: confState,
           errorMessage: isDryRun
             ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
             : isUnconfirmed
