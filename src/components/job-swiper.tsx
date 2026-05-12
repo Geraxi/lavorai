@@ -487,9 +487,14 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
  * spostata sotto per dare percezione di profondità.
  */
 function PeekCard({ job, depth }: { job: JobRow; depth: number }) {
+  // NB: niente opacity reduction. Avevamo `1 - depth * 0.35` per dare
+  // profondità, ma durante l'animazione di swipe-out della card attiva
+  // la peek card sottostante restava visibile al 65% di opacità per
+  // ~250ms prima che la nuova SwipeCard montasse sopra — sembrava un
+  // glitch di "card trasparente". Scale + yOffset bastano per la
+  // percezione di stack senza causare il flash translucido.
   const scale = 1 - depth * 0.04;
   const yOffset = depth * 8;
-  const opacity = 1 - depth * 0.35;
   return (
     <div
       aria-hidden
@@ -497,7 +502,6 @@ function PeekCard({ job, depth }: { job: JobRow; depth: number }) {
         position: "absolute",
         inset: 0,
         transform: `scale(${scale}) translateY(${yOffset}px)`,
-        opacity,
         zIndex: 10 - depth,
         pointerEvents: "none",
       }}
