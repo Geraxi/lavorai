@@ -229,3 +229,78 @@ TRUST_SECTION_VIEW but not the rest.
       in `src/i18n/request.ts` (commit comment marks the spot)
 - [ ] Run the Python audit script (see CHANGELOG) again against both
       files to verify no cross-locale leakage
+
+---
+
+## Scraper expansion — inventory roadmap
+
+Current sources (`src/lib/scrapers/`):
+- ✅ Greenhouse (`boards.greenhouse.io`, `job-boards.greenhouse.io`)
+- ✅ Lever (`jobs.lever.co`)
+- ✅ Ashby (`jobs.ashbyhq.com`)
+- ✅ SmartRecruiters (`jobs.smartrecruiters.com`)
+- ✅ LinkedIn via Apify (resolves Easy Apply → underlying ATS,
+       drops the rest)
+
+These cover roughly 60–70 % of EU/US tech / design / product / sales
+inventory. For Italy and Dubai specifically the coverage is patchy.
+
+### 🟡 Next sources to add (high ROI, low complexity)
+
+Each of these exposes a public job-list endpoint (no auth, no Apify).
+Pattern matches the existing Greenhouse/Lever adapters — same code
+shape, just a different URL + JSON schema.
+
+- [ ] **Workable** (`apply.workable.com/<company>/`,
+      `workable.com/j/<id>`). Already in the URL allow-list in
+      auto-apply-cron.ts but no scraper feeds it. Pattern:
+      `https://apply.workable.com/api/v3/accounts/<slug>/jobs`.
+      Italian + MENA mid-market coverage.
+- [ ] **Recruitee** (`<co>.recruitee.com`). Used by lots of EU SMBs
+      including Italian ones. Public JSON at
+      `https://<co>.recruitee.com/api/offers`.
+- [ ] **Personio** (`<co>.jobs.personio.com`). German payroll + HR
+      stack with big EU footprint (Italy included). XML feed at
+      `/xml`.
+- [ ] **BambooHR** (`<co>.bamboohr.com/jobs`). US-leaning but covers
+      many remote-friendly companies. Embedded JSON in the page.
+- [ ] **Teamtailor** (`jobs.<co>.com` / `<co>.teamtailor.com`).
+      Nordic + EU, lots of Italian scaleups. Public REST API.
+- [ ] **JazzHR**, **Pinpoint**, **JobVite** — long tail, only add if
+      a target company list demands it.
+
+### 🟡 Italy-specific inventory boost
+For Italian roles to actually populate when prefs say "Milano":
+- [ ] **InfoJobs.it** — biggest IT job board. RSS feed per query.
+      Apply links are external (often back to ATS) — handle the
+      redirect chain when we resolve them.
+- [ ] **Lavorare.net**, **JobRapido**, **Subito Lavoro** — aggregators.
+      Lower trust but high volume of IT-localised roles.
+- [ ] Curate an `ITALIAN_GREENHOUSE_COMPANIES` shortlist: Bending
+      Spoons, Satispay, Nexi, ScalaPay, Sketchin, Tinaba, Brumbrum,
+      Cortilia, Wallife, Treedom, etc. Add to ats-companies.ts.
+
+### 🟢 Dubai / UAE / MENA inventory
+This is the bigger gap. Most MENA hiring doesn't go through
+Greenhouse/Lever. Required:
+- [ ] **Bayt.com** API or scraper — by far the biggest MENA board.
+- [ ] **Naukri Gulf** — Indian-owned but covers UAE/Saudi heavily.
+- [ ] **GulfTalent** — premium MENA roles.
+- [ ] **LinkedIn-MENA queries** in `DEFAULT_LINKEDIN_QUERIES`:
+      `?location=United Arab Emirates`, `?location=Dubai` — Apify
+      will resolve the ones that redirect to an ATS we already
+      submit to, drop the rest.
+- [ ] Caveat: submitting on Bayt / Naukri requires their auth, which
+      we deliberately don't store. For MENA we may end up as a
+      *discovery* tool only (show the role, link out to apply
+      manually) until we add a proxy-credential or redirect-handoff
+      flow.
+
+### Diagnostic UI surface
+After the location-filter fix landed (commit 7a81a5c), the
+`stats.skippedLocationMismatch` counter goes up every run when the
+pool is location-starved. Surface this:
+- [ ] Dashboard alert: "Nessun annuncio per le tue città questa
+      settimana → allarga preferenze o aggiungi 'Remote'"
+- [ ] Cron log line: per-user breakdown of skip reasons so we can
+      see *which* users are blocked on inventory vs filters
