@@ -44,29 +44,33 @@ export function SectionPersonas() {
         {/* People-grid hero image — mostra la diversità target prima
             ancora di leggere i 4 personas testuali. Crop con border
             radius generoso + leggera overlay verde per fonderla col
-            theme. Asset: /people-grid.jpg (32 ritratti di varie
-            professioni, mix etnico+età+contesto). */}
+            theme. Asset: /people-grid.jpg (gruppo di professionisti
+            di settori diversi: medici, ingegneri, operai, chef,
+            insegnanti, sviluppatori, ecc.).
+            Aspect ratio 3/2 → matcha il crop naturale di una foto
+            di gruppo orizzontale senza tagliare teste o piedi. */}
         <Reveal delay={0.12} className="mx-auto mt-12 max-w-5xl">
           <div
             style={{
               position: "relative",
               borderRadius: "2rem",
               overflow: "hidden",
-              aspectRatio: "16 / 7",
+              aspectRatio: "3 / 2",
               border: "1px solid rgba(255,255,255,0.18)",
               boxShadow:
                 "0 2px 6px rgba(5,80,55,0.20), 0 24px 60px -16px rgba(5,80,55,0.40)",
+              background: "rgba(5,80,55,0.20)",
             }}
           >
             <Image
               src="/people-grid.jpg"
-              alt="Professionisti italiani di ogni settore: medici, designer, sviluppatori, insegnanti, operai, chef, e altri"
+              alt="Professionisti italiani di ogni settore: medici, designer, sviluppatori, insegnanti, operai, chef, vigili del fuoco, ingegneri e altri"
               fill
               priority={false}
               sizes="(max-width: 1024px) 100vw, 960px"
               style={{
                 objectFit: "cover",
-                objectPosition: "center",
+                objectPosition: "center 35%",
               }}
             />
             {/* Overlay gradient: sfuma in verde su entrambi i bordi
