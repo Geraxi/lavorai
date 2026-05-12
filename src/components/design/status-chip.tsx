@@ -19,7 +19,10 @@ export type ApplicationStatus =
 const MAP: Record<ApplicationStatus, { label: string; className: string }> = {
   // Stati business (design)
   pronta: { label: "CV pronto", className: "ds-chip ds-chip-blue" },
-  inviata: { label: "Inviata", className: "ds-chip" },
+  // "inviata" è semanticamente equivalente a "success" — entrambi
+  // rappresentano una candidatura consegnata. Usa lo stesso chip verde
+  // per coerenza visiva (signal positivo forte).
+  inviata: { label: "Inviata", className: "ds-chip ds-chip-green" },
   vista: { label: "Vista", className: "ds-chip ds-chip-blue" },
   colloquio: { label: "Colloquio", className: "ds-chip ds-chip-amber" },
   offerta: { label: "Offerta", className: "ds-chip ds-chip-green" },
