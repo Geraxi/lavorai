@@ -315,23 +315,46 @@ export async function processApplication(applicationId: string): Promise<void> {
         "confirmation" in outcome && outcome.confirmation === "DRY_RUN";
       const confState =
         "confirmation" in outcome ? outcome.confirmation : "DETECTED";
+      // FIX false-success: l'adapter ritorna ok:true se il click sul submit
+      // non ha lanciato eccezioni, ma questo NON garantisce che il form sia
+      // stato accettato. Se non abbiamo rilevato keyword di conferma
+      // (UNCONFIRMED), c'è un rischio reale di false-success — silent
+      // validation, captcha, modal di errore. Trattiamolo come needs_review:
+      // l'utente vede la candidatura nello stato "da verificare" invece di
+      // ricevere un'email "inviata" che potrebbe essere una bugia.
+      const isUnconfirmed =
+        !isDryRun &&
+        "confirmation" in outcome &&
+        outcome.confirmation === "UNCONFIRMED";
+
       console.log(
-        `[worker] ${applicationId} adapter ${adapter.id} → submitted (${confState})`,
+        `[worker] ${applicationId} adapter ${adapter.id} → submitted (${confState})${isUnconfirmed ? " [UNCONFIRMED — needs review]" : ""}`,
       );
       await prisma.application.update({
         where: { id: applicationId },
         data: {
-          // In dry-run non marchiamo come success: il form è stato compilato
-          // ma NON è stato inviato. Lo stato resta ready_to_apply.
-          status: isDryRun ? "ready_to_apply" : "success",
-          submittedVia: isDryRun ? null : `portal_${adapter.id}`,
-          completedAt: isDryRun ? null : new Date(),
+          // In dry-run non marchiamo come success.
+          // Se UNCONFIRMED, marchiamo come ready_to_apply con messaggio
+          // esplicito così l'utente può verificare manualmente.
+          status: isDryRun
+            ? "ready_to_apply"
+            : isUnconfirmed
+              ? "ready_to_apply"
+              : "success",
+          submittedVia:
+            isDryRun || isUnconfirmed ? null : `portal_${adapter.id}`,
+          completedAt: isDryRun || isUnconfirmed ? null : new Date(),
           errorMessage: isDryRun
             ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
-            : null,
+            : isUnconfirmed
+              ? `Submit cliccato ma non abbiamo rilevato la pagina di conferma di ${adapter.label}. La candidatura potrebbe non essere stata accettata (validazione silenziosa, captcha, errore modale). Verifica manualmente sul portale.`
+              : null,
         },
       });
-      if (!isDryRun) {
+      // Solo confirmed (= conferma rilevata davvero) bumpa sessione e
+      // manda l'email "candidatura inviata". UNCONFIRMED resta in coda
+      // di review, niente email fuorviante.
+      if (!isDryRun && !isUnconfirmed) {
         await markSessionSentSuccess(applicationId);
         await notifyApplicationSent(applicationId).catch((err) =>
           console.error(`[worker] ${applicationId} notify email failed`, err),

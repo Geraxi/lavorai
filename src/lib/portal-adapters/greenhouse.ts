@@ -188,19 +188,58 @@ export const greenhouseAdapter: PortalAdapter = {
           error: "Bottone submit non trovato.",
         };
       }
+      const urlBeforeSubmit = page.url();
       await submit.first().click();
-      // Se il click non ha buttato eccezioni, assumiamo submit riuscito.
-      // Aspettiamo brevemente per dare tempo alla navigazione.
-      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
+      // Aspettiamo che succeda QUALCOSA: o navigazione, o un'iniezione
+      // DOM (banner conferma/errore). networkidle da solo non basta perché
+      // un click su un form con errore di validazione client-side non
+      // genera traffico di rete → networkidle finisce subito → falso ok.
+      await page
+        .waitForLoadState("networkidle", { timeout: 15_000 })
+        .catch(() => void 0);
+      await page.waitForTimeout(1500); // breve grace per render lato JS
+
       const url = page.url();
       const bodyText = await page.locator("body").innerText().catch(() => "");
-      const confirmed =
-        /confirm|thank|successo|grazie|submitted|applied|received|invi(at|o)|conferma/i.test(bodyText) ||
-        /confirm|thank/i.test(url);
+
+      // 1) ERROR signals — Greenhouse mostra un alert-banner se la
+      //    validazione fallisce ("This field is required", "Invalid",
+      //    "There were problems with your submission"). Se li vediamo,
+      //    NON è stata submittata.
+      const errorPatterns =
+        /(there\s+(was|were)\s+problems?|this\s+field\s+is\s+required|please\s+(correct|fix|enter)|invalid\s+(email|input|file)|errore|campo\s+obbligatorio|inserisci|file\s+too\s+large|select\s+a\s+(valid\s+)?file)/i;
+      const sawError = errorPatterns.test(bodyText);
+
+      // 2) STRONG confirmation signals — keyword inequivoche + cambio URL
+      //    o presenza di una page di "thank you" canonical di Greenhouse.
+      //    Stretto di proposito per ridurre false positive (es. la pagina
+      //    contiene già la parola "apply" nel CTA originale).
+      const strongConfirmRegex =
+        /(thank\s+you|application\s+(received|submitted|successful)|your\s+application\s+has\s+been|grazie\s+per|candidatura\s+(inviata|ricevuta)|we\s+received\s+your)/i;
+      const urlChanged = url !== urlBeforeSubmit;
+      const urlHasConfirm = /thank|confirm|received|success/i.test(url);
+      const strongConfirmed =
+        strongConfirmRegex.test(bodyText) || urlHasConfirm;
+
+      if (sawError) {
+        return {
+          ok: false,
+          status: "validation_failed",
+          error: `Greenhouse ha mostrato un errore di validazione dopo il submit. Body excerpt: "${bodyText.slice(0, 240).replace(/\s+/g, " ")}"`,
+        };
+      }
+
       return {
         ok: true,
         status: "submitted",
-        confirmation: confirmed ? "DETECTED" : "UNCONFIRMED",
+        // DETECTED solo con strong-confirm. URL changed + no error
+        // (cioè: siamo navigati ma senza thank-you page chiara) lo
+        // trattiamo come UNCONFIRMED — l'utente verifica manualmente.
+        confirmation: strongConfirmed
+          ? "DETECTED"
+          : urlChanged
+            ? "UNCONFIRMED"
+            : "UNCONFIRMED",
       };
     } catch (err) {
       return {

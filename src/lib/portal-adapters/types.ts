@@ -40,7 +40,16 @@ export interface ApplyInput {
 
 export type ApplyOutcome =
   | { ok: true; status: "submitted"; confirmation?: string }
-  | { ok: false; status: "form_not_found" | "missing_field" | "captcha" | "unknown_error"; error: string };
+  | {
+      ok: false;
+      status:
+        | "form_not_found"
+        | "missing_field"
+        | "captcha"
+        | "validation_failed"
+        | "unknown_error";
+      error: string;
+    };
 
 export interface PortalAdapter {
   /** Identificatore macchina (es. "greenhouse") */
