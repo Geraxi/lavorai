@@ -220,42 +220,112 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
   }, [currentJob, animatingId, detailJob, apply, skip]);
 
   if (!currentJob) {
+    const hasSkipped = skipped.size > 0;
+    const totalJobs = jobs.length;
     return (
       <div
+        className="ds-section-card"
         style={{
-          padding: "80px 24px",
+          padding: "48px 32px",
           textAlign: "center",
-          border: "1px dashed var(--border-ds)",
-          borderRadius: 12,
-          background: "var(--bg-elev)",
+          borderRadius: 20,
         }}
       >
-        <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
-        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>
-          {t("emptyTitle")}
+        <div style={{ fontSize: 48, marginBottom: 14 }}>🎯</div>
+        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, letterSpacing: "-0.01em" }}>
+          {totalJobs === 0 ? "Nessuna offerta trovata" : "Hai visto tutte le offerte"}
         </div>
         <div
           style={{
-            fontSize: 13.5,
+            fontSize: 14,
             color: "var(--fg-muted)",
-            maxWidth: 360,
+            maxWidth: 440,
+            margin: "0 auto 24px",
+            lineHeight: 1.55,
+          }}
+        >
+          {totalJobs === 0
+            ? "Nessun annuncio corrisponde alle tue preferenze attuali. Allarga ruoli, città o tipologia di contratto per scoprire altre opportunità."
+            : `Hai esaminato tutte le ${totalJobs} offerte allineate al tuo profilo. Allarga le preferenze per nuovi match, oppure resetta gli skip per riprovare quelli scartati.`}
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
+            maxWidth: 380,
             margin: "0 auto",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => router.push("/preferences")}
+            className="ds-btn ds-btn-primary"
+            style={{
+              padding: "12px 18px",
+              fontSize: 14,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <Icon name="filter" size={14} />
+            Modifica preferenze (ruoli, città, salario)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push("/jobs")}
+            className="ds-btn"
+            style={{
+              padding: "11px 18px",
+              fontSize: 13.5,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <Icon name="search" size={13} />
+            Cerca manualmente su /jobs
+          </button>
+
+          {hasSkipped && (
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem(SKIP_KEY);
+                setSkipped(new Set());
+                toast.success(`Ripristinati ${skipped.size} annunci scartati`);
+              }}
+              className="ds-btn"
+              style={{
+                padding: "11px 18px",
+                fontSize: 13.5,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 8,
+              }}
+            >
+              <Icon name="refresh" size={13} />
+              Ripristina gli {skipped.size} skip
+            </button>
+          )}
+        </div>
+
+        <div
+          style={{
+            marginTop: 24,
+            fontSize: 11.5,
+            color: "var(--fg-subtle)",
             lineHeight: 1.5,
           }}
         >
-          {t("emptyBody")}
+          Il cron sync-jobs pesca nuovi annunci ogni 2 ore.
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            localStorage.removeItem(SKIP_KEY);
-            setSkipped(new Set());
-          }}
-          className="ds-btn"
-          style={{ marginTop: 18 }}
-        >
-          {t("resetSkipped")}
-        </button>
       </div>
     );
   }
