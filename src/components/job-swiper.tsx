@@ -630,19 +630,32 @@ function JobCardSurface({
 
   return (
     <div
-      style={{
-        position: "relative",
-        height: "100%",
-        borderRadius: 18,
-        border: "1px solid var(--border-ds)",
-        background: "var(--bg-elev)",
-        boxShadow:
-          "0 12px 30px -8px rgba(0,0,0,0.18), 0 4px 10px -4px rgba(0,0,0,0.1)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        userSelect: compact ? "none" : "auto",
-      }}
+      style={
+        {
+          position: "relative",
+          height: "100%",
+          borderRadius: "2rem",
+          border: "1px solid rgba(255,255,255,0.10)",
+          // Solid emerald gradient — opaco, coerente con .ds-card del sito.
+          background: "linear-gradient(to bottom right, #059669, #065F46)",
+          color: "#FFFFFF",
+          boxShadow:
+            "inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.18), 0 4px 12px rgba(5,80,55,0.25), 0 32px 80px -16px rgba(5,80,55,0.45)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          userSelect: compact ? "none" : "auto",
+          // Override CSS vars così child elements con var(--fg-muted)
+          // ecc. (titoli, company, descrizione, hint) cascade a
+          // versioni white-translucent leggibili su emerald.
+          "--fg": "#FFFFFF",
+          "--fg-muted": "rgba(255,255,255,0.85)",
+          "--fg-subtle": "rgba(255,255,255,0.60)",
+          "--border-ds": "rgba(255,255,255,0.15)",
+          "--bg-elev": "rgba(255,255,255,0.10)",
+          "--bg-sunken": "rgba(0,0,0,0.15)",
+        } as React.CSSProperties
+      }
     >
       {/* Accent strip in alto — gradient basato sul colore company */}
       <div
