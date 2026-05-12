@@ -32,6 +32,89 @@ function randomToken(): string {
     .join("");
 }
 
+/**
+ * Espande una preferenza di location utente in un set di matcher case-
+ * insensitive che applichiamo contro `job.location`. Logica:
+ *   - "Milan" → ["milan", "milano"]
+ *   - "Dubai/UAE" → ["dubai", "uae", "united arab emirates", "emirates"]
+ *   - "Roma" → ["rome", "roma"]
+ *   - "Remote" → ["remote", "remoto", "anywhere"]
+ *   - "Italy" → ["italy", "italia", "milano", "roma", "torino", "milan", "rome"]
+ *   - "EU" / "Europe" → ["europe", "eu", "united kingdom", "germany", ...] (broad)
+ * Inoltre, qualsiasi job con `remote: true` qualifica sempre se la
+ * lista preferenze contiene almeno una location "fisica" non-remote
+ * — perché remote-friendly è una superset di qualunque città scelta.
+ */
+function expandLocationPref(loc: string): string[] {
+  const k = loc.trim().toLowerCase();
+  const aliases: Record<string, string[]> = {
+    milan: ["milan", "milano", "lombardia"],
+    milano: ["milan", "milano", "lombardia"],
+    rome: ["rome", "roma", "lazio"],
+    roma: ["rome", "roma", "lazio"],
+    turin: ["turin", "torino", "piemonte"],
+    torino: ["turin", "torino", "piemonte"],
+    bologna: ["bologna", "emilia"],
+    naples: ["naples", "napoli", "campania"],
+    napoli: ["naples", "napoli", "campania"],
+    florence: ["florence", "firenze", "toscana"],
+    firenze: ["florence", "firenze", "toscana"],
+    italy: [
+      "italy", "italia", "milan", "milano", "rome", "roma",
+      "turin", "torino", "bologna", "naples", "napoli",
+      "florence", "firenze", "lombardia", "lazio", "veneto",
+    ],
+    italia: [
+      "italy", "italia", "milan", "milano", "rome", "roma",
+      "turin", "torino", "bologna", "naples", "napoli",
+      "florence", "firenze",
+    ],
+    dubai: ["dubai", "uae", "united arab emirates", "emirates", "abu dhabi"],
+    "dubai/uae": ["dubai", "uae", "united arab emirates", "emirates", "abu dhabi"],
+    uae: ["dubai", "uae", "united arab emirates", "emirates", "abu dhabi"],
+    remote: ["remote", "remoto", "anywhere", "worldwide", "fully remote"],
+    remoto: ["remote", "remoto", "anywhere", "fully remote"],
+    europe: [
+      "europe", "eu", "european union", "remote eu", "europe remote",
+      "berlin", "london", "amsterdam", "paris", "madrid", "barcelona",
+      "dublin", "lisbon", "warsaw", "prague",
+    ],
+    eu: [
+      "europe", "eu", "european union", "remote eu",
+      "berlin", "london", "amsterdam", "paris", "madrid",
+    ],
+  };
+  if (aliases[k]) return aliases[k];
+  // Fallback: ritorna la stringa così com'è (lowercase).
+  return [k];
+}
+
+/**
+ * Test: l'utente accetta questo job in base alle sue location pref?
+ *   - Nessuna pref impostata → true (back-compat, niente filtro)
+ *   - `job.remote === true` → true (remote = superset di qualsiasi città)
+ *   - `job.location` contiene almeno un alias di qualsiasi pref → true
+ *   - Altrimenti false
+ */
+function jobMatchesLocationPrefs(
+  job: { location: string | null; remote: boolean },
+  prefs: string[],
+): boolean {
+  if (prefs.length === 0) return true;
+  // Job esplicitamente remoto: ok per qualunque preferenza fisica
+  // (a meno che l'utente abbia chiesto SOLO un'area specifica E
+  // marcato esplicitamente "no remote" — non supportato oggi).
+  if (job.remote) return true;
+  const haystack = (job.location ?? "").toLowerCase();
+  if (!haystack) return false; // no location → no match (defensive)
+  for (const p of prefs) {
+    for (const alias of expandLocationPref(p)) {
+      if (haystack.includes(alias)) return true;
+    }
+  }
+  return false;
+}
+
 interface RunStats {
   usersProcessed: number;
   applicationsEnqueued: number;
@@ -43,6 +126,7 @@ interface RunStats {
   skippedAvoidedCompany: number;
   skippedSessionPaused: number;
   skippedEmploymentMismatch: number;
+  skippedLocationMismatch: number;
   errors: number;
 }
 
@@ -76,6 +160,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     skippedAvoidedCompany: 0,
     skippedSessionPaused: 0,
     skippedEmploymentMismatch: 0,
+    skippedLocationMismatch: 0,
     errors: 0,
   };
 
@@ -208,6 +293,23 @@ async function processUser(
 
   const roles: string[] = Array.from(rolesSet.values());
   if (roles.length === 0) return;
+
+  // Parsing preferenze di location. Bug pre-fix: questo campo veniva
+  // letto in select ma MAI usato nel filtro → utente impostava "Milan,
+  // Dubai/UAE" e si vedeva candidato a job in Berlino o San Francisco.
+  // Ora applichiamo `jobMatchesLocationPrefs` nel loop per ogni job.
+  let locationPrefs: string[] = [];
+  try {
+    const arr = JSON.parse(prefs.locationsJson);
+    if (Array.isArray(arr)) {
+      locationPrefs = arr
+        .filter((l): l is string => typeof l === "string")
+        .map((l) => l.trim())
+        .filter(Boolean);
+    }
+  } catch {
+    /* noop — locationsJson malformato, niente filtro location */
+  }
 
   // Daily cap = quante già create oggi
   const todayCount = await prisma.application.count({
@@ -434,6 +536,21 @@ async function processUser(
       continue;
     }
     void cKey;
+
+    // Filtro location: skippa job fuori dalle aree preferite dall'utente.
+    // Remote-friendly job (job.remote === true) passano sempre. Vedi
+    // expandLocationPref per gli alias multi-lingua (Milan↔Milano,
+    // Dubai↔UAE, Italy → tutte le maggiori città italiane, ecc.).
+    if (
+      locationPrefs.length > 0 &&
+      !jobMatchesLocationPrefs(
+        { location: job.location, remote: job.remote },
+        locationPrefs,
+      )
+    ) {
+      stats.skippedLocationMismatch++;
+      continue;
+    }
 
     // Match STRETTO sul titolo: tutti i token significativi del ruolo
     // devono essere presenti. "Product Designer" → sì "Senior Product
