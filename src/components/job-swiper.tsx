@@ -751,9 +751,10 @@ function JobCardSurface({
   const descSnippet = useMemo(() => {
     if (compact) return "";
     const clean = cleanHtmlText(job.description).replace(/\s+/g, " ").trim();
-    return clean.length > 180 ? clean.slice(0, 180).trimEnd() + "…" : clean;
+    return clean.length > 280 ? clean.slice(0, 280).trimEnd() + "…" : clean;
   }, [job.description, compact]);
   const postedLabel = relativeDateLabel(job.postedAt ?? null);
+  const salaryLabel = (job.salaryMin || job.salaryMax) ? formatSalary(job.salaryMin, job.salaryMax) : null;
 
   return (
     <div
@@ -762,39 +763,61 @@ function JobCardSurface({
           position: "relative",
           height: "100%",
           borderRadius: "2rem",
-          border: "1px solid rgba(255,255,255,0.10)",
-          // Solid emerald gradient — opaco, coerente con .ds-card del sito.
-          background: "linear-gradient(to bottom right, #059669, #065F46)",
-          color: "#FFFFFF",
+          border: "1px solid rgba(0,0,0,0.06)",
+          // White card — pop su dark background, tono Tinder.
+          background: "#FFFFFF",
+          color: "#0F1012",
           boxShadow:
-            "inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -1px 0 rgba(0,0,0,0.18), 0 4px 12px rgba(5,80,55,0.25), 0 32px 80px -16px rgba(5,80,55,0.45)",
+            "0 1px 2px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.18), 0 32px 80px -16px rgba(0,0,0,0.35)",
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
           userSelect: compact ? "none" : "auto",
-          // Override CSS vars così child elements con var(--fg-muted)
-          // ecc. (titoli, company, descrizione, hint) cascade a
-          // versioni white-translucent leggibili su emerald.
-          "--fg": "#FFFFFF",
-          "--fg-muted": "rgba(255,255,255,0.85)",
-          "--fg-subtle": "rgba(255,255,255,0.60)",
-          "--border-ds": "rgba(255,255,255,0.15)",
-          "--bg-elev": "rgba(255,255,255,0.10)",
-          "--bg-sunken": "rgba(0,0,0,0.15)",
+          // Override CSS vars per cascade dark-on-white nel contenuto.
+          "--fg": "#0F1012",
+          "--fg-muted": "rgba(15,16,18,0.65)",
+          "--fg-subtle": "rgba(15,16,18,0.42)",
+          "--border-ds": "rgba(15,16,18,0.10)",
+          "--bg-elev": "rgba(15,16,18,0.04)",
+          "--bg-sunken": "rgba(15,16,18,0.06)",
         } as React.CSSProperties
       }
     >
-      {/* Accent strip in alto — gradient basato sul colore company */}
+      {/* Brand banner: gradient col company color, logo centrato.
+          Sostituisce la "photo" stile Tinder con un'identità visiva
+          deterministica derivata dal nome azienda. */}
       <div
         aria-hidden
         style={{
-          height: 6,
-          background: `linear-gradient(90deg, ${color}, ${color}88 60%, transparent)`,
+          position: "relative",
+          height: compact ? 90 : 120,
+          background: `linear-gradient(135deg, ${color}, ${color}CC 60%, ${color}88)`,
           flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          overflow: "hidden",
         }}
-      />
+      >
+        {/* Texture overlay sottile per evitare il flat-color */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.18), transparent 50%), radial-gradient(circle at 80% 80%, rgba(0,0,0,0.15), transparent 50%)",
+            pointerEvents: "none",
+          }}
+        />
+        <CompanyLogo
+          company={job.company ?? job.title}
+          color={color}
+          size={compact ? 56 : 76}
+          rounded={18}
+        />
+      </div>
 
-      {/* Bookmark heart — top-right floating (solo card primaria) */}
+      {/* Bookmark heart — floating sul banner, top-right */}
       {!compact && onToggleSave && (
         <button
           type="button"
@@ -806,14 +829,14 @@ function JobCardSurface({
           onPointerDown={(e) => e.stopPropagation()}
           style={{
             position: "absolute",
-            top: 18,
-            right: 18,
+            top: 16,
+            right: 16,
             zIndex: 5,
             width: 40,
             height: 40,
             borderRadius: 999,
-            background: isSaved ? "#FFFFFF" : "rgba(255,255,255,0.18)",
-            border: "1px solid rgba(255,255,255,0.35)",
+            background: isSaved ? "#FFFFFF" : "rgba(255,255,255,0.22)",
+            border: "1px solid rgba(255,255,255,0.5)",
             color: isSaved ? "#DC2626" : "#FFFFFF",
             display: "inline-flex",
             alignItems: "center",
@@ -823,6 +846,7 @@ function JobCardSurface({
             transition: "transform 0.15s, background 0.15s",
             fontSize: 18,
             lineHeight: 1,
+            boxShadow: isSaved ? "0 2px 8px rgba(0,0,0,0.15)" : undefined,
           }}
           onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
           onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
@@ -831,71 +855,99 @@ function JobCardSurface({
         </button>
       )}
 
-      {/* Header: logo grande + title + company */}
-      <div
-        style={{
-          padding: "28px 28px 14px",
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 18,
-        }}
-      >
-        <CompanyLogo
-          company={job.company ?? job.title}
-          color={color}
-          size={72}
-          rounded={16}
-        />
-        <div style={{ flex: 1, minWidth: 0, paddingRight: compact ? 0 : 44 }}>
-          <div
-            style={{
-              fontSize: 20,
-              fontWeight: 700,
-              letterSpacing: "-0.02em",
-              lineHeight: 1.2,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-            }}
-          >
-            {job.title}
-          </div>
-          <div
-            style={{
-              fontSize: 14.5,
-              color: "var(--fg-muted)",
-              marginTop: 5,
-              fontWeight: 500,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              flexWrap: "wrap",
-            }}
-          >
-            <span style={{ fontWeight: 600, color: "#FFFFFF" }}>
-              {job.company ?? "—"}
-            </span>
-            {job.location && (
-              <>
-                <span style={{ opacity: 0.5 }}>·</span>
-                <span style={{ fontSize: 13 }}>{shortLocation(job.location)}</span>
-              </>
-            )}
-          </div>
+      {/* Header testuale sotto il banner: title + company + location */}
+      <div style={{ padding: "20px 24px 12px" }}>
+        <div
+          style={{
+            fontSize: 20,
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.25,
+            color: "#0F1012",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {job.title}
+        </div>
+        <div
+          style={{
+            marginTop: 6,
+            fontSize: 13.5,
+            color: "rgba(15,16,18,0.65)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexWrap: "wrap",
+          }}
+        >
+          <span style={{ fontWeight: 600, color: "#0F1012" }}>
+            {job.company ?? "—"}
+          </span>
+          {job.location && (
+            <>
+              <span style={{ opacity: 0.4 }}>·</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                <Icon name="map-pin" size={11} />
+                {shortLocation(job.location)}
+              </span>
+            </>
+          )}
+          {postedLabel && (
+            <>
+              <span style={{ opacity: 0.4 }}>·</span>
+              <span>{postedLabel}</span>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Description snippet — ridà densità informativa alla card */}
+      {/* KEY FACTS row — salario + contratto + remote come "stat strip"
+          stile Tinder bio. Visivamente forte, leggibile a colpo d'occhio. */}
+      {!compact && (salaryLabel || job.contractType || job.remote) && (
+        <div
+          style={{
+            margin: "0 24px 14px",
+            padding: "12px 14px",
+            borderRadius: 12,
+            background: "rgba(5,150,105,0.06)",
+            border: "1px solid rgba(5,150,105,0.15)",
+            display: "flex",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          {salaryLabel && (
+            <KeyFact icon="euro" label="RAL" value={salaryLabel} />
+          )}
+          {job.contractType && (
+            <KeyFact
+              icon="clock"
+              label="Contratto"
+              value={job.contractType === "permanent" ? "Tempo indet." : job.contractType}
+            />
+          )}
+          {job.remote && (
+            <KeyFact icon="globe" label="Modalità" value="Remote" />
+          )}
+          {seniority && (
+            <KeyFact icon="star" label="Livello" value={seniority} />
+          )}
+        </div>
+      )}
+
+      {/* Description snippet — più lungo (280 char) per densità info */}
       {!compact && descSnippet && (
         <div
           style={{
-            padding: "0 28px 14px",
+            padding: "0 24px 14px",
             fontSize: 13.5,
-            lineHeight: 1.55,
-            color: "rgba(255,255,255,0.88)",
+            lineHeight: 1.6,
+            color: "rgba(15,16,18,0.75)",
             display: "-webkit-box",
-            WebkitLineClamp: 3,
+            WebkitLineClamp: 4,
             WebkitBoxOrient: "vertical",
             overflow: "hidden",
           }}
@@ -907,61 +959,40 @@ function JobCardSurface({
       {/* Spacer flessibile per spingere pill/footer in basso */}
       <div style={{ flex: 1, minHeight: 4 }} />
 
-      {/* PILLS: info strutturate, tutte pill-shaped */}
-      <div
-        style={{
-          padding: "0 28px",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 8,
-        }}
-      >
-        {job.remote && (
-          <Pill tone="primary" icon="zap" label="Remote" />
-        )}
-        {seniority && <Pill tone="accent" label={seniority} />}
-        {job.location && (
-          <Pill icon="map-pin" label={shortLocation(job.location)} />
-        )}
-        {job.contractType && (
-          <Pill
-            icon="clock"
-            label={
-              job.contractType === "permanent" ? "Permanent" : job.contractType
-            }
-          />
-        )}
-        {(job.salaryMin || job.salaryMax) && (
-          <Pill
-            icon="euro"
-            tone="strong"
-            label={formatSalary(job.salaryMin, job.salaryMax)}
-          />
-        )}
-        {postedLabel && <Pill label={postedLabel} subtle />}
-      </div>
-
-      {/* SKILLS: solo sulla card primaria, non sui peek */}
+      {/* SKILLS: tech tags estratti dalla description */}
       {!compact && skills.length > 0 && (
         <div
           style={{
-            padding: "14px 28px 0",
+            padding: "0 24px 14px",
             display: "flex",
             flexWrap: "wrap",
             gap: 6,
           }}
         >
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              color: "rgba(15,16,18,0.45)",
+              marginRight: 4,
+              alignSelf: "center",
+            }}
+          >
+            Tech
+          </span>
           {skills.map((s) => (
             <span
               key={s}
               style={{
-                fontSize: 11,
+                fontSize: 11.5,
                 fontWeight: 600,
                 padding: "4px 10px",
                 borderRadius: 999,
-                background: "hsl(var(--primary) / 0.1)",
-                color: "hsl(var(--primary))",
-                border: "1px solid hsl(var(--primary) / 0.25)",
+                background: "rgba(5,150,105,0.10)",
+                color: "#047857",
+                border: "1px solid rgba(5,150,105,0.22)",
               }}
             >
               {s}
@@ -974,18 +1005,17 @@ function JobCardSurface({
       {!compact && (
         <div
           style={{
-            padding: "18px 28px 24px",
+            padding: "14px 24px 20px",
             fontSize: 11.5,
-            color: "var(--fg-subtle)",
+            color: "rgba(15,16,18,0.45)",
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
             alignSelf: "flex-start",
-            opacity: 0.85,
           }}
         >
           <Icon name="arrow-up-right" size={11} />
-          Tocca la card per leggere la descrizione completa
+          Tocca la card per la descrizione completa
         </div>
       )}
 
@@ -995,72 +1025,50 @@ function JobCardSurface({
 }
 
 /**
- * Pill atomica riusabile. Variante tonale:
- *   default → neutro
- *   primary → primary verde (badge importante, es. Remote)
- *   accent  → bordo accentuato (seniority)
- *   strong  → testo bold + colore primary (salary range)
- *   subtle  → opacity ridotta (posted date)
+ * "KeyFact" — riga compatta label/value usata nella stat-strip
+ * sotto l'header (RAL, Contratto, Modalità, Livello). Label è
+ * uppercase micro, value è bold per leggibilità a colpo d'occhio.
  */
-function Pill({
+function KeyFact({
   icon,
   label,
-  tone = "default",
-  subtle,
+  value,
 }: {
-  icon?: "zap" | "map-pin" | "clock" | "euro";
+  icon: "euro" | "clock" | "globe" | "star";
   label: string;
-  tone?: "default" | "primary" | "accent" | "strong";
-  subtle?: boolean;
+  value: string;
 }) {
-  const baseStyle = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 5,
-    padding: "5px 11px",
-    borderRadius: 999,
-    fontSize: 12,
-    fontWeight: 500,
-    lineHeight: 1.4,
-    opacity: subtle ? 0.7 : 1,
-    whiteSpace: "nowrap" as const,
-  };
-  let style: React.CSSProperties = {
-    ...baseStyle,
-    background: "var(--bg-sunken)",
-    color: "var(--fg-muted)",
-    border: "1px solid var(--border-ds)",
-  };
-  if (tone === "primary") {
-    style = {
-      ...baseStyle,
-      background: "hsl(var(--primary) / 0.12)",
-      color: "hsl(var(--primary))",
-      border: "1px solid hsl(var(--primary) / 0.3)",
-      fontWeight: 600,
-    };
-  } else if (tone === "accent") {
-    style = {
-      ...baseStyle,
-      background: "var(--bg)",
-      color: "var(--fg)",
-      border: "1px solid var(--fg-muted)",
-      fontWeight: 600,
-    };
-  } else if (tone === "strong") {
-    style = {
-      ...baseStyle,
-      background: "var(--bg-sunken)",
-      color: "var(--fg)",
-      border: "1px solid var(--border-ds)",
-      fontWeight: 600,
-    };
-  }
   return (
-    <span style={style}>
-      {icon && <Icon name={icon} size={11} />}
-      {label}
-    </span>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+      <div
+        style={{
+          fontSize: 9.5,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          color: "rgba(15,16,18,0.5)",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+        }}
+      >
+        <Icon name={icon} size={10} />
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: 13.5,
+          fontWeight: 700,
+          color: "#0F1012",
+          letterSpacing: "-0.01em",
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
