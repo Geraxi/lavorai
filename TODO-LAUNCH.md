@@ -146,3 +146,86 @@ Once analytics is wired, run these in priority order:
 5. **Boundary table** — 3-column (current) vs flat list with toggle.
 6. **Pricing toggle** — monthly only vs monthly+quarterly. Quarterly
    = 20% discount.
+
+---
+
+## Deferred priorities (post this-session)
+
+These are tracked from the 9-priority brief. P1–P3 landed; P4–P9 either
+need a dedicated effort, real product data, or both.
+
+### 🟡 P4–P5: Premium UI system + custom icon set
+**Effort**: ~2–3 focused days. Do NOT half-do this — partial design
+system upgrades create visual debt worse than the current state.
+
+- [ ] Audit all `Button` variants — refine padding rhythm, weight
+      hierarchy, hover/pressed/disabled/loading states
+- [ ] Card system: unify surfaces (`ds-card`, `ds-glass`, `ds-section-card`)
+      around a single elevation token scale
+- [ ] Pricing cards: feel like designed objects, not commodity SaaS
+      blocks — consider custom illustration per tier
+- [ ] Form fields: consistent focus rings, validation states, helper
+      text typography
+- [ ] **Custom SVG icon set** for the 6 core concepts:
+      auto-apply, CV tailoring, portal coverage, review mode,
+      privacy/consent, interview outcomes. Replace lucide stand-ins
+      where they read as generic
+- [ ] Typography pass: pair the existing Inter with a serif display
+      face for editorial sections (manifesto, invisible-work)
+
+### 🟡 P6: Free CV audit lead magnet (full flow)
+**Status**: `/analizza-cv` and `/optimize` route scaffolding exists.
+Missing: real ATS-score UI + capture flow.
+
+- [ ] Build results screen with 4 scored axes: ATS readability /
+      keyword alignment / clarity / practical fixes
+- [ ] Email-gate the full result (capture before result reveal)
+- [ ] Wire to actual scoring backend OR implement placeholder logic
+      clearly marked as v0
+- [ ] Add hero secondary CTA + inline section after proof block
+
+### 🟡 P7: Signup refinement (beyond the checklist that landed)
+- [ ] Step indicator (1 of 3) above the form even for the email step
+- [ ] Helper text under upload field explaining what we extract and what
+      we DON'T touch (e.g., "non leggiamo metadata photo")
+- [ ] Inline validation UX (green check on valid email, password
+      strength meter)
+- [ ] Optional toggle: "Modalità revisione (mi mostri ogni
+      candidatura prima)" vs "Auto pieno (parti senza chiedere)" at
+      signup time, persisting to user prefs
+
+### 🟢 P8: B2B discovery layer
+**Status**: nothing in place.
+
+- [ ] Add footer-nav link "Per career service e academy" → `/business`
+- [ ] Create `/business` page with 3 sections:
+      1. Use cases (career service, bootcamp, outplacement, training)
+      2. What we measure (placement velocity, support reduction, cohort
+         visibility)
+      3. Contact form (demo request, not full enterprise checkout)
+- [ ] Lightweight POST to `/api/business-inquiry` (Resend forward to
+      umberto@lavorai.it)
+- [ ] Avoid distracting B2C copy — keep this entry minimal
+
+### 🟢 P9: Analytics event catalogue + final QA
+**Status**: partial — `src/lib/analytics.ts` has FAQ_EXPAND and
+TRUST_SECTION_VIEW but not the rest.
+
+- [ ] Define all events in one place:
+      `HERO_CTA_CLICK`, `CV_AUDIT_START`, `CV_AUDIT_SUBMIT`,
+      `PRICING_CTA_CLICK`, `SIGNUP_SUBMIT`, `FAQ_EXPAND` ✅,
+      `B2B_CTA_CLICK`, `FINAL_CTA_CLICK`, `TRUST_SECTION_VIEW` ✅
+- [ ] Wire each event at the call site
+- [ ] Mobile QA pass: hero text sizing, trust strip layout, signup
+      form on iOS Safari, pricing cards on Android Chrome
+- [ ] Accessibility pass: focus order, ARIA labels on all icon-only
+      buttons, color contrast on emerald/light surfaces
+- [ ] Metadata audit per route: title, description, OG image, canonical
+
+### Locale unfreeze (revert when ready)
+- [ ] Translate every key in `messages/en.json` for real — most strings
+      are currently Italian copy mistakenly placed in the EN file
+- [ ] Re-add `"en"` to `routing.locales` and revert the locale freeze
+      in `src/i18n/request.ts` (commit comment marks the spot)
+- [ ] Run the Python audit script (see CHANGELOG) again against both
+      files to verify no cross-locale leakage

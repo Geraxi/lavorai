@@ -37,7 +37,7 @@ function SignupContent() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!consent) {
-      setErr("Devi accettare la privacy policy per continuare.");
+      setErr("Devi accettare l'informativa privacy per continuare.");
       return;
     }
     setLoading(true);
@@ -231,7 +231,7 @@ function SignupContent() {
                   href="/privacy"
                   style={{ color: "var(--fg)", textDecoration: "underline" }}
                 >
-                  privacy policy
+                  informativa privacy
                 </Link>{" "}
                 {t("consentAuthorize")}
               </span>
@@ -248,6 +248,41 @@ function SignupContent() {
                 {err}
               </p>
             )}
+
+            {/* "Cosa succede dopo" — riduce esitazione mostrando che
+                ogni step prima dell'auto-apply richiede tua conferma. */}
+            <div
+              style={{
+                marginTop: 16,
+                padding: "12px 14px",
+                borderRadius: 10,
+                background: "rgba(5,150,105,0.06)",
+                border: "1px solid rgba(5,150,105,0.18)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                fontSize: 12.5,
+                lineHeight: 1.5,
+                color: "var(--fg-muted)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  color: "hsl(var(--primary))",
+                  marginBottom: 2,
+                }}
+              >
+                Cosa succede dopo
+              </div>
+              <NextStep n="1" label="Verifichi l'email (60s)" />
+              <NextStep n="2" label="Carichi il CV — niente parte finché non confermi" />
+              <NextStep n="3" label="Scegli ruoli e città. L'auto-apply è OFF di default" />
+              <NextStep n="4" label="Attivi solo quando ti senti pronto — pausa in 1 click" />
+            </div>
 
             <button
               type="submit"
@@ -471,6 +506,32 @@ function Benefit({ icon, text }: { icon: "zap" | "sparkles" | "target"; text: st
         <Icon name={icon} size={13} />
       </div>
       <span style={{ color: "var(--fg-muted)" }}>{text}</span>
+    </div>
+  );
+}
+
+function NextStep({ n, label }: { n: string; label: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 999,
+          background: "hsl(var(--primary))",
+          color: "white",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 10.5,
+          fontWeight: 700,
+          flexShrink: 0,
+          lineHeight: 1,
+        }}
+      >
+        {n}
+      </span>
+      <span>{label}</span>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy",
+  title: "Informativa privacy",
   description:
     "Informativa privacy di LavorAI. Come gestiamo i dati personali, i cookie dei portali terzi, e i diritti GDPR.",
 };
@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         </div>
       </header>
       <main className="container max-w-3xl py-12">
-        <h1 className="text-4xl font-bold tracking-tight">Privacy Policy</h1>
+        <h1 className="text-4xl font-bold tracking-tight">Informativa privacy</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Versione draft Sprint 4 — non è definitiva. Revisione legale prima del
           launch pubblico.

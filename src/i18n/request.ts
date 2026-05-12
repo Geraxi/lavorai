@@ -19,23 +19,17 @@ function isLocale(v: string | undefined | null): v is Locale {
 }
 
 export default getRequestConfig(async () => {
-  const c = await cookies();
-  const fromCookie = c.get("NEXT_LOCALE")?.value;
-  let locale: Locale = "it";
+  // LANCIO: locale fissato a "it" finché messages/en.json non è tradotto
+  // completamente. La detection geo + cookie resta cablata sotto (chiamata
+  // a cookies/headers per side-effects RSC e non rompere le firme) ma
+  // qualsiasi valore viene scartato. Sblocchiamo `en` quando le stringhe
+  // sono state tradotte e QA'd — vedi TODO-LAUNCH.md.
+  await cookies();
+  await headers();
+  const locale: Locale = "it";
 
-  if (isLocale(fromCookie)) {
-    locale = fromCookie;
-  } else {
-    const h = await headers();
-    const country = (h.get("x-vercel-ip-country") ?? "").toUpperCase();
-    if (country && country !== "IT") {
-      locale = "en";
-    } else {
-      const accept = (h.get("accept-language") ?? "").toLowerCase();
-      // se non c'è geo (dev) ma il browser preferisce inglese
-      if (!country && accept.startsWith("en")) locale = "en";
-    }
-  }
+  // riferimenti tenuti vivi per evitare warning "unused" durante il freeze.
+  void isLocale;
 
   return {
     locale,

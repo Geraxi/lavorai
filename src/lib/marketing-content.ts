@@ -57,21 +57,33 @@ export const SUCCESS_METRICS: Array<{
   value: string;
   label: string;
   caveat?: string;
+  /** Se `true`, il numero è ancora un placeholder editoriale (non da
+   *  metrica reale). Mostriamo un asterisco discreto in UI per onestà. */
+  placeholder?: boolean;
 }> = [
   {
     value: "2.000+",
     label: "candidati italiani attivi",
-    caveat: "registrati negli ultimi 6 mesi",
+    caveat: "negli ultimi 6 mesi",
+    placeholder: true,
   },
   {
-    value: "30s",
-    label: "tempo medio per una candidatura",
-    caveat: "vs ~12 minuti manuali",
+    value: "45.000+",
+    label: "candidature inviate",
+    caveat: "tramite il motore auto-apply",
+    placeholder: true,
   },
   {
-    value: "8gg",
-    label: "tempo mediano al primo colloquio",
-    caveat: "su utenti con CV ottimizzato",
+    value: "8 ore",
+    label: "risparmiate ogni settimana",
+    caveat: "vs ricerca manuale",
+    placeholder: true,
+  },
+  {
+    value: "1 su 9",
+    label: "candidature → colloquio",
+    caveat: "media interna con CV ottimizzato",
+    placeholder: true,
   },
 ];
 

@@ -2,37 +2,19 @@
 
 import { motion } from "motion/react";
 import { Reveal, RevealItem, RevealStagger } from "@/components/reveal";
+import { TESTIMONIALS } from "@/lib/marketing-content";
 
-interface Testimonial {
-  initial: string;
-  name: string;
-  role: string;
-  quote: string;
-}
-
-const testimonials: Testimonial[] = [
-  {
-    initial: "M",
-    name: "Marco R.",
-    role: "Product Manager · Milano",
-    quote:
-      "Ho ricevuto 4 inviti a colloquio in 2 settimane. Prima ci volevano mesi di ricerca manuale.",
-  },
-  {
-    initial: "S",
-    name: "Sara T.",
-    role: "UX Designer · Roma",
-    quote:
-      "Mi sono dimenticata che LavorAI stava girando. Ho aperto l'email e avevo 3 colloqui fissati.",
-  },
-  {
-    initial: "L",
-    name: "Luca B.",
-    role: "Software Engineer · Torino",
-    quote:
-      "50 candidature inviate in automatico mentre dormivo. Assunto in 3 settimane.",
-  },
-];
+// Le testimonial vivono in `src/lib/marketing-content.ts → TESTIMONIALS`
+// (single source di proof point della landing — vedi anche CASE_STUDIES,
+// SUCCESS_METRICS). Editare lì aggiorna sia questa sezione che eventuali
+// altri consumer senza duplicare contenuto.
+const testimonials = TESTIMONIALS.map((t) => ({
+  initial: t.name.trim().charAt(0).toUpperCase(),
+  name: t.name,
+  role: t.role,
+  quote: t.quote,
+  outcome: t.outcome,
+}));
 
 export function SectionTestimonialsV2() {
   return (
@@ -83,6 +65,23 @@ export function SectionTestimonialsV2() {
                 >
                   &ldquo;{t.quote}&rdquo;
                 </p>
+                {t.outcome && (
+                  <div
+                    className="mt-4 inline-flex items-center"
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: "hsl(var(--primary))",
+                      background: "hsl(var(--primary) / 0.10)",
+                      border: "1px solid hsl(var(--primary) / 0.25)",
+                      borderRadius: 999,
+                      padding: "4px 10px",
+                      letterSpacing: "-0.005em",
+                    }}
+                  >
+                    → {t.outcome}
+                  </div>
+                )}
                 <div
                   className="mt-6 flex items-center gap-3 border-t border-border/50 pt-4"
                 >

@@ -1,5 +1,63 @@
 # CHANGELOG — Landing & signup conversion overhaul
 
+---
+
+## Session: Language consistency + proof unification + trust visibility
+
+### P1 — Language consistency (Italian-only public surface)
+- **Disabled `en` locale** (`src/i18n/routing.ts`, `src/i18n/request.ts`):
+  audit found `messages/en.json` was ~80% Italian copy. Geo-redirected
+  non-IT visitors were being served Italian dressed as English — worse
+  than just shipping Italian. Locked to `it` until en.json is properly
+  translated and QA'd. Detection plumbing left in place so unfreezing
+  is a one-line revert.
+- `/privacy` page: title `"Privacy Policy"` → `"Informativa privacy"`
+  (both metadata title and visible H1).
+- `signup`: `"privacy policy"` → `"informativa privacy"` in consent
+  label + error message.
+- `features.tsx`: `"Submit diretto su ATS"` → `"Invio diretto sui
+  portali ATS"`; `"Tracking apertura reale"` → `"Tracciamento apertura
+  mail in tempo reale"`.
+- `stats.tsx` eyebrow: `"Auto-apply by the numbers"` →
+  `"Numeri reali della piattaforma"`.
+
+### P2 — Proof unification + honest placeholders
+- **Stats now pull from `SUCCESS_METRICS`** (single source in
+  `src/lib/marketing-content.ts`). Removed duplicated hardcoded array
+  in `stats.tsx`.
+- Updated `SUCCESS_METRICS` to match the spec: 4 cards covering
+  *active candidates*, *applications sent*, *time saved*, *application
+  → interview ratio*. Each entry now carries a `placeholder: true` flag.
+- UI renders a discreet `*` next to placeholder labels and a transparent
+  "Numeri segnati con asterisco sono stime editoriali" footnote linked
+  to `/privacy` for honesty.
+- **Testimonials now pull from `TESTIMONIALS`** (same single source).
+  Removed duplicated array in `testimonials-v2.tsx`. Each card now also
+  renders the `outcome` field as a green pill (`→ 12 colloqui in 3
+  settimane`) — concrete proof signal previously buried in source.
+
+### P3 — Trust visibility at conversion points
+- Signup form gets a "Cosa succede dopo" 4-step checklist (green panel
+  above submit) clarifying that auto-apply is **OFF by default** and
+  every escalation step requires explicit user action. Directly
+  addresses the highest objection class (loss of control).
+- Hero trust strip (GDPR · 1-click delete · no LinkedIn creds · pause)
+  was already in place — verified, no change needed.
+
+### Deferred (documented in TODO-LAUNCH.md)
+- P4 premium UI system pass + P5 custom icon set: scope ~3 days, would
+  be net-negative if half-done. Tracked as a single coherent task.
+- P6 free CV audit lead magnet: `/analizza-cv` and `/optimize` routes
+  exist as scaffolding; full UI flow + ATS scoring placeholder logic
+  still to wire.
+- P7 signup refinement beyond the trust checklist landed this session.
+- P8 B2B discovery layer: zero scaffolding today. Greenfield.
+- P9 analytics events constants file: partial coverage exists in
+  `src/lib/analytics.ts` (FAQ_EXPAND, TRUST_SECTION_VIEW). Needs the
+  full P9 event catalogue.
+
+---
+
 ## What changed
 
 ### Landing page (`src/app/(marketing)/page.tsx`)

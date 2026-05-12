@@ -31,12 +31,12 @@ const features: Feature[] = [
   },
   {
     icon: Send,
-    title: "Submit diretto su ATS",
+    title: "Invio diretto sui portali ATS",
     body: "Playwright compila e invia il modulo direttamente su Greenhouse, Lever, Workable e BambooHR. Niente reindirizzamenti, niente login: la candidatura arriva come l'hai mandata tu.",
   },
   {
     icon: Eye,
-    title: "Tracking apertura reale",
+    title: "Tracciamento apertura mail in tempo reale",
     body: "Pixel 1×1 + webhook Resend: vedi il momento esatto in cui il recruiter apre la mail. Stato \"Vista\" reale, non inventato.",
   },
   {

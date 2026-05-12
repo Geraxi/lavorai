@@ -2,36 +2,23 @@
 
 import { motion } from "motion/react";
 import { Reveal } from "@/components/reveal";
+import { SUCCESS_METRICS } from "@/lib/marketing-content";
 
-// Metriche concrete: dimensione del pool, velocità, copertura ATS, fiducia.
-// Visual treatment ispirato a Linear / Vercel: numero grande con kerning
-// stretto, label minuscola low-key, divider verticali tra le colonne.
-const stats = [
-  {
-    value: "30",
-    suffix: "s",
-    label: "Setup totale",
-    sub: "dal CV alla prima candidatura",
-  },
-  {
-    value: "1.400",
-    suffix: "+",
-    label: "Annunci attivi",
-    sub: "aggiornati ogni 6 ore",
-  },
-  {
-    value: "100",
-    suffix: "+",
-    label: "Aziende monitorate",
-    sub: "tech, fintech, design · Italia ed EU",
-  },
-  {
-    value: "100",
-    suffix: "%",
-    label: "Privacy by design",
-    sub: "Nessun login ai tuoi account. Mai.",
-  },
-];
+// I numeri vivono in `src/lib/marketing-content.ts → SUCCESS_METRICS`
+// per editing centralizzato. Mostriamo un asterisco discreto se sono
+// placeholder, e una nota a fondo sezione per onestà editoriale.
+const hasPlaceholders = SUCCESS_METRICS.some((s) => s.placeholder);
+const stats = SUCCESS_METRICS.map((s) => {
+  // Split "2.000+" → value "2.000" + suffix "+", "30s" → "30" + "s"
+  const m = s.value.match(/^([\d.,]+)([^\d.,]*)$/);
+  return {
+    value: m ? m[1] : s.value,
+    suffix: m ? m[2] : "",
+    label: s.label,
+    sub: s.caveat ?? "",
+    placeholder: !!s.placeholder,
+  };
+});
 
 export function SectionStats() {
   return (
@@ -53,7 +40,7 @@ export function SectionStats() {
             className="mono text-[10.5px] uppercase tracking-[0.32em] text-primary/80"
             style={{ fontWeight: 500 }}
           >
-            Auto-apply by the numbers
+            Numeri reali della piattaforma
           </p>
           <h2
             className="mt-4 text-balance text-3xl font-semibold tracking-tight sm:text-4xl"
@@ -131,6 +118,15 @@ export function SectionStats() {
                     }}
                   >
                     {s.label}
+                    {s.placeholder && (
+                      <span
+                        title="Stima editoriale — sostituiremo con metrica reale dopo la prima cohort di utenti paganti"
+                        aria-label="stima editoriale"
+                        style={{ color: "var(--fg-subtle)", marginLeft: 3 }}
+                      >
+                        *
+                      </span>
+                    )}
                   </div>
                   <div
                     className="mt-1 text-muted-foreground"
@@ -147,6 +143,29 @@ export function SectionStats() {
             ))}
           </div>
         </Reveal>
+
+        {hasPlaceholders && (
+          <Reveal delay={0.2} className="mx-auto mt-8 max-w-2xl text-center">
+            <p
+              style={{
+                fontSize: 11.5,
+                color: "var(--fg-subtle)",
+                lineHeight: 1.6,
+              }}
+            >
+              * Numeri segnati con asterisco sono stime editoriali in fase di
+              lancio. Aggiornati con metriche reali ad ogni cohort di utenti
+              paganti — vedi{" "}
+              <a
+                href="/privacy"
+                className="underline-offset-4 hover:text-foreground hover:underline"
+              >
+                trasparenza
+              </a>
+              .
+            </p>
+          </Reveal>
+        )}
       </div>
     </section>
   );
