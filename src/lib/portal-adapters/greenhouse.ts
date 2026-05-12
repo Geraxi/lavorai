@@ -188,58 +188,130 @@ export const greenhouseAdapter: PortalAdapter = {
           error: "Bottone submit non trovato.",
         };
       }
+      // ============================================================
+      // VERIFICA HARD: cattura la risposta HTTP della POST di submission
+      // ============================================================
+      // Greenhouse, quando clicchi submit, fa una POST a uno dei suoi
+      // endpoint interni (forms tipo /jobs/<id>/applications,
+      // /api/embed/job_application, /forms/jobs/<id>). Lo status code
+      // della risposta è la verità — il DOM è una conseguenza.
+      //
+      //   - 2xx (200/201) → submission ACCETTATA dal server
+      //   - 302/303 redirect a /thank_you o simili → ACCETTATA
+      //   - 4xx (400/422) → server ha rifiutato (validation, dup, ecc)
+      //   - 5xx → errore server, retry potenziale
+      //   - nessuna POST = la validazione client-side ha bloccato il
+      //     submit prima ancora di inviare → NON arrivata
       const urlBeforeSubmit = page.url();
-      await submit.first().click();
-      // Aspettiamo che succeda QUALCOSA: o navigazione, o un'iniezione
-      // DOM (banner conferma/errore). networkidle da solo non basta perché
-      // un click su un form con errore di validazione client-side non
-      // genera traffico di rete → networkidle finisce subito → falso ok.
-      await page
-        .waitForLoadState("networkidle", { timeout: 15_000 })
-        .catch(() => void 0);
-      await page.waitForTimeout(1500); // breve grace per render lato JS
+      const submissionResponsePromise = page
+        .waitForResponse(
+          (resp) => {
+            const u = resp.url().toLowerCase();
+            const m = resp.request().method().toUpperCase();
+            if (m !== "POST") return false;
+            // Endpoint Greenhouse di submission noti. Manteniamo larga
+            // la lista perché Greenhouse ha diverse forme:
+            //   - boards.greenhouse.io/embed/job_app/submit
+            //   - job-boards.greenhouse.io/api/.../job_applications
+            //   - boards.greenhouse.io/<co>/jobs/<id>/applications
+            return (
+              u.includes("greenhouse.io") &&
+              (u.includes("/applications") ||
+                u.includes("/job_app") ||
+                u.includes("/submit") ||
+                u.includes("/job_application"))
+            );
+          },
+          { timeout: 25_000 },
+        )
+        .catch(() => null);
 
-      const url = page.url();
+      await submit.first().click();
+
+      const submissionResponse = await submissionResponsePromise;
+
+      // Diamo comunque un po' di tempo al DOM di stabilizzarsi
+      await page
+        .waitForLoadState("networkidle", { timeout: 10_000 })
+        .catch(() => void 0);
+      await page.waitForTimeout(800);
+
+      const finalUrl = page.url();
       const bodyText = await page.locator("body").innerText().catch(() => "");
 
-      // 1) ERROR signals — Greenhouse mostra un alert-banner se la
-      //    validazione fallisce ("This field is required", "Invalid",
-      //    "There were problems with your submission"). Se li vediamo,
-      //    NON è stata submittata.
-      const errorPatterns =
-        /(there\s+(was|were)\s+problems?|this\s+field\s+is\s+required|please\s+(correct|fix|enter)|invalid\s+(email|input|file)|errore|campo\s+obbligatorio|inserisci|file\s+too\s+large|select\s+a\s+(valid\s+)?file)/i;
-      const sawError = errorPatterns.test(bodyText);
-
-      // 2) STRONG confirmation signals — keyword inequivoche + cambio URL
-      //    o presenza di una page di "thank you" canonical di Greenhouse.
-      //    Stretto di proposito per ridurre false positive (es. la pagina
-      //    contiene già la parola "apply" nel CTA originale).
-      const strongConfirmRegex =
-        /(thank\s+you|application\s+(received|submitted|successful)|your\s+application\s+has\s+been|grazie\s+per|candidatura\s+(inviata|ricevuta)|we\s+received\s+your)/i;
-      const urlChanged = url !== urlBeforeSubmit;
-      const urlHasConfirm = /thank|confirm|received|success/i.test(url);
-      const strongConfirmed =
-        strongConfirmRegex.test(bodyText) || urlHasConfirm;
-
-      if (sawError) {
+      // ============================================================
+      // CASE A: catturata la POST → decide dallo status code
+      // ============================================================
+      if (submissionResponse) {
+        const status = submissionResponse.status();
+        // 2xx o 3xx redirect → ACCETTATA dal server.
+        if (status >= 200 && status < 400) {
+          return {
+            ok: true,
+            status: "submitted",
+            // Conferma HTTP-level = la più forte possibile.
+            confirmation: `DETECTED_HTTP_${status}`,
+          };
+        }
+        // 4xx → server rifiuta (validazione, duplicato, job chiuso).
+        if (status >= 400 && status < 500) {
+          let serverMsg = "";
+          try {
+            const body = await submissionResponse.text();
+            serverMsg = body.slice(0, 400).replace(/\s+/g, " ");
+          } catch {
+            /* response già consumata o binary */
+          }
+          return {
+            ok: false,
+            status: "validation_failed",
+            error: `Greenhouse ha rifiutato la submission (HTTP ${status}). Server response: "${serverMsg}"`,
+          };
+        }
+        // 5xx → errore server. Caller retry.
         return {
           ok: false,
-          status: "validation_failed",
-          error: `Greenhouse ha mostrato un errore di validazione dopo il submit. Body excerpt: "${bodyText.slice(0, 240).replace(/\s+/g, " ")}"`,
+          status: "unknown_error",
+          error: `Greenhouse ha risposto con HTTP ${status} — errore server, retry consigliato.`,
         };
       }
 
+      // ============================================================
+      // CASE B: nessuna POST catturata → validazione client-side ha
+      // bloccato il submit OPPURE l'endpoint non corrisponde al pattern
+      // ============================================================
+      // Verifica se ci sono error banner visibili — significa che la
+      // validazione client ha fermato il submit prima che partisse.
+      const errorPatterns =
+        /(there\s+(was|were)\s+problems?|this\s+field\s+is\s+required|please\s+(correct|fix|enter)|invalid\s+(email|input|file)|errore|campo\s+obbligatorio|inserisci|file\s+too\s+large|select\s+a\s+(valid\s+)?file)/i;
+      if (errorPatterns.test(bodyText)) {
+        return {
+          ok: false,
+          status: "validation_failed",
+          error: `Validazione client-side ha bloccato il submit (nessuna POST partita). Body excerpt: "${bodyText.slice(0, 240).replace(/\s+/g, " ")}"`,
+        };
+      }
+
+      // Fallback DOM-level: forse l'endpoint Greenhouse non matchava il
+      // nostro pattern. Cerchiamo conferma forte via thank-you page.
+      const strongConfirmRegex =
+        /(thank\s+you|application\s+(received|submitted|successful)|your\s+application\s+has\s+been|grazie\s+per|candidatura\s+(inviata|ricevuta)|we\s+received\s+your)/i;
+      const urlChanged = finalUrl !== urlBeforeSubmit;
+      const urlHasConfirm = /thank|confirm|received|success/i.test(finalUrl);
+      if (strongConfirmRegex.test(bodyText) || urlHasConfirm) {
+        return {
+          ok: true,
+          status: "submitted",
+          confirmation: "DETECTED_DOM",
+        };
+      }
+
+      // Cliccato submit, nessuna POST, nessun banner errore, nessuna
+      // thank-you page. Non possiamo dichiarare success. Caller retry.
       return {
-        ok: true,
-        status: "submitted",
-        // DETECTED solo con strong-confirm. URL changed + no error
-        // (cioè: siamo navigati ma senza thank-you page chiara) lo
-        // trattiamo come UNCONFIRMED — l'utente verifica manualmente.
-        confirmation: strongConfirmed
-          ? "DETECTED"
-          : urlChanged
-            ? "UNCONFIRMED"
-            : "UNCONFIRMED",
+        ok: false,
+        status: "unknown_error",
+        error: `Submit cliccato ma niente è stato confermato (no POST HTTP catturata, no thank-you page, no error banner). URL ${urlChanged ? "cambiato" : "invariato"}: ${finalUrl}. Caller dovrebbe ritentare.`,
       };
     } catch (err) {
       return {

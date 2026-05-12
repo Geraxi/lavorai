@@ -291,41 +291,74 @@ export async function processApplication(applicationId: string): Promise<void> {
       (app.user.preferences as { applicationAnswersJson?: string } | null)
         ?.applicationAnswersJson ?? null,
     );
-    const outcome = await attemptPortalAdapterSubmit({
-      applicationId,
-      adapter,
-      jobUrl: adapterUrl,
-      cvPath,
-      clPath,
-      coverLetterText: result.coverLetter,
-      userId: app.userId,
-      userEmail: app.user.email,
-      answers: userAnswers,
-    }).catch((err) => {
-      console.error(`[worker] ${applicationId} adapter ${adapter.id} failed`, err);
-      return {
-        ok: false as const,
-        status: "unknown_error" as const,
-        error: err instanceof Error ? err.message : "unknown",
-      };
-    });
+    // Retry policy: tentiamo fino a 2 volte se l'errore è del tipo
+    // "potenzialmente transitorio" (unknown_error, network, server 5xx).
+    // NON retriamo su validation_failed o captcha — quelli sono motivi
+    // strutturali per cui il retry farebbe solo perdere tempo.
+    const RETRY_STATUSES = new Set(["unknown_error"]);
+    const MAX_ATTEMPTS = 2;
+    let outcome: Awaited<ReturnType<typeof attemptPortalAdapterSubmit>> = {
+      ok: false as const,
+      status: "unknown_error" as const,
+      error: "init",
+    };
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      outcome = await attemptPortalAdapterSubmit({
+        applicationId,
+        adapter,
+        jobUrl: adapterUrl,
+        cvPath,
+        clPath,
+        coverLetterText: result.coverLetter,
+        userId: app.userId,
+        userEmail: app.user.email,
+        answers: userAnswers,
+      }).catch((err) => {
+        console.error(
+          `[worker] ${applicationId} adapter ${adapter.id} attempt ${attempt} threw`,
+          err,
+        );
+        return {
+          ok: false as const,
+          status: "unknown_error" as const,
+          error: err instanceof Error ? err.message : "unknown",
+        };
+      });
+
+      // Successo o errore non-retriable → break.
+      if (outcome.ok) break;
+      if (!RETRY_STATUSES.has(outcome.status)) break;
+      if (attempt < MAX_ATTEMPTS) {
+        const backoff = 2500 * attempt; // 2.5s, 5s
+        console.warn(
+          `[worker] ${applicationId} adapter ${adapter.id} attempt ${attempt} → ${outcome.status} (${outcome.error}). Retry in ${backoff}ms.`,
+        );
+        await new Promise((r) => setTimeout(r, backoff));
+      }
+    }
 
     if (outcome.ok) {
       const isDryRun =
         "confirmation" in outcome && outcome.confirmation === "DRY_RUN";
       const confState =
-        "confirmation" in outcome ? outcome.confirmation : "DETECTED";
-      // FIX false-success: l'adapter ritorna ok:true se il click sul submit
-      // non ha lanciato eccezioni, ma questo NON garantisce che il form sia
-      // stato accettato. Se non abbiamo rilevato keyword di conferma
-      // (UNCONFIRMED), c'è un rischio reale di false-success — silent
-      // validation, captcha, modal di errore. Trattiamolo come needs_review:
-      // l'utente vede la candidatura nello stato "da verificare" invece di
-      // ricevere un'email "inviata" che potrebbe essere una bugia.
-      const isUnconfirmed =
+        "confirmation" in outcome ? outcome.confirmation : "UNKNOWN";
+
+      // CONTRATTO "success": deve esserci prova HARD del submit accettato.
+      //   - DETECTED_HTTP_2xx / DETECTED_HTTP_3xx → POST catturata, status
+      //     server-confirmed → success.
+      //   - DETECTED_DOM     → fallback DOM (thank-you page rilevata).
+      //   - DRY_RUN          → branch separato (non success).
+      //   - qualsiasi altro  → trattalo come UNCONFIRMED, NON success.
+      //
+      // Pre-refactor era: "ok:true → success". Ora è: "ok:true E prova
+      // di conferma → success". Senza prova, l'application resta in
+      // ready_to_apply col messaggio "verifica a mano" e NIENTE email
+      // "inviata" mandata all'utente.
+      const isConfirmed =
         !isDryRun &&
-        "confirmation" in outcome &&
-        outcome.confirmation === "UNCONFIRMED";
+        typeof confState === "string" &&
+        confState.startsWith("DETECTED");
+      const isUnconfirmed = !isDryRun && !isConfirmed;
 
       console.log(
         `[worker] ${applicationId} adapter ${adapter.id} → submitted (${confState})${isUnconfirmed ? " [UNCONFIRMED — needs review]" : ""}`,
