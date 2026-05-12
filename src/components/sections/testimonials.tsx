@@ -71,7 +71,7 @@ export function SectionTestimonials() {
               <motion.div
                 whileHover={{ y: -6 }}
                 transition={{ type: "spring", stiffness: 280, damping: 22 }}
-                className="group relative h-full rounded-2xl border border-border/70 bg-card/50 p-7 backdrop-blur-sm"
+                className="group relative h-full p-7 ds-glass"
                 style={{
                   boxShadow:
                     "0 1px 0 hsl(var(--foreground) / 0.04) inset, 0 10px 30px -12px hsl(var(--foreground) / 0.16)",

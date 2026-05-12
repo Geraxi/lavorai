@@ -16,66 +16,56 @@
        Bg da cream (#FAFAF7) → bianco puro con micro-tint verde per
        calore e identità brand. Green primary più saturo per matchare
        aiapply / Linear / Vercel aesthetic. */
-    --bg: #DCEEE2;             /* verde brand chiaro: page background */
-    --bg-elev: #EAF5EE;         /* verde elevato — cards visibilmente verdi su bg */
-    --bg-sunken: #C5DCCD;       /* verde scuro per sezioni "incassate" */
-    --fg: #0A1410;             /* near-black con micro-tint verde */
-    --fg-muted: #4A5552;
-    --fg-subtle: #8A9590;
-    --border-ds: #E2EAE5;      /* border con tint verde */
-    --border-strong: #C8D5CE;
-    /* GREEN PALETTE — 3 ruoli distinti.
-       Ogni livello ha SATURAZIONE e LUMINOSITÀ diversa così
-       icons/cards/background non si confondono visivamente.
+    --bg: #010510;             /* Dark mode background - matches hero image */
+    --bg-elev: rgba(255,255,255,0.03); /* Glass elevation */
+    --bg-sunken: rgba(0,0,0,0.3);       
+    --fg: #FFFFFF;             
+    --fg-muted: rgba(255,255,255,0.7);
+    --fg-subtle: rgba(255,255,255,0.45);
+    --border-ds: rgba(255,255,255,0.1);      
+    --border-strong: rgba(255,255,255,0.2);
+    /* GREEN PALETTE */
+    --green-bg: oklch(0.2 0.06 155);        
+    --green-card: oklch(0.3 0.10 155);      
+    --green-icon: oklch(0.55 0.20 155);      
+    --green-deep: oklch(0.42 0.16 155);      
+    --green-edge: rgba(255,255,255,0.1);      
 
-       Background → leggera, atmosferica (saturazione bassa)
-       Cards       → medio, surface verde tinta (saturazione media)
-       Icons/text  → vivido, saturato (saturazione alta) per il "pop"
-       Solid CTA   → versione più scura per contrasto su white text */
-    --green-bg: oklch(0.88 0.06 155);        /* page bg + atmospheric washes */
-    --green-card: oklch(0.72 0.10 155);      /* card surfaces, mid-tone */
-    --green-icon: oklch(0.55 0.20 155);      /* ICONS — vivido, saturato */
-    --green-deep: oklch(0.42 0.16 155);      /* solid CTA, text emphasis */
-    --green-edge: oklch(0.50 0.18 155);      /* borders, accent lines */
-
-    /* Primary token kept for backward compat — punta al green-icon
-       (il più "vivo" per CTA / accent / icone). */
     --primary-ds: var(--green-icon);
-    --primary-weak: oklch(0.94 0.05 155);
+    --primary-weak: rgba(5, 150, 105, 0.15);
     --primary-fg-ds: #FFFFFF;
     --amber: oklch(0.72 0.13 75);
-    --amber-weak: oklch(0.96 0.04 85);
+    --amber-weak: rgba(217, 119, 6, 0.15);
     --red-ds: oklch(0.58 0.17 25);
-    --red-weak: oklch(0.96 0.03 25);
+    --red-weak: rgba(220, 38, 38, 0.15);
     --blue: oklch(0.55 0.12 240);
-    --blue-weak: oklch(0.96 0.03 240);
-    --violet: oklch(0.55 0.14 290);
-    --shadow-lg: 0 12px 40px -8px rgba(15, 16, 18, 0.18), 0 2px 8px rgba(15, 16, 18, 0.06);
-    --shadow-sm: 0 1px 2px rgba(15, 16, 18, 0.04);
+    --blue-weak: rgba(37, 99, 235, 0.15);
+    --shadow-lg: 0 12px 40px -8px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
     /* Premium layered elevation */
-    --shadow-premium: 0 1px 0 rgba(255,255,255,0.6) inset, 0 1px 2px rgba(15,16,18,0.04), 0 4px 12px -2px rgba(15,16,18,0.06), 0 12px 32px -8px rgba(15,16,18,0.08);
-    --shadow-hover: 0 1px 0 rgba(255,255,255,0.7) inset, 0 2px 4px rgba(15,16,18,0.06), 0 8px 24px -4px rgba(15,16,18,0.10), 0 20px 48px -12px rgba(15,16,18,0.14);
+    --shadow-premium: inset 0 1px 0 rgba(255,255,255,0.1), 0 32px 64px rgba(0,0,0,0.5), inset 0 0 40px rgba(255,255,255,0.02);
+    --shadow-hover: inset 0 1px 0 rgba(255,255,255,0.2), 0 40px 80px rgba(0,0,0,0.6), inset 0 0 40px rgba(255,255,255,0.05);
     --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
 
-    /* Shadcn/ui bridge (HSL) — mappati sui token light */
-    --background: 60 14% 97%;           /* #FAFAF7 */
-    --foreground: 220 7% 7%;            /* #0F1012 */
-    --card: 0 0% 100%;
-    --card-foreground: 220 7% 7%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 7% 7%;
-    --primary: 155 50% 38%;             /* green più saturo (was 30% sat → 50%) */
+    /* Shadcn/ui bridge (HSL) — mappati sui token dark */
+    --background: 240 10% 4%;           /* #0a0a0a */
+    --foreground: 0 0% 100%;            /* #FFFFFF */
+    --card: 240 10% 4%;
+    --card-foreground: 0 0% 100%;
+    --popover: 240 10% 4%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 155 50% 38%;             
     --primary-foreground: 0 0% 100%;
-    --secondary: 48 17% 91%;            /* bg-sunken */
-    --secondary-foreground: 220 7% 7%;
-    --muted: 48 17% 91%;
-    --muted-foreground: 220 3% 37%;     /* fg-muted */
+    --secondary: 240 4% 16%;            
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;     
     --accent: 155 30% 40%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 16 75% 48%;
+    --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 100%;
-    --border: 42 22% 88%;               /* border-ds */
-    --input: 40 14% 80%;                /* border-strong */
+    --border: 240 4% 16%;               
+    --input: 240 4% 16%;                
     --ring: 155 30% 40%;
     --radius: 8px;
     --radius-sm: 4px;
@@ -100,19 +90,8 @@
     scroll-behavior: smooth;
   }
   body {
-    /* Background VERDE atmosferico — usa --green-bg (saturazione
-       bassa) per non competere con il vivido --green-icon usato sui
-       contenuti. I cards usano --green-card (mid). Tre livelli, tre
-       toni di verde diversi. */
-    background:
-      /* Wash atmosferico con --green-bg (soft) */
-      radial-gradient(circle at 50% 30%, color-mix(in oklch, var(--green-bg) 70%, transparent), transparent 60%),
-      radial-gradient(circle at 10% 90%, color-mix(in oklch, var(--green-bg) 55%, transparent), transparent 55%),
-      radial-gradient(circle at 95% 70%, color-mix(in oklch, var(--green-bg) 50%, transparent), transparent 55%),
-      /* Highlight bianco morbido top-left per "luce" */
-      radial-gradient(circle at 25% 15%, rgba(255,255,255,0.30), transparent 45%),
-      /* Base verde brand chiara */
-      linear-gradient(135deg, #CCE5D5 0%, #E0EFE5 50%, #D2EBDC 100%);
+    /* Background AMBIENTALE - matched to hero background image color */
+    background: #010510;
     background-attachment: fixed;
     color: var(--fg);
     font-family: var(--font-inter), -apple-system, "system-ui", sans-serif;
@@ -282,38 +261,25 @@
   .ds-btn-sm { padding: 6px 12px; font-size: 13px; border-radius: 8px; }
   .ds-btn-lg { padding: 12px 20px; font-size: 15px; border-radius: 12px; }
 
-  /* iOS Glass utility: usa --green-card (medio) per il tint glass.
-     Il bordo usa --green-card a 0.25 — distinguibile ma non aggressivo
-     come il green-icon che è riservato a icone/accent vividi. */
+  /* iOS Glass utility: dark mode frosted glass */
   .ds-glass {
-    background:
-      linear-gradient(135deg, color-mix(in oklch, var(--green-card) 22%, transparent), color-mix(in oklch, var(--green-card) 10%, transparent)),
-      rgba(255,255,255,0.45);
-    border: 1px solid color-mix(in oklch, var(--green-card) 30%, transparent);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(40px) saturate(200%);
     -webkit-backdrop-filter: blur(40px) saturate(200%);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.80),
-      inset 0 -1px 0 color-mix(in oklch, var(--green-card) 10%, transparent),
-      0 2px 8px color-mix(in oklch, var(--green-card) 14%, transparent),
-      0 16px 40px -12px color-mix(in oklch, var(--green-card) 25%, transparent);
-    border-radius: 18px;
+    box-shadow: var(--shadow-premium);
+    border-radius: 24px;
+    color: #FFFFFF;
   }
-  /* GREEN glass variant — tint primary più visibile, per hero blocks
-     ed elementi che vogliono brand presence. */
+  /* GREEN glass variant */
   .ds-glass-green {
-    background:
-      linear-gradient(135deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.10)),
-      rgba(255,255,255,0.55);
-    border: 1px solid hsl(var(--primary) / 0.30);
+    background: rgba(5, 150, 105, 0.1);
+    border: 1px solid rgba(5, 150, 105, 0.3);
     backdrop-filter: blur(40px) saturate(200%);
     -webkit-backdrop-filter: blur(40px) saturate(200%);
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.80),
-      inset 0 -1px 0 hsl(var(--primary) / 0.10),
-      0 2px 8px hsl(var(--primary) / 0.10),
-      0 16px 40px -12px hsl(var(--primary) / 0.22);
-    border-radius: 18px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 32px 64px rgba(0,0,0,0.5);
+    border-radius: 24px;
+    color: #FFFFFF;
   }
   /* SOLID GREEN — full brand fill (per CTA finale, callouts forti) */
   .ds-glass-green-solid {
@@ -370,32 +336,18 @@
     100% { transform: scale(2.2); opacity: 0; }
   }
 
-  /* Card surfaces — solid emerald gradient (Tailwind emerald-600 →
-     emerald-800), white text, 32px radius. Tipografia inverted da
-     dark-on-light a light-on-dark. Le CSS custom props vengono
-     ridichiarate dentro la card così TUTTO il contenuto interno che
-     usa var(--fg-muted), var(--fg-subtle), var(--border-ds) cascada
-     automaticamente a versioni white-translucent appropriate. */
+  /* Card surfaces — dark glassmorphism */
   .ds-card {
     position: relative;
-    background: linear-gradient(to bottom right, #059669, #065F46);
+    background: rgba(255, 255, 255, 0.03);
     color: #FFFFFF;
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 2rem;  /* 32px — Tailwind rounded-[2rem] */
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.12),
-      inset 0 -1px 0 rgba(0,0,0,0.18),
-      0 2px 6px rgba(5,80,55,0.20),
-      0 20px 50px -16px rgba(5,80,55,0.40);
-    transition: transform 0.35s var(--ease-premium), box-shadow 0.35s var(--ease-premium), background 0.25s ease;
-    /* Override CSS vars per il contenuto interno white-on-emerald */
-    --fg: #FFFFFF;
-    --fg-muted: rgba(255,255,255,0.78);
-    --fg-subtle: rgba(255,255,255,0.55);
-    --border-ds: rgba(255,255,255,0.15);
-    --border-strong: rgba(255,255,255,0.22);
-    --bg-elev: rgba(255,255,255,0.08);
-    --bg-sunken: rgba(0,0,0,0.12);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 2rem;  /* 32px */
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    box-shadow: var(--shadow-premium);
+    transition: transform 0.35s var(--ease-premium), box-shadow 0.35s var(--ease-premium);
+    /* Nessun override necessario, fg base è già scuro */
   }
   .ds-card:hover {
     transform: translateY(-2px);
@@ -443,7 +395,7 @@
     background:
       linear-gradient(135deg, rgba(255,255,255,0.65), rgba(232,243,236,0.55)),
       rgba(255,255,255,0.55);
-    color: var(--fg);
+    color: #000000;
     font-size: 14.5px;
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -625,27 +577,17 @@
   .ds-kpi-delta.down { color: var(--red-ds); }
   .ds-kpi-spark { margin-top: 10px; height: 28px; }
 
-  /* Section card — same emerald solid recipe as .ds-card.
-     Stesse override CSS-var per il contenuto white-on-emerald. */
+  /* Section card — dark glassmorphism */
   .ds-section-card {
-    background: linear-gradient(to bottom right, #059669, #065F46);
+    background: rgba(255, 255, 255, 0.03);
     color: #FFFFFF;
-    border: 1px solid rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.08);
     border-radius: 2rem;
     overflow: hidden;
     display: flex; flex-direction: column;
-    box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.12),
-      inset 0 -1px 0 rgba(0,0,0,0.18),
-      0 1px 3px rgba(5,80,55,0.15),
-      0 14px 40px -12px rgba(5,80,55,0.35);
-    --fg: #FFFFFF;
-    --fg-muted: rgba(255,255,255,0.78);
-    --fg-subtle: rgba(255,255,255,0.55);
-    --border-ds: rgba(255,255,255,0.15);
-    --border-strong: rgba(255,255,255,0.22);
-    --bg-elev: rgba(255,255,255,0.08);
-    --bg-sunken: rgba(0,0,0,0.12);
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    box-shadow: var(--shadow-premium);
   }
   .ds-section-head {
     display: flex; align-items: center; justify-content: space-between;
@@ -772,6 +714,7 @@
 
   /* ----- Onboarding ----- */
   .ds-upload-zone {
+    display: block;
     border: 1.5px dashed var(--border-strong);
     border-radius: var(--radius);
     padding: 36px 24px;

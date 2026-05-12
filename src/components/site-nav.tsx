@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { cn } from "@/lib/utils";
 
 export function SiteNav() {
@@ -42,7 +41,7 @@ export function SiteNav() {
       className={cn(
         "sticky top-0 z-40 w-full transition-all duration-300",
         scrolled || isApp
-          ? "border-b border-border/50 bg-background/80 backdrop-blur-xl shadow-lg shadow-background/10"
+          ? "border-b border-white/10 bg-white/5 backdrop-blur-3xl shadow-lg"
           : "border-b border-transparent bg-transparent",
       )}
     >
@@ -115,7 +114,6 @@ export function SiteNav() {
               </Button>
             </>
           )}
-          <LanguageSwitcher />
         </div>
       </div>
     </header>

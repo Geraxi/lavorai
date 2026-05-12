@@ -30,7 +30,7 @@ export function SiteFooter() {
   ];
 
   return (
-    <footer className="relative border-t border-border/60 bg-background">
+    <footer className="relative border-t border-white/10 bg-black/20 backdrop-blur-3xl">
       <div className="container py-16">
         <div className="grid gap-12 md:grid-cols-[2fr_1fr_1fr]">
           <div className="max-w-sm space-y-4">

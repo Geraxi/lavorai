@@ -312,113 +312,7 @@ function SignupContent() {
             </Link>
           </p>
 
-          {/* What happens next — checklist post-signup. Riduce ansia da
-              "cosa firmo?" mostrando ESATTAMENTE i 4 step (numerati,
-              tempi stimati) prima di candidare la prima volta. */}
-          <div
-            style={{
-              marginTop: 28,
-              paddingTop: 20,
-              borderTop: "1px solid var(--border-ds)",
-            }}
-          >
-            <div
-              className="mono"
-              style={{
-                fontSize: 10.5,
-                textTransform: "uppercase",
-                letterSpacing: "0.16em",
-                color: "var(--fg-subtle)",
-                fontWeight: 500,
-                marginBottom: 12,
-              }}
-            >
-              Cosa succede dopo
-            </div>
-            <ol
-              style={{
-                listStyle: "none",
-                padding: 0,
-                margin: 0,
-                display: "flex",
-                flexDirection: "column",
-                gap: 10,
-              }}
-            >
-              {[
-                { d: "60s", t: "Verifica email", b: "Link sicuro nella tua casella" },
-                { d: "2 min", t: "Carichi il CV", b: "Claude estrae profilo + skill" },
-                { d: "1 min", t: "Confermi ruoli e città", b: "Modificabili sempre" },
-                { d: "≤ 4h", t: "Prima candidatura inviata", b: "Su un job che matcha al ≥ 50%" },
-              ].map((s, i) => (
-                <li
-                  key={i}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "auto 1fr auto",
-                    gap: 12,
-                    alignItems: "center",
-                    fontSize: 12.5,
-                  }}
-                >
-                  <div
-                    className="mono"
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: 999,
-                      background: "var(--bg-sunken)",
-                      color: "var(--fg)",
-                      border: "1px solid var(--border-ds)",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 10.5,
-                      fontWeight: 600,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {i + 1}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 500, color: "var(--fg)" }}>{s.t}</div>
-                    <div style={{ color: "var(--fg-muted)", fontSize: 11.5 }}>
-                      {s.b}
-                    </div>
-                  </div>
-                  <div
-                    className="mono"
-                    style={{
-                      fontSize: 10.5,
-                      color: "var(--fg-subtle)",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {s.d}
-                  </div>
-                </li>
-              ))}
-            </ol>
 
-            {/* Modalità review vs auto — chiarimento esplicito */}
-            <div
-              style={{
-                marginTop: 18,
-                padding: "12px 14px",
-                borderRadius: 8,
-                background: "var(--bg-sunken)",
-                border: "1px solid var(--border-ds)",
-                fontSize: 11.5,
-                color: "var(--fg-muted)",
-                lineHeight: 1.5,
-              }}
-            >
-              <strong style={{ color: "var(--fg)", fontWeight: 500 }}>
-                Default sicuro:
-              </strong>{" "}
-              al primo signup parte in modalità Hybrid (ti chiede ok prima di ogni candidatura). Auto si attiva solo se lo decidi tu dalle preferenze.
-            </div>
-          </div>
             </>
           )}
         </div>
@@ -441,12 +335,23 @@ function SignupContent() {
 
       {/* RIGHT — showcase (solo desktop) */}
       <div className="lavorai-login-right">
-        <div className="lavorai-login-showcase">
+        <div 
+          className="lavorai-login-showcase ds-glass"
+          style={{
+            maxWidth: 580,
+            padding: "48px",
+            borderRadius: "24px",
+            background: "rgba(1, 5, 16, 0.55)",
+            backdropFilter: "blur(24px)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            boxShadow: "0 32px 80px -20px rgba(0,0,0,0.8)"
+          }}
+        >
           <div
             style={{
-              fontSize: 14,
+              fontSize: 20,
               color: "var(--fg-muted)",
-              marginBottom: 10,
+              marginBottom: 12,
               letterSpacing: "0.02em",
             }}
           >
@@ -454,21 +359,21 @@ function SignupContent() {
           </div>
           <div
             style={{
-              fontSize: 42,
-              fontWeight: 600,
+              fontSize: 48,
+              fontWeight: 700,
               letterSpacing: "-0.035em",
               lineHeight: 1.05,
-              marginBottom: 32,
+              marginBottom: 40,
             }}
           >
-            perché tu no?
+            tu non puoi permetterti di non usarla.
           </div>
           <div
             style={{
-              fontSize: 13.5,
+              fontSize: 20,
               color: "var(--fg-muted)",
-              lineHeight: 1.55,
-              maxWidth: 440,
+              lineHeight: 1.6,
+              maxWidth: 580,
             }}
           >
             Smetti di candidarti. Inizia a essere chiamato.
@@ -493,14 +398,18 @@ function SignupContent() {
         }
         .lavorai-login-right {
           position: relative;
+          overflow: hidden;
           background:
-            linear-gradient(135deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.10)),
-            rgba(255,255,255,0.30);
-          backdrop-filter: blur(40px) saturate(180%);
+            linear-gradient(to bottom, rgba(1, 5, 16, 0.6), rgba(1, 5, 16, 0.6)),
+            url('/signup-showcase.png');
+          background-size: cover;
+          background-position: center;
+          padding: 80px 56px;
           display: flex;
+          flex-direction: column;
+          justify-content: center;
           align-items: center;
-          padding: 64px;
-          border-left: 1px solid rgba(255,255,255,0.40);
+          border-left: 1px solid var(--border-ds);
         }
         .lavorai-login-showcase { max-width: 520px; }
         @media (max-width: 860px) {

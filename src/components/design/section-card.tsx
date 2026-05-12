@@ -4,11 +4,17 @@ import type { ReactNode } from "react";
 export function SectionCard({
   children,
   className,
+  style,
 }: {
   children: ReactNode;
   className?: string;
+  style?: React.CSSProperties;
 }) {
-  return <div className={cn("ds-section-card", className)}>{children}</div>;
+  return (
+    <div className={cn("ds-section-card", className)} style={style}>
+      {children}
+    </div>
+  );
 }
 
 export function SectionHead({

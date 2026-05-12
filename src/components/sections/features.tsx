@@ -85,7 +85,7 @@ export function SectionFeatures() {
               <motion.div
                 whileHover={{ y: -4 }}
                 transition={{ type: "spring", stiffness: 300, damping: 22 }}
-                className="group relative h-full rounded-2xl border border-border/70 bg-card/40 p-6 backdrop-blur-sm"
+                className="group relative h-full p-6 ds-glass"
                 style={{
                   boxShadow:
                     "0 1px 0 hsl(var(--foreground) / 0.04) inset, 0 10px 30px -12px hsl(var(--foreground) / 0.14)",

@@ -234,8 +234,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* PROGRESS HERO — il cuore della dashboard, green glass */}
-        <div
-          className="ds-glass-green"
+        <SectionCard
           style={{
             position: "relative",
             padding: "28px 30px",
@@ -243,18 +242,6 @@ export default async function DashboardPage() {
             overflow: "hidden",
           }}
         >
-          {/* Tint primary verde sottile sopra il glass — dà personalità
-              senza rompere l'effetto liquido. */}
-          <div
-            aria-hidden
-            style={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "linear-gradient(180deg, hsl(var(--primary)/0.10), transparent 90%)",
-              pointerEvents: "none",
-            }}
-          />
           <div
             style={{
               display: "flex",
@@ -383,7 +370,7 @@ export default async function DashboardPage() {
               />
             )}
           </div>
-        </div>
+        </SectionCard>
 
         {/* Live applications list */}
         <SectionCard>

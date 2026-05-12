@@ -106,8 +106,8 @@ function TierCard({ tier }: { tier: TierConfig }) {
         className={cn(
           "card-hover-glow relative h-full backdrop-blur",
           tier.highlight
-            ? "bg-card/95 shadow-2xl"
-            : "border-border/60 bg-card/60",
+            ? "ds-glass ds-glass-green shadow-2xl"
+            : "ds-glass",
         )}
         style={
           tier.highlight

@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import * as motionReact from "motion/react";
 import { Reveal } from "@/components/reveal";
 import { Icon } from "@/components/design/icon";
 import { CASE_STUDIES, type CaseStudy } from "@/lib/marketing-content";
@@ -66,125 +67,126 @@ export function SectionCaseStudies() {
 }
 
 function CaseCard({ cs }: { cs: CaseStudy }) {
+  // Framer Motion 3D tilt & mouse glow effect
+  const x = motionReact.useMotionValue(0);
+  const y = motionReact.useMotionValue(0);
+
+  const mouseXSpring = motionReact.useSpring(x, { stiffness: 300, damping: 20 });
+  const mouseYSpring = motionReact.useSpring(y, { stiffness: 300, damping: 20 });
+
+  const rotateX = motionReact.useTransform(mouseYSpring, [-0.5, 0.5], ["3deg", "-3deg"]);
+  const rotateY = motionReact.useTransform(mouseXSpring, [-0.5, 0.5], ["-3deg", "3deg"]);
+  
+  // Calculate percentage for the radial gradient glow
+  const glowX = motionReact.useTransform(mouseXSpring, [-0.5, 0.5], ["0%", "100%"]);
+  const glowY = motionReact.useTransform(mouseYSpring, [-0.5, 0.5], ["0%", "100%"]);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    x.set(mouseX / width - 0.5);
+    y.set(mouseY / height - 0.5);
+  };
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+  };
+
   return (
-    <article
-      style={{
-        height: "100%",
-        borderRadius: 16,
-        background: "var(--bg-elev)",
-        border: "1px solid var(--border-ds)",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {/* Header */}
-      <header style={{ padding: 24, display: "flex", gap: 14, alignItems: "center" }}>
-        <div
+    <div style={{ perspective: 1200, height: "100%" }}>
+      <motionReact.motion.article
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{
+          rotateX,
+          rotateY,
+          transformStyle: "preserve-3d",
+          borderRadius: 24,
+        }}
+        className="ds-glass flex flex-col h-full overflow-hidden relative group"
+      >
+        {/* Mouse follow glow */}
+        <motionReact.motion.div
+          className="pointer-events-none absolute inset-0 z-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700"
           style={{
-            width: 48,
-            height: 48,
-            borderRadius: 12,
-            background: "linear-gradient(135deg, hsl(var(--primary)/0.25), hsl(var(--primary)/0.12))",
-            color: "hsl(var(--primary))",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 700,
-            fontSize: 15,
-            letterSpacing: "-0.01em",
-            border: "1px solid hsl(var(--primary)/0.3)",
-            flexShrink: 0,
+            background: motionReact.useMotionTemplate`radial-gradient(600px circle at ${glowX} ${glowY}, rgba(255,255,255,0.06), transparent 80%)`,
           }}
-        >
-          {cs.initials}
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: 15.5,
-              fontWeight: 600,
-              letterSpacing: "-0.012em",
-              lineHeight: 1.3,
-            }}
-          >
-            {cs.role}
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              color: "var(--fg-muted)",
-              marginTop: 3,
-              lineHeight: 1.5,
-            }}
-          >
-            {cs.context}
-          </div>
-        </div>
-      </header>
-
-      {/* Before / After */}
-      <div
-        style={{
-          padding: "0 24px",
-          display: "grid",
-          gridTemplateColumns: "1fr",
-          gap: 14,
-        }}
-      >
-        <BeforeAfterBlock
-          tone="before"
-          title={cs.beforeTitle}
-          body={cs.beforeBody}
         />
-        <BeforeAfterBlock
-          tone="after"
-          title={cs.afterTitle}
-          body={cs.afterBody}
-        />
-      </div>
 
-      {/* Metrics */}
-      <div
-        style={{
-          marginTop: 22,
-          padding: "18px 24px",
-          background: "var(--bg-sunken)",
-          borderTop: "1px solid var(--border-ds)",
-          display: "grid",
-          gridTemplateColumns: "repeat(3, 1fr)",
-          gap: 12,
-        }}
-      >
-        {cs.metrics.map((m) => (
-          <div key={m.label} style={{ textAlign: "center" }}>
+        {/* Content wrapper with translateZ for parallax */}
+        <div style={{ transform: "translateZ(20px)", display: "flex", flexDirection: "column", height: "100%" }} className="relative z-10">
+          {/* Header */}
+          <header className="p-6 flex items-center gap-4">
             <div
-              className="mono"
+              className="flex-shrink-0 flex items-center justify-center font-bold text-base relative"
               style={{
-                fontSize: 24,
-                fontWeight: 700,
+                width: 52,
+                height: 52,
+                borderRadius: 16,
+                background: "rgba(255,255,255,0.03)",
                 color: "hsl(var(--primary))",
-                letterSpacing: "-0.02em",
-                fontFeatureSettings: '"tnum"',
-                lineHeight: 1,
+                border: "1px solid rgba(255,255,255,0.08)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.1), 0 4px 12px rgba(0,0,0,0.2)",
               }}
             >
-              {m.value}
+              {cs.initials}
             </div>
-            <div
-              style={{
-                fontSize: 11.5,
-                color: "var(--fg-muted)",
-                marginTop: 6,
-                lineHeight: 1.35,
-              }}
-            >
-              {m.label}
+            <div className="min-w-0">
+              <div className="text-[16px] font-semibold tracking-tight leading-snug text-white group-hover:text-primary transition-colors duration-300">
+                {cs.role}
+              </div>
+              <div className="text-[13px] mt-1 leading-relaxed text-white/60">
+                {cs.context}
+              </div>
             </div>
+          </header>
+
+          {/* Before / After */}
+          <div className="px-6 grid grid-cols-1 gap-3.5 flex-1">
+            <BeforeAfterBlock
+              tone="before"
+              title={cs.beforeTitle}
+              body={cs.beforeBody}
+            />
+            <BeforeAfterBlock
+              tone="after"
+              title={cs.afterTitle}
+              body={cs.afterBody}
+            />
           </div>
-        ))}
-      </div>
-    </article>
+
+          {/* Metrics */}
+          <div
+            className="mt-6 p-5 grid grid-cols-3 gap-3 transition-colors duration-500 group-hover:bg-white/[0.04]"
+            style={{
+              background: "rgba(255,255,255,0.02)",
+              borderTop: "1px solid rgba(255,255,255,0.06)",
+            }}
+          >
+            {cs.metrics.map((m) => (
+              <div key={m.label} className="text-center group/metric">
+                <div
+                  className="mono text-[26px] font-bold leading-none tracking-tight transition-transform duration-300 group-hover/metric:scale-110"
+                  style={{
+                    color: "hsl(var(--primary))",
+                    textShadow: "0 0 20px hsl(var(--primary)/0.4)",
+                  }}
+                >
+                  {m.value}
+                </div>
+                <div className="text-[11.5px] mt-1.5 leading-snug text-white/50">
+                  {m.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motionReact.motion.article>
+    </div>
   );
 }
 
@@ -197,46 +199,33 @@ function BeforeAfterBlock({
   title: string;
   body: string;
 }) {
-  const accent = tone === "before" ? "#94A3B8" : "hsl(var(--primary))";
-  const bg = tone === "before" ? "var(--bg-sunken)" : "hsl(var(--primary)/0.08)";
-  const border =
-    tone === "before"
-      ? "1px solid var(--border-ds)"
-      : "1px solid hsl(var(--primary)/0.25)";
-  const iconName: "x" | "check" = tone === "before" ? "x" : "check";
+  const isBefore = tone === "before";
+  
+  const accent = isBefore ? "rgba(255,255,255,0.5)" : "hsl(var(--primary))";
+  const bg = isBefore ? "rgba(255,255,255,0.02)" : "hsl(var(--primary)/0.06)";
+  const border = isBefore
+    ? "1px solid rgba(255,255,255,0.06)"
+    : "1px solid hsl(var(--primary)/0.3)";
+  const iconName: "x" | "check" = isBefore ? "x" : "check";
+
   return (
     <div
       style={{
-        padding: 14,
-        borderRadius: 10,
+        padding: 16,
+        borderRadius: 12,
         background: bg,
         border,
+        boxShadow: isBefore ? "none" : "inset 0 0 20px hsl(var(--primary)/0.03)",
       }}
     >
       <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 6,
-          fontSize: 12,
-          fontWeight: 600,
-          color: accent,
-          textTransform: "uppercase",
-          letterSpacing: "0.06em",
-          marginBottom: 6,
-        }}
+        className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider mb-2"
+        style={{ color: accent }}
       >
         <Icon name={iconName} size={11} />
         {title}
       </div>
-      <p
-        style={{
-          fontSize: 13.5,
-          lineHeight: 1.55,
-          color: "var(--fg-muted)",
-          margin: 0,
-        }}
-      >
+      <p className="text-[13.5px] leading-relaxed text-white/70 m-0">
         {body}
       </p>
     </div>

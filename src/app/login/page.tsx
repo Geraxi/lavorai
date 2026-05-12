@@ -351,10 +351,11 @@ function LoginContent() {
           position: relative;
           overflow: hidden;
           background:
-            linear-gradient(135deg, hsl(var(--primary) / 0.22), hsl(var(--primary) / 0.10)),
-            rgba(255,255,255,0.30);
-          backdrop-filter: blur(40px) saturate(180%);
-          padding: 56px;
+            linear-gradient(to bottom, rgba(1, 5, 16, 0.6), rgba(1, 5, 16, 0.6)),
+            url('/signup-showcase.png');
+          background-size: cover;
+          background-position: center;
+          padding: 80px 56px;
           display: flex;
           flex-direction: column;
           justify-content: center;
@@ -407,245 +408,52 @@ function Benefit({
 function LoginShowcase() {
   return (
     <div className="lavorai-login-right">
-      <div
-        aria-hidden
+      <div 
+        className="lavorai-login-showcase ds-glass" 
         style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "radial-gradient(60% 50% at 70% 30%, oklch(0.62 0.13 155 / 0.18) 0%, transparent 60%), radial-gradient(50% 40% at 20% 80%, oklch(0.55 0.12 240 / 0.12) 0%, transparent 60%)",
-          pointerEvents: "none",
-        }}
-      />
-
-      <div
-        style={{
-          position: "relative",
-          transform: "rotate(-3deg)",
-          marginBottom: 20,
-        }}
-      >
-        <div
-          className="ds-cv-preview"
-          style={{
-            width: 360,
-            background: "#fff",
-            padding: "24px 28px",
-            boxShadow:
-              "0 30px 80px -20px rgba(15,16,18,0.24), 0 10px 30px -10px rgba(15,16,18,0.12)",
-          }}
-        >
-          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em" }}>
-            Giulia Rinaldi
-          </div>
-          <div style={{ fontSize: 10.5, color: "#5B5D61", marginBottom: 10 }}>
-            Senior Product Designer · Milano
-          </div>
-          <CvH>Esperienza</CvH>
-          <CvItem
-            h="Senior Product Designer · Satispay"
-            m="2023 – oggi"
-            body="Lead design su app pagamenti (2M+ utenti). +34% conversion."
-            highlight
-          />
-          <CvItem
-            h="Product Designer · Nexi"
-            m="2020 – 2023"
-            body="Design system enterprise per prodotti payment."
-          />
-          <CvH>Competenze</CvH>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-            {["Figma", "Design Systems", "User Research", "Prototyping"].map(
-              (s) => (
-                <span
-                  key={s}
-                  style={{
-                    fontSize: 9,
-                    padding: "1px 6px",
-                    border: "1px solid #E6E4DD",
-                    borderRadius: 3,
-                    color: "#0F1012",
-                  }}
-                >
-                  {s}
-                </span>
-              ),
-            )}
-          </div>
-        </div>
-
-        <div
-          style={{
-            position: "absolute",
-            top: -16,
-            right: -24,
-            padding: "8px 12px",
-            borderRadius: 10,
-            background: "var(--bg-elev)",
-            border: "1px solid var(--border-ds)",
-            boxShadow: "var(--shadow-lg)",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            transform: "rotate(4deg)",
-          }}
-        >
-          <Icon name="sparkles" size={12} style={{ color: "var(--primary-ds)" }} />
-          <span style={{ fontSize: 11.5, fontWeight: 500 }}>
-            Ottimizzato per Satispay
-          </span>
-        </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: -14,
-            left: -20,
-            padding: "10px 12px",
-            borderRadius: 10,
-            background: "var(--bg-elev)",
-            border: "1px solid var(--border-ds)",
-            boxShadow: "var(--shadow-lg)",
-            transform: "rotate(-2deg)",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              color: "var(--fg-subtle)",
-              textTransform: "uppercase",
-              letterSpacing: "0.04em",
-            }}
-          >
-            ATS Score
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: 4,
-              marginTop: 2,
-            }}
-          >
-            <span
-              style={{ fontSize: 18, fontWeight: 700, color: "var(--primary-ds)" }}
-            >
-              94
-            </span>
-            <span style={{ fontSize: 11, color: "var(--fg-muted)" }}>/100</span>
-          </div>
-        </div>
-      </div>
-
-      <div
-        style={{
-          position: "relative",
-          marginTop: 60,
-          textAlign: "center",
-          maxWidth: 440,
+          maxWidth: 580,
+          padding: "48px",
+          borderRadius: "24px",
+          background: "rgba(1, 5, 16, 0.55)",
+          backdropFilter: "blur(24px)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow: "0 32px 80px -20px rgba(0,0,0,0.8)"
         }}
       >
         <div
           style={{
-            fontSize: 18,
-            fontWeight: 600,
-            letterSpacing: "-0.015em",
-            marginBottom: 10,
+            fontSize: 20,
+            color: "var(--fg-muted)",
+            marginBottom: 12,
+            letterSpacing: "0.02em",
           }}
         >
-          &ldquo;In 2 settimane, 3 colloqui. Ore risparmiate ogni giorno.&rdquo;
+          Se i recruiter usano l&apos;AI,
         </div>
-        <div style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-          Marco · Full-stack developer, Milano
-        </div>
-
         <div
           style={{
-            marginTop: 32,
-            display: "flex",
-            justifyContent: "center",
-            gap: 24,
+            fontSize: 48,
+            fontWeight: 700,
+            letterSpacing: "-0.035em",
+            lineHeight: 1.05,
+            marginBottom: 40,
           }}
         >
-          <Stat value="10k+" label="candidature inviate" />
-          <Stat value="82%" label="match medio" />
-          <Stat value="30s" label="per candidatura" />
+          tu non puoi permetterti di non usarla.
+        </div>
+        <div
+          style={{
+            fontSize: 20,
+            color: "var(--fg-muted)",
+            lineHeight: 1.6,
+            maxWidth: 580,
+          }}
+        >
+          Smetti di candidarti. Inizia a essere chiamato.
+          LavorAI scansiona i portali 24/7, adatta CV e lettera ad ogni
+          annuncio e invia per te. Tu rispondi solo ai recruiter interessati.
         </div>
       </div>
-    </div>
-  );
-}
-
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <div
-      style={{
-        fontSize: 11.5,
-        color: "var(--fg-subtle)",
-        textAlign: "center",
-      }}
-    >
-      <div
-        style={{
-          fontSize: 18,
-          fontWeight: 600,
-          color: "var(--fg)",
-          letterSpacing: "-0.02em",
-          marginBottom: 2,
-        }}
-      >
-        {value}
-      </div>
-      {label}
-    </div>
-  );
-}
-
-function CvH({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        fontSize: 9.5,
-        textTransform: "uppercase",
-        letterSpacing: "0.08em",
-        color: "#5B5D61",
-        margin: "12px 0 4px",
-        borderBottom: "1px solid #E6E4DD",
-        paddingBottom: 3,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-function CvItem({
-  h,
-  m,
-  body,
-  highlight,
-}: {
-  h: string;
-  m: string;
-  body?: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        marginBottom: 8,
-        padding: highlight ? "5px 8px" : undefined,
-        background: highlight ? "oklch(0.95 0.03 155)" : undefined,
-        borderRadius: highlight ? 4 : undefined,
-        marginLeft: highlight ? -8 : undefined,
-        marginRight: highlight ? -8 : undefined,
-      }}
-    >
-      <div style={{ fontSize: 10.5, fontWeight: 600 }}>{h}</div>
-      <div style={{ fontSize: 9.5, color: "#5B5D61" }}>{m}</div>
-      {body && (
-        <div style={{ fontSize: 9.5, color: "#0F1012", marginTop: 2 }}>{body}</div>
-      )}
     </div>
   );
 }

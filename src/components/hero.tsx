@@ -15,67 +15,83 @@ export function Hero() {
     <section
       className="relative overflow-hidden"
       style={{
-        // Hero background = pianeta intero visibile (no crop) sul lato
-        // destro, fondo scuro #0a1820 che si estende a sinistra dove
-        // sta il copy bianco. L'immagine è 1254×1254 (quadrata) →
-        // background-size: contain conserva le proporzioni, niente
-        // zoom aggressivo.
-        backgroundColor: "#0a1820",
-        backgroundImage: "url('/Lavoraiherosection.png')",
-        backgroundSize: "auto 65%",
-        backgroundPosition: "right 4% center",
-        backgroundRepeat: "no-repeat",
-        minHeight: 720,
+        backgroundColor: "#010510",
+        minHeight: 800,
+        display: "flex",
+        alignItems: "center",
       }}
     >
-      {/* Overlay morbido per fondere la zona scura dello space con
-          il pianeta a destra. Light wash sul border-zone così il
-          confine planet/space non sembra tagliato. */}
+      {/* Animated rotating background image */}
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0"
+        style={{
+          backgroundImage: "url('/Lavoraiherosection.png')",
+          backgroundSize: "contain",
+          backgroundPosition: "right center",
+          backgroundRepeat: "no-repeat",
+          transformOrigin: "75% 50%", // Anchor rotation roughly around the planet
+        }}
+        animate={{
+          rotate: [0, 1.5, -1.5, 0],
+          scale: [1.02, 1.05, 1.05, 1.02],
+        }}
+        transition={{
+          duration: 18,
+          ease: "easeInOut",
+          repeat: Infinity,
+        }}
+      />
+      {/* Soft gradient to fade the left side into black, blending the image */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
-            "linear-gradient(90deg, rgba(10,24,32,0) 0%, rgba(10,24,32,0) 40%, rgba(10,24,32,0.30) 70%, rgba(10,24,32,0) 100%), linear-gradient(180deg, rgba(10,24,32,0.20) 0%, transparent 30%, rgba(10,24,32,0.30) 100%)",
+            "linear-gradient(90deg, #010510 0%, rgba(1,5,16,0.8) 40%, rgba(1,5,16,0) 100%)",
         }}
       />
 
-      {/* Subtle green atmospheric glow per fondere il pianeta col
-          theme verde del resto del sito */}
+      {/* Subtle green atmospheric glow */}
       <motion.div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0"
         style={{
           background:
-            "radial-gradient(ellipse 50% 60% at 70% 55%, hsl(var(--primary) / 0.25), transparent 65%)",
+            "radial-gradient(ellipse 40% 50% at 75% 50%, hsl(var(--primary) / 0.15), transparent 70%)",
           mixBlendMode: "screen",
         }}
         animate={{
-          opacity: [0.55, 0.85, 0.65, 0.85, 0.55],
+          opacity: [0.5, 0.8, 0.5],
         }}
         transition={{
-          duration: 9,
+          duration: 8,
           ease: "easeInOut",
           repeat: Infinity,
         }}
       />
 
       <div
-        className="relative z-10"
+        className="relative z-10 w-full"
         style={{
           maxWidth: 1480,
           margin: "0 auto",
-          padding: "72px 40px 0",
+          padding: "40px",
         }}
       >
-        <div className="grid items-center gap-14 lg:grid-cols-[1.4fr_1fr] lg:gap-12">
-          {/* Colonna sinistra: copy + CTA */}
-          <div className="flex flex-col items-start text-left">
+        <div className="grid items-center gap-14 lg:grid-cols-2">
+          {/* Colonna sinistra: Testo puro su dark background, senza box glassmorphism */}
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+            className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-10 pb-20"
+          >
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="mb-5 inline-flex items-center gap-2 rounded-full border px-3 py-1"
+              className="mb-6 inline-flex items-center gap-2 rounded-full border px-3 py-1"
               style={{
                 borderColor: "hsl(var(--primary) / 0.4)",
                 background: "hsl(var(--primary) / 0.08)",
@@ -95,12 +111,12 @@ export function Hero() {
                 style={{
                   fontSize: 11,
                   fontWeight: 500,
-                  letterSpacing: "0.18em",
+                  letterSpacing: "0.1em",
                   color: "hsl(var(--primary))",
                   textTransform: "uppercase",
                 }}
               >
-                {t("badge")}
+                PER CHI CERCA LAVORO ALLE 23 DI DOMENICA
               </span>
             </motion.div>
 
@@ -110,26 +126,24 @@ export function Hero() {
               transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
               className="text-balance font-bold tracking-tight"
               style={{
-                fontSize: "clamp(2.5rem, 5.2vw, 5rem)",
-                letterSpacing: "-0.038em",
-                lineHeight: 1.04,
-                fontWeight: 700,
-                maxWidth: "14ch",
+                fontSize: "clamp(3rem, 5.5vw, 6rem)",
+                letterSpacing: "-0.03em",
+                lineHeight: 1.05,
+                fontWeight: 800,
                 color: "#FFFFFF",
                 textShadow: "0 2px 24px rgba(0,5,20,0.5)",
               }}
             >
-              {t("title1")}{" "}
+              Lavoravo.<br />
+              Lavoro.<br />
+              Lavorerò.<br />
               <span
                 style={{
-                  background:
-                    "linear-gradient(180deg, #6EE7B7, #34D399)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  backgroundClip: "text",
+                  color: "hsl(var(--primary))",
+                  textShadow: "0 0 40px hsl(var(--primary)/0.3)",
                 }}
               >
-                {t("title2")}
+                LavorAI.
               </span>
             </motion.h1>
 
@@ -137,101 +151,107 @@ export function Hero() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.2 }}
-              className="mt-5 max-w-xl"
+              className="mt-6 max-w-[500px]"
               style={{
                 fontSize: "clamp(1rem, 1.1vw, 1.125rem)",
-                lineHeight: 1.55,
-                color: "rgba(255,255,255,0.85)",
-                textShadow: "0 1px 12px rgba(0,5,20,0.4)",
+                lineHeight: 1.6,
+                color: "rgba(255,255,255,0.7)",
               }}
             >
-              {t("subtitle")}
+              LavorAI è il copilota che si carica il peso ripetitivo: trova le offerte giuste, riscrive il CV per ognuna, compila i form. Tu torni a fare colloqui, non a riempire campi.
             </motion.p>
 
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.35 }}
-              className="mt-7 flex flex-col items-start gap-3"
+              className="mt-8 flex flex-col items-start gap-5 w-full"
             >
-              <div
-                className="flex flex-wrap items-center gap-3"
-              >
-                <ShineButton
-                  label={t("cta")}
-                  onClick={() =>
-                    trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, {
-                      label: "signup",
-                    })
-                  }
-                />
-                <Link
-                  href="/analizza-cv"
-                  onClick={() =>
-                    trackEvent(AnalyticsEvent.HERO_CTA_SECONDARY, {
-                      label: "lead_magnet",
-                    })
-                  }
-                  className="ds-btn"
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  asChild
+                  className="group relative overflow-hidden bg-primary text-primary-foreground hover:bg-primary/90"
                   style={{
-                    minHeight: 60,
+                    minHeight: 52,
                     paddingLeft: 24,
                     paddingRight: 24,
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: 600,
+                    borderRadius: 12,
+                  }}
+                >
+                  <Link href="/signup" onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, { label: "signup" })}>
+                    <span className="relative z-10">Provalo, vedi se ti capisce</span>
+                  </Link>
+                </Button>
+                <Link
+                  href="/analizza-cv"
+                  onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_SECONDARY, { label: "lead_magnet" })}
+                  className="ds-btn"
+                  style={{
+                    minHeight: 52,
+                    paddingLeft: 24,
+                    paddingRight: 24,
+                    fontSize: 16,
+                    fontWeight: 600,
+                    background: "#FFFFFF",
+                    color: "#000000",
+                    borderRadius: 12,
                     display: "inline-flex",
                     alignItems: "center",
                     gap: 8,
                   }}
                 >
-                  {t("ctaSecondary")} →
+                  Prima fai vedere il mio CV →
                 </Link>
               </div>
-              <span style={{ fontSize: 14, color: "rgba(255,255,255,0.75)" }}>
-                {t("ctaCaption")}
-              </span>
+              
+              {/* Checkmarks row */}
+              <div className="flex flex-wrap gap-x-5 gap-y-2 mt-2" style={{ fontSize: 13, color: "rgba(255,255,255,0.9)", fontWeight: 500 }}>
+                {["3 candidature gratis", "Niente carta", "Pausa quando vuoi"].map((text) => (
+                  <span key={text} className="inline-flex items-center gap-1.5">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    {text}
+                  </span>
+                ))}
+              </div>
             </motion.div>
 
-            {/* Trust strip — 4 reassurance concrete sotto il CTA. */}
+            {/* 4-icon trust strip Grid */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.45 }}
-              className="mt-5 flex flex-wrap gap-x-5 gap-y-2"
-              style={{ fontSize: 12.5, color: "rgba(255,255,255,0.78)" }}
+              className="mt-8 grid grid-cols-2 gap-x-6 gap-y-4 max-w-[500px]"
+              style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}
             >
-              {(["trustStrip1", "trustStrip2", "trustStrip3", "trustStrip4"] as const).map(
-                (k) => (
-                  <span key={k} className="inline-flex items-center gap-1.5">
-                    <span
-                      aria-hidden
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: 999,
-                        background: "hsl(var(--primary))",
-                      }}
-                    />
-                    {t(k)}
-                  </span>
-                ),
-              )}
+              <div className="flex items-start gap-3">
+                <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                <span className="leading-tight">GDPR-first<br/>server EU</span>
+              </div>
+              <div className="flex items-start gap-3">
+                <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <span className="leading-tight">Cancella tutto<br/>in 1 click</span>
+              </div>
+              <div className="flex items-start gap-3">
+                <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+                <span className="leading-tight">Niente credenziali<br/>LinkedIn richieste</span>
+              </div>
+              <div className="flex items-start gap-3">
+                <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                <span className="leading-tight">Pausa<br/>quando vuoi</span>
+              </div>
             </motion.div>
 
-            {/* Live activity bar — proof of momentum. Numeri reali con
-                un counter animato che parte da 0 e tickha verso il
-                target. Trasforma "stat statiche" in "il sistema sta
-                lavorando ADESSO". */}
+            {/* Live activity bar */}
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.55 }}
-              className="mt-6 inline-flex items-center gap-3 rounded-lg border px-3.5 py-2.5"
+              className="mt-10 inline-flex items-center gap-3 rounded-lg border px-3.5 py-2.5"
               style={{
-                borderColor: "rgba(255,255,255,0.18)",
-                background: "rgba(255,255,255,0.08)",
-                backdropFilter: "blur(20px) saturate(180%)",
-                WebkitBackdropFilter: "blur(20px) saturate(180%)",
+                borderColor: "rgba(255,255,255,0.1)",
+                background: "rgba(255,255,255,0.02)",
               }}
             >
               <span
@@ -260,26 +280,24 @@ export function Hero() {
               <span
                 style={{
                   fontSize: 13,
-                  color: "rgba(255,255,255,0.80)",
+                  color: "rgba(255,255,255,0.6)",
                   display: "inline-flex",
                   alignItems: "baseline",
                   gap: 5,
                 }}
               >
-                <Counter target={1247} />
+                <strong style={{ color: "#FFFFFF", fontWeight: 600 }}>
+                  <Counter target={1247} />
+                </strong>
                 <span>{t("liveActivity1")}</span>
-                <span style={{ opacity: 0.4, margin: "0 4px" }}>·</span>
+                <span style={{ opacity: 0.4, margin: "0 6px" }}>·</span>
                 <strong style={{ color: "#FFFFFF", fontWeight: 600 }}>
                   <Counter target={8} />
                 </strong>
                 <span>{t("liveActivity2")}</span>
               </span>
             </motion.div>
-
-            {/* Logo strips rimossi dall'hero: spostati nella nuova
-                SectionPlatformCards che li mostra come card visuali
-                separate con descrizioni. Lascia respirare l'hero. */}
-          </div>
+          </motion.div>
 
           {/* Right column: deliberatamente vuota su desktop — l'immagine
               pianeta è ora background della section, lascia che si

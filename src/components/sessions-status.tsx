@@ -125,8 +125,7 @@ export function SessionsStatus() {
               style={{
                 padding: "14px 18px",
                 borderRadius: 10,
-                background:
-                  "linear-gradient(180deg, hsl(var(--primary)/0.10), hsl(var(--primary)/0.04))",
+                background: "var(--bg-elev)",
                 border: "1px solid hsl(var(--primary)/0.40)",
                 display: "flex",
                 alignItems: "center",

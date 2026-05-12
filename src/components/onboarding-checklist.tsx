@@ -51,11 +51,6 @@ export function OnboardingChecklist({ state }: { state: ChecklistState }) {
   return (
     <div
       className="ds-section-card"
-      style={{
-        background:
-          "linear-gradient(135deg, var(--primary-weak) 0%, var(--bg-elev) 60%)",
-        borderColor: "var(--primary-ds)",
-      }}
     >
       <div
         className="ds-section-head"

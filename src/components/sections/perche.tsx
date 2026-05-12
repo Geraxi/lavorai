@@ -53,7 +53,7 @@ export function SectionPerche() {
         <RevealStagger className="mx-auto mt-16 grid max-w-5xl gap-4 sm:grid-cols-2">
           {vantaggi.map((v) => (
             <RevealItem key={v.title}>
-              <div className="card-hover-glow group flex gap-4 rounded-xl border border-border/60 bg-card/60 p-5 backdrop-blur">
+              <div className="card-hover-glow group flex gap-4 p-5 ds-glass">
                 <div className="flex h-8 w-8 flex-none items-center justify-center rounded-lg bg-primary/15 ring-1 ring-primary/25">
                   <Check className="h-4 w-4 text-primary" />
                 </div>
