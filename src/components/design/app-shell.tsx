@@ -70,23 +70,23 @@ export function AppShell({
         id="main-content"
         className="ds-scroll lavorai-main"
       >
-        {/* Mobile topbar */}
+        {/* Mobile topbar — visibile su <1024px sopra al contenuto */}
         <div className="lavorai-mobile-topbar">
           <button
             type="button"
             aria-label="Apri menu"
-            className="ds-btn ds-btn-ghost"
+            className="lavorai-menu-btn"
             onClick={() => setOpen(true)}
-            style={{ padding: 8 }}
           >
-            <Icon name="menu" size={20} />
+            <Icon name="menu" size={18} />
+            <span>Menu</span>
           </button>
           <Logo href="/dashboard" size="sm" />
           <Link
             href="/settings"
-            className="ds-btn ds-btn-ghost"
-            style={{ padding: 8 }}
+            className="lavorai-menu-btn"
             aria-label="Impostazioni"
+            style={{ padding: "8px 10px" }}
           >
             <Icon name="user" size={16} />
           </Link>
@@ -94,6 +94,20 @@ export function AppShell({
 
         {children}
       </main>
+
+      {/* Floating Action Button (FAB) — sempre visibile su mobile, anche
+          se la topbar scrolla via. Quick access al drawer di navigazione.
+          Su desktop nascosto perché la sidebar è già fissa a sinistra. */}
+      {!open && (
+        <button
+          type="button"
+          className="lavorai-nav-fab"
+          onClick={() => setOpen(true)}
+          aria-label="Apri menu di navigazione"
+        >
+          <Icon name="menu" size={22} />
+        </button>
+      )}
 
       <style>{`
         .lavorai-app-shell {
@@ -115,6 +129,25 @@ export function AppShell({
         .lavorai-mobile-topbar { display: none; }
         .lavorai-sidebar-backdrop { display: none; }
         .lavorai-sidebar-drawer { display: none; }
+        .lavorai-nav-fab { display: none; }
+
+        .lavorai-menu-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 8px 12px;
+          border-radius: 8px;
+          background: var(--bg-elev);
+          border: 1px solid var(--border-ds);
+          color: var(--fg);
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          text-decoration: none;
+        }
+        .lavorai-menu-btn:hover {
+          background: var(--bg-sunken);
+        }
 
         @media (max-width: 1023px) {
           .lavorai-app-shell {
@@ -148,10 +181,40 @@ export function AppShell({
             top: 0;
             bottom: 0;
             left: 0;
-            width: 260px;
+            width: 280px;
+            max-width: 86vw;
             z-index: 50;
             animation: lavorai-slide-in 0.25s cubic-bezier(0.2, 0.8, 0.3, 1);
             overflow-y: auto;
+          }
+          .lavorai-nav-fab {
+            display: inline-flex;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 999px;
+            background: hsl(var(--primary));
+            color: #001a0d;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            box-shadow:
+              0 1px 2px rgba(0,0,0,0.18),
+              0 8px 24px hsl(var(--primary) / 0.35),
+              0 18px 50px rgba(0,0,0,0.30);
+            cursor: pointer;
+            z-index: 35;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+          }
+          .lavorai-nav-fab:hover,
+          .lavorai-nav-fab:focus-visible {
+            transform: scale(1.05);
+            outline: none;
+          }
+          .lavorai-nav-fab:active {
+            transform: scale(0.96);
           }
         }
         @keyframes lavorai-fade-in { from { opacity: 0; } to { opacity: 1; } }
