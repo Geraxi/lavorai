@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/session";
+import { guardPremiumAPI } from "@/lib/premium-gate";
 
 export const runtime = "nodejs";
 
@@ -20,10 +20,9 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ applicationId: string }> },
 ) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "auth_required" }, { status: 401 });
-  }
+  const gate = await guardPremiumAPI("interview_copilot");
+  if (gate.error) return gate.error;
+  const user = gate.user;
   const { applicationId } = await params;
   const sinceParam = request.nextUrl.searchParams.get("since");
   const since = sinceParam ? new Date(sinceParam) : null;

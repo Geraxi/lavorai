@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/session";
+import { guardPremiumAPI } from "@/lib/premium-gate";
 import { randomBytes } from "crypto";
 
 export const runtime = "nodejs";
@@ -25,10 +25,9 @@ export const runtime = "nodejs";
  * Ritorna: { sessionId, pairingCode }
  */
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "auth_required" }, { status: 401 });
-  }
+  const gate = await guardPremiumAPI("interview_copilot");
+  if (gate.error) return gate.error;
+  const user = gate.user;
 
   let body: Record<string, unknown>;
   try {

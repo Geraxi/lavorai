@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/session";
+import { guardPremiumAPI } from "@/lib/premium-gate";
 import { suggestAnswer, type CopilotContext } from "@/lib/interview-copilot";
 
 export const runtime = "nodejs";
@@ -21,10 +21,9 @@ export const maxDuration = 30;
  * speakingNote, latencyMs }. Appende il turn al log.
  */
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
-    return NextResponse.json({ error: "auth_required" }, { status: 401 });
-  }
+  const gate = await guardPremiumAPI("interview_copilot");
+  if (gate.error) return gate.error;
+  const user = gate.user;
 
   let body: Record<string, unknown>;
   try {

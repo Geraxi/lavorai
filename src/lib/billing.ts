@@ -21,6 +21,12 @@ export interface TierConfig {
   analytics: "none" | "basic" | "advanced";
   prioritySupport: boolean;
 
+  // Premium feature gates (true = incluso nel tier)
+  /** Modulo Founder Coach (Opportunity Analyzer + Equity + Vocab + ...) */
+  hasFounderCoach: boolean;
+  /** Interview Copilot live (teleprompter + Whisper + auto-question detect) */
+  hasInterviewCopilot: boolean;
+
   // Features (per landing bullet list, in ordine)
   features: string[];
 
@@ -46,6 +52,8 @@ export const TIERS: Record<Tier, TierConfig> = {
     coverLetter: "basic",
     analytics: "none",
     prioritySupport: false,
+    hasFounderCoach: false,
+    hasInterviewCopilot: false,
     features: [
       "3 candidature totali",
       "CV optimization AI",
@@ -68,6 +76,8 @@ export const TIERS: Record<Tier, TierConfig> = {
     coverLetter: "basic",
     analytics: "basic",
     prioritySupport: false,
+    hasFounderCoach: false,
+    hasInterviewCopilot: false,
     features: [
       "50 candidature al mese",
       "Auto-apply su 1 portale a scelta",
@@ -92,7 +102,11 @@ export const TIERS: Record<Tier, TierConfig> = {
     coverLetter: "advanced",
     analytics: "advanced",
     prioritySupport: true,
+    hasFounderCoach: true,
+    hasInterviewCopilot: true,
     features: [
+      "🎯 Founder Interview Coach (Opportunity Analyzer + Equity + Vocab)",
+      "🎤 Interview Copilot live con teleprompter + audio capture",
       "Candidature illimitate",
       "Auto-apply su tutti i portali (LinkedIn, InfoJobs, Indeed, Subito)",
       "CV optimization AI multi-variante",
@@ -193,3 +207,45 @@ export function effectiveTier(user: {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
   return normalizeTier(user.tier);
 }
+
+/**
+ * Feature gate set: tutte le entitlement check le centralizziamo qui
+ * così UI, server e API leggono dalla stessa logica. Aggiungere una
+ * nuova feature premium = aggiungere una entry sotto + un boolean
+ * sui TierConfig sopra. Niente if-tier sparsi nel codebase.
+ */
+export type PremiumFeature = "founder_coach" | "interview_copilot";
+
+const FEATURE_TIER_REQUIRED: Record<PremiumFeature, Tier> = {
+  founder_coach: "pro_plus",
+  interview_copilot: "pro_plus",
+};
+
+export function canAccess(
+  user: { tier?: string | null; email?: string | null },
+  feature: PremiumFeature,
+): boolean {
+  const eff = effectiveTier(user);
+  const required = FEATURE_TIER_REQUIRED[feature];
+  // Ordine: free < pro < pro_plus
+  const rank: Record<Tier, number> = { free: 0, pro: 1, pro_plus: 2 };
+  return rank[eff] >= rank[required];
+}
+
+export function requiredTierFor(feature: PremiumFeature): Tier {
+  return FEATURE_TIER_REQUIRED[feature];
+}
+
+/** UX copy helper per il paywall in-page */
+export const FEATURE_LABELS: Record<PremiumFeature, { name: string; blurb: string }> = {
+  founder_coach: {
+    name: "Founder Interview Coach",
+    blurb:
+      "Opportunity Analyzer, Equity Coach, Negotiation Scripts e vocabolario founder-level. Pensato per CTO, Tech Co-Founder e ruoli AI Builder.",
+  },
+  interview_copilot: {
+    name: "Interview Copilot live",
+    blurb:
+      "Teleprompter live durante il colloquio: audio capture da Google Meet via Chrome extension, Whisper trascrizione automatica, suggerimenti AI in <3s.",
+  },
+};

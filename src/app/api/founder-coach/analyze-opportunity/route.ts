@@ -1,14 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/session";
 import { analyzeOpportunity } from "@/lib/founder-coach/analyzer";
+import { guardPremiumAPI } from "@/lib/premium-gate";
 import type { OpportunityInput } from "@/lib/founder-coach/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "auth_required" }, { status: 401 });
+  const gate = await guardPremiumAPI("founder_coach");
+  if (gate.error) return gate.error;
 
   let body: Partial<OpportunityInput>;
   try {
