@@ -52,3 +52,44 @@ export async function PATCH(
   });
   return NextResponse.json({ ok: true });
 }
+
+/**
+ * GET /api/applications/[id]
+ * Restituisce i dettagli base della candidatura (con il Job collegato)
+ * per le pagine di interview prep / copilot. Solo proprietario.
+ */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const user = await getCurrentUser();
+  if (!user) {
+    return NextResponse.json({ error: "auth_required" }, { status: 401 });
+  }
+  const { id } = await params;
+  const app = await prisma.application.findFirst({
+    where: { id, userId: user.id },
+    select: {
+      id: true,
+      status: true,
+      userStatus: true,
+      submittedVia: true,
+      submitConfirmation: true,
+      createdAt: true,
+      completedAt: true,
+      job: {
+        select: {
+          title: true,
+          company: true,
+          location: true,
+          url: true,
+          description: true,
+        },
+      },
+    },
+  });
+  if (!app) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  return NextResponse.json({ application: app });
+}

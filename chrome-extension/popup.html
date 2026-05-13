@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <title>LavorAI Copilot</title>
+    <style>
+      :root {
+        --bg: #0a0d12;
+        --bg-elev: rgba(255, 255, 255, 0.04);
+        --border: rgba(255, 255, 255, 0.1);
+        --fg: #ffffff;
+        --fg-muted: rgba(255, 255, 255, 0.7);
+        --fg-subtle: rgba(255, 255, 255, 0.45);
+        --primary: hsl(155, 50%, 50%);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 320px;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          system-ui, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      header {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .brand {
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .brand span {
+        color: var(--primary);
+      }
+      main {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--fg-subtle);
+        font-weight: 600;
+      }
+      input[type="text"] {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-family: "SF Mono", Consolas, Monaco, monospace;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        background: var(--bg-elev);
+        color: var(--fg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        outline: none;
+      }
+      input[type="text"]:focus {
+        border-color: var(--primary);
+      }
+      .row {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      button {
+        font-size: 13px;
+        font-weight: 600;
+        padding: 10px 14px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg-elev);
+        color: var(--fg);
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--primary);
+        color: #001a0d;
+        border-color: var(--primary);
+      }
+      button.danger {
+        background: rgba(220, 38, 38, 0.15);
+        border-color: rgba(220, 38, 38, 0.5);
+        color: rgb(252, 165, 165);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        background: var(--bg-elev);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 12.5px;
+        color: var(--fg-muted);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--fg-subtle);
+        flex-shrink: 0;
+      }
+      .dot.live {
+        background: var(--primary);
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+      .dot.error {
+        background: #dc2626;
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      .hint {
+        font-size: 11.5px;
+        color: var(--fg-subtle);
+        line-height: 1.5;
+      }
+      footer {
+        padding: 10px 16px;
+        border-top: 1px solid var(--border);
+        font-size: 11px;
+        color: var(--fg-subtle);
+        text-align: center;
+      }
+      footer a {
+        color: var(--fg-muted);
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">Lavor<span>AI</span></div>
+      <div id="version" style="font-size: 10px; color: var(--fg-subtle)">v0.1.0</div>
+    </header>
+    <main>
+      <div class="row">
+        <label for="code">Pairing code</label>
+        <input id="code" type="text" placeholder="ABCD1234" maxlength="8" />
+        <div class="hint">
+          Lo trovi in alto a destra nella pagina
+          <strong>Interview Copilot</strong> di LavorAI.
+        </div>
+      </div>
+
+      <div class="status">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">Non collegato</span>
+      </div>
+
+      <button id="btn-start" class="primary">Inizia ad ascoltare la tab</button>
+      <button id="btn-stop" class="danger" style="display: none">Ferma cattura</button>
+
+      <div class="hint">
+        Apri Google Meet (o Zoom Web / Teams) in <strong>questa</strong> tab,
+        torna qui e premi <em>Inizia</em>. La trascrizione avviene
+        localmente nel tuo browser e viene mandata SOLO al tuo account LavorAI.
+      </div>
+    </main>
+    <footer>
+      <a href="https://lavorai.it/interview" target="_blank">lavorai.it/interview</a>
+    </footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

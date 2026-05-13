@@ -205,6 +205,13 @@ export default function ApplicationsPage() {
               ))}
             </div>
             <AutoApplyToggle />
+            <a
+              href="/applications/new"
+              className="ds-btn"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+            >
+              <Icon name="plus" size={12} /> Importa candidatura
+            </a>
             <button
               className="ds-btn"
               type="button"

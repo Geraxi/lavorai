@@ -142,6 +142,7 @@ model User {
   preferences         UserPreferences?
   cvProfile           CVProfile?
   applicationSessions ApplicationSession[]
+  interviewSessions   InterviewSession[]
   resetTokens    PasswordResetToken[]
   verifyTokens   EmailVerificationToken[]
 }
@@ -350,8 +351,44 @@ model Application {
   job     Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
   session ApplicationSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
+  interviewSessions InterviewSession[]
+
   @@index([userId, createdAt])
   @@index([sessionId])
+}
+
+/// Sessione di preparazione + Copilot per un colloquio specifico.
+/// Una per Application, ma teoricamente l'utente può rifarne una nuova
+/// per round successivi (HR → technical → final). Per ora 1:1 con Application.
+model InterviewSession {
+  id            String   @id @default(cuid())
+  applicationId String
+  userId        String
+  /// Brief generato dall'onboarding (JSON):
+  ///   { goals, expectations, weakAreas, strengths, customNotes, generatedAt }
+  briefJson     String?  @db.Text
+  /// Pairing code univoco per linkare la Chrome extension a questa sessione
+  /// (l'extension manda transcript chunks → web app via WebSocket/SSE).
+  /// 8 char alfanumerico, generato al setup.
+  pairingCode   String?  @unique
+  pairingCodeExpiresAt DateTime?
+  /// Live transcript accumulato durante la call. JSONL chunks:
+  ///   { ts, speaker?, text, source: "extension" | "paste" | "dictation" }
+  /// Mai persistito post-call se l'utente preme "Cancella tutto".
+  transcriptJsonl String? @db.Text
+  /// Storia delle interazioni col Copilot (domanda → risposta suggerita).
+  /// JSONL: { ts, question, suggestion, model, latencyMs }
+  copilotLogJsonl String? @db.Text
+  startedAt     DateTime?
+  endedAt       DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([applicationId])
 }
 
 /// Log platform-wide di ogni email effettivamente consegnata via Resend.

@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "LavorAI Interview Copilot",
+  "version": "0.1.0",
+  "description": "Cattura l'audio della tab Google Meet / Zoom Web / Teams e lo trascrive live verso LavorAI per suggerirti risposte durante il colloquio.",
+  "permissions": [
+    "tabCapture",
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://meet.google.com/*",
+    "https://*.zoom.us/*",
+    "https://teams.microsoft.com/*",
+    "https://teams.live.com/*",
+    "https://lavorai.it/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "LavorAI Copilot",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "minimum_chrome_version": "116"
+}
