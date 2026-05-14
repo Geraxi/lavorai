@@ -38,9 +38,14 @@ export function Hero() {
           //   - transformOrigin centro: ora che c'è margine, la scale
           //     può animarsi simmetricamente senza creare crop laterali.
           backgroundSize: "80%",
-          backgroundPosition: "right 40px center",
+          // Iterazione 3: l'utente vuole il pianeta più in alto-destra.
+          // Right 10px = quasi flush col bordo destro (10px di micro-margine
+          // così non taglia mai durante la scale 1.02). Top 12% = il
+          // pianeta sta nel terzo superiore della section, non più
+          // centrato verticalmente.
+          backgroundPosition: "right 10px top 12%",
           backgroundRepeat: "no-repeat",
-          transformOrigin: "75% 50%",
+          transformOrigin: "85% 30%",
         }}
         animate={{
           rotate: [0, 1, -1, 0],
