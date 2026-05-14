@@ -41,6 +41,7 @@ export function AppSidebar({
     { href: "/applications", label: t("applications"), icon: "briefcase", count: null },
     { href: "/jobs", label: t("jobs"), icon: "inbox" },
     { href: "/analytics", label: t("analytics"), icon: "chart" },
+    { href: "/interview", label: "Colloqui", icon: "sparkles" },
     { href: "/founder-coach", label: "Founder Coach", icon: "target" },
   ];
 
