@@ -28,14 +28,24 @@ export function Hero() {
         className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
         style={{
           backgroundImage: "url('/Lavoraiherosection.png')",
-          backgroundSize: "contain",
-          backgroundPosition: "right center",
+          // Era "contain" + scale fino a 1.05 + transformOrigin centro:
+          // l'animazione comprimeva l'immagine sempre >1.0 e tagliava
+          // il top del pianeta (alberi/erba sopra). Ora:
+          //  - size: 92% così c'è padding top/bottom (più "respiro")
+          //  - position: right 30% sposta il pianeta lievemente VERSO
+          //    L'ALTO della section, evitando che il top tocchi il bordo
+          //  - transformOrigin alto-destra così la scale-animation cresce
+          //    verso il basso/sinistra (mai verso il bordo top che già
+          //    è il punto critico).
+          //  - scale parte da 1.0 → niente crop permanente.
+          backgroundSize: "92%",
+          backgroundPosition: "right 35%",
           backgroundRepeat: "no-repeat",
-          transformOrigin: "75% 50%",
+          transformOrigin: "85% 20%",
         }}
         animate={{
-          rotate: [0, 1.5, -1.5, 0],
-          scale: [1.02, 1.05, 1.05, 1.02],
+          rotate: [0, 1.2, -1.2, 0],
+          scale: [1.0, 1.025, 1.025, 1.0],
         }}
         transition={{
           duration: 18,
