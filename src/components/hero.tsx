@@ -37,15 +37,18 @@ export function Hero() {
           //     così c'è respiro tra il pianeta e l'edge del viewport.
           //   - transformOrigin centro: ora che c'è margine, la scale
           //     può animarsi simmetricamente senza creare crop laterali.
-          backgroundSize: "80%",
-          // Iterazione 3: l'utente vuole il pianeta più in alto-destra.
-          // Right 10px = quasi flush col bordo destro (10px di micro-margine
-          // così non taglia mai durante la scale 1.02). Top 12% = il
-          // pianeta sta nel terzo superiore della section, non più
-          // centrato verticalmente.
-          backgroundPosition: "right 10px top 12%",
+          // Iterazione 4: vincolare l'altezza dell'immagine alla section
+          // (auto 88%) garantisce che la sfera entra SEMPRE verticalmente
+          // anche se il viewport cambia altezza. L'immagine è 766x765
+          // (quadrata) → 88% di altezza section = anche larghezza
+          // proporzionata, niente clipping orizzontale.
+          backgroundSize: "auto 88%",
+          // Right 20px + top 4%: pianeta in alto-destra con micro-margine
+          // su entrambi i lati così niente edge viene mai toccato dal
+          // micro respiro di scale.
+          backgroundPosition: "right 20px top 4%",
           backgroundRepeat: "no-repeat",
-          transformOrigin: "85% 30%",
+          transformOrigin: "85% 20%",
         }}
         animate={{
           rotate: [0, 1, -1, 0],
@@ -132,7 +135,7 @@ export function Hero() {
             // pt-[280px] su mobile spinge il testo SOTTO il pianeta-hero
             // (alto 320px nel blocco bg di sopra) — su desktop torna a
             // pt-10 perché il pianeta è laterale, non sovrastante.
-            className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-[280px] pb-16 lg:pt-10 lg:pb-20"
+            className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-[280px] pb-16 lg:pt-6 lg:pb-12"
           >
             <motion.div
               initial={{ opacity: 0, y: 8 }}
@@ -175,7 +178,9 @@ export function Hero() {
               style={{
                 // Misura "base" = quella di LavorAI (l'ultima riga).
                 // Le righe precedenti sono in em per scalare in proporzione.
-                fontSize: "clamp(3.5rem, 7vw, 7.5rem)",
+                // Max ridotto da 7.5rem a 6rem così le 4 righe + content
+                // sotto stanno tutte nella section senza scroll/crop.
+                fontSize: "clamp(3rem, 5.8vw, 6rem)",
                 letterSpacing: "-0.03em",
                 lineHeight: 1.02,
                 fontWeight: 800,
@@ -342,7 +347,7 @@ export function Hero() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.55 }}
-              className="mt-10 inline-flex items-center gap-3 rounded-lg border px-3.5 py-2.5"
+              className="mt-6 inline-flex items-center gap-3 rounded-lg border px-3.5 py-2.5"
               style={{
                 borderColor: "rgba(255,255,255,0.1)",
                 background: "rgba(255,255,255,0.02)",

@@ -1071,8 +1071,12 @@
 .lavorai-hero-section {
   min-height: auto;
 }
+/* Desktop: usa altezza viewport meno il nav (≈64px) così tutto —
+   eyebrow + headline 4-righe + paragrafo + CTA + checkmarks + trust
+   strip — sta DENTRO la section senza essere croppato. Il pianeta è
+   posizionato e dimensionato per non eccedere queste boundary. */
 @media (min-width: 1024px) {
   .lavorai-hero-section {
-    min-height: 800px;
+    min-height: calc(100vh - 64px);
   }
 }
