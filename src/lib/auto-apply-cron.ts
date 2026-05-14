@@ -45,7 +45,7 @@ function randomToken(): string {
  * lista preferenze contiene almeno una location "fisica" non-remote
  * — perché remote-friendly è una superset di qualunque città scelta.
  */
-function expandLocationPref(loc: string): string[] {
+export function expandLocationPref(loc: string): string[] {
   const k = loc.trim().toLowerCase();
   const aliases: Record<string, string[]> = {
     milan: ["milan", "milano", "lombardia"],
@@ -96,7 +96,7 @@ function expandLocationPref(loc: string): string[] {
  *   - `job.location` contiene almeno un alias di qualsiasi pref → true
  *   - Altrimenti false
  */
-function jobMatchesLocationPrefs(
+export function jobMatchesLocationPrefs(
   job: { location: string | null; remote: boolean },
   prefs: string[],
 ): boolean {
