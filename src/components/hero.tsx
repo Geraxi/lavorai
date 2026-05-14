@@ -28,24 +28,23 @@ export function Hero() {
         className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
         style={{
           backgroundImage: "url('/Lavoraiherosection.png')",
-          // Era "contain" + scale fino a 1.05 + transformOrigin centro:
-          // l'animazione comprimeva l'immagine sempre >1.0 e tagliava
-          // il top del pianeta (alberi/erba sopra). Ora:
-          //  - size: 92% così c'è padding top/bottom (più "respiro")
-          //  - position: right 30% sposta il pianeta lievemente VERSO
-          //    L'ALTO della section, evitando che il top tocchi il bordo
-          //  - transformOrigin alto-destra così la scale-animation cresce
-          //    verso il basso/sinistra (mai verso il bordo top che già
-          //    è il punto critico).
-          //  - scale parte da 1.0 → niente crop permanente.
-          backgroundSize: "92%",
-          backgroundPosition: "right 35%",
+          // Image fitting: ora 80% size + margine 40px sia a destra che
+          // verticalmente. Niente più crop su nessun lato, sia per il
+          // sizing che per la micro scale-animation (max 1.02).
+          //   - size 80%: lascia ~10% bezel orizzontale per non toccare
+          //     mai i bordi laterali (anche con scale 1.02).
+          //   - position "right 40px center": ancora 40px dal bordo destro
+          //     così c'è respiro tra il pianeta e l'edge del viewport.
+          //   - transformOrigin centro: ora che c'è margine, la scale
+          //     può animarsi simmetricamente senza creare crop laterali.
+          backgroundSize: "80%",
+          backgroundPosition: "right 40px center",
           backgroundRepeat: "no-repeat",
-          transformOrigin: "85% 20%",
+          transformOrigin: "75% 50%",
         }}
         animate={{
-          rotate: [0, 1.2, -1.2, 0],
-          scale: [1.0, 1.025, 1.025, 1.0],
+          rotate: [0, 1, -1, 0],
+          scale: [1.0, 1.02, 1.02, 1.0],
         }}
         transition={{
           duration: 18,
