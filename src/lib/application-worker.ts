@@ -496,7 +496,9 @@ export async function processApplication(applicationId: string): Promise<void> {
     } else {
       // Nessuna email recruiter, adapter fallito o non disponibile → stato
       // finale ready_to_apply così la candidatura non resta "applying" per
-      // sempre (l'utente la vede chiaramente come "da fare a mano").
+      // sempre. NIENTE email "candidati a mano" se l'utente ha scelto
+      // auto-apply pieno: in modalità auto vogliamo silenzio, non
+      // delegare il lavoro all'utente.
       await prisma.application.update({
         where: { id: applicationId },
         data: {
@@ -506,9 +508,16 @@ export async function processApplication(applicationId: string): Promise<void> {
           completedAt: new Date(),
         },
       });
-      await notifyApplicationManual(applicationId).catch((err) =>
-        console.error(`[worker] ${applicationId} notify manual failed`, err),
-      );
+      const userAutoMode = app.user.preferences?.autoApplyMode ?? "manual";
+      if (userAutoMode !== "auto") {
+        await notifyApplicationManual(applicationId).catch((err) =>
+          console.error(`[worker] ${applicationId} notify manual failed`, err),
+        );
+      } else {
+        console.log(
+          `[worker] ${applicationId} suppressed manual-apply email (user in auto mode)`,
+        );
+      }
     }
   }
 }
@@ -694,7 +703,8 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
   }
 
   // Portal sconosciuto (non nei nostri adapter né in infojobs): no-op,
-  // lascio ready_to_apply con errorMessage esplicito
+  // lascio ready_to_apply con errorMessage esplicito. Niente email
+  // "candidati a mano" se l'utente è in auto mode (vedi gate sotto).
   if (!isPortalId(portal)) {
     await prisma.application.update({
       where: { id: applicationId },
@@ -705,9 +715,24 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
         completedAt: new Date(),
       },
     });
-    await notifyApplicationManual(applicationId).catch((err) =>
-      console.error(`[worker] ${applicationId} notify manual failed`, err),
-    );
+    // Gate email "candidati a mano": solo se l'utente NON è in auto mode.
+    // In attemptAutoSubmit non abbiamo `app` in scope → query targeted
+    // sulla relazione user → preferences.
+    const appForMode = await prisma.application.findUnique({
+      where: { id: applicationId },
+      select: { user: { select: { preferences: { select: { autoApplyMode: true } } } } },
+    });
+    const userAutoMode =
+      appForMode?.user?.preferences?.autoApplyMode ?? "manual";
+    if (userAutoMode !== "auto") {
+      await notifyApplicationManual(applicationId).catch((err) =>
+        console.error(`[worker] ${applicationId} notify manual failed`, err),
+      );
+    } else {
+      console.log(
+        `[worker] ${applicationId} suppressed manual-apply email (user in auto mode, portal not supported)`,
+      );
+    }
     return;
   }
 
