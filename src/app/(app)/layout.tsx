@@ -2,10 +2,19 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/design/app-shell";
 import { CommandPalette } from "@/components/design/command-palette";
 import { ThemeScript } from "@/components/design/theme-script";
-import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
 
+/**
+ * App layout. Strippato delle 2 prisma.count() che giravano su OGNI
+ * navigazione (bloccanti pre-paint, 200-500ms felt latency).
+ * I conteggi sidebar ora fluiscono via client SWR a /api/sidebar-stats
+ * dopo il primo paint — navigazione tra pagine è istantanea, badge si
+ * popolano subito dopo.
+ *
+ * Resta solo getCurrentUser() (session lookup, già cached da NextAuth)
+ * + effectiveTier() (pure function) prima del render.
+ */
 export default async function AppLayout({
   children,
 }: {
@@ -18,18 +27,7 @@ export default async function AppLayout({
     return null;
   }
 
-  const [applicationsCount, todayCount] = await Promise.all([
-    prisma.application.count({ where: { userId: user.id } }),
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-      },
-    }),
-  ]);
-
   const tier = effectiveTier(user);
-  const dailyCap = tier === "free" ? 3 : tier === "pro" ? 50 : 100;
 
   return (
     <>
@@ -42,9 +40,8 @@ export default async function AppLayout({
       </a>
       <AppShell
         sidebarProps={{
-          applicationsCount,
-          autoApplyToday: todayCount,
-          autoApplyRemaining: Math.max(0, dailyCap - todayCount),
+          // Conteggi NON forniti dal server: la sidebar fetcha
+          // /api/sidebar-stats via SWR dopo il primo paint.
           userName: user.name ?? user.email.split("@")[0],
           userPlan:
             tier === "pro_plus"

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import useSWR from "swr";
 import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -8,6 +9,14 @@ import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/design/icon";
 import { cn } from "@/lib/utils";
+
+const fetcher = (u: string) => fetch(u).then((r) => r.json());
+
+interface SidebarStats {
+  applicationsCount: number;
+  autoApplyToday: number;
+  autoApplyRemaining: number;
+}
 
 interface NavItem {
   href: string;
@@ -26,14 +35,43 @@ export interface SidebarProps {
 }
 
 export function AppSidebar({
-  applicationsCount,
+  applicationsCount: applicationsCountProp,
   autoApplyOn = true,
-  autoApplyToday = 22,
-  autoApplyRemaining = 78,
+  autoApplyToday: autoApplyTodayProp,
+  autoApplyRemaining: autoApplyRemainingProp,
   userName = "Demo User",
   userPlan = "Pro plan",
 }: SidebarProps) {
   const t = useTranslations("appShell");
+
+  // Conteggi via SWR DOPO il primo paint così non bloccano la
+  // navigazione. Refresh ogni 30s mentre l'utente naviga, dedupe
+  // automatico tra tab/render simultanei. Se le prop arrivano dal
+  // server (per back-compat), vengono usate come fallback iniziale
+  // prima della prima fetch.
+  const { data: stats } = useSWR<SidebarStats>(
+    "/api/sidebar-stats",
+    fetcher,
+    {
+      refreshInterval: 30_000,
+      revalidateOnFocus: true,
+      fallbackData:
+        applicationsCountProp !== undefined &&
+        autoApplyTodayProp !== undefined &&
+        autoApplyRemainingProp !== undefined
+          ? {
+              applicationsCount: applicationsCountProp,
+              autoApplyToday: autoApplyTodayProp,
+              autoApplyRemaining: autoApplyRemainingProp,
+            }
+          : undefined,
+    },
+  );
+
+  const applicationsCount = stats?.applicationsCount ?? applicationsCountProp;
+  const autoApplyToday = stats?.autoApplyToday ?? autoApplyTodayProp ?? 0;
+  const autoApplyRemaining =
+    stats?.autoApplyRemaining ?? autoApplyRemainingProp ?? 0;
 
   const workItems: NavItem[] = [
     { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
