@@ -55,6 +55,13 @@ export default async function DashboardPage() {
     now.getDate(),
   );
 
+  // Parallelizza tutto: prima erano 3 blocchi sequenziali (6 counts +
+  // 1 findMany 7-day + 1 findFirst lastApp). Ora un unico Promise.all
+  // → il tempo totale è quello della query più lenta (~50-150ms su Neon)
+  // invece della somma sequenziale.
+  const sevenDaysAgo = new Date(todayStart);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+
   const [
     deliveredMonth,
     deliveredToday,
@@ -62,6 +69,8 @@ export default async function DashboardPage() {
     pendingCount,
     applyingCount,
     failedMonth,
+    lastWeekApps,
+    lastApp,
   ] = await Promise.all([
     prisma.application.count({
       where: {
@@ -107,22 +116,23 @@ export default async function DashboardPage() {
         createdAt: { gte: monthStart },
       },
     }),
+    prisma.application.findMany({
+      where: {
+        userId: user.id,
+        status: "success",
+        submittedVia: { not: null },
+        createdAt: { gte: sevenDaysAgo },
+      },
+      select: { createdAt: true },
+    }),
+    prisma.application.findFirst({
+      where: { userId: user.id },
+      select: { createdAt: true },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
-  // 7-day daily count per la mini bar chart. Sostituisce i 4 MiniStat
-  // affollati con una visualizzazione che dice "stai performando meglio
-  // o peggio degli ultimi giorni" a colpo d'occhio.
-  const sevenDaysAgo = new Date(todayStart);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-  const lastWeekApps = await prisma.application.findMany({
-    where: {
-      userId: user.id,
-      status: "success",
-      submittedVia: { not: null },
-      createdAt: { gte: sevenDaysAgo },
-    },
-    select: { createdAt: true },
-  });
+  // 7-day daily count per la mini bar chart.
   const dailyCounts = Array.from({ length: 7 }, (_, i) => {
     const day = new Date(sevenDaysAgo);
     day.setDate(day.getDate() + i);
@@ -143,14 +153,7 @@ export default async function DashboardPage() {
   const isLive = autoMode === "auto" || autoMode === "hybrid";
   const dailyCap = prefs?.dailyCap ?? 25;
 
-  // Ultima attività auto-apply: timestamp dell'ultima candidatura creata.
-  // Usata per mostrare "Ultima esecuzione: 2 ore fa" sotto l'header così
-  // l'utente vede a colpo d'occhio che il sistema sta lavorando.
-  const lastApp = await prisma.application.findFirst({
-    where: { userId: user.id },
-    select: { createdAt: true },
-    orderBy: { createdAt: "desc" },
-  });
+  // lastApp è già caricato nel Promise.all sopra (parallelizzato).
   // Prossima run: prossima delle 3 ore tattiche (08/12/16 UTC).
   const nextRun = (() => {
     const nowUtc = new Date();
