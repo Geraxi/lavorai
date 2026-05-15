@@ -127,29 +127,65 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   ],
   callbacks: {
-    async jwt({ token, user }) {
-      // Primo accesso: copia l'id nel token
-      if (user?.id) {
-        token.sub = user.id;
+    async jwt({ token, user, trigger }) {
+      // Caching aggressivo dei campi User nel JWT per evitare di hittare
+      // il DB su OGNI session() lookup (= ogni nav RSC). Prima: 1 query
+      // User per ogni page navigation. Dopo: solo all'inizio della sessione
+      // e su refresh esplicito.
+      //
+      // Quando hidratare:
+      //  - Primo sign-in (user è presente)
+      //  - update() esplicito chiamato dal client (trigger === "update")
+      //  - Token senza tier (back-compat per JWT pre-fix)
+      //  - Token "vecchio" oltre 1 ora (auto-refresh per riflettere upgrade
+      //    di tier dopo checkout Stripe senza signout)
+      const HOUR = 60 * 60;
+      const tokenAge =
+        typeof token.iat === "number"
+          ? Math.floor(Date.now() / 1000) - token.iat
+          : 0;
+      const needsRehydrate =
+        !!user?.id ||
+        trigger === "update" ||
+        !token.tier ||
+        tokenAge > HOUR;
+
+      if (user?.id) token.sub = user.id;
+
+      if (needsRehydrate && typeof token.sub === "string") {
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.sub },
+          select: {
+            tier: true,
+            subscriptionStatus: true,
+            email: true,
+            name: true,
+          },
+        });
+        if (dbUser) {
+          token.tier = effectiveTier({
+            tier: dbUser.tier,
+            email: dbUser.email,
+          });
+          token.subscriptionStatus = dbUser.subscriptionStatus ?? null;
+          if (dbUser.email) token.email = dbUser.email;
+          if (dbUser.name) token.name = dbUser.name;
+        }
       }
       return token;
     },
     async session({ session, token }) {
-      // Porta id + tier + subscription dalla DB alla sessione
+      // Solo lettura dal JWT: ZERO query DB qui. Il JWT è già stato
+      // popolato in jwt() (vedi sopra) o è ancora "fresh" entro 1h.
       const userId = typeof token.sub === "string" ? token.sub : null;
       if (session.user && userId) {
         session.user.id = userId;
-        const dbUser = await prisma.user.findUnique({
-          where: { id: userId },
-          select: { tier: true, subscriptionStatus: true, email: true, name: true },
-        });
-        session.user.tier = effectiveTier({
-          tier: dbUser?.tier,
-          email: dbUser?.email,
-        });
-        session.user.subscriptionStatus = dbUser?.subscriptionStatus ?? null;
-        if (dbUser?.email) session.user.email = dbUser.email;
-        if (dbUser?.name) session.user.name = dbUser.name;
+        session.user.tier =
+          (token.tier as Tier | undefined) ?? "free";
+        session.user.subscriptionStatus =
+          (token.subscriptionStatus as string | null | undefined) ?? null;
+        if (typeof token.email === "string") session.user.email = token.email;
+        if (typeof token.name === "string") session.user.name = token.name;
       }
       return session;
     },
