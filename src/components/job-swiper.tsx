@@ -737,6 +737,20 @@ function JobCardSurface({
     return clean.length > 280 ? clean.slice(0, 280).trimEnd() + "…" : clean;
   }, [job.description, compact]);
   const postedLabel = relativeDateLabel(job.postedAt ?? null);
+  // Portale ATS → pill di fiducia "candidatura diretta". Segnala
+  // all'utente che è un form reale, non un redirect.
+  const portalLabel = useMemo(() => {
+    if (compact) return null;
+    const p = portalOf(job.url);
+    const map: Record<string, string> = {
+      greenhouse: "Greenhouse · invio diretto",
+      lever: "Lever · invio diretto",
+      ashby: "Ashby · invio diretto",
+      workable: "Workable · invio diretto",
+      smartrecruiters: "SmartRecruiters · invio diretto",
+    };
+    return map[p] ?? null;
+  }, [job.url, compact]);
   const salaryLabel = (job.salaryMin || job.salaryMax) ? formatSalary(job.salaryMin, job.salaryMax) : null;
 
   return (
@@ -887,37 +901,45 @@ function JobCardSurface({
         </div>
       </div>
 
-      {/* KEY FACTS row — salario + contratto + remote come "stat strip"
-          stile Tinder bio. Visivamente forte, leggibile a colpo d'occhio. */}
-      {!compact && (salaryLabel || job.contractType || job.remote) && (
+      {/* PILL CLUSTER — sempre presente. Deriva tag da tutti i campi
+          disponibili così la card non è mai vuota anche quando
+          salario/contratto/remote mancano (es. ruolo onsite senza RAL
+          pubblicata). Ordine: highlight (salario) → meta strutturati
+          → skill tech. */}
+      {!compact && (
         <div
           style={{
-            margin: "0 24px 14px",
-            padding: "12px 14px",
-            borderRadius: 12,
-            background: "rgba(5,150,105,0.06)",
-            border: "1px solid rgba(5,150,105,0.15)",
+            padding: "0 24px 14px",
             display: "flex",
-            gap: 16,
             flexWrap: "wrap",
+            gap: 7,
           }}
         >
           {salaryLabel && (
-            <KeyFact icon="euro" label="RAL" value={salaryLabel} />
+            <Pill icon="euro" tone="salary" text={salaryLabel} />
           )}
+          {job.remote && <Pill icon="globe" tone="green" text="Remote" />}
+          {seniority && <Pill icon="star" tone="accent" text={seniority} />}
           {job.contractType && (
-            <KeyFact
+            <Pill
               icon="clock"
-              label="Contratto"
-              value={job.contractType === "permanent" ? "Tempo indet." : job.contractType}
+              text={
+                job.contractType === "permanent"
+                  ? "Tempo indeterminato"
+                  : job.contractType
+              }
             />
           )}
-          {job.remote && (
-            <KeyFact icon="globe" label="Modalità" value="Remote" />
+          {job.location && (
+            <Pill icon="map-pin" text={shortLocation(job.location)} />
           )}
-          {seniority && (
-            <KeyFact icon="star" label="Livello" value={seniority} />
+          {postedLabel && <Pill icon="clock" text={postedLabel} />}
+          {portalLabel && (
+            <Pill icon="zap" tone="trust" text={portalLabel} />
           )}
+          {skills.map((s) => (
+            <Pill key={s} tone="tech" text={s} />
+          ))}
         </div>
       )}
 
@@ -939,50 +961,8 @@ function JobCardSurface({
         </div>
       )}
 
-      {/* Spacer flessibile per spingere pill/footer in basso */}
+      {/* Spacer flessibile per spingere il footer in basso */}
       <div style={{ flex: 1, minHeight: 4 }} />
-
-      {/* SKILLS: tech tags estratti dalla description */}
-      {!compact && skills.length > 0 && (
-        <div
-          style={{
-            padding: "0 24px 14px",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 6,
-          }}
-        >
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              color: "rgba(15,16,18,0.45)",
-              marginRight: 4,
-              alignSelf: "center",
-            }}
-          >
-            Tech
-          </span>
-          {skills.map((s) => (
-            <span
-              key={s}
-              style={{
-                fontSize: 11.5,
-                fontWeight: 600,
-                padding: "4px 10px",
-                borderRadius: 999,
-                background: "rgba(5,150,105,0.10)",
-                color: "#047857",
-                border: "1px solid rgba(5,150,105,0.22)",
-              }}
-            >
-              {s}
-            </span>
-          ))}
-        </div>
-      )}
 
       {/* Footer hint */}
       {!compact && (
@@ -1008,50 +988,88 @@ function JobCardSurface({
 }
 
 /**
- * "KeyFact" — riga compatta label/value usata nella stat-strip
- * sotto l'header (RAL, Contratto, Modalità, Livello). Label è
- * uppercase micro, value è bold per leggibilità a colpo d'occhio.
+ * Pill rotonda riusabile per la card swipe. Toni:
+ *   default → grigio neutro (location, posted, contract)
+ *   green   → verde solido (remote)
+ *   salary  → verde forte enfatizzato (RAL)
+ *   accent  → outline scuro (seniority)
+ *   trust   → verde tenue (portale ATS = invio diretto)
+ *   tech    → verde tenue (skill estratte)
  */
-function KeyFact({
+function Pill({
   icon,
-  label,
-  value,
+  text,
+  tone = "default",
 }: {
-  icon: "euro" | "clock" | "globe" | "star";
-  label: string;
-  value: string;
+  icon?: "euro" | "clock" | "globe" | "star" | "map-pin" | "zap";
+  text: string;
+  tone?: "default" | "green" | "salary" | "accent" | "trust" | "tech";
 }) {
+  const palette: Record<
+    string,
+    { bg: string; fg: string; border: string; weight: number }
+  > = {
+    default: {
+      bg: "rgba(15,16,18,0.04)",
+      fg: "rgba(15,16,18,0.70)",
+      border: "rgba(15,16,18,0.10)",
+      weight: 500,
+    },
+    green: {
+      bg: "#059669",
+      fg: "#FFFFFF",
+      border: "#059669",
+      weight: 600,
+    },
+    salary: {
+      bg: "rgba(5,150,105,0.12)",
+      fg: "#047857",
+      border: "rgba(5,150,105,0.35)",
+      weight: 700,
+    },
+    accent: {
+      bg: "transparent",
+      fg: "#0F1012",
+      border: "rgba(15,16,18,0.28)",
+      weight: 600,
+    },
+    trust: {
+      bg: "rgba(5,150,105,0.08)",
+      fg: "#047857",
+      border: "rgba(5,150,105,0.22)",
+      weight: 600,
+    },
+    tech: {
+      bg: "rgba(5,150,105,0.10)",
+      fg: "#047857",
+      border: "rgba(5,150,105,0.22)",
+      weight: 600,
+    },
+  };
+  const p = palette[tone] ?? palette.default;
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-      <div
-        style={{
-          fontSize: 9.5,
-          fontWeight: 600,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          color: "rgba(15,16,18,0.5)",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-        }}
-      >
-        <Icon name={icon} size={10} />
-        {label}
-      </div>
-      <div
-        style={{
-          fontSize: 13.5,
-          fontWeight: 700,
-          color: "#0F1012",
-          letterSpacing: "-0.01em",
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-      >
-        {value}
-      </div>
-    </div>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "6px 12px",
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: p.weight,
+        lineHeight: 1.2,
+        background: p.bg,
+        color: p.fg,
+        border: `1px solid ${p.border}`,
+        whiteSpace: "nowrap",
+        maxWidth: "100%",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+      }}
+    >
+      {icon && <Icon name={icon} size={11} />}
+      {text}
+    </span>
   );
 }
 
