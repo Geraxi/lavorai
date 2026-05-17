@@ -15,6 +15,8 @@ import {
 } from "@/components/settings-actions";
 import { prisma } from "@/lib/db";
 import { ThemeToggle } from "@/components/design/theme-toggle";
+import { Suspense } from "react";
+import { PostCheckoutRefresh } from "@/components/post-checkout-refresh";
 
 export const metadata: Metadata = { title: "Impostazioni" };
 export const dynamic = "force-dynamic";
@@ -33,6 +35,11 @@ export default async function SettingsPage() {
 
   return (
     <>
+      {/* Post-checkout: forza refresh tier dopo redirect Stripe
+          (?subscribed=1), gestendo la latenza del webhook. */}
+      <Suspense fallback={null}>
+        <PostCheckoutRefresh />
+      </Suspense>
       <AppTopbar title="Impostazioni" breadcrumb="Profilo" />
       <div
         style={{
