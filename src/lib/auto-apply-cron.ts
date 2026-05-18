@@ -494,9 +494,15 @@ async function processUser(
   // Hard cap per company nel rolling window 30gg.
   // Senza questo, una company con 60 job aperti (es. Wunderman, Dropbox)
   // si prendeva 20+ candidature mentre 50+ altre aziende non vedevano
-  // niente. Limite ragionevole: 3 candidature/azienda/30gg = abbastanza
-  // per coprire i ruoli più rilevanti senza spam.
-  const COMPANY_CAP_30D = 3;
+  // niente.
+  //
+  // Alzato da 3 → 6: a 3 il pool si esauriva dopo ~30 giorni (ogni
+  // azienda matchante saturata, skippedAvoidedCompany dominava il
+  // funnel → 0 candidature/giorno). 6 ruoli DIVERSI nella stessa
+  // azienda in un mese non è spam — sono posizioni distinte, il
+  // recruiting di team diversi non si parla. Raddoppia l'headroom
+  // sotto cap senza degradare la qualità percepita dal recruiter.
+  const COMPANY_CAP_30D = 6;
   const recentByCompany30d = await prisma.application.groupBy({
     by: ["jobId"],
     where: {
