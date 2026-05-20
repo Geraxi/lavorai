@@ -16,7 +16,11 @@ export function SectionPricing() {
   return (
     <section
       id="prezzi"
-      className="relative border-t border-border/60 py-24 md:py-32"
+      // pb extra per evitare che la sticky CTA (fixed bottom 16+~70px
+      // alta) copra i bottoni "Scegli Pro+" / "Inizia gratis" delle
+      // card pricing. Margine extra solo nella pricing section,
+      // sufficient clearance per la sticky senza alterare il resto.
+      className="relative border-t border-border/60 pt-24 md:pt-32 pb-40 md:pb-48"
     >
       <div
         aria-hidden
@@ -138,13 +142,27 @@ function TierCard({ tier }: { tier: TierConfig }) {
             <span
               className={cn(
                 "text-5xl font-bold tracking-tighter",
-                tier.highlight && "text-gradient-accent",
+                // BUG: text-gradient-accent usa green→green su transparent
+                // text. Sulla card highlight che ha BG verde, il testo
+                // diventava invisibile (green-on-green). Sulle altre card
+                // bg dark il gradient ha senso, ma highlight no — usiamo
+                // foreground solido (white-on-green leggibile).
+                tier.highlight ? "text-foreground" : "text-foreground",
               )}
             >
               {tier.priceDisplay}
             </span>
             {tier.priceSuffix && (
-              <span className="text-sm text-muted-foreground">
+              <span
+                className={cn(
+                  "text-sm",
+                  // Suffisso "/ mese": opacità ridotta ma comunque
+                  // visibile sul verde (muted-foreground è troppo grigio).
+                  tier.highlight
+                    ? "text-foreground/80"
+                    : "text-muted-foreground",
+                )}
+              >
                 {tier.priceSuffix}
               </span>
             )}
