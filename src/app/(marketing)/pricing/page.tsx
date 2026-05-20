@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   title: "Prezzi · LavorAI",
   description:
     "Piani LavorAI: Free (3 candidature), Pro (€19.99/mese, 50 candidature), Pro+ (€39.99/mese, illimitate + Founder Coach + Interview Copilot).",
+  alternates: { canonical: "/pricing" },
 };
 
 /**

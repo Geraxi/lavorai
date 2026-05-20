@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "Termini di servizio",
   description:
     "Termini e condizioni di LavorAI, inclusi i termini per la funzionalità di auto-apply sui portali di lavoro.",
+  alternates: { canonical: "/termini" },
 };
 
 export default function TerminiPage() {

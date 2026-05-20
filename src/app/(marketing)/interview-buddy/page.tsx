@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "Interview Buddy · mock interview AI gratis · LavorAI",
   description:
     "Practica un colloquio di 5 domande con AI. Carica un annuncio reale, ricevi feedback specifico turn-by-turn + summary finale con score. Gratis, niente registrazione.",
+  alternates: { canonical: "/interview-buddy" },
 };
 
 /**

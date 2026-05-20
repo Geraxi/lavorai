@@ -4,6 +4,7 @@ import { PlaceholderPage } from "@/components/placeholder-page";
 export const metadata: Metadata = {
   title: "Contatti",
   description: "Contatta il team di LavorAI.",
+  alternates: { canonical: "/contatti" },
 };
 
 export default function ContattiPage() {

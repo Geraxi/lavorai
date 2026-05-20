@@ -1,5 +1,13 @@
+import type { Metadata } from "next";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
+
+export const metadata: Metadata = {
+  // Canonical homepage. Risolto contro metadataBase nel root layout
+  // (lavorai.it in prod). Senza questo, Google rischia di indicizzare
+  // varianti con query string (?utm, ?ref) come pagine distinte.
+  alternates: { canonical: "/" },
+};
 import { Hero } from "@/components/hero";
 import { SectionComeFunziona } from "@/components/sections/come-funziona";
 import { SectionLeadMagnet } from "@/components/sections/lead-magnet-banner";

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
   title: "Informativa privacy",
+  alternates: { canonical: "/privacy" },
   description:
     "Informativa privacy di LavorAI. Come gestiamo i dati personali, i cookie dei portali terzi, e i diritti GDPR.",
 };

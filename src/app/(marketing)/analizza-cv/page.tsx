@@ -9,6 +9,7 @@ export const metadata: Metadata = {
   title: "Analizza il tuo CV gratis · ATS score + suggerimenti",
   description:
     "Carica il CV e un annuncio. In 60 secondi ricevi: ATS score (su 100), CV ottimizzato in DOCX, cover letter scritta per quell'annuncio, 3-5 suggerimenti concreti.",
+  alternates: { canonical: "/analizza-cv" },
 };
 
 /**
