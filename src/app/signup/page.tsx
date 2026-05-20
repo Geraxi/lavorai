@@ -433,9 +433,9 @@ function SignupContent() {
           /* Stesso pattern del login: bitmap sgranato sostituito da
              gradient CSS pulito + ambient glow verdi + grid subtle. */
           background:
-            radial-gradient(ellipse 70% 80% at 75% 25%, hsl(155 55% 22%) 0%, transparent 65%),
-            radial-gradient(ellipse 55% 60% at 25% 80%, hsl(155 50% 18%) 0%, transparent 70%),
-            linear-gradient(165deg, hsl(155 45% 10%) 0%, hsl(160 50% 7%) 100%);
+            radial-gradient(ellipse 70% 80% at 75% 25%, hsl(155 65% 38%) 0%, transparent 60%),
+            radial-gradient(ellipse 55% 60% at 25% 80%, hsl(158 60% 30%) 0%, transparent 65%),
+            linear-gradient(165deg, hsl(155 55% 25%) 0%, hsl(160 60% 18%) 100%);
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
@@ -448,8 +448,8 @@ function SignupContent() {
           position: absolute;
           inset: 0;
           background-image:
-            linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+            linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
           background-size: 56px 56px;
           mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 80%);
           pointer-events: none;
