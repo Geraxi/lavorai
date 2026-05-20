@@ -1,4 +1,102 @@
-import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
+import type {
+  PortalAdapter,
+  ApplyInput,
+  ApplyOutcome,
+  CanaryLog,
+} from "./types";
+import type { Page } from "playwright";
+
+/**
+ * Canary helper: scatta uno screenshot della page corrente e lo
+ * carica su Vercel Blob. Ritorna l'URL pubblico, o null se fallisce
+ * o se Blob non è configurato. Mai throws — la canary deve essere
+ * non-distruttiva sul flow di submit.
+ */
+async function uploadScreenshot(
+  page: Page,
+  label: string,
+  applicationId: string | undefined,
+): Promise<string | null> {
+  try {
+    if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+    const { put } = await import("@vercel/blob");
+    const buf = await page.screenshot({ type: "png", fullPage: false });
+    const filename = `canary/${applicationId ?? "noid"}-${label}-${Date.now()}.png`;
+    const blob = await put(filename, buf, {
+      access: "public",
+      contentType: "image/png",
+      addRandomSuffix: false,
+    });
+    return blob.url;
+  } catch (err) {
+    console.warn("[canary] screenshot upload failed", err);
+    return null;
+  }
+}
+
+/**
+ * Canary helper: estrae lo stato attuale di TUTTI i campi form
+ * (name, label, type, value-length, required). Risponde alla domanda
+ * "il form è davvero compilato come dovrebbe essere prima del submit?".
+ */
+async function captureFormFields(
+  page: Page,
+): Promise<CanaryLog["fields"]> {
+  return page.evaluate(() => {
+    const out: Array<{
+      name: string;
+      label: string;
+      type: string;
+      valueLength: number;
+      required: boolean;
+    }> = [];
+    const inputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      "input, textarea, select",
+    );
+    inputs.forEach((el) => {
+      const id = el.id || "";
+      const labelEl = id
+        ? document.querySelector(`label[for="${id}"]`)
+        : el.closest("label");
+      out.push({
+        name: el.name || id || el.getAttribute("aria-label") || "(anon)",
+        label: (labelEl?.textContent ?? "").trim().slice(0, 120),
+        type:
+          (el as HTMLInputElement).type ||
+          el.tagName.toLowerCase(),
+        valueLength:
+          (el as HTMLInputElement).type === "file"
+            ? (el as HTMLInputElement).files?.[0]?.name?.length ?? 0
+            : (el.value ?? "").length,
+        required: el.required ?? false,
+      });
+    });
+    return out;
+  });
+}
+
+/**
+ * Legge il filename del file effettivamente attaccato all'input resume.
+ * Null se nessun file attached → CV mancante → submission rotta.
+ */
+async function readResumeFilename(page: Page): Promise<string | null> {
+  return page.evaluate(() => {
+    const candidates = document.querySelectorAll<HTMLInputElement>(
+      'input[type="file"]',
+    );
+    for (const inp of Array.from(candidates)) {
+      const name = (inp.name + " " + (inp.getAttribute("aria-label") ?? "")).toLowerCase();
+      if (name.includes("resume") || name.includes("cv")) {
+        return inp.files?.[0]?.name ?? null;
+      }
+    }
+    // Fallback: primo input file con un file attaccato
+    for (const inp of Array.from(candidates)) {
+      if (inp.files && inp.files.length > 0) return inp.files[0]!.name;
+    }
+    return null;
+  });
+}
 
 /**
  * Greenhouse ATS — `boards.greenhouse.io/<slug>/jobs/<id>` o `job-boards.greenhouse.io/*`.
@@ -178,6 +276,43 @@ export const greenhouseAdapter: PortalAdapter = {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
 
+      // ============================================================
+      // CANARY DEBUG — gated da env CANARY_DEBUG=1
+      // Cattura forensica pre-submit: filename CV attaccato, tutti i
+      // campi form, screenshot. Risponde alla domanda "il submit è
+      // davvero andato in porto con i dati corretti?".
+      // Zero impatto sul flow normale quando flag spento.
+      // ============================================================
+      const canaryEnabled = process.env.CANARY_DEBUG === "1";
+      let canaryPre: {
+        resumeAttachedFilename: string | null;
+        preSubmitScreenshotUrl: string | null;
+        fields: CanaryLog["fields"];
+        urlBeforeSubmit: string;
+        capturedAt: string;
+      } | null = null;
+      if (canaryEnabled) {
+        try {
+          const [resumeFn, fields, screenshotUrl] = await Promise.all([
+            readResumeFilename(page),
+            captureFormFields(page),
+            uploadScreenshot(page, "pre-submit", input.applicationId),
+          ]);
+          canaryPre = {
+            resumeAttachedFilename: resumeFn,
+            preSubmitScreenshotUrl: screenshotUrl,
+            fields,
+            urlBeforeSubmit: page.url(),
+            capturedAt: new Date().toISOString(),
+          };
+          console.log(
+            `[canary] pre-submit — resume="${resumeFn ?? "MISSING"}" fields=${fields.length} screenshot=${screenshotUrl ? "ok" : "skipped"}`,
+          );
+        } catch (err) {
+          console.warn("[canary] pre-submit capture failed", err);
+        }
+      }
+
       const submit = page.locator(
         'button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply"), button:has-text("Invia")',
       );
@@ -239,33 +374,67 @@ export const greenhouseAdapter: PortalAdapter = {
       const finalUrl = page.url();
       const bodyText = await page.locator("body").innerText().catch(() => "");
 
+      // Estrai body HTTP della response submit (se presente) per canary.
+      let submitHttpBody: string | null = null;
+      let submitHttpStatus: number | null = null;
+      if (submissionResponse) {
+        submitHttpStatus = submissionResponse.status();
+        try {
+          const body = await submissionResponse.text();
+          submitHttpBody = body.slice(0, 800).replace(/\s+/g, " ");
+        } catch {
+          /* already consumed */
+        }
+      }
+
+      // Canary post-submit: screenshot + completa il payload con
+      // l'osservazione dopo il click. Helper centrale così OGNI return
+      // path porta indietro lo stesso payload.
+      let canaryFull: CanaryLog | undefined;
+      if (canaryEnabled && canaryPre) {
+        const postScreenshot = await uploadScreenshot(
+          page,
+          "post-submit",
+          input.applicationId,
+        );
+        canaryFull = {
+          resumeAttachedFilename: canaryPre.resumeAttachedFilename,
+          preSubmitScreenshotUrl: canaryPre.preSubmitScreenshotUrl,
+          postSubmitScreenshotUrl: postScreenshot,
+          fields: canaryPre.fields,
+          submitHttpStatus,
+          submitHttpBody,
+          urlBeforeSubmit: canaryPre.urlBeforeSubmit,
+          urlAfterSubmit: finalUrl,
+          bodyTextAfterSubmit: bodyText.slice(0, 800).replace(/\s+/g, " "),
+          capturedAt: canaryPre.capturedAt,
+        };
+        console.log(
+          `[canary] post-submit — http=${submitHttpStatus ?? "none"} urlChanged=${finalUrl !== canaryPre.urlBeforeSubmit} screenshot=${postScreenshot ? "ok" : "skipped"}`,
+        );
+      }
+
       // ============================================================
       // CASE A: catturata la POST → decide dallo status code
       // ============================================================
       if (submissionResponse) {
-        const status = submissionResponse.status();
+        const status = submitHttpStatus ?? submissionResponse.status();
         // 2xx o 3xx redirect → ACCETTATA dal server.
         if (status >= 200 && status < 400) {
           return {
             ok: true,
             status: "submitted",
-            // Conferma HTTP-level = la più forte possibile.
             confirmation: `DETECTED_HTTP_${status}`,
+            canary: canaryFull,
           };
         }
         // 4xx → server rifiuta (validazione, duplicato, job chiuso).
         if (status >= 400 && status < 500) {
-          let serverMsg = "";
-          try {
-            const body = await submissionResponse.text();
-            serverMsg = body.slice(0, 400).replace(/\s+/g, " ");
-          } catch {
-            /* response già consumata o binary */
-          }
           return {
             ok: false,
             status: "validation_failed",
-            error: `Greenhouse ha rifiutato la submission (HTTP ${status}). Server response: "${serverMsg}"`,
+            error: `Greenhouse ha rifiutato la submission (HTTP ${status}). Server response: "${submitHttpBody ?? "(empty)"}"`,
+            canary: canaryFull,
           };
         }
         // 5xx → errore server. Caller retry.
@@ -273,6 +442,7 @@ export const greenhouseAdapter: PortalAdapter = {
           ok: false,
           status: "unknown_error",
           error: `Greenhouse ha risposto con HTTP ${status} — errore server, retry consigliato.`,
+          canary: canaryFull,
         };
       }
 
@@ -280,8 +450,6 @@ export const greenhouseAdapter: PortalAdapter = {
       // CASE B: nessuna POST catturata → validazione client-side ha
       // bloccato il submit OPPURE l'endpoint non corrisponde al pattern
       // ============================================================
-      // Verifica se ci sono error banner visibili — significa che la
-      // validazione client ha fermato il submit prima che partisse.
       const errorPatterns =
         /(there\s+(was|were)\s+problems?|this\s+field\s+is\s+required|please\s+(correct|fix|enter)|invalid\s+(email|input|file)|errore|campo\s+obbligatorio|inserisci|file\s+too\s+large|select\s+a\s+(valid\s+)?file)/i;
       if (errorPatterns.test(bodyText)) {
@@ -289,11 +457,10 @@ export const greenhouseAdapter: PortalAdapter = {
           ok: false,
           status: "validation_failed",
           error: `Validazione client-side ha bloccato il submit (nessuna POST partita). Body excerpt: "${bodyText.slice(0, 240).replace(/\s+/g, " ")}"`,
+          canary: canaryFull,
         };
       }
 
-      // Fallback DOM-level: forse l'endpoint Greenhouse non matchava il
-      // nostro pattern. Cerchiamo conferma forte via thank-you page.
       const strongConfirmRegex =
         /(thank\s+you|application\s+(received|submitted|successful)|your\s+application\s+has\s+been|grazie\s+per|candidatura\s+(inviata|ricevuta)|we\s+received\s+your)/i;
       const urlChanged = finalUrl !== urlBeforeSubmit;
@@ -303,15 +470,15 @@ export const greenhouseAdapter: PortalAdapter = {
           ok: true,
           status: "submitted",
           confirmation: "DETECTED_DOM",
+          canary: canaryFull,
         };
       }
 
-      // Cliccato submit, nessuna POST, nessun banner errore, nessuna
-      // thank-you page. Non possiamo dichiarare success. Caller retry.
       return {
         ok: false,
         status: "unknown_error",
         error: `Submit cliccato ma niente è stato confermato (no POST HTTP catturata, no thank-you page, no error banner). URL ${urlChanged ? "cambiato" : "invariato"}: ${finalUrl}. Caller dovrebbe ritentare.`,
+        canary: canaryFull,
       };
     } catch (err) {
       return {

@@ -381,6 +381,11 @@ export async function processApplication(applicationId: string): Promise<void> {
           // diagnosi successive — pre-fix non c'era e non possiamo
           // sapere retroattivamente lo stato delle vecchie candidature.
           submitConfirmation: confState,
+          // Persist canary log se l'adapter l'ha popolato (env CANARY_DEBUG=1).
+          // Non sovrascriviamo se outcome.canary è undefined (run normale).
+          ...("canary" in outcome && outcome.canary
+            ? { canaryLog: JSON.stringify(outcome.canary) }
+            : {}),
           errorMessage: isDryRun
             ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
             : isUnconfirmed
@@ -408,6 +413,11 @@ export async function processApplication(applicationId: string): Promise<void> {
       where: { id: applicationId },
       data: {
         errorMessage: `Portal ${adapter.label}: ${outcome.error}`,
+        // Canary log anche su failure — vogliamo evidence forense del
+        // perché è fallito.
+        ...("canary" in outcome && outcome.canary
+          ? { canaryLog: JSON.stringify(outcome.canary) }
+          : {}),
       },
     });
   }
@@ -1293,6 +1303,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       jobUrl,
       dryRun: process.env.PORTAL_SUBMIT_DRY_RUN === "true",
       answers: input.answers,
+      applicationId: input.applicationId, // per naming canary assets
     });
     return outcome;
   } finally {

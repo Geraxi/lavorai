@@ -335,6 +335,11 @@ model Application {
   ///   null          = candidatura via fallback email, o pre-instrumentation
   /// Persistito dal worker a partire dal fix false-success (vedi changelog).
   submitConfirmation String?
+  /// Canary debug snapshot: JSON con stato form pre-submit, screenshot
+  /// URL Vercel Blob, HTTP response, post-submit URL/body excerpt.
+  /// Popolato solo quando env CANARY_DEBUG=1 — diagnostica integrità
+  /// del flow di submission reale. NON popolato in run normali.
+  canaryLog       String?   @db.Text
   // Stato impostato manualmente dall'utente (es. "vista", "colloquio", "offerta",
   // "rifiutata") quando ha info esterne (risposta via email, LinkedIn, ecc.).
   // Ortogonale a `status` che è lo stato del pipeline interno.

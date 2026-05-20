@@ -36,10 +36,56 @@ export interface ApplyInput {
    *  notice period, LinkedIn, EEO, ecc). L'adapter le inietta nei
    *  campi custom che riconosce via fuzzy-match label. */
   answers?: ApplicationAnswers;
+  /** Application ID — opzionale, usato solo per naming canary asset
+   *  (es. screenshot Blob filename). Non strettamente necessario per
+   *  l'apply normale. */
+  applicationId?: string;
+}
+
+/**
+ * Canary debug payload: ritornato dall'adapter quando CANARY_DEBUG=1.
+ * Il worker lo serializza su Application.canaryLog per ispezione.
+ * Risponde alla domanda: "il submit è davvero andato in porto?".
+ */
+export interface CanaryLog {
+  /** Filename effettivo del CV attaccato all'input file (read da
+   *  input.files[0].name). null = CV NON attaccato → submission rotta. */
+  resumeAttachedFilename: string | null;
+  /** URL screenshot del form right-before-submit, su Vercel Blob.
+   *  null se Blob non disponibile o upload fallito. */
+  preSubmitScreenshotUrl: string | null;
+  /** URL screenshot post-submit (dopo response HTTP). */
+  postSubmitScreenshotUrl: string | null;
+  /** Tutti i campi form osservati: name/label/type/value/required. */
+  fields: Array<{
+    name: string;
+    label: string;
+    type: string;
+    valueLength: number;
+    required: boolean;
+  }>;
+  /** HTTP response status della POST di submission (null se nessuna POST). */
+  submitHttpStatus: number | null;
+  /** Body excerpt (primi 800 char) della response. */
+  submitHttpBody: string | null;
+  /** URL prima del submit. */
+  urlBeforeSubmit: string;
+  /** URL dopo il submit. */
+  urlAfterSubmit: string;
+  /** Body innerText post-submit (primi 800 char) — per spotting "thank
+   *  you" / error banner / nothing. */
+  bodyTextAfterSubmit: string;
+  /** Timestamp ISO del capture. */
+  capturedAt: string;
 }
 
 export type ApplyOutcome =
-  | { ok: true; status: "submitted"; confirmation?: string }
+  | {
+      ok: true;
+      status: "submitted";
+      confirmation?: string;
+      canary?: CanaryLog;
+    }
   | {
       ok: false;
       status:
@@ -49,6 +95,7 @@ export type ApplyOutcome =
         | "validation_failed"
         | "unknown_error";
       error: string;
+      canary?: CanaryLog;
     };
 
 export interface PortalAdapter {
