@@ -350,17 +350,32 @@ function LoginContent() {
         .lavorai-login-right {
           position: relative;
           overflow: hidden;
+          /* Fondo CSS pulito: il vecchio bitmap signup-showcase.png era
+             sgranato e troppo carico (3-4 card mockup sovrapposte).
+             Ora: base nero profondo + 2 glow verdi ambient (radial) +
+             grid pattern sottile. La copy a destra è IL focus. */
           background:
-            linear-gradient(to bottom, rgba(1, 5, 16, 0.6), rgba(1, 5, 16, 0.6)),
-            url('/signup-showcase.png');
-          background-size: cover;
-          background-position: center;
+            radial-gradient(ellipse 60% 80% at 80% 20%, hsl(155 50% 38% / 0.18), transparent 65%),
+            radial-gradient(ellipse 50% 60% at 20% 80%, hsl(155 50% 38% / 0.10), transparent 65%),
+            linear-gradient(180deg, #010510 0%, #02080f 100%);
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: center;
           border-left: 1px solid var(--border-ds);
+        }
+        /* Grid pattern overlay sottile — texture, non rumore */
+        .lavorai-login-right::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+          background-size: 56px 56px;
+          mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 80%);
+          pointer-events: none;
         }
         @media (max-width: 1023px) {
           .lavorai-login { grid-template-columns: 1fr; }
@@ -408,16 +423,15 @@ function Benefit({
 function LoginShowcase() {
   return (
     <div className="lavorai-login-right">
-      <div 
-        className="lavorai-login-showcase ds-glass" 
+      <div
+        className="lavorai-login-showcase"
         style={{
-          maxWidth: 580,
-          padding: "48px",
-          borderRadius: "24px",
-          background: "rgba(1, 5, 16, 0.55)",
-          backdropFilter: "blur(24px)",
-          border: "1px solid rgba(255, 255, 255, 0.08)",
-          boxShadow: "0 32px 80px -20px rgba(0,0,0,0.8)"
+          // Niente più ds-glass + box-shadow heavy: ora il fondo è
+          // pulito (no bitmap dietro), la copy si legge senza scrim.
+          // Restano solo padding + max-width per centratura.
+          position: "relative",
+          zIndex: 1,
+          maxWidth: 560,
         }}
       >
         <div
