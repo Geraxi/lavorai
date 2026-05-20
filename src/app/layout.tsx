@@ -5,6 +5,7 @@ import { getLocale, getMessages } from "next-intl/server";
 import { Toaster } from "@/components/ui/sonner";
 import { CookieBanner } from "@/components/cookie-banner";
 import { Providers } from "@/app/providers";
+import { StructuredData } from "@/components/structured-data";
 import { assertEnvOrCrash } from "@/lib/env";
 import "./globals.css";
 
@@ -93,6 +94,10 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-screen antialiased">
+        {/* JSON-LD structured data: Organization + WebSite +
+            SoftwareApplication. Renderizzato server-side per essere
+            visibile ai crawler senza richiedere JS. */}
+        <StructuredData />
         <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers>{children}</Providers>
           <Toaster richColors position="top-center" />
