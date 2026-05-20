@@ -354,10 +354,13 @@ function LoginContent() {
              sgranato e troppo carico (3-4 card mockup sovrapposte).
              Ora: base nero profondo + 2 glow verdi ambient (radial) +
              grid pattern sottile. La copy a destra è IL focus. */
+          /* Verde brand effettivo invece di nero-con-hint-verde:
+             base in tonalità deep emerald, due ambient highlight
+             di primary più chiaro per profondità. */
           background:
-            radial-gradient(ellipse 60% 80% at 80% 20%, hsl(155 50% 38% / 0.18), transparent 65%),
-            radial-gradient(ellipse 50% 60% at 20% 80%, hsl(155 50% 38% / 0.10), transparent 65%),
-            linear-gradient(180deg, #010510 0%, #02080f 100%);
+            radial-gradient(ellipse 70% 80% at 75% 25%, hsl(155 55% 22%) 0%, transparent 65%),
+            radial-gradient(ellipse 55% 60% at 25% 80%, hsl(155 50% 18%) 0%, transparent 70%),
+            linear-gradient(165deg, hsl(155 45% 10%) 0%, hsl(160 50% 7%) 100%);
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
