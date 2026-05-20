@@ -3,6 +3,27 @@
 import Link from "next/link";
 import { motion } from "motion/react";
 import { Check } from "lucide-react";
+import { Icon, type IconName } from "@/components/design/icon";
+
+/**
+ * Parser di feature string con marker premium [icon-name].
+ * Esempio: "[target] Founder Interview Coach" → { icon: "target", text: "Founder ..." }
+ * Senza marker → { icon: null, text: feature }.
+ *
+ * Restringe il set di icon validi così non possiamo iniettare nomi
+ * sconosciuti — fallback a null se non riconosciuto.
+ */
+const FEATURE_ICONS = new Set<IconName>([
+  "target", "sparkles", "zap", "star", "globe", "send", "chart",
+]);
+
+function parseFeature(raw: string): { icon: IconName | null; text: string } {
+  const m = raw.match(/^\[([a-z-]+)\]\s+(.*)$/);
+  if (m && FEATURE_ICONS.has(m[1] as IconName)) {
+    return { icon: m[1] as IconName, text: m[2] };
+  }
+  return { icon: null, text: raw };
+}
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -169,12 +190,45 @@ function TierCard({ tier }: { tier: TierConfig }) {
           </div>
 
           <ul className="flex flex-col gap-3">
-            {tier.features.map((f) => (
-              <li key={f} className="flex items-start gap-3 text-sm">
-                <Check className="mt-0.5 h-4 w-4 flex-none text-primary" />
-                <span>{f}</span>
-              </li>
-            ))}
+            {tier.features.map((raw) => {
+              const f = parseFeature(raw);
+              return (
+                <li key={raw} className="flex items-start gap-3 text-sm">
+                  {/* TICK: era text-primary (verde) — invisibile sulla
+                      card highlight bg-verde. Ora pill bianca-su-verde
+                      sul highlight, verde-su-dark sulle altre. */}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full",
+                      tier.highlight
+                        ? "bg-foreground/20 text-foreground"
+                        : "bg-primary/15 text-primary",
+                    )}
+                  >
+                    <Check className="h-3 w-3 stroke-[3]" />
+                  </span>
+                  {/* PREMIUM ICON: se la feature ha marker [icon], lo
+                      rendiamo INLINE prima del testo. Sostituisce gli
+                      emoji 🎯 🎤 con Icon component del design system. */}
+                  <span className="flex items-start gap-2">
+                    {f.icon && (
+                      <span
+                        className={cn(
+                          "mt-0.5 inline-flex h-5 w-5 flex-none items-center justify-center rounded",
+                          tier.highlight
+                            ? "bg-foreground/15 text-foreground"
+                            : "bg-primary/15 text-primary",
+                        )}
+                      >
+                        <Icon name={f.icon} size={12} />
+                      </span>
+                    )}
+                    <span>{f.text}</span>
+                  </span>
+                </li>
+              );
+            })}
           </ul>
 
           <Button

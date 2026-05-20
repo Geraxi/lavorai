@@ -105,8 +105,10 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasFounderCoach: true,
     hasInterviewCopilot: true,
     features: [
-      "🎯 Founder Interview Coach (Opportunity Analyzer + Equity + Vocab)",
-      "🎤 Interview Copilot live con teleprompter + audio capture",
+      // Marker [icon] viene parsato dal pricing renderer → Icon component
+      // del design system (premium, niente emoji). Vedi PricingCard.
+      "[target] Founder Interview Coach (Opportunity Analyzer + Equity + Vocab)",
+      "[sparkles] Interview Copilot live con teleprompter + audio capture",
       "Candidature illimitate",
       "Auto-apply su tutti i portali (LinkedIn, InfoJobs, Indeed, Subito)",
       "CV optimization AI multi-variante",
