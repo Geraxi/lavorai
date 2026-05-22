@@ -81,8 +81,8 @@ export default function InterviewPrepPage() {
         setLoading(false);
         return;
       }
-      toast.success("Brief pronto. Apri il Copilot quando inizia il colloquio.");
-      router.push(`/interview/live/${applicationId}`);
+      toast.success("Brief salvato. Allenati con il Mock Interview.");
+      router.push("/interview-buddy");
     } catch {
       toast.error("Errore di rete");
       setLoading(false);

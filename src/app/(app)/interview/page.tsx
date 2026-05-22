@@ -76,9 +76,8 @@ export default async function InterviewHubPage() {
             margin: 0,
           }}
         >
-          Interview Copilot{" "}
-          <span style={{ color: "hsl(var(--primary))" }}>live</span>
-          <span style={{ color: "var(--fg-muted)" }}> + Mock practice</span>
+          Preparati al{" "}
+          <span style={{ color: "hsl(var(--primary))" }}>colloquio</span>
         </h1>
         <p
           style={{
@@ -89,9 +88,9 @@ export default async function InterviewHubPage() {
             maxWidth: 720,
           }}
         >
-          Due strumenti diversi: pratica prima (mock), Copilot affianco a
-          Google Meet/Zoom durante il colloquio reale. La pratica costruisce
-          il muscolo, il Copilot ti supporta sotto pressione.
+          Allenati con il Mock Interview: domande simulate dall&apos;AI sul tuo
+          CV e sul ruolo, con feedback turn-by-turn. Il Copilot live durante la
+          call (teleprompter + audio capture) è in arrivo.
         </p>
       </div>
 
@@ -107,26 +106,19 @@ export default async function InterviewHubPage() {
       >
         <ModeCard
           highlight
-          letter="LIVE"
-          title="Copilot durante la call"
-          blurb="Apri LavorAI affianco al Meet. Chrome extension cattura l'audio, Whisper trascrive, AI suggerisce la risposta sul teleprompter in ~3s. Tu leggi mentre guardi la camera."
-          ctaLabel={
-            interviewing.length > 0
-              ? "Apri Copilot per una candidatura"
-              : "Importa una candidatura per iniziare"
-          }
-          ctaHref={
-            interviewing.length > 0
-              ? `/interview/live/${interviewing[0].id}`
-              : "/applications/new"
-          }
-        />
-        <ModeCard
           letter="MOCK"
           title="Pratica con domande simulate"
           blurb="5 domande generate dall'AI in base al tuo CV e al ruolo: behavioral STAR + 1 deep technical. Risposta libera, feedback su sostanza, struttura, chiarezza."
           ctaLabel="Inizia un mock"
           ctaHref="/interview-buddy"
+        />
+        <ModeCard
+          letter="LIVE"
+          comingSoon
+          title="Copilot durante la call"
+          blurb="Teleprompter affianco a Google Meet: audio capture + trascrizione automatica + risposte AI in tempo reale mentre guardi la camera. In arrivo — ti avvisiamo appena è pronto."
+          ctaLabel="Presto disponibile"
+          ctaHref="#"
         />
       </div>
 
@@ -222,6 +214,7 @@ export default async function InterviewHubPage() {
 
 function ModeCard({
   highlight,
+  comingSoon,
   letter,
   title,
   blurb,
@@ -229,32 +222,15 @@ function ModeCard({
   ctaHref,
 }: {
   highlight?: boolean;
+  comingSoon?: boolean;
   letter: string;
   title: string;
   blurb: string;
   ctaLabel: string;
   ctaHref: string;
 }) {
-  return (
-    <Link
-      href={ctaHref}
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 14,
-        padding: 22,
-        borderRadius: 18,
-        background: highlight
-          ? "linear-gradient(180deg, hsl(var(--primary) / 0.10), transparent 60%)"
-          : "var(--bg-elev)",
-        border: highlight
-          ? "1px solid hsl(var(--primary) / 0.35)"
-          : "1px solid var(--border-ds)",
-        textDecoration: "none",
-        color: "inherit",
-        minHeight: 200,
-      }}
-    >
+  const inner = (
+    <>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <span
           style={{
@@ -262,24 +238,33 @@ function ModeCard({
             fontWeight: 700,
             padding: "3px 8px",
             borderRadius: 5,
-            background: highlight
-              ? "hsl(var(--primary))"
-              : "var(--bg-sunken)",
+            background: highlight ? "hsl(var(--primary))" : "var(--bg-sunken)",
             color: highlight ? "#001a0d" : "var(--fg-muted)",
             letterSpacing: "0.12em",
           }}
         >
           {letter}
         </span>
-        <span
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            letterSpacing: "-0.015em",
-          }}
-        >
+        <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: "-0.015em" }}>
           {title}
         </span>
+        {comingSoon && (
+          <span
+            style={{
+              marginLeft: "auto",
+              fontSize: 10,
+              fontWeight: 700,
+              padding: "3px 8px",
+              borderRadius: 999,
+              background: "var(--bg-sunken)",
+              color: "var(--fg-subtle)",
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Presto
+          </span>
+        )}
       </div>
       <p
         style={{
@@ -296,14 +281,46 @@ function ModeCard({
         style={{
           fontSize: 13,
           fontWeight: 600,
-          color: highlight ? "hsl(var(--primary))" : "var(--fg)",
+          color: comingSoon
+            ? "var(--fg-subtle)"
+            : highlight
+              ? "hsl(var(--primary))"
+              : "var(--fg)",
           display: "inline-flex",
           alignItems: "center",
           gap: 6,
         }}
       >
-        {ctaLabel} →
+        {ctaLabel} {comingSoon ? "" : "→"}
       </div>
+    </>
+  );
+
+  const cardStyle: React.CSSProperties = {
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
+    padding: 22,
+    borderRadius: 18,
+    background: highlight
+      ? "linear-gradient(180deg, hsl(var(--primary) / 0.10), transparent 60%)"
+      : "var(--bg-elev)",
+    border: highlight
+      ? "1px solid hsl(var(--primary) / 0.35)"
+      : "1px solid var(--border-ds)",
+    textDecoration: "none",
+    color: "inherit",
+    minHeight: 200,
+    opacity: comingSoon ? 0.65 : 1,
+  };
+
+  // Coming-soon: niente link, card statica (non cliccabile).
+  if (comingSoon) {
+    return <div style={{ ...cardStyle, cursor: "default" }}>{inner}</div>;
+  }
+  return (
+    <Link href={ctaHref} style={cardStyle}>
+      {inner}
     </Link>
   );
 }
@@ -320,7 +337,6 @@ function ApplicationCard({
   };
   mode: "active" | "other";
 }) {
-  const hasSession = app.interviewSessions.length > 0;
   const color = companyColor(app.job.company ?? app.job.title);
 
   return (
@@ -373,8 +389,10 @@ function ApplicationCard({
         </div>
       </div>
       <div style={{ display: "flex", gap: 8 }}>
+        {/* Il Copilot live per-candidatura è in arrivo. Per ora la card
+            porta al Mock Interview generico (funzionante). */}
         <Link
-          href={`/interview/live/${app.id}`}
+          href="/interview-buddy"
           className="ds-btn ds-btn-primary"
           style={{
             flex: 1,
@@ -386,24 +404,8 @@ function ApplicationCard({
             gap: 6,
           }}
         >
-          <Icon name="zap" size={11} /> {hasSession ? "Riapri Copilot" : "Apri Copilot live"}
+          <Icon name="zap" size={11} /> Allenati con il Mock
         </Link>
-        {!hasSession && (
-          <Link
-            href={`/interview/prep/${app.id}`}
-            className="ds-btn"
-            style={{
-              padding: "8px 12px",
-              fontSize: 12.5,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
-            title="Prepara il brief prima del colloquio"
-          >
-            Brief
-          </Link>
-        )}
       </div>
     </div>
   );

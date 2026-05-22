@@ -64,14 +64,14 @@ export default function InterviewDominationPage() {
           color: "var(--fg-muted)",
         }}
       >
-        💡 Per risposte personalizzate al tuo CV + JD specifico, usa il{" "}
+        💡 Allenati con queste risposte modello, poi mettile in pratica nel{" "}
         <Link
-          href="/interview/live"
+          href="/interview-buddy"
           style={{ color: "hsl(var(--primary))", textDecoration: "underline" }}
         >
-          Live Copilot
+          Mock Interview
         </Link>
-        : ti suggerisce risposte in &lt;2s durante la call vera.
+        . Il Copilot live durante la call (teleprompter) è in arrivo.
       </div>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 18 }}>

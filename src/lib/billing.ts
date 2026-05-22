@@ -108,7 +108,7 @@ export const TIERS: Record<Tier, TierConfig> = {
       // Marker [icon] viene parsato dal pricing renderer → Icon component
       // del design system (premium, niente emoji). Vedi PricingCard.
       "[target] Founder Interview Coach (Opportunity Analyzer + Equity + Vocab)",
-      "[sparkles] Interview Copilot live con teleprompter + audio capture",
+      "[sparkles] Interview Copilot live con teleprompter + audio capture (in arrivo)",
       "Candidature illimitate",
       "Auto-apply su tutti i portali (LinkedIn, InfoJobs, Indeed, Subito)",
       "CV optimization AI multi-variante",
@@ -246,8 +246,8 @@ export const FEATURE_LABELS: Record<PremiumFeature, { name: string; blurb: strin
       "Opportunity Analyzer, Equity Coach, Negotiation Scripts e vocabolario founder-level. Pensato per CTO, Tech Co-Founder e ruoli AI Builder.",
   },
   interview_copilot: {
-    name: "Interview Copilot live",
+    name: "Interview Copilot live (in arrivo)",
     blurb:
-      "Teleprompter live durante il colloquio: audio capture da Google Meet via Chrome extension, Whisper trascrizione automatica, suggerimenti AI in <3s.",
+      "Teleprompter live durante il colloquio: audio capture da Google Meet, trascrizione automatica, suggerimenti AI in tempo reale. Funzionalità in arrivo — ti avvisiamo appena è pronta. Nel frattempo usa il Mock Interview per allenarti.",
   },
 };

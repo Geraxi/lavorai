@@ -42,7 +42,84 @@ interface SuggestionTurn {
  * Layout teleprompter: poco testo, grande, ad alto contrasto, leggibile
  * mentre guardi la camera. Auto-scroll alla risposta nuova.
  */
-export default function InterviewLivePage() {
+/**
+ * COMING SOON gate. Il Copilot live (teleprompter + audio capture +
+ * Whisper) richiede OPENAI_API_KEY non ancora configurata + validazione
+ * canary del flow di consegna. Finché non è pronto, mostriamo una
+ * schermata "in arrivo" invece del teleprompter. L'implementazione
+ * completa resta sotto (InterviewLiveTeleprompter) per il re-enable:
+ * basta cambiare il default export.
+ */
+export default function InterviewLiveComingSoon() {
+  return (
+    <div
+      style={{
+        minHeight: "70vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "40px 24px",
+      }}
+    >
+      <div style={{ maxWidth: 520, textAlign: "center" }}>
+        <div
+          style={{
+            display: "inline-block",
+            padding: "5px 11px",
+            borderRadius: 999,
+            background: "var(--bg-sunken)",
+            color: "var(--fg-subtle)",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            marginBottom: 18,
+          }}
+        >
+          🎤 Presto disponibile
+        </div>
+        <h1
+          style={{
+            fontSize: 28,
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            lineHeight: 1.2,
+            margin: "0 0 12px",
+          }}
+        >
+          Interview Copilot live
+        </h1>
+        <p
+          style={{
+            fontSize: 15,
+            color: "var(--fg-muted)",
+            lineHeight: 1.6,
+            margin: "0 0 28px",
+          }}
+        >
+          Il teleprompter live durante la call — audio capture da Google
+          Meet, trascrizione automatica e risposte AI in tempo reale — è in
+          fase finale di sviluppo. Ti avvisiamo appena è pronto.
+          <br />
+          <br />
+          Nel frattempo, allenati con il <strong>Mock Interview</strong>:
+          domande simulate sul tuo CV e feedback turn-by-turn.
+        </p>
+        <Link
+          href="/interview-buddy"
+          className="ds-btn ds-btn-primary"
+          style={{ padding: "12px 22px", fontSize: 14 }}
+        >
+          Vai al Mock Interview <Icon name="arrow-right" size={13} />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// Implementazione completa del teleprompter — non esportata di default
+// finché la feature non è live (vedi InterviewLiveComingSoon sopra).
+function InterviewLiveTeleprompter() {
   const params = useParams<{ applicationId: string }>();
   const applicationId = params?.applicationId ?? "";
 
