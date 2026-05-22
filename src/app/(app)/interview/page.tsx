@@ -252,17 +252,18 @@ function ModeCard({
           <span
             style={{
               marginLeft: "auto",
-              fontSize: 10,
-              fontWeight: 700,
-              padding: "3px 8px",
+              fontSize: 11,
+              fontWeight: 800,
+              padding: "5px 12px",
               borderRadius: 999,
-              background: "var(--bg-sunken)",
-              color: "var(--fg-subtle)",
-              letterSpacing: "0.08em",
+              background: "rgba(245, 158, 11, 0.18)",
+              border: "1px solid rgba(245, 158, 11, 0.45)",
+              color: "#fbbf24",
+              letterSpacing: "0.1em",
               textTransform: "uppercase",
             }}
           >
-            Presto
+            Coming soon
           </span>
         )}
       </div>

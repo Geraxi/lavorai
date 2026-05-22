@@ -65,18 +65,19 @@ export default function InterviewLiveComingSoon() {
         <div
           style={{
             display: "inline-block",
-            padding: "5px 11px",
+            padding: "7px 16px",
             borderRadius: 999,
-            background: "var(--bg-sunken)",
-            color: "var(--fg-subtle)",
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: "0.12em",
+            background: "rgba(245, 158, 11, 0.18)",
+            border: "1px solid rgba(245, 158, 11, 0.45)",
+            color: "#fbbf24",
+            fontSize: 13,
+            fontWeight: 800,
+            letterSpacing: "0.14em",
             textTransform: "uppercase",
-            marginBottom: 18,
+            marginBottom: 20,
           }}
         >
-          🎤 Presto disponibile
+          🎤 Coming soon
         </div>
         <h1
           style={{

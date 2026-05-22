@@ -17,12 +17,23 @@ const FEATURE_ICONS = new Set<IconName>([
   "target", "sparkles", "zap", "star", "globe", "send", "chart",
 ]);
 
-function parseFeature(raw: string): { icon: IconName | null; text: string } {
-  const m = raw.match(/^\[([a-z-]+)\]\s+(.*)$/);
-  if (m && FEATURE_ICONS.has(m[1] as IconName)) {
-    return { icon: m[1] as IconName, text: m[2] };
+function parseFeature(raw: string): {
+  icon: IconName | null;
+  text: string;
+  comingSoon: boolean;
+} {
+  // Marker {soon} ovunque nella stringa → flag comingSoon + chip dedicato
+  let comingSoon = false;
+  let s = raw;
+  if (s.includes("{soon}")) {
+    comingSoon = true;
+    s = s.replace(/\s*\{soon\}\s*/g, " ").trim();
   }
-  return { icon: null, text: raw };
+  const m = s.match(/^\[([a-z-]+)\]\s+(.*)$/);
+  if (m && FEATURE_ICONS.has(m[1] as IconName)) {
+    return { icon: m[1] as IconName, text: m[2], comingSoon };
+  }
+  return { icon: null, text: s, comingSoon };
 }
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
@@ -193,7 +204,15 @@ function TierCard({ tier }: { tier: TierConfig }) {
             {tier.features.map((raw) => {
               const f = parseFeature(raw);
               return (
-                <li key={raw} className="flex items-start gap-3 text-sm">
+                <li
+                  key={raw}
+                  className={cn(
+                    "flex items-start gap-3 text-sm",
+                    // Feature coming-soon: testo attenuato per segnalare
+                    // che non è ancora attiva.
+                    f.comingSoon && "opacity-60",
+                  )}
+                >
                   {/* TICK: era text-primary (verde) — invisibile sulla
                       card highlight bg-verde. Ora pill bianca-su-verde
                       sul highlight, verde-su-dark sulle altre. */}
@@ -211,7 +230,7 @@ function TierCard({ tier }: { tier: TierConfig }) {
                   {/* PREMIUM ICON: se la feature ha marker [icon], lo
                       rendiamo INLINE prima del testo. Sostituisce gli
                       emoji 🎯 🎤 con Icon component del design system. */}
-                  <span className="flex items-start gap-2">
+                  <span className="flex flex-1 items-start gap-2">
                     {f.icon && (
                       <span
                         className={cn(
@@ -224,7 +243,21 @@ function TierCard({ tier }: { tier: TierConfig }) {
                         <Icon name={f.icon} size={12} />
                       </span>
                     )}
-                    <span>{f.text}</span>
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {f.text}
+                      {f.comingSoon && (
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider",
+                            tier.highlight
+                              ? "bg-foreground/25 text-foreground"
+                              : "bg-amber-500/20 text-amber-400",
+                          )}
+                        >
+                          Coming soon
+                        </span>
+                      )}
+                    </span>
                   </span>
                 </li>
               );
