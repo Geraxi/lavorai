@@ -212,18 +212,87 @@ export const greenhouseAdapter: PortalAdapter = {
           .catch(() => void 0);
       }
 
-      // Upload CV
-      const cvInput = page.locator(
-        'input[type="file"][name*="resume" i], input[type="file"][aria-label*="resume" i], input[type="file"]#resume, input[type="file"]',
-      );
-      if ((await cvInput.count()) === 0) {
+      // ============================================================
+      // Upload CV — HARDENED contro le varianti Greenhouse.
+      // ============================================================
+      // Greenhouse ha 2 pattern:
+      //   1. Legacy: <input type="file" id="resume"> diretto
+      //   2. Modern (job-boards.greenhouse.io): React dropzone con
+      //      l'input nascosto + bottone "Attach"/"Allega". Spesso
+      //      l'input esiste ma è display:none; Playwright setInputFiles
+      //      funziona comunque su input nascosti MA il React state si
+      //      aggiorna solo se l'input riceve l'evento change nativo.
+      //
+      // Strategia robusta:
+      //   a. Trova l'input file più specifico (resume > generico)
+      //   b. setInputFiles (dispatcha change nativo)
+      //   c. Verifica che il file sia ATTACCATO leggendo input.files
+      //   d. Se non attaccato, prova il filechooser via bottone Attach
+      //   e. Verifica di nuovo; se ancora vuoto → missing_field esplicito
+      const resumeSelectors = [
+        'input[type="file"][name*="resume" i]',
+        'input[type="file"][aria-label*="resume" i]',
+        'input[type="file"]#resume',
+        'input[type="file"][name*="cv" i]',
+        'input[type="file"]',
+      ];
+      let cvAttached = false;
+      for (const sel of resumeSelectors) {
+        const loc = page.locator(sel);
+        if ((await loc.count()) === 0) continue;
+        try {
+          await loc.first().setInputFiles(input.cvLocalPath);
+          // Verifica reale: il file è davvero nel DOM input?
+          const fname = await loc
+            .first()
+            .evaluate((el: HTMLInputElement) => el.files?.[0]?.name ?? null)
+            .catch(() => null);
+          if (fname) {
+            cvAttached = true;
+            break;
+          }
+        } catch {
+          /* prova selettore successivo */
+        }
+      }
+
+      // Fallback: filechooser via bottone "Attach"/"Allega"/"Upload"
+      if (!cvAttached) {
+        const attachBtn = page.locator(
+          'button:has-text("Attach"), button:has-text("Allega"), button:has-text("Upload"), label:has-text("resume" i), [role="button"]:has-text("Attach")',
+        );
+        if ((await attachBtn.count()) > 0) {
+          try {
+            const [chooser] = await Promise.all([
+              page.waitForEvent("filechooser", { timeout: 5000 }),
+              attachBtn.first().click(),
+            ]);
+            await chooser.setFiles(input.cvLocalPath);
+            await page.waitForTimeout(500);
+            // Re-verifica
+            const anyFile = await page
+              .locator('input[type="file"]')
+              .first()
+              .evaluate((el: HTMLInputElement) => el.files?.[0]?.name ?? null)
+              .catch(() => null);
+            cvAttached = !!anyFile;
+          } catch {
+            /* filechooser non disponibile */
+          }
+        }
+      }
+
+      if (!cvAttached) {
+        // NON proseguiamo col submit se il CV non è attaccato: una
+        // candidatura senza CV è worse than nothing (ghost record,
+        // zero conferma). Falliamo esplicito → worker logga + fallback.
         return {
           ok: false,
           status: "missing_field",
-          error: "Input upload CV non trovato.",
+          error:
+            "CV non attaccato al form Greenhouse (né input diretto né filechooser hanno registrato il file). Submission abortita per non inviare candidatura vuota.",
         };
       }
-      await cvInput.first().setInputFiles(input.cvLocalPath);
 
       // Cover letter (textarea o file — opzionale)
       const clTextarea = page.locator(
