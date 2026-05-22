@@ -1,8 +1,13 @@
-/* cache-bust: 2026-05-22a — forza nuovo hash del chunk CSS per
-   invalidare versioni rotte cachate immutable nei browser. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* cache-bust: regola reale (sopravvive alla minificazione, a
+   differenza di un commento) per forzare un nuovo content-hash del
+   chunk CSS e invalidare versioni rotte cachate immutable. */
+:root {
+  --css-build-version: "2026-05-22a";
+}
 
 /* =========================================================================
    LavorAI design system — ported da LavorAI.html (Claude Design)
