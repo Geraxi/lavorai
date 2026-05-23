@@ -81,6 +81,7 @@ export type EmailKind =
   | "password_reset"
   | "welcome"
   | "magic_link"
+  | "onboarding_nudge"
   | "other";
 
 /** Marca un'email come effettivamente consegnata per il tracking quota. */

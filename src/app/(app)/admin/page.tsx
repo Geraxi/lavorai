@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { isAdmin, isTestAccount } from "@/lib/admin";
 import { AdminAssistant } from "@/components/admin-assistant";
 import { AdminPopups } from "@/components/admin-popups";
+import { AdminNudges } from "@/components/admin-nudges";
 
 export const metadata: Metadata = { title: "Admin · LavorAI", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -205,6 +206,9 @@ export default async function AdminPage() {
       </div>
 
       <style>{`@media (max-width:800px){.admin-2col{grid-template-columns:1fr !important}}`}</style>
+
+      {/* Nudge onboarding agli utenti bloccati */}
+      <AdminNudges />
 
       {/* Popup & sondaggi per gli utenti */}
       <AdminPopups />
