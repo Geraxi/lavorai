@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/design/app-shell";
 import { CommandPalette } from "@/components/design/command-palette";
 import { ThemeScript } from "@/components/design/theme-script";
+import { UserPopup } from "@/components/user-popup";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
@@ -56,6 +57,7 @@ export default async function AppLayout({
         {children}
       </AppShell>
       <CommandPalette />
+      <UserPopup />
     </>
   );
 }

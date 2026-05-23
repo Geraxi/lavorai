@@ -145,6 +145,56 @@ model User {
   interviewSessions   InterviewSession[]
   resetTokens    PasswordResetToken[]
   verifyTokens   EmailVerificationToken[]
+  popupResponses PopupResponse[]
+}
+
+/// Popup/sondaggio creato dall'admin (founder) e mostrato agli utenti
+/// dentro l'app. Es: "Ti piace la piattaforma?", richieste di feedback,
+/// proposte di miglioramento. Gestiti da /admin.
+model AdminPopup {
+  id        String  @id @default(cuid())
+  title     String
+  body      String  @db.Text
+  /// Tipo di interazione richiesta:
+  ///   "rating"      = stelline 1-5 (+ commento opzionale)
+  ///   "feedback"    = campo testo libero
+  ///   "improvement" = proposta di miglioramento (campo testo)
+  ///   "info"        = solo messaggio, bottone di conferma (nessun input)
+  kind      String  @default("feedback")
+  /// Etichetta del bottone di invio/conferma. Default per-kind se vuoto.
+  ctaLabel  String?
+  /// Pubblico target: "all" | "free" | "pro" | "pro_plus".
+  audience  String  @default("all")
+  /// Solo i popup attivi vengono mostrati. Disattivare = stop immediato.
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+  /// Scadenza opzionale: dopo questa data non viene più mostrato.
+  expiresAt DateTime?
+
+  responses PopupResponse[]
+
+  @@index([active])
+}
+
+/// Risposta (o dismiss) di un utente a un AdminPopup. Una per (popup,user):
+/// così ogni utente vede il popup una volta sola, poi non più.
+model PopupResponse {
+  id        String  @id @default(cuid())
+  popupId   String
+  userId    String
+  /// Valutazione 1-5 per i popup "rating". null altrimenti.
+  rating    Int?
+  /// Testo libero per "feedback"/"improvement" (o commento del rating).
+  text      String? @db.Text
+  /// true se l'utente ha chiuso senza rispondere ("Più tardi"/X).
+  dismissed Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  popup AdminPopup @relation(fields: [popupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([popupId, userId])
+  @@index([popupId, createdAt])
 }
 
 model UserPreferences {
