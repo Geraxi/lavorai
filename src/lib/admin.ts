@@ -27,3 +27,41 @@ export function isAdmin(email: string | null | undefined): boolean {
   if (!email) return false;
   return ADMIN_EMAILS.has(canonicalEmail(email));
 }
+
+/**
+ * Account di test/interni da ESCLUDERE dalle metriche "utenti reali".
+ * Gonfiano i conteggi e falsano conversion rate / signup trend.
+ *   - domini di testing automatico (testmail.app, mailinator, ecc.)
+ *   - prefissi di test DB (postdbpush-, test-, demo-)
+ *   - email interne note (founder + tester whitelisted)
+ */
+const INTERNAL_EMAILS = new Set(
+  [
+    "umbertogeraci0@gmail.com",
+    "geracigears@gmail.com",
+    "antonella.lasalandra07@gmail.com",
+  ].map(canonicalEmail),
+);
+
+const TEST_DOMAINS = [
+  "inbox.testmail.app",
+  "testmail.app",
+  "mailinator.com",
+  "example.com",
+  "example.org",
+];
+
+const TEST_LOCAL_PREFIXES = ["postdbpush-", "test-", "demo-", "e2e-"];
+
+export function isTestAccount(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const e = email.trim().toLowerCase();
+  if (INTERNAL_EMAILS.has(canonicalEmail(e))) return true;
+  const at = e.lastIndexOf("@");
+  if (at < 0) return false;
+  const local = e.slice(0, at);
+  const domain = e.slice(at + 1);
+  if (TEST_DOMAINS.some((d) => domain === d || domain.endsWith("." + d))) return true;
+  if (TEST_LOCAL_PREFIXES.some((p) => local.startsWith(p))) return true;
+  return false;
+}

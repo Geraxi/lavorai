@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { isAdmin } from "@/lib/admin";
+import { isAdmin, isTestAccount } from "@/lib/admin";
 
 export const metadata: Metadata = { title: "Admin · LavorAI", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -22,10 +22,7 @@ export default async function AdminPage() {
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
   const [
-    totalUsers,
-    users24h,
-    users7d,
-    users30d,
+    allUsersLite,
     payingUsers,
     verifiedUsers,
     recentUsers,
@@ -41,10 +38,9 @@ export default async function AdminPage() {
     activeSessions,
     autoApplyUsers,
   ] = await Promise.all([
-    prisma.user.count(),
-    prisma.user.count({ where: { createdAt: { gte: since(24) } } }),
-    prisma.user.count({ where: { createdAt: { gte: since(24 * 7) } } }),
-    prisma.user.count({ where: { createdAt: { gte: since(24 * 30) } } }),
+    // Tutti gli utenti lite per calcolare metriche REALI (escludendo
+    // test/interni) in JS — più affidabile di N count() con NOT-contains.
+    prisma.user.findMany({ select: { email: true, tier: true, emailVerified: true, createdAt: true } }),
     prisma.user.count({ where: { tier: { in: ["pro", "pro_plus"] } } }),
     prisma.user.count({ where: { emailVerified: { not: null } } }),
     prisma.user.findMany({
@@ -69,6 +65,17 @@ export default async function AdminPage() {
     prisma.userPreferences.groupBy({ by: ["autoApplyMode"], _count: { _all: true } }),
   ]);
 
+  // Metriche REALI: escludi test/interni (testmail.app, postdbpush-,
+  // founder, tester). Total resta visibile per riferimento.
+  const totalUsers = allUsersLite.length;
+  const realUsersList = allUsersLite.filter((u) => !isTestAccount(u.email));
+  const realTotal = realUsersList.length;
+  const realPaying = realUsersList.filter((u) => u.tier === "pro" || u.tier === "pro_plus").length;
+  const real24h = realUsersList.filter((u) => u.createdAt >= since(24)).length;
+  const real7d = realUsersList.filter((u) => u.createdAt >= since(24 * 7)).length;
+  const real30d = realUsersList.filter((u) => u.createdAt >= since(24 * 30)).length;
+  const testCount = totalUsers - realTotal;
+
   // Delivery-truth: quante "success" hanno conferma HARD vs sospette
   const confMap = Object.fromEntries(
     appsByConfirmation.map((r) => [r.submitConfirmation ?? "null", r._count._all]),
@@ -92,14 +99,17 @@ export default async function AdminPage() {
         </p>
       </div>
 
-      {/* KPI ROW */}
+      {/* KPI ROW — metriche REALI (test/interni esclusi) */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px,1fr))", gap: 12, marginBottom: 26 }}>
-        <Kpi label="Utenti totali" value={totalUsers} sub={`${verifiedUsers} verificati`} />
-        <Kpi label="Nuovi 24h / 7g / 30g" value={`${users24h} / ${users7d} / ${users30d}`} />
-        <Kpi label="Paganti" value={payingUsers} sub={payingUsers === 0 ? "nessuna conversione" : `${Math.round((payingUsers / Math.max(1, totalUsers)) * 100)}% conversion`} tone={payingUsers > 0 ? "good" : "warn"} />
+        <Kpi label="Utenti reali" value={realTotal} sub={`${totalUsers} totali · ${testCount} test/interni esclusi`} tone={realTotal > 0 ? "good" : undefined} />
+        <Kpi label="Reali: 24h / 7g / 30g" value={`${real24h} / ${real7d} / ${real30d}`} />
+        <Kpi label="Paganti (reali)" value={realPaying} sub={realPaying === 0 ? "nessuna conversione" : `${Math.round((realPaying / Math.max(1, realTotal)) * 100)}% conversion`} tone={realPaying > 0 ? "good" : "warn"} />
         <Kpi label="Candidature totali" value={totalApps} sub={`${apps7d} ultimi 7g`} />
         <Kpi label="Consegnate (mese)" value={deliveredMonth} />
         <Kpi label="Sessioni attive" value={activeSessions} />
+      </div>
+      <div style={{ fontSize: 11.5, color: "var(--fg-subtle)", marginBottom: 22 }}>
+        Verificati totali: {verifiedUsers}/{totalUsers} · Paganti totali (incl. interni): {payingUsers}
       </div>
 
       {/* DELIVERY TRUTH — il pezzo più importante */}
@@ -138,16 +148,26 @@ export default async function AdminPage() {
               </tr>
             </thead>
             <tbody>
-              {recentUsers.map((u) => (
-                <tr key={u.email} style={{ borderBottom: "1px solid var(--border-ds)" }}>
-                  <Td>{u.email}</Td>
-                  <Td><TierChip tier={u.tier} /></Td>
-                  <Td>{u.emailVerified ? "✅" : "❌"}</Td>
-                  <Td>{u._count.applications}</Td>
-                  <Td>{u.createdAt.toLocaleDateString("it-IT")}</Td>
-                  <Td>{u.lastLoginAt ? u.lastLoginAt.toLocaleDateString("it-IT") : "—"}</Td>
-                </tr>
-              ))}
+              {recentUsers.map((u) => {
+                const test = isTestAccount(u.email);
+                return (
+                  <tr key={u.email} style={{ borderBottom: "1px solid var(--border-ds)", opacity: test ? 0.5 : 1 }}>
+                    <Td>
+                      {u.email}
+                      {test && (
+                        <span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 700, padding: "1px 6px", borderRadius: 999, background: "var(--bg-sunken)", color: "var(--fg-subtle)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                          test/interno
+                        </span>
+                      )}
+                    </Td>
+                    <Td><TierChip tier={u.tier} /></Td>
+                    <Td>{u.emailVerified ? "✅" : "❌"}</Td>
+                    <Td>{u._count.applications}</Td>
+                    <Td>{u.createdAt.toLocaleDateString("it-IT")}</Td>
+                    <Td>{u.lastLoginAt ? u.lastLoginAt.toLocaleDateString("it-IT") : "—"}</Td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
