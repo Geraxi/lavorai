@@ -7,6 +7,7 @@ import { AdminAssistant } from "@/components/admin-assistant";
 import { AdminPopups } from "@/components/admin-popups";
 import { AdminNudges } from "@/components/admin-nudges";
 import { AdminAiHealth } from "@/components/admin-ai-health";
+import { AdminTestApply } from "@/components/admin-test-apply";
 
 export const metadata: Metadata = { title: "Admin · LavorAI", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -248,8 +249,11 @@ export default async function AdminPage() {
 
       <style>{`@media (max-width:800px){.admin-2col{grid-template-columns:1fr !important}}`}</style>
 
-      {/* Health check AI produzione (chiave + crediti) */}
+      {/* Health check AI produzione (chiave + crediti + browser) */}
       <AdminAiHealth />
+
+      {/* Test candidatura end-to-end su Vercel (dry-run) */}
+      <AdminTestApply />
 
       {/* Nudge onboarding agli utenti bloccati */}
       <AdminNudges />
