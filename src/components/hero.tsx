@@ -314,6 +314,22 @@ export function Hero() {
                   </span>
                 ))}
               </div>
+
+              {/* Product Hunt featured badge */}
+              <a
+                href="https://www.producthunt.com/products/lavorai-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lavorai-it"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-5 inline-block"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt="Lavorai.it - AI-powered auto apply for job seekers | Product Hunt"
+                  width={220}
+                  height={48}
+                  src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1151760&theme=light&t=1779546633084"
+                />
+              </a>
             </motion.div>
 
             {/* 4-icon trust strip Grid */}
