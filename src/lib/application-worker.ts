@@ -19,6 +19,7 @@ import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { inboundReplyAddress } from "@/lib/email";
 import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
+import { launchBrowser } from "@/lib/browser";
 import { scrapeRecruiterEmail } from "@/lib/recruiter-email";
 import { findPortalAdapter } from "@/lib/portal-adapters";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
@@ -786,12 +787,7 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
 
   let browser: import("playwright").Browser | undefined;
   try {
-    // Import dinamico: playwright pesa ~300MB, serverless lo skip-a se AUTO_APPLY_ENABLED non è true
-    const { chromium } = await import("playwright");
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--disable-blink-features=AutomationControlled"],
-    });
+    browser = await launchBrowser();
     const context = await browser.newContext({
       userAgent: session.userAgent,
       locale: "it-IT",
@@ -1305,13 +1301,9 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     ensureLocalPath(clPath, "cover_letter.docx"),
   ]);
 
-  const { chromium } = await import("playwright");
   let browser: import("playwright").Browser | undefined;
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
-    });
+    browser = await launchBrowser();
     const context = await browser.newContext({
       locale: "it-IT",
       timezoneId: "Europe/Rome",
@@ -1344,13 +1336,9 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
  * "Candidati ora" / "Apply", prendere il suo href.
  */
 async function resolveAdzunaViaBrowser(adzunaUrl: string): Promise<string | null> {
-  const { chromium } = await import("playwright");
   let browser: import("playwright").Browser | undefined;
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
-    });
+    browser = await launchBrowser();
     const ctx = await browser.newContext({
       locale: "it-IT",
       timezoneId: "Europe/Rome",

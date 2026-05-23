@@ -34,8 +34,15 @@ const nextConfig = {
     "pdfjs-dist",
     "playwright",
     "playwright-core",
+    "@sparticuz/chromium",
     "mammoth",
   ],
+  // Traccia il binario Chromium compresso (@sparticuz/chromium) DENTRO il
+  // bundle delle function API che lanciano il browser. Senza, su Vercel il
+  // file .br non viene incluso e executablePath() fallisce a runtime.
+  outputFileTracingIncludes: {
+    "/api/**": ["./node_modules/@sparticuz/chromium/**"],
+  },
   async headers() {
     return [
       {
