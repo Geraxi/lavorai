@@ -17,9 +17,21 @@ interface HealthResult {
  * una chiamata reale al server prod. Risolve l'incognita "la chiave prod
  * funziona davvero?" che non possiamo testare da locale (chiave Sensitive).
  */
+interface BrowserResult {
+  ok: boolean;
+  status: string;
+  message: string;
+  chromiumVersion?: string;
+  launchedMs?: number;
+  totalMs?: number;
+  raw?: string;
+}
+
 export function AdminAiHealth() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<HealthResult | null>(null);
+  const [brLoading, setBrLoading] = useState(false);
+  const [brResult, setBrResult] = useState<BrowserResult | null>(null);
 
   async function check() {
     if (loading) return;
@@ -32,6 +44,20 @@ export function AdminAiHealth() {
       setResult({ ok: false, status: "network", message: "Errore di rete." });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function checkBrowser() {
+    if (brLoading) return;
+    setBrLoading(true);
+    setBrResult(null);
+    try {
+      const res = await fetch("/api/admin/browser-healthcheck");
+      setBrResult((await res.json()) as BrowserResult);
+    } catch {
+      setBrResult({ ok: false, status: "network", message: "Errore di rete." });
+    } finally {
+      setBrLoading(false);
     }
   }
 
@@ -76,6 +102,47 @@ export function AdminAiHealth() {
       >
         {loading ? "Verifico…" : "Verifica chiave + crediti"}
       </button>
+
+      <button
+        type="button"
+        onClick={checkBrowser}
+        disabled={brLoading}
+        style={{
+          marginLeft: 8,
+          padding: "9px 18px",
+          borderRadius: 10,
+          border: "1px solid var(--border-ds)",
+          background: "transparent",
+          color: "var(--fg)",
+          fontSize: 13.5,
+          fontWeight: 700,
+          cursor: "pointer",
+        }}
+      >
+        {brLoading ? "Avvio Chromium…" : "Verifica browser (Chromium)"}
+      </button>
+
+      {brResult && (
+        <div
+          style={{
+            marginTop: 14,
+            padding: 12,
+            borderRadius: 10,
+            background: brResult.ok ? "rgba(22,163,74,0.1)" : "rgba(220,38,38,0.1)",
+            border: `1px solid ${brResult.ok ? "rgba(22,163,74,0.4)" : "rgba(220,38,38,0.4)"}`,
+          }}
+        >
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: brResult.ok ? "hsl(var(--primary))" : "#fca5a5" }}>
+            {brResult.ok ? "✅ " : "❌ "}
+            {brResult.message}
+          </div>
+          <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 6, lineHeight: 1.6 }}>
+            {brResult.chromiumVersion && <>Chromium: <code>{brResult.chromiumVersion}</code><br /></>}
+            {brResult.launchedMs != null && <>avvio: {brResult.launchedMs}ms · totale: {brResult.totalMs}ms<br /></>}
+            {brResult.raw && <>dettaglio: {brResult.raw}</>}
+          </div>
+        </div>
+      )}
 
       {result && (
         <div
