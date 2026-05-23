@@ -42,6 +42,21 @@ export function SiteFooter() {
               <span className="flex h-2 w-2 rounded-full bg-primary shadow-[0_0_8px_hsl(var(--primary))]" />
               <span>{t("hostedIn")}</span>
             </div>
+            {/* Product Hunt featured badge */}
+            <a
+              href="https://www.producthunt.com/products/lavorai-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lavorai-it"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block pt-1"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt="Lavorai.it - AI-powered auto apply for job seekers | Product Hunt"
+                width={250}
+                height={54}
+                src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1151760&theme=light&t=1779546633084"
+              />
+            </a>
           </div>
 
           {linkGroups.map((group) => (
