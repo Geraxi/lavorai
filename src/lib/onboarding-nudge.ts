@@ -259,7 +259,7 @@ const COPY = {
   },
 } as const;
 
-function renderNudge(c: NudgeCandidate): {
+export function renderNudge(c: NudgeCandidate): {
   subject: string;
   html: string;
   text: string;
