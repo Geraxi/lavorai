@@ -40,6 +40,8 @@ export default async function AdminPage() {
     emailsByKind7d,
     activeSessions,
     autoApplyUsers,
+    creditFailures7d,
+    lastCreditFailure,
   ] = await Promise.all([
     // Tutti gli utenti lite per calcolare metriche REALI (escludendo
     // test/interni) in JS — più affidabile di N count() con NOT-contains.
@@ -66,6 +68,28 @@ export default async function AdminPage() {
     prisma.emailLog.groupBy({ by: ["kind"], where: { createdAt: { gte: since(24 * 7) } }, _count: { _all: true } }),
     prisma.applicationSession.count({ where: { status: { in: ["active", "auto"] } } }),
     prisma.userPreferences.groupBy({ by: ["autoApplyMode"], _count: { _all: true } }),
+    // AI pipeline health: fallimenti per crediti Anthropic esauriti (7g).
+    prisma.application.count({
+      where: {
+        status: "failed",
+        createdAt: { gte: since(24 * 7) },
+        OR: [
+          { errorMessage: { contains: "credit balance" } },
+          { errorMessage: { contains: "crediti esauriti" } },
+        ],
+      },
+    }),
+    prisma.application.findFirst({
+      where: {
+        status: "failed",
+        OR: [
+          { errorMessage: { contains: "credit balance" } },
+          { errorMessage: { contains: "crediti esauriti" } },
+        ],
+      },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
   ]);
 
   // Metriche REALI: escludi test/interni (testmail.app, postdbpush-,
@@ -114,6 +138,22 @@ export default async function AdminPage() {
       <div style={{ fontSize: 11.5, color: "var(--fg-subtle)", marginBottom: 22 }}>
         Verificati totali: {verifiedUsers}/{totalUsers} · Paganti totali (incl. interni): {payingUsers}
       </div>
+
+      {/* AI PIPELINE HEALTH — alert crediti Anthropic */}
+      {creditFailures7d > 0 && (
+        <div style={{ marginBottom: 20, padding: "14px 16px", borderRadius: 12, background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.4)" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#fca5a5" }}>
+            🚨 Crediti AI (Anthropic) esauriti — pipeline candidature BLOCCATA
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 6, lineHeight: 1.6 }}>
+            {creditFailures7d} candidature fallite negli ultimi 7g per crediti esauriti
+            {lastCreditFailure && ` · ultimo ${lastCreditFailure.createdAt.toLocaleString("it-IT")}`}.
+            Ogni nuova candidatura fallirà al primo step (generazione CV) finché non ricarichi.
+            <br />
+            <strong>Azione:</strong> console.anthropic.com → Billing → aggiungi credito. Poi requeue le candidature bloccate.
+          </div>
+        </div>
+      )}
 
       {/* DELIVERY TRUTH — il pezzo più importante */}
       <Panel title="🚚 Verità sulla consegna candidature">

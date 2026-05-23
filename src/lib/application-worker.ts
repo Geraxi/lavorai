@@ -18,6 +18,7 @@ import { renderCVPdf } from "@/lib/cv-pdf";
 import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { inboundReplyAddress } from "@/lib/email";
+import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { scrapeRecruiterEmail } from "@/lib/recruiter-email";
 import { findPortalAdapter } from "@/lib/portal-adapters";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
@@ -157,6 +158,23 @@ export async function processApplication(applicationId: string): Promise<void> {
     );
   } catch (err) {
     console.error(`[worker] ${applicationId} AI/generate failed`, err);
+    // Crediti AI esauriti / quota: è un outage di SISTEMA, non un errore
+    // della singola candidatura. Avvisa subito il founder (deduplicato) così
+    // non resta in silenzio come è successo dal 12/05.
+    if (isCreditExhaustedError(err)) {
+      await markFailed(
+        applicationId,
+        "Servizio AI temporaneamente non disponibile (crediti esauriti). La candidatura verrà ritentata appena ripristinato.",
+      );
+      await alertFounder(
+        "anthropic_credits",
+        "Crediti Anthropic esauriti — pipeline candidature ferma",
+        `Una candidatura (${applicationId}) è fallita perché i crediti Anthropic sono esauriti.\n` +
+          `Tutte le nuove candidature falliranno finché non ricarichi su console.anthropic.com → Billing.\n\n` +
+          `Errore grezzo: ${err instanceof Error ? err.message : String(err)}`,
+      ).catch(() => void 0);
+      return;
+    }
     await markFailed(
       applicationId,
       err instanceof Error ? err.message : "Errore generazione CV",

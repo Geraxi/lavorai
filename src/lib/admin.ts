@@ -8,6 +8,9 @@
 
 const ADMIN_EMAILS_RAW = ["umbertogeraci0@gmail.com"];
 
+/** Email del founder per alert operativi (esaurimento crediti, outage). */
+export const FOUNDER_EMAIL = "umbertogeraci0@gmail.com";
+
 function canonicalEmail(raw: string): string {
   const trimmed = raw.trim().toLowerCase();
   const at = trimmed.lastIndexOf("@");

@@ -82,6 +82,7 @@ export type EmailKind =
   | "welcome"
   | "magic_link"
   | "onboarding_nudge"
+  | "founder_alert"
   | "other";
 
 /** Marca un'email come effettivamente consegnata per il tracking quota. */
