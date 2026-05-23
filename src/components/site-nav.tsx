@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { cn } from "@/lib/utils";
 
 export function SiteNav() {
@@ -85,6 +86,11 @@ export function SiteNav() {
         </nav>
 
         <div className="flex items-center gap-3">
+          {!isApp && (
+            <div className="hidden sm:block">
+              <LanguageSwitcher />
+            </div>
+          )}
           {isApp ? (
             <Button
               asChild

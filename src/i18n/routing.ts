@@ -5,11 +5,11 @@ import { defineRouting } from "next-intl/routing";
  * inglese a /en/*. Geo-detect su Vercel reindirizza visitatori non-IT
  * su /en al primo accesso (vedi src/middleware.ts).
  */
-// LANCIO: solo italiano. "en" rimosso dalla list finché messages/en.json
-// non è completamente tradotto (oggi contiene ~80% stringhe IT — vedi
-// TODO-LAUNCH.md per il piano di unfreeze).
+// it = default. en riabilitato dopo traduzione completa di
+// messages/en.json (418 chiavi, tutte EN native). Detection geo +
+// cookie + Accept-Language gestita in src/i18n/request.ts.
 export const routing = defineRouting({
-  locales: ["it"],
+  locales: ["it", "en"],
   defaultLocale: "it",
   localePrefix: "as-needed",
 });
