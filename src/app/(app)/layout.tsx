@@ -4,6 +4,7 @@ import { CommandPalette } from "@/components/design/command-palette";
 import { ThemeScript } from "@/components/design/theme-script";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
+import { isAdmin } from "@/lib/admin";
 
 /**
  * App layout. Strippato delle 2 prisma.count() che giravano su OGNI
@@ -49,6 +50,7 @@ export default async function AppLayout({
               : tier === "pro"
                 ? "Piano Pro"
                 : "Piano Free",
+          isAdmin: isAdmin(user.email),
         }}
       >
         {children}

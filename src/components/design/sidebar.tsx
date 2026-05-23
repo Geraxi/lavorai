@@ -32,6 +32,7 @@ export interface SidebarProps {
   autoApplyRemaining?: number;
   userName?: string;
   userPlan?: string;
+  isAdmin?: boolean;
 }
 
 export function AppSidebar({
@@ -41,6 +42,7 @@ export function AppSidebar({
   autoApplyRemaining: autoApplyRemainingProp,
   userName = "Demo User",
   userPlan = "Pro plan",
+  isAdmin = false,
 }: SidebarProps) {
   const t = useTranslations("appShell");
 
@@ -87,6 +89,10 @@ export function AppSidebar({
     { href: "/preferences", label: t("preferences"), icon: "target" },
     { href: "/cv", label: t("materials"), icon: "file" },
     { href: "/settings", label: t("account"), icon: "settings" },
+    // Link Admin visibile SOLO al founder (isAdmin dal layout server).
+    ...(isAdmin
+      ? [{ href: "/admin", label: "Admin", icon: "chart" as IconName }]
+      : []),
   ];
 
   const pathname = usePathname();
