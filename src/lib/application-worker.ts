@@ -17,6 +17,7 @@ import { detectLanguage } from "@/lib/lang-detect";
 import { renderCVPdf } from "@/lib/cv-pdf";
 import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
 import { sendWithinQuota } from "@/lib/email-quota";
+import { inboundReplyAddress } from "@/lib/email";
 import { scrapeRecruiterEmail } from "@/lib/recruiter-email";
 import { findPortalAdapter } from "@/lib/portal-adapters";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
@@ -1142,11 +1143,17 @@ async function deliverApplicationToRecruiter(
     ? `Application for ${input.job.title}${input.job.company ? ` — ${input.job.company}` : ""}`
     : `Candidatura — ${input.job.title}${input.job.company ? ` · ${input.job.company}` : ""}`;
 
+  // Se è configurato un dominio inbound, le risposte del recruiter passano da
+  // noi (per il parsing) e poi le inoltriamo all'utente. Altrimenti fallback
+  // storico: reply diretta alla casella dell'utente (nessun parsing possibile).
+  const inboundReply = inboundReplyAddress(input.applicationId);
+  const effectiveReplyTo = inboundReply ?? input.replyTo;
+
   const result = await sendWithinQuota("application_sent", input.to, async () => {
     await resend.emails.send({
       from,
       to: input.to,
-      replyTo: input.replyTo,
+      replyTo: effectiveReplyTo,
       subject,
       html: renderRecruiterEmail({
         candidateName,

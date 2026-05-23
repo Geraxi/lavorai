@@ -26,6 +26,91 @@ function getFromAddress(): string {
   );
 }
 
+/**
+ * Indirizzo inbound per-application a cui il recruiter risponde.
+ * Settiamo questo come `replyTo` dell'email di candidatura: quando il recruiter
+ * preme "Rispondi", la mail arriva qui, Resend Inbound la inoltra al webhook
+ * `/api/webhooks/resend` (event email.received), la classifichiamo e la
+ * inoltriamo all'utente.
+ *
+ * Richiede un dominio inbound con record MX su Resend (es. inbound.lavorai.it),
+ * configurato via env INBOUND_EMAIL_DOMAIN. Se non settato → null e il worker
+ * usa il fallback storico (replyTo = email dell'utente, niente parsing).
+ *
+ * Formato: reply+<applicationId>@<domain>. Il + è preservato da Resend; un
+ * catch-all sul dominio cattura tutte le reply a prescindere dal tag.
+ */
+export function inboundReplyAddress(applicationId: string): string | null {
+  const domain = process.env.INBOUND_EMAIL_DOMAIN;
+  if (!domain) return null;
+  return `reply+${applicationId}@${domain}`;
+}
+
+/** Estrae l'applicationId da un indirizzo inbound reply+<id>@domain. */
+export function applicationIdFromInboundAddress(
+  address: string | undefined | null,
+): string | null {
+  if (!address) return null;
+  // gestisce "Name <reply+abc@dom>" o "reply+abc@dom"
+  const m = address.match(/reply\+([^@\s>]+)@/i);
+  return m?.[1] ?? null;
+}
+
+/**
+ * Inoltra all'utente una risposta ricevuta dal recruiter, così non perde mai
+ * il contatto diretto (prima le reply andavano alla sua casella; ora passano
+ * da noi per il parsing, quindi dobbiamo girargliele).
+ */
+export async function forwardReplyToUser(input: {
+  userEmail: string;
+  recruiterFrom: string;
+  jobTitle: string;
+  company: string | null;
+  subject: string | null;
+  bodyText: string | null;
+  kind: string;
+}): Promise<void> {
+  const client = getClient();
+  const kindLabel: Record<string, string> = {
+    colloquio: "📅 Possibile colloquio",
+    rifiutata: "❌ Esito negativo",
+    risposta: "💬 Risposta",
+    auto: "🤖 Risposta automatica",
+    bounce: "⚠️ Mancata consegna",
+  };
+  const label = kindLabel[input.kind] ?? "💬 Risposta";
+  const ctx = `${input.jobTitle}${input.company ? ` · ${input.company}` : ""}`;
+  const safeBody = escapeHtml(input.bodyText ?? "").replace(/\n/g, "<br/>");
+
+  await client.emails.send({
+    from: getFromAddress(),
+    to: input.userEmail,
+    replyTo: input.recruiterFrom,
+    subject: `[${label}] ${input.subject ?? ctx}`,
+    text:
+      `${label} alla tua candidatura "${ctx}"\n` +
+      `Da: ${input.recruiterFrom}\n\n` +
+      `${input.bodyText ?? "(nessun contenuto testuale)"}\n\n` +
+      `---\nRispondi direttamente a questa email per rispondere al recruiter.\n` +
+      `Inoltrato da LavorAI.`,
+    html: `<!doctype html><html lang="it"><body style="margin:0;padding:0;background:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;color:#0F172A;">
+  <div style="max-width:600px;margin:0 auto;padding:32px 20px;">
+    <div style="font-size:20px;font-weight:700;margin-bottom:16px;">Lavor<span style="color:#16A34A;">AI</span></div>
+    <div style="font-size:13px;color:#64748B;margin-bottom:4px;">${label} — candidatura</div>
+    <h1 style="font-size:18px;font-weight:700;margin:0 0 4px;line-height:1.3;">${escapeHtml(ctx)}</h1>
+    <p style="font-size:13px;color:#64748B;margin:0 0 20px;">Da: ${escapeHtml(input.recruiterFrom)}</p>
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:20px;font-size:14px;line-height:1.6;color:#334155;">
+      ${safeBody || "<em>(nessun contenuto testuale)</em>"}
+    </div>
+    <p style="font-size:13px;color:#64748B;margin:20px 0 0;line-height:1.6;">
+      Rispondi direttamente a questa email per rispondere al recruiter.<br/>
+      Inoltrato da <a href="https://lavorai.it" style="color:#16a34a;text-decoration:none;">LavorAI</a>.
+    </p>
+  </div>
+</body></html>`,
+  });
+}
+
 type Locale = "it" | "en";
 
 const COPY = {

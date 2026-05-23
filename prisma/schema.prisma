@@ -348,6 +348,15 @@ model Application {
   // viene caricato (o Resend webhook notifica email.opened) marchiamo viewedAt.
   trackingToken   String?   @unique
   viewedAt        DateTime?
+  // Risposte REALI del recruiter: quando un recruiter risponde all'email di
+  // candidatura, la reply arriva all'indirizzo inbound per-application
+  // (reply+<id>@inbound), Resend ce la inoltra via webhook email.received, la
+  // classifichiamo (colloquio/rifiutata/risposta) e popoliamo questi campi.
+  // Distinti da viewedAt (= solo apertura email, NON una risposta umana).
+  lastReplyAt     DateTime?
+  replyCount      Int       @default(0)
+  /// Classificazione dell'ultima risposta: "colloquio" | "rifiutata" | "risposta"
+  lastReplyKind   String?
   createdAt       DateTime  @default(now())
   startedAt       DateTime?
   completedAt     DateTime?
@@ -357,9 +366,34 @@ model Application {
   session ApplicationSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   interviewSessions InterviewSession[]
+  replies           ApplicationReply[]
 
   @@index([userId, createdAt])
   @@index([sessionId])
+}
+
+/// Risposta inbound a una candidatura inviata via email_recruiter.
+/// Una riga per ogni email ricevuta dall'indirizzo reply+<appId>@inbound.
+/// Conserviamo il contenuto per mostrarlo all'utente nella dashboard e per
+/// trasparenza ("queste sono risposte VERE, non aperture email").
+model ApplicationReply {
+  id            String   @id @default(cuid())
+  applicationId String
+  /// Mittente reale (recruiter). Es. "Jane Doe <jane@acme.com>"
+  fromAddress   String
+  subject       String?
+  /// Corpo testuale (preferito text/plain, fallback html→text). Troncato.
+  bodyText      String?  @db.Text
+  /// Classificazione automatica: "colloquio" | "rifiutata" | "risposta" |
+  /// "auto" (out-of-office / no-reply) | "bounce" (mailer-daemon).
+  kind          String
+  /// true se è una risposta umana reale (non auto/bounce) → conta come "risposta".
+  isHuman       Boolean  @default(true)
+  receivedAt    DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, receivedAt])
 }
 
 /// Sessione di preparazione + Copilot per un colloquio specifico.

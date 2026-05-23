@@ -66,6 +66,7 @@ export default async function DashboardPage() {
     deliveredMonth,
     deliveredToday,
     viewedMonth,
+    repliesMonth,
     pendingCount,
     applyingCount,
     failedMonth,
@@ -94,6 +95,15 @@ export default async function DashboardPage() {
         status: "success",
         submittedVia: { not: null },
         viewedAt: { not: null },
+        createdAt: { gte: monthStart },
+      },
+    }),
+    // Risposte REALI: candidature con almeno una reply umana del recruiter
+    // (lastReplyAt è settato solo per risposte umane, non per aperture email).
+    prisma.application.count({
+      where: {
+        userId: user.id,
+        lastReplyAt: { not: null },
         createdAt: { gte: monthStart },
       },
     }),
@@ -371,6 +381,11 @@ export default async function DashboardPage() {
                 label={t("statOpened")}
                 value={viewedMonth}
               />
+            )}
+            {/* Risposte VERE del recruiter (reply email parsate via inbound),
+                distinte dalle aperture. Mostrate solo quando > 0. */}
+            {repliesMonth > 0 && (
+              <PipelineStat label="Risposte" value={repliesMonth} />
             )}
           </div>
         </SectionCard>
