@@ -495,11 +495,17 @@ export async function processApplication(
       where: { id: applicationId },
       data: {
         errorMessage: `Portal ${adapter.label}: ${outcome.error}`,
-        // Canary log anche su failure — vogliamo evidence forense del
-        // perché è fallito.
-        ...("canary" in outcome && outcome.canary
-          ? { canaryLog: JSON.stringify(outcome.canary) }
-          : {}),
+        // Persisti SEMPRE il motivo del fallimento adapter in canaryLog (anche
+        // senza screenshot): il fallback email sotto sovrascrive errorMessage,
+        // quindi senza questo perderemmo la causa reale (diagnostica prod).
+        canaryLog:
+          "canary" in outcome && outcome.canary
+            ? JSON.stringify(outcome.canary)
+            : JSON.stringify({
+                adapterFailure: outcome.status,
+                error: outcome.error,
+                at: new Date().toISOString(),
+              }),
       },
     });
   }
