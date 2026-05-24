@@ -32,6 +32,16 @@ export interface ApplicationAnswers {
   // ---------- Profilo / link ----------
   linkedinUrl?: string;
   githubUrl?: string;
+  portfolioUrl?: string;
+  websiteUrl?: string;
+
+  // ---------- Localizzazione (campi standard ATS) ----------
+  /** Città di residenza (es. "Milano"). */
+  city?: string;
+  /** Paese (es. "Italia"). */
+  country?: string;
+  /** Pronomi, se l'utente vuole condividerli (campo opzionale comune). */
+  pronouns?: string;
 
   // ---------- Domande aperte ----------
   /** "linkedin" | "google" | "referral" | "other" */
@@ -148,6 +158,20 @@ export const FIELD_HINTS: Record<keyof ApplicationAnswers, string[]> = {
   ],
   linkedinUrl: ["linkedin", "linkedin url", "linkedin profile"],
   githubUrl: ["github", "github url", "github profile"],
+  portfolioUrl: [
+    "portfolio",
+    "portfolio link",
+    "portfolio url",
+    "link to your work",
+    "personal site",
+    "your work",
+    "dribbble",
+    "behance",
+  ],
+  websiteUrl: ["website", "personal website", "sito web", "your site"],
+  city: ["city", "town", "città", "city of residence", "current city"],
+  country: ["country", "paese", "nazione", "country of residence"],
+  pronouns: ["pronoun", "pronouns", "pronomi"],
   howHeard: [
     "how did you hear",
     "where did you hear",

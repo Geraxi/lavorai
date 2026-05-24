@@ -325,6 +325,49 @@ export const greenhouseAdapter: PortalAdapter = {
         console.warn("[greenhouse] generic-fill failed", err);
       }
 
+      // AI answerer: compila i campi OBBLIGATORI ancora vuoti (incl.
+      // react-select custom) usando SOLO i dati reali del candidato.
+      // Senza questo, i form Greenhouse con domande custom obbligatorie
+      // restano incompleti → la validazione client blocca il submit
+      // (causa storica dei 0/126 DETECTED).
+      try {
+        const { answerRequiredFields } = await import("./ai-answer");
+        const p = input.profile;
+        const links = p.links ?? [];
+        const findLink = (re: RegExp) =>
+          links.find((l) => re.test(`${l.url} ${l.label}`))?.url;
+        const cvText = [
+          p.summary,
+          ...(p.experiences ?? []).map(
+            (e) =>
+              `${e.role} @ ${e.company} (${e.startDate}-${e.endDate || "Present"}): ${e.description || (e.bullets ?? []).join("; ")}`,
+          ),
+        ]
+          .filter(Boolean)
+          .join("\n");
+        const ai = await answerRequiredFields(page, {
+          firstName: p.firstName,
+          lastName: p.lastName,
+          email: p.email || input.userEmail,
+          phone: p.phone || input.userPhone,
+          city: input.answers?.city || p.city,
+          country: input.answers?.country,
+          linkedinUrl: input.answers?.linkedinUrl || findLink(/linkedin/i),
+          portfolioUrl:
+            input.answers?.portfolioUrl ||
+            findLink(/portfolio|dribbble|behance/i),
+          workAuth: input.answers?.workAuthEU,
+          cvText,
+          jobTitle: p.title,
+          company: null,
+        });
+        console.log(
+          `[greenhouse] ai-answer: ${ai.answered} compilati, ${ai.remainingRequired} required ancora vuoti (${ai.details.slice(0, 5).join(" | ")})`,
+        );
+      } catch (err) {
+        console.warn("[greenhouse] ai-answer failed", err);
+      }
+
       // GDPR/consenso + accetta termini (best-effort)
       for (const sel of [
         'input[type="checkbox"][name*="privacy" i]',

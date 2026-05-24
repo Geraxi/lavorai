@@ -169,6 +169,16 @@ function renderValueForText(
       return a.linkedinUrl ?? null;
     case "githubUrl":
       return a.githubUrl ?? null;
+    case "portfolioUrl":
+      return a.portfolioUrl ?? null;
+    case "websiteUrl":
+      return a.websiteUrl ?? null;
+    case "city":
+      return a.city ?? null;
+    case "country":
+      return a.country ?? null;
+    case "pronouns":
+      return a.pronouns ?? null;
     case "whyInterested":
       return a.whyInterested ?? null;
     default:
