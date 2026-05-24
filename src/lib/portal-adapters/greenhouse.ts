@@ -325,11 +325,29 @@ export const greenhouseAdapter: PortalAdapter = {
         console.warn("[greenhouse] generic-fill failed", err);
       }
 
+      // GDPR/consenso + accetta termini (best-effort) — PRIMA dell'AI answerer
+      // così non vengono contati come "domande senza risposta".
+      for (const sel of [
+        'input[type="checkbox"][name*="privacy" i]',
+        'input[type="checkbox"][name*="gdpr" i]',
+        'input[type="checkbox"][name*="consent" i]',
+        'input[type="checkbox"][id*="privacy" i]',
+      ]) {
+        const cb = page.locator(sel);
+        if ((await cb.count()) > 0) {
+          await cb
+            .first()
+            .check({ timeout: 1500 })
+            .catch(() => void 0);
+        }
+      }
+
       // AI answerer: compila i campi OBBLIGATORI ancora vuoti (incl.
-      // react-select custom) usando SOLO i dati reali del candidato.
-      // Senza questo, i form Greenhouse con domande custom obbligatorie
-      // restano incompleti → la validazione client blocca il submit
-      // (causa storica dei 0/126 DETECTED).
+      // react-select custom) usando le risposte già date dall'utente +
+      // SOLO i dati reali del candidato. Senza questo, i form Greenhouse con
+      // domande custom obbligatorie restano incompleti → validazione client
+      // blocca il submit (causa storica dei 0/126 DETECTED).
+      let pendingQuestions: import("./types").PendingQuestion[] = [];
       try {
         const { answerRequiredFields } = await import("./ai-answer");
         const p = input.profile;
@@ -360,7 +378,9 @@ export const greenhouseAdapter: PortalAdapter = {
           cvText,
           jobTitle: p.title,
           company: null,
+          storedAnswers: input.storedAnswers,
         });
+        pendingQuestions = ai.unanswered;
         console.log(
           `[greenhouse] ai-answer: ${ai.answered} compilati, ${ai.remainingRequired} required ancora vuoti (${ai.details.slice(0, 5).join(" | ")})`,
         );
@@ -368,20 +388,16 @@ export const greenhouseAdapter: PortalAdapter = {
         console.warn("[greenhouse] ai-answer failed", err);
       }
 
-      // GDPR/consenso + accetta termini (best-effort)
-      for (const sel of [
-        'input[type="checkbox"][name*="privacy" i]',
-        'input[type="checkbox"][name*="gdpr" i]',
-        'input[type="checkbox"][name*="consent" i]',
-        'input[type="checkbox"][id*="privacy" i]',
-      ]) {
-        const cb = page.locator(sel);
-        if ((await cb.count()) > 0) {
-          await cb
-            .first()
-            .check({ timeout: 1500 })
-            .catch(() => void 0);
-        }
+      // Se restano campi OBBLIGATORI senza risposta, NON inviamo un form
+      // incompleto (verrebbe bloccato). Chiediamo all'utente: il worker
+      // mette la candidatura in "needs_answers" e raccoglie le risposte.
+      if (pendingQuestions.length > 0) {
+        return {
+          ok: false,
+          status: "needs_user_input",
+          error: `${pendingQuestions.length} domande obbligatorie richiedono la tua risposta prima dell'invio.`,
+          pendingQuestions,
+        };
       }
 
       if (input.dryRun) {

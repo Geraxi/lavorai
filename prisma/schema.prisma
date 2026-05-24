@@ -146,6 +146,36 @@ model User {
   resetTokens    PasswordResetToken[]
   verifyTokens   EmailVerificationToken[]
   popupResponses PopupResponse[]
+  answers        UserAnswer[]
+}
+
+/// Risposte RIUTILIZZABILI dell'utente alle domande dei form di candidatura
+/// (es. "Hai diritto al lavoro in UK?", "Hai esperienza con app mobile?",
+/// "Link al portfolio"). Chieste UNA volta: la prossima volta che un form
+/// pone la stessa domanda, la riempiamo da qui senza ridisturbare l'utente.
+/// labelKey = label normalizzata (lowercase, no spazi/punteggiatura) per il
+/// match cross-job.
+model UserAnswer {
+  id         String   @id @default(cuid())
+  userId     String
+  /// Chiave normalizzata della domanda (per match tra job diversi).
+  labelKey   String
+  /// Testo originale della domanda (per mostrarla all'utente).
+  label      String
+  /// "text" | "textarea" | "select" | "react-select" | "checkbox"
+  kind       String   @default("text")
+  /// Opzioni disponibili (per select/react-select), JSON array di stringhe.
+  optionsJson String? @db.Text
+  /// Risposta dell'utente. null/"" = ancora da rispondere (pending).
+  answer     String?  @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  answeredAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, labelKey])
+  @@index([userId, answeredAt])
 }
 
 /// Popup/sondaggio creato dall'admin (founder) e mostrato agli utenti
@@ -407,6 +437,12 @@ model Application {
   replyCount      Int       @default(0)
   /// Classificazione dell'ultima risposta: "colloquio" | "rifiutata" | "risposta"
   lastReplyKind   String?
+  // Quando l'adapter incontra campi OBBLIGATORI che non sa rispondere dai
+  // dati del candidato, la candidatura va in status="needs_answers" e qui
+  // salviamo le domande (JSON array di { label, kind, options }). L'utente
+  // le risponde in /questions, le salviamo in UserAnswer (riutilizzabili) e
+  // ri-accodiamo la candidatura. Niente più invii bloccati in silenzio.
+  pendingQuestionsJson String? @db.Text
   createdAt       DateTime  @default(now())
   startedAt       DateTime?
   completedAt     DateTime?

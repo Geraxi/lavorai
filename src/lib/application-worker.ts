@@ -314,6 +314,15 @@ export async function processApplication(
       (app.user.preferences as { applicationAnswersJson?: string } | null)
         ?.applicationAnswersJson ?? null,
     );
+    // Risposte riutilizzabili già date dall'utente a domande di form
+    // precedenti — riempiono i campi custom senza ridisturbarlo.
+    const storedRows = await prisma.userAnswer.findMany({
+      where: { userId: app.userId, NOT: { answer: null } },
+      select: { label: true, answer: true, kind: true },
+    });
+    const storedAnswers = storedRows
+      .filter((r) => r.answer && r.answer.trim())
+      .map((r) => ({ label: r.label, answer: r.answer as string, kind: r.kind }));
     // Retry policy: tentiamo fino a 2 volte se l'errore è del tipo
     // "potenzialmente transitorio" (unknown_error, network, server 5xx).
     // NON retriamo su validation_failed o captcha — quelli sono motivi
@@ -336,6 +345,7 @@ export async function processApplication(
         userId: app.userId,
         userEmail: app.user.email,
         answers: userAnswers,
+        storedAnswers,
         forceRealSubmit: opts?.forceRealSubmit === true,
       }).catch((err) => {
         console.error(
@@ -428,6 +438,54 @@ export async function processApplication(
       }
       return; // fatto
     }
+
+    // L'adapter ha trovato campi OBBLIGATORI che non sappiamo rispondere:
+    // chiediamo all'utente invece di inviare un form incompleto o fingere.
+    if (outcome.status === "needs_user_input") {
+      const questions = outcome.pendingQuestions ?? [];
+      // Persisti le domande come UserAnswer riutilizzabili (answer vuoto).
+      const { normalizeLabel } = await import("@/lib/portal-adapters/ai-answer");
+      for (const q of questions) {
+        const labelKey = normalizeLabel(q.label);
+        if (!labelKey) continue;
+        await prisma.userAnswer
+          .upsert({
+            where: { userId_labelKey: { userId: app.userId, labelKey } },
+            create: {
+              userId: app.userId,
+              labelKey,
+              label: q.label,
+              kind: q.kind,
+              optionsJson: q.options ? JSON.stringify(q.options) : null,
+            },
+            update: {
+              // aggiorna metadati (opzioni possono cambiare), NON la risposta
+              label: q.label,
+              kind: q.kind,
+              optionsJson: q.options ? JSON.stringify(q.options) : null,
+            },
+          })
+          .catch((err) =>
+            console.error(`[worker] upsert UserAnswer failed`, err),
+          );
+      }
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: {
+          status: "needs_answers",
+          pendingQuestionsJson: JSON.stringify(questions),
+          errorMessage: `${questions.length} domande del form richiedono la tua risposta. Rispondi e ricandidiamo automaticamente.`,
+          ...("canary" in outcome && outcome.canary
+            ? { canaryLog: JSON.stringify(outcome.canary) }
+            : {}),
+        },
+      });
+      await notifyNeedsAnswers(applicationId).catch((err) =>
+        console.error(`[worker] ${applicationId} notify needs-answers failed`, err),
+      );
+      return; // in attesa delle risposte utente
+    }
+
     // se l'adapter non ci è riuscito (form cambiato / captcha / …) proseguiamo
     // al fallback email. Logghiamo l'errore sull'Application per debugging.
     console.warn(
@@ -1060,6 +1118,57 @@ async function notifyApplicationManual(applicationId: string): Promise<void> {
   });
 }
 
+/**
+ * Avvisa l'utente che una candidatura richiede risposte a domande del form
+ * prima di poter essere inviata. Lo manda a /questions.
+ */
+async function notifyNeedsAnswers(applicationId: string): Promise<void> {
+  const app = await prisma.application.findUnique({
+    where: { id: applicationId },
+    include: {
+      job: { select: { title: true, company: true } },
+      user: { select: { email: true, name: true, locale: true } },
+    },
+  });
+  if (!app) return;
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return;
+
+  const resend = new Resend(apiKey);
+  const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
+  const firstName = (app.user.name ?? "").split(/\s+/)[0] || "";
+  const company = app.job.company ?? "l'azienda";
+  const jobTitle = app.job.title;
+  const locale = app.user.locale === "en" ? "en" : "it";
+  const url = `${siteUrl}/questions`;
+
+  const subject =
+    locale === "en"
+      ? `❓ A few questions to finish applying at ${company}`
+      : `❓ Poche domande per completare la candidatura a ${company}`;
+  const text =
+    locale === "en"
+      ? `Hi ${firstName},\n\nThe application for "${jobTitle}" at ${company} has a few required questions only you can answer (e.g. work authorization, screening questions).\n\nAnswer them once here and we'll submit automatically (and reuse your answers next time): ${url}\n\n— LavorAI`
+      : `Ciao ${firstName},\n\nLa candidatura per "${jobTitle}" presso ${company} ha alcune domande obbligatorie a cui solo tu puoi rispondere (es. diritto al lavoro, domande di screening).\n\nRispondi una volta qui e inviamo in automatico (e riusiamo le risposte la prossima volta): ${url}\n\n— LavorAI`;
+
+  await sendWithinQuota("application_manual", app.user.email, async () => {
+    await resend.emails.send({
+      from,
+      to: app.user.email,
+      subject,
+      text,
+      html: `<!doctype html><html lang="${locale}"><body style="font-family:-apple-system,Inter,sans-serif;color:#0F172A;max-width:560px;margin:0 auto;padding:32px 20px;">
+  <div style="font-size:20px;font-weight:700;margin-bottom:20px;">Lavor<span style="color:#16A34A;">AI</span></div>
+  <h1 style="font-size:20px;margin:0 0 10px;">${locale === "en" ? "A few quick questions" : "Poche domande veloci"}</h1>
+  <p style="font-size:15px;line-height:1.6;color:#334155;">${locale === "en" ? `The application for <strong>${escapeHtml(jobTitle)}</strong> at <strong>${escapeHtml(company)}</strong> has required questions only you can answer.` : `La candidatura per <strong>${escapeHtml(jobTitle)}</strong> presso <strong>${escapeHtml(company)}</strong> ha domande obbligatorie a cui solo tu puoi rispondere.`}</p>
+  <p style="font-size:15px;line-height:1.6;color:#334155;">${locale === "en" ? "Answer once — we reuse them next time and submit automatically." : "Rispondi una volta — le riusiamo la prossima volta e inviamo in automatico."}</p>
+  <div style="text-align:center;margin:28px 0;"><a href="${url}" style="display:inline-block;background:#16A34A;color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:600;">${locale === "en" ? "Answer the questions" : "Rispondi alle domande"}</a></div>
+</body></html>`,
+    });
+  });
+}
+
 function renderManualEmail(data: {
   firstName: string;
   jobTitle: string;
@@ -1274,6 +1383,7 @@ interface AdapterSubmitInput {
   userId: string;
   userEmail: string;
   answers?: import("@/lib/application-answers").ApplicationAnswers;
+  storedAnswers?: Array<{ label: string; answer: string; kind?: string }>;
   /** Override chirurgico: forza l'invio REALE anche se PORTAL_SUBMIT_DRY_RUN=true.
    *  Usato dal test admin per un singolo invio confermato, senza toccare il
    *  flag globale (che farebbe partire il backlog dal worker locale). */
@@ -1330,6 +1440,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
         ? false
         : process.env.PORTAL_SUBMIT_DRY_RUN === "true",
       answers: input.answers,
+      storedAnswers: input.storedAnswers,
       applicationId: input.applicationId, // per naming canary assets
     });
     return outcome;

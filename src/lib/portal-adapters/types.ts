@@ -36,6 +36,9 @@ export interface ApplyInput {
    *  notice period, LinkedIn, EEO, ecc). L'adapter le inietta nei
    *  campi custom che riconosce via fuzzy-match label. */
   answers?: ApplicationAnswers;
+  /** Risposte riutilizzabili già date dall'utente a domande di form
+   *  precedenti (da UserAnswer). label→answer, match per label normalizzata. */
+  storedAnswers?: Array<{ label: string; answer: string; kind?: string }>;
   /** Application ID — opzionale, usato solo per naming canary asset
    *  (es. screenshot Blob filename). Non strettamente necessario per
    *  l'apply normale. */
@@ -96,7 +99,27 @@ export type ApplyOutcome =
         | "unknown_error";
       error: string;
       canary?: CanaryLog;
+    }
+  | {
+      // Form trovato e compilato per quanto possibile, ma restano campi
+      // OBBLIGATORI che non sappiamo rispondere dai dati del candidato.
+      // Chiediamo all'utente prima di inviare (niente submit incompleto).
+      ok: false;
+      status: "needs_user_input";
+      error: string;
+      pendingQuestions: PendingQuestion[];
+      canary?: CanaryLog;
     };
+
+/** Domanda obbligatoria di un form che richiede input dell'utente. */
+export interface PendingQuestion {
+  /** Testo della domanda così come appare nel form. */
+  label: string;
+  /** "text" | "textarea" | "select" | "react-select" | "checkbox" */
+  kind: string;
+  /** Opzioni disponibili (per select/react-select). */
+  options?: string[];
+}
 
 export interface PortalAdapter {
   /** Identificatore macchina (es. "greenhouse") */
