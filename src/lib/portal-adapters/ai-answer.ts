@@ -119,6 +119,20 @@ export async function answerRequiredFields(
     }
   }
 
+  // 3b. Riempi i campi noti dal PROFILO (country/city/phone/link) anche se
+  //     sono react-select searchable (le cui opzioni l'AI non vedrebbe).
+  for (const f of pending) {
+    if (filledIdx.has(f.idx)) continue;
+    const pv = profileValueForLabel(f.label, ctx);
+    if (!pv) continue;
+    const ok = await fillField(page, f, pv).catch(() => false);
+    if (ok) {
+      answered++;
+      filledIdx.add(f.idx);
+      details.push(`profile:"${f.label.slice(0, 32)}"`);
+    }
+  }
+
   // 4. Per il resto, chiedi a Claude (solo dai dati reali).
   const remaining = pending.filter((f) => !filledIdx.has(f.idx));
   let answers: AiAnswer[] = [];
@@ -160,122 +174,128 @@ export async function answerRequiredFields(
   return { answered, remainingRequired: stillEmpty.length, details, unanswered };
 }
 
+/** Mappa una label a un valore noto del profilo (per i campi standard). */
+function profileValueForLabel(label: string, ctx: CandidateContext): string | null {
+  const l = label.toLowerCase();
+  if (/\bcountry\b|paese|nazione/.test(l)) return ctx.country ?? null;
+  if (/\bcity\b|\btown\b|location|città|citt/.test(l)) return ctx.city ?? null;
+  if (/phone|telefono|mobile|cellulare/.test(l)) return ctx.phone ?? null;
+  if (/linkedin/.test(l)) return ctx.linkedinUrl ?? null;
+  if (/portfolio|website|personal site|sito/.test(l)) return ctx.portfolioUrl ?? null;
+  return null;
+}
+
 // ---------- enumerazione campi ----------
 
 async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]> {
   return page.evaluate((tag) => {
-    function labelFor(el: Element): string {
-      const id = el.getAttribute("id");
-      let txt = "";
-      if (id) {
-        const l = document.querySelector(`label[for="${CSS.escape(id)}"]`);
-        if (l) txt = l.textContent ?? "";
-      }
-      if (!txt) {
-        const wrap = el.closest("label");
-        if (wrap) txt = wrap.textContent ?? "";
-      }
-      if (!txt) {
-        // Greenhouse: label è sibling nel container ".field"/"div"
-        const container =
-          el.closest("[class*='field'], [class*='question'], .form-field, div");
-        const l = container?.querySelector("label");
-        if (l) txt = l.textContent ?? "";
-      }
-      if (!txt) txt = el.getAttribute("aria-label") || el.getAttribute("placeholder") || el.getAttribute("name") || "";
-      return txt.replace(/\s+/g, " ").trim();
-    }
-    function isRequired(el: Element, label: string): boolean {
-      if ((el as HTMLInputElement).required) return true;
-      if (el.getAttribute("aria-required") === "true") return true;
-      if (/\*\s*$/.test(label) || label.includes("*")) return true;
-      return false;
-    }
-
+    // NB: NIENTE funzioni nominate qui dentro. I bundler (esbuild/tsx) le
+    // avvolgono con un helper __name che NON esiste nel browser quando
+    // Playwright serializza la funzione → "ReferenceError: __name". Tutto
+    // inline per essere bulletproof su qualsiasi bundler.
     const out: Array<{ idx: number; label: string; kind: string; options?: string[] }> = [];
     let idx = 0;
 
-    // a) input text-like + textarea
-    const textEls = Array.from(
-      document.querySelectorAll(
-        "input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=submit]):not([type=button]), textarea",
-      ),
-    ) as (HTMLInputElement | HTMLTextAreaElement)[];
-    for (const el of textEls) {
+    // Tutti i controlli del form, in ordine di documento.
+    const all = Array.from(
+      document.querySelectorAll("input, textarea, select"),
+    ) as (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[];
+
+    for (const el of all) {
+      const type = ((el as HTMLInputElement).type || el.tagName).toLowerCase();
+      if (["hidden", "submit", "button", "reset", "image"].includes(type)) continue;
       const style = window.getComputedStyle(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
-      if (el.value && el.value.trim() !== "") continue; // già pieno
-      // Salta gli input INTERNI ai widget react-select / combobox: sono
-      // gestiti dal widget (li compiliamo via il container), non sono vere
-      // domande. Erano la causa dei "campi fantasma" senza label.
-      if (
-        el.closest(
-          "[class*='select__'], [class*='-control'], [role='combobox']",
-        ) ||
-        el.getAttribute("role") === "combobox" ||
-        el.getAttribute("aria-autocomplete") === "list"
-      )
+
+      // --- label (inline) ---
+      let label = "";
+      const id = el.getAttribute("id");
+      if (id) {
+        const l = document.querySelector(`label[for="${CSS.escape(id)}"]`);
+        if (l) label = l.textContent ?? "";
+      }
+      if (!label) {
+        const wrap = el.closest("label");
+        if (wrap) label = wrap.textContent ?? "";
+      }
+      if (!label) {
+        const c = el.closest("[class*='field'], [class*='question'], .form-field, div");
+        const l = c?.querySelector("label");
+        if (l) label = l.textContent ?? "";
+      }
+      if (!label)
+        label =
+          el.getAttribute("aria-label") ||
+          el.getAttribute("placeholder") ||
+          el.getAttribute("name") ||
+          "";
+      label = label.replace(/\s+/g, " ").trim();
+
+      // --- required (inline) ---
+      const required =
+        (el as HTMLInputElement).required ||
+        el.getAttribute("aria-required") === "true" ||
+        label.includes("*");
+
+      const cls = typeof el.className === "string" ? el.className : "";
+      const role = el.getAttribute("role") || "";
+      const isCombo =
+        role === "combobox" ||
+        /select__input/.test(cls) ||
+        el.getAttribute("aria-autocomplete") === "list";
+
+      // a) react-select combobox
+      if (isCombo) {
+        if (!required) continue;
+        // Il single-value (valore selezionato) sta nel container largo
+        // .select-shell, NON nell'input-container stretto → usa quello.
+        const shell =
+          el.closest("[class*='select-shell']") ||
+          el.parentElement?.parentElement ||
+          el.parentElement;
+        const sv = shell?.querySelector(
+          "[class*='single-value'], [class*='multi-value']",
+        );
+        if (sv && (sv.textContent ?? "").trim()) continue; // già selezionato
+        el.setAttribute(tag, String(idx));
+        out.push({ idx, label, kind: "react-select" });
+        idx++;
         continue;
-      const label = labelFor(el);
-      // Niente label leggibile = non possiamo né chiederla all'utente né
-      // saperne il senso → salta (evita domande vuote che bloccano tutto).
-      if (label.replace(/[^a-z0-9]/gi, "").length < 3) continue;
-      if (!isRequired(el, label)) continue;
+      }
+
+      // input interni dei widget (requiredInput nascosto, ecc.) → skip
+      if (/requiredInput/.test(cls) || el.closest("[class*='select-shell']")) continue;
+
+      // b) checkbox
+      if (type === "checkbox") {
+        if ((el as HTMLInputElement).checked) continue;
+        if (!required) continue;
+        el.setAttribute(tag, String(idx));
+        out.push({ idx, label, kind: "checkbox" });
+        idx++;
+        continue;
+      }
+
+      // c) <select> nativo
+      if (el.tagName === "SELECT") {
+        if ((el as HTMLSelectElement).value.trim()) continue;
+        if (!required) continue;
+        el.setAttribute(tag, String(idx));
+        const options = Array.from((el as HTMLSelectElement).options)
+          .map((o) => (o.textContent ?? "").trim())
+          .filter((t) => t && !/^select/i.test(t));
+        out.push({ idx, label, kind: "select", options });
+        idx++;
+        continue;
+      }
+
+      // d) text / textarea
+      if ((el as HTMLInputElement).value && (el as HTMLInputElement).value.trim())
+        continue;
+      if (label.replace(/[^a-z0-9]/gi, "").length < 3) continue; // senza label utile
+      if (!required) continue;
       el.setAttribute(tag, String(idx));
       out.push({ idx, label, kind: el.tagName === "TEXTAREA" ? "textarea" : "text" });
-      idx++;
-    }
-
-    // b) <select> nativi
-    const selects = Array.from(document.querySelectorAll("select")) as HTMLSelectElement[];
-    for (const el of selects) {
-      const style = window.getComputedStyle(el);
-      if (style.display === "none") continue;
-      if (el.value && el.value.trim() !== "") continue;
-      const label = labelFor(el);
-      if (!isRequired(el, label)) continue;
-      el.setAttribute(tag, String(idx));
-      const options = Array.from(el.options)
-        .map((o) => o.textContent?.trim() ?? "")
-        .filter((t) => t && !/^select/i.test(t));
-      out.push({ idx, label, kind: "select", options });
-      idx++;
-    }
-
-    // c) react-select (Greenhouse nuovo / Lever / Ashby): container .select__control
-    const rsControls = Array.from(
-      document.querySelectorAll(
-        "[class*='select__control'], [class*='-control'][class*='select']",
-      ),
-    );
-    for (const ctrl of rsControls) {
-      // vuoto se non c'è single-value/multi-value
-      const hasValue = ctrl.querySelector(
-        "[class*='single-value'], [class*='multi-value']",
-      );
-      if (hasValue) continue;
-      const container = ctrl.closest("[class*='field'], [class*='question'], div");
-      const label = (container?.querySelector("label")?.textContent ?? "")
-        .replace(/\s+/g, " ")
-        .trim();
-      // required se label ha * (react-select non espone required nativo)
-      if (!label.includes("*") && ctrl.getAttribute("aria-required") !== "true")
-        continue;
-      ctrl.setAttribute(tag, String(idx));
-      out.push({ idx, label, kind: "react-select" });
-      idx++;
-    }
-
-    // d) checkbox required (consenso/privacy)
-    const checks = Array.from(
-      document.querySelectorAll("input[type=checkbox]"),
-    ) as HTMLInputElement[];
-    for (const el of checks) {
-      if (el.checked) continue;
-      const label = labelFor(el);
-      if (!isRequired(el, label)) continue;
-      el.setAttribute(tag, String(idx));
-      out.push({ idx, label, kind: "checkbox" });
       idx++;
     }
 
@@ -291,7 +311,7 @@ async function readReactSelectOptions(page: Page, idx: number): Promise<string[]
     await control.click({ timeout: 2000 });
     await page.waitForTimeout(350);
     const opts = await page
-      .locator("[class*='select__option'], [role='option']")
+      .locator("[class*='select__option']")
       .allTextContents();
     // chiudi il menu
     await page.keyboard.press("Escape").catch(() => void 0);
@@ -330,29 +350,50 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
     return true;
   }
   if (f.kind === "react-select") {
+    // react-select (Greenhouse): NON basta cliccare l'opzione (il click non
+    // registra l'onChange). Il modo affidabile: apri → digita per filtrare →
+    // premi Enter (seleziona l'opzione evidenziata) → verifica single-value.
+    const optsSel = "[class*='select__option']";
     await loc.click({ timeout: 3000 });
-    await page.waitForTimeout(300);
-    // digita per filtrare
-    await page.keyboard.type(value.slice(0, 40), { delay: 10 }).catch(() => void 0);
-    await page.waitForTimeout(400);
-    const option = page
-      .locator("[class*='select__option'], [role='option']")
-      .filter({ hasText: new RegExp(escapeRe(value.slice(0, 25)), "i") })
-      .first();
-    if (await option.count()) {
-      await option.click({ timeout: 3000 });
-      return true;
+    await page.waitForTimeout(350);
+    // digita per filtrare (NON usare fill(""): chiuderebbe il menu)
+    await loc.pressSequentially(value.slice(0, 40), { delay: 22 }).catch(() => void 0);
+    // Attendi il caricamento opzioni (alcuni select cercano async: città,
+    // paese). Poll fino a ~2.5s invece di un wait fisso troppo corto.
+    let optCount = 0;
+    for (let i = 0; i < 10; i++) {
+      await page.waitForTimeout(250);
+      optCount = await page.locator(optsSel).count();
+      if (optCount > 0) break;
     }
-    // Nessuna opzione corrisponde: NON scegliamo a caso (sarebbe inventare).
-    // Chiudiamo il menu e lasciamo il campo vuoto → resterà UNCONFIRMED.
-    await page.keyboard.press("Escape").catch(() => void 0);
-    return false;
+    if (optCount === 0) {
+      // nessuna opzione corrisponde al valore: non inventiamo, chiudiamo.
+      await page.keyboard.press("Escape").catch(() => void 0);
+      return false;
+    }
+    // Enter seleziona l'opzione evidenziata (modo affidabile per react-select).
+    await loc.press("Enter").catch(() => void 0);
+    await page.waitForTimeout(300);
+
+    // verifica che la selezione si sia FISSATA — SOLO nello shell di QUESTO
+    // campo (non risalire troppo: catturerebbe il single-value di un vicino).
+    const ok = await loc
+      .evaluate((el) => {
+        const shell =
+          el.closest("[class*='select-shell']") ||
+          el.closest("[class*='select__value-container']") ||
+          el.parentElement?.parentElement ||
+          el.parentElement;
+        const sv = shell?.querySelector(
+          "[class*='single-value'], [class*='multi-value']",
+        );
+        return !!(sv && (sv.textContent ?? "").trim());
+      })
+      .catch(() => false);
+    if (!ok) await page.keyboard.press("Escape").catch(() => void 0);
+    return ok;
   }
   return false;
-}
-
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // ---------- Claude ----------
