@@ -316,7 +316,7 @@ async function readReactSelectOptions(page: Page, idx: number): Promise<string[]
     // chiudi il menu
     await page.keyboard.press("Escape").catch(() => void 0);
     const clean = opts.map((o) => o.replace(/\s+/g, " ").trim()).filter(Boolean);
-    return clean.length ? clean.slice(0, 25) : undefined;
+    return clean.length ? clean.slice(0, 60) : undefined;
   } catch {
     return undefined;
   }

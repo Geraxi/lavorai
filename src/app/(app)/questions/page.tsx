@@ -180,16 +180,28 @@ function renderInput(
     fontFamily: "inherit",
   };
 
-  if ((q.kind === "select" || q.kind === "react-select") && q.options?.length) {
+  if (q.kind === "select" || q.kind === "react-select") {
+    // Campo con testo libero + suggerimenti (datalist): la lista opzioni può
+    // essere troncata/incompleta (es. 200+ paesi) → l'utente può comunque
+    // digitare la risposta (es. "Italy"). In fase di invio la matchiamo.
+    const listId = `opts-${q.id}`;
     return (
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={base}>
-        <option value="">— scegli —</option>
-        {q.options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
+      <>
+        <input
+          list={q.options?.length ? listId : undefined}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={base}
+          placeholder="Scrivi o scegli (es. Italy)…"
+        />
+        {q.options?.length ? (
+          <datalist id={listId}>
+            {q.options.map((o) => (
+              <option key={o} value={o} />
+            ))}
+          </datalist>
+        ) : null}
+      </>
     );
   }
   if (q.kind === "checkbox") {
