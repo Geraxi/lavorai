@@ -178,6 +178,13 @@ export const greenhouseAdapter: PortalAdapter = {
       };
     }
 
+    // Settle: il form Greenhouse moderno è React e i widget (dropzone CV,
+    // react-select) si idratano DOPO il domcontentloaded. Senza attesa, il
+    // setInputFiles sul CV non viene registrato (file non caricato). Aspetta
+    // networkidle + un margine prima di compilare.
+    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => void 0);
+    await page.waitForTimeout(1500);
+
     const firstName = page.locator(
       'input[name="first_name"], input#first_name, input[aria-label*="First" i]',
     );
@@ -236,30 +243,61 @@ export const greenhouseAdapter: PortalAdapter = {
         'input[type="file"][name*="cv" i]',
         'input[type="file"]',
       ];
+      // Basename del CV: Greenhouse (dropzone React) carica il file in modo
+      // ASINCRONO su S3 e mostra il nome nella UI, poi AZZERA input.files.
+      // Quindi NON verifichiamo via input.files (dava sempre null → falso
+      // negativo → fallback → crash). Verifichiamo che il nome compaia nella
+      // pagina o appaia un indicatore di file caricato.
+      const cvBase = input.cvLocalPath.split(/[\\/]/).pop() || "cv";
+      const verifyAttached = async (): Promise<boolean> => {
+        for (let i = 0; i < 12; i++) {
+          await page.waitForTimeout(400);
+          const ok = await page
+            .evaluate((name) => {
+              try {
+                const body = (document.body.innerText || "").toLowerCase();
+                if (name && body.includes(name.toLowerCase())) return true;
+                // indicatori UI di file scelto (no :has() — non supportato
+                // ovunque, lanciava e falsava la verifica).
+                const ind = document.querySelector(
+                  "[class*='chosen'], [class*='file-name'], [class*='attachment'], [class*='uploaded'], [class*='filename']",
+                );
+                return !!(ind && (ind.textContent || "").trim());
+              } catch {
+                return false;
+              }
+            }, cvBase)
+            .catch(() => false);
+          if (ok) return true;
+        }
+        return false;
+      };
+
       let cvAttached = false;
       for (const sel of resumeSelectors) {
         const loc = page.locator(sel);
         if ((await loc.count()) === 0) continue;
-        try {
-          await loc.first().setInputFiles(input.cvLocalPath);
-          // Verifica reale: il file è davvero nel DOM input?
-          const fname = await loc
-            .first()
-            .evaluate((el: HTMLInputElement) => el.files?.[0]?.name ?? null)
-            .catch(() => null);
-          if (fname) {
-            cvAttached = true;
+        // Retry: la dropzone può idratarsi in ritardo → ri-setta il file.
+        for (let attempt = 0; attempt < 2 && !cvAttached; attempt++) {
+          try {
+            await loc.first().setInputFiles(input.cvLocalPath);
+            if (await verifyAttached()) {
+              cvAttached = true;
+              break;
+            }
+            await page.waitForTimeout(800);
+          } catch {
+            /* prova selettore successivo */
             break;
           }
-        } catch {
-          /* prova selettore successivo */
         }
+        if (cvAttached) break;
       }
 
       // Fallback: filechooser via bottone "Attach"/"Allega"/"Upload"
       if (!cvAttached) {
         const attachBtn = page.locator(
-          'button:has-text("Attach"), button:has-text("Allega"), button:has-text("Upload"), label:has-text("resume" i), [role="button"]:has-text("Attach")',
+          'button:has-text("Attach"), button:has-text("Allega"), button:has-text("Upload"), [role="button"]:has-text("Attach")',
         );
         if ((await attachBtn.count()) > 0) {
           try {
@@ -268,14 +306,7 @@ export const greenhouseAdapter: PortalAdapter = {
               attachBtn.first().click(),
             ]);
             await chooser.setFiles(input.cvLocalPath);
-            await page.waitForTimeout(500);
-            // Re-verifica
-            const anyFile = await page
-              .locator('input[type="file"]')
-              .first()
-              .evaluate((el: HTMLInputElement) => el.files?.[0]?.name ?? null)
-              .catch(() => null);
-            cvAttached = !!anyFile;
+            cvAttached = await verifyAttached();
           } catch {
             /* filechooser non disponibile */
           }
