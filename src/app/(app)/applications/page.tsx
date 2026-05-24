@@ -261,7 +261,6 @@ export default function ApplicationsPage() {
                 <th>{t("colLocation")}</th>
                 <th>{t("colSalary")}</th>
                 <th>{t("colMatch")}</th>
-                <th>{t("colSource")}</th>
                 <th>{t("colStatus")}</th>
                 <th>Inviata</th>
                 <th style={{ width: 40 }}></th>
@@ -314,7 +313,6 @@ export default function ApplicationsPage() {
                       </span>
                     </div>
                   </td>
-                  <td style={{ color: "var(--fg-muted)", fontSize: 12 }}>{a.source}</td>
                   <td>
                     {a.backendStatus === "awaiting_consent" ? (
                       <span
@@ -395,13 +393,12 @@ export default function ApplicationsPage() {
 
 function exportCsv(rows: Row[]): void {
   if (rows.length === 0) return;
-  const header = ["Azienda", "Ruolo", "Luogo", "Modalità", "Fonte", "Stato", "Match", "Inviata"];
+  const header = ["Azienda", "Ruolo", "Luogo", "Modalità", "Stato", "Match", "Inviata"];
   const body = rows.map((r) => [
     r.company,
     r.role,
     r.location,
     r.mode,
-    r.source,
     r.status,
     String(r.match),
     r.applied,

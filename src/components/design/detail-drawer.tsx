@@ -107,7 +107,6 @@ export function DetailDrawer({
               >
                 <MiniStat label="Match" value={`${app.match}%`} accent={app.match >= 85} />
                 <MiniStat label="RAL" value={app.salary} mono />
-                <MiniStat label="Fonte" value={app.source} />
                 <MiniStat label="Inviata" value={app.applied} />
               </div>
 

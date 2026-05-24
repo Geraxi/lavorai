@@ -203,15 +203,13 @@ export default async function JobDetailPage({ params }: { params: Params }) {
               className="mt-5"
               style={{ fontSize: 11, color: "var(--fg-muted)" }}
             >
-              Fonte:{" "}
               <a
                 href={job.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
               >
-                {job.source === "mock" ? "Mock data dev" : job.source}{" "}
-                <Icon name="external" size={11} />
+                Apri annuncio originale <Icon name="external" size={11} />
               </a>
             </div>
           </SectionBody>
