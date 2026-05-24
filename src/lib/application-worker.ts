@@ -41,7 +41,10 @@ import { resolveFinalUrl } from "@/lib/resolve-job-url";
  * gated da `AUTO_APPLY_ENABLED=true`.
  */
 
-export async function processApplication(applicationId: string): Promise<void> {
+export async function processApplication(
+  applicationId: string,
+  opts?: { forceRealSubmit?: boolean },
+): Promise<void> {
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -333,6 +336,7 @@ export async function processApplication(applicationId: string): Promise<void> {
         userId: app.userId,
         userEmail: app.user.email,
         answers: userAnswers,
+        forceRealSubmit: opts?.forceRealSubmit === true,
       }).catch((err) => {
         console.error(
           `[worker] ${applicationId} adapter ${adapter.id} attempt ${attempt} threw`,
@@ -1270,6 +1274,10 @@ interface AdapterSubmitInput {
   userId: string;
   userEmail: string;
   answers?: import("@/lib/application-answers").ApplicationAnswers;
+  /** Override chirurgico: forza l'invio REALE anche se PORTAL_SUBMIT_DRY_RUN=true.
+   *  Usato dal test admin per un singolo invio confermato, senza toccare il
+   *  flag globale (che farebbe partire il backlog dal worker locale). */
+  forceRealSubmit?: boolean;
 }
 
 async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
@@ -1318,7 +1326,9 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       clLocalPath,
       coverLetterText: input.coverLetterText,
       jobUrl,
-      dryRun: process.env.PORTAL_SUBMIT_DRY_RUN === "true",
+      dryRun: input.forceRealSubmit
+        ? false
+        : process.env.PORTAL_SUBMIT_DRY_RUN === "true",
       answers: input.answers,
       applicationId: input.applicationId, // per naming canary assets
     });

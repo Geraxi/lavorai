@@ -30,18 +30,29 @@ interface TestApplyResult {
  */
 export function AdminTestApply() {
   const [appId, setAppId] = useState("");
+  const [realSubmit, setRealSubmit] = useState(false);
   const [loading, setLoading] = useState(false);
   const [res, setRes] = useState<TestApplyResult | null>(null);
 
   async function run() {
     if (loading) return;
+    if (
+      realSubmit &&
+      !confirm(
+        "INVIO REALE: questa candidatura verrà inviata DAVVERO all'azienda. Continuare?",
+      )
+    )
+      return;
     setLoading(true);
     setRes(null);
     try {
       const r = await fetch("/api/admin/test-apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ applicationId: appId.trim() || undefined }),
+        body: JSON.stringify({
+          applicationId: appId.trim() || undefined,
+          realSubmit,
+        }),
       });
       setRes((await r.json()) as TestApplyResult);
     } catch {
@@ -99,16 +110,40 @@ export function AdminTestApply() {
             padding: "9px 18px",
             borderRadius: 10,
             border: "none",
-            background: "hsl(var(--primary))",
-            color: "#001a0d",
+            background: realSubmit ? "#dc2626" : "hsl(var(--primary))",
+            color: realSubmit ? "#fff" : "#001a0d",
             fontSize: 13.5,
             fontWeight: 700,
             cursor: "pointer",
           }}
         >
-          {loading ? "Eseguo (~30-60s)…" : "Esegui test candidatura"}
+          {loading
+            ? "Eseguo (~30-60s)…"
+            : realSubmit
+              ? "Esegui INVIO REALE"
+              : "Esegui test (dry-run)"}
         </button>
       </div>
+
+      <label
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 7,
+          fontSize: 12.5,
+          color: realSubmit ? "#fca5a5" : "var(--fg-muted)",
+          marginBottom: 12,
+          cursor: "pointer",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={realSubmit}
+          onChange={(e) => setRealSubmit(e.target.checked)}
+        />
+        Invio REALE (toglie il dry-run solo per questa candidatura — la manda
+        davvero all&apos;azienda)
+      </label>
 
       {res && (
         <div

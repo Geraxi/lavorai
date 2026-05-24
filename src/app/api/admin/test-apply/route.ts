@@ -27,14 +27,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  let body: { applicationId?: string } = {};
+  let body: { applicationId?: string; realSubmit?: boolean } = {};
   try {
     body = await request.json();
   } catch {
     // body opzionale
   }
 
-  const dryRun = process.env.PORTAL_SUBMIT_DRY_RUN === "true";
+  // Invio reale SOLO se richiesto esplicitamente: override chirurgico del
+  // dry-run per questa singola candidatura (non tocca il flag globale).
+  const forceRealSubmit = body.realSubmit === true;
+  const dryRun = forceRealSubmit
+    ? false
+    : process.env.PORTAL_SUBMIT_DRY_RUN === "true";
   const portalEnabled = process.env.PORTAL_SUBMIT_ENABLED === "true";
 
   // Trova la candidatura da testare.
@@ -73,7 +78,7 @@ export async function POST(request: NextRequest) {
   const t0 = Date.now();
   let runError: string | null = null;
   try {
-    await processApplication(appId);
+    await processApplication(appId, { forceRealSubmit });
   } catch (err) {
     runError = err instanceof Error ? err.message : String(err);
   }
