@@ -205,7 +205,21 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
       const style = window.getComputedStyle(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
       if (el.value && el.value.trim() !== "") continue; // già pieno
+      // Salta gli input INTERNI ai widget react-select / combobox: sono
+      // gestiti dal widget (li compiliamo via il container), non sono vere
+      // domande. Erano la causa dei "campi fantasma" senza label.
+      if (
+        el.closest(
+          "[class*='select__'], [class*='-control'], [role='combobox']",
+        ) ||
+        el.getAttribute("role") === "combobox" ||
+        el.getAttribute("aria-autocomplete") === "list"
+      )
+        continue;
       const label = labelFor(el);
+      // Niente label leggibile = non possiamo né chiederla all'utente né
+      // saperne il senso → salta (evita domande vuote che bloccano tutto).
+      if (label.replace(/[^a-z0-9]/gi, "").length < 3) continue;
       if (!isRequired(el, label)) continue;
       el.setAttribute(tag, String(idx));
       out.push({ idx, label, kind: el.tagName === "TEXTAREA" ? "textarea" : "text" });

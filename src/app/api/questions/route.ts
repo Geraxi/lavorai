@@ -84,9 +84,14 @@ export async function POST(request: NextRequest) {
   let requeued = 0;
   for (const app of waiting) {
     const qs = safeParse(app.pendingQuestionsJson ?? "[]") as Array<{ label: string }>;
+    // Ignora le domande senza label leggibile (campi interni react-select):
+    // non sono rispondibili dall'utente e non devono bloccare il re-queue.
+    const realQs = Array.isArray(qs)
+      ? qs.filter((q) => normalizeLabel(q.label ?? "").length >= 3)
+      : [];
     const allAnswered =
-      Array.isArray(qs) &&
-      qs.every((q) => answeredKeys.has(normalizeLabel(q.label)));
+      realQs.length > 0 &&
+      realQs.every((q) => answeredKeys.has(normalizeLabel(q.label)));
     if (!allAnswered) continue;
     await prisma.application.update({
       where: { id: app.id },
