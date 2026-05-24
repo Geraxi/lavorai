@@ -475,9 +475,15 @@ export async function processApplication(
           status: "needs_answers",
           pendingQuestionsJson: JSON.stringify(questions),
           errorMessage: `${questions.length} domande del form richiedono la tua risposta. Rispondi e ricandidiamo automaticamente.`,
-          ...("canary" in outcome && outcome.canary
-            ? { canaryLog: JSON.stringify(outcome.canary) }
-            : {}),
+          canaryLog:
+            "canary" in outcome && outcome.canary
+              ? JSON.stringify(outcome.canary)
+              : JSON.stringify({
+                  needsUserInput: true,
+                  aiDebug: "debug" in outcome ? outcome.debug : undefined,
+                  questions: questions.map((q) => q.label),
+                  at: new Date().toISOString(),
+                }),
         },
       });
       await notifyNeedsAnswers(applicationId).catch((err) =>

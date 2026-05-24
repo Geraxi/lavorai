@@ -108,6 +108,8 @@ export type ApplyOutcome =
       status: "needs_user_input";
       error: string;
       pendingQuestions: PendingQuestion[];
+      /** Diagnostica: cosa ha fatto l'AI-answer (per capire i fallimenti prod). */
+      debug?: string;
       canary?: CanaryLog;
     };
 

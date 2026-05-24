@@ -348,6 +348,7 @@ export const greenhouseAdapter: PortalAdapter = {
       // domande custom obbligatorie restano incompleti → validazione client
       // blocca il submit (causa storica dei 0/126 DETECTED).
       let pendingQuestions: import("./types").PendingQuestion[] = [];
+      let aiDebug = "";
       try {
         const { answerRequiredFields } = await import("./ai-answer");
         const p = input.profile;
@@ -381,10 +382,10 @@ export const greenhouseAdapter: PortalAdapter = {
           storedAnswers: input.storedAnswers,
         });
         pendingQuestions = ai.unanswered;
-        console.log(
-          `[greenhouse] ai-answer: ${ai.answered} compilati, ${ai.remainingRequired} required ancora vuoti (${ai.details.slice(0, 5).join(" | ")})`,
-        );
+        aiDebug = `answered=${ai.answered} remaining=${ai.remainingRequired} | ${ai.details.join(" ; ")}`;
+        console.log(`[greenhouse] ai-answer: ${aiDebug}`);
       } catch (err) {
+        aiDebug = "ai-answer THREW: " + (err instanceof Error ? err.message : String(err));
         console.warn("[greenhouse] ai-answer failed", err);
       }
 
@@ -397,6 +398,7 @@ export const greenhouseAdapter: PortalAdapter = {
           status: "needs_user_input",
           error: `${pendingQuestions.length} domande obbligatorie richiedono la tua risposta prima dell'invio.`,
           pendingQuestions,
+          debug: aiDebug,
         };
       }
 
