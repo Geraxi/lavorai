@@ -492,6 +492,29 @@ export async function processApplication(
       return; // in attesa delle risposte utente
     }
 
+    // Captcha: il form è pronto ma c'è un reCAPTCHA che blocca l'invio
+    // automatico (per design). Niente fallback email fuorviante: diciamo
+    // all'utente di completarlo a mano (CV pronto). Onesto.
+    if (outcome.status === "captcha") {
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: {
+          status: "ready_to_apply",
+          submitConfirmation: "CAPTCHA",
+          errorMessage:
+            "Questo annuncio ha un captcha che impedisce l'invio automatico. CV e risposte sono pronti — apri il link e completa captcha + invio (1 minuto).",
+          canaryLog:
+            "canary" in outcome && outcome.canary
+              ? JSON.stringify(outcome.canary)
+              : JSON.stringify({ captcha: true, at: new Date().toISOString() }),
+        },
+      });
+      await notifyApplicationManual(applicationId).catch((err) =>
+        console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
+      );
+      return; // l'utente completa a mano
+    }
+
     // se l'adapter non ci è riuscito (form cambiato / captcha / …) proseguiamo
     // al fallback email. Logghiamo l'errore sull'Application per debugging.
     console.warn(

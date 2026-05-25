@@ -420,6 +420,31 @@ export const greenhouseAdapter: PortalAdapter = {
         console.warn("[greenhouse] ai-answer failed", err);
       }
 
+      // reCAPTCHA: alcuni form (es. Monzo) hanno un captcha che blocca il
+      // submit automatico — PER DESIGN, non è aggirabile (né dovrebbe esserlo).
+      // Lo rileviamo: se presente e non risolto, NON fingiamo. Lo segnaliamo
+      // così il worker dice all'utente "tutto pronto, completa tu captcha+invio".
+      const hasCaptcha = await page
+        .evaluate(() => {
+          const resp = document.querySelector(
+            'textarea[name="g-recaptcha-response"], #g-recaptcha-response',
+          ) as HTMLTextAreaElement | null;
+          const widget = document.querySelector(
+            '.g-recaptcha, .grecaptcha-badge, iframe[src*="recaptcha"], [class*="hcaptcha"], iframe[src*="hcaptcha"]',
+          );
+          // captcha presente E non risolto (response vuota)
+          return !!widget && (!resp || !resp.value.trim());
+        })
+        .catch(() => false);
+      if (hasCaptcha) {
+        return {
+          ok: false,
+          status: "captcha",
+          error:
+            "Il form ha un reCAPTCHA che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.",
+        };
+      }
+
       // Se restano campi OBBLIGATORI senza risposta, NON inviamo un form
       // incompleto (verrebbe bloccato). Chiediamo all'utente: il worker
       // mette la candidatura in "needs_answers" e raccoglie le risposte.
