@@ -60,15 +60,16 @@ export default async function SettingsPage() {
           >
             Impostazioni
           </h1>
-          <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4 }}>
-            Account, piano, preferenze.
-          </p>
         </div>
 
         <div className="flex flex-col" style={{ gap: 16 }}>
-          {/* Account */}
+          {/* Account (con tema) */}
           <SectionCard>
-            <SectionHead icon={<Icon name="user" size={14} />} title="Account" />
+            <SectionHead
+              icon={<Icon name="user" size={14} />}
+              title="Account"
+              actions={<ThemeToggle />}
+            />
             <SectionBody>
               <div
                 style={{
@@ -84,16 +85,6 @@ export default async function SettingsPage() {
                     defaultValue={user.email}
                     readOnly
                   />
-                  <p
-                    style={{
-                      fontSize: 11,
-                      color: "var(--fg-muted)",
-                      marginTop: 6,
-                    }}
-                  >
-                    L&apos;email è l&apos;identificatore del tuo account — non
-                    modificabile.
-                  </p>
                 </div>
                 <div>
                   <label className="ds-label">Nome</label>
@@ -107,7 +98,7 @@ export default async function SettingsPage() {
             </SectionBody>
           </SectionCard>
 
-          {/* Subscription */}
+          {/* Piano */}
           <SectionCard>
             <SectionHead
               icon={<Icon name="zap" size={14} />}
@@ -156,124 +147,45 @@ export default async function SettingsPage() {
                   hasStripe={!!user.stripeSubscriptionId}
                 />
               </div>
-
-              <div
-                style={{
-                  marginTop: 20,
-                  padding: 16,
-                  borderRadius: "var(--radius)",
-                  background: "var(--bg-sunken)",
-                  fontSize: 12.5,
-                }}
-              >
-                <div
-                  style={{
-                    fontWeight: 500,
-                    marginBottom: 8,
-                    color: "var(--fg)",
-                  }}
-                >
-                  Cosa include il tuo piano
-                </div>
-                <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-                  {cfg.features.map((f) => (
-                    <li key={f} style={{ color: "var(--fg-muted)" }}>
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </SectionBody>
           </SectionCard>
 
-          {/* Appearance */}
-          <SectionCard>
-            <SectionHead
-              icon={<Icon name="sun" size={14} />}
-              title="Aspetto"
-              actions={<ThemeToggle />}
-            />
-            <SectionBody>
-              <p style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-                Tema chiaro (default) o scuro. La scelta è salvata nel browser.
-              </p>
-            </SectionBody>
-          </SectionCard>
-
-          {/* Notifications */}
-          <SectionCard>
-            <SectionHead
-              icon={<Icon name="bell" size={14} />}
-              title="Notifiche"
-            />
-            <SectionBody>
-              <div className="flex flex-col" style={{ gap: 10, fontSize: 13 }}>
-                <ToggleRow
-                  label="Recruiter risponde"
-                  desc="Email quando un recruiter apre o risponde alla tua candidatura"
-                  on
-                />
-                <ToggleRow
-                  label="Nuovi annunci compatibili"
-                  desc="Digest settimanale dei job che matchano >85%"
-                  on
-                />
-                <ToggleRow
-                  label="Report mensile"
-                  desc="Analytics e insight sulle tue candidature"
-                  on={false}
-                />
-              </div>
-            </SectionBody>
-          </SectionCard>
-
-          {/* Danger zone */}
+          {/* Dati & account */}
           <SectionCard>
             <SectionHead
               icon={<Icon name="download" size={14} />}
-              title="I tuoi dati (GDPR)"
+              title="Dati & account"
             />
             <SectionBody>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div style={{ fontWeight: 500 }}>Esporta i tuoi dati</div>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "var(--fg-muted)",
-                      marginTop: 4,
-                    }}
-                  >
-                    Scarica un file JSON con tutte le informazioni che abbiamo
-                    su di te (profilo, CV, candidature, preferenze).
-                  </p>
+              <div className="flex flex-col" style={{ gap: 14 }}>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <div style={{ fontWeight: 500, fontSize: 13.5 }}>
+                      Esporta i tuoi dati (GDPR)
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
+                      JSON con profilo, CV, candidature e preferenze.
+                    </p>
+                  </div>
+                  <GdprExportButton />
                 </div>
-                <GdprExportButton />
-              </div>
-            </SectionBody>
-          </SectionCard>
-
-          <SectionCard>
-            <SectionHead
-              icon={<Icon name="x" size={14} />}
-              title="Zona pericolosa"
-            />
-            <SectionBody>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <div style={{ fontWeight: 500 }}>Cancella account</div>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "var(--fg-muted)",
-                      marginTop: 4,
-                    }}
-                  >
-                    Rimuove tutti i dati (CV, candidature, sessioni portali).
-                    Irreversibile.
-                  </p>
+                <div
+                  style={{
+                    borderTop: "1px solid var(--border-ds)",
+                    paddingTop: 14,
+                  }}
+                  className="flex items-center justify-between gap-4"
+                >
+                  <div>
+                    <div style={{ fontWeight: 500, fontSize: 13.5 }}>
+                      Cancella account
+                    </div>
+                    <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
+                      Rimuove tutti i dati. Irreversibile.
+                    </p>
+                  </div>
+                  <DeleteAccountButton hasPassword={hasPassword} />
                 </div>
-                <DeleteAccountButton hasPassword={hasPassword} />
               </div>
             </SectionBody>
           </SectionCard>
@@ -283,34 +195,3 @@ export default async function SettingsPage() {
   );
 }
 
-function ToggleRow({
-  label,
-  desc,
-  on,
-}: {
-  label: string;
-  desc: string;
-  on: boolean;
-}) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <div>
-        <div style={{ fontWeight: 500 }}>{label}</div>
-        <p
-          style={{
-            fontSize: 11.5,
-            color: "var(--fg-muted)",
-            marginTop: 2,
-          }}
-        >
-          {desc}
-        </p>
-      </div>
-      <button
-        type="button"
-        className={`ds-toggle${on ? " on" : ""}`}
-        aria-label={label}
-      />
-    </div>
-  );
-}

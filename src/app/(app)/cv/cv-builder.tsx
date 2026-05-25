@@ -17,7 +17,7 @@ import type {
   Skill,
 } from "@/lib/cv-profile-types";
 
-type TabKey = "personal" | "summary" | "experience" | "education" | "skills" | "languages" | "links";
+type TabKey = "personal" | "summary" | "experience" | "education" | "skills" | "extra";
 
 const TABS: { key: TabKey; label: string; icon: Parameters<typeof Icon>[0]["name"] }[] = [
   { key: "personal", label: "Personali", icon: "user" },
@@ -25,8 +25,7 @@ const TABS: { key: TabKey; label: string; icon: Parameters<typeof Icon>[0]["name
   { key: "experience", label: "Esperienza", icon: "briefcase" },
   { key: "education", label: "Istruzione", icon: "file" },
   { key: "skills", label: "Competenze", icon: "target" },
-  { key: "languages", label: "Lingue", icon: "globe" },
-  { key: "links", label: "Link", icon: "external" },
+  { key: "extra", label: "Lingue & Link", icon: "globe" },
 ];
 
 function emptyExp(): Experience {
@@ -102,11 +101,10 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.022em", margin: 0 }}>
-            CV Builder
+            Il tuo CV
           </h1>
           <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginTop: 4, maxWidth: 560 }}>
-            Questo è il tuo profilo reale. LavorAI lo adatta al singolo annuncio —
-            senza mai inventare esperienze o skill che non hai.
+            Il tuo profilo reale — LavorAI lo adatta a ogni annuncio.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -226,8 +224,12 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
         />
       )}
       {tab === "skills" && <SkillsSection profile={profile} update={update} />}
-      {tab === "languages" && <LanguagesSection profile={profile} update={update} />}
-      {tab === "links" && <LinksSection profile={profile} update={update} />}
+      {tab === "extra" && (
+        <div className="flex flex-col" style={{ gap: 16 }}>
+          <LanguagesSection profile={profile} update={update} />
+          <LinksSection profile={profile} update={update} />
+        </div>
+      )}
     </>
   );
 }
