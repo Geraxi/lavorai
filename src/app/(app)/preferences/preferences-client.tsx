@@ -311,154 +311,134 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
 
           {/* ---------------- COSA CERCHI ---------------- */}
           {activeTab === "search" && (
-            <>
-              <SectionCard>
-                <SectionHead
-                  icon={<Icon name="briefcase" size={14} />}
-                  title={`Ruoli (${roles.length})`}
+            <SectionCard>
+              <SectionBody flush={false}>
+                {/* Ruoli */}
+                <label className="ds-label">Ruoli ({roles.length})</label>
+                <ChipEditor
+                  items={roles}
+                  onRemove={(r) => removeChip(setRoles, r)}
+                  input={roleInput}
+                  setInput={setRoleInput}
+                  onAdd={() => addChip(setRoles, roleInput, () => setRoleInput(""))}
+                  placeholder="+ Ruolo, Invio"
                 />
-                <SectionBody>
-                  <ChipEditor
-                    items={roles}
-                    onRemove={(r) => removeChip(setRoles, r)}
-                    input={roleInput}
-                    setInput={setRoleInput}
-                    onAdd={() => addChip(setRoles, roleInput, () => setRoleInput(""))}
-                    placeholder="+ Ruolo, Invio"
-                  />
-                </SectionBody>
-              </SectionCard>
 
-              <SectionCard>
-                <SectionHead
-                  icon={<Icon name="map-pin" size={14} />}
-                  title="Sedi & modalità"
+                {/* Dove & come */}
+                <label className="ds-label" style={{ marginTop: 22 }}>
+                  Dove & come
+                </label>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gap: 8,
+                    marginBottom: 12,
+                  }}
+                >
+                  {(["remoto", "ibrido", "sede"] as const).map((m) => (
+                    <button
+                      type="button"
+                      key={m}
+                      onClick={() => {
+                        setModeSel((s) => ({ ...s, [m]: !s[m] }));
+                        mark();
+                      }}
+                      className={`ds-pref-card${modeSel[m] ? " selected" : ""}`}
+                      style={{ textAlign: "center", cursor: "pointer", padding: "9px 12px", textTransform: "capitalize", fontSize: 13, fontWeight: 500 }}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+                <ChipEditor
+                  items={locations}
+                  onRemove={(l) => removeChip(setLocations, l)}
+                  input={locInput}
+                  setInput={setLocInput}
+                  onAdd={() => addChip(setLocations, locInput, () => setLocInput(""))}
+                  placeholder="+ Città, Invio"
                 />
-                <SectionBody>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(3, 1fr)",
-                      gap: 8,
-                      marginBottom: 14,
-                    }}
-                  >
-                    {(["remoto", "ibrido", "sede"] as const).map((m) => (
-                      <button
-                        type="button"
-                        key={m}
-                        onClick={() => {
-                          setModeSel((s) => ({ ...s, [m]: !s[m] }));
-                          mark();
-                        }}
-                        className={`ds-pref-card${modeSel[m] ? " selected" : ""}`}
-                        style={{ textAlign: "center", cursor: "pointer", padding: "9px 12px", textTransform: "capitalize", fontSize: 13, fontWeight: 500 }}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                  <ChipEditor
-                    items={locations}
-                    onRemove={(l) => removeChip(setLocations, l)}
-                    input={locInput}
-                    setInput={setLocInput}
-                    onAdd={() => addChip(setLocations, locInput, () => setLocInput(""))}
-                    placeholder="+ Città, Invio"
-                  />
-                </SectionBody>
-              </SectionCard>
 
-              <SectionCard>
-                <SectionHead icon={<Icon name="euro" size={14} />} title="Compenso & contratto" />
-                <SectionBody>
-                  <label className="ds-label">
-                    RAL minima ·{" "}
-                    <span className="mono" style={{ color: "var(--fg)" }}>€{salary}k</span>
-                  </label>
-                  <input
-                    type="range"
-                    min="20"
-                    max="150"
-                    value={salary}
-                    onChange={(e) => {
-                      setSalary(Number(e.target.value));
-                      mark();
-                    }}
-                    style={{ width: "100%" }}
-                  />
-                  <div className="mono flex justify-between" style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 4, marginBottom: 18 }}>
-                    <span>€20k</span>
-                    <span>€80k</span>
-                    <span>€150k+</span>
-                  </div>
+                {/* RAL */}
+                <label className="ds-label" style={{ marginTop: 22 }}>
+                  RAL minima ·{" "}
+                  <span className="mono" style={{ color: "var(--fg)" }}>€{salary}k</span>
+                </label>
+                <input
+                  type="range"
+                  min="20"
+                  max="150"
+                  value={salary}
+                  onChange={(e) => {
+                    setSalary(Number(e.target.value));
+                    mark();
+                  }}
+                  style={{ width: "100%" }}
+                />
 
-                  <label className="ds-label">Tipologia</label>
-                  <div className="ds-toggle-group" style={{ display: "flex", width: "100%" }}>
-                    {[
-                      { v: "employee", label: "Dipendente" },
-                      { v: "piva", label: "P.IVA" },
-                      { v: "both", label: "Entrambi" },
-                    ].map((o) => (
-                      <button
-                        key={o.v}
-                        type="button"
-                        className={employmentType === o.v ? "active" : undefined}
-                        style={{ flex: 1 }}
-                        onClick={() => {
-                          setEmploymentType(o.v as typeof employmentType);
-                          mark();
-                        }}
-                      >
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {(employmentType === "piva" || employmentType === "both") && (
-                    <div
-                      style={{
-                        marginTop: 16,
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: 12,
+                {/* Tipologia */}
+                <label className="ds-label" style={{ marginTop: 18 }}>Tipologia</label>
+                <div className="ds-toggle-group" style={{ display: "flex", width: "100%" }}>
+                  {[
+                    { v: "employee", label: "Dipendente" },
+                    { v: "piva", label: "P.IVA" },
+                    { v: "both", label: "Entrambi" },
+                  ].map((o) => (
+                    <button
+                      key={o.v}
+                      type="button"
+                      className={employmentType === o.v ? "active" : undefined}
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        setEmploymentType(o.v as typeof employmentType);
+                        mark();
                       }}
                     >
-                      <div>
-                        <label className="ds-label">Tariffa/giorno (€)</label>
-                        <input type="number" min="0" max="5000" step="50" placeholder="450" value={dailyRate} onChange={(e) => { setDailyRate(e.target.value); mark(); }} className="ds-input" />
-                      </div>
-                      <div>
-                        <label className="ds-label">Disponibile dal</label>
-                        <input type="text" placeholder="immediata" value={availableFrom} onChange={(e) => { setAvailableFrom(e.target.value); mark(); }} className="ds-input" maxLength={60} />
-                      </div>
-                      <div>
-                        <label className="ds-label">Partita IVA</label>
-                        <input type="text" placeholder="IT123…" value={vatNumber} onChange={(e) => { setVatNumber(e.target.value); mark(); }} className="ds-input" maxLength={30} />
-                      </div>
-                      <div>
-                        <label className="ds-label">Portfolio URL</label>
-                        <input type="url" placeholder="https://…" value={portfolioUrl} onChange={(e) => { setPortfolioUrl(e.target.value); mark(); }} className="ds-input" maxLength={300} />
-                      </div>
-                    </div>
-                  )}
-                </SectionBody>
-              </SectionCard>
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
 
-              <SectionCard>
-                <SectionHead icon={<Icon name="x" size={14} />} title={`Aziende escluse (${excluded.length})`} />
-                <SectionBody>
-                  <ChipEditor
-                    items={excluded}
-                    onRemove={(c) => removeChip(setExcluded, c)}
-                    input={excludeInput}
-                    setInput={setExcludeInput}
-                    onAdd={() => addChip(setExcluded, excludeInput, () => setExcludeInput(""))}
-                    placeholder="+ Azienda, Invio"
-                  />
-                </SectionBody>
-              </SectionCard>
-            </>
+                {(employmentType === "piva" || employmentType === "both") && (
+                  <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                    <div>
+                      <label className="ds-label">Tariffa/giorno (€)</label>
+                      <input type="number" min="0" max="5000" step="50" placeholder="450" value={dailyRate} onChange={(e) => { setDailyRate(e.target.value); mark(); }} className="ds-input" />
+                    </div>
+                    <div>
+                      <label className="ds-label">Disponibile dal</label>
+                      <input type="text" placeholder="immediata" value={availableFrom} onChange={(e) => { setAvailableFrom(e.target.value); mark(); }} className="ds-input" maxLength={60} />
+                    </div>
+                    <div>
+                      <label className="ds-label">Partita IVA</label>
+                      <input type="text" placeholder="IT123…" value={vatNumber} onChange={(e) => { setVatNumber(e.target.value); mark(); }} className="ds-input" maxLength={30} />
+                    </div>
+                    <div>
+                      <label className="ds-label">Portfolio URL</label>
+                      <input type="url" placeholder="https://…" value={portfolioUrl} onChange={(e) => { setPortfolioUrl(e.target.value); mark(); }} className="ds-input" maxLength={300} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Aziende escluse — accordion (uso raro) */}
+                <details style={{ marginTop: 20, borderTop: "1px solid var(--border-ds)", paddingTop: 14 }}>
+                  <summary style={{ cursor: "pointer", fontSize: 12.5, color: "var(--fg-muted)" }}>
+                    Aziende da escludere ({excluded.length})
+                  </summary>
+                  <div style={{ marginTop: 12 }}>
+                    <ChipEditor
+                      items={excluded}
+                      onRemove={(c) => removeChip(setExcluded, c)}
+                      input={excludeInput}
+                      setInput={setExcludeInput}
+                      onAdd={() => addChip(setExcluded, excludeInput, () => setExcludeInput(""))}
+                      placeholder="+ Azienda, Invio"
+                    />
+                  </div>
+                </details>
+              </SectionBody>
+            </SectionCard>
           )}
 
           {/* ---------------- FORM RISPOSTE ---------------- */}
