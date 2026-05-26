@@ -493,6 +493,38 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                     <label className="ds-label">Portfolio / sito</label>
                     <input type="url" className="ds-input" placeholder="https://…" value={answers.portfolioUrl ?? ""} onChange={(e) => setAnswer("portfolioUrl", e.target.value || undefined)} maxLength={300} />
                   </div>
+                  <div>
+                    <label className="ds-label">Anni di esperienza</label>
+                    <input type="number" min="0" max="60" className="ds-input" placeholder="6" value={answers.yearsExperience ?? ""} onChange={(e) => setAnswer("yearsExperience", e.target.value ? Math.max(0, parseInt(e.target.value, 10) || 0) : undefined)} />
+                  </div>
+                  <div>
+                    <label className="ds-label">Livello di inglese</label>
+                    <select className="ds-input" value={answers.englishLevel ?? ""} onChange={(e) => setAnswer("englishLevel", (e.target.value || undefined) as typeof answers.englishLevel | undefined)}>
+                      <option value="">—</option>
+                      <option value="A1">A1</option>
+                      <option value="A2">A2</option>
+                      <option value="B1">B1</option>
+                      <option value="B2">B2</option>
+                      <option value="C1">C1</option>
+                      <option value="C2">C2</option>
+                      <option value="Native">Madrelingua</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="ds-label">Lingue parlate</label>
+                    <input type="text" className="ds-input" placeholder="Italiano (madrelingua), Inglese C1" value={answers.languagesText ?? ""} onChange={(e) => setAnswer("languagesText", e.target.value || undefined)} maxLength={200} />
+                  </div>
+                  <div>
+                    <label className="ds-label">Titolo di studio</label>
+                    <select className="ds-input" value={answers.highestEducation ?? ""} onChange={(e) => setAnswer("highestEducation", (e.target.value || undefined) as typeof answers.highestEducation | undefined)}>
+                      <option value="">—</option>
+                      <option value="high_school">Diploma</option>
+                      <option value="bachelor">Laurea triennale</option>
+                      <option value="master">Laurea magistrale / Master</option>
+                      <option value="phd">PhD</option>
+                      <option value="other">Altro</option>
+                    </select>
+                  </div>
                 </div>
 
                 <details style={{ borderTop: "1px solid var(--border-ds)", paddingTop: 14, marginTop: 16 }}>

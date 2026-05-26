@@ -43,6 +43,16 @@ export interface ApplicationAnswers {
   /** Pronomi, se l'utente vuole condividerli (campo opzionale comune). */
   pronouns?: string;
 
+  // ---------- Esperienza / lingue (campi PREDITTIVI: tantissimi form chiedono) ----------
+  /** Anni di esperienza professionale totali (es. 6). */
+  yearsExperience?: number;
+  /** Livello di inglese (Common European Framework). */
+  englishLevel?: "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "Native";
+  /** Lingue parlate (testo libero, es. "Italiano (madrelingua), Inglese C1"). */
+  languagesText?: string;
+  /** Titolo di studio più alto. */
+  highestEducation?: "high_school" | "bachelor" | "master" | "phd" | "other";
+
   // ---------- Domande aperte ----------
   /** "linkedin" | "google" | "referral" | "other" */
   howHeard?: "linkedin" | "google" | "referral" | "other";
@@ -172,6 +182,27 @@ export const FIELD_HINTS: Record<keyof ApplicationAnswers, string[]> = {
   city: ["city", "town", "città", "city of residence", "current city"],
   country: ["country", "paese", "nazione", "country of residence"],
   pronouns: ["pronoun", "pronouns", "pronomi"],
+  yearsExperience: [
+    "years of experience",
+    "how many years",
+    "anni di esperienza",
+    "professional experience",
+  ],
+  englishLevel: [
+    "english proficiency",
+    "english level",
+    "level of english",
+    "livello di inglese",
+    "english fluency",
+  ],
+  languagesText: ["languages", "languages spoken", "lingue", "languages you speak"],
+  highestEducation: [
+    "highest education",
+    "education level",
+    "titolo di studio",
+    "level of education",
+    "degree",
+  ],
   howHeard: [
     "how did you hear",
     "where did you hear",

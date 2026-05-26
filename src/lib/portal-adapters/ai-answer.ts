@@ -30,6 +30,16 @@ export interface CandidateContext {
   workAuth?: string | null;
   /** Aspettativa RAL annua in euro (per "desired salary" ecc.). */
   salaryExpectationEur?: number | null;
+  /** Anni di esperienza professionale totali. */
+  yearsExperience?: number | null;
+  /** Livello di inglese: "A1"|"A2"|"B1"|"B2"|"C1"|"C2"|"Native" */
+  englishLevel?: string | null;
+  /** Lingue parlate (es. [{name:"Italiano",level:"Madrelingua"}]). */
+  languages?: Array<{ name: string; level?: string }>;
+  /** Notice period / disponibilità (es. "2 weeks", "Immediate"). */
+  noticePeriod?: string | null;
+  /** Titolo di studio più alto (es. "Bachelor", "Master"). */
+  highestEducation?: string | null;
   /** Estratto del CV (testo) per rispondere a domande tipo "hai esperienza con X?". */
   cvText?: string | null;
   jobTitle?: string | null;
@@ -186,6 +196,19 @@ function profileValueForLabel(label: string, ctx: CandidateContext): string | nu
   if (/phone|telefono|mobile|cellulare/.test(l)) return ctx.phone ?? null;
   if (/linkedin/.test(l)) return ctx.linkedinUrl ?? null;
   if (/portfolio|website|personal site|sito/.test(l)) return ctx.portfolioUrl ?? null;
+  if (/years?\s+of\s+(.+\s+)?experience|how many years|anni di esperienza/.test(l))
+    return ctx.yearsExperience != null ? String(ctx.yearsExperience) : null;
+  if (/english.+(level|proficiency)|level of english|livello di inglese|inglese livello/.test(l))
+    return ctx.englishLevel ?? null;
+  if (/\blanguages?\b|\blingue?\b/.test(l) && !/programming|coding|programmazione/.test(l))
+    return (ctx.languages ?? [])
+      .map((x) => (x.level ? `${x.name} (${x.level})` : x.name))
+      .filter(Boolean)
+      .join(", ") || null;
+  if (/notice period|preavviso|when can you start|earliest start/.test(l))
+    return ctx.noticePeriod ?? null;
+  if (/highest (level of )?education|titolo di studio|diploma|degree|laurea/.test(l))
+    return ctx.highestEducation ?? null;
   return null;
 }
 
@@ -485,6 +508,11 @@ async function askClaude(
     portfolio: ctx.portfolioUrl ?? null,
     workAuthorization: ctx.workAuth ?? null,
     desiredAnnualSalaryEur: ctx.salaryExpectationEur ?? null,
+    yearsOfExperience: ctx.yearsExperience ?? null,
+    englishLevel: ctx.englishLevel ?? null,
+    languages: ctx.languages ?? null,
+    noticePeriod: ctx.noticePeriod ?? null,
+    highestEducation: ctx.highestEducation ?? null,
   };
   const fieldList = fields.map((f) => ({
     idx: f.idx,

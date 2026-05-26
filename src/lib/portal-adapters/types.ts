@@ -39,6 +39,11 @@ export interface ApplyInput {
   /** Risposte riutilizzabili già date dall'utente a domande di form
    *  precedenti (da UserAnswer). label→answer, match per label normalizzata. */
   storedAnswers?: Array<{ label: string; answer: string; kind?: string }>;
+  /** Dati di profilo dell'utente per le risposte comuni nei form ATS. */
+  userYearsExperience?: number | null;
+  userEnglishLevel?: string | null;
+  userNoticePeriod?: string | null;
+  userHighestEducation?: string | null;
   /** Application ID — opzionale, usato solo per naming canary asset
    *  (es. screenshot Blob filename). Non strettamente necessario per
    *  l'apply normale. */

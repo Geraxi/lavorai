@@ -346,6 +346,9 @@ export async function processApplication(
         userEmail: app.user.email,
         answers: userAnswers,
         storedAnswers,
+        userYearsExperience: app.user.yearsExperience,
+        userEnglishLevel: app.user.englishLevel,
+        userNoticePeriod: app.user.noticePeriod,
         forceRealSubmit: opts?.forceRealSubmit === true,
       }).catch((err) => {
         console.error(
@@ -1426,6 +1429,9 @@ interface AdapterSubmitInput {
   userEmail: string;
   answers?: import("@/lib/application-answers").ApplicationAnswers;
   storedAnswers?: Array<{ label: string; answer: string; kind?: string }>;
+  userYearsExperience?: number | null;
+  userEnglishLevel?: string | null;
+  userNoticePeriod?: string | null;
   /** Override chirurgico: forza l'invio REALE anche se PORTAL_SUBMIT_DRY_RUN=true.
    *  Usato dal test admin per un singolo invio confermato, senza toccare il
    *  flag globale (che farebbe partire il backlog dal worker locale). */
@@ -1483,6 +1489,9 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
         : process.env.PORTAL_SUBMIT_DRY_RUN === "true",
       answers: input.answers,
       storedAnswers: input.storedAnswers,
+      userYearsExperience: input.userYearsExperience,
+      userEnglishLevel: input.userEnglishLevel,
+      userNoticePeriod: input.userNoticePeriod,
       applicationId: input.applicationId, // per naming canary assets
     });
     return outcome;
