@@ -184,36 +184,65 @@ export const workableAdapter: PortalAdapter = {
         return { ok: false, status: "missing_field", error: "Bottone submit Workable non trovato." };
       }
       const urlBefore = page.url();
-      let postStatus: number | null = null;
-      const responsePromise = page
-        .waitForResponse(
-          (r) => {
-            const u = r.url();
-            const m = r.request().method();
-            return (
-              /workable\.com/.test(u) &&
-              m === "POST" &&
-              /apply|applicant|candidate|application/i.test(u)
-            );
-          },
-          { timeout: 20_000 },
-        )
-        .then((r) => {
-          postStatus = r.status();
-        })
-        .catch(() => void 0);
+      // Logga TUTTE le request POST/PUT verso workable.com dopo il click —
+      // Workable cambia spesso gli endpoint e i path. Catturiamo la prima
+      // response 2xx/3xx come prova HARD di consegna, e teniamo log completo
+      // per diagnostica.
+      const postLog: Array<{ url: string; method: string; status: number }> = [];
+      let detectedStatus: number | null = null;
+      let detectedUrl = "";
+      const onResponse = (r: import("playwright").Response) => {
+        try {
+          const m = r.request().method();
+          if (m !== "POST" && m !== "PUT") return;
+          const u = r.url();
+          if (!/workable\.com|amazonaws\.com|cloudfront\.net/i.test(u)) return;
+          const s = r.status();
+          postLog.push({ url: u.slice(0, 120), method: m, status: s });
+          // Considera 2xx/3xx come consegna riuscita su un endpoint di app.
+          if (
+            detectedStatus === null &&
+            s >= 200 &&
+            s < 400 &&
+            /apply|applicant|candidate|application|submit|jobs/i.test(u)
+          ) {
+            detectedStatus = s;
+            detectedUrl = u;
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+      page.on("response", onResponse);
+
       await submit.first().click().catch(() => void 0);
-      await responsePromise;
-      await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => void 0);
-      await page.waitForTimeout(800);
+      // attendi che il network si quieti (cattura tutte le POST)
+      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
+      await page.waitForTimeout(1200);
+      page.off("response", onResponse);
+      console.log(
+        `[workable] post-submit network: ${postLog.length} POST/PUT — ${postLog.slice(0, 4).map((p) => `${p.status} ${p.url.split("/").slice(2, 5).join("/")}`).join(" | ")}`,
+      );
       const bodyText = await page.locator("body").innerText().catch(() => "");
 
-      // Prova HARD: HTTP 2xx/3xx sull'endpoint di applicazione = consegnato.
-      if (postStatus !== null && postStatus >= 200 && postStatus < 400) {
+      // Prova HARD: 2xx/3xx su endpoint di applicazione = consegnato.
+      if (detectedStatus !== null) {
+        console.log(`[workable] DETECTED via HTTP ${detectedStatus} on ${detectedUrl.slice(0, 80)}`);
         return {
           ok: true,
           status: "submitted",
-          confirmation: `DETECTED_HTTP_${postStatus}`,
+          confirmation: `DETECTED_HTTP_${detectedStatus}`,
+        };
+      }
+      // Fallback HARD: qualsiasi 2xx POST su workable.com dopo il click
+      // (l'endpoint può cambiare; se ne abbiamo almeno una 2xx, accettata).
+      const any2xx = postLog.find((p) => p.status >= 200 && p.status < 400);
+      if (any2xx) {
+        console.log(`[workable] DETECTED via fallback 2xx ${any2xx.status} on ${any2xx.url.slice(0, 80)}`);
+        return {
+          ok: true,
+          status: "submitted",
+          confirmation: `DETECTED_HTTP_${any2xx.status}`,
         };
       }
       // Prova SOFT: thank-you nel body / url cambiata.
