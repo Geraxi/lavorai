@@ -9,6 +9,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/termini`, lastModified: now, priority: 0.3 },
     { url: `${base}/contatti`, lastModified: now, priority: 0.3 },
     { url: `${base}/optimize`, lastModified: now, priority: 0.8 },
+    { url: `${base}/proof`, lastModified: now, priority: 0.9 },
     { url: `${base}/login`, lastModified: now, priority: 0.5 },
   ];
 }
