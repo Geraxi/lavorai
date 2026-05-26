@@ -60,13 +60,34 @@ export const workableAdapter: PortalAdapter = {
       await cvInput.first().setInputFiles(input.cvLocalPath).catch(() => void 0);
       const cvBase = input.cvLocalPath.split(/[\\/]/).pop() || "cv";
       let cvOk = false;
-      for (let i = 0; i < 10 && !cvOk; i++) {
+      for (let i = 0; i < 12 && !cvOk; i++) {
         await page.waitForTimeout(400);
-        cvOk = await page.evaluate((name) => {
-          try {
-            return (document.body.innerText || "").toLowerCase().includes(name.toLowerCase());
-          } catch { return false; }
-        }, cvBase).catch(() => false);
+        cvOk = await page
+          .evaluate((name) => {
+            try {
+              // 1. filename mostrato nel body
+              const body = (document.body.innerText || "").toLowerCase();
+              if (name && body.includes(name.toLowerCase())) return true;
+              // 2. indicatore testuale di upload riuscito (Workable mostra
+              //    "Resume Uploaded" / "uploaded" / "caricato")
+              if (/uploaded|attached|caricato|uploaded successfully/i.test(body))
+                return true;
+              // 3. file ancora in input.files (alcuni form non lo azzerano)
+              const files = document.querySelectorAll('input[type="file"]');
+              for (const f of Array.from(files)) {
+                if ((f as HTMLInputElement).files && (f as HTMLInputElement).files!.length > 0)
+                  return true;
+              }
+              // 4. indicatori UI generici
+              const ind = document.querySelector(
+                "[class*='uploaded'], [class*='attachment'], [class*='file-name'], [class*='filename']",
+              );
+              return !!(ind && (ind.textContent || "").trim());
+            } catch {
+              return false;
+            }
+          }, cvBase)
+          .catch(() => false);
       }
 
       // ----- Cover letter (opzionale) -----
