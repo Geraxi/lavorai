@@ -168,7 +168,10 @@ export const workableAdapter: PortalAdapter = {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
 
-      // ----- Submit + verifica HARD -----
+      // ----- Submit + cattura HTTP HARD -----
+      // Workable POSTa la candidatura a un endpoint api (applicants/candidate).
+      // Lo status HTTP 2xx/3xx = prova OGGETTIVA di consegna, indipendente
+      // dal testo della thank-you page (che varia per azienda/lingua).
       const submit = page.locator(
         'button[type="submit"], button:has-text("Submit"), button:has-text("Apply"), button:has-text("Invia"), button:has-text("Send")',
       );
@@ -176,15 +179,48 @@ export const workableAdapter: PortalAdapter = {
         return { ok: false, status: "missing_field", error: "Bottone submit Workable non trovato." };
       }
       const urlBefore = page.url();
+      let postStatus: number | null = null;
+      const responsePromise = page
+        .waitForResponse(
+          (r) => {
+            const u = r.url();
+            const m = r.request().method();
+            return (
+              /workable\.com/.test(u) &&
+              m === "POST" &&
+              /apply|applicant|candidate|application/i.test(u)
+            );
+          },
+          { timeout: 20_000 },
+        )
+        .then((r) => {
+          postStatus = r.status();
+        })
+        .catch(() => void 0);
       await submit.first().click().catch(() => void 0);
-      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
-      await page.waitForTimeout(1200);
+      await responsePromise;
+      await page.waitForLoadState("networkidle", { timeout: 12_000 }).catch(() => void 0);
+      await page.waitForTimeout(800);
       const bodyText = await page.locator("body").innerText().catch(() => "");
-      const confirmed =
+
+      // Prova HARD: HTTP 2xx/3xx sull'endpoint di applicazione = consegnato.
+      if (postStatus !== null && postStatus >= 200 && postStatus < 400) {
+        return {
+          ok: true,
+          status: "submitted",
+          confirmation: `DETECTED_HTTP_${postStatus}`,
+        };
+      }
+      // Prova SOFT: thank-you nel body / url cambiata.
+      const softConfirmed =
         /thank|applied|submitted|grazie|received|confirm|invi(at|o)|application has been/i.test(bodyText) ||
         /thank|confirm|success/i.test(page.url()) ||
         page.url() !== urlBefore;
-      return { ok: true, status: "submitted", confirmation: confirmed ? "DETECTED" : "UNCONFIRMED" };
+      return {
+        ok: true,
+        status: "submitted",
+        confirmation: softConfirmed ? "DETECTED" : "UNCONFIRMED",
+      };
     } catch (err) {
       return {
         ok: false,
