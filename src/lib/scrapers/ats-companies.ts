@@ -343,32 +343,21 @@ export const ASHBY_COMPANIES: AtsCompany[] = [
  * form realmente auto-inviabili. Da curare/espandere nel tempo.
  */
 export const WORKABLE_COMPANIES: AtsCompany[] = [
-  // Italia / EU PMI & scaleup
-  { slug: "soldo", name: "Soldo", country: "IT" },
-  { slug: "credimi", name: "Credimi", country: "IT" },
-  { slug: "fitprime", name: "Fitprime", country: "IT" },
-  { slug: "musixmatch", name: "Musixmatch", country: "IT" },
-  { slug: "tinaba", name: "Tinaba", country: "IT" },
-  { slug: "qomodo", name: "Qomodo", country: "IT" },
-  { slug: "fido", name: "Fido", country: "IT" },
-  { slug: "planet-smart-city", name: "Planet Smart City", country: "IT" },
-  { slug: "milkman", name: "Milkman", country: "IT" },
-  { slug: "deporvillage", name: "Deporvillage", country: "ES" },
-  { slug: "redcare-pharmacy", name: "Redcare Pharmacy", country: "DE" },
-  { slug: "shippypro", name: "ShippyPro", country: "IT" },
-  { slug: "indigo-ai", name: "Indigo.ai", country: "IT" },
-  { slug: "userbot", name: "Userbot", country: "IT" },
+  // Validati (account Workable reali, form captcha-free, con job aperti).
+  { slug: "speexx", name: "Speexx", country: "DE" },
+  { slug: "workmotion", name: "WorkMotion", country: "DE" },
+  { slug: "jeenka", name: "Jeenka", country: "IT" },
   { slug: "bizaway", name: "BizAway", country: "IT" },
-  { slug: "beintoo", name: "Beintoo", country: "IT" },
-  { slug: "credit-agricole-italia", name: "Crédit Agricole Italia", country: "IT" },
-  { slug: "supermoney", name: "SuperMoney", country: "IT" },
-  { slug: "wallife", name: "Wallife", country: "IT" },
-  { slug: "switcho", name: "Switcho", country: "IT" },
-  { slug: "tot", name: "Tot", country: "IT" },
-  { slug: "kampaay", name: "Kampaay", country: "IT" },
-  { slug: "fiscozen", name: "Fiscozen", country: "IT" },
-  { slug: "soldout", name: "Soldout", country: "IT" },
-  { slug: "deus-technology", name: "Deus Technology", country: "IT" },
+  { slug: "garmin-cluj", name: "Garmin Cluj", country: "RO" },
+  // Account reali (al momento 0 ruoli aperti, ma entreranno quando assumono).
+  { slug: "specify", name: "Specify" },
+  { slug: "springa", name: "Springa", country: "IT" },
+  { slug: "instilla-srl", name: "Instilla", country: "IT" },
+  { slug: "velasca", name: "Velasca", country: "IT" },
+  { slug: "opinno", name: "Opinno", country: "IT" },
+  { slug: "truelayer", name: "TrueLayer", country: "UK" },
+  // NOTA: lista da espandere con slug Workable REALI (gli slug inventati
+  // danno 404). Curare nel tempo da careers page reali.
 ];
 
 export const SMARTRECRUITERS_COMPANIES: AtsCompany[] = [
