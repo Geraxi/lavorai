@@ -493,26 +493,33 @@ export async function processApplication(
     }
 
     // Captcha: il form è pronto ma c'è un reCAPTCHA che blocca l'invio
-    // automatico (per design). Niente fallback email fuorviante: diciamo
-    // all'utente di completarlo a mano (CV pronto). Onesto.
+    // automatico (per design). Comportamento per modalità:
+    //   - hybrid / manual → handoff: avvisiamo l'utente "completa tu in 1 click"
+    //   - full auto → l'utente vuole zero coinvolgimento → saltiamo in
+    //     silenzio (niente email che lo disturba), marcato CAPTCHA.
     if (outcome.status === "captcha") {
+      const mode = app.user.preferences?.autoApplyMode ?? "manual";
+      const handoff = mode !== "auto"; // hybrid/manual = chiedi all'utente
       await prisma.application.update({
         where: { id: applicationId },
         data: {
           status: "ready_to_apply",
           submitConfirmation: "CAPTCHA",
-          errorMessage:
-            "Questo annuncio ha un captcha che impedisce l'invio automatico. CV e risposte sono pronti — apri il link e completa captcha + invio (1 minuto).",
+          errorMessage: handoff
+            ? "Questo annuncio ha un captcha che impedisce l'invio automatico. CV e risposte sono pronti — apri il link e completa captcha + invio (1 minuto)."
+            : "Saltato: l'annuncio ha un captcha (non auto-inviabile in modalità full-auto).",
           canaryLog:
             "canary" in outcome && outcome.canary
               ? JSON.stringify(outcome.canary)
-              : JSON.stringify({ captcha: true, at: new Date().toISOString() }),
+              : JSON.stringify({ captcha: true, mode, at: new Date().toISOString() }),
         },
       });
-      await notifyApplicationManual(applicationId).catch((err) =>
-        console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
-      );
-      return; // l'utente completa a mano
+      if (handoff) {
+        await notifyApplicationManual(applicationId).catch((err) =>
+          console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
+        );
+      }
+      return; // l'utente completa a mano (hybrid/manual) o saltato (auto)
     }
 
     // se l'adapter non ci è riuscito (form cambiato / captcha / …) proseguiamo

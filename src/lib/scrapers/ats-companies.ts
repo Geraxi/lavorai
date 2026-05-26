@@ -337,6 +337,40 @@ export const ASHBY_COMPANIES: AtsCompany[] = [
  * SmartRecruiters (`jobs.smartrecruiters.com/<companyId>`). Enterprise EU,
  * tantissime aziende tradizionali. companyId è case-sensitive.
  */
+/**
+ * Workable (`apply.workable.com/<slug>/j/<id>/`). Usato da MOLTE PMI/scaleup
+ * EU e italiane che — a differenza dei big — raramente mettono captcha →
+ * form realmente auto-inviabili. Da curare/espandere nel tempo.
+ */
+export const WORKABLE_COMPANIES: AtsCompany[] = [
+  // Italia / EU PMI & scaleup
+  { slug: "soldo", name: "Soldo", country: "IT" },
+  { slug: "credimi", name: "Credimi", country: "IT" },
+  { slug: "fitprime", name: "Fitprime", country: "IT" },
+  { slug: "musixmatch", name: "Musixmatch", country: "IT" },
+  { slug: "tinaba", name: "Tinaba", country: "IT" },
+  { slug: "qomodo", name: "Qomodo", country: "IT" },
+  { slug: "fido", name: "Fido", country: "IT" },
+  { slug: "planet-smart-city", name: "Planet Smart City", country: "IT" },
+  { slug: "milkman", name: "Milkman", country: "IT" },
+  { slug: "deporvillage", name: "Deporvillage", country: "ES" },
+  { slug: "redcare-pharmacy", name: "Redcare Pharmacy", country: "DE" },
+  { slug: "shippypro", name: "ShippyPro", country: "IT" },
+  { slug: "indigo-ai", name: "Indigo.ai", country: "IT" },
+  { slug: "userbot", name: "Userbot", country: "IT" },
+  { slug: "bizaway", name: "BizAway", country: "IT" },
+  { slug: "beintoo", name: "Beintoo", country: "IT" },
+  { slug: "credit-agricole-italia", name: "Crédit Agricole Italia", country: "IT" },
+  { slug: "supermoney", name: "SuperMoney", country: "IT" },
+  { slug: "wallife", name: "Wallife", country: "IT" },
+  { slug: "switcho", name: "Switcho", country: "IT" },
+  { slug: "tot", name: "Tot", country: "IT" },
+  { slug: "kampaay", name: "Kampaay", country: "IT" },
+  { slug: "fiscozen", name: "Fiscozen", country: "IT" },
+  { slug: "soldout", name: "Soldout", country: "IT" },
+  { slug: "deus-technology", name: "Deus Technology", country: "IT" },
+];
+
 export const SMARTRECRUITERS_COMPANIES: AtsCompany[] = [
   // Enterprise EU big
   { slug: "BoschGroup", name: "Bosch", country: "DE" },

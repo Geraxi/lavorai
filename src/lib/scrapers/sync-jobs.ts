@@ -3,6 +3,7 @@ import { fetchGreenhouseMulti } from "./greenhouse";
 import { fetchLeverMulti } from "./lever";
 import { fetchAshbyMulti } from "./ashby";
 import { fetchSmartRecruitersMulti } from "./smartrecruiters";
+import { fetchWorkableMulti } from "./workable";
 import {
   fetchLinkedinViaApify,
   DEFAULT_LINKEDIN_QUERIES,
@@ -12,6 +13,7 @@ import {
   LEVER_COMPANIES,
   ASHBY_COMPANIES,
   SMARTRECRUITERS_COMPANIES,
+  WORKABLE_COMPANIES,
 } from "./ats-companies";
 import type { JobListItem } from "@/lib/adzuna";
 
@@ -27,30 +29,33 @@ export async function syncAtsJobs(): Promise<{
   lever: number;
   ashby: number;
   smartrecruiters: number;
+  workable: number;
   linkedin: number;
   total: number;
 }> {
   console.log(
-    "[sync-jobs] starting Greenhouse + Lever + Ashby + SmartRecruiters + LinkedIn(Apify) fetch...",
+    "[sync-jobs] starting Greenhouse + Lever + Ashby + SmartRecruiters + Workable + LinkedIn(Apify) fetch...",
   );
-  const [gh, lv, ash, sr, li] = await Promise.all([
+  const [gh, lv, ash, sr, wk, li] = await Promise.all([
     fetchGreenhouseMulti(GREENHOUSE_COMPANIES, 4),
     fetchLeverMulti(LEVER_COMPANIES, 4),
     fetchAshbyMulti(ASHBY_COMPANIES, 4),
     fetchSmartRecruitersMulti(SMARTRECRUITERS_COMPANIES, 4),
+    fetchWorkableMulti(WORKABLE_COMPANIES, 4),
     fetchLinkedinViaApify(DEFAULT_LINKEDIN_QUERIES, 25),
   ]);
   console.log(
-    `[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}  ashby=${ash.length}  smartrec=${sr.length}  linkedin=${li.length}`,
+    `[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}  ashby=${ash.length}  smartrec=${sr.length}  workable=${wk.length}  linkedin=${li.length}`,
   );
 
-  const all = [...gh, ...lv, ...ash, ...sr, ...li];
+  const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...li];
   const upserted = await upsertJobs(all);
   return {
     greenhouse: gh.length,
     lever: lv.length,
     ashby: ash.length,
     smartrecruiters: sr.length,
+    workable: wk.length,
     linkedin: li.length,
     total: upserted,
   };
