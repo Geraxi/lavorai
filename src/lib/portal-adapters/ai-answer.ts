@@ -236,6 +236,9 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
           "";
       label = label
         .replace(/SVGs? not supported by this browser\.?/gi, " ")
+        // Workable: il selettore paesi del telefono dumpa l'intera lista
+        // (+1United States+44United Kingdom...) dentro la label. Taglia.
+        .split(/\s*\+\d{1,4}[A-Z]/)[0]
         .replace(/\s+/g, " ")
         .trim();
 
@@ -297,6 +300,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
             if (!t) t = r.closest("label")?.textContent ?? r.value ?? "";
             return t
               .replace(/SVGs? not supported by this browser\.?/gi, " ")
+              .split(/\s*\+\d{1,4}[A-Z]/)[0]
               .replace(/\s+/g, " ")
               .trim();
           })

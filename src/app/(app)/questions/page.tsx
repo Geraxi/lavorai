@@ -71,8 +71,9 @@ export default function QuestionsPage() {
         {waiting > 0 && (
           <>
             {" "}
-            <strong>{waiting}</strong> candidature sono in attesa delle tue
-            risposte.
+            <strong>{waiting}</strong>{" "}
+            {waiting === 1 ? "candidatura è in attesa" : "candidature sono in attesa"}{" "}
+            delle tue risposte.
           </>
         )}
       </p>
@@ -132,7 +133,7 @@ export default function QuestionsPage() {
                   lineHeight: 1.4,
                 }}
               >
-                {q.label.replace(/\*+$/, "").trim()}
+                {cleanLabel(q.label)}
               </label>
               {renderInput(q, values[q.labelKey] ?? "", (v) =>
                 setValues((s) => ({ ...s, [q.labelKey]: v })),
@@ -162,6 +163,24 @@ export default function QuestionsPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Pulisce la label di una domanda: spesso i form Workable concatenano nel
+ * testo l'intera lista dei prefissi telefonici, oppure ci sono "SVGs not
+ * supported by this browser." → la rendono illeggibile. Qui tagliamo tutto
+ * dal primo +<cifra><Paese> in poi e rimuoviamo rumore noto.
+ */
+function cleanLabel(raw: string): string {
+  let s = (raw || "")
+    .replace(/SVGs? not supported by this browser\.?/gi, " ")
+    // taglia alla prima sequenza tipo "+39", "+1", "+44" seguita da una lettera
+    .split(/\s*\+\d{1,4}[A-Z]/)[0]
+    .replace(/\s+/g, " ")
+    .trim();
+  s = s.replace(/^\*+/, "").replace(/\*+$/, "").trim();
+  if (!s) s = raw.slice(0, 60);
+  return s;
 }
 
 function renderInput(
