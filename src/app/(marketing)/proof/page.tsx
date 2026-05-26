@@ -107,99 +107,106 @@ export default async function ProofPage() {
         contiamo solo quello che si misura.
       </p>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: 14,
-          marginTop: 36,
-        }}
-      >
-        <Stat label="Consegne confermate" value={detectedTotal} sub="HTTP 2xx/3xx dal portale" />
-        <Stat label="Questo mese" value={detectedMonth} sub={now.toLocaleDateString("it-IT", { month: "long" })} />
-        <Stat label="Risposte recruiter" value={repliesTotal} sub="parsate da email inbound" />
-        <Stat label="Tasso risposta" value={`${responseRate}%`} sub="risposte / consegne" />
-      </div>
+      {detectedTotal > 0 ? (
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 14,
+              marginTop: 36,
+            }}
+          >
+            <Stat label="Consegne confermate" value={detectedTotal} sub="HTTP 2xx/3xx dal portale" />
+            <Stat label="Questo mese" value={detectedMonth} sub={now.toLocaleDateString("it-IT", { month: "long" })} />
+            {repliesTotal > 0 && (
+              <Stat label="Risposte recruiter" value={repliesTotal} sub="parsate da email inbound" />
+            )}
+            {responseRate > 0 && (
+              <Stat label="Tasso risposta" value={`${responseRate}%`} sub="risposte / consegne" />
+            )}
+          </div>
 
-      {portalCounts.length > 0 && (
-        <div style={{ marginTop: 38, fontSize: 13, color: "var(--fg-muted)" }}>
-          Per portale:{" "}
-          {portalCounts
-            .filter((p) => p.submittedVia)
-            .map((p) => `${p.submittedVia?.replace("portal_", "")} ${p._count._all}`)
-            .join(" · ")}
-        </div>
-      )}
+          {portalCounts.length > 0 && (
+            <div style={{ marginTop: 38, fontSize: 13, color: "var(--fg-muted)" }}>
+              Per portale:{" "}
+              {portalCounts
+                .filter((p) => p.submittedVia)
+                .map((p) => `${p.submittedVia?.replace("portal_", "")} ${p._count._all}`)
+                .join(" · ")}
+            </div>
+          )}
 
-      <h2
-        style={{
-          fontSize: 22,
-          fontWeight: 700,
-          letterSpacing: "-0.015em",
-          marginTop: 56,
-          marginBottom: 10,
-        }}
-      >
-        Ultime consegne confermate
-      </h2>
-      <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginBottom: 18 }}>
-        Anonimizzate per il candidato. Azienda, ruolo, data e prova HTTP sono pubblici.
-      </p>
+          <h2
+            style={{
+              fontSize: 22,
+              fontWeight: 700,
+              letterSpacing: "-0.015em",
+              marginTop: 56,
+              marginBottom: 10,
+            }}
+          >
+            Ultime consegne confermate
+          </h2>
+          <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginBottom: 18 }}>
+            Anonimizzate per il candidato. Azienda, ruolo, data e prova HTTP sono pubblici.
+          </p>
 
-      {recentDetected.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <div
-          style={{
-            border: "1px solid var(--border-ds)",
-            borderRadius: 14,
-            overflow: "hidden",
-          }}
-        >
-          {recentDetected.map((a, i) => (
-            <div
-              key={i}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto auto",
-                alignItems: "center",
-                gap: 14,
-                padding: "14px 18px",
-                borderBottom: i < recentDetected.length - 1 ? "1px solid var(--border-ds)" : "none",
-                fontSize: 13.5,
-              }}
-            >
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {a.job.company ?? "—"}
-                </div>
-                <div style={{ fontSize: 12.5, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {a.job.title}
-                  {a.job.location ? ` · ${a.job.location}` : ""}
-                </div>
-              </div>
-              <span
-                className="mono"
+          <div
+            style={{
+              border: "1px solid var(--border-ds)",
+              borderRadius: 14,
+              overflow: "hidden",
+            }}
+          >
+            {recentDetected.map((a, i) => (
+              <div
+                key={i}
                 style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  padding: "3px 8px",
-                  borderRadius: 999,
-                  background: "hsl(var(--primary)/0.14)",
-                  color: "hsl(var(--primary))",
-                  whiteSpace: "nowrap",
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto auto",
+                  alignItems: "center",
+                  gap: 14,
+                  padding: "14px 18px",
+                  borderBottom: i < recentDetected.length - 1 ? "1px solid var(--border-ds)" : "none",
+                  fontSize: 13.5,
                 }}
               >
-                {a.submitConfirmation}
-              </span>
-              <span style={{ fontSize: 11.5, color: "var(--fg-subtle)", whiteSpace: "nowrap", fontFeatureSettings: '"tnum"' }}>
-                {a.completedAt
-                  ? a.completedAt.toLocaleDateString("it-IT", { day: "2-digit", month: "short" })
-                  : "—"}
-              </span>
-            </div>
-          ))}
-        </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {a.job.company ?? "—"}
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {a.job.title}
+                    {a.job.location ? ` · ${a.job.location}` : ""}
+                  </div>
+                </div>
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 600,
+                    padding: "3px 8px",
+                    borderRadius: 999,
+                    background: "hsl(var(--primary)/0.14)",
+                    color: "hsl(var(--primary))",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {a.submitConfirmation}
+                </span>
+                <span style={{ fontSize: 11.5, color: "var(--fg-subtle)", whiteSpace: "nowrap", fontFeatureSettings: '"tnum"' }}>
+                  {a.completedAt
+                    ? a.completedAt.toLocaleDateString("it-IT", { day: "2-digit", month: "short" })
+                    : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        // Pre-traction: niente "0" imbarazzanti. Racconta il metodo + CTA.
+        <MethodologyPanel />
       )}
 
       <div
@@ -285,31 +292,98 @@ function Stat({ label, value, sub }: { label: string; value: number | string; su
   );
 }
 
-function EmptyState() {
+/**
+ * Pre-traction: invece di mostrare "0" imbarazzanti, raccontiamo il METODO
+ * — come verifichiamo ogni consegna. È il differenziatore: gli altri tool
+ * dichiarano "X inviate", noi proviamo. Il counter arriverà appena le
+ * consegne `DETECTED_*` iniziano ad accumularsi.
+ */
+function MethodologyPanel() {
+  const steps = [
+    {
+      n: "01",
+      title: "Compiliamo il form vero",
+      body:
+        "Niente scorciatoie via email: l'AI riempie i campi del portale ATS (Greenhouse, Workable, Lever, Ashby) come farebbe una persona.",
+    },
+    {
+      n: "02",
+      title: "Clicchiamo Invia",
+      body:
+        "Il browser headless preme il bottone di submit. Niente \"inviata\" finta: parte la POST HTTP vera al server del portale.",
+    },
+    {
+      n: "03",
+      title: "Catturiamo la risposta del server",
+      body:
+        "Leggiamo lo status HTTP della POST. Solo 2xx/3xx vale come consegna confermata. Il numero che vedrai qui sopra contiene SOLO quelle.",
+    },
+    {
+      n: "04",
+      title: "Tracciamo le risposte vere",
+      body:
+        "Le reply dei recruiter passano da un nostro indirizzo inbound, vengono classificate (colloquio / rifiutata / risposta) e contate qui — distinte dalle aperture email.",
+    },
+  ];
   return (
-    <div
-      style={{
-        padding: 36,
-        borderRadius: 14,
-        background: "var(--bg-elev)",
-        border: "1px dashed var(--border-ds)",
-        textAlign: "center",
-      }}
-    >
-      <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>
-        Ancora 0 consegne confermate
-      </div>
-      <div
+    <div style={{ marginTop: 48 }}>
+      <h2
         style={{
-          fontSize: 13,
-          color: "var(--fg-muted)",
-          maxWidth: 420,
-          margin: "0 auto",
-          lineHeight: 1.55,
+          fontSize: 22,
+          fontWeight: 700,
+          letterSpacing: "-0.015em",
+          marginBottom: 8,
         }}
       >
-        Stiamo verificando ogni invio col server del portale (HTTP 2xx). Niente
-        falsi &ldquo;inviata&rdquo;: il primo numero che vedrai qui sarà reale.
+        Come verifichiamo ogni invio
+      </h2>
+      <p
+        style={{
+          fontSize: 14,
+          color: "var(--fg-muted)",
+          maxWidth: 620,
+          marginBottom: 24,
+          lineHeight: 1.6,
+        }}
+      >
+        Gli altri tool dichiarano numeri che non possono provare. Questo è il
+        nostro processo, end-to-end. Trasparente.
+      </p>
+      <div style={{ display: "grid", gap: 12 }}>
+        {steps.map((s) => (
+          <div
+            key={s.n}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "60px 1fr",
+              gap: 18,
+              padding: "18px 20px",
+              borderRadius: 12,
+              background: "var(--bg-elev)",
+              border: "1px solid var(--border-ds)",
+            }}
+          >
+            <div
+              className="mono"
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: "hsl(var(--primary))",
+                letterSpacing: "0.04em",
+              }}
+            >
+              {s.n}
+            </div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+                {s.title}
+              </div>
+              <div style={{ fontSize: 13.5, color: "var(--fg-muted)", lineHeight: 1.6 }}>
+                {s.body}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
