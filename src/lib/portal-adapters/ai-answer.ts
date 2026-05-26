@@ -28,6 +28,8 @@ export interface CandidateContext {
   linkedinUrl?: string | null;
   portfolioUrl?: string | null;
   workAuth?: string | null;
+  /** Aspettativa RAL annua in euro (per "desired salary" ecc.). */
+  salaryExpectationEur?: number | null;
   /** Estratto del CV (testo) per rispondere a domande tipo "hai esperienza con X?". */
   cvText?: string | null;
   jobTitle?: string | null;
@@ -49,7 +51,7 @@ export function normalizeLabel(label: string): string {
 interface FieldDescriptor {
   idx: number;
   label: string;
-  kind: "text" | "textarea" | "select" | "react-select" | "checkbox";
+  kind: "text" | "textarea" | "select" | "react-select" | "checkbox" | "radio";
   options?: string[];
 }
 
@@ -179,6 +181,8 @@ function profileValueForLabel(label: string, ctx: CandidateContext): string | nu
   const l = label.toLowerCase();
   if (/\bcountry\b|paese|nazione/.test(l)) return ctx.country ?? null;
   if (/\bcity\b|\btown\b|location|città|citt/.test(l)) return ctx.city ?? null;
+  if (/salary|ral|compensation|stipendio|retribuzione/.test(l))
+    return ctx.salaryExpectationEur ? String(ctx.salaryExpectationEur) : null;
   if (/phone|telefono|mobile|cellulare/.test(l)) return ctx.phone ?? null;
   if (/linkedin/.test(l)) return ctx.linkedinUrl ?? null;
   if (/portfolio|website|personal site|sito/.test(l)) return ctx.portfolioUrl ?? null;
@@ -195,6 +199,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
     // inline per essere bulletproof su qualsiasi bundler.
     const out: Array<{ idx: number; label: string; kind: string; options?: string[] }> = [];
     let idx = 0;
+    const seen = new Set<string>();
 
     // Tutti i controlli del form, in ordine di documento.
     const all = Array.from(
@@ -229,7 +234,10 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
           el.getAttribute("placeholder") ||
           el.getAttribute("name") ||
           "";
-      label = label.replace(/\s+/g, " ").trim();
+      label = label
+        .replace(/SVGs? not supported by this browser\.?/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
       // --- required (inline) ---
       const required =
@@ -265,6 +273,49 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
 
       // input interni dei widget (requiredInput nascosto, ecc.) → skip
       if (/requiredInput/.test(cls) || el.closest("[class*='select-shell']")) continue;
+
+      // a2) radio group (es. Workable sì/no obbligatori)
+      if (type === "radio") {
+        const gname = (el as HTMLInputElement).name;
+        if (!gname || seen.has("radio:" + gname)) continue;
+        seen.add("radio:" + gname);
+        const group = Array.from(
+          document.querySelectorAll(`input[type=radio][name="${CSS.escape(gname)}"]`),
+        ) as HTMLInputElement[];
+        if (group.some((r) => r.checked)) continue;
+        const req =
+          group.some((r) => r.required || r.getAttribute("aria-required") === "true") ||
+          label.includes("*");
+        if (!req) continue;
+        // Etichette delle singole opzioni (Yes/No/…)
+        const opts = group
+          .map((r) => {
+            const rid = r.getAttribute("id");
+            let t = rid
+              ? document.querySelector(`label[for="${CSS.escape(rid)}"]`)?.textContent ?? ""
+              : "";
+            if (!t) t = r.closest("label")?.textContent ?? r.value ?? "";
+            return t
+              .replace(/SVGs? not supported by this browser\.?/gi, " ")
+              .replace(/\s+/g, " ")
+              .trim();
+          })
+          .filter(Boolean);
+        // Domanda del gruppo: legend/label del container
+        const cont = el.closest("fieldset, [class*='field'], [class*='question']");
+        let q =
+          cont?.querySelector("legend")?.textContent ??
+          cont?.querySelector("label")?.textContent ??
+          gname;
+        q = (q || gname)
+          .replace(/SVGs? not supported by this browser\.?/gi, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        group.forEach((r) => r.setAttribute(tag, String(idx)));
+        out.push({ idx, label: q, kind: "radio", options: opts });
+        idx++;
+        continue;
+      }
 
       // b) checkbox
       if (type === "checkbox") {
@@ -340,6 +391,21 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
     }
     return false;
   }
+  if (f.kind === "radio") {
+    // Le opzioni e i radio taggati sono nello stesso ordine del gruppo.
+    const opts = f.options ?? [];
+    const v = value.toLowerCase().trim();
+    let mi = opts.findIndex((o) => o.toLowerCase().trim() === v);
+    if (mi < 0) mi = opts.findIndex((o) => o.toLowerCase().includes(v) || v.includes(o.toLowerCase()));
+    if (mi < 0) return false;
+    const radios = page.locator(`[${TAG}="${f.idx}"]`);
+    const target = radios.nth(mi);
+    await target.check({ timeout: 3000 }).catch(async () => {
+      // radio custom nascosto → clicca la label associata o via JS
+      await target.evaluate((el) => (el as HTMLElement).click()).catch(() => void 0);
+    });
+    return true;
+  }
   if (f.kind === "select") {
     // match opzione per testo (case-insensitive contains)
     const target = value.toLowerCase();
@@ -414,6 +480,7 @@ async function askClaude(
     linkedin: ctx.linkedinUrl ?? null,
     portfolio: ctx.portfolioUrl ?? null,
     workAuthorization: ctx.workAuth ?? null,
+    desiredAnnualSalaryEur: ctx.salaryExpectationEur ?? null,
   };
   const fieldList = fields.map((f) => ({
     idx: f.idx,

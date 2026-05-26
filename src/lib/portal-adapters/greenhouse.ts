@@ -407,6 +407,7 @@ export const greenhouseAdapter: PortalAdapter = {
             input.answers?.portfolioUrl ||
             findLink(/portfolio|dribbble|behance/i),
           workAuth: input.answers?.workAuthEU,
+          salaryExpectationEur: input.answers?.salaryExpectationEur,
           cvText,
           jobTitle: p.title,
           company: null,
