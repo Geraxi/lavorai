@@ -86,6 +86,19 @@ export async function POST(request: NextRequest) {
     const cookieLocale = request.cookies.get("NEXT_LOCALE")?.value;
     const locale = cookieLocale === "en" ? "en" : "it";
 
+    // Referral attribution: leggi cookie lv_ref se presente (impostato dal
+    // TrackReferral client component quando l'utente arriva con ?ref=<code>).
+    let referredById: string | null = null;
+    const refCode = request.cookies.get("lv_ref")?.value;
+    if (refCode) {
+      try {
+        const { resolveReferralCode } = await import("@/lib/referral");
+        referredById = await resolveReferralCode(refCode);
+      } catch {
+        /* ignore */
+      }
+    }
+
     const user = await prisma.user.create({
       data: {
         email,
@@ -94,6 +107,7 @@ export async function POST(request: NextRequest) {
         emailVerified: null,
         privacyConsentAt,
         locale,
+        referredById,
       },
       select: { id: true, email: true, locale: true },
     });

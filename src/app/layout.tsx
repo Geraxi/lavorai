@@ -6,6 +6,8 @@ import { Toaster } from "@/components/ui/sonner";
 import { CookieBanner } from "@/components/cookie-banner";
 import { Providers } from "@/app/providers";
 import { StructuredData } from "@/components/structured-data";
+import { TrackPageView } from "@/components/track-page-view";
+import { TrackReferral } from "@/components/track-referral";
 import { assertEnvOrCrash } from "@/lib/env";
 import "./globals.css";
 
@@ -100,6 +102,8 @@ export default async function RootLayout({
         <StructuredData />
         <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers>{children}</Providers>
+          <TrackPageView />
+          <TrackReferral />
           <Toaster richColors position="top-center" />
           <CookieBanner />
         </NextIntlClientProvider>

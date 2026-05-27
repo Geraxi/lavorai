@@ -147,6 +147,36 @@ model User {
   verifyTokens   EmailVerificationToken[]
   popupResponses PopupResponse[]
   answers        UserAnswer[]
+
+  // Referral: ogni utente ha un codice univoco da condividere; referredById
+  // punta a chi l'ha invitato (se applicabile). Reward gestito a parte
+  // (es. mese gratis Pro per entrambi quando il referred upgrada).
+  referralCode  String?           @unique
+  referredById  String?
+  referredBy    User?             @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals     User[]            @relation("UserReferrals")
+}
+
+/// Page-view tracking leggero per le metriche admin. Non sostituisce
+/// un'analytics seria (es. Vercel Analytics): è pensato come dato grezzo
+/// di cui abbiamo il controllo, mostrato nel pannello /admin.
+model PageView {
+  id        String   @id @default(cuid())
+  path      String
+  referrer  String?
+  /// userId loggato (se la pagina è autenticata), null per anonimi.
+  userId    String?
+  /// session id (cookie lato client) — per stimare visitatori unici.
+  sessionId String?
+  /// Country dal geo header Vercel (best-effort).
+  country   String?
+  /// User agent troncato.
+  userAgent String?
+  ts        DateTime @default(now())
+
+  @@index([ts])
+  @@index([path, ts])
+  @@index([sessionId])
 }
 
 /// Risposte RIUTILIZZABILI dell'utente alle domande dei form di candidatura
