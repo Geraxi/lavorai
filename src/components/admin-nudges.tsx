@@ -49,6 +49,9 @@ export function AdminNudges() {
 
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
+  const [history, setHistory] = useState<
+    Array<{ at: string; dryRun: boolean; target: string; details: RunResult["details"]; sent: number; skipped: number }>
+  >([]);
   const [onlyEmail, setOnlyEmail] = useState("");
   const [ignoreCooldown, setIgnoreCooldown] = useState(false);
 
@@ -68,6 +71,19 @@ export function AdminNudges() {
       });
       const j = (await res.json()) as RunResult;
       setResult(j);
+      // Persist every run in a session-local history so picking another
+      // user doesn't wipe what just happened.
+      setHistory((prev) => [
+        {
+          at: new Date().toLocaleTimeString("it-IT"),
+          dryRun,
+          target: onlyEmail.trim() || "tutti i candidati",
+          details: j.details,
+          sent: j.sent,
+          skipped: j.skipped,
+        },
+        ...prev,
+      ].slice(0, 20));
       if (!dryRun) mutate();
     } finally {
       setSending(false);
@@ -304,6 +320,108 @@ export function AdminNudges() {
                 </span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Cronologia di sessione: ogni run resta visibile finché non
+          ricarichi la pagina. "sent" = email consegnata a Resend
+          con successo (= nudge realmente inviato). */}
+      {history.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--fg-subtle)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              fontWeight: 600,
+              marginBottom: 8,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span>Cronologia di sessione ({history.length})</span>
+            <button
+              type="button"
+              onClick={() => setHistory([])}
+              style={{
+                background: "transparent",
+                border: 0,
+                color: "var(--fg-subtle)",
+                fontSize: 11,
+                textDecoration: "underline",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              svuota
+            </button>
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {history.map((h, idx) => (
+              <div
+                key={idx}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  background: "var(--bg)",
+                  border: "1px solid var(--border-ds)",
+                  fontSize: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    marginBottom: 4,
+                  }}
+                >
+                  <span style={{ color: "var(--fg)" }}>
+                    <span style={{ color: "var(--fg-subtle)" }}>{h.at}</span> · {h.target}
+                  </span>
+                  <span style={{ color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
+                    {h.dryRun ? "dry-run" : `inviati ${h.sent} · saltati ${h.skipped}`}
+                  </span>
+                </div>
+                {h.details.map((d, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      fontSize: 11.5,
+                      color: "var(--fg-muted)",
+                    }}
+                  >
+                    <span>{d.email}</span>
+                    <span
+                      style={{
+                        color:
+                          d.status === "sent"
+                            ? "hsl(var(--primary))"
+                            : d.status.startsWith("error")
+                              ? "#fca5a5"
+                              : "var(--fg-subtle)",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {STEP_LABEL[d.step] ?? d.step} · {d.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 8, lineHeight: 1.5 }}>
+            <strong>sent</strong> = email consegnata a Resend (nudge realmente
+            inviato).{" "}
+            <strong>skipped_cooldown</strong> = già nudgato di recente, salta
+            (sblocca con &quot;ignora cooldown&quot;).{" "}
+            <strong>error_*</strong> = errore di consegna.
           </div>
         </div>
       )}
