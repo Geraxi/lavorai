@@ -102,45 +102,85 @@ export function AdminNudges() {
         1 ogni 5 giorni per utente, rispetta la quota email.
       </p>
 
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          alignItems: "center",
-          marginBottom: 14,
-        }}
-      >
-        <select
-          value={onlyEmail}
-          onChange={(e) => setOnlyEmail(e.target.value)}
+      <div style={{ marginBottom: 14 }}>
+        <label
           style={{
-            flex: "1 1 260px",
-            borderRadius: 10,
-            border: "1px solid var(--border-ds)",
-            background: "var(--bg)",
-            color: "var(--fg)",
-            padding: "9px 11px",
-            fontSize: 13,
+            display: "block",
+            fontSize: 11,
+            color: "var(--fg-subtle)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            fontWeight: 600,
+            marginBottom: 6,
           }}
         >
-          <option value="">— tutti i candidati ({data?.count ?? 0}) —</option>
-          {(directory?.users ?? []).map((u) => (
-            <option key={u.email} value={u.email}>
-              {u.email}
-              {u.name ? ` · ${u.name}` : ""}
-              {u.tier !== "free" ? ` · ${u.tier}` : ""}
+          Destinatario
+        </label>
+        <div style={{ position: "relative" }}>
+          <select
+            value={onlyEmail}
+            onChange={(e) => setOnlyEmail(e.target.value)}
+            style={{
+              width: "100%",
+              borderRadius: 10,
+              border: "1px solid var(--border-ds)",
+              background: "var(--bg)",
+              color: "var(--fg)",
+              padding: "10px 36px 10px 12px",
+              fontSize: 13,
+              appearance: "none",
+              WebkitAppearance: "none",
+              MozAppearance: "none",
+              cursor: "pointer",
+            }}
+          >
+            <option value="">
+              Tutti gli utenti candidati al nudge ({data?.count ?? 0})
             </option>
-          ))}
-        </select>
+            {(directory?.users ?? []).length === 0 ? (
+              <option disabled>caricamento utenti…</option>
+            ) : (
+              <>
+                <option disabled>──── utenti reali ({directory?.users.length ?? 0}) ────</option>
+                {(directory?.users ?? []).map((u) => (
+                  <option key={u.email} value={u.email}>
+                    {u.email}
+                    {u.name ? ` · ${u.name}` : ""}
+                    {u.tier !== "free" ? ` · ${u.tier}` : ""}
+                  </option>
+                ))}
+              </>
+            )}
+          </select>
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              right: 12,
+              top: "50%",
+              transform: "translateY(-50%)",
+              pointerEvents: "none",
+              color: "var(--fg-subtle)",
+              fontSize: 11,
+            }}
+          >
+            ▼
+          </span>
+        </div>
+        {onlyEmail && (
+          <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 6 }}>
+            Selezionato: <strong style={{ color: "var(--fg)" }}>{onlyEmail}</strong>
+          </div>
+        )}
         <label
           style={{
             fontSize: 12,
             color: "var(--fg-muted)",
-            display: "flex",
+            display: "inline-flex",
             alignItems: "center",
             gap: 6,
             cursor: "pointer",
+            marginTop: 10,
           }}
         >
           <input
@@ -148,7 +188,7 @@ export function AdminNudges() {
             checked={ignoreCooldown}
             onChange={(e) => setIgnoreCooldown(e.target.checked)}
           />
-          ignora cooldown
+          ignora cooldown (consenti invio anche se già nudgato di recente)
         </label>
       </div>
 

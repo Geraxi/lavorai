@@ -9,10 +9,19 @@ export const dynamic = "force-dynamic";
 const DT = (d: Date | null | undefined) =>
   d ? d.toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "—";
 
-export default async function AdminUsersPage() {
-  const users = await prisma.user.findMany({
+interface PageProps {
+  searchParams?: Promise<{ includeTest?: string }>;
+}
+
+export default async function AdminUsersPage({ searchParams }: PageProps) {
+  const sp = (await searchParams) ?? {};
+  const includeTest = sp.includeTest === "1";
+
+  // Pull more than needed; filter test/internal server-side so they don't
+  // appear at all unless explicitly requested.
+  const raw = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
-    take: 100,
+    take: 200,
     select: {
       id: true,
       email: true,
@@ -47,7 +56,8 @@ export default async function AdminUsersPage() {
     },
   });
 
-  // Resolve referrers in one pass.
+  const users = includeTest ? raw : raw.filter((u) => !isTestAccount(u.email));
+
   const referrerIds = users.map((u) => u.referredById).filter((x): x is string => !!x);
   const referrers = referrerIds.length
     ? await prisma.user.findMany({
@@ -59,141 +69,169 @@ export default async function AdminUsersPage() {
 
   return (
     <>
-      <PageTitle title={`Utenti recenti (${users.length})`} sub="Clicca una riga per espandere i dettagli completi" />
-      <Panel title="Lista">
-        <div style={{ display: "grid", gap: 6 }}>
-          {users.map((u) => {
-            const test = isTestAccount(u.email);
-            const roles = safeJsonArray(u.preferences?.rolesJson);
-            const locs = safeJsonArray(u.preferences?.locationsJson);
-            const hasCv = u._count.cvDocuments > 0;
-            return (
-              <details
-                key={u.id}
+      <PageTitle
+        title={`Utenti reali (${users.length})`}
+        sub={
+          includeTest
+            ? "Visualizzazione completa, inclusi test/interni"
+            : "Esclusi automaticamente test e account interni"
+        }
+      />
+
+      <div style={{ marginBottom: 14, fontSize: 12 }}>
+        <a
+          href={includeTest ? "/admin/users" : "/admin/users?includeTest=1"}
+          style={{ color: "var(--fg-muted)", textDecoration: "underline" }}
+        >
+          {includeTest ? "← solo utenti reali" : "mostra anche test/interni"}
+        </a>
+      </div>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        {users.length === 0 && (
+          <Panel title="Nessun utente">
+            <div style={{ color: "var(--fg-muted)", fontSize: 13 }}>
+              {includeTest ? "Database vuoto." : "Nessun utente reale ancora."}
+            </div>
+          </Panel>
+        )}
+
+        {users.map((u) => {
+          const roles = safeJsonArray(u.preferences?.rolesJson);
+          const locs = safeJsonArray(u.preferences?.locationsJson);
+          const hasCv = u._count.cvDocuments > 0;
+          const test = isTestAccount(u.email);
+
+          return (
+            <div
+              key={u.id}
+              style={{
+                background: "var(--bg-elev)",
+                border: "1px solid var(--border-ds)",
+                borderRadius: 12,
+                padding: "14px 16px",
+                opacity: test ? 0.6 : 1,
+              }}
+            >
+              {/* Header */}
+              <div
                 style={{
-                  background: "var(--bg)",
-                  border: "1px solid var(--border-ds)",
-                  borderRadius: 10,
-                  opacity: test ? 0.55 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  marginBottom: 12,
+                  paddingBottom: 10,
+                  borderBottom: "1px solid var(--border-ds)",
                 }}
               >
-                <summary
+                <strong style={{ fontSize: 14 }}>{u.email}</strong>
+                {u.name && <span style={{ color: "var(--fg-muted)", fontSize: 13 }}>· {u.name}</span>}
+                <TierChip tier={u.tier} />
+                <span
                   style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 1.6fr) 70px 50px 60px 110px 110px",
-                    gap: 10,
-                    alignItems: "center",
-                    padding: "10px 12px",
-                    fontSize: 12.5,
-                    cursor: "pointer",
-                    listStyle: "none",
+                    fontSize: 10.5,
+                    padding: "2px 8px",
+                    borderRadius: 999,
+                    background: u.emailVerified ? "rgba(34,197,94,0.12)" : "rgba(220,38,38,0.12)",
+                    color: u.emailVerified ? "#86efac" : "#fca5a5",
+                    fontWeight: 600,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
                   }}
                 >
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    <strong style={{ fontWeight: 600 }}>{u.email}</strong>
-                    {u.name && <span style={{ color: "var(--fg-subtle)" }}> · {u.name}</span>}
-                    {test && (
-                      <span
-                        style={{
-                          marginLeft: 6,
-                          fontSize: 9.5,
-                          fontWeight: 700,
-                          padding: "1px 6px",
-                          borderRadius: 999,
-                          background: "var(--bg-sunken)",
-                          color: "var(--fg-subtle)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.06em",
-                        }}
-                      >
-                        test
-                      </span>
-                    )}
+                  {u.emailVerified ? "email verificata" : "non verificato"}
+                </span>
+                {test && (
+                  <span
+                    style={{
+                      fontSize: 9.5,
+                      fontWeight: 700,
+                      padding: "1px 6px",
+                      borderRadius: 999,
+                      background: "var(--bg-sunken)",
+                      color: "var(--fg-subtle)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    test
                   </span>
-                  <TierChip tier={u.tier} />
-                  <span style={{ color: u.emailVerified ? "var(--fg)" : "var(--fg-subtle)" }}>
-                    {u.emailVerified ? "verif." : "no"}
-                  </span>
-                  <span style={{ color: "var(--fg-muted)" }}>{u._count.applications} app</span>
-                  <span style={{ color: "var(--fg-muted)" }}>{u.createdAt.toLocaleDateString("it-IT")}</span>
-                  <span style={{ color: "var(--fg-muted)" }}>
-                    {u.lastLoginAt ? u.lastLoginAt.toLocaleDateString("it-IT") : "mai"}
-                  </span>
-                </summary>
+                )}
+                <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--fg-subtle)" }}>
+                  {u._count.applications} candidature
+                </span>
+              </div>
 
-                <div
-                  style={{
-                    padding: "12px 14px 14px",
-                    borderTop: "1px solid var(--border-ds)",
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                    gap: 14,
-                    fontSize: 12,
-                    color: "var(--fg-muted)",
-                  }}
-                >
-                  <DetailGroup title="Account">
-                    <KV k="ID" v={<code style={{ fontSize: 11 }}>{u.id}</code>} />
-                    <KV k="Nome" v={u.name ?? "—"} />
-                    <KV k="Email verificata" v={u.emailVerified ? DT(u.emailVerified) : "no"} />
-                    <KV k="Registrato" v={DT(u.createdAt)} />
-                    <KV k="Ultimo login" v={DT(u.lastLoginAt)} />
-                  </DetailGroup>
+              {/* Detail grid */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  gap: 16,
+                  fontSize: 12,
+                }}
+              >
+                <DetailGroup title="Account">
+                  <KV k="ID" v={<code style={{ fontSize: 10.5 }}>{u.id}</code>} />
+                  <KV k="Registrato" v={DT(u.createdAt)} />
+                  <KV k="Verificato" v={u.emailVerified ? DT(u.emailVerified) : "—"} />
+                  <KV k="Ultimo login" v={DT(u.lastLoginAt)} />
+                </DetailGroup>
 
-                  <DetailGroup title="Onboarding">
-                    <KV k="CV caricato" v={hasCv ? `sì (${u._count.cvDocuments})` : "no"} />
-                    <KV
-                      k="Preferenze"
-                      v={
-                        u.preferences
-                          ? `sì · aggiornato ${DT(u.preferences.updatedAt)}`
-                          : "non compilate"
-                      }
-                    />
-                    {u.preferences && (
-                      <>
-                        <KV
-                          k="Auto-apply"
-                          v={`${u.preferences.autoApplyOn ? "ON" : "OFF"} · ${u.preferences.autoApplyMode} · cap ${u.preferences.dailyCap}/g`}
-                        />
-                        <KV k="Match min" v={String(u.preferences.matchMin)} />
-                        <KV k="Ruoli" v={roles.length ? roles.join(", ") : "—"} />
-                        <KV k="Località" v={locs.length ? locs.join(", ") : "—"} />
-                      </>
-                    )}
-                  </DetailGroup>
+                <DetailGroup title="Onboarding">
+                  <KV k="CV" v={hasCv ? `sì (${u._count.cvDocuments})` : "non caricato"} />
+                  <KV
+                    k="Preferenze"
+                    v={
+                      u.preferences
+                        ? `compilate · ${DT(u.preferences.updatedAt)}`
+                        : "non compilate"
+                    }
+                  />
+                  {u.preferences && (
+                    <>
+                      <KV
+                        k="Auto-apply"
+                        v={`${u.preferences.autoApplyOn ? "ON" : "OFF"} · ${u.preferences.autoApplyMode} · cap ${u.preferences.dailyCap}/g`}
+                      />
+                      <KV k="Match min" v={`${u.preferences.matchMin}%`} />
+                      <KV k="Ruoli" v={roles.length ? roles.join(", ") : "—"} />
+                      <KV k="Località" v={locs.length ? locs.join(", ") : "—"} />
+                    </>
+                  )}
+                </DetailGroup>
 
-                  <DetailGroup title="Referral">
-                    <KV k="Codice" v={u.referralCode ?? "non generato"} />
-                    <KV
-                      k="Arrivato da"
-                      v={u.referredById ? referrerByIdMap.get(u.referredById) ?? u.referredById : "—"}
-                    />
-                  </DetailGroup>
+                <DetailGroup title="Referral">
+                  <KV k="Codice" v={u.referralCode ?? "non generato"} />
+                  <KV
+                    k="Arrivato da"
+                    v={u.referredById ? (referrerByIdMap.get(u.referredById) ?? u.referredById) : "—"}
+                  />
+                </DetailGroup>
 
-                  <DetailGroup title={`Ultime ${u.applications.length} candidature`}>
-                    {u.applications.length === 0 ? (
-                      <div style={{ color: "var(--fg-subtle)" }}>nessuna</div>
-                    ) : (
-                      u.applications.map((a, i) => (
-                        <div key={i} style={{ marginBottom: 4 }}>
-                          <div style={{ color: "var(--fg)" }}>
-                            {a.job?.title ?? "—"}{" "}
-                            <span style={{ color: "var(--fg-subtle)" }}>· {a.job?.company ?? "—"}</span>
-                          </div>
-                          <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>
-                            {DT(a.createdAt)} · {a.status}
-                          </div>
+                <DetailGroup title={`Ultime candidature (${u.applications.length})`}>
+                  {u.applications.length === 0 ? (
+                    <div style={{ color: "var(--fg-subtle)" }}>nessuna</div>
+                  ) : (
+                    u.applications.map((a, i) => (
+                      <div key={i} style={{ marginBottom: 4 }}>
+                        <div style={{ color: "var(--fg)" }}>
+                          {a.job?.title ?? "—"}{" "}
+                          <span style={{ color: "var(--fg-subtle)" }}>· {a.job?.company ?? "—"}</span>
                         </div>
-                      ))
-                    )}
-                  </DetailGroup>
-                </div>
-              </details>
-            );
-          })}
-        </div>
-      </Panel>
+                        <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>
+                          {DT(a.createdAt)} · {a.status}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </DetailGroup>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }
@@ -218,12 +256,12 @@ function DetailGroup({ title, children }: { title: string; children: React.React
           textTransform: "uppercase",
           letterSpacing: "0.1em",
           fontWeight: 600,
-          marginBottom: 6,
+          marginBottom: 8,
         }}
       >
         {title}
       </div>
-      <div style={{ display: "grid", gap: 3 }}>{children}</div>
+      <div style={{ display: "grid", gap: 4 }}>{children}</div>
     </div>
   );
 }
@@ -231,7 +269,7 @@ function DetailGroup({ title, children }: { title: string; children: React.React
 function KV({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-      <span style={{ color: "var(--fg-subtle)", minWidth: 90, fontSize: 11 }}>{k}</span>
+      <span style={{ color: "var(--fg-subtle)", minWidth: 88, fontSize: 11 }}>{k}</span>
       <span style={{ color: "var(--fg)", wordBreak: "break-word" }}>{v}</span>
     </div>
   );
