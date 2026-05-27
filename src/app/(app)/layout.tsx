@@ -3,6 +3,7 @@ import { AppShell } from "@/components/design/app-shell";
 import { CommandPalette } from "@/components/design/command-palette";
 import { ThemeScript } from "@/components/design/theme-script";
 import { UserPopup } from "@/components/user-popup";
+import { OnboardingBanner } from "@/components/onboarding-banner";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
@@ -54,6 +55,7 @@ export default async function AppLayout({
           isAdmin: isAdmin(user.email),
         }}
       >
+        <OnboardingBanner />
         {children}
       </AppShell>
       <CommandPalette />

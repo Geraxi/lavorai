@@ -25,6 +25,30 @@ const DEFAULT_BATCH_CAP = 50;
 
 export type NudgeStep = "verify" | "cv" | "preferences" | "first_application";
 
+/**
+ * Determina lo step mancante per un singolo utente loggato.
+ * Usato dal banner in-app persistente (vedi <OnboardingBanner/>).
+ * Ritorna null se l'utente ha completato tutti gli step.
+ */
+export async function getOnboardingStepForUser(
+  userId: string,
+): Promise<NudgeStep | null> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      emailVerified: true,
+      preferences: { select: { rolesJson: true } },
+      _count: { select: { cvDocuments: true, applications: true } },
+    },
+  });
+  if (!u) return null;
+  if (!u.emailVerified) return "verify";
+  if (u._count.cvDocuments === 0) return "cv";
+  if (!u.preferences || u.preferences.rolesJson === "[]") return "preferences";
+  if (u._count.applications === 0) return "first_application";
+  return null;
+}
+
 export interface NudgeCandidate {
   userId: string;
   email: string;
