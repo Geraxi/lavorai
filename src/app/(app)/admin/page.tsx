@@ -70,7 +70,7 @@ export default async function AdminOverviewPage() {
       {creditFailures7d > 0 && (
         <div style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.4)" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#fca5a5" }}>
-            🚨 Crediti AI esauriti — pipeline bloccata
+            Crediti AI esauriti — pipeline bloccata
           </div>
           <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 6, lineHeight: 1.6 }}>
             {creditFailures7d} candidature fallite negli ultimi 7g per crediti.

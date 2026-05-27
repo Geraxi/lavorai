@@ -18,25 +18,25 @@ export default async function AdminJobsPage() {
     <>
       <PageTitle title="Job pool & motore" sub="Annunci scaricati, email inviate, modalità auto-apply utenti" />
 
-      <Panel title="💼 Job pool per fonte">
+      <Panel title="Job pool per fonte">
         <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.7 }}>
           {jobsBySource.map((r) => `${r.source}: ${r._count._all}`).join(" · ") || "vuoto"}
           <div style={{ marginTop: 8 }}>
             Job più recente cached: {newestJob?.cachedAt ? newestJob.cachedAt.toLocaleString("it-IT") : "—"}
             {newestJob?.cachedAt && Date.now() - newestJob.cachedAt.getTime() > 6 * 3600e3 && (
-              <span style={{ color: "#fbbf24" }}> ⚠️ &gt;6h fa — il cron sync-jobs potrebbe non girare</span>
+              <span style={{ color: "#fbbf24" }}> &gt;6h fa — il cron sync-jobs potrebbe non girare</span>
             )}
           </div>
         </div>
       </Panel>
 
-      <Panel title="📧 Email inviate (7g)">
+      <Panel title="Email inviate (7g)">
         <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.7 }}>
           {emailsByKind7d.length === 0 ? "nessuna" : emailsByKind7d.map((r) => `${r.kind}: ${r._count._all}`).join(" · ")}
         </div>
       </Panel>
 
-      <Panel title="⚙️ Auto-apply mode (utenti)">
+      <Panel title="Auto-apply mode (utenti)">
         <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.7 }}>
           {autoApplyUsers.length === 0 ? "nessuna preferenza" : autoApplyUsers.map((r) => `${r.autoApplyMode}: ${r._count._all}`).join(" · ")}
         </div>

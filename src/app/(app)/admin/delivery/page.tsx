@@ -44,7 +44,7 @@ export default async function AdminDeliveryPage() {
 
       {confirmedDelivered === 0 && totalApps > 0 && (
         <div style={{ marginTop: 14, padding: "10px 12px", borderRadius: 8, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.3)", fontSize: 12.5, color: "#fca5a5" }}>
-          🚨 ZERO candidature con prova hard di consegna su {totalApps} totali. Priorità #1.
+          ZERO candidature con prova hard di consegna su {totalApps} totali. Priorità #1.
         </div>
       )}
     </>
