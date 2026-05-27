@@ -9,6 +9,7 @@ import { AdminNudges } from "@/components/admin-nudges";
 import { AdminAiHealth } from "@/components/admin-ai-health";
 import { AdminTestApply } from "@/components/admin-test-apply";
 import { AdminTraffic } from "@/components/admin-traffic";
+import { AdminSubNav } from "@/components/admin-sub-nav";
 
 export const metadata: Metadata = { title: "Admin · LavorAI", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -115,8 +116,33 @@ export default async function AdminPage() {
     .reduce((s, [, v]) => s + v, 0);
   const unconfirmed = (confMap["UNCONFIRMED"] ?? 0) + (confMap["null"] ?? 0);
 
+  const navItems = [
+    { id: "overview", label: "Panoramica", icon: "📊" },
+    { id: "traffic", label: "Traffico", icon: "📈" },
+    { id: "delivery", label: "Consegna", icon: "🚚" },
+    { id: "users", label: "Utenti", icon: "👤" },
+    { id: "jobs", label: "Job pool", icon: "💼" },
+    { id: "system", label: "Salute AI", icon: "🤖" },
+    { id: "test", label: "Test invio", icon: "🧪" },
+    { id: "nudges", label: "Nudge", icon: "✉️" },
+    { id: "popups", label: "Popup", icon: "📣" },
+    { id: "assistant", label: "AI chat", icon: "💬" },
+  ];
+
   return (
-    <div style={{ padding: "28px 24px", maxWidth: 1280, margin: "0 auto" }}>
+    <div
+      style={{
+        padding: "28px 24px",
+        maxWidth: 1280,
+        margin: "0 auto",
+        display: "grid",
+        gridTemplateColumns: "200px 1fr",
+        gap: 24,
+      }}
+      className="admin-grid"
+    >
+      <AdminSubNav items={navItems} />
+      <div>
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 11, color: "var(--fg-subtle)", textTransform: "uppercase", letterSpacing: "0.14em" }}>
           Internal · Admin
@@ -129,8 +155,10 @@ export default async function AdminPage() {
         </p>
       </div>
 
+      <style>{`@media (max-width:900px){.admin-grid{grid-template-columns:1fr !important}.admin-grid > nav{position:relative !important;top:0 !important;}}`}</style>
+
       {/* KPI ROW — metriche REALI (test/interni esclusi) */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px,1fr))", gap: 12, marginBottom: 26 }}>
+      <div id="overview" style={{ scrollMarginTop: 20, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px,1fr))", gap: 12, marginBottom: 26 }}>
         <Kpi label="Utenti reali" value={realTotal} sub={`${totalUsers} totali · ${testCount} test/interni esclusi`} tone={realTotal > 0 ? "good" : undefined} />
         <Kpi label="Reali: 24h / 7g / 30g" value={`${real24h} / ${real7d} / ${real30d}`} />
         <Kpi label="Paganti (reali)" value={realPaying} sub={realPaying === 0 ? "nessuna conversione" : `${Math.round((realPaying / Math.max(1, realTotal)) * 100)}% conversion`} tone={realPaying > 0 ? "good" : "warn"} />
@@ -159,6 +187,7 @@ export default async function AdminPage() {
       )}
 
       {/* DELIVERY TRUTH — il pezzo più importante */}
+      <div id="delivery" style={{ scrollMarginTop: 20 }} />
       <Panel title="🚚 Verità sulla consegna candidature">
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))", gap: 12 }}>
           <Kpi label="Consegna confermata (HTTP/DOM)" value={confirmedDelivered} tone={confirmedDelivered > 0 ? "good" : "warn"} />
@@ -185,6 +214,7 @@ export default async function AdminPage() {
       </Panel>
 
       {/* USERS */}
+      <div id="users" style={{ scrollMarginTop: 20 }} />
       <Panel title={`👤 Utenti recenti (${recentUsers.length})`}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
@@ -220,6 +250,7 @@ export default async function AdminPage() {
       </Panel>
 
       {/* JOB POOL */}
+      <div id="jobs" style={{ scrollMarginTop: 20 }} />
       <Panel title="💼 Job pool">
         <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.7 }}>
           {jobsBySource.map((r) => `${r.source}: ${r._count._all}`).join(" · ") || "vuoto"}
@@ -251,22 +282,35 @@ export default async function AdminPage() {
       <style>{`@media (max-width:800px){.admin-2col{grid-template-columns:1fr !important}}`}</style>
 
       {/* Traffico sito (page views + unici) */}
-      <AdminTraffic />
+      <div id="traffic" style={{ scrollMarginTop: 20 }}>
+        <AdminTraffic />
+      </div>
 
       {/* Health check AI produzione (chiave + crediti + browser) */}
-      <AdminAiHealth />
+      <div id="system" style={{ scrollMarginTop: 20 }}>
+        <AdminAiHealth />
+      </div>
 
       {/* Test candidatura end-to-end su Vercel (dry-run) */}
-      <AdminTestApply />
+      <div id="test" style={{ scrollMarginTop: 20 }}>
+        <AdminTestApply />
+      </div>
 
       {/* Nudge onboarding agli utenti bloccati */}
-      <AdminNudges />
+      <div id="nudges" style={{ scrollMarginTop: 20 }}>
+        <AdminNudges />
+      </div>
 
       {/* Popup & sondaggi per gli utenti */}
-      <AdminPopups />
+      <div id="popups" style={{ scrollMarginTop: 20 }}>
+        <AdminPopups />
+      </div>
 
       {/* Assistente AI admin (chat sidebar con accesso allo snapshot live) */}
-      <AdminAssistant />
+      <div id="assistant" style={{ scrollMarginTop: 20 }}>
+        <AdminAssistant />
+      </div>
+      </div>
     </div>
   );
 }

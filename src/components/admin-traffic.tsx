@@ -10,39 +10,51 @@ export async function AdminTraffic() {
   const now = Date.now();
   const since = (h: number) => new Date(now - h * 3600_000);
 
+  // Defensive: la tabella PageView potrebbe non esistere ancora subito dopo
+  // il primo deploy (prisma db push gira al build). Ogni query .catch a 0/[].
   const [views24h, views7d, views30d, uniq24h, uniq7d, topPaths, topReferrers, byCountry] =
     await Promise.all([
-      prisma.pageView.count({ where: { ts: { gte: since(24) } } }),
-      prisma.pageView.count({ where: { ts: { gte: since(24 * 7) } } }),
-      prisma.pageView.count({ where: { ts: { gte: since(24 * 30) } } }),
+      prisma.pageView.count({ where: { ts: { gte: since(24) } } }).catch(() => 0),
+      prisma.pageView.count({ where: { ts: { gte: since(24 * 7) } } }).catch(() => 0),
+      prisma.pageView.count({ where: { ts: { gte: since(24 * 30) } } }).catch(() => 0),
       prisma.pageView
         .groupBy({ by: ["sessionId"], where: { ts: { gte: since(24) } } })
-        .then((r) => r.length),
+        .then((r) => r.length)
+        .catch(() => 0),
       prisma.pageView
         .groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * 7) } } })
-        .then((r) => r.length),
-      prisma.pageView.groupBy({
-        by: ["path"],
-        where: { ts: { gte: since(24 * 7) } },
-        _count: { _all: true },
-        orderBy: { _count: { path: "desc" } },
-        take: 10,
-      }),
-      prisma.pageView.groupBy({
-        by: ["referrer"],
-        where: { ts: { gte: since(24 * 7) }, referrer: { not: null } },
-        _count: { _all: true },
-        orderBy: { _count: { referrer: "desc" } },
-        take: 8,
-      }),
-      prisma.pageView.groupBy({
-        by: ["country"],
-        where: { ts: { gte: since(24 * 7) }, country: { not: null } },
-        _count: { _all: true },
-        orderBy: { _count: { country: "desc" } },
-        take: 8,
-      }),
+        .then((r) => r.length)
+        .catch(() => 0),
+      prisma.pageView
+        .groupBy({
+          by: ["path"],
+          where: { ts: { gte: since(24 * 7) } },
+          _count: { _all: true },
+          orderBy: { _count: { path: "desc" } },
+          take: 10,
+        })
+        .catch(() => [] as Array<{ path: string; _count: { _all: number } }>),
+      prisma.pageView
+        .groupBy({
+          by: ["referrer"],
+          where: { ts: { gte: since(24 * 7) }, referrer: { not: null } },
+          _count: { _all: true },
+          orderBy: { _count: { referrer: "desc" } },
+          take: 8,
+        })
+        .catch(() => [] as Array<{ referrer: string | null; _count: { _all: number } }>),
+      prisma.pageView
+        .groupBy({
+          by: ["country"],
+          where: { ts: { gte: since(24 * 7) }, country: { not: null } },
+          _count: { _all: true },
+          orderBy: { _count: { country: "desc" } },
+          take: 8,
+        })
+        .catch(() => [] as Array<{ country: string | null; _count: { _all: number } }>),
     ]);
+
+  const hasAnyData = views30d > 0;
 
   return (
     <section
@@ -60,6 +72,25 @@ export async function AdminTraffic() {
       <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 14px" }}>
         Page views e visitatori unici (sessione anonima). Esclude /admin e /api.
       </p>
+
+      {!hasAnyData && (
+        <div
+          style={{
+            padding: "10px 14px",
+            borderRadius: 10,
+            background: "rgba(245,158,11,0.1)",
+            border: "1px solid rgba(245,158,11,0.35)",
+            fontSize: 12.5,
+            color: "var(--fg)",
+            marginBottom: 14,
+            lineHeight: 1.55,
+          }}
+        >
+          ⏳ Tracking attivo ma ancora nessuna visita registrata. I dati
+          iniziano a comparire appena qualcuno visita una pagina pubblica
+          (es. <code>/</code>, <code>/proof</code>, <code>/pricing</code>).
+        </div>
+      )}
 
       <div
         style={{
