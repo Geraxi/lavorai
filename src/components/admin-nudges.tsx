@@ -20,11 +20,17 @@ interface RunResult {
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 const STEP_LABEL: Record<string, string> = {
-  verify: "❗ Email da verificare",
-  cv: "📄 CV mancante",
-  preferences: "🎯 Preferenze mancanti",
-  first_application: "🚀 1ª candidatura",
+  verify: "Email da verificare",
+  cv: "CV mancante",
+  preferences: "Preferenze mancanti",
+  first_application: "1ª candidatura",
 };
+
+interface DirectoryUser {
+  email: string;
+  name: string | null;
+  tier: string;
+}
 
 /**
  * Pannello admin: nudge di onboarding agli utenti bloccati.
@@ -35,6 +41,11 @@ export function AdminNudges() {
     count: number;
     candidates: Candidate[];
   }>("/api/admin/nudges", fetcher);
+
+  const { data: directory } = useSWR<{ users: DirectoryUser[] }>(
+    "/api/admin/users-list",
+    fetcher,
+  );
 
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
@@ -83,7 +94,7 @@ export function AdminNudges() {
           marginBottom: 4,
         }}
       >
-        ✉️ Nudge onboarding
+        Nudge onboarding
       </h2>
       <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 14px" }}>
         Email che ricordano agli utenti bloccati di completare lo step mancante
@@ -100,12 +111,11 @@ export function AdminNudges() {
           marginBottom: 14,
         }}
       >
-        <input
+        <select
           value={onlyEmail}
           onChange={(e) => setOnlyEmail(e.target.value)}
-          placeholder="Solo questa email (opzionale)"
           style={{
-            flex: "1 1 220px",
+            flex: "1 1 260px",
             borderRadius: 10,
             border: "1px solid var(--border-ds)",
             background: "var(--bg)",
@@ -113,7 +123,16 @@ export function AdminNudges() {
             padding: "9px 11px",
             fontSize: 13,
           }}
-        />
+        >
+          <option value="">— tutti i candidati ({data?.count ?? 0}) —</option>
+          {(directory?.users ?? []).map((u) => (
+            <option key={u.email} value={u.email}>
+              {u.email}
+              {u.name ? ` · ${u.name}` : ""}
+              {u.tier !== "free" ? ` · ${u.tier}` : ""}
+            </option>
+          ))}
+        </select>
         <label
           style={{
             fontSize: 12,
