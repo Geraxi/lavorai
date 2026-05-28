@@ -14,7 +14,7 @@ export default async function AdminOverviewPage() {
   const now = Date.now();
   const since = (h: number) => new Date(now - h * 3600_000);
 
-  const [allUsersLite, payingUsers, verifiedUsers, totalApps, apps7d, deliveredMonth, activeSessions, creditFailures7d] =
+  const [allUsersLite, payingUsers, verifiedUsers, totalApps, apps7d, deliveredMonth, activeSessions, creditFailuresRecent] =
     await Promise.all([
       prisma.user.findMany({ select: { email: true, tier: true, emailVerified: true, createdAt: true } }),
       prisma.user.count({ where: { tier: { in: ["pro", "pro_plus"] } } }),
@@ -29,11 +29,13 @@ export default async function AdminOverviewPage() {
         },
       }),
       prisma.applicationSession.count({ where: { status: { in: ["active", "auto"] } } }),
+      // Crediti esauriti ORA: contiamo solo gli ultimi 6h. Su finestra 7g
+      // l'alert restava rosso per una settimana anche dopo aver ricaricato.
       prisma.application.count({
         where: {
           status: "failed",
           errorMessage: { contains: "credit balance", mode: "insensitive" },
-          createdAt: { gte: since(24 * 7) },
+          createdAt: { gte: since(6) },
         },
       }),
     ]);
@@ -67,13 +69,13 @@ export default async function AdminOverviewPage() {
         Verificati totali: {verifiedUsers}/{totalUsers} · Paganti totali (incl. interni): {payingUsers}
       </div>
 
-      {creditFailures7d > 0 && (
+      {creditFailuresRecent > 0 && (
         <div style={{ padding: "14px 16px", borderRadius: 12, background: "rgba(220,38,38,0.1)", border: "1px solid rgba(220,38,38,0.4)" }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: "#fca5a5" }}>
             Crediti AI esauriti — pipeline bloccata
           </div>
           <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 6, lineHeight: 1.6 }}>
-            {creditFailures7d} candidature fallite negli ultimi 7g per crediti.
+            {creditFailuresRecent} candidature fallite nelle ultime 6h per crediti.
             Azione: console.anthropic.com → Billing.
           </div>
         </div>
