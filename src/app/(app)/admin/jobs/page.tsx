@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { Panel, PageTitle } from "../_ui";
+import { AdminSyncButton } from "@/components/admin-sync-button";
 
 export const metadata: Metadata = { title: "Admin · Job pool", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -17,6 +18,13 @@ export default async function AdminJobsPage() {
   return (
     <>
       <PageTitle title="Job pool & motore" sub="Annunci scaricati, email inviate, modalità auto-apply utenti" />
+
+      <Panel title="Sync manuale (ATS + demand-driven)">
+        <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6, marginBottom: 10 }}>
+          Forza un fetch immediato: scraper ATS + ricerca Adzuna sui ruoli che gli utenti reali hanno selezionato (es. Meteorologo, Analista Climatico).
+        </div>
+        <AdminSyncButton />
+      </Panel>
 
       <Panel title="Job pool per fonte">
         <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.7 }}>
