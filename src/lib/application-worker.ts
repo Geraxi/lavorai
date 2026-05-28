@@ -591,20 +591,31 @@ export async function processApplication(
       orderBy: { cachedAt: "desc" },
     });
     const officialUrl = atsAlt?.url ?? resolvedUrl;
+    // In modalità "auto" l'utente vuole zero coinvolgimento: NON gli
+    // chiediamo di candidarsi a mano. Saltiamo in silenzio (niente email),
+    // marcando il motivo. Al prossimo ciclo l'auto-apply pesca la copia ATS
+    // diretta (il cron è già ATS-only) e la invia davvero. In hybrid/manual
+    // invece l'handoff "candidati in 1 click" ha senso.
+    const mode = app.user.preferences?.autoApplyMode ?? "manual";
+    const handoff = mode !== "auto";
     await prisma.application.update({
       where: { id: applicationId },
       data: {
         status: "ready_to_apply",
         submittedVia: null,
-        errorMessage:
-          `${app.job.company} usa un sistema di candidatura ufficiale (ATS). ` +
-          `Per non mandare la candidatura a una casella sbagliata, candidati dal portale: ${officialUrl} — CV e lettera sono pronti.`,
+        errorMessage: handoff
+          ? `${app.job.company} usa un sistema di candidatura ufficiale (ATS). ` +
+            `Per non mandare la candidatura a una casella sbagliata, candidati dal portale: ${officialUrl} — CV e lettera sono pronti.`
+          : `Skippato in auto: ${app.job.company} ha un ATS ufficiale ma questa copia è da aggregatore. ` +
+            `L'auto-apply userà la copia ATS diretta al prossimo ciclo.`,
         completedAt: new Date(),
       },
     });
-    await notifyApplicationManual(applicationId).catch((err) =>
-      console.error(`[worker] ${applicationId} notify manual (ats-known) failed`, err),
-    );
+    if (handoff) {
+      await notifyApplicationManual(applicationId).catch((err) =>
+        console.error(`[worker] ${applicationId} notify manual (ats-known) failed`, err),
+      );
+    }
     return;
   }
 
