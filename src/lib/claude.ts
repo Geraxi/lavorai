@@ -65,55 +65,62 @@ export async function optimizeCV(
   input: OptimizeCVInput,
 ): Promise<OptimizationResult> {
   const client = getClient();
+  const userContent =
+    USER_PROMPT_TEMPLATE(input.cvText, input.jobPosting) +
+    buildSessionContextBlock(input.sessionContext) +
+    buildPivaBlock(input.pivaContext) +
+    buildCoverLetterHintsBlock(input.coverLetterHints);
 
-  const response = await client.messages.create({
-    model: CV_OPTIMIZATION_MODEL,
-    max_tokens: 8000,
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content:
-          USER_PROMPT_TEMPLATE(input.cvText, input.jobPosting) +
-          buildSessionContextBlock(input.sessionContext) +
-          buildPivaBlock(input.pivaContext) +
-          buildCoverLetterHintsBlock(input.coverLetterHints),
-      },
-    ],
-  });
+  // Due tentativi: il fallimento di parse più comune è l'output troncato
+  // (stop_reason="max_tokens") o un raro glitch di formattazione. Un retry
+  // risolve la maggior parte dei casi transitori prima di buttare il job.
+  let lastErr: unknown = null;
+  let lastPreview = "";
+  let lastTruncated = false;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const response = await client.messages.create({
+      model: CV_OPTIMIZATION_MODEL,
+      max_tokens: 16000, // alzato da 8000: CV+cover letter lunghi venivano troncati
+      system: [
+        {
+          type: "text",
+          text: SYSTEM_PROMPT,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: [{ role: "user", content: userContent }],
+    });
 
-  // Concatena tutti i blocchi testuali (Claude può spezzare l'output).
-  const rawText = response.content
-    .map((block) => (block.type === "text" ? block.text : ""))
-    .join("")
-    .trim();
+    const truncated = response.stop_reason === "max_tokens";
+    const rawText = response.content
+      .map((block) => (block.type === "text" ? block.text : ""))
+      .join("")
+      .trim();
+    const cleaned = stripCodeFence(rawText);
 
-  // Difesa extra: rimuovi eventuali code fence ```json``` se Claude
-  // dovesse ignorare l'istruzione.
-  const cleaned = stripCodeFence(rawText);
-
-  try {
-    const parsed = JSON.parse(cleaned) as OptimizationResult;
-    validateShape(parsed);
-    return parsed;
-  } catch (err) {
-    console.error(
-      "[optimizeCV] Claude ha risposto con JSON non valido o schema errato.",
-      {
-        preview: cleaned.slice(0, 500),
-        error: err instanceof Error ? err.message : String(err),
-      },
-    );
-    throw new Error(
-      "Claude ha risposto con un formato non valido. Riprova tra qualche secondo.",
-    );
+    try {
+      const parsed = JSON.parse(cleaned) as OptimizationResult;
+      validateShape(parsed);
+      return parsed;
+    } catch (err) {
+      lastErr = err;
+      lastPreview = cleaned.slice(0, 500);
+      lastTruncated = truncated;
+      console.error(
+        `[optimizeCV] tentativo ${attempt}/2 — JSON non valido${truncated ? " (output TRONCATO: stop_reason=max_tokens)" : ""}.`,
+        { preview: lastPreview, error: err instanceof Error ? err.message : String(err) },
+      );
+      // se troncato, non ha senso ritentare identico — fallisce uguale
+      if (truncated) break;
+    }
   }
+
+  void lastErr;
+  throw new Error(
+    lastTruncated
+      ? "Risposta AI troncata (CV troppo lungo). Riprova."
+      : "Claude ha risposto con un formato non valido. Riprova tra qualche secondo.",
+  );
 }
 
 function buildSessionContextBlock(ctx: string | null | undefined): string {
