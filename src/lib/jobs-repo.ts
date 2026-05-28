@@ -125,15 +125,56 @@ export async function searchAndCacheJobs(
   }
   const finalWhere = and.length > 0 ? { AND: and } : {};
 
-  return prisma.job.findMany({
+  // Pesca largo, poi deduplica per (azienda|titolo) preferendo la sorgente
+  // più submittabile. Senza questo, lo stesso ruolo compariva due volte —
+  // una copia Adzuna (aggregatore, submit via email fragile) e una copia
+  // ATS (Greenhouse/Lever, submit diretto) — e l'ordinamento alfabetico
+  // metteva Adzuna prima, facendo candidare alla copia sbagliata.
+  const rows = await prisma.job.findMany({
     where: finalWhere,
-    orderBy: [
-      // Priorità: Greenhouse/Lever (submit diretto) prima di Adzuna (scraping fragile)
-      { source: "asc" },
-      { postedAt: "desc" },
-    ],
-    take: 200,
+    orderBy: [{ postedAt: "desc" }],
+    take: 400,
   });
+  return dedupePreferAts(rows).slice(0, 200);
+}
+
+/**
+ * Priorità sorgente: più alto = preferito quando esistono duplicati dello
+ * stesso job. Gli ATS con submit diretto battono gli aggregatori.
+ */
+function sourceRank(source: string): number {
+  switch (source) {
+    case "greenhouse":
+    case "lever":
+    case "workable":
+    case "ashby":
+    case "smartrecruiters":
+      return 3; // submit diretto via adapter
+    case "linkedin":
+      return 2;
+    case "adzuna":
+      return 1; // aggregatore, submit fragile
+    default:
+      return 0;
+  }
+}
+
+export function dedupePreferAts(jobs: Job[]): Job[] {
+  const byKey = new Map<string, Job>();
+  const order: string[] = [];
+  for (const j of jobs) {
+    const key = `${(j.company ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")}|${j.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, j);
+      order.push(key);
+    } else if (sourceRank(j.source) > sourceRank(existing.source)) {
+      byKey.set(key, j); // sostituisci con la copia più submittabile
+    }
+  }
+  return order.map((k) => byKey.get(k)).filter((j): j is Job => Boolean(j));
 }
 
 export async function getJobById(id: string): Promise<Job | null> {
