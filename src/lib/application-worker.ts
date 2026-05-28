@@ -23,6 +23,31 @@ import { launchBrowser } from "@/lib/browser";
 import { scrapeRecruiterEmail } from "@/lib/recruiter-email";
 import { findPortalAdapter } from "@/lib/portal-adapters";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
+import {
+  GREENHOUSE_COMPANIES,
+  LEVER_COMPANIES,
+  ASHBY_COMPANIES,
+  WORKABLE_COMPANIES,
+  SMARTRECRUITERS_COMPANIES,
+} from "@/lib/scrapers/ats-companies";
+
+// Set di nomi azienda con board ATS noto (normalizzati). Usato per evitare
+// il fallback email verso indirizzi scrapati quando esiste un portale
+// ufficiale di candidatura.
+const KNOWN_ATS_COMPANY_NAMES = new Set(
+  [
+    ...GREENHOUSE_COMPANIES,
+    ...LEVER_COMPANIES,
+    ...ASHBY_COMPANIES,
+    ...WORKABLE_COMPANIES,
+    ...SMARTRECRUITERS_COMPANIES,
+  ].map((c) => c.name.toLowerCase().replace(/[^a-z0-9]/g, "")),
+);
+
+function isKnownAtsCompany(company: string | null | undefined): boolean {
+  if (!company) return false;
+  return KNOWN_ATS_COMPANY_NAMES.has(company.toLowerCase().replace(/[^a-z0-9]/g, ""));
+}
 
 /**
  * Worker: processa una candidatura fino a consegna al utente.
@@ -549,6 +574,40 @@ export async function processApplication(
     });
   }
 
+  // Guardia anti-email-sbagliata: se l'azienda ha un board ATS noto
+  // (Greenhouse/Lever/Workable/...), NON facciamo il fallback email a un
+  // indirizzo scrapato (spesso caselle sbagliate). Preferiamo l'invio sul
+  // portale ufficiale. Se nel pool esiste già una copia ATS dello stesso
+  // job (diversa dall'aggregatore Adzuna), puntiamo l'utente lì in manuale;
+  // al prossimo ciclo l'auto-apply userà direttamente quella copia.
+  if (!app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
+    const atsAlt = await prisma.job.findFirst({
+      where: {
+        company: app.job.company,
+        source: { in: ["greenhouse", "lever", "workable", "ashby", "smartrecruiters"] },
+        id: { not: app.job.id },
+      },
+      select: { url: true },
+      orderBy: { cachedAt: "desc" },
+    });
+    const officialUrl = atsAlt?.url ?? resolvedUrl;
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: {
+        status: "ready_to_apply",
+        submittedVia: null,
+        errorMessage:
+          `${app.job.company} usa un sistema di candidatura ufficiale (ATS). ` +
+          `Per non mandare la candidatura a una casella sbagliata, candidati dal portale: ${officialUrl} — CV e lettera sono pronti.`,
+        completedAt: new Date(),
+      },
+    });
+    await notifyApplicationManual(applicationId).catch((err) =>
+      console.error(`[worker] ${applicationId} notify manual (ats-known) failed`, err),
+    );
+    return;
+  }
+
   let recruiterEmail = app.job.recruiterEmail;
   if (!recruiterEmail) {
     recruiterEmail = await scrapeRecruiterEmail(
@@ -1002,6 +1061,23 @@ async function portalSubmitStrategy(
 
 // ---------- Notifica utente: candidatura consegnata ----------
 
+/**
+ * Livello di consegna comunicato all'utente — onesto sul grado di prova:
+ *  - "confirmed": submit sul portale ATS con conferma rilevata (DETECTED)
+ *  - "portal":    submit sul portale ma senza conferma chiara (UNCONFIRMED)
+ *  - "email":     inviata via email al recruiter (nessuna conferma ATS)
+ */
+type DeliveryLevel = "confirmed" | "portal" | "email";
+
+function deliveryLevelOf(
+  submittedVia: string | null,
+  submitConfirmation: string | null,
+): DeliveryLevel {
+  if (submittedVia === "email_recruiter") return "email";
+  if (submitConfirmation === "DETECTED") return "confirmed";
+  return "portal";
+}
+
 async function notifyApplicationSent(applicationId: string): Promise<void> {
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
@@ -1017,11 +1093,12 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
   const company = app.job.company ?? "l'azienda";
   const jobTitle = app.job.title;
   const jobUrl = app.job.url;
+  const level = deliveryLevelOf(app.submittedVia, app.submitConfirmation);
 
   if (!apiKey) {
     if (process.env.NODE_ENV !== "production") {
       console.log(
-        `\n📧 [sent-email DEV] Avrei avvisato ${app.user.email} — candidatura per "${jobTitle}" consegnata a ${company}\n`,
+        `\n📧 [sent-email DEV] Avrei avvisato ${app.user.email} — candidatura "${jobTitle}" @ ${company} (livello: ${level})\n`,
       );
     }
     return;
@@ -1031,21 +1108,45 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
   const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
 
   const locale = app.user.locale === "en" ? "en" : "it";
+  const en = locale === "en";
+
+  // Oggetto + testo onesti per livello. Niente "✓ consegnata" se non
+  // abbiamo conferma reale.
   const subject =
-    locale === "en"
-      ? `Application sent to ${company} ✓`
-      : `Candidatura inviata a ${company} ✓`;
-  const textBody =
-    locale === "en"
-      ? `Hi ${firstName},\n\nYour application for "${jobTitle}" was delivered to ${company}.\n\nJob link: ${jobUrl}\n\n— LavorAI`
-      : `Ciao ${firstName},\n\nLa tua candidatura per "${jobTitle}" è stata consegnata a ${company}.\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`;
+    level === "confirmed"
+      ? en
+        ? `Application submitted to ${company} ✓`
+        : `Candidatura inviata a ${company} ✓`
+      : level === "portal"
+        ? en
+          ? `Application submitted to ${company}`
+          : `Candidatura inviata a ${company}`
+        : en
+          ? `Application emailed to ${company}`
+          : `Candidatura inviata via email a ${company}`;
+
+  const textBody = en
+    ? `Hi ${firstName},\n\n${
+        level === "confirmed"
+          ? `Your application for "${jobTitle}" was submitted to ${company} and we detected a confirmation.`
+          : level === "portal"
+            ? `Your application for "${jobTitle}" was submitted to ${company}'s portal. We couldn't capture an explicit confirmation page — keep an eye out for ${company}'s own email.`
+            : `We emailed your application for "${jobTitle}" to ${company}'s recruiting address. Not all companies confirm by email — we recommend also applying on their official page if you don't hear back.`
+      }\n\nJob link: ${jobUrl}\n\n— LavorAI`
+    : `Ciao ${firstName},\n\n${
+        level === "confirmed"
+          ? `La tua candidatura per "${jobTitle}" è stata inviata a ${company} e abbiamo rilevato una conferma.`
+          : level === "portal"
+            ? `La tua candidatura per "${jobTitle}" è stata inviata sul portale di ${company}. Non siamo riusciti a catturare una pagina di conferma esplicita — controlla anche l'email di ${company}.`
+            : `Abbiamo inviato la tua candidatura per "${jobTitle}" via email all'indirizzo di recruiting di ${company}. Non tutte le aziende confermano via email — se non ricevi risposta, ti consigliamo di candidarti anche sulla loro pagina ufficiale.`
+      }\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`;
 
   await sendWithinQuota("application_sent", app.user.email, async () => {
     await resend.emails.send({
       from,
       to: app.user.email,
       subject,
-      html: renderSentEmail({ firstName, jobTitle, company, jobUrl, locale }),
+      html: renderSentEmail({ firstName, jobTitle, company, jobUrl, locale, level }),
       text: textBody,
     });
   });
@@ -1057,23 +1158,43 @@ function renderSentEmail(data: {
   company: string;
   jobUrl: string;
   locale: "it" | "en";
+  level: DeliveryLevel;
 }): string {
+  const checkmark = data.level === "confirmed" ? " ✓" : "";
   const m =
     data.locale === "en"
       ? {
-          title: `Application sent${data.firstName ? `, ${data.firstName}` : ""} ✓`,
-          delivered: "We delivered your application to:",
+          title: `${
+            data.level === "email" ? "Application emailed" : "Application submitted"
+          }${data.firstName ? `, ${data.firstName}` : ""}${checkmark}`,
+          delivered:
+            data.level === "confirmed"
+              ? "We submitted your application — confirmation detected:"
+              : data.level === "portal"
+                ? "We submitted your application to the portal (confirmation not captured):"
+                : "We emailed your application to the recruiting address:",
           updates:
-            "We'll notify you as soon as there are updates (views, recruiter replies). Meanwhile you can track everything from your dashboard.",
+            data.level === "email"
+              ? "Not all companies confirm emailed applications. If you don't hear back, consider applying on their official page too. Track everything from your dashboard."
+              : "We'll notify you as soon as there are updates (views, recruiter replies). Meanwhile you can track everything from your dashboard.",
           openCta: "Open job →",
           dashboardHint: "View all your applications at lavorai.it/applications",
           questions: "Questions? Just reply to this email.",
         }
       : {
-          title: `Candidatura inviata${data.firstName ? `, ${data.firstName}` : ""} ✓`,
-          delivered: "Abbiamo consegnato la tua candidatura a:",
+          title: `${
+            data.level === "email" ? "Candidatura inviata via email" : "Candidatura inviata"
+          }${data.firstName ? `, ${data.firstName}` : ""}${checkmark}`,
+          delivered:
+            data.level === "confirmed"
+              ? "Abbiamo inviato la tua candidatura — conferma rilevata:"
+              : data.level === "portal"
+                ? "Abbiamo inviato la candidatura sul portale (conferma non catturata):"
+                : "Abbiamo inviato la candidatura via email all'indirizzo di recruiting:",
           updates:
-            "Ti avviseremo non appena ci saranno novità (visualizzazioni, risposte dei recruiter). Nel frattempo puoi monitorare lo stato dalla tua dashboard.",
+            data.level === "email"
+              ? "Non tutte le aziende confermano le candidature via email. Se non ricevi risposta, valuta di candidarti anche sulla pagina ufficiale. Monitora tutto dalla dashboard."
+              : "Ti avviseremo non appena ci saranno novità (visualizzazioni, risposte dei recruiter). Nel frattempo puoi monitorare lo stato dalla tua dashboard.",
           openCta: "Apri annuncio →",
           dashboardHint:
             "Vedrai tutte le candidature su lavorai.it/applications",
