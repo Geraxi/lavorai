@@ -118,6 +118,7 @@ export function jobMatchesLocationPrefs(
 interface RunStats {
   usersProcessed: number;
   applicationsEnqueued: number;
+  applicationsAwaitingConsent: number;
   skippedDailyCap: number;
   skippedMonthlyPaywall: number;
   skippedMatchThreshold: number;
@@ -152,6 +153,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   const stats: RunStats = {
     usersProcessed: 0,
     applicationsEnqueued: 0,
+    applicationsAwaitingConsent: 0,
     skippedDailyCap: 0,
     skippedMonthlyPaywall: 0,
     skippedMatchThreshold: 0,
@@ -164,10 +166,14 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     errors: 0,
   };
 
-  // Utenti in modalità auto con CV + preferenze
+  // Utenti in modalità auto O hybrid con CV + preferenze.
+  // - "auto":   creiamo candidature "queued" e le mandiamo subito in coda.
+  // - "hybrid": creiamo candidature "awaiting_consent" — il motore trova e
+  //             prepara i job, l'utente li approva dal dashboard. Senza
+  //             questo, hybrid era di fatto morto (zero candidature mai).
   const eligibleUsers = await prisma.user.findMany({
     where: {
-      preferences: { autoApplyMode: "auto" },
+      preferences: { autoApplyMode: { in: ["auto", "hybrid"] } },
       cvDocuments: { some: {} },
       cvProfile: { isNot: null },
     },
@@ -232,6 +238,13 @@ async function processUser(
   if (!user.preferences || !user.cvProfile) return;
   const prefs = user.preferences;
   const profile = rowToProfile(user.cvProfile);
+
+  // Modalità: "auto" candida direttamente (queued + enqueue), "hybrid"
+  // prepara la candidatura e la lascia in "awaiting_consent" perché
+  // l'utente la approvi dal dashboard. initialStatus guida entrambi i
+  // create-block sotto.
+  const isHybrid = prefs.autoApplyMode === "hybrid";
+  const initialStatus = isHybrid ? "awaiting_consent" : "queued";
 
   // Round attivi (sessioni status=active|auto, non completate). I "round"
   // sono la nuova source-of-truth: ognuno ha un title + targetCount.
@@ -403,6 +416,8 @@ async function processUser(
       // Skip jobs dove l'utente ha:
       //   - una candidatura consegnata (success) → mai ricandidare
       //   - una in volo (queued/optimizing/applying) → no doppioni
+      //   - una in attesa di approvazione (awaiting_consent) → in hybrid
+      //     non vogliamo duplicare la stessa suggestion ogni tick
       //   - una qualsiasi recente (< 24h) → cooldown anti-spam-retry
       // I ready_to_apply / failed più vecchi di 24h tornano nel pool ma
       // solo una volta al giorno, non ogni 30 minuti.
@@ -411,7 +426,7 @@ async function processUser(
           some: {
             userId: user.id,
             OR: [
-              { status: { in: ["success", "queued", "optimizing", "applying"] } },
+              { status: { in: ["success", "queued", "optimizing", "applying", "awaiting_consent"] } },
               { createdAt: { gte: new Date(Date.now() - 12 * 3600_000) } },
             ],
           },
@@ -677,15 +692,21 @@ async function processUser(
           userId: user.id,
           jobId: job.id,
           portal,
-          status: "queued",
+          status: initialStatus,
           trackingToken: randomToken(),
           atsScore: score,
           sessionId,
         },
       });
-      await enqueueApplication(app.id);
+      // Solo in auto mandiamo subito in coda. In hybrid resta
+      // "awaiting_consent" finché l'utente non approva dal dashboard.
+      if (!isHybrid) {
+        await enqueueApplication(app.id);
+        stats.applicationsEnqueued++;
+      } else {
+        stats.applicationsAwaitingConsent++;
+      }
       enqueued++;
-      stats.applicationsEnqueued++;
       // Marca azienda usata nel run (diversificazione)
       const usedKey = (job.company ?? "").toLowerCase();
       if (usedKey) {
@@ -762,15 +783,19 @@ async function processUser(
             userId: user.id,
             jobId: job.id,
             portal: portalOf(job.url),
-            status: "queued",
+            status: initialStatus,
             trackingToken: randomToken(),
             atsScore: score,
             sessionId,
           },
         });
-        await enqueueApplication(app.id);
+        if (!isHybrid) {
+          await enqueueApplication(app.id);
+          stats.applicationsEnqueued++;
+        } else {
+          stats.applicationsAwaitingConsent++;
+        }
         enqueued++;
-        stats.applicationsEnqueued++;
         if (cKey2) {
           companyCount30d.set(cKey2, (companyCount30d.get(cKey2) ?? 0) + 1);
         }
