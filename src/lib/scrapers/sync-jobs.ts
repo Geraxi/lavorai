@@ -4,6 +4,7 @@ import { fetchLeverMulti } from "./lever";
 import { fetchAshbyMulti } from "./ashby";
 import { fetchSmartRecruitersMulti } from "./smartrecruiters";
 import { fetchWorkableMulti } from "./workable";
+import { fetchDemandJobs } from "./demand-queries";
 import {
   fetchLinkedinViaApify,
   DEFAULT_LINKEDIN_QUERIES,
@@ -31,24 +32,30 @@ export async function syncAtsJobs(): Promise<{
   smartrecruiters: number;
   workable: number;
   linkedin: number;
+  demand: number;
+  demandQueries: number;
   total: number;
 }> {
   console.log(
-    "[sync-jobs] starting Greenhouse + Lever + Ashby + SmartRecruiters + Workable + LinkedIn(Apify) fetch...",
+    "[sync-jobs] starting Greenhouse + Lever + Ashby + SmartRecruiters + Workable + LinkedIn(Apify) + Demand(Adzuna) fetch...",
   );
-  const [gh, lv, ash, sr, wk, li] = await Promise.all([
+  const [gh, lv, ash, sr, wk, li, demand] = await Promise.all([
     fetchGreenhouseMulti(GREENHOUSE_COMPANIES, 4),
     fetchLeverMulti(LEVER_COMPANIES, 4),
     fetchAshbyMulti(ASHBY_COMPANIES, 4),
     fetchSmartRecruitersMulti(SMARTRECRUITERS_COMPANIES, 4),
     fetchWorkableMulti(WORKABLE_COMPANIES, 4),
     fetchLinkedinViaApify(DEFAULT_LINKEDIN_QUERIES, 25),
+    // Demand-driven: popola il pool con i ruoli che gli utenti reali
+    // hanno selezionato (es. "Meteorologo", "Analista Climatico"), non
+    // solo i verticali design/dev hard-coded.
+    fetchDemandJobs(),
   ]);
   console.log(
-    `[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}  ashby=${ash.length}  smartrec=${sr.length}  workable=${wk.length}  linkedin=${li.length}`,
+    `[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}  ashby=${ash.length}  smartrec=${sr.length}  workable=${wk.length}  linkedin=${li.length}  demand=${demand.items.length} (${demand.queries} queries)`,
   );
 
-  const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...li];
+  const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...li, ...demand.items];
   const upserted = await upsertJobs(all);
   return {
     greenhouse: gh.length,
@@ -57,6 +64,8 @@ export async function syncAtsJobs(): Promise<{
     smartrecruiters: sr.length,
     workable: wk.length,
     linkedin: li.length,
+    demand: demand.items.length,
+    demandQueries: demand.queries,
     total: upserted,
   };
 }
