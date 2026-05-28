@@ -135,6 +135,29 @@ const PREFERRED_LOCAL = new Set([
   "cv",
 ]);
 
+// Sottostringhe nel local-part che indicano caselle NON adatte a ricevere
+// candidature (accessibilità, accomodamenti, diversità, stampa, investitori,
+// compliance, sicurezza, reclami, ecc.). Match per `includes`, non esatto.
+const BLACKLIST_SUBSTRING = [
+  "accessib", // accessiblerecruitment, accessibility
+  "accommodation",
+  "accomodation",
+  "adjustment", // reasonableadjustments
+  "diversity",
+  "inclusion",
+  "press",
+  "media",
+  "investor",
+  "compliance",
+  "security",
+  "gdpr",
+  "complaint",
+  "reclami",
+  "whistleblow",
+  "fraud",
+  "spam",
+];
+
 function score(email: string, companySlug: string | null): number {
   const [local, domain] = email.split("@");
   if (!local || !domain) return -1;
@@ -144,6 +167,11 @@ function score(email: string, companySlug: string | null): number {
   if (/(^|\.)ingest(\.[a-z]+)?\.sentry\.io$/i.test(domain)) return -1000;
   if (/(^|\.)sentry\.io$/i.test(domain)) return -1000;
   if (BLACKLIST_LOCAL.has(local)) return -100;
+  // Blocklist per SOTTOSTRINGA: caselle che NON processano candidature
+  // anche se contengono "recruitment"/"recruiting". Es. The Fork usa
+  // accessiblerecruitment@thefork.com SOLO per richieste di accessibilità
+  // — mandarci una candidatura la perde silenziosamente.
+  if (BLACKLIST_SUBSTRING.some((sub) => local.includes(sub))) return -1000;
   // Regex-level filters su local part palesemente finti
   if (/^(tu|you)(a|r)?[._-]?e?mail$/i.test(local)) return -1000;
   if (/^nome[._-]?cognome$/i.test(local)) return -1000;
