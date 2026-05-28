@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { Panel, PageTitle } from "../_ui";
 import { AdminSyncButton } from "@/components/admin-sync-button";
 import { AdminRetryCreditButton } from "@/components/admin-retry-credit-button";
+import { AdminAutoApplyButton } from "@/components/admin-autoapply-button";
 
 export const metadata: Metadata = { title: "Admin · Job pool", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -32,6 +33,13 @@ export default async function AdminJobsPage() {
           Ri-accoda le candidature andate in errore per crediti AI esauriti (ora che i crediti sono di nuovo disponibili). Le rimette in coda al worker.
         </div>
         <AdminRetryCreditButton />
+      </Panel>
+
+      <Panel title="Lancia candidature automatiche">
+        <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6, marginBottom: 10 }}>
+          Esegue subito il cron auto-apply: accoda candidature per utenti in modalità auto (inviate dal worker) e prepara quelle hybrid (da approvare su /applications).
+        </div>
+        <AdminAutoApplyButton />
       </Panel>
 
       <Panel title="Job pool per fonte">
