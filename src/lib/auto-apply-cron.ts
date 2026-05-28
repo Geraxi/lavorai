@@ -46,7 +46,13 @@ function randomToken(): string {
  * — perché remote-friendly è una superset di qualunque città scelta.
  */
 export function expandLocationPref(loc: string): string[] {
-  const k = loc.trim().toLowerCase();
+  // Normalizza: rimuove qualifier tra parentesi ("Remoto (IT)" → "remoto",
+  // "Remote (EU)" → "remote") così le preferenze remote si espandono davvero.
+  const k = loc
+    .trim()
+    .toLowerCase()
+    .replace(/\s*\(.*?\)\s*/g, "")
+    .trim();
   const aliases: Record<string, string[]> = {
     milan: ["milan", "milano", "lombardia"],
     milano: ["milan", "milano", "lombardia"],
@@ -106,7 +112,27 @@ export function jobMatchesLocationPrefs(
   // marcato esplicitamente "no remote" — non supportato oggi).
   if (job.remote) return true;
   const haystack = (job.location ?? "").toLowerCase();
-  if (!haystack) return false; // no location → no match (defensive)
+  if (!haystack) {
+    // Location vuota (≈29% del pool, tipico dei job ATS che mettono la
+    // sede nella descrizione). Rifiutarli tutti perdeva centinaia di job
+    // buoni. Diamo il beneficio del dubbio SE l'utente è aperto a remote
+    // o a un'area ampia (nazione/continente) — chi cerca solo una città
+    // specifica resta filtrato.
+    const hasBroadPref = prefs.some((p) => {
+      const k = p.trim().toLowerCase().replace(/\s*\(.*?\)\s*/g, "").trim();
+      return (
+        k.includes("remot") ||
+        k.includes("remote") ||
+        k === "italy" ||
+        k === "italia" ||
+        k === "eu" ||
+        k === "europe" ||
+        k === "europa" ||
+        k === "anywhere"
+      );
+    });
+    return hasBroadPref;
+  }
   for (const p of prefs) {
     for (const alias of expandLocationPref(p)) {
       if (haystack.includes(alias)) return true;
