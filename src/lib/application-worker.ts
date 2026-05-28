@@ -581,21 +581,41 @@ export async function processApplication(
   // job (diversa dall'aggregatore Adzuna), puntiamo l'utente lì in manuale;
   // al prossimo ciclo l'auto-apply userà direttamente quella copia.
   if (!app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
+    const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters"];
+    const isAtsSourceJob = ATS_SOURCES.includes(app.job.source);
+
+    if (isAtsSourceJob) {
+      // Questo job È GIÀ da sorgente ATS ma l'adapter non ha confermato il
+      // submit (form cambiato, campo mancante, ecc.). NON mandiamo a email
+      // scrapate: marchiamo failed così viene ritentato al ciclo successivo.
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: {
+          status: "failed",
+          errorMessage:
+            `Submit sul portale ${app.job.source} non confermato (form cambiato o campo mancante). ` +
+            `Verrà ritentato automaticamente.`,
+          completedAt: new Date(),
+        },
+      });
+      return;
+    }
+
+    // Copia da AGGREGATORE (Adzuna/other) di un'azienda con ATS noto:
+    // esiste una copia ATS diretta nel pool → puntiamo lì invece di
+    // mandare a una casella scrapata sbagliata.
     const atsAlt = await prisma.job.findFirst({
       where: {
         company: app.job.company,
-        source: { in: ["greenhouse", "lever", "workable", "ashby", "smartrecruiters"] },
+        source: { in: ATS_SOURCES },
         id: { not: app.job.id },
       },
       select: { url: true },
       orderBy: { cachedAt: "desc" },
     });
     const officialUrl = atsAlt?.url ?? resolvedUrl;
-    // In modalità "auto" l'utente vuole zero coinvolgimento: NON gli
-    // chiediamo di candidarsi a mano. Saltiamo in silenzio (niente email),
-    // marcando il motivo. Al prossimo ciclo l'auto-apply pesca la copia ATS
-    // diretta (il cron è già ATS-only) e la invia davvero. In hybrid/manual
-    // invece l'handoff "candidati in 1 click" ha senso.
+    // In "auto" niente handoff manuale: skip silenzioso, il cron pescherà
+    // la copia ATS diretta al prossimo ciclo. In hybrid/manual l'handoff ok.
     const mode = app.user.preferences?.autoApplyMode ?? "manual";
     const handoff = mode !== "auto";
     await prisma.application.update({
@@ -606,7 +626,7 @@ export async function processApplication(
         errorMessage: handoff
           ? `${app.job.company} usa un sistema di candidatura ufficiale (ATS). ` +
             `Per non mandare la candidatura a una casella sbagliata, candidati dal portale: ${officialUrl} — CV e lettera sono pronti.`
-          : `Skippato in auto: ${app.job.company} ha un ATS ufficiale ma questa copia è da aggregatore. ` +
+          : `Skippato in auto: copia da aggregatore di ${app.job.company}. ` +
             `L'auto-apply userà la copia ATS diretta al prossimo ciclo.`,
         completedAt: new Date(),
       },
