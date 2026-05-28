@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { Panel, PageTitle } from "../_ui";
 import { AdminSyncButton } from "@/components/admin-sync-button";
+import { AdminRetryCreditButton } from "@/components/admin-retry-credit-button";
 
 export const metadata: Metadata = { title: "Admin · Job pool", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -24,6 +25,13 @@ export default async function AdminJobsPage() {
           Forza un fetch immediato: scraper ATS + ricerca Adzuna sui ruoli che gli utenti reali hanno selezionato (es. Meteorologo, Analista Climatico).
         </div>
         <AdminSyncButton />
+      </Panel>
+
+      <Panel title="Recupero candidature fallite">
+        <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6, marginBottom: 10 }}>
+          Ri-accoda le candidature andate in errore per crediti AI esauriti (ora che i crediti sono di nuovo disponibili). Le rimette in coda al worker.
+        </div>
+        <AdminRetryCreditButton />
       </Panel>
 
       <Panel title="Job pool per fonte">
