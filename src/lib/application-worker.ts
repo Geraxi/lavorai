@@ -20,7 +20,7 @@ import { sendWithinQuota } from "@/lib/email-quota";
 import { inboundReplyAddress } from "@/lib/email";
 import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { launchBrowser } from "@/lib/browser";
-import { scrapeRecruiterEmail } from "@/lib/recruiter-email";
+import { scrapeRecruiterEmail, isUsableRecruiterEmail } from "@/lib/recruiter-email";
 import { findPortalAdapter } from "@/lib/portal-adapters";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
 import {
@@ -640,6 +640,16 @@ export async function processApplication(
   }
 
   let recruiterEmail = app.job.recruiterEmail;
+  // L'email salvata sul Job (da ingestion) NON è passata dai nostri filtri:
+  // può essere una casella privacy/no-reply/generica. Validiamola con le
+  // stesse regole dello scraping prima di mandarci una candidatura, così non
+  // marchiamo "success" un invio finito in una casella sbagliata.
+  if (recruiterEmail && !(await isUsableRecruiterEmail(recruiterEmail, app.job.company))) {
+    console.warn(
+      `[worker] ${applicationId} recruiterEmail pre-esistente scartata (non idonea): ${recruiterEmail}`,
+    );
+    recruiterEmail = null;
+  }
   if (!recruiterEmail) {
     recruiterEmail = await scrapeRecruiterEmail(
       resolvedUrl,
@@ -1105,7 +1115,11 @@ function deliveryLevelOf(
   submitConfirmation: string | null,
 ): DeliveryLevel {
   if (submittedVia === "email_recruiter") return "email";
-  if (submitConfirmation === "DETECTED") return "confirmed";
+  // Conferma "hard": DETECTED esatto (legacy) oppure DETECTED_HTTP_2xx/3xx /
+  // DETECTED_DOM dai nuovi adapter HTTP-aware. Senza startsWith, ogni invio
+  // HTTP-confermato veniva declassato a "portal" (niente checkmark all'utente).
+  if (typeof submitConfirmation === "string" && submitConfirmation.startsWith("DETECTED"))
+    return "confirmed";
   return "portal";
 }
 

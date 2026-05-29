@@ -221,6 +221,28 @@ async function hasMxRecord(domain: string): Promise<boolean> {
 }
 
 /**
+ * Valida un'email recruiter GIÀ NOTA (es. arrivata dall'ingestion del job,
+ * non scrapata da noi) con le stesse regole dello scraping: blacklist
+ * (privacy/no-reply/info/generic), placeholder, artefatti, + MX record reale.
+ *
+ * Serve perché Job.recruiterEmail può contenere caselle inadatte salvate a
+ * monte: senza questa guardia il worker mandava la candidatura lì e la
+ * marcava "success" (falsa conferma). Ritorna true solo se l'indirizzo è
+ * plausibilmente in grado di ricevere una candidatura.
+ */
+export async function isUsableRecruiterEmail(
+  email: string | null | undefined,
+  company: string | null,
+): Promise<boolean> {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(normalized)) return false;
+  // score < 0 = blacklist/placeholder/artefatto (incl. privacy, no-reply, dpo…)
+  if (score(normalized, slug(company)) < 0) return false;
+  return hasMxRecord(normalized.split("@")[1] ?? "");
+}
+
+/**
  * Prende un URL di job posting e prova a estrarre l'email del recruiter.
  * Ritorna null se niente di utile trovato.
  */

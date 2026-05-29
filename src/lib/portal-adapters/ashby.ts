@@ -141,7 +141,9 @@ export const ashbyAdapter: PortalAdapter = {
       }
 
       // Upload CV — Ashby usa input[type="file"] (spesso hidden, dietro un
-      // bottone "Attach" o "Upload Resume")
+      // bottone "Attach" o "Upload Resume"). L'upload è ASINCRONO verso l'API
+      // Ashby: dobbiamo VERIFICARE che il file risulti attaccato prima di
+      // inviare, altrimenti finiremmo per inviare una candidatura senza CV.
       const cvInput = page.locator('input[type="file"]');
       if ((await cvInput.count()) === 0) {
         return {
@@ -150,7 +152,51 @@ export const ashbyAdapter: PortalAdapter = {
           error: "Input upload CV non trovato (Ashby).",
         };
       }
-      await cvInput.first().setInputFiles(input.cvLocalPath);
+      const cvBase = input.cvLocalPath.split(/[\\/]/).pop() || "cv";
+      const verifyCvAttached = async (): Promise<boolean> => {
+        for (let i = 0; i < 12; i++) {
+          await page.waitForTimeout(400);
+          const ok = await page
+            .evaluate((name) => {
+              try {
+                const inputs = document.querySelectorAll<HTMLInputElement>(
+                  'input[type="file"]',
+                );
+                for (const inp of Array.from(inputs)) {
+                  if (inp.files && inp.files.length > 0) return true;
+                }
+                const body = (document.body.innerText || "").toLowerCase();
+                if (name && body.includes(name.toLowerCase())) return true;
+                const ind = document.querySelector(
+                  "[class*='chosen'], [class*='file-name'], [class*='filename'], [class*='attachment'], [class*='uploaded']",
+                );
+                return !!(ind && (ind.textContent || "").trim());
+              } catch {
+                return false;
+              }
+            }, cvBase)
+            .catch(() => false);
+          if (ok) return true;
+        }
+        return false;
+      };
+      let cvAttached = false;
+      for (let attempt = 0; attempt < 2 && !cvAttached; attempt++) {
+        await cvInput.first().setInputFiles(input.cvLocalPath).catch(() => void 0);
+        if (await verifyCvAttached()) {
+          cvAttached = true;
+          break;
+        }
+        await page.waitForTimeout(600);
+      }
+      if (!cvAttached) {
+        return {
+          ok: false,
+          status: "missing_field",
+          error:
+            "CV non attaccato al form Ashby (upload non registrato). Submission abortita per non inviare candidatura vuota.",
+        };
+      }
 
       // Custom questions
       try {
@@ -174,6 +220,29 @@ export const ashbyAdapter: PortalAdapter = {
         await consent.nth(i).check({ timeout: 1500 }).catch(() => void 0);
       }
 
+      // Captcha (Turnstile/hCaptcha/reCAPTCHA): se presente e non risolto NON
+      // fingiamo l'invio — per design non è aggirabile. Segnaliamo così il
+      // worker dice all'utente "completa captcha e invia tu".
+      const hasCaptcha = await page
+        .evaluate(() => {
+          const resp = document.querySelector(
+            'textarea[name="g-recaptcha-response"], #g-recaptcha-response',
+          ) as HTMLTextAreaElement | null;
+          const widget = document.querySelector(
+            '.g-recaptcha, .grecaptcha-badge, iframe[src*="recaptcha"], [class*="hcaptcha"], iframe[src*="hcaptcha"], iframe[src*="turnstile"], [class*="cf-turnstile"]',
+          );
+          return !!widget && (!resp || !resp.value.trim());
+        })
+        .catch(() => false);
+      if (hasCaptcha) {
+        return {
+          ok: false,
+          status: "captcha",
+          error:
+            "Il form Ashby ha un captcha che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.",
+        };
+      }
+
       if (input.dryRun) {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
@@ -188,22 +257,106 @@ export const ashbyAdapter: PortalAdapter = {
           error: "Bottone submit Ashby non trovato.",
         };
       }
+
+      // ============================================================
+      // VERIFICA HARD: cattura la risposta HTTP della POST di submission.
+      // Ashby invia la candidatura via API (GraphQL `non-user-graphql` op
+      // ApplyToJobPosting, o endpoint REST). Lo status code è la verità; il
+      // DOM è una conseguenza. NOTA: il GraphQL risponde 200 ANCHE in caso di
+      // errore applicativo → dobbiamo ispezionare il body per `"errors"`.
+      // Nessuna POST catturata = la validazione client ha bloccato il submit.
+      // ============================================================
+      const urlBeforeSubmit = page.url();
+      const submissionResponsePromise = page
+        .waitForResponse(
+          (resp) => {
+            const u = resp.url().toLowerCase();
+            if (resp.request().method().toUpperCase() !== "POST") return false;
+            if (!u.includes("ashbyhq.com")) return false;
+            return (
+              u.includes("graphql") ||
+              u.includes("/apply") ||
+              u.includes("application") ||
+              u.includes("/submit")
+            );
+          },
+          { timeout: 25_000 },
+        )
+        .catch(() => null);
+
       await submit.first().click({ timeout: 5_000 });
+
+      const submissionResponse = await submissionResponsePromise;
       await page
-        .waitForLoadState("networkidle", { timeout: 15_000 })
+        .waitForLoadState("networkidle", { timeout: 12_000 })
         .catch(() => void 0);
+      await page.waitForTimeout(800);
+
+      const finalUrl = page.url();
       const bodyText = await page
         .locator("body")
         .innerText()
         .catch(() => "");
-      const confirmed =
-        /thank|applied|submitted|grazie|received|confirm|application received/i.test(
-          bodyText,
-        ) || /thanks|confirm/i.test(page.url());
+
+      // CASE A: POST catturata → decide da status + (per GraphQL) body.
+      if (submissionResponse) {
+        const status = submissionResponse.status();
+        let respBody = "";
+        try {
+          respBody = (await submissionResponse.text()).slice(0, 2000);
+        } catch {
+          /* body già consumato */
+        }
+        if (status >= 400) {
+          return {
+            ok: false,
+            status: status < 500 ? "validation_failed" : "unknown_error",
+            error: `Ashby ha rifiutato la submission (HTTP ${status}). Response: "${respBody.replace(/\s+/g, " ").slice(0, 240)}"`,
+          };
+        }
+        // 2xx/3xx: il GraphQL può avere errori applicativi in un body 200.
+        const hasGraphqlError = /"errors"\s*:\s*\[\s*\{/.test(respBody);
+        if (hasGraphqlError) {
+          return {
+            ok: false,
+            status: "validation_failed",
+            error: `Ashby GraphQL ha risposto 200 ma con errori applicativi: "${respBody.replace(/\s+/g, " ").slice(0, 240)}"`,
+          };
+        }
+        return {
+          ok: true,
+          status: "submitted",
+          confirmation: `DETECTED_HTTP_${status}`,
+        };
+      }
+
+      // CASE B: nessuna POST → validazione client o thank-you senza request
+      // intercettabile. Solo conferma DOM FORTE (no match su testo già
+      // presente nel form non inviato) o errore esplicito.
+      const errorPatterns =
+        /(this\s+field\s+is\s+required|please\s+(correct|fix|enter|complete)|invalid\s+(email|input|file)|campo\s+obbligatorio|inserisci|file\s+too\s+large)/i;
+      if (errorPatterns.test(bodyText)) {
+        return {
+          ok: false,
+          status: "validation_failed",
+          error: `Validazione client-side ha bloccato il submit Ashby (nessuna POST partita). Body: "${bodyText.slice(0, 200).replace(/\s+/g, " ")}"`,
+        };
+      }
+      const strongConfirmRegex =
+        /(thank\s+you\s+for\s+(applying|your)|application\s+(received|submitted|successful)|your\s+application\s+has\s+been|we['’]?ve\s+received\s+your|grazie\s+per\s+(la\s+)?candidatura|candidatura\s+(inviata|ricevuta))/i;
+      const urlHasConfirm = /thank|confirm|success|submitted/i.test(finalUrl);
+      if (strongConfirmRegex.test(bodyText) || urlHasConfirm) {
+        return {
+          ok: true,
+          status: "submitted",
+          confirmation: "DETECTED_DOM",
+        };
+      }
+
       return {
-        ok: true,
-        status: "submitted",
-        confirmation: confirmed ? "DETECTED" : "UNCONFIRMED",
+        ok: false,
+        status: "unknown_error",
+        error: `Submit Ashby cliccato ma nessuna conferma rilevata (no POST HTTP, no thank-you, no error banner). URL ${finalUrl !== urlBeforeSubmit ? "cambiato" : "invariato"}: ${finalUrl}.`,
       };
     } catch (err) {
       return {
