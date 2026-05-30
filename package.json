@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "worker": "tsx worker.ts",
-    "worker:dev": "REDIS_URL=redis://localhost:6379 tsx watch worker.ts"
+    "worker:dev": "REDIS_URL=redis://localhost:6379 tsx watch worker.ts",
+    "seed:test-user": "tsx scripts/seed-test-user.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
