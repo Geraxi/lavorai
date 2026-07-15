@@ -7,12 +7,13 @@ interface Preview {
   count: number;
   limitHitCount: number;
   genericCount: number;
+  noAppsCount: number;
   candidates: Array<{
     email: string;
     name: string | null;
     applications: number;
     daysSinceSignup: number;
-    reason: "limit_hit" | "generic";
+    reason: "limit_hit" | "generic" | "no_apps";
   }>;
 }
 
@@ -44,7 +45,7 @@ export function AdminUpgradeNudgesButton() {
     if (
       !dryRun &&
       !confirm(
-        `Inviare l'email upgrade_nudge a ${preview?.count ?? 0} utenti Free? (${preview?.limitHitCount ?? 0} limit-hit + ${preview?.genericCount ?? 0} generic)`,
+        `Inviare l'email upgrade_nudge a ${preview?.count ?? 0} utenti Free? (${preview?.limitHitCount ?? 0} limit-hit + ${preview?.genericCount ?? 0} generic + ${preview?.noAppsCount ?? 0} no-apps)`,
       )
     )
       return;
@@ -73,6 +74,7 @@ export function AdminUpgradeNudgesButton() {
 
   const limitHit = preview?.candidates.filter((c) => c.reason === "limit_hit") ?? [];
   const generic = preview?.candidates.filter((c) => c.reason === "generic") ?? [];
+  const noApps = preview?.candidates.filter((c) => c.reason === "no_apps") ?? [];
 
   return (
     <div style={{ marginTop: 4 }}>
@@ -97,7 +99,8 @@ export function AdminUpgradeNudgesButton() {
           <>
             <strong style={{ color: "var(--fg)" }}>{preview.count} utenti eleggibili</strong>:{" "}
             <span style={{ color: "#fca5a5" }}>{preview.limitHitCount} limit-hit</span>{" "}
-            · <span>{preview.genericCount} generic</span>
+            · <span>{preview.genericCount} generic</span>{" "}
+            · <span style={{ color: "var(--fg-subtle)" }}>{preview.noAppsCount} no-apps</span>
           </>
         )}
       </div>
@@ -132,6 +135,21 @@ export function AdminUpgradeNudgesButton() {
               <div key={c.email}>
                 {c.email}
                 {c.name ? ` · ${c.name}` : ""} · {c.applications} app · {c.daysSinceSignup}gg
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+      {noApps.length > 0 && (
+        <details style={{ marginBottom: 10, fontSize: 12, color: "var(--fg-muted)" }}>
+          <summary style={{ cursor: "pointer" }}>
+            {noApps.length} no-apps (pitch iniziale, mai visto valore)
+          </summary>
+          <div style={{ marginTop: 6, display: "grid", gap: 3 }}>
+            {noApps.slice(0, 20).map((c) => (
+              <div key={c.email}>
+                {c.email}
+                {c.name ? ` · ${c.name}` : ""} · 0 app · {c.daysSinceSignup}gg
               </div>
             ))}
           </div>

@@ -32,8 +32,11 @@ export interface UpgradeCandidate {
    * "limit_hit" → ha esaurito il tetto mensile del piano Free ORA:
    *               questo è il momento massimo di conversione — pipeline
    *               ferma, incentivo massimo a sbloccare Pro subito.
+   * "no_apps"   → registrato da tempo ma 0 candidature. Copy onesto:
+   *               NON fingiamo che abbia già visto il valore; parla di
+   *               copertura più ampia (Pro sblocca più fonti + priorità).
    */
-  reason: "generic" | "limit_hit";
+  reason: "generic" | "limit_hit" | "no_apps";
 }
 
 /**
@@ -94,16 +97,24 @@ export async function findUpgradeCandidates(opts?: {
   for (const u of users) {
     if (u.tier !== "free") continue;
     if (isTestAccount(u.email)) continue;
-    if (u._count.applications < 1) continue; // mai usato → nudge onboarding, non upgrade
 
     const usedThisMonth = monthlyUsed.get(u.id) ?? 0;
     const limitHit = usedThisMonth >= FREE_MONTHLY_CAP;
+    const noApps = u._count.applications === 0;
     const withinValueWindow = u.createdAt.getTime() >= maxAge.getTime();
 
-    // Segmentazione: limit-hit sempre; altrimenti solo se ancora nella
-    // finestra di valore (5-90 gg). Vecchi utenti Free che NON hanno
-    // esaurito il limite non vengono (ri)disturbati.
-    if (!limitHit && !withinValueWindow) continue;
+    // Segmentazione:
+    //  - limit-hit → sempre (max conversione, pipeline ferma)
+    //  - no-apps   → sempre se registrato da ≥5gg (pitch onesto: mai
+    //                usato, proviamo con Pro per copertura più ampia)
+    //  - generic   → solo nella finestra di valore 5-90gg
+    if (!limitHit && !noApps && !withinValueWindow) continue;
+
+    const reason: UpgradeCandidate["reason"] = limitHit
+      ? "limit_hit"
+      : noApps
+        ? "no_apps"
+        : "generic";
 
     if (!opts?.ignoreCooldown) {
       const recent = await prisma.emailLog.count({
@@ -123,15 +134,18 @@ export async function findUpgradeCandidates(opts?: {
       locale: u.locale ?? "it",
       applicationsCount: u._count.applications,
       daysSinceSignup: Math.round((now - u.createdAt.getTime()) / 86_400_000),
-      reason: limitHit ? "limit_hit" : "generic",
+      reason,
     });
   }
 
-  // Priorità: prima i limit-hit (conversione massima), poi i generic.
-  out.sort((a, b) => {
-    if (a.reason === b.reason) return 0;
-    return a.reason === "limit_hit" ? -1 : 1;
-  });
+  // Priorità: limit-hit (conversione massima) → generic (ha visto valore)
+  // → no-apps (pitch iniziale onesto). Riflette ROI atteso per segmento.
+  const rank: Record<UpgradeCandidate["reason"], number> = {
+    limit_hit: 0,
+    generic: 1,
+    no_apps: 2,
+  };
+  out.sort((a, b) => rank[a.reason] - rank[b.reason]);
 
   return out;
 }
@@ -218,20 +232,27 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
   const greetName = c.name && c.name.trim() ? c.name.split(/\s+/)[0] : null;
 
   const isLimitHit = c.reason === "limit_hit";
+  const isNoApps = c.reason === "no_apps";
   const COPY = {
     it: {
       subject: isLimitHit
         ? `Hai finito le ${FREE_MONTHLY_CAP} candidature del mese — sblocca ora`
-        : "Sblocca l'auto-apply 24/7 — passa a Pro",
+        : isNoApps
+          ? "Nessuna candidatura ancora — proviamo con Pro"
+          : "Sblocca l'auto-apply 24/7 — passa a Pro",
       greet: greetName ? `Ciao ${greetName},` : "Ciao,",
       lead: isLimitHit
         ? `Hai raggiunto il tetto Free di ${FREE_MONTHLY_CAP} candidature/mese. Il motore ha trovato nuovi annunci compatibili col tuo profilo ma non puo' candidarti finche' il piano non riparte a inizio mese.`
-        : c.applicationsCount > 1
-          ? `Hai gia' inviato ${c.applicationsCount} candidature con LavorAI Free. Bene.`
-          : `Hai gia' provato LavorAI Free. Bene.`,
+        : isNoApps
+          ? `Sei con noi da ${c.daysSinceSignup} giorni ma il motore non ha ancora candidato per te. Cause tipiche: verticale poco coperto dalle fonti Free, matching stretto, oppure ATS custom. Pro sblocca piu' fonti e priorità sui portali diretti — se non parte niente entro 24h, rimborso integrale.`
+          : c.applicationsCount > 1
+            ? `Hai gia' inviato ${c.applicationsCount} candidature con LavorAI Free. Bene.`
+            : `Hai gia' provato LavorAI Free. Bene.`,
       pitch: isLimitHit
         ? "Con Pro riparti oggi stesso:"
-        : "Su Pro la differenza e' concreta:",
+        : isNoApps
+          ? "Cosa cambia con Pro:"
+          : "Su Pro la differenza e' concreta:",
       bullets: [
         "Auto-apply 24/7 senza limite giornaliero",
         "Generazione CV + lettera personalizzata per OGNI annuncio (Free: limitato)",
@@ -241,23 +262,29 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
       ],
       promise:
         "Promessa: prima consegna confermata entro 24h dall'upgrade, o rimborso integrale.",
-      cta: isLimitHit ? "Sblocca ora" : "Passa a Pro",
+      cta: isLimitHit ? "Sblocca ora" : isNoApps ? "Prova Pro" : "Passa a Pro",
       footer:
         "Ricevi questa email perche' hai un account LavorAI Free attivo. Cambia tier o disiscriviti in qualsiasi momento.",
     },
     en: {
       subject: isLimitHit
         ? `You hit your ${FREE_MONTHLY_CAP}-application monthly cap — unlock now`
-        : "Unlock 24/7 auto-apply — upgrade to Pro",
+        : isNoApps
+          ? "No applications yet — let's try with Pro"
+          : "Unlock 24/7 auto-apply — upgrade to Pro",
       greet: greetName ? `Hi ${greetName},` : "Hi,",
       lead: isLimitHit
         ? `You've hit the Free tier cap of ${FREE_MONTHLY_CAP} applications this month. The engine found new matches for you but can't submit them until the plan resets on the 1st.`
-        : c.applicationsCount > 1
-          ? `You've already submitted ${c.applicationsCount} applications on LavorAI Free. Nice.`
-          : `You've tried LavorAI Free. Nice.`,
+        : isNoApps
+          ? `You've been with us ${c.daysSinceSignup} days but the engine hasn't applied for you yet. Common causes: your vertical isn't well covered by Free sources, tight matching, or custom ATS. Pro unlocks more sources and priority on direct portals — if nothing lands within 24h, full refund.`
+          : c.applicationsCount > 1
+            ? `You've already submitted ${c.applicationsCount} applications on LavorAI Free. Nice.`
+            : `You've tried LavorAI Free. Nice.`,
       pitch: isLimitHit
         ? "With Pro you resume today:"
-        : "Pro is where the real value kicks in:",
+        : isNoApps
+          ? "What Pro changes:"
+          : "Pro is where the real value kicks in:",
       bullets: [
         "24/7 auto-apply with no daily cap",
         "Tailored CV + cover letter for EVERY job (Free is limited)",
@@ -267,7 +294,7 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
       ],
       promise:
         "Promise: first confirmed delivery within 24h after upgrade, or full refund.",
-      cta: isLimitHit ? "Unlock now" : "Upgrade to Pro",
+      cta: isLimitHit ? "Unlock now" : isNoApps ? "Try Pro" : "Upgrade to Pro",
       footer:
         "You're receiving this because you have an active LavorAI Free account. Change tier or unsubscribe anytime.",
     },

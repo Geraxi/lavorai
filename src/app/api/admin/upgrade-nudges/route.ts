@@ -25,6 +25,7 @@ export async function GET() {
     })),
     limitHitCount: candidates.filter((c) => c.reason === "limit_hit").length,
     genericCount: candidates.filter((c) => c.reason === "generic").length,
+    noAppsCount: candidates.filter((c) => c.reason === "no_apps").length,
   });
 }
 
