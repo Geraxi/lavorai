@@ -4,6 +4,7 @@ import { CommandPalette } from "@/components/design/command-palette";
 import { ThemeScript } from "@/components/design/theme-script";
 import { UserPopup } from "@/components/user-popup";
 import { OnboardingBanner } from "@/components/onboarding-banner";
+import { UpgradePrompt } from "@/components/upgrade-prompt";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
@@ -56,6 +57,9 @@ export default async function AppLayout({
         }}
       >
         <OnboardingBanner />
+        {/* Prompt persistente upgrade Pro (solo Free tier, self-hides
+            per Pro/Pro+/admin). Adatta il tono in base all'uso mensile. */}
+        <UpgradePrompt />
         {children}
       </AppShell>
       <CommandPalette />
