@@ -21,7 +21,10 @@ export async function GET() {
       name: c.name,
       applications: c.applicationsCount,
       daysSinceSignup: c.daysSinceSignup,
+      reason: c.reason,
     })),
+    limitHitCount: candidates.filter((c) => c.reason === "limit_hit").length,
+    genericCount: candidates.filter((c) => c.reason === "generic").length,
   });
 }
 

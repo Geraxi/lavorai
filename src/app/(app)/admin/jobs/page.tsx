@@ -4,6 +4,7 @@ import { Panel, PageTitle } from "../_ui";
 import { AdminSyncButton } from "@/components/admin-sync-button";
 import { AdminRetryCreditButton } from "@/components/admin-retry-credit-button";
 import { AdminAutoApplyButton } from "@/components/admin-autoapply-button";
+import { AdminUpgradeNudgesButton } from "@/components/admin-upgrade-nudges-button";
 
 export const metadata: Metadata = { title: "Admin · Job pool", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -40,6 +41,13 @@ export default async function AdminJobsPage() {
           Esegue subito il cron auto-apply: accoda candidature per utenti in modalità auto (inviate dal worker) e prepara quelle hybrid (da approvare su /applications).
         </div>
         <AdminAutoApplyButton />
+      </Panel>
+
+      <Panel title="Upgrade nudges (Free → Pro)">
+        <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6, marginBottom: 10 }}>
+          Invia l&apos;email upgrade_nudge agli utenti Free eleggibili. Priorità ai limit-hit (esaurito il tetto mensile) — massima conversione. Cooldown 10gg per utente, esclusi test/interni.
+        </div>
+        <AdminUpgradeNudgesButton />
       </Panel>
 
       <Panel title="Job pool per fonte">
