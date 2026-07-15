@@ -27,7 +27,21 @@ export interface UpgradeCandidate {
   locale: string;
   applicationsCount: number;
   daysSinceSignup: number;
+  /**
+   * "generic"   → utente Free attivo, nudge di valore periodico
+   * "limit_hit" → ha esaurito il tetto mensile del piano Free ORA:
+   *               questo è il momento massimo di conversione — pipeline
+   *               ferma, incentivo massimo a sbloccare Pro subito.
+   */
+  reason: "generic" | "limit_hit";
 }
+
+/**
+ * Tetto mensile del piano Free — deve restare allineato a getLimits(free)
+ * in lib/billing.ts. Duplicato qui per evitare ciclo di dipendenza sulle
+ * env di stripe che billing.ts richiede.
+ */
+const FREE_MONTHLY_CAP = 3;
 
 export async function findUpgradeCandidates(opts?: {
   onlyEmail?: string;
@@ -37,12 +51,17 @@ export async function findUpgradeCandidates(opts?: {
   const minAge = new Date(now - MIN_AGE_DAYS * 86_400_000);
   const maxAge = new Date(now - MAX_AGE_DAYS * 86_400_000);
 
+  // Pool 1: free "attivi" nella finestra 5-90 giorni (nudge di valore periodico).
+  // Pool 2: free CHE HANNO ESAURITO IL LIMITE MENSILE — indipendentemente
+  // dall'età dell'account. Sono il segmento più conversion-heavy: pipeline
+  // ferma, dolore massimo. Include anche vecchi utenti (>90gg) che l'ex
+  // filtro MAX_AGE_DAYS scartava.
   const users = await prisma.user.findMany({
     where: opts?.onlyEmail
       ? { email: opts.onlyEmail }
       : {
           tier: "free",
-          createdAt: { lte: minAge, gte: maxAge },
+          createdAt: { lte: minAge }, // rimosso il floor 90gg: limit-hit vince
         },
     select: {
       id: true,
@@ -55,6 +74,20 @@ export async function findUpgradeCandidates(opts?: {
     },
   });
 
+  // Conteggio candidature del mese corrente per identificare i limit-hit.
+  // Un'unica group-by su tutti i free users evita N+1 sulla DB.
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const monthByUser = await prisma.application.groupBy({
+    by: ["userId"],
+    where: {
+      userId: { in: users.map((u) => u.id) },
+      createdAt: { gte: monthStart },
+      status: { in: ["success", "queued", "optimizing", "applying", "ready_to_apply"] },
+    },
+    _count: { _all: true },
+  });
+  const monthlyUsed = new Map(monthByUser.map((r) => [r.userId, r._count._all]));
+
   const cooldownSince = new Date(now - COOLDOWN_DAYS * 86_400_000);
   const out: UpgradeCandidate[] = [];
 
@@ -62,6 +95,15 @@ export async function findUpgradeCandidates(opts?: {
     if (u.tier !== "free") continue;
     if (isTestAccount(u.email)) continue;
     if (u._count.applications < 1) continue; // mai usato → nudge onboarding, non upgrade
+
+    const usedThisMonth = monthlyUsed.get(u.id) ?? 0;
+    const limitHit = usedThisMonth >= FREE_MONTHLY_CAP;
+    const withinValueWindow = u.createdAt.getTime() >= maxAge.getTime();
+
+    // Segmentazione: limit-hit sempre; altrimenti solo se ancora nella
+    // finestra di valore (5-90 gg). Vecchi utenti Free che NON hanno
+    // esaurito il limite non vengono (ri)disturbati.
+    if (!limitHit && !withinValueWindow) continue;
 
     if (!opts?.ignoreCooldown) {
       const recent = await prisma.emailLog.count({
@@ -81,8 +123,15 @@ export async function findUpgradeCandidates(opts?: {
       locale: u.locale ?? "it",
       applicationsCount: u._count.applications,
       daysSinceSignup: Math.round((now - u.createdAt.getTime()) / 86_400_000),
+      reason: limitHit ? "limit_hit" : "generic",
     });
   }
+
+  // Priorità: prima i limit-hit (conversione massima), poi i generic.
+  out.sort((a, b) => {
+    if (a.reason === b.reason) return 0;
+    return a.reason === "limit_hit" ? -1 : 1;
+  });
 
   return out;
 }
@@ -168,15 +217,21 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
   const url = `${siteUrl}/pricing`;
   const greetName = c.name && c.name.trim() ? c.name.split(/\s+/)[0] : null;
 
+  const isLimitHit = c.reason === "limit_hit";
   const COPY = {
     it: {
-      subject: "Sblocca l'auto-apply 24/7 — passa a Pro",
+      subject: isLimitHit
+        ? `Hai finito le ${FREE_MONTHLY_CAP} candidature del mese — sblocca ora`
+        : "Sblocca l'auto-apply 24/7 — passa a Pro",
       greet: greetName ? `Ciao ${greetName},` : "Ciao,",
-      lead:
-        c.applicationsCount > 1
+      lead: isLimitHit
+        ? `Hai raggiunto il tetto Free di ${FREE_MONTHLY_CAP} candidature/mese. Il motore ha trovato nuovi annunci compatibili col tuo profilo ma non puo' candidarti finche' il piano non riparte a inizio mese.`
+        : c.applicationsCount > 1
           ? `Hai gia' inviato ${c.applicationsCount} candidature con LavorAI Free. Bene.`
           : `Hai gia' provato LavorAI Free. Bene.`,
-      pitch: "Su Pro la differenza e' concreta:",
+      pitch: isLimitHit
+        ? "Con Pro riparti oggi stesso:"
+        : "Su Pro la differenza e' concreta:",
       bullets: [
         "Auto-apply 24/7 senza limite giornaliero",
         "Generazione CV + lettera personalizzata per OGNI annuncio (Free: limitato)",
@@ -186,18 +241,23 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
       ],
       promise:
         "Promessa: prima consegna confermata entro 24h dall'upgrade, o rimborso integrale.",
-      cta: "Passa a Pro",
+      cta: isLimitHit ? "Sblocca ora" : "Passa a Pro",
       footer:
         "Ricevi questa email perche' hai un account LavorAI Free attivo. Cambia tier o disiscriviti in qualsiasi momento.",
     },
     en: {
-      subject: "Unlock 24/7 auto-apply — upgrade to Pro",
+      subject: isLimitHit
+        ? `You hit your ${FREE_MONTHLY_CAP}-application monthly cap — unlock now`
+        : "Unlock 24/7 auto-apply — upgrade to Pro",
       greet: greetName ? `Hi ${greetName},` : "Hi,",
-      lead:
-        c.applicationsCount > 1
+      lead: isLimitHit
+        ? `You've hit the Free tier cap of ${FREE_MONTHLY_CAP} applications this month. The engine found new matches for you but can't submit them until the plan resets on the 1st.`
+        : c.applicationsCount > 1
           ? `You've already submitted ${c.applicationsCount} applications on LavorAI Free. Nice.`
           : `You've tried LavorAI Free. Nice.`,
-      pitch: "Pro is where the real value kicks in:",
+      pitch: isLimitHit
+        ? "With Pro you resume today:"
+        : "Pro is where the real value kicks in:",
       bullets: [
         "24/7 auto-apply with no daily cap",
         "Tailored CV + cover letter for EVERY job (Free is limited)",
@@ -207,7 +267,7 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
       ],
       promise:
         "Promise: first confirmed delivery within 24h after upgrade, or full refund.",
-      cta: "Upgrade to Pro",
+      cta: isLimitHit ? "Unlock now" : "Upgrade to Pro",
       footer:
         "You're receiving this because you have an active LavorAI Free account. Change tier or unsubscribe anytime.",
     },
