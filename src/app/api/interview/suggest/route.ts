@@ -184,7 +184,7 @@ export async function POST(request: NextRequest) {
       bullets: suggestion.bullets,
       speakingNote: suggestion.speakingNote,
     },
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-5",
     latencyMs: suggestion.latencyMs,
   };
   const newLog =

@@ -10,7 +10,7 @@ import {
  * Stringa esatta richiesta dallo Sprint 2 — non modificare senza
  * confermare con il team.
  */
-const CV_OPTIMIZATION_MODEL = "claude-sonnet-4-20250514";
+const CV_OPTIMIZATION_MODEL = "claude-sonnet-5";
 
 let cachedClient: Anthropic | null = null;
 

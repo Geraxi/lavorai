@@ -7,7 +7,7 @@ import { isAdmin, isTestAccount } from "@/lib/admin";
 export const runtime = "nodejs";
 export const maxDuration = 45;
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-5";
 
 /**
  * POST /api/admin/assistant

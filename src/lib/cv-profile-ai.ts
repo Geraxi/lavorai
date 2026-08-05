@@ -9,7 +9,7 @@ import { extractProfile as extractProfileRegex } from "@/lib/cv-profile";
  */
 
 // Usa lo stesso modello di claude.ts per consistenza (l'estrazione è breve → costo trascurabile)
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-5";
 
 const SYSTEM_PROMPT = `Sei un parser di CV italiano/inglese. Estrai campi oggettivi in JSON.
 

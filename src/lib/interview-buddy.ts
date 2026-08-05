@@ -15,7 +15,7 @@ import Anthropic from "@anthropic-ai/sdk";
  * qui usiamo esplicitamente il locale del visitor.
  */
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-5";
 
 let cachedClient: Anthropic | null = null;
 function getClient(): Anthropic {

@@ -16,7 +16,7 @@ import Anthropic from "@anthropic-ai/sdk";
  * consenso. Tutto best-effort: ogni step in try/catch, non lancia mai.
  */
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-5";
 
 export interface CandidateContext {
   firstName?: string | null;

@@ -14,7 +14,7 @@ import { COMPANY_STAGES } from "./data/stages";
  * (red/green flags, strategia, score). Output strutturato JSON.
  */
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-5";
 
 let cachedClient: Anthropic | null = null;
 function getClient(): Anthropic {

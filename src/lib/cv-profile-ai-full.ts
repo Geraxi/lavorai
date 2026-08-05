@@ -14,7 +14,7 @@ import {
  *    not present in the source profile.
  */
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-5";
 
 let cached: Anthropic | null = null;
 function client(): Anthropic | null {

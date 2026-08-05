@@ -16,7 +16,7 @@ import Anthropic from "@anthropic-ai/sdk";
  *       { headline, bullets: string[], speakingNote: string }
  */
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-5";
 
 let cachedClient: Anthropic | null = null;
 function getClient(): Anthropic {
