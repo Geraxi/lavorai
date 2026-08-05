@@ -1087,3 +1087,79 @@
     min-height: calc(100vh - 64px);
   }
 }
+
+/* ==========================================================================
+   LavorAI — Dashboard Redesign (premium + snellito)
+   Riusa i design token già presenti (--border-ds, --shadow-premium,
+   --shadow-hover, --ease-premium, --fg-muted). Nessun nuovo colore introdotto.
+   ========================================================================== */
+
+/* 1) Rimuove il banner "Carica il tuo CV" duplicato in cima:
+      lo stesso invito è già il primo step della checklist onboarding. */
+.dashboard-cv-banner { display: none; }
+
+/* 2) Titolo hero: più grande, tracking negativo, leggero gradiente premium */
+.dashboard-hero h1 {
+  font-size: 36px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  background: linear-gradient(180deg, #fff, #ffffffbf);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.dashboard-hero p {
+  font-size: 15px;
+  margin-top: 8px;
+  color: var(--fg-muted);
+}
+
+/* 3) LAYOUT — la parte centrale dello "snellimento".
+      Onboarding a tutta larghezza in alto; sotto, 3 card in riga. */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  align-items: stretch;      /* le 3 card in riga hanno la stessa altezza */
+  max-width: 1180px;
+}
+.dashboard-grid > * { margin-bottom: 0; }   /* la gap sostituisce i margini */
+
+.dashboard-hero      { grid-column: 1 / -1; margin-bottom: 2px; }  /* riga 1 */
+.dashboard-onboarding{ grid-column: 1 / -1; }                       /* riga 2, full width */
+.dashboard-round     { grid-column: 1; }                            /* riga 3 */
+.dashboard-stats     { grid-column: 2; }
+.dashboard-recent    { grid-column: 3; }
+
+.dashboard-round,
+.dashboard-stats,
+.dashboard-recent { height: 100%; }
+.dashboard-round > .ds-section-card { height: 100%; }
+
+/* 4) Rifiniture premium delle card (raggi più morbidi, ombre, hover) */
+.ds-section-card {
+  border-radius: 24px;
+  border: 1px solid var(--border-ds);
+  background: linear-gradient(180deg, #ffffff0a, #ffffff04);
+  box-shadow: var(--shadow-premium);
+  transition:
+    transform    .45s var(--ease-premium),
+    box-shadow   .45s var(--ease-premium),
+    border-color .45s var(--ease-premium);
+}
+.ds-section-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--border-strong);
+}
+
+.ds-section-head { padding: 16px 20px; border-bottom: 1px solid var(--border-ds); }
+.ds-section-head-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.ds-btn { border-radius: 11px; }
+
+/* 5) Responsive: sotto i 1000px tutto torna a colonna singola */
+@media (max-width: 1000px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .dashboard-round,
+  .dashboard-stats,
+  .dashboard-recent { grid-column: 1; }
+}

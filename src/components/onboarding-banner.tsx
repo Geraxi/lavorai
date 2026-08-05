@@ -56,6 +56,7 @@ export async function OnboardingBanner() {
   return (
     <div
       role="status"
+      className={step === "cv" ? "dashboard-cv-banner" : undefined}
       style={{
         margin: "12px 24px 0",
         padding: "12px 16px",

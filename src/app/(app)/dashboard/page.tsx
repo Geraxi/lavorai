@@ -197,32 +197,23 @@ export default async function DashboardPage() {
       />
 
       <div
+        className="dashboard-grid"
         style={{
           padding: "24px 32px 80px",
-          maxWidth: 1180,
           width: "100%",
           margin: "0 auto",
         }}
       >
         {/* Greeting compatto */}
-        <div className="mb-6">
+        <div className="dashboard-hero">
           <h1
             style={{
-              fontSize: 26,
-              fontWeight: 600,
-              letterSpacing: "-0.022em",
               margin: 0,
             }}
           >
             {t("greeting", { name: greetingName })}
           </h1>
-          <p
-            style={{
-              fontSize: 15,
-              color: "var(--fg-muted)",
-              marginTop: 6,
-            }}
-          >
+          <p>
             {deliveredMonth > 0
               ? viewedMonth > 0
                 ? t("subtitleWithViews", {
@@ -236,22 +227,22 @@ export default async function DashboardPage() {
 
         {/* Onboarding checklist solo se incompleto */}
         {!allChecklistDone && (
-          <div className="mb-6">
+          <div className="dashboard-onboarding">
             <OnboardingChecklist state={onboarding} />
           </div>
         )}
 
         {/* Round attivi + prompt round completati */}
-        <div className="mb-6" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="dashboard-round" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <SessionsStatus />
         </div>
 
         {/* PROGRESS HERO — il cuore della dashboard, green glass */}
         <SectionCard
+          className="dashboard-stats"
           style={{
             position: "relative",
             padding: "28px 30px",
-            marginBottom: 24,
             overflow: "hidden",
           }}
         >
@@ -391,7 +382,7 @@ export default async function DashboardPage() {
         </SectionCard>
 
         {/* Live applications list */}
-        <SectionCard>
+        <SectionCard className="dashboard-recent">
           <SectionHead
             icon={<Icon name="briefcase" size={15} />}
             title={
