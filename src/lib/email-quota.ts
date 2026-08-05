@@ -77,6 +77,7 @@ export type EmailKind =
   | "cv_ready"
   | "application_sent"
   | "application_manual"
+  | "application_no_reply_yet"
   | "signup_verify"
   | "password_reset"
   | "welcome"

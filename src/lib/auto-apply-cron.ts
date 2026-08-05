@@ -490,10 +490,35 @@ async function processUser(
     companyApplyCount.set(c, (companyApplyCount.get(c) ?? 0) + 1);
   }
 
+  // Pre-calcola match score per ogni job → prima chiave di sort.
+  // Diamo prima all'utente i job più congrui al suo profilo (CV + ruoli),
+  // così se la quota giornaliera si esaurisce non sprechiamo slot sui
+  // match deboli. A parità di score prevalgono i tie-break aziende
+  // meno contattate (diversificazione) e postedAt più recente.
+  const roleProfileForScore = scoreProfileForRoles(profile, roles);
+  const scoreCache = new Map<string, number>();
+  const scoreOf = (j: (typeof jobs)[number]): number => {
+    let s = scoreCache.get(j.id);
+    if (s === undefined) {
+      s = quickMatchScore(
+        roleProfileForScore,
+        `${j.title}\n${j.company ?? ""}\n${j.description}`,
+      );
+      scoreCache.set(j.id, s);
+    }
+    return s;
+  };
+
   jobs.sort((a, b) => {
+    // 1. Match score DESC (più congruo prima)
+    const sb = scoreOf(b);
+    const sa = scoreOf(a);
+    if (sb !== sa) return sb - sa;
+    // 2. Aziende mai contattate prima (diversificazione)
     const ca = companyApplyCount.get((a.company ?? "").toLowerCase()) ?? 0;
     const cb = companyApplyCount.get((b.company ?? "").toLowerCase()) ?? 0;
-    if (ca !== cb) return ca - cb; // mai contattate per prime
+    if (ca !== cb) return ca - cb;
+    // 3. Job più recenti (freschezza)
     const ta = a.postedAt?.getTime() ?? 0;
     const tb = b.postedAt?.getTime() ?? 0;
     return tb - ta;

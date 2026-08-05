@@ -4,6 +4,7 @@ import { runUpgradeNudges } from "@/lib/upgrade-nudge";
 import { runAutoApplyCron } from "@/lib/auto-apply-cron";
 import { syncAtsJobs } from "@/lib/scrapers/sync-jobs";
 import { runCronSelfHeal } from "@/lib/cron-self-heal";
+import { runNoReplyFollowups } from "@/lib/no-reply-followup";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -36,10 +37,11 @@ export async function GET(request: NextRequest) {
   // 3. Auto-apply: crea candidature nuove per utenti auto+hybrid.
   const autoApply = await runAutoApplyCron().catch((err) => ({ error: String(err) }));
 
-  // 4. Nudges (email onboarding + upgrade).
-  const [onboarding, upgrade] = await Promise.all([
+  // 4. Nudges + follow-up "no reply yet" per candidature silenti da >3gg.
+  const [onboarding, upgrade, noReply] = await Promise.all([
     runOnboardingNudges({}).catch((err) => ({ error: String(err) })),
     runUpgradeNudges({}).catch((err) => ({ error: String(err) })),
+    runNoReplyFollowups({}).catch((err) => ({ error: String(err) })),
   ]);
   return NextResponse.json({
     ok: true,
@@ -49,5 +51,6 @@ export async function GET(request: NextRequest) {
     autoApply,
     onboarding,
     upgrade,
+    noReply,
   });
 }
