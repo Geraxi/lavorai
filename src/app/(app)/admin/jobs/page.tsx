@@ -5,6 +5,7 @@ import { AdminSyncButton } from "@/components/admin-sync-button";
 import { AdminRetryCreditButton } from "@/components/admin-retry-credit-button";
 import { AdminAutoApplyButton } from "@/components/admin-autoapply-button";
 import { AdminUpgradeNudgesButton } from "@/components/admin-upgrade-nudges-button";
+import { AdminReparseCvButton } from "@/components/admin-reparse-cv-button";
 
 export const metadata: Metadata = { title: "Admin · Job pool", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -41,6 +42,13 @@ export default async function AdminJobsPage() {
           Esegue subito il cron auto-apply: accoda candidature per utenti in modalità auto (inviate dal worker) e prepara quelle hybrid (da approvare su /applications).
         </div>
         <AdminAutoApplyButton />
+      </Panel>
+
+      <Panel title="Ri-parsa CV (recupero profili vuoti)">
+        <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.6, marginBottom: 10 }}>
+          Riprocessa i CV degli utenti con cvProfile vuoto (fallout del bug modello Anthropic risolto). Sblocca l&apos;auto-apply intelligente per Giuseppe, Martin, Angelica, Leonida e altri 6-8 utenti.
+        </div>
+        <AdminReparseCvButton />
       </Panel>
 
       <Panel title="Upgrade nudges (Free → Pro)">
