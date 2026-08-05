@@ -1098,14 +1098,36 @@
       lo stesso invito è già il primo step della checklist onboarding. */
 .dashboard-cv-banner { display: none; }
 
-/* 2) Titolo hero: più grande, tracking negativo, leggero gradiente premium */
+/* 2) Titolo hero: più grande, tracking negativo, leggero gradiente premium.
+      Gradiente attivo solo in dark mode (in light mode il #fff sarebbe
+      invisibile su bg chiaro → text-fill-color transparent lo cancellerebbe). */
 .dashboard-hero h1 {
   font-size: 36px;
   line-height: 1.05;
   letter-spacing: -0.03em;
+  font-weight: 700;
+  color: var(--fg);
+}
+@media (prefers-color-scheme: dark) {
+  .dashboard-hero h1 {
+    background: linear-gradient(180deg, #fff, #ffffffbf);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+:root[data-theme="dark"] .dashboard-hero h1 {
   background: linear-gradient(180deg, #fff, #ffffffbf);
   -webkit-background-clip: text;
   background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+:root[data-theme="light"] .dashboard-hero h1 {
+  background: none;
+  -webkit-text-fill-color: initial;
+  color: var(--fg);
 }
 .dashboard-hero p {
   font-size: 15px;
@@ -1156,8 +1178,10 @@
 .ds-section-head-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .ds-btn { border-radius: 11px; }
 
-/* 5) Responsive: sotto i 1000px tutto torna a colonna singola */
-@media (max-width: 1000px) {
+/* 5) Responsive: sotto i 900px tutto torna a colonna singola.
+      Abbassato da 1000 → 900 per far attivare il grid 3-col anche su
+      viewport con sidebar (main content ~1150-1200px). */
+@media (max-width: 900px) {
   .dashboard-grid { grid-template-columns: 1fr; }
   .dashboard-round,
   .dashboard-stats,
