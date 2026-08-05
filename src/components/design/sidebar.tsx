@@ -100,7 +100,7 @@ export function AppSidebar({
 
   return (
     <aside
-      className="sticky top-0 flex h-screen flex-col gap-0.5 border-r px-3 py-3.5"
+      className="sticky top-0 flex h-screen flex-col gap-0.5 overflow-y-auto overflow-x-hidden border-r px-3 py-3.5"
       style={{
         background: "var(--bg)",
         borderColor: "var(--border-ds)",
