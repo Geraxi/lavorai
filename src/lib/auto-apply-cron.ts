@@ -237,6 +237,20 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     }
   }
 
+  // Daily summary: al termine, invia un'email onesta a ogni utente con
+  // attività nelle 24h ("N inviate + N preparate"). Idempotente lato
+  // destinatario (cooldown 24h nella funzione). Fire-and-forget: se
+  // fallisce non blocca il return dei RunStats.
+  try {
+    const { runDailySummary } = await import("@/lib/daily-summary");
+    const dailyRes = await runDailySummary({});
+    console.log(
+      `[auto-apply-cron] daily-summary: sent=${dailyRes.sent} skipped=${dailyRes.skipped} errors=${dailyRes.errors}`,
+    );
+  } catch (err) {
+    console.error("[auto-apply-cron] daily-summary failed (non-fatal)", err);
+  }
+
   return stats;
 }
 
