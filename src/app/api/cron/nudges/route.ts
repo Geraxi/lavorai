@@ -5,6 +5,7 @@ import { runAutoApplyCron } from "@/lib/auto-apply-cron";
 import { syncAtsJobs } from "@/lib/scrapers/sync-jobs";
 import { runCronSelfHeal } from "@/lib/cron-self-heal";
 import { runNoReplyFollowups } from "@/lib/no-reply-followup";
+import { runDailySummary } from "@/lib/daily-summary";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -37,11 +38,14 @@ export async function GET(request: NextRequest) {
   // 3. Auto-apply: crea candidature nuove per utenti auto+hybrid.
   const autoApply = await runAutoApplyCron().catch((err) => ({ error: String(err) }));
 
-  // 4. Nudges + follow-up "no reply yet" per candidature silenti da >3gg.
-  const [onboarding, upgrade, noReply] = await Promise.all([
+  // 4. Nudges + follow-up "no reply yet" per candidature silenti da >3gg
+  //    + daily summary a ogni utente attivo nelle 24h (copre il gap
+  //    "auto mode + 0 success" dove l'utente prima non riceveva nulla).
+  const [onboarding, upgrade, noReply, dailySummary] = await Promise.all([
     runOnboardingNudges({}).catch((err) => ({ error: String(err) })),
     runUpgradeNudges({}).catch((err) => ({ error: String(err) })),
     runNoReplyFollowups({}).catch((err) => ({ error: String(err) })),
+    runDailySummary({}).catch((err) => ({ error: String(err) })),
   ]);
   return NextResponse.json({
     ok: true,
@@ -52,5 +56,6 @@ export async function GET(request: NextRequest) {
     onboarding,
     upgrade,
     noReply,
+    dailySummary,
   });
 }

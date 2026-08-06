@@ -78,6 +78,7 @@ export type EmailKind =
   | "application_sent"
   | "application_manual"
   | "application_no_reply_yet"
+  | "daily_summary"
   | "signup_verify"
   | "password_reset"
   | "welcome"
