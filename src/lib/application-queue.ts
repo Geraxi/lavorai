@@ -69,7 +69,48 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
     }
   }
 
-  // Fallback in-process (dev / MVP pre-queue)
+  // Fallback SERVERLESS: HTTP self-invoke.
+  // Su Vercel l'in-process fallback era la causa root del "15 app stuck
+  // in optimizing": il cron auto-apply creava 15 candidature e chiamava
+  // `void processApplication()` per ognuna → tutte partivano dentro la
+  // STESSA serverless function del cron (300s budget totale) → race +
+  // timeout → tutte morte a metà con status "optimizing" persistito.
+  //
+  // Con self-invoke via HTTP, ogni candidatura innesca una nuova
+  // serverless function con proprio budget 300s isolato. Se una fallisce
+  // le altre continuano. Vercel gestisce la concurrency (fluid compute
+  // riusa le istanze). Nessuna dipendenza da Redis/BullMQ/QStash.
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+
+  if (baseUrl && process.env.NODE_ENV === "production") {
+    const secret = process.env.APP_WORKER_SECRET ?? process.env.ADMIN_SYNC_KEY ?? "";
+    try {
+      // Fire-and-forget: non aspettare la risposta. La function chiamata
+      // ha 300s tutti suoi per completare il processApplication.
+      void fetch(`${baseUrl}/api/applications/process`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          ...(secret ? { "x-worker-secret": secret } : {}),
+        },
+        body: JSON.stringify({ applicationId }),
+        // keepalive: la connessione può chiudersi prima della risposta
+        // senza abortire la request lato server.
+        keepalive: true,
+      }).catch((err) => {
+        console.error(`[queue] self-invoke failed for ${applicationId}`, err);
+      });
+      return;
+    } catch (err) {
+      console.error("[queue] self-invoke setup failed", err);
+    }
+  }
+
+  // Ultimo fallback: in-process (SOLO dev locale — in prod pericoloso
+  // perché la function del caller morirà con TIMEOUT + tutti gli app
+  // in-flight persi).
   void processApplication(applicationId).catch((err) => {
     console.error("[queue] in-process worker error", err);
   });

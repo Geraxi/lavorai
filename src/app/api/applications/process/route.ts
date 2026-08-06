@@ -15,17 +15,20 @@ const Schema = z.object({ applicationId: z.string().min(1) });
  * Per chiamanti legittimi in dev: include header `x-worker-secret: <APP_WORKER_SECRET>`
  */
 export async function POST(request: NextRequest) {
-  const secret = process.env.APP_WORKER_SECRET;
-  if (secret) {
-    const provided = request.headers.get("x-worker-secret");
-    if (provided !== secret) {
+  // Accetta APP_WORKER_SECRET (originale) O ADMIN_SYNC_KEY (fallback
+  // usato dal self-invoke serverless in application-queue.ts). Uno
+  // dei due DEVE matchare in produzione.
+  const workerSecret = process.env.APP_WORKER_SECRET;
+  const adminKey = process.env.ADMIN_SYNC_KEY;
+  const provided = request.headers.get("x-worker-secret");
+  const authorized =
+    (workerSecret && provided === workerSecret) ||
+    (adminKey && provided === adminKey);
+  if (!authorized) {
+    if (process.env.NODE_ENV === "production") {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
-  } else if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { error: "worker_secret_missing" },
-      { status: 503 },
-    );
+    // dev: permetti chiamate senza secret per test locale
   }
 
   const body = await request.json().catch(() => null);
