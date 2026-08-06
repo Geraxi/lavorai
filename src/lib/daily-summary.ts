@@ -63,7 +63,7 @@ export async function runDailySummary(opts?: {
   for (const g of active) {
     const user = await prisma.user.findUnique({
       where: { id: g.userId },
-      select: { email: true, name: true, locale: true, tier: true },
+      select: { id: true, email: true, name: true, locale: true, tier: true },
     });
     if (!user) {
       details.push({ email: "?", status: "user_not_found" });
