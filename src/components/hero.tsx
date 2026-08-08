@@ -188,58 +188,46 @@ export function Hero() {
                 textShadow: "0 2px 24px rgba(0,5,20,0.5)",
               }}
             >
-              {/* Scala progressiva: il passato è piccolo, il futuro è grande.
-                  Trasmette il "build-up" tipografico fino al brand name. */}
+              {/* H1 promise-driven: chi arriva capisce in 2 secondi COSA
+                  fa il prodotto — no più wordplay poetico. Il claim finale
+                  ("LavorAI") resta col glow verde per il brand. */}
               <motion.span
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 0.55, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.05 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.55, delay: 0.05 }}
                 style={{
                   display: "block",
-                  fontSize: "0.42em",
-                  letterSpacing: "-0.025em",
-                  lineHeight: 1.1,
-                }}
-              >
-                Lavoravo.
-              </motion.span>
-              <motion.span
-                initial={{ opacity: 0, x: -6 }}
-                animate={{ opacity: 0.75, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.15 }}
-                style={{
-                  display: "block",
-                  fontSize: "0.58em",
-                  letterSpacing: "-0.028em",
-                  lineHeight: 1.08,
-                  marginTop: "0.1em",
-                }}
-              >
-                Lavoro.
-              </motion.span>
-              <motion.span
-                initial={{ opacity: 0, x: -4 }}
-                animate={{ opacity: 0.92, x: 0 }}
-                transition={{ duration: 0.55, delay: 0.25 }}
-                style={{
-                  display: "block",
-                  fontSize: "0.78em",
+                  fontSize: "0.82em",
                   letterSpacing: "-0.03em",
                   lineHeight: 1.05,
-                  marginTop: "0.06em",
                 }}
               >
-                Lavorerò.
+                Candidati a 50 lavori
               </motion.span>
               <motion.span
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.55, delay: 0.15 }}
+                style={{
+                  display: "block",
+                  fontSize: "0.82em",
+                  letterSpacing: "-0.03em",
+                  lineHeight: 1.05,
+                  marginTop: "0.04em",
+                }}
+              >
+                al mese, mentre dormi.
+              </motion.span>
+              <motion.span
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 style={{
                   display: "block",
                   color: "hsl(var(--primary))",
                   textShadow: "0 0 40px hsl(var(--primary)/0.35)",
-                  marginTop: "0.04em",
+                  marginTop: "0.14em",
+                  fontSize: "0.95em",
                 }}
               >
                 LavorAI.
@@ -250,15 +238,40 @@ export function Hero() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.2 }}
-              className="mt-6 max-w-[500px]"
+              className="mt-6 max-w-[520px]"
               style={{
-                fontSize: "clamp(1rem, 1.1vw, 1.125rem)",
-                lineHeight: 1.6,
-                color: "rgba(255,255,255,0.7)",
+                fontSize: "clamp(1rem, 1.15vw, 1.15rem)",
+                lineHeight: 1.55,
+                color: "rgba(255,255,255,0.78)",
               }}
             >
-              LavorAI è il copilota che si carica il peso ripetitivo: trova le offerte giuste, riscrive il CV per ognuna, compila i form. Tu torni a fare colloqui, non a riempire campi.
+              Colleghi il tuo CV una volta. LavorAI trova le offerte giuste, riscrive il CV per ognuna e invia le candidature al posto tuo. Tu torni a fare colloqui, non a riempire form.
             </motion.p>
+
+            {/* Trust strip subito sotto la subtitle — 3 punti chiave visivi */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.28 }}
+              className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2"
+              style={{
+                fontSize: 13,
+                color: "rgba(255,255,255,0.72)",
+              }}
+            >
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span aria-hidden style={{ color: "hsl(var(--primary))", fontWeight: 700 }}>✓</span>
+                3 candidature/mese <strong style={{ color: "#fff" }}>gratis</strong>
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span aria-hidden style={{ color: "hsl(var(--primary))", fontWeight: 700 }}>✓</span>
+                Nessuna carta richiesta
+              </span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <span aria-hidden style={{ color: "hsl(var(--primary))", fontWeight: 700 }}>✓</span>
+                Attivazione in 2 minuti
+              </span>
+            </motion.div>
 
             <motion.div
               initial={{ opacity: 0, y: 14 }}
@@ -280,7 +293,7 @@ export function Hero() {
                   }}
                 >
                   <Link href="/signup" onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, { label: "signup" })}>
-                    <span className="relative z-10">Provalo, vedi se ti capisce</span>
+                    <span className="relative z-10">Attiva auto-apply — gratis</span>
                   </Link>
                 </Button>
                 <Link
