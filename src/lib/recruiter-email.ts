@@ -271,21 +271,45 @@ export async function scrapeRecruiterEmail(
       ),
     ).map((m) => m[0].toLowerCase());
 
-    if (matches.length === 0) return null;
-    const unique = Array.from(new Set(matches));
-
     const s = slug(company);
     let best: string | null = null;
     let bestScore = -Infinity;
-    for (const e of unique) {
-      const sc = score(e, s);
-      if (sc > bestScore) {
-        bestScore = sc;
-        best = e;
+
+    if (matches.length > 0) {
+      const unique = Array.from(new Set(matches));
+      for (const e of unique) {
+        const sc = score(e, s);
+        if (sc > bestScore) {
+          bestScore = sc;
+          best = e;
+        }
       }
     }
-    // Se tutti sono negativi → non abbiamo niente di sensato
-    if (bestScore < 0 || !best) return null;
+
+    // ── Claude AI fallback ─────────────────────────────────────────────
+    // Se regex + score non danno un buon candidato (nessun match, o tutti
+    // negativi per blacklist/generic), chiediamo a Claude di estrarre
+    // un'email di recruiting dal testo pulito. Copre annunci italiani SMB
+    // dove l'email è dentro un blob "Come candidarsi:" o nel footer non
+    // strutturato che sfugge alla regex.
+    if (!best || bestScore < 0) {
+      const claudeEmail = await extractEmailWithClaude(html, company).catch(
+        (err) => {
+          console.warn("[recruiter-scrape] Claude fallback failed:", err);
+          return null;
+        },
+      );
+      if (claudeEmail) {
+        const sc = score(claudeEmail, s);
+        // Accettiamo anche score 0 (email neutra) — Claude ha filtrato
+        // manualmente rispetto ai fake, ci fidiamo un po' di più.
+        if (sc > -1000 && !BLACKLIST_FULL.has(claudeEmail)) {
+          best = claudeEmail;
+        }
+      }
+    }
+
+    if (!best) return null;
 
     // Sanity DNS: il dominio deve avere MX record reale (evita placeholder
     // e domini sintetici che passerebbero comunque il blacklist).
@@ -297,6 +321,90 @@ export async function scrapeRecruiterEmail(
     return best;
   } catch (err) {
     console.warn("[recruiter-scrape]", jobUrl, err);
+    return null;
+  }
+}
+
+/**
+ * Fallback AI: chiede a Claude Sonnet di estrarre l'email di recruiting
+ * dal testo della pagina. Prompt strict: solo email VERE di contatto per
+ * candidatura, mai placeholder o generic (info@, noreply@, ecc). Ritorna
+ * null se Claude non ne trova una legittima.
+ *
+ * Costo: ~1 chiamata Claude per RTA — vale la pena solo per il fallback
+ * (regex NON trova o trova solo email pessime).
+ */
+async function extractEmailWithClaude(
+  html: string,
+  company: string | null,
+): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  // Pulizia HTML → testo, cap 15k char per non esplodere sui token
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 15000);
+  if (text.length < 50) return null;
+
+  const prompt = `Sei un extractor. Cerca UNA email di recruiting/candidature nel testo di questo annuncio di lavoro${company ? ` di ${company}` : ""}.
+
+Rispondi ESCLUSIVAMENTE con:
+- una email valida (es. "hr@company.com") se ne trovi UNA legittima usata per ricevere candidature
+- la parola "NONE" (senza virgolette) se nessuna email è chiaramente di recruiting
+
+Regole rigide (RIFIUTA e rispondi "NONE" se):
+- Email non riconducibile chiaramente al recruiting (no info@, no noreply@, no privacy@, no gdpr@, no accessibility@, no legal@, no ufficio-stampa@)
+- Email placeholder (name@company.com, your.email@...)
+- Email di dipendenti citate solo di sfuggita
+- Se l'annuncio dice "candidati sul sito" o "clicca qui" senza email
+
+Testo:
+"""
+${text}
+"""
+
+Solo l'email o "NONE". Nient'altro.`;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-5",
+        max_tokens: 60,
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      content?: Array<{ type: string; text?: string }>;
+    };
+    const raw = (data.content ?? [])
+      .map((b) => (b.type === "text" ? (b.text ?? "") : ""))
+      .join("")
+      .trim()
+      .toLowerCase();
+    if (!raw || raw === "none") return null;
+    // Estrai la prima email dalla risposta (Claude potrebbe aggiungere
+    // rumore nonostante l'istruzione)
+    const emailMatch = raw.match(
+      /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/,
+    );
+    if (!emailMatch) return null;
+    console.log(`[recruiter-scrape] Claude found: ${emailMatch[0]}`);
+    return emailMatch[0];
+  } catch (err) {
+    console.warn("[recruiter-scrape] Claude call errored:", err);
     return null;
   }
 }

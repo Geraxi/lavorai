@@ -732,27 +732,32 @@ export async function processApplication(
       });
     } else {
       // Nessuna email recruiter, adapter fallito o non disponibile → stato
-      // finale ready_to_apply così la candidatura non resta "applying" per
-      // sempre. NIENTE email "candidati a mano" se l'utente ha scelto
-      // auto-apply pieno: in modalità auto vogliamo silenzio, non
-      // delegare il lavoro all'utente.
+      // Nessuna email recruiter, adapter fallito o non disponibile.
+      // Comportamento per modalità:
+      //   - hybrid/manual → ready_to_apply + email "candidati in 1 click"
+      //   - auto         → awaiting_consent (visibile su /applications con
+      //                     bottone Consenti) invece di ready_to_apply,
+      //                     così l'utente Pro/paying vede materiale REALE
+      //                     su cui agire, non solo un elenco muto.
+      const userAutoMode = app.user.preferences?.autoApplyMode ?? "manual";
+      const isAutoMode = userAutoMode === "auto";
       await prisma.application.update({
         where: { id: applicationId },
         data: {
-          status: "ready_to_apply",
-          errorMessage:
-            "Non siamo riusciti a trovare l'email del recruiter in questo annuncio. Apri il link e invia manualmente — CV e lettera sono pronti.",
+          status: isAutoMode ? "awaiting_consent" : "ready_to_apply",
+          errorMessage: isAutoMode
+            ? "Fonte senza email recruiter accessibile. CV e lettera pronti — approva l'invio manuale dalla tua dashboard."
+            : "Non siamo riusciti a trovare l'email del recruiter in questo annuncio. Apri il link e invia manualmente — CV e lettera sono pronti.",
           completedAt: new Date(),
         },
       });
-      const userAutoMode = app.user.preferences?.autoApplyMode ?? "manual";
-      if (userAutoMode !== "auto") {
+      if (!isAutoMode) {
         await notifyApplicationManual(applicationId).catch((err) =>
           console.error(`[worker] ${applicationId} notify manual failed`, err),
         );
       } else {
         console.log(
-          `[worker] ${applicationId} suppressed manual-apply email (user in auto mode)`,
+          `[worker] ${applicationId} → awaiting_consent (auto mode, no recruiter email; user will approve on /applications)`,
         );
       }
     }
