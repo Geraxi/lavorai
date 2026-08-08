@@ -58,6 +58,14 @@ function SignupContent() {
         setErr(body?.message ?? "Impossibile creare l'account. Riprova.");
         return;
       }
+      // Track signup conversion su Meta+Google (retargeting audiences).
+      try {
+        const { trackConversion } = await import("@/components/tracking-pixels");
+        trackConversion("CompleteRegistration", { content_name: "signup_email" });
+        trackConversion("Lead");
+      } catch {
+        /* silenzioso — se pixel non caricato, non blocca il flow */
+      }
       setCreated(true);
     } catch {
       setErr("Errore di rete. Riprova.");

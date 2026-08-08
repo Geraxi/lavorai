@@ -228,6 +228,18 @@ function TierCard({
         toast.error(body?.message ?? "Checkout non disponibile.");
         return;
       }
+      // Track InitiateCheckout su Meta+Google — audience retargeting
+      // "abandoned checkout" (utenti che hanno cliccato ma non pagato).
+      try {
+        const { trackConversion } = await import("@/components/tracking-pixels");
+        trackConversion("InitiateCheckout", {
+          value: tier === "pro_plus" ? 39.99 : 19.99,
+          currency: "EUR",
+          content_name: tier,
+        });
+      } catch {
+        /* silenzioso */
+      }
       window.location.href = body.url;
     } catch {
       toast.error("Errore di rete.");

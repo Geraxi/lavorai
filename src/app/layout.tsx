@@ -8,6 +8,7 @@ import { Providers } from "@/app/providers";
 import { StructuredData } from "@/components/structured-data";
 import { TrackPageView } from "@/components/track-page-view";
 import { TrackReferral } from "@/components/track-referral";
+import { TrackingPixels } from "@/components/tracking-pixels";
 import { assertEnvOrCrash } from "@/lib/env";
 import "./globals.css";
 
@@ -39,21 +40,30 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "LavorAI — Il copilota italiano per la ricerca del lavoro",
+    // Title ottimizzato per keyword ad ALTA INTENT commerciale (chi cerca
+    // ATTIVAMENTE un tool di auto-apply) invece del generico "ricerca lavoro"
+    // (mismatch di intento — attrae anche career advice searcher che rimbalzano).
+    default:
+      "LavorAI — Candidature automatiche ai lavori | Auto-apply CV in italiano",
     template: "%s · LavorAI",
   },
   description:
-    "Candidati in automatico su LinkedIn, InfoJobs, Indeed e Subito. CV ATS-friendly e lettera motivazionale AI, in italiano nativo. Da €19.99/mese.",
+    "Invia CV in automatico a 50 lavori al mese. LavorAI riscrive il CV per ogni annuncio, compila i form al posto tuo su Greenhouse, Lever, LinkedIn. 3 candidature gratis, no carta. Da €19.99/mese.",
   keywords: [
-    "CV ottimizzato",
-    "ATS",
-    "ricerca lavoro",
+    // KEYWORD AD ALTA INTENT COMMERCIALE (chi cerca soluzione, non info)
+    "auto candidatura lavoro",
+    "candidarsi automaticamente ai lavori",
+    "auto apply lavoro",
+    "inviare CV automaticamente",
+    "software candidature automatiche",
+    "auto apply italiano",
+    "bot candidature LinkedIn",
+    "candidature automatiche AI",
+    // KEYWORD DI MERCATO (product category)
     "auto-apply",
-    "lettera motivazionale",
-    "LinkedIn",
-    "InfoJobs",
-    "AI lavoro",
-    "curriculum italiano",
+    "CV ATS-friendly",
+    "cover letter AI italiano",
+    "curriculum ottimizzato ATS",
   ],
   authors: [{ name: "LavorAI" }],
   creator: "LavorAI",
@@ -62,15 +72,15 @@ export const metadata: Metadata = {
     locale: "it_IT",
     url: siteUrl,
     siteName: "LavorAI",
-    title: "LavorAI — Il copilota italiano per la ricerca del lavoro",
+    title: "LavorAI — Candidature automatiche ai lavori | Auto-apply CV",
     description:
-      "Carica il CV, imposta le preferenze, LavorAI si candida in automatico per te sui portali italiani e internazionali.",
+      "Invia CV in automatico a 50 lavori al mese. LavorAI riscrive il CV per ogni annuncio e invia le candidature al posto tuo. 3 gratis, no carta.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "LavorAI — Il copilota italiano per la ricerca del lavoro",
+    title: "LavorAI — Candidature automatiche ai lavori",
     description:
-      "Carica il CV, imposta le preferenze, LavorAI si candida in automatico per te.",
+      "50 candidature/mese automatiche. CV riscritto per ogni annuncio. 3 gratis.",
   },
   robots: { index: true, follow: true },
   icons: { icon: "/favicon.ico" },
@@ -106,6 +116,9 @@ export default async function RootLayout({
           <TrackReferral />
           <Toaster richColors position="top-center" />
           <CookieBanner />
+          {/* Meta Pixel + Google Ads + GA4 — solo se ENV NEXT_PUBLIC_*
+              impostate + consent GDPR accettato. Vedi tracking-pixels.tsx. */}
+          <TrackingPixels />
         </NextIntlClientProvider>
       </body>
     </html>
