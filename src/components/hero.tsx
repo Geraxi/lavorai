@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 // Image import non più necessario — l'immagine pianeta è ora bg
 // CSS della section, non un <Image> renderizzato.
 import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
+import { LiveStatsBadge } from "@/components/live-stats-badge";
 
 export function Hero() {
   const t = useTranslations("hero");
@@ -137,37 +138,17 @@ export function Hero() {
             // pt-10 perché il pianeta è laterale, non sovrastante.
             className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-[280px] pb-16 lg:pt-6 lg:pb-12"
           >
+            {/* Badge live — stats REALI dal DB via /api/public/stats.
+                Se il fetch fallisce o gli stats sono a zero, non renderizza
+                nulla (no "0 utenti" imbarazzante). Sostituisce il badge
+                hardcoded precedente. */}
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="mb-6 inline-flex items-center gap-2 rounded-full border px-3 py-1"
-              style={{
-                borderColor: "hsl(var(--primary) / 0.4)",
-                background: "hsl(var(--primary) / 0.08)",
-              }}
+              className="mb-6"
             >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: 999,
-                  background: "hsl(var(--primary))",
-                  boxShadow: "0 0 8px hsl(var(--primary) / 0.6)",
-                }}
-              />
-              <span
-                className="mono"
-                style={{
-                  fontSize: 11,
-                  fontWeight: 500,
-                  letterSpacing: "0.1em",
-                  color: "hsl(var(--primary))",
-                  textTransform: "uppercase",
-                }}
-              >
-                PER CHI CERCA LAVORO ALLE 23 DI DOMENICA
-              </span>
+              <LiveStatsBadge variant="hero" />
             </motion.div>
 
             <motion.h1
@@ -248,28 +229,32 @@ export function Hero() {
               Colleghi il tuo CV una volta. LavorAI trova le offerte giuste, riscrive il CV per ognuna e invia le candidature al posto tuo. Tu torni a fare colloqui, non a riempire form.
             </motion.p>
 
-            {/* Trust strip subito sotto la subtitle — 3 punti chiave visivi */}
+            {/* Garanzia rimborso — proof of confidence, sostituisce
+                bisogno di testimonial fake. Il founder ci mette i soldi. */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.28 }}
-              className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2"
+              className="mt-5 inline-flex items-start gap-2.5 rounded-lg px-3 py-2"
               style={{
+                background: "hsl(var(--primary) / 0.08)",
+                borderLeft: "3px solid hsl(var(--primary))",
+                maxWidth: 520,
                 fontSize: 13,
-                color: "rgba(255,255,255,0.72)",
+                lineHeight: 1.5,
+                color: "rgba(255,255,255,0.85)",
               }}
             >
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span aria-hidden style={{ color: "hsl(var(--primary))", fontWeight: 700 }}>✓</span>
-                3 candidature/mese <strong style={{ color: "#fff" }}>gratis</strong>
+              <span
+                aria-hidden
+                style={{ color: "hsl(var(--primary))", fontWeight: 700, fontSize: 15, lineHeight: 1 }}
+              >
+                🛡
               </span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span aria-hidden style={{ color: "hsl(var(--primary))", fontWeight: 700 }}>✓</span>
-                Nessuna carta richiesta
-              </span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span aria-hidden style={{ color: "hsl(var(--primary))", fontWeight: 700 }}>✓</span>
-                Attivazione in 2 minuti
+              <span>
+                <strong style={{ color: "#fff" }}>Garanzia:</strong>{" "}
+                se in 24h dall&apos;upgrade Pro non ricevi almeno 1 candidatura consegnata,
+                rimborso integrale — senza domande.
               </span>
             </motion.div>
 
