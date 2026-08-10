@@ -5,6 +5,7 @@ import { ThemeScript } from "@/components/design/theme-script";
 import { UserPopup } from "@/components/user-popup";
 import { OnboardingBanner } from "@/components/onboarding-banner";
 import { UpgradePrompt } from "@/components/upgrade-prompt";
+import { CoverageWarning } from "@/components/coverage-warning";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
@@ -57,6 +58,11 @@ export default async function AppLayout({
         }}
       >
         <OnboardingBanner />
+        {/* Coverage warning: mostra solo se verticale utente low-coverage
+            + modalità auto. Previene case Giuseppe (pagante che aspetta
+            magia auto-apply su verticale non coperto). Self-hide se
+            dismissed dall'utente o se verticale coperto. */}
+        <CoverageWarning />
         {/* Prompt persistente upgrade Pro (solo Free tier, self-hides
             per Pro/Pro+/admin). Adatta il tono in base all'uso mensile. */}
         <UpgradePrompt />
