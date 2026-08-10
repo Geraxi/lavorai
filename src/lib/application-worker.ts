@@ -1128,6 +1128,31 @@ function deliveryLevelOf(
   return "portal";
 }
 
+/**
+ * Anti-spam: verifica se abbiamo mandato un'email dello stesso tipo
+ * all'utente nelle ultime N ore. Prima di questa gate, un burst di 15
+ * candidature in 2 minuti causava 15 email consecutive → utente
+ * cancellava l'account (case reale Giuseppe 08/08).
+ *
+ * Con la gate + daily_summary (che manda un digest onesto giornaliero),
+ * l'utente riceve al massimo 1 email individuale per tipo/6h + 1 report.
+ */
+async function shouldSuppressForCooldown(
+  email: string,
+  kind: string,
+  cooldownHours: number,
+): Promise<boolean> {
+  try {
+    const since = new Date(Date.now() - cooldownHours * 3600_000);
+    const recent = await prisma.emailLog.count({
+      where: { to: email, kind, createdAt: { gte: since } },
+    });
+    return recent > 0;
+  } catch {
+    return false; // in caso di errore DB, non blocchiamo (fail-open)
+  }
+}
+
 async function notifyApplicationSent(applicationId: string): Promise<void> {
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
@@ -1137,6 +1162,16 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
     },
   });
   if (!app) return;
+
+  // Cooldown 2h: burst di N success in pochi minuti = 1 sola email
+  // individuale; le successive vengono raccolte dal daily_summary. Case
+  // reale Giuseppe: 15 success in 2 min → 15 email → churn.
+  if (await shouldSuppressForCooldown(app.user.email, "application_sent", 2)) {
+    console.log(
+      `[worker] ${applicationId} suppressed application_sent (cooldown 2h — daily_summary catch-up)`,
+    );
+    return;
+  }
 
   const apiKey = process.env.RESEND_API_KEY;
   const firstName = (app.user.name ?? "").split(/\s+/)[0] || "";
@@ -1294,6 +1329,17 @@ async function notifyApplicationManual(applicationId: string): Promise<void> {
     },
   });
   if (!app) return;
+
+  // Cooldown 6h: burst di 15 candidature "candidati a mano" in 2 minuti
+  // ha causato la cancellazione di Giuseppe (case reale 08/08). Con la
+  // gate + daily_summary onesto (che elenca TUTTE le "preparate"),
+  // l'utente riceve al massimo 1 email individuale ogni 6h.
+  if (await shouldSuppressForCooldown(app.user.email, "application_manual", 6)) {
+    console.log(
+      `[worker] ${applicationId} suppressed application_manual (cooldown 6h — user has already received one recently; daily_summary will include this)`,
+    );
+    return;
+  }
 
   const apiKey = process.env.RESEND_API_KEY;
   const firstName = (app.user.name ?? "").split(/\s+/)[0] || "";
