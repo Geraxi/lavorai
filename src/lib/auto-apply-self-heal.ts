@@ -150,7 +150,10 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
       where: {
         status: "failed",
         createdAt: { gte: since },
-        errorMessage: { contains: "credit balance" },
+        OR: [
+          { errorMessage: { contains: "credit balance" } },
+          { errorMessage: { contains: "crediti esauriti" } },
+        ],
       },
       select: { userId: true },
       distinct: ["userId"],

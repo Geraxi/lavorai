@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { Kpi, PageTitle, SectionCard, BarChart, ChartCard } from "./_ui";
+import { RetryCreditFailuresButton } from "./_retry-button";
 
 export const metadata: Metadata = { title: "Admin · Panoramica", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -49,7 +50,10 @@ export default async function AdminOverviewPage() {
     prisma.application.count({
       where: {
         status: "failed",
-        errorMessage: { contains: "credit balance", mode: "insensitive" },
+        OR: [
+          { errorMessage: { contains: "credit balance", mode: "insensitive" } },
+          { errorMessage: { contains: "crediti esauriti", mode: "insensitive" } },
+        ],
         createdAt: { gte: since(6) },
       },
     }),
@@ -157,6 +161,17 @@ export default async function AdminOverviewPage() {
             {creditFailuresRecent} candidature fallite nelle ultime 6h per crediti.
             Azione: console.anthropic.com → Billing.
           </div>
+          <RetryCreditFailuresButton />
+        </div>
+      )}
+      {/* Retry sempre disponibile anche se il counter è 0 (potrebbero
+          esserci failed di >6h che non contano nel banner). */}
+      {creditFailuresRecent === 0 && (
+        <div style={{ padding: "10px 14px", borderRadius: 10, background: "rgba(255,255,255,0.02)", border: "1px solid var(--border-ds)", marginTop: 8 }}>
+          <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 4 }}>
+            Retry manuale candidature failed per crediti (finestra 14gg)
+          </div>
+          <RetryCreditFailuresButton />
         </div>
       )}
 

@@ -38,7 +38,11 @@ export async function POST(req: NextRequest) {
   const failed = await prisma.application.findMany({
     where: {
       status: "failed",
-      errorMessage: { contains: "credit balance", mode: "insensitive" },
+      OR: [
+        { errorMessage: { contains: "credit balance", mode: "insensitive" } },
+        { errorMessage: { contains: "crediti esauriti", mode: "insensitive" } },
+        { errorMessage: { contains: "insufficient", mode: "insensitive" } },
+      ],
       createdAt: { gte: since },
     },
     select: { id: true },
