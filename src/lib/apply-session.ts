@@ -17,54 +17,24 @@ function normalize(s: string | null | undefined): string {
     .replace(/\s+/g, " ");
 }
 
-/** Stopword che non ci dicono nulla sul ruolo effettivo */
-const STOPWORDS = new Set([
-  "senior",
-  "junior",
-  "lead",
-  "principal",
-  "staff",
-  "head",
-  "of",
-  "and",
-  "the",
-  "la",
-  "il",
-  "di",
-  "a",
-  "da",
-  "to",
-  "for",
-  "per",
-  "stage",
-  "tirocinio",
-  "intern",
-  "remote",
-  "remoto",
-  "full",
-  "part",
-  "time",
-]);
-
 /**
  * Chiave canonica per raggruppare i job in una sessione.
- * Strategia: category (se presente) + primi 1-2 token significativi del titolo.
+ *
+ * Strategia (post-refactor): SOLO category. Il titolo del job non
+ * entra più nella chiave — se lo facesse si generavano decine di
+ * sessioni per utente ("Front End Developer", "Senior React",
+ * "Fullstack Node"...), tutte separate, con lista che cresceva
+ * all'infinito. Ora un utente ha tipicamente 3-6 sessioni (una per
+ * categoria: IT, Design, Marketing, ecc.) e resta gestibile a colpo
+ * d'occhio.
  */
 export function sessionKeyForJob(job: {
   title: string;
   category: string | null;
 }): { key: string; label: string } {
   const cat = normalize(job.category) || "generico";
-  const titleTokens = normalize(job.title)
-    .split(" ")
-    .filter((t) => t && !STOPWORDS.has(t))
-    .slice(0, 2);
-  const role = titleTokens.join(" ") || "varie";
-  const key = `${cat}::${role}`;
-  const prettyCat = prettify(cat);
-  const prettyRole = prettify(role);
-  const label =
-    prettyCat === prettyRole ? prettyRole : `${prettyCat} · ${prettyRole}`;
+  const key = `cat::${cat}`;
+  const label = prettify(cat);
   return { key, label };
 }
 

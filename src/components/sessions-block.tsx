@@ -22,11 +22,12 @@ interface ApiSession {
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 export function SessionsBlock() {
-  const { data, mutate } = useSWR<{ sessions: ApiSession[] }>(
+  const { data, mutate } = useSWR<{ sessions: ApiSession[]; archivedCount?: number }>(
     "/api/sessions",
     fetcher,
   );
   const sessions = data?.sessions ?? [];
+  const archivedCount = data?.archivedCount ?? 0;
   const [busy, setBusy] = useState<string | null>(null);
 
   async function toggle(s: ApiSession) {
@@ -167,6 +168,18 @@ export function SessionsBlock() {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+        {archivedCount > 0 && (
+          <div
+            style={{
+              marginTop: 12,
+              fontSize: 11.5,
+              color: "var(--fg-subtle)",
+              textAlign: "center",
+            }}
+          >
+            + {archivedCount} {archivedCount === 1 ? "sessione archiviata" : "sessioni archiviate"} (completate o inattive da &gt;30 giorni)
           </div>
         )}
       </SectionBody>

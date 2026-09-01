@@ -10,6 +10,12 @@ const MAX_ACTIVE_SESSIONS = 3;
 /**
  * GET /api/sessions
  * Lista dei round dell'utente con progresso (sentCount / targetCount).
+ *
+ * Logica anti-accumulo:
+ *  1. Auto-archive: sessioni active con 0 candidature aperte >30gg → cancelled.
+ *  2. Auto-archive: sessioni completed >14gg dopo completedAt → cancelled.
+ *  3. Filtro: la lista mostra solo attive/paused + completed-non-ancora-viste.
+ *     Le altre finiscono in `archivedCount` (l'UI dice "N round archiviati").
  */
 export async function GET() {
   const user = await getCurrentUser();
@@ -17,17 +23,63 @@ export async function GET() {
     return NextResponse.json({ sessions: [] });
   }
 
-  // Di default escludiamo cancelled (rumore legacy); puoi includerle con
-  // ?includeCancelled=1 per pagine analytics/audit.
+  const now = Date.now();
+  const staleActiveCutoff = new Date(now - 30 * 86_400_000);
+  const oldCompletedCutoff = new Date(now - 14 * 86_400_000);
+
+  // Cleanup silenzioso, best-effort — non blocca la response se fallisce.
+  await prisma.applicationSession
+    .updateMany({
+      where: {
+        userId: user.id,
+        status: { in: ["active", "auto"] },
+        applications: { none: {} },
+        createdAt: { lt: staleActiveCutoff },
+      },
+      data: { status: "cancelled" },
+    })
+    .catch(() => void 0);
+  await prisma.applicationSession
+    .updateMany({
+      where: {
+        userId: user.id,
+        status: "completed",
+        completedAt: { lt: oldCompletedCutoff },
+      },
+      data: { status: "cancelled" },
+    })
+    .catch(() => void 0);
+  // Idle: sessioni active/auto senza aggiornamenti da >14gg (updatedAt
+  // si rinfresca su ogni resolveSession → apply). Copre le sessioni
+  // legacy granulari accumulate prima del refactor a chiave "category".
+  await prisma.applicationSession
+    .updateMany({
+      where: {
+        userId: user.id,
+        status: { in: ["active", "auto"] },
+        updatedAt: { lt: oldCompletedCutoff },
+      },
+      data: { status: "cancelled" },
+    })
+    .catch(() => void 0);
+
   const sessions = await prisma.applicationSession.findMany({
     where: {
       userId: user.id,
-      status: { in: ["active", "auto", "paused", "completed"] },
+      OR: [
+        { status: { in: ["active", "auto", "paused"] } },
+        { status: "completed", completedAcknowledgedAt: null },
+      ],
     },
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
+    take: 20,
     include: {
       _count: { select: { applications: true } },
     },
+  });
+
+  const archivedCount = await prisma.applicationSession.count({
+    where: { userId: user.id, status: "cancelled" },
   });
 
   // Conteggia quante awaiting_consent per sessione
@@ -46,6 +98,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
+    archivedCount,
     sessions: sessions.map((s) => ({
       id: s.id,
       label: s.label,
