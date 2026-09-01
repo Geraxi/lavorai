@@ -183,7 +183,7 @@ export function Hero() {
                   lineHeight: 1.05,
                 }}
               >
-                Candidati a 50 lavori
+                {t("titleLineA")}
               </motion.span>
               <motion.span
                 initial={{ opacity: 0, y: 10 }}
@@ -197,7 +197,7 @@ export function Hero() {
                   marginTop: "0.04em",
                 }}
               >
-                al mese, mentre dormi.
+                {t("titleLineB")}
               </motion.span>
               <motion.span
                 initial={{ opacity: 0, y: 10 }}
@@ -211,7 +211,7 @@ export function Hero() {
                   fontSize: "0.95em",
                 }}
               >
-                LavorAI.
+                {t("titleBrand")}
               </motion.span>
             </motion.h1>
 
@@ -226,7 +226,7 @@ export function Hero() {
                 color: "rgba(255,255,255,0.78)",
               }}
             >
-              Colleghi il tuo CV una volta. LavorAI trova le offerte giuste, riscrive il CV per ognuna e invia le candidature al posto tuo. Tu torni a fare colloqui, non a riempire form.
+              {t("subtitleV2")}
             </motion.p>
 
             {/* Garanzia rimborso — proof of confidence, sostituisce
@@ -252,9 +252,8 @@ export function Hero() {
                 🛡
               </span>
               <span>
-                <strong style={{ color: "#fff" }}>Garanzia:</strong>{" "}
-                se in 24h dall&apos;upgrade Pro non ricevi almeno 1 candidatura consegnata,
-                rimborso integrale — senza domande.
+                <strong style={{ color: "#fff" }}>{t("guaranteeLabel")}</strong>{" "}
+                {t("guaranteeText")}
               </span>
             </motion.div>
 
@@ -278,7 +277,7 @@ export function Hero() {
                   }}
                 >
                   <Link href="/signup" onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, { label: "signup" })}>
-                    <span className="relative z-10">Attiva auto-apply — gratis</span>
+                    <span className="relative z-10">{t("ctaPrimaryV2")}</span>
                   </Link>
                 </Button>
                 <Link
@@ -299,13 +298,13 @@ export function Hero() {
                     gap: 8,
                   }}
                 >
-                  Prima fai vedere il mio CV →
+                  {t("ctaSecondaryV2")}
                 </Link>
               </div>
               
               {/* Checkmarks row */}
               <div className="flex flex-wrap gap-x-5 gap-y-2 mt-2" style={{ fontSize: 13, color: "rgba(255,255,255,0.9)", fontWeight: 500 }}>
-                {["3 candidature gratis", "Niente carta", "Pausa quando vuoi"].map((text) => (
+                {[t("checkA"), t("checkB"), t("checkC")].map((text) => (
                   <span key={text} className="inline-flex items-center gap-1.5">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                     {text}
@@ -340,19 +339,19 @@ export function Hero() {
             >
               <div className="flex items-start gap-3">
                 <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                <span className="leading-tight">GDPR-first<br/>server EU</span>
+                <span className="leading-tight">{t("trustA1")}<br/>{t("trustA2")}</span>
               </div>
               <div className="flex items-start gap-3">
                 <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                <span className="leading-tight">Cancella tutto<br/>in 1 click</span>
+                <span className="leading-tight">{t("trustB1")}<br/>{t("trustB2")}</span>
               </div>
               <div className="flex items-start gap-3">
                 <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
-                <span className="leading-tight">Niente credenziali<br/>LinkedIn richieste</span>
+                <span className="leading-tight">{t("trustC1")}<br/>{t("trustC2")}</span>
               </div>
               <div className="flex items-start gap-3">
                 <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-                <span className="leading-tight">Pausa<br/>quando vuoi</span>
+                <span className="leading-tight">{t("trustD1")}<br/>{t("trustD2")}</span>
               </div>
             </motion.div>
 
