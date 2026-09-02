@@ -26,10 +26,16 @@ export interface DailySummaryResult {
 }
 
 interface UserActivity {
+  /** DETECTED_* : submit ATS con prova hard (2xx / DOM di conferma) */
+  atsConfirmedCount: number;
+  /** EMAIL_SENT : email consegnata al recruiter (SMTP 250 OK, no conferma lettura) */
+  emailSentCount: number;
+  /** Somma dei due sopra — usata dove non serve distinguere */
   successCount: number;
   rtaCount: number;
   failedCount: number;
-  successJobs: Array<{ title: string; company: string | null; url: string }>;
+  atsConfirmedJobs: Array<{ title: string; company: string | null; url: string }>;
+  emailSentJobs: Array<{ title: string; company: string | null; url: string }>;
   rtaJobs: Array<{ title: string; company: string | null; url: string }>;
 }
 
@@ -106,26 +112,32 @@ export async function runDailySummary(opts?: {
       orderBy: { completedAt: "desc" },
     });
 
+    const successApps = apps.filter((a) => a.status === "success");
+    const atsApps = successApps.filter(
+      (a) => (a.submitConfirmation ?? "").startsWith("DETECTED"),
+    );
+    const emailApps = successApps.filter(
+      (a) => a.submitConfirmation === "EMAIL_SENT" || a.submittedVia === "email_recruiter",
+    );
+
+    const mapJob = (a: (typeof apps)[number]) => ({
+      title: a.job?.title ?? "?",
+      company: a.job?.company ?? null,
+      url: a.job?.url ?? "#",
+    });
+
     const activity: UserActivity = {
-      successCount: apps.filter((a) => a.status === "success").length,
+      atsConfirmedCount: atsApps.length,
+      emailSentCount: emailApps.length,
+      successCount: successApps.length,
       rtaCount: apps.filter((a) => a.status === "ready_to_apply").length,
       failedCount: apps.filter((a) => a.status === "failed").length,
-      successJobs: apps
-        .filter((a) => a.status === "success")
-        .slice(0, 8)
-        .map((a) => ({
-          title: a.job?.title ?? "?",
-          company: a.job?.company ?? null,
-          url: a.job?.url ?? "#",
-        })),
+      atsConfirmedJobs: atsApps.slice(0, 8).map(mapJob),
+      emailSentJobs: emailApps.slice(0, 8).map(mapJob),
       rtaJobs: apps
         .filter((a) => a.status === "ready_to_apply")
         .slice(0, 8)
-        .map((a) => ({
-          title: a.job?.title ?? "?",
-          company: a.job?.company ?? null,
-          url: a.job?.url ?? "#",
-        })),
+        .map(mapJob),
     };
 
     const total = activity.successCount + activity.rtaCount + activity.failedCount;
@@ -189,12 +201,13 @@ function renderSummary(
     : `<p style="font-size:15px;line-height:1.6;color:#334155;margin:0 0 16px;">Ecco cosa ha fatto LavorAI per te nelle ultime 24 ore:</p>`;
 
   const summaryBoxHtml = `<div style="padding:14px 16px;background:#F1F5F9;border-radius:8px;margin-bottom:20px;font-size:14px;line-height:1.7;color:#0F172A;">
-    <div><strong style="color:#16A34A;">✓ ${a.successCount}</strong> ${en ? "sent" : "inviate"} ${en ? "to the ATS portal directly" : "sul portale ATS direttamente"}</div>
+    ${a.atsConfirmedCount > 0 ? `<div><strong style="color:#16A34A;">✓ ${a.atsConfirmedCount}</strong> ${en ? "delivered to ATS with confirmation" : "consegnate su portale ATS con conferma"}</div>` : ""}
+    ${a.emailSentCount > 0 ? `<div><strong style="color:#3B82F6;">✉ ${a.emailSentCount}</strong> ${en ? "sent to recruiter by email (no delivery confirmation from their side)" : "inviate al recruiter via email (nessuna conferma di lettura dalla loro parte)"}</div>` : ""}
     <div><strong style="color:#EAB308;">◐ ${a.rtaCount}</strong> ${en ? "prepared — need your 1-click approval" : "preparate — servono ancora la tua approvazione (1-click)"}</div>
     ${a.failedCount > 0 ? `<div><strong style="color:#94A3B8;">✕ ${a.failedCount}</strong> ${en ? "failed (auto-retry)" : "fallite (retry automatico)"}</div>` : ""}
   </div>`;
 
-  const listBlock = (title: string, jobs: UserActivity["successJobs"]) => {
+  const listBlock = (title: string, jobs: UserActivity["atsConfirmedJobs"]) => {
     if (jobs.length === 0) return "";
     const items = jobs
       .map(
@@ -208,8 +221,11 @@ function renderSummary(
   const rtaBlock = a.rtaJobs.length
     ? listBlock(en ? "Ready for your approval" : "Pronte per la tua approvazione", a.rtaJobs)
     : "";
-  const successBlock = a.successJobs.length
-    ? listBlock(en ? "Sent to ATS" : "Inviate all'ATS", a.successJobs)
+  const atsBlock = a.atsConfirmedJobs.length
+    ? listBlock(en ? "Delivered to ATS (confirmed)" : "Consegnate su ATS (con conferma)", a.atsConfirmedJobs)
+    : "";
+  const emailBlock = a.emailSentJobs.length
+    ? listBlock(en ? "Sent by email to recruiter" : "Inviate al recruiter via email", a.emailSentJobs)
     : "";
 
   const ctaText = en ? "Review & approve on your dashboard" : "Rivedile e approva dal dashboard";
@@ -225,7 +241,8 @@ function renderSummary(
     <p style="font-size:15px;line-height:1.6;color:#334155;margin:0 0 8px;">${greet}</p>
     ${introHtml}
     ${summaryBoxHtml}
-    ${successBlock}
+    ${atsBlock}
+    ${emailBlock}
     ${rtaBlock}
     ${a.rtaCount > 0 ? `<div style="text-align:center;margin:24px 0;"><a href="${ctaUrl}" style="display:inline-block;background:#16A34A;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">${ctaText} →</a></div>` : ""}
     <hr style="border:none;border-top:1px solid #E2E8F0;margin:28px 0 16px;" />
@@ -239,7 +256,8 @@ function renderSummary(
     en
       ? `Today LavorAI processed ${total} applications for you:`
       : `Oggi LavorAI ha processato ${total} candidature per te:`,
-    en ? `- ${a.successCount} sent to ATS` : `- ${a.successCount} inviate all'ATS`,
+    en ? `- ${a.atsConfirmedCount} delivered to ATS (confirmed)` : `- ${a.atsConfirmedCount} consegnate su ATS (con conferma)`,
+    en ? `- ${a.emailSentCount} sent to recruiter by email` : `- ${a.emailSentCount} inviate al recruiter via email`,
     en
       ? `- ${a.rtaCount} prepared, awaiting your 1-click approval`
       : `- ${a.rtaCount} preparate, in attesa della tua approvazione (1-click)`,
@@ -254,10 +272,17 @@ function renderSummary(
           "",
         ]
       : []),
-    ...(a.successJobs.length > 0
+    ...(a.atsConfirmedJobs.length > 0
       ? [
-          en ? "Sent to ATS:" : "Inviate all'ATS:",
-          ...a.successJobs.map((j) => `  - ${j.title}${j.company ? ` @ ${j.company}` : ""}`),
+          en ? "Delivered to ATS (confirmed):" : "Consegnate su ATS (con conferma):",
+          ...a.atsConfirmedJobs.map((j) => `  - ${j.title}${j.company ? ` @ ${j.company}` : ""}`),
+          "",
+        ]
+      : []),
+    ...(a.emailSentJobs.length > 0
+      ? [
+          en ? "Sent to recruiter by email:" : "Inviate al recruiter via email:",
+          ...a.emailSentJobs.map((j) => `  - ${j.title}${j.company ? ` @ ${j.company}` : ""}`),
           "",
         ]
       : []),

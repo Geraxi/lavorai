@@ -42,7 +42,11 @@ export default async function AdminOverviewPage() {
     prisma.application.count(),
     prisma.application.count({ where: { createdAt: { gte: since(24 * 7) } } }),
     prisma.application.count({
-      where: { status: "success", submittedVia: { not: null }, createdAt: { gte: monthStart } },
+      where: {
+        status: "success",
+        submitConfirmation: { startsWith: "DETECTED" },
+        createdAt: { gte: monthStart },
+      },
     }),
     prisma.applicationSession.count({ where: { status: { in: ["active", "auto"] } } }),
     // Crediti esauriti ORA: contiamo solo gli ultimi 6h. Su finestra 7g
@@ -160,7 +164,7 @@ export default async function AdminOverviewPage() {
           tone={realPaying > 0 ? "good" : "warn"}
         />
         <Kpi label="Candidature totali" value={totalApps} sub={`${apps7d} ultimi 7g`} />
-        <Kpi label="Consegnate (mese)" value={deliveredMonth} />
+        <Kpi label="ATS confermate (mese)" value={deliveredMonth} sub="solo submitConfirmation=DETECTED_*" tone={deliveredMonth > 0 ? "good" : "warn"} />
         <Kpi label="Sessioni attive" value={activeSessions} />
       </div>
       <div style={{ fontSize: 11.5, color: "var(--fg-subtle)", marginBottom: 20 }}>

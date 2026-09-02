@@ -28,7 +28,13 @@ export interface SelfHealReport {
   matchMinAutoLowered: Array<{ userId: string; from: number; to: number }>;
   creditExhaustedUsers: string[];
   adminAlertSent: boolean;
+  /** % di success con submitConfirmation=DETECTED_* negli ultimi 7g. -1 se non calcolabile. */
+  detectedRate7d: number;
+  detectedSampleSize: number;
 }
+
+const DELIVERY_ALERT_THRESHOLD = 0.6; // <60% DETECTED → alert
+const DELIVERY_ALERT_MIN_SAMPLE = 20; // richiede almeno 20 success in 7g
 
 const STUCK_THRESHOLD_MS = 30 * 60 * 1000; // 30 min
 const ZERO_THROUGHPUT_HOURS = 48;
@@ -42,6 +48,8 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
     matchMinAutoLowered: [],
     creditExhaustedUsers: [],
     adminAlertSent: false,
+    detectedRate7d: -1,
+    detectedSampleSize: 0,
   };
 
   // ── 1. Archive garbage sessions ────────────────────────────────────
@@ -165,11 +173,39 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
     console.error("[self-heal] credit detection failed", err);
   }
 
-  // ── 5. Admin alert email (only if anything notable happened) ───────
+  // ── 5. Delivery-confirmation rate check (last 7d) ──────────────────
+  // Se troppe "success" sono senza prova hard di consegna (submitConfirmation
+  // non DETECTED_*), la promessa "mandiamo le candidature davvero" è
+  // bucata a monte. Alert al founder così si può indagare (ATS che ha
+  // cambiato il DOM di conferma, adapter rotto, ecc.).
+  try {
+    const since7d = new Date(Date.now() - 7 * 86_400_000);
+    const totalSuccess = await prisma.application.count({
+      where: { status: "success", completedAt: { gte: since7d } },
+    });
+    const detected = await prisma.application.count({
+      where: {
+        status: "success",
+        completedAt: { gte: since7d },
+        submitConfirmation: { startsWith: "DETECTED" },
+      },
+    });
+    report.detectedSampleSize = totalSuccess;
+    report.detectedRate7d = totalSuccess > 0 ? detected / totalSuccess : -1;
+  } catch (err) {
+    console.error("[self-heal] delivery-rate check failed", err);
+  }
+
+  // ── 6. Admin alert email (only if anything notable happened) ───────
+  const deliveryUnderThreshold =
+    report.detectedSampleSize >= DELIVERY_ALERT_MIN_SAMPLE &&
+    report.detectedRate7d >= 0 &&
+    report.detectedRate7d < DELIVERY_ALERT_THRESHOLD;
   const shouldAlert =
     report.creditExhaustedUsers.length > 0 ||
     report.matchMinAutoLowered.length > 0 ||
-    report.stuckAppsRequeued > 5;
+    report.stuckAppsRequeued > 5 ||
+    deliveryUnderThreshold;
   if (shouldAlert) {
     try {
       await sendAdminAlert(report);
@@ -204,6 +240,15 @@ async function sendAdminAlert(r: SelfHealReport): Promise<void> {
     for (const m of r.matchMinAutoLowered) {
       lines.push(`   - ${m.userId}: ${m.from} → ${m.to}`);
     }
+  }
+  if (
+    r.detectedSampleSize >= DELIVERY_ALERT_MIN_SAMPLE &&
+    r.detectedRate7d >= 0 &&
+    r.detectedRate7d < DELIVERY_ALERT_THRESHOLD
+  ) {
+    lines.push(
+      `🔴 DELIVERY RATE LOW — only ${Math.round(r.detectedRate7d * 100)}% of successful applications in the last 7 days have hard DETECTED confirmation (${r.detectedSampleSize} success total). Investigate: an ATS may have changed its confirmation DOM, an adapter may be broken, or too many are falling through to email-recruiter path without proof.`,
+    );
   }
   if (r.garbageSessionsArchived > 0) {
     lines.push(`ℹ️ Archived ${r.garbageSessionsArchived} garbage sessions.`);

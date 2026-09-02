@@ -700,6 +700,11 @@ export async function processApplication(
           status: "success",
           submittedVia: "email_recruiter",
           completedAt: new Date(),
+          // EMAIL_SENT ≠ DETECTED_*. La SMTP ci ha detto 250 OK ma
+          // non abbiamo prova che il recruiter esista/legga. In /proof
+          // e negli aggregate contiamo solo DETECTED come "consegnata
+          // con prova" — l'email è "inviata" ma non "confermata".
+          submitConfirmation: "EMAIL_SENT",
         },
       });
       await markSessionSentSuccess(applicationId);
