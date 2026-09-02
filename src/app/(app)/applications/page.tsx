@@ -263,6 +263,7 @@ export default function ApplicationsPage() {
                 <th>{t("colMatch")}</th>
                 <th>{t("colStatus")}</th>
                 <th>Inviata</th>
+                <th style={{ width: 60, textAlign: "center" }} title="CV ottimizzato per questa posizione">CV</th>
                 <th style={{ width: 40 }}></th>
               </tr>
             </thead>
@@ -351,6 +352,21 @@ export default function ApplicationsPage() {
                     )}
                   </td>
                   <td style={{ color: "var(--fg-muted)", fontSize: 12 }}>{a.applied}</td>
+                  <td onClick={(e) => e.stopPropagation()} style={{ textAlign: "center" }}>
+                    {a.hasCvPdf || a.hasCvDocx ? (
+                      <a
+                        href={`/api/applications/${a.id}/document?kind=${a.hasCvPdf ? "pdf" : "cv"}`}
+                        download
+                        title={`Scarica CV${a.hasCvPdf ? " PDF" : " DOCX"} ottimizzato per ${a.role}`}
+                        className="ds-btn ds-btn-sm ds-btn-ghost"
+                        style={{ padding: "3px 8px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4 }}
+                      >
+                        <Icon name="download" size={11} /> {a.hasCvPdf ? "PDF" : "DOCX"}
+                      </a>
+                    ) : (
+                      <span style={{ fontSize: 10.5, color: "var(--fg-subtle)" }} title="CV non ancora generato">—</span>
+                    )}
+                  </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     {a.backendStatus === "awaiting_consent" ? (
                       <button

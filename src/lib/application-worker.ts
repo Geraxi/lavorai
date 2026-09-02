@@ -1527,6 +1527,25 @@ async function deliverApplicationToRecruiter(
   const resend = new Resend(apiKey);
   const from =
     process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
+
+  // GUARDIA PROD: onboarding@resend.dev è il sandbox di Resend — accetta
+  // SOLO invii a caselle dello stesso account. In produzione con
+  // recruiter esterni Resend rigetta silenziosamente (o accetta e non
+  // consegna). Se in prod, rifiuta prima di illudere "sent".
+  if (
+    process.env.NODE_ENV === "production" &&
+    from.toLowerCase().includes("resend.dev")
+  ) {
+    console.error(
+      `[worker] EMAIL_FROM è sandbox Resend (${from}) — nessuna delivery reale possibile a recruiter esterni. Configura EMAIL_FROM con dominio verificato.`,
+    );
+    await alertFounder(
+      "email_from_sandbox",
+      "EMAIL_FROM è sandbox — delivery bloccata",
+      `L'app sta cercando di inviare candidature ai recruiter ma EMAIL_FROM punta ancora al sandbox Resend (${from}).\nResend accetta invii sandbox solo verso caselle interne all'account → NIENTE candidatura arriva ai recruiter esterni.\n\nFix: su Resend verifica un dominio (es. lavorai.it), poi setta EMAIL_FROM="LavorAI <candidature@lavorai.it>" (o simile) su Vercel.`,
+    ).catch(() => void 0);
+    return false;
+  }
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
   const pixel = input.trackingToken
     ? `${siteUrl}/api/track/open/${input.trackingToken}`
@@ -1543,10 +1562,15 @@ async function deliverApplicationToRecruiter(
   const inboundReply = inboundReplyAddress(input.applicationId);
   const effectiveReplyTo = inboundReply ?? input.replyTo;
 
+  // BCC opzionale al founder — prova esterna alla dashboard Resend che
+  // il messaggio è partito davvero (setta RECRUITER_DELIVERY_BCC su Vercel).
+  const bccFounder = process.env.RECRUITER_DELIVERY_BCC?.trim() || undefined;
+
   const result = await sendWithinQuota("application_sent", input.to, async () => {
-    await resend.emails.send({
+    const resp = await resend.emails.send({
       from,
       to: input.to,
+      ...(bccFounder ? { bcc: bccFounder } : {}),
       replyTo: effectiveReplyTo,
       subject,
       html: renderRecruiterEmail({
@@ -1577,6 +1601,23 @@ async function deliverApplicationToRecruiter(
         "X-Lavorai-App-Id": input.applicationId,
       },
     });
+    // Resend restituisce { data: { id }, error }. `error` viene dalla API
+    // (dominio non verificato, quota, indirizzo malformato) — NON viene
+    // lanciato come exception. Se non lo controlliamo, marchiamo "sent"
+    // ma nulla è partito davvero.
+    if (resp.error) {
+      const msg = `Resend rifiutato: ${resp.error.name ?? "error"} — ${resp.error.message ?? "no message"}`;
+      console.error(`[worker] ${input.applicationId} ${msg}`);
+      await alertFounder(
+        "resend_reject",
+        "Resend ha rifiutato una candidatura",
+        `App ${input.applicationId} — recruiter: ${input.to}\n${msg}\n\nCause tipiche: dominio EMAIL_FROM non verificato su Resend, quota superata, indirizzo destinatario malformato.`,
+      ).catch(() => void 0);
+      throw new Error(msg);
+    }
+    console.log(
+      `[worker] ${input.applicationId} recruiter delivered → resend.id=${resp.data?.id ?? "?"} to=${input.to}`,
+    );
   });
   return result.sent;
 }
