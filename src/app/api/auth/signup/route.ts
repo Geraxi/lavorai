@@ -99,6 +99,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Attribution first-touch: parsato dal cookie `lv_attrib` scritto da
+    // <TrackAttribution/> al primo pageload. Payload compatto pipe-separated:
+    // "r=google.com|s=cpc|m=paid|c=brand|p=/auto-candidatura"
+    const attribRaw = request.cookies.get("lv_attrib")?.value ?? "";
+    const attrib: Record<string, string> = {};
+    for (const pair of attribRaw.split("|")) {
+      const [k, v] = pair.split("=");
+      if (k && v) attrib[k] = decodeURIComponent(v).slice(0, 120);
+    }
+
     const user = await prisma.user.create({
       data: {
         email,
@@ -108,6 +118,11 @@ export async function POST(request: NextRequest) {
         privacyConsentAt,
         locale,
         referredById,
+        signupReferrer: attrib.r ?? null,
+        signupUtmSource: attrib.s ?? null,
+        signupUtmMedium: attrib.m ?? null,
+        signupUtmCampaign: attrib.c ?? null,
+        signupLandingPath: attrib.p ?? null,
       },
       select: { id: true, email: true, locale: true },
     });

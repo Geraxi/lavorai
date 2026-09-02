@@ -36,7 +36,7 @@ export default async function AdminOverviewPage() {
     apps14dRows,
     pageViews14dRows,
   ] = await Promise.all([
-    prisma.user.findMany({ select: { email: true, tier: true, emailVerified: true, createdAt: true } }),
+    prisma.user.findMany({ select: { email: true, tier: true, emailVerified: true, createdAt: true, signupReferrer: true, signupUtmSource: true, signupUtmMedium: true } }),
     prisma.user.count({ where: { tier: { in: ["pro", "pro_plus"] } } }),
     prisma.user.count({ where: { emailVerified: { not: null } } }),
     prisma.application.count(),
@@ -117,6 +117,21 @@ export default async function AdminOverviewPage() {
   const usersSeriesSum = usersSeries.reduce((a, b) => a + b, 0);
   const appsSeriesSum = appsSeries.reduce((a, b) => a + b, 0);
   const viewsSeriesSum = viewsSeries.reduce((a, b) => a + b, 0);
+
+  // Signup by source ultimi 7g — chi arriva da dove.
+  const signup7d = realUsers.filter((u) => u.createdAt >= since(24 * 7));
+  const sourceCounts = new Map<string, number>();
+  for (const u of signup7d) {
+    const label =
+      u.signupUtmSource?.trim() ||
+      u.signupReferrer?.trim() ||
+      "direct/unknown";
+    sourceCounts.set(label, (sourceCounts.get(label) ?? 0) + 1);
+  }
+  const sourcesRanked = Array.from(sourceCounts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10);
+  const sourcesTotal = signup7d.length;
 
   // Esiti candidature ultimi 14g (distribuzione per stato).
   const statusCounts = apps14dRows.reduce<Record<string, number>>((acc, a) => {
@@ -217,6 +232,33 @@ export default async function AdminOverviewPage() {
             )}
           </ChartCard>
         </div>
+      </div>
+
+      <div style={{ marginTop: 28 }}>
+        <div style={{ fontSize: 11, color: "var(--fg-subtle)", textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 600, marginBottom: 12 }}>
+          Da dove arrivano gli utenti · signup ultimi 7g
+        </div>
+        <ChartCard title={`Sorgenti signup (${sourcesTotal})`} total={sourcesTotal}>
+          {sourcesTotal === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--fg-subtle)", padding: "20px 0", textAlign: "center" }}>
+              Nessun nuovo utente negli ultimi 7g. L'attribution è attiva dal deploy — mostrerà i valori man mano che arrivano signup.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
+              {sourcesRanked.map(([label, n]) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                  <div style={{ minWidth: 180, color: "var(--fg)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+                  <div style={{ flex: 1, height: 8, background: "var(--bg-sunken)", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ width: `${(n / sourcesTotal) * 100}%`, height: "100%", background: "hsl(var(--primary))" }} />
+                  </div>
+                  <div style={{ minWidth: 60, textAlign: "right", color: "var(--fg-muted)" }}>
+                    <strong style={{ color: "var(--fg)" }}>{n}</strong> ({Math.round((n / sourcesTotal) * 100)}%)
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </ChartCard>
       </div>
 
       <div style={{ marginTop: 28 }}>

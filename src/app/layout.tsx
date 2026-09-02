@@ -8,6 +8,7 @@ import { Providers } from "@/app/providers";
 import { StructuredData } from "@/components/structured-data";
 import { TrackPageView } from "@/components/track-page-view";
 import { TrackReferral } from "@/components/track-referral";
+import { TrackAttribution } from "@/components/track-attribution";
 import { TrackingPixels } from "@/components/tracking-pixels";
 import { assertEnvOrCrash } from "@/lib/env";
 import "./globals.css";
@@ -114,6 +115,7 @@ export default async function RootLayout({
           <Providers>{children}</Providers>
           <TrackPageView />
           <TrackReferral />
+          <TrackAttribution />
           <Toaster richColors position="top-center" />
           <CookieBanner />
           {/* Meta Pixel + Google Ads + GA4 — solo se ENV NEXT_PUBLIC_*

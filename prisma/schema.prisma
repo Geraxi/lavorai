@@ -155,6 +155,16 @@ model User {
   referredById  String?
   referredBy    User?             @relation("UserReferrals", fields: [referredById], references: [id], onDelete: SetNull)
   referrals     User[]            @relation("UserReferrals")
+
+  // Attribution first-touch: da dove è arrivato l'utente al signup.
+  // Popolati dal signup route leggendo cookie `lv_attrib` scritto da
+  // <TrackAttribution/> alla prima pageview (persiste 30gg, non
+  // sovrascritto — first-touch, non last-touch).
+  signupReferrer     String? // dominio del referrer (es. "google.com", "producthunt.com", "direct")
+  signupUtmSource    String? // valore ?utm_source
+  signupUtmMedium    String? // valore ?utm_medium
+  signupUtmCampaign  String? // valore ?utm_campaign
+  signupLandingPath  String? // primo path visitato (es. "/auto-candidatura")
 }
 
 /// Page-view tracking leggero per le metriche admin. Non sostituisce

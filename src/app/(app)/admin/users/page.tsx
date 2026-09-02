@@ -32,6 +32,11 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       lastLoginAt: true,
       referralCode: true,
       referredById: true,
+      signupReferrer: true,
+      signupUtmSource: true,
+      signupUtmMedium: true,
+      signupUtmCampaign: true,
+      signupLandingPath: true,
       preferences: {
         select: {
           autoApplyMode: true,
@@ -208,6 +213,18 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                     k="Arrivato da"
                     v={u.referredById ? (referrerByIdMap.get(u.referredById) ?? u.referredById) : "—"}
                   />
+                </DetailGroup>
+
+                <DetailGroup title="Attribution (signup)">
+                  <KV k="Sorgente" v={u.signupReferrer ?? "—"} />
+                  <KV k="Landing" v={u.signupLandingPath ?? "—"} />
+                  {(u.signupUtmSource || u.signupUtmMedium || u.signupUtmCampaign) && (
+                    <>
+                      <KV k="utm_source" v={u.signupUtmSource ?? "—"} />
+                      <KV k="utm_medium" v={u.signupUtmMedium ?? "—"} />
+                      <KV k="utm_campaign" v={u.signupUtmCampaign ?? "—"} />
+                    </>
+                  )}
                 </DetailGroup>
 
                 <DetailGroup title={`Ultime candidature (${u.applications.length})`}>
