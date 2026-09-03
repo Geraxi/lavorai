@@ -460,6 +460,10 @@ model Application {
   /// Popolato solo quando env CANARY_DEBUG=1 — diagnostica integrità
   /// del flow di submission reale. NON popolato in run normali.
   canaryLog       String?   @db.Text
+  /// Numero di retry automatici già tentati per submit falliti transitori
+  /// (session expired, ATS 5xx, network timeout). Cap a 1 retry per non
+  /// intasare Anthropic budget su fallimenti sistemici.
+  retryCount      Int       @default(0)
   // Stato impostato manualmente dall'utente (es. "vista", "colloquio", "offerta",
   // "rifiutata") quando ha info esterne (risposta via email, LinkedIn, ecc.).
   // Ortogonale a `status` che è lo stato del pipeline interno.

@@ -31,7 +31,36 @@ export interface SelfHealReport {
   /** % di success con submitConfirmation=DETECTED_* negli ultimi 7g. -1 se non calcolabile. */
   detectedRate7d: number;
   detectedSampleSize: number;
+  /** Candidature failed transitorie re-accodate dal retry pass (1 retry max per app). */
+  transientFailuresRetried: number;
 }
+
+/**
+ * Errori "transient" — probabilmente vale la pena ritentare: rete,
+ * timeout, 5xx dell'ATS, sessione scaduta. NON: credit exhausted (già
+ * gestito separatamente), CV mancante, portale non supportato, form
+ * incompleto — che non risolverebbe un retry.
+ */
+const TRANSIENT_ERROR_KEYWORDS = [
+  "timeout",
+  "timed out",
+  "network",
+  "econnreset",
+  "econnrefused",
+  "etimedout",
+  "502",
+  "503",
+  "504",
+  "server error",
+  "session expired",
+  "session scaduta",
+  "rate limit",
+  "browser crash",
+  "page closed",
+  "page.closed",
+];
+const RETRY_MAX = 1;
+const RETRY_MIN_AGE_MS = 30 * 60 * 1000; // aspetta almeno 30 min prima di ritentare
 
 const DELIVERY_ALERT_THRESHOLD = 0.6; // <60% DETECTED → alert
 const DELIVERY_ALERT_MIN_SAMPLE = 20; // richiede almeno 20 success in 7g
@@ -50,7 +79,55 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
     adminAlertSent: false,
     detectedRate7d: -1,
     detectedSampleSize: 0,
+    transientFailuresRetried: 0,
   };
+
+  // ── 0. Retry transient portal failures ─────────────────────────────
+  // Prende candidature failed per errori di rete/5xx/session e le
+  // ri-accoda. Max 1 retry per candidatura (retryCount cap) e attende
+  // almeno 30min dall'ultimo fallimento (dà tempo al portale di
+  // riprendersi da glitch transitori).
+  try {
+    const retryAgeCutoff = new Date(Date.now() - RETRY_MIN_AGE_MS);
+    const patternOr = TRANSIENT_ERROR_KEYWORDS.map((kw) => ({
+      errorMessage: { contains: kw, mode: "insensitive" as const },
+    }));
+    const candidates = await prisma.application.findMany({
+      where: {
+        status: "failed",
+        retryCount: { lt: RETRY_MAX },
+        completedAt: { lt: retryAgeCutoff },
+        OR: patternOr,
+      },
+      select: { id: true, retryCount: true },
+      take: 50,
+    });
+    for (const c of candidates) {
+      try {
+        await prisma.application.update({
+          where: { id: c.id },
+          data: {
+            status: "queued",
+            startedAt: null,
+            errorMessage: null,
+            completedAt: null,
+            retryCount: c.retryCount + 1,
+          },
+        });
+        await enqueueApplication(c.id);
+        report.transientFailuresRetried++;
+      } catch (err) {
+        console.error(`[self-heal] retry ${c.id} failed`, err);
+      }
+    }
+    if (report.transientFailuresRetried > 0) {
+      console.log(
+        `[self-heal] re-enqueued ${report.transientFailuresRetried} transient portal failures for retry`,
+      );
+    }
+  } catch (err) {
+    console.error("[self-heal] transient retry pass failed", err);
+  }
 
   // ── 1. Archive garbage sessions ────────────────────────────────────
   try {
@@ -249,6 +326,9 @@ async function sendAdminAlert(r: SelfHealReport): Promise<void> {
     lines.push(
       `🔴 DELIVERY RATE LOW — only ${Math.round(r.detectedRate7d * 100)}% of successful applications in the last 7 days have hard DETECTED confirmation (${r.detectedSampleSize} success total). Investigate: an ATS may have changed its confirmation DOM, an adapter may be broken, or too many are falling through to email-recruiter path without proof.`,
     );
+  }
+  if (r.transientFailuresRetried > 0) {
+    lines.push(`🔄 Re-enqueued ${r.transientFailuresRetried} transient portal failures for auto-retry.`);
   }
   if (r.garbageSessionsArchived > 0) {
     lines.push(`ℹ️ Archived ${r.garbageSessionsArchived} garbage sessions.`);
