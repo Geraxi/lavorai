@@ -133,6 +133,27 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
         }
         toast.success("Preferenze salvate");
         setDirty(false);
+        // Trigger first-apply se l'utente non ha ancora candidature.
+        // Fire-and-forget: se fallisce l'utente non lo vede — il cron
+        // notturno lo prenderà comunque. Se va, il toast successivo
+        // informa che il motore è partito.
+        fetch("/api/onboarding/trigger-first-apply", { method: "POST" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (!data || data.skipped) return;
+            const enq = data?.stats?.enqueued ?? 0;
+            const await_ = data?.stats?.awaitingConsent ?? 0;
+            const total = enq + await_;
+            if (total > 0) {
+              toast.success(
+                `LavorAI sta processando le tue prime ${total} candidature adesso — vedile in Candidature tra qualche minuto.`,
+                { duration: 8000 },
+              );
+            }
+          })
+          .catch(() => {
+            /* silenzioso, cron notturno recupera */
+          });
       } catch {
         toast.error("Errore di rete");
       }

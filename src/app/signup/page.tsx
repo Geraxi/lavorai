@@ -7,6 +7,7 @@ import { Logo } from "@/components/logo";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/design/icon";
 import { PaywallDialog } from "@/components/paywall-dialog";
+import { GoogleButton } from "@/components/google-signin-button";
 
 export default function SignupPage() {
   return (
@@ -174,6 +175,8 @@ function SignupContent() {
           >
             {t("signupSubheading")}
           </p>
+
+          <GoogleButton mode="signup" />
 
           <form onSubmit={onSubmit}>
             <Label htmlFor="name">{t("name")}</Label>

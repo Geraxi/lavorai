@@ -254,6 +254,66 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   return stats;
 }
 
+/**
+ * Trigger auto-apply per un singolo utente ora — usato dall'onboarding
+ * per dare esperienza tangibile ("prime 3 candidature in 2 min") invece
+ * di far aspettare il cron notturno. Idempotente: rispetta gli stessi
+ * cap giornalieri/mensili + già-candidato del cron principale.
+ *
+ * Ritorna gli stats parziali solo per questo utente (utile per la UI
+ * che mostra "N candidature accodate").
+ */
+export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
+  const stats: RunStats = {
+    usersProcessed: 0,
+    applicationsEnqueued: 0,
+    applicationsAwaitingConsent: 0,
+    skippedDailyCap: 0,
+    skippedMonthlyPaywall: 0,
+    skippedMatchThreshold: 0,
+    skippedRoleMismatch: 0,
+    skippedAlreadyApplied: 0,
+    skippedAvoidedCompany: 0,
+    skippedSessionPaused: 0,
+    skippedEmploymentMismatch: 0,
+    skippedLocationMismatch: 0,
+    errors: 0,
+  };
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      tier: true,
+      avoidCompanies: true,
+      preferences: {
+        select: {
+          autoApplyMode: true,
+          matchMin: true,
+          dailyCap: true,
+          rolesJson: true,
+          locationsJson: true,
+          salaryMin: true,
+          employmentType: true,
+        },
+      },
+      cvProfile: true,
+    },
+  });
+  if (!user || !user.preferences || !user.cvProfile) return stats;
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  try {
+    stats.usersProcessed = 1;
+    await processUser(user, stats, todayStart, monthStart);
+  } catch (err) {
+    console.error(`[runAutoApplyForUser] ${userId} errored`, err);
+    stats.errors++;
+  }
+  return stats;
+}
+
 async function processUser(
   user: {
     id: string;

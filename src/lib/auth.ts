@@ -1,5 +1,6 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { Resend } from "resend";
 import bcrypt from "bcryptjs";
@@ -125,6 +126,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       },
     },
+    // Google OAuth — attivo solo se le due env sono settate. Se mancano
+    // il provider non si registra, quindi zero rischio di rompere il
+    // login esistente in prod finché non configuri GOOGLE_CLIENT_ID +
+    // GOOGLE_CLIENT_SECRET (Console Google Cloud → OAuth 2.0 client).
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            // profile() serve a marcare l'email come verified: Google
+            // già garantisce l'email verificata, quindi saltiamo il
+            // gate `emailVerified` che blocca il Credentials login.
+            profile(p) {
+              return {
+                id: p.sub,
+                name: p.name,
+                email: p.email,
+                image: p.picture,
+                emailVerified: p.email_verified ? new Date() : null,
+              };
+            },
+          }),
+        ]
+      : []),
   ],
   callbacks: {
     async jwt({ token, user, trigger }) {

@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
       success_url: `${siteUrl}/settings?subscribed=1`,
       cancel_url: `${siteUrl}/#prezzi?canceled=1`,
       allow_promotion_codes: true,
+      client_reference_id: user.id, // fallback per webhook checkout.session.completed
       subscription_data: {
         metadata: { userId: user.id, tier },
       },

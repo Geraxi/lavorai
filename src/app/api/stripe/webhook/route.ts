@@ -39,21 +39,34 @@ export async function POST(request: NextRequest) {
 
   try {
     switch (event.type) {
-      case "customer.subscription.created":
-      case "customer.subscription.updated": {
-        const sub = event.data.object as Stripe.Subscription;
+      case "checkout.session.completed": {
+        // Belt-and-suspenders: fires appena il pagamento va a buon fine,
+        // PRIMA di customer.subscription.created. Se per qualche motivo
+        // (endpoint config incompleta, race, filtro eventi) l'evento
+        // subscription non arriva, questo garantisce comunque l'upgrade.
+        const sess = event.data.object as Stripe.Checkout.Session;
+        if (sess.mode !== "subscription" || sess.payment_status !== "paid") break;
         const customerId =
-          typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+          typeof sess.customer === "string" ? sess.customer : sess.customer?.id;
+        const subscriptionId =
+          typeof sess.subscription === "string"
+            ? sess.subscription
+            : sess.subscription?.id;
+        const userId = sess.client_reference_id ?? undefined;
+        if (!customerId || !subscriptionId) break;
+
+        // Recupera la subscription per leggere price/status/period_end.
+        const sub = await stripe().subscriptions.retrieve(subscriptionId);
         const item = sub.items.data[0];
         const priceId = item?.price.id;
         const tier = priceId ? priceIdToTier(priceId) ?? "free" : "free";
-        // Stripe API version change: current_period_end può essere sul sub
-        // top-level OPPURE sull'item. Accediamo in modo safe.
         const anyItem = item as unknown as { current_period_end?: number };
         const anySub = sub as unknown as { current_period_end?: number };
         const periodEndTs = anyItem?.current_period_end ?? anySub.current_period_end;
 
-        await prisma.user.updateMany({
+        // Match utente: prima per stripeCustomerId, poi per client_reference_id
+        // (fallback se il customer non era ancora persistito lato nostro).
+        const matched = await prisma.user.updateMany({
           where: { stripeCustomerId: customerId },
           data: {
             stripeSubscriptionId: sub.id,
@@ -63,6 +76,61 @@ export async function POST(request: NextRequest) {
             currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
           },
         });
+        if (matched.count === 0 && userId) {
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              stripeCustomerId: customerId,
+              stripeSubscriptionId: sub.id,
+              stripePriceId: priceId ?? null,
+              subscriptionStatus: sub.status,
+              tier: sub.status === "active" || sub.status === "trialing" ? tier : "free",
+              currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
+            },
+          }).catch((err) => console.error("[stripe/webhook] fallback update failed", err));
+        }
+        break;
+      }
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        const sub = event.data.object as Stripe.Subscription;
+        const customerId =
+          typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+        const item = sub.items.data[0];
+        const priceId = item?.price.id;
+        const tier = priceId ? priceIdToTier(priceId) ?? "free" : "free";
+        const anyItem = item as unknown as { current_period_end?: number };
+        const anySub = sub as unknown as { current_period_end?: number };
+        const periodEndTs = anyItem?.current_period_end ?? anySub.current_period_end;
+
+        // Fallback userId da metadata (settato al checkout come
+        // subscription_data.metadata.userId) — se nessun user matcha
+        // per stripeCustomerId, promuove per metadata.
+        const metaUserId = (sub.metadata?.userId as string | undefined) ?? undefined;
+
+        const matched = await prisma.user.updateMany({
+          where: { stripeCustomerId: customerId },
+          data: {
+            stripeSubscriptionId: sub.id,
+            stripePriceId: priceId ?? null,
+            subscriptionStatus: sub.status,
+            tier: sub.status === "active" || sub.status === "trialing" ? tier : "free",
+            currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
+          },
+        });
+        if (matched.count === 0 && metaUserId) {
+          await prisma.user.update({
+            where: { id: metaUserId },
+            data: {
+              stripeCustomerId: customerId,
+              stripeSubscriptionId: sub.id,
+              stripePriceId: priceId ?? null,
+              subscriptionStatus: sub.status,
+              tier: sub.status === "active" || sub.status === "trialing" ? tier : "free",
+              currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
+            },
+          }).catch((err) => console.error("[stripe/webhook] metadata fallback failed", err));
+        }
         break;
       }
       case "customer.subscription.deleted": {

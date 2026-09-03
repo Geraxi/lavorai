@@ -7,6 +7,7 @@ import { Logo } from "@/components/logo";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Icon } from "@/components/design/icon";
+import { GoogleButton } from "@/components/google-signin-button";
 
 export default function LoginPage() {
   return (
@@ -143,6 +144,8 @@ function LoginContent() {
                   <span>{t("errorLinkInvalid")}</span>
                 </div>
               )}
+
+              <GoogleButton mode="login" />
 
               <form onSubmit={onPasswordSubmit}>
                 <label
