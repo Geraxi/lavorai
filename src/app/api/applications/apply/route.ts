@@ -66,10 +66,33 @@ export async function POST(request: NextRequest) {
     monthStart.setDate(1);
     monthStart.setHours(0, 0, 0, 0);
 
-    const usedThisMonth = await prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: monthStart } },
-    });
+    // --- Parallel batch reads (era 6+ query sequenziali → 700-1500ms
+    // di round-trip Neon. Ora tutto in 1 sola tornata) ---
+    const needsPortalCheck =
+      process.env.AUTO_APPLY_ENABLED === "true";
+    const [usedThisMonth, cv, job, portalSession, prefs, profileRow] =
+      await Promise.all([
+        prisma.application.count({
+          where: { userId: user.id, createdAt: { gte: monthStart } },
+        }),
+        prisma.cVDocument.findFirst({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+        }),
+        prisma.job.findUnique({ where: { id: jobId } }),
+        needsPortalCheck
+          ? prisma.portalSession.findUnique({
+              where: { userId_portal: { userId: user.id, portal } },
+            })
+          : Promise.resolve(null),
+        prisma.userPreferences.findUnique({
+          where: { userId: user.id },
+          select: { autoApplyMode: true, matchMin: true },
+        }),
+        prisma.cVProfile.findUnique({ where: { userId: user.id } }),
+      ]);
 
+    // --- Guardrail checks (dopo il batch, sfrutta gli stessi dati) ---
     if (usedThisMonth >= limits.monthlyApplications) {
       return NextResponse.json(
         {
@@ -85,56 +108,29 @@ export async function POST(request: NextRequest) {
         { status: 402 },
       );
     }
-
-    // --- CV check ---
-    const cv = await prisma.cVDocument.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "desc" },
-    });
     if (!cv) {
       return NextResponse.json(
         { error: "missing_cv", message: "Carica prima il tuo CV." },
         { status: 409 },
       );
     }
-
-    // --- Job check ---
-    const job = await prisma.job.findUnique({ where: { id: jobId } });
     if (!job) {
       return NextResponse.json(
         { error: "job_not_found", message: "Annuncio non trovato." },
         { status: 404 },
       );
     }
-
-    // --- Portal session check (solo job reali) ---
-    // Portal session serve solo per auto-submit (feature flagged).
-    // Per MVP senza auto-apply, consegnamo CV+CL via email → nessuna
-    // credenziale portale richiesta.
-    if (process.env.AUTO_APPLY_ENABLED === "true" && job.source !== "mock") {
-      const session = await prisma.portalSession.findUnique({
-        where: { userId_portal: { userId: user.id, portal } },
-      });
-      if (!session) {
-        return NextResponse.json(
-          {
-            error: "missing_session",
-            message: `Collega prima il tuo account ${portal} per l'auto-apply.`,
-            portal,
-          },
-          { status: 409 },
-        );
-      }
+    if (needsPortalCheck && job.source !== "mock" && !portalSession) {
+      return NextResponse.json(
+        {
+          error: "missing_session",
+          message: `Collega prima il tuo account ${portal} per l'auto-apply.`,
+          portal,
+        },
+        { status: 409 },
+      );
     }
 
-    // --- Leggi preferenze (mode + matchMin) e profilo CV per match score ---
-    const [prefs, profileRow] = await Promise.all([
-      prisma.userPreferences.findUnique({
-        where: { userId: user.id },
-        select: { autoApplyMode: true, matchMin: true },
-      }),
-      prisma.cVProfile.findUnique({ where: { userId: user.id } }),
-    ]);
     type Mode = "off" | "manual" | "hybrid" | "auto";
     const mode: Mode = (prefs?.autoApplyMode as Mode) ?? "manual";
 

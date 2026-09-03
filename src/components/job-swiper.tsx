@@ -146,55 +146,56 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
     [],
   );
 
-  // Apply: stessa logica di JobsList ma scoped al singolo
+  // Apply — UX ottimistica: la card scorre a destra e la SUCCESSIVA
+  // appare in 250ms, indipendentemente da quanto ci mette il fetch.
+  // Il fetch parte in parallelo; se fallisce, toast di errore ma
+  // l'utente ha già visto il prossimo job (perceived latency 250ms
+  // invece di 1-2s che era prima).
   const apply = useCallback(
-    async (job: JobRow) => {
+    (job: JobRow) => {
       setAnimatingId(job.id);
       setAnimDir("right");
-      try {
-        const res = await fetch("/api/applications/apply", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId: job.id, portal: portalOf(job.url) }),
+      // Rimuovi la card dopo l'animazione, non aspettare il fetch.
+      setTimeout(() => {
+        setSkipped((prev) => {
+          const next = new Set(prev);
+          next.add(job.id);
+          saveSkipped(next);
+          return next;
         });
-        const body = await res.json().catch(() => ({}));
-
-        if (res.status === 409 && body?.error === "missing_cv") {
-          toast.error(t("uploadCvFirst"));
-          router.push("/onboarding");
-          return;
-        }
-        if (res.status === 402) {
-          setPaywallMessage(body?.message ?? null);
-          setPaywallOpen(true);
-          // Reset animation
-          setAnimatingId(null);
-          setAnimDir(null);
-          return;
-        }
-        if (!res.ok) {
-          toast.error(body?.message ?? t("retryError"));
-          setAnimatingId(null);
-          setAnimDir(null);
-          return;
-        }
-        toast.success(t("applied", { title: job.title }));
-        // Anche se è stato applicato lo aggiungo a skipped per non rivederlo
-        setTimeout(() => {
-          setSkipped((prev) => {
-            const next = new Set(prev);
-            next.add(job.id);
-            saveSkipped(next);
-            return next;
-          });
-          setAnimatingId(null);
-          setAnimDir(null);
-        }, 250);
-      } catch {
-        toast.error(t("networkError"));
         setAnimatingId(null);
         setAnimDir(null);
-      }
+      }, 250);
+      // Fetch in background — mostriamo il toast solo se il risultato
+      // richiede l'attenzione dell'utente (errore, paywall, missing CV).
+      fetch("/api/applications/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: job.id, portal: portalOf(job.url) }),
+      })
+        .then(async (res) => {
+          const body = await res.json().catch(() => ({}));
+          if (res.status === 409 && body?.error === "missing_cv") {
+            toast.error(t("uploadCvFirst"));
+            router.push("/onboarding");
+            return;
+          }
+          if (res.status === 402) {
+            setPaywallMessage(body?.message ?? null);
+            setPaywallOpen(true);
+            return;
+          }
+          if (!res.ok) {
+            toast.error(
+              `"${job.title}": ${body?.message ?? t("retryError")}`,
+            );
+            return;
+          }
+          toast.success(t("applied", { title: job.title }));
+        })
+        .catch(() => {
+          toast.error(`"${job.title}": ${t("networkError")}`);
+        });
     },
     [t, router],
   );
