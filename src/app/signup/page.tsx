@@ -181,6 +181,8 @@ function SignupContent() {
             {t("signupSubheading")}
           </p>
 
+          <GoogleButton mode="signup" />
+
           <form onSubmit={onSubmit}>
             <Label htmlFor="name">{t("name")}</Label>
             <input
@@ -364,12 +366,6 @@ function SignupContent() {
               <Icon name="check" size={10} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
               {t("signupTrustCancel")}
             </p>
-
-            {/* Google button SOTTO il CTA principale — email è la via
-                primaria, Google è alternativa. */}
-            <div style={{ marginTop: 20 }}>
-              <GoogleButton mode="signup" position="below" />
-            </div>
           </form>
 
           <p
