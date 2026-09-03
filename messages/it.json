@@ -456,7 +456,7 @@
     "passwordPlaceholder": "Almeno 8 caratteri",
     "passwordForgot": "Password dimenticata?",
     "submitLogin": "Accedi",
-    "submitSignup": "Apri l'account",
+    "submitSignup": "Crea account",
     "loginWithGoogle": "Continua con Google",
     "or": "oppure",
     "noAccount": "Non hai un account?",
@@ -511,6 +511,13 @@
     "loginLink2": "Accedi",
     "termsFootnoteLink": "termini",
     "termsFootnotePre": "Creando l'account accetti i nostri ",
-    "termsFootnotePost": ". Dati processati in UE · GDPR-compliant."
+    "termsFootnotePost": ". Dati processati in UE · GDPR-compliant.",
+    "confirmPassword": "Conferma password",
+    "confirmPasswordPlaceholder": "Riscrivi la stessa password",
+    "errorPasswordMismatch": "Le password non coincidono.",
+    "errorPrivacyRequired": "Devi accettare l'informativa privacy per continuare.",
+    "orDivider": "oppure",
+    "googleSignup": "Registrati con Google",
+    "googleLogin": "Continua con Google"
   }
 }

@@ -2,63 +2,89 @@
 
 import { signIn } from "next-auth/react";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 /**
- * Bottone "Continua con Google". Renderizzato SOLO se l'env pubblica
- * dice che Google è configurato — così non mostriamo un bottone che
- * dà 500 in click. Fallback: se la env NEXT_PUBLIC_GOOGLE_ENABLED
- * non è "true", il componente non renderizza nulla.
+ * Bottone "Continua con Google". Renderizzato SOLO se
+ * NEXT_PUBLIC_GOOGLE_ENABLED === "true" (l'env viene embedded a
+ * build-time — se manca il flag il componente non renderizza nulla,
+ * evitando bottoni che darebbero 500).
+ *
+ * position:
+ *   - "above" (default): divider "oppure" DOPO il bottone (bottone in
+ *     alto, form sotto).
+ *   - "below": divider "oppure" PRIMA del bottone (form sopra, Google
+ *     come alternativa in fondo).
  */
-export function GoogleButton({ mode }: { mode: "signup" | "login" }) {
+export function GoogleButton({
+  mode,
+  position = "above",
+}: {
+  mode: "signup" | "login";
+  position?: "above" | "below";
+}) {
   const [loading, setLoading] = useState(false);
+  const t = useTranslations("auth");
   const enabled = process.env.NEXT_PUBLIC_GOOGLE_ENABLED === "true";
   if (!enabled) return null;
 
-  const label = mode === "signup" ? "Registrati con Google" : "Continua con Google";
+  const label = mode === "signup" ? t("googleSignup") : t("googleLogin");
 
-  return (
+  const divider = (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        margin: "8px 0 16px",
+        color: "var(--fg-subtle)",
+        fontSize: 11.5,
+      }}
+    >
+      <div style={{ flex: 1, height: 1, background: "var(--border-ds)" }} />
+      {t("orDivider")}
+      <div style={{ flex: 1, height: 1, background: "var(--border-ds)" }} />
+    </div>
+  );
+
+  const button = (
+    <button
+      type="button"
+      disabled={loading}
+      onClick={() => {
+        setLoading(true);
+        signIn("google", { callbackUrl: "/dashboard" });
+      }}
+      style={{
+        width: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 10,
+        padding: "11px 14px",
+        borderRadius: 10,
+        border: "1px solid var(--border-ds)",
+        background: "#fff",
+        color: "#1f2937",
+        fontSize: 14,
+        fontWeight: 600,
+        cursor: loading ? "wait" : "pointer",
+      }}
+    >
+      <GoogleIcon />
+      {loading ? "…" : label}
+    </button>
+  );
+
+  return position === "below" ? (
     <>
-      <button
-        type="button"
-        disabled={loading}
-        onClick={() => {
-          setLoading(true);
-          signIn("google", { callbackUrl: "/dashboard" });
-        }}
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-          padding: "11px 14px",
-          borderRadius: 10,
-          border: "1px solid var(--border-ds)",
-          background: "#fff",
-          color: "#1f2937",
-          fontSize: 14,
-          fontWeight: 600,
-          cursor: loading ? "wait" : "pointer",
-          marginBottom: 16,
-        }}
-      >
-        <GoogleIcon />
-        {loading ? "Redirect…" : label}
-      </button>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          margin: "8px 0 16px",
-          color: "var(--fg-subtle)",
-          fontSize: 11.5,
-        }}
-      >
-        <div style={{ flex: 1, height: 1, background: "var(--border-ds)" }} />
-        oppure
-        <div style={{ flex: 1, height: 1, background: "var(--border-ds)" }} />
-      </div>
+      {divider}
+      {button}
+    </>
+  ) : (
+    <>
+      {button}
+      {divider}
     </>
   );
 }

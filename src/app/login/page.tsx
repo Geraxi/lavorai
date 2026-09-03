@@ -145,8 +145,6 @@ function LoginContent() {
                 </div>
               )}
 
-              <GoogleButton mode="login" />
-
               <form onSubmit={onPasswordSubmit}>
                 <label
                   htmlFor="email"
@@ -276,6 +274,10 @@ function LoginContent() {
                     </>
                   )}
                 </button>
+
+                <div style={{ marginTop: 20 }}>
+                  <GoogleButton mode="login" position="below" />
+                </div>
               </form>
 
               <p

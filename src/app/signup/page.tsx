@@ -25,6 +25,7 @@ function SignupContent() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [consent, setConsent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -38,7 +39,11 @@ function SignupContent() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!consent) {
-      setErr("Devi accettare l'informativa privacy per continuare.");
+      setErr(t("errorPrivacyRequired"));
+      return;
+    }
+    if (password !== confirmPassword) {
+      setErr(t("errorPasswordMismatch"));
       return;
     }
     setLoading(true);
@@ -176,8 +181,6 @@ function SignupContent() {
             {t("signupSubheading")}
           </p>
 
-          <GoogleButton mode="signup" />
-
           <form onSubmit={onSubmit}>
             <Label htmlFor="name">{t("name")}</Label>
             <input
@@ -215,7 +218,34 @@ function SignupContent() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("passwordPlaceholderSignup")}
               className="ds-input"
-              style={{ padding: "10px 12px", fontSize: 14 }}
+              style={{ padding: "10px 12px", fontSize: 14, marginBottom: 14 }}
+            />
+
+            <Label htmlFor="confirmPassword">{t("confirmPassword")}</Label>
+            <input
+              id="confirmPassword"
+              type="password"
+              required
+              autoComplete="new-password"
+              minLength={8}
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder={t("confirmPasswordPlaceholder")}
+              className="ds-input"
+              style={{
+                padding: "10px 12px",
+                fontSize: 14,
+                // Bordo rosso soft se le due password sono state entrambe
+                // digitate ma non coincidono → feedback immediato senza
+                // dover attendere il submit.
+                borderColor:
+                  confirmPassword.length > 0 && confirmPassword !== password
+                    ? "rgba(220,38,38,0.55)"
+                    : undefined,
+              }}
+              aria-invalid={
+                confirmPassword.length > 0 && confirmPassword !== password
+              }
             />
 
             <label
@@ -334,6 +364,12 @@ function SignupContent() {
               <Icon name="check" size={10} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
               {t("signupTrustCancel")}
             </p>
+
+            {/* Google button SOTTO il CTA principale — email è la via
+                primaria, Google è alternativa. */}
+            <div style={{ marginTop: 20 }}>
+              <GoogleButton mode="signup" position="below" />
+            </div>
           </form>
 
           <p
