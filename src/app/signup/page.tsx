@@ -287,12 +287,12 @@ function SignupContent() {
                   marginBottom: 2,
                 }}
               >
-                Cosa succede dopo
+                {t("signupWhatNextLabel")}
               </div>
-              <NextStep n="1" label="Verifichi l'email (60s)" />
-              <NextStep n="2" label="Carichi il CV — niente parte finché non confermi" />
-              <NextStep n="3" label="Scegli ruoli e città. L'auto-apply è OFF di default" />
-              <NextStep n="4" label="Attivi solo quando ti senti pronto — pausa in 1 click" />
+              <NextStep n="1" label={t("signupStep1")} />
+              <NextStep n="2" label={t("signupStep2")} />
+              <NextStep n="3" label={t("signupStep3")} />
+              <NextStep n="4" label={t("signupStep4")} />
             </div>
 
             <button
@@ -328,11 +328,11 @@ function SignupContent() {
               }}
             >
               <Icon name="check" size={10} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
-              3 candidature gratuite ·{" "}
+              {t("signupTrustFree")} ·{" "}
               <Icon name="check" size={10} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
-              No carta ·{" "}
+              {t("signupTrustNoCard")} ·{" "}
               <Icon name="check" size={10} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
-              Cancelli in 1 click
+              {t("signupTrustCancel")}
             </p>
           </form>
 
@@ -344,7 +344,7 @@ function SignupContent() {
               textAlign: "center",
             }}
           >
-            Hai già un account?{" "}
+            {t("haveAccountQuestion")}{" "}
             <Link
               href={`/login${plan ? `?plan=${plan}` : ""}`}
               style={{
@@ -354,7 +354,7 @@ function SignupContent() {
                 textUnderlineOffset: 3,
               }}
             >
-              Accedi
+              {t("loginLink2")}
             </Link>
           </p>
 
@@ -371,11 +371,11 @@ function SignupContent() {
             marginTop: 24,
           }}
         >
-          Creando l&apos;account accetti i nostri{" "}
+          {t("termsFootnotePre")}
           <Link href="/termini" style={{ color: "var(--fg-muted)" }}>
-            termini
+            {t("termsFootnoteLink")}
           </Link>
-          . Dati processati in UE · GDPR-compliant.
+          {t("termsFootnotePost")}
         </p>
       </div>
 

@@ -498,6 +498,19 @@
     "verifyEmailBody2": "Cliccalo entro 24 ore. Se non lo trovi, guarda nello spam, i filtri italiani sono diffidenti.",
     "backToLogin": "← Torna al login",
     "choosePlan": "Scegli il piano",
-    "termsLink": "Creando l'account accetti i nostri"
+    "termsLink": "Creando l'account accetti i nostri",
+    "signupWhatNextLabel": "Cosa succede dopo",
+    "signupStep1": "Verifichi l'email (60s)",
+    "signupStep2": "Carichi il CV — niente parte finché non confermi",
+    "signupStep3": "Scegli ruoli e città. L'auto-apply è OFF di default",
+    "signupStep4": "Attivi solo quando ti senti pronto — pausa in 1 click",
+    "signupTrustFree": "3 candidature gratuite",
+    "signupTrustNoCard": "No carta",
+    "signupTrustCancel": "Cancelli in 1 click",
+    "haveAccountQuestion": "Hai già un account?",
+    "loginLink2": "Accedi",
+    "termsFootnoteLink": "termini",
+    "termsFootnotePre": "Creando l'account accetti i nostri ",
+    "termsFootnotePost": ". Dati processati in UE · GDPR-compliant."
   }
 }
