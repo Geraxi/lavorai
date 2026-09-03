@@ -18,6 +18,8 @@ export type AlertReason =
   | "anthropic_credits"
   | "anthropic_error"
   | "resend_error"
+  | "resend_reject"
+  | "email_from_sandbox"
   | "other";
 
 /** Riconosce un errore Anthropic di crediti/quota esauriti. */
