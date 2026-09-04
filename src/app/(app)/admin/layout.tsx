@@ -17,7 +17,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="adm-root">
-      <AdminTopbar userName={user?.name ?? user?.email?.split("@")[0] ?? "Admin"} />
+      <AdminTopbar userName={user?.name ?? "Umberto"} email={user?.email ?? ""} />
       <div className="adm-content">{children}</div>
 
       <style>{`

@@ -17,7 +17,7 @@ const TITLES: Record<string, string> = {
  * Topbar admin: search ⌘K · range · Live · campanella · avatar.
  * Il search apre la CommandPalette globale (⌘K già gestita dall'app).
  */
-export function AdminTopbar({ userName, rangeLabel = "Ultimi 14 giorni" }: { userName: string; rangeLabel?: string }) {
+export function AdminTopbar({ userName, email, rangeLabel = "Ultimi 14 giorni" }: { userName: string; email?: string; rangeLabel?: string }) {
   const pathname = usePathname() ?? "/admin";
   const initials = getInitials(userName);
 
@@ -146,7 +146,7 @@ export function AdminTopbar({ userName, rangeLabel = "Ultimi 14 giorni" }: { use
         </div>
         <div style={{ lineHeight: 1.15 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg)" }}>{userName}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>Admin · {TITLES[pathname] ?? "Admin"}</div>
+          <div style={{ fontSize: 11, color: "var(--fg-subtle)" }} title={TITLES[pathname] ?? "Admin"}>{email || "Admin"}</div>
         </div>
       </div>
     </div>
