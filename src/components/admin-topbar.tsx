@@ -10,7 +10,6 @@ const TITLES: Record<string, string> = {
   "/admin/users": "Utenti",
   "/admin/jobs": "Job pool",
   "/admin/automation": "Automazione & Utenti",
-  "/admin/system": "Salute AI",
 };
 
 /**

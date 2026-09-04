@@ -96,7 +96,6 @@ export function AppSidebar({
     { href: "/admin/users", label: "Utenti", icon: "user" },
     { href: "/admin/jobs", label: "Job pool", icon: "briefcase" },
     { href: "/admin/automation", label: "Automazione & Utenti", icon: "zap" },
-    { href: "/admin/system", label: "Salute AI", icon: "sparkles" },
   ];
 
   const setupItems: NavItem[] = [

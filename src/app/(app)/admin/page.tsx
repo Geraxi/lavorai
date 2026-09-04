@@ -341,7 +341,7 @@ export default async function AdminOverviewPage() {
         <div className="adm-card">
           <div className="adm-card-head" style={{ alignItems: "center" }}>
             <div className="adm-card-title">Crediti AI</div>
-            <Link href="/admin/system" className="adm-link">Vedi dettagli →</Link>
+            <Link href="/admin/jobs" className="adm-link">Vedi dettagli →</Link>
           </div>
           <div className="adm-card-body" style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
             <Donut
