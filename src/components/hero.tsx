@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
@@ -124,7 +123,7 @@ export function Hero() {
         style={{
           maxWidth: 1480,
           margin: "0 auto",
-          padding: "40px",
+          padding: "24px 40px",
         }}
       >
         <div className="grid items-center gap-14 lg:grid-cols-2">
@@ -136,7 +135,7 @@ export function Hero() {
             // pt-[280px] su mobile spinge il testo SOTTO il pianeta-hero
             // (alto 320px nel blocco bg di sopra) — su desktop torna a
             // pt-10 perché il pianeta è laterale, non sovrastante.
-            className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-[280px] pb-16 lg:pt-6 lg:pb-12"
+            className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-[280px] pb-8 lg:pt-4 lg:pb-6"
           >
             {/* Badge live — stats REALI dal DB via /api/public/stats.
                 Se il fetch fallisce o gli stats sono a zero, non renderizza
@@ -146,7 +145,7 @@ export function Hero() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="mb-6"
+              className="mb-3"
             >
               <LiveStatsBadge variant="hero" />
             </motion.div>
@@ -161,7 +160,7 @@ export function Hero() {
                 // Le righe precedenti sono in em per scalare in proporzione.
                 // Max ridotto da 7.5rem a 6rem così le 4 righe + content
                 // sotto stanno tutte nella section senza scroll/crop.
-                fontSize: "clamp(3rem, 5.8vw, 6rem)",
+                fontSize: "clamp(2.25rem, 4.2vw, 4.5rem)",
                 letterSpacing: "-0.03em",
                 lineHeight: 1.02,
                 fontWeight: 800,
@@ -219,10 +218,10 @@ export function Hero() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.2 }}
-              className="mt-6 max-w-[520px]"
+              className="mt-3 max-w-[520px]"
               style={{
-                fontSize: "clamp(1rem, 1.15vw, 1.15rem)",
-                lineHeight: 1.55,
+                fontSize: "clamp(0.9rem, 1vw, 1rem)",
+                lineHeight: 1.5,
                 color: "rgba(255,255,255,0.78)",
               }}
             >
@@ -235,13 +234,13 @@ export function Hero() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.28 }}
-              className="mt-5 inline-flex items-start gap-2.5 rounded-lg px-3 py-2"
+              className="mt-3 inline-flex items-start gap-2 rounded-lg px-3 py-1.5"
               style={{
                 background: "hsl(var(--primary) / 0.08)",
                 borderLeft: "3px solid hsl(var(--primary))",
                 maxWidth: 520,
-                fontSize: 13,
-                lineHeight: 1.5,
+                fontSize: 12,
+                lineHeight: 1.45,
                 color: "rgba(255,255,255,0.85)",
               }}
             >
@@ -261,19 +260,19 @@ export function Hero() {
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.35 }}
-              className="mt-8 flex flex-col items-start gap-5 w-full"
+              className="mt-4 flex flex-col items-start gap-3 w-full"
             >
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   asChild
                   className="group relative overflow-hidden bg-primary text-primary-foreground hover:bg-primary/90"
                   style={{
-                    minHeight: 52,
-                    paddingLeft: 24,
-                    paddingRight: 24,
-                    fontSize: 16,
+                    minHeight: 44,
+                    paddingLeft: 20,
+                    paddingRight: 20,
+                    fontSize: 14.5,
                     fontWeight: 600,
-                    borderRadius: 12,
+                    borderRadius: 10,
                   }}
                 >
                   <Link href="/signup" onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, { label: "signup" })}>
@@ -312,102 +311,6 @@ export function Hero() {
                 ))}
               </div>
 
-              {/* Product Hunt featured badge */}
-              <a
-                href="https://www.producthunt.com/products/lavorai-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lavorai-it"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-5 inline-block"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  alt="Lavorai.it - AI-powered auto apply for job seekers | Product Hunt"
-                  width={220}
-                  height={48}
-                  src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1151760&theme=light&t=1779546633084"
-                />
-              </a>
-            </motion.div>
-
-            {/* 4-icon trust strip Grid */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.45 }}
-              className="mt-8 grid grid-cols-2 gap-x-6 gap-y-4 max-w-[500px]"
-              style={{ fontSize: 13, color: "rgba(255,255,255,0.7)" }}
-            >
-              <div className="flex items-start gap-3">
-                <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                <span className="leading-tight">{t("trustA1")}<br/>{t("trustA2")}</span>
-              </div>
-              <div className="flex items-start gap-3">
-                <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                <span className="leading-tight">{t("trustB1")}<br/>{t("trustB2")}</span>
-              </div>
-              <div className="flex items-start gap-3">
-                <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
-                <span className="leading-tight">{t("trustC1")}<br/>{t("trustC2")}</span>
-              </div>
-              <div className="flex items-start gap-3">
-                <svg className="mt-0.5" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-                <span className="leading-tight">{t("trustD1")}<br/>{t("trustD2")}</span>
-              </div>
-            </motion.div>
-
-            {/* Live activity bar */}
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.55 }}
-              className="mt-6 inline-flex items-center gap-3 rounded-lg border px-3.5 py-2.5"
-              style={{
-                borderColor: "rgba(255,255,255,0.1)",
-                background: "rgba(255,255,255,0.02)",
-              }}
-            >
-              <span
-                aria-hidden
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: 999,
-                  background: "hsl(var(--primary))",
-                  boxShadow: "0 0 8px hsl(var(--primary) / 0.7)",
-                  flexShrink: 0,
-                  position: "relative",
-                }}
-              >
-                <span
-                  style={{
-                    position: "absolute",
-                    inset: -4,
-                    borderRadius: 999,
-                    background: "hsl(var(--primary))",
-                    opacity: 0.3,
-                    animation: "ds-pulse 1.8s ease-out infinite",
-                  }}
-                />
-              </span>
-              <span
-                style={{
-                  fontSize: 13,
-                  color: "rgba(255,255,255,0.6)",
-                  display: "inline-flex",
-                  alignItems: "baseline",
-                  gap: 5,
-                }}
-              >
-                <strong style={{ color: "#FFFFFF", fontWeight: 600 }}>
-                  <Counter target={1247} />
-                </strong>
-                <span>{t("liveActivity1")}</span>
-                <span style={{ opacity: 0.4, margin: "0 6px" }}>·</span>
-                <strong style={{ color: "#FFFFFF", fontWeight: 600 }}>
-                  <Counter target={8} />
-                </strong>
-                <span>{t("liveActivity2")}</span>
-              </span>
             </motion.div>
           </motion.div>
 
@@ -424,82 +327,6 @@ export function Hero() {
   );
 }
 
-/**
- * CTA primario unico — "Avvia l'auto-apply". Più grande e tangibile.
- */
-function ShineButton({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick?: () => void;
-}) {
-  return (
-    <Button
-      asChild
-      size="lg"
-      className="group relative overflow-hidden"
-      style={{
-        minHeight: 60,
-        paddingLeft: 32,
-        paddingRight: 32,
-      }}
-    >
-      <Link href="/signup" onClick={onClick}>
-        <span
-          className="relative z-10 font-semibold"
-          style={{ fontSize: 17, letterSpacing: "-0.005em" }}
-        >
-          {label}
-        </span>
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent transition-transform duration-700 group-hover:translate-x-full"
-        />
-      </Link>
-    </Button>
-  );
-}
-
-/**
- * Numero che tickha da 0 al target su 1.4s — easeOut. Usato nella
- * live activity strip per dare sensazione di "il sistema sta facendo
- * cose adesso". Numero finale è hardcoded (placeholder) — sostituire
- * con dato reale via API una volta che abbiamo il dataset.
- *
- * NOTE PLACEHOLDER: 1247 e 8 sono numeri credibili ma non reali.
- * Vedi TODO-LAUNCH.md — bisogna wirar /api/marketing/stats che
- * ritorna count(success last 7d) + count(applying right now).
- */
-function Counter({ target }: { target: number }) {
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    let raf = 0;
-    const start = performance.now();
-    const duration = 1400;
-    const ease = (t: number) => 1 - Math.pow(1 - t, 3);
-    const tick = (now: number) => {
-      const elapsed = now - start;
-      const progress = Math.min(1, elapsed / duration);
-      setValue(Math.round(ease(progress) * target));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target]);
-  return (
-    <strong
-      className="mono"
-      style={{
-        color: "#FFFFFF",
-        fontWeight: 600,
-        fontFeatureSettings: '"tnum"',
-      }}
-    >
-      {value.toLocaleString("it-IT")}
-    </strong>
-  );
-}
-
-// HeroVisual rimosso: l'immagine pianeta è ora background-image
-// della <section> hero (full-bleed), non un elemento separato.
+// Live-activity Counter + Product Hunt badge + 4-icon trust strip
+// rimossi dall'hero (troppo per stare above-the-fold). Vivono più
+// in basso nella landing.
