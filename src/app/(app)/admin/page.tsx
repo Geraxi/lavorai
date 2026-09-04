@@ -30,6 +30,8 @@ export default async function AdminOverviewPage() {
     jobsTotal,
     jobsFresh24h,
     readyBacklog,
+    emailSentMonth,
+    awaitingConsentTotal,
     suspectSends,
     activePopups,
     popupResponses,
@@ -65,6 +67,21 @@ export default async function AdminOverviewPage() {
     prisma.job.count(),
     prisma.job.count({ where: { cachedAt: { gte: since(24) } } }),
     prisma.application.count({ where: { status: "ready_to_apply" } }),
+    // Email consegnate al recruiter questo mese (SMTP 250 OK, no
+    // conferma di lettura). Distinto dai DETECTED ATS per onestà.
+    prisma.application.count({
+      where: {
+        status: "success",
+        OR: [
+          { submitConfirmation: "EMAIL_SENT" },
+          { submittedVia: "email_recruiter" },
+        ],
+        createdAt: { gte: monthStart },
+      },
+    }),
+    // Candidature in attesa che l'utente clicchi Consenti (hybrid mode).
+    // Se alto → problema di UX/mode-choice, non pipeline.
+    prisma.application.count({ where: { status: "awaiting_consent" } }),
     // Invii "sospetti": marcati success ma senza prova hard di conferma
     // (submitConfirmation null o UNCONFIRMED). Segnale per la sezione Consegna.
     prisma.application.count({
@@ -281,10 +298,16 @@ export default async function AdminOverviewPage() {
           <SectionCard
             href="/admin/delivery"
             label="Consegna"
-            metric={`${deliveredMonth} / ${readyBacklog}`}
-            metricSub="consegnate mese / in attesa"
+            metric={`${deliveredMonth + emailSentMonth}`}
+            metricSub={`ATS: ${deliveredMonth} · email: ${emailSentMonth} · in attesa consenso: ${awaitingConsentTotal} · preparate: ${readyBacklog}`}
             desc="Esito invii, conferme HTTP/DOM e candidature da completare."
-            tone={suspectSends > 0 ? "warn" : deliveredMonth > 0 ? "good" : undefined}
+            tone={
+              deliveredMonth + emailSentMonth > 0
+                ? "good"
+                : awaitingConsentTotal + readyBacklog > 0
+                  ? "warn"
+                  : undefined
+            }
           />
           <SectionCard
             href="/admin/users"
