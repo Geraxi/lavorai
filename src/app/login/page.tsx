@@ -145,8 +145,6 @@ function LoginContent() {
                 </div>
               )}
 
-              <GoogleButton mode="login" />
-
               <form onSubmit={onPasswordSubmit}>
                 <label
                   htmlFor="email"
@@ -276,6 +274,10 @@ function LoginContent() {
                     </>
                   )}
                 </button>
+
+                <div style={{ marginTop: 14 }}>
+                  <GoogleButton mode="login" position="below" />
+                </div>
               </form>
 
               <p
@@ -302,16 +304,17 @@ function LoginContent() {
 
               <div
                 style={{
-                  marginTop: 28,
-                  paddingTop: 20,
+                  marginTop: 16,
+                  paddingTop: 14,
                   borderTop: "1px solid var(--border-ds)",
                   display: "grid",
-                  gap: 10,
+                  gap: 6,
+                  fontSize: 12,
                 }}
               >
-                <Benefit icon="zap" text="Candidati in automatico su portali italiani e internazionali" />
-                <Benefit icon="sparkles" text="CV e cover letter adattati ad ogni annuncio" />
-                <Benefit icon="target" text="3 candidature gratis per provare — no carta" />
+                <Benefit icon="zap" text={t("loginBenefit1")} />
+                <Benefit icon="sparkles" text={t("loginBenefit2")} />
+                <Benefit icon="target" text={t("loginBenefit3")} />
               </div>
         </div>
 
@@ -323,15 +326,15 @@ function LoginContent() {
             marginTop: 24,
           }}
         >
-          Continuando accetti i nostri{" "}
+          {t("loginFooterPre")}
           <Link href="/termini" style={{ color: "var(--fg-muted)" }}>
-            termini
-          </Link>{" "}
-          e la{" "}
-          <Link href="/privacy" style={{ color: "var(--fg-muted)" }}>
-            privacy policy
+            {t("loginFooterTerms")}
           </Link>
-          . Dati processati in UE · GDPR-compliant.
+          {t("loginFooterMid")}
+          <Link href="/privacy" style={{ color: "var(--fg-muted)" }}>
+            {t("loginFooterPrivacy")}
+          </Link>
+          {t("loginFooterPost")}
         </p>
       </div>
 

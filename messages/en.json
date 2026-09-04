@@ -518,6 +518,14 @@
     "errorPrivacyRequired": "You must accept the privacy notice to continue.",
     "orDivider": "or",
     "googleSignup": "Sign up with Google",
-    "googleLogin": "Continue with Google"
+    "googleLogin": "Continue with Google",
+    "loginBenefit1": "Apply automatically to italian and international portals",
+    "loginBenefit2": "CV and cover letter tailored to each posting",
+    "loginBenefit3": "3 free applications to try — no card",
+    "loginFooterPre": "By continuing you accept our ",
+    "loginFooterTerms": "terms",
+    "loginFooterMid": " and ",
+    "loginFooterPrivacy": "privacy policy",
+    "loginFooterPost": ". Data processed in the EU · GDPR-compliant."
   }
 }

@@ -181,8 +181,6 @@ function SignupContent() {
             {t("signupSubheading")}
           </p>
 
-          <GoogleButton mode="signup" />
-
           <form onSubmit={onSubmit}>
             <Label htmlFor="name">{t("name")}</Label>
             <input
@@ -193,7 +191,7 @@ function SignupContent() {
               onChange={(e) => setName(e.target.value)}
               placeholder={t("namePlaceholder")}
               className="ds-input"
-              style={{ padding: "10px 12px", fontSize: 14, marginBottom: 14 }}
+              style={{ padding: "8px 12px", fontSize: 14, marginBottom: 10 }}
             />
 
             <Label htmlFor="email">{t("email")}</Label>
@@ -206,7 +204,7 @@ function SignupContent() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t("emailPlaceholderExample")}
               className="ds-input"
-              style={{ padding: "10px 12px", fontSize: 14, marginBottom: 14 }}
+              style={{ padding: "8px 12px", fontSize: 14, marginBottom: 10 }}
             />
 
             <Label htmlFor="password">{t("password")}</Label>
@@ -220,7 +218,7 @@ function SignupContent() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t("passwordPlaceholderSignup")}
               className="ds-input"
-              style={{ padding: "10px 12px", fontSize: 14, marginBottom: 14 }}
+              style={{ padding: "8px 12px", fontSize: 14, marginBottom: 10 }}
             />
 
             <Label htmlFor="confirmPassword">{t("confirmPassword")}</Label>
@@ -296,16 +294,16 @@ function SignupContent() {
                 ogni step prima dell'auto-apply richiede tua conferma. */}
             <div
               style={{
-                marginTop: 16,
-                padding: "12px 14px",
+                marginTop: 12,
+                padding: "10px 12px",
                 borderRadius: 10,
                 background: "rgba(5,150,105,0.06)",
                 border: "1px solid rgba(5,150,105,0.18)",
                 display: "flex",
                 flexDirection: "column",
-                gap: 6,
-                fontSize: 12.5,
-                lineHeight: 1.5,
+                gap: 4,
+                fontSize: 12,
+                lineHeight: 1.45,
                 color: "var(--fg-muted)",
               }}
             >
@@ -333,9 +331,9 @@ function SignupContent() {
               className="ds-btn ds-btn-primary"
               style={{
                 width: "100%",
-                padding: "12px 18px",
+                padding: "11px 18px",
                 fontSize: 14,
-                marginTop: 18,
+                marginTop: 12,
               }}
             >
               {loading ? (
@@ -366,6 +364,10 @@ function SignupContent() {
               <Icon name="check" size={10} style={{ display: "inline", marginRight: 4, verticalAlign: "middle" }} />
               {t("signupTrustCancel")}
             </p>
+
+            <div style={{ marginTop: 10 }}>
+              <GoogleButton mode="signup" position="below" />
+            </div>
           </form>
 
           <p

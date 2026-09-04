@@ -36,7 +36,7 @@ export function GoogleButton({
         display: "flex",
         alignItems: "center",
         gap: 10,
-        margin: "8px 0 16px",
+        margin: "6px 0 10px",
         color: "var(--fg-subtle)",
         fontSize: 11.5,
       }}
@@ -61,7 +61,7 @@ export function GoogleButton({
         alignItems: "center",
         justifyContent: "center",
         gap: 10,
-        padding: "11px 14px",
+        padding: "9px 14px",
         borderRadius: 10,
         border: "1px solid var(--border-ds)",
         background: "#fff",

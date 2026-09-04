@@ -518,6 +518,14 @@
     "errorPrivacyRequired": "Devi accettare l'informativa privacy per continuare.",
     "orDivider": "oppure",
     "googleSignup": "Registrati con Google",
-    "googleLogin": "Continua con Google"
+    "googleLogin": "Continua con Google",
+    "loginBenefit1": "Candidati in automatico su portali italiani e internazionali",
+    "loginBenefit2": "CV e cover letter adattati ad ogni annuncio",
+    "loginBenefit3": "3 candidature gratis per provare — no carta",
+    "loginFooterPre": "Continuando accetti i nostri ",
+    "loginFooterTerms": "termini",
+    "loginFooterMid": " e la ",
+    "loginFooterPrivacy": "privacy policy",
+    "loginFooterPost": ". Dati processati in UE · GDPR-compliant."
   }
 }
