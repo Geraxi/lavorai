@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { Icon } from "@/components/design/icon";
+import { CvPreviewModal, CvPreviewButton } from "./_preview-modal";
 
 export const metadata: Metadata = {
   title: "CV per posizione · LavorAI",
@@ -105,6 +106,7 @@ export default async function MaterialiPage() {
           </div>
         )}
       </div>
+      <CvPreviewModal />
     </>
   );
 }
@@ -200,18 +202,21 @@ function MaterialCard({ app }: { app: AppRow }) {
         </div>
       )}
 
-      {/* Downloads */}
+      {/* Downloads + preview */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {hasCvPdf && (
-          <a
-            href={`/api/applications/${app.id}/document?kind=pdf`}
-            download
-            className="ds-btn ds-btn-sm"
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}
-            title="Scarica CV PDF ottimizzato"
-          >
-            <Icon name="download" size={11} /> CV PDF
-          </a>
+          <>
+            <CvPreviewButton id={app.id} title={app.job.title} />
+            <a
+              href={`/api/applications/${app.id}/document?kind=pdf`}
+              download
+              className="ds-btn ds-btn-sm ds-btn-ghost"
+              style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12 }}
+              title="Scarica CV PDF ottimizzato"
+            >
+              <Icon name="download" size={11} /> CV PDF
+            </a>
+          </>
         )}
         {hasCvDocx && (
           <a

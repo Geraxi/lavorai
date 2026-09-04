@@ -70,11 +70,19 @@ export async function GET(
         ? "application/pdf"
         : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+    // ?disposition=inline → render nel browser (usato dal modal
+    // preview PDF su /materiali). Default resta 'attachment' per
+    // preservare il comportamento dei download button esistenti.
+    const dispositionMode =
+      request.nextUrl.searchParams.get("disposition") === "inline"
+        ? "inline"
+        : "attachment";
+
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": `${dispositionMode}; filename="${filename}"`,
         "Cache-Control": "private, max-age=0, no-store",
       },
     });
