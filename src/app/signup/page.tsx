@@ -290,41 +290,6 @@ function SignupContent() {
               </p>
             )}
 
-            {/* "Cosa succede dopo" — riduce esitazione mostrando che
-                ogni step prima dell'auto-apply richiede tua conferma. */}
-            <div
-              style={{
-                marginTop: 12,
-                padding: "10px 12px",
-                borderRadius: 10,
-                background: "rgba(5,150,105,0.06)",
-                border: "1px solid rgba(5,150,105,0.18)",
-                display: "flex",
-                flexDirection: "column",
-                gap: 4,
-                fontSize: 12,
-                lineHeight: 1.45,
-                color: "var(--fg-muted)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 10.5,
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.12em",
-                  color: "hsl(var(--primary))",
-                  marginBottom: 2,
-                }}
-              >
-                {t("signupWhatNextLabel")}
-              </div>
-              <NextStep n="1" label={t("signupStep1")} />
-              <NextStep n="2" label={t("signupStep2")} />
-              <NextStep n="3" label={t("signupStep3")} />
-              <NextStep n="4" label={t("signupStep4")} />
-            </div>
-
             <button
               type="submit"
               disabled={loading}
@@ -563,28 +528,3 @@ function Benefit({ icon, text }: { icon: "zap" | "sparkles" | "target"; text: st
   );
 }
 
-function NextStep({ n, label }: { n: string; label: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <span
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 999,
-          background: "hsl(var(--primary))",
-          color: "white",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 10.5,
-          fontWeight: 700,
-          flexShrink: 0,
-          lineHeight: 1,
-        }}
-      >
-        {n}
-      </span>
-      <span>{label}</span>
-    </div>
-  );
-}
