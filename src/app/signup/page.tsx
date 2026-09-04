@@ -440,11 +440,10 @@ function SignupContent() {
         .lavorai-login-right {
           position: relative;
           overflow: hidden;
-          /* Stesso pattern del login: bitmap sgranato sostituito da
-             gradient CSS pulito + ambient glow verdi + grid subtle. */
+          /* Foto asset /public/login-hero.jpg + fallback verde brand
+             se l'asset manca in prod. Vedi commento identico su /login. */
           background:
-            radial-gradient(ellipse 70% 80% at 75% 25%, hsl(155 65% 38%) 0%, transparent 60%),
-            radial-gradient(ellipse 55% 60% at 25% 80%, hsl(158 60% 30%) 0%, transparent 65%),
+            url('/login-hero.jpg') center/cover no-repeat,
             linear-gradient(165deg, hsl(155 55% 25%) 0%, hsl(160 60% 18%) 100%);
           padding: 80px 56px;
           display: flex;
@@ -457,11 +456,8 @@ function SignupContent() {
           content: "";
           position: absolute;
           inset: 0;
-          background-image:
-            linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
-          background-size: 56px 56px;
-          mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 80%);
+          background:
+            linear-gradient(90deg, rgba(1,5,16,0.78) 0%, rgba(1,5,16,0.55) 40%, rgba(1,5,16,0.2) 75%, rgba(1,5,16,0) 100%);
           pointer-events: none;
         }
         .lavorai-login-showcase { max-width: 520px; }

@@ -356,16 +356,12 @@ function LoginContent() {
         .lavorai-login-right {
           position: relative;
           overflow: hidden;
-          /* Fondo CSS pulito: il vecchio bitmap signup-showcase.png era
-             sgranato e troppo carico (3-4 card mockup sovrapposte).
-             Ora: base nero profondo + 2 glow verdi ambient (radial) +
-             grid pattern sottile. La copy a destra è IL focus. */
-          /* Verde brand pieno — non "dark con hint". Lightness ~25-35%
-             così il pannello si legge inequivocabilmente come verde,
-             non come nero saturato. */
+          /* Foto asset in /public/login-hero.jpg (uomo su bean bag,
+             dashboard LavorAI proiettato). Fallback verde brand se
+             l'asset non è ancora salvato in prod — evita pannello
+             bianco/nero durante la propagazione. */
           background:
-            radial-gradient(ellipse 70% 80% at 75% 25%, hsl(155 65% 38%) 0%, transparent 60%),
-            radial-gradient(ellipse 55% 60% at 25% 80%, hsl(158 60% 30%) 0%, transparent 65%),
+            url('/login-hero.jpg') center/cover no-repeat,
             linear-gradient(165deg, hsl(155 55% 25%) 0%, hsl(160 60% 18%) 100%);
           padding: 80px 56px;
           display: flex;
@@ -374,16 +370,15 @@ function LoginContent() {
           align-items: center;
           border-left: 1px solid var(--border-ds);
         }
-        /* Grid pattern overlay sottile — texture, non rumore */
+        /* Scrim dark per leggibilità testo (option B):
+           gradient orizzontale che scurisce il lato sinistro dove
+           siede la copy, lasciando il lato destro nitido. */
         .lavorai-login-right::before {
           content: "";
           position: absolute;
           inset: 0;
-          background-image:
-            linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
-          background-size: 56px 56px;
-          mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 80%);
+          background:
+            linear-gradient(90deg, rgba(1,5,16,0.78) 0%, rgba(1,5,16,0.55) 40%, rgba(1,5,16,0.2) 75%, rgba(1,5,16,0) 100%);
           pointer-events: none;
         }
         @media (max-width: 1023px) {
