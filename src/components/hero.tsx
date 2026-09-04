@@ -301,14 +301,29 @@ export function Hero() {
                 </Link>
               </div>
               
-              {/* Checkmarks row */}
-              <div className="flex flex-wrap gap-x-5 gap-y-2 mt-2" style={{ fontSize: 13, color: "rgba(255,255,255,0.9)", fontWeight: 500 }}>
+              {/* Checkmarks row + Product Hunt badge inline — compatto */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-2" style={{ fontSize: 13, color: "rgba(255,255,255,0.9)", fontWeight: 500 }}>
                 {[t("checkA"), t("checkB"), t("checkC")].map((text) => (
                   <span key={text} className="inline-flex items-center gap-1.5">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                     {text}
                   </span>
                 ))}
+                <a
+                  href="https://www.producthunt.com/products/lavorai-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lavorai-it"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block"
+                  style={{ lineHeight: 0 }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    alt="Lavorai.it - AI-powered auto apply for job seekers | Product Hunt"
+                    width={170}
+                    height={37}
+                    src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1151760&theme=light&t=1779546633084"
+                  />
+                </a>
               </div>
 
             </motion.div>
