@@ -87,14 +87,22 @@ export function AppSidebar({
     { href: "/founder-coach", label: "Founder Coach", icon: "target" },
   ];
 
+  // Sezione ADMIN — visibile SOLO al founder (isAdmin dal layout server).
+  // Un'unica sidebar: niente nav annidata dentro /admin.
+  const adminItems: NavItem[] = [
+    { href: "/admin", label: "Panoramica", icon: "dashboard" },
+    { href: "/admin/traffic", label: "Traffico", icon: "chart" },
+    { href: "/admin/delivery", label: "Consegna", icon: "send" },
+    { href: "/admin/users", label: "Utenti", icon: "user" },
+    { href: "/admin/jobs", label: "Job pool", icon: "briefcase" },
+    { href: "/admin/automation", label: "Automazione & Utenti", icon: "zap" },
+    { href: "/admin/system", label: "Salute AI", icon: "sparkles" },
+  ];
+
   const setupItems: NavItem[] = [
     { href: "/preferences", label: t("preferences"), icon: "target" },
     { href: "/cv", label: t("materials"), icon: "file" },
     { href: "/settings", label: t("account"), icon: "settings" },
-    // Link Admin visibile SOLO al founder (isAdmin dal layout server).
-    ...(isAdmin
-      ? [{ href: "/admin", label: "Admin", icon: "chart" as IconName }]
-      : []),
   ];
 
   const pathname = usePathname();
@@ -126,6 +134,15 @@ export function AppSidebar({
           active={isActive(pathname, it.href)}
         />
       ))}
+
+      {isAdmin && (
+        <>
+          <SectionLabel>Admin</SectionLabel>
+          {adminItems.map((it) => (
+            <NavItem key={it.href} item={it} active={isActive(pathname, it.href)} />
+          ))}
+        </>
+      )}
 
       <SectionLabel>{t("sectionProfile")}</SectionLabel>
       {setupItems.map((it) => (
@@ -349,6 +366,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 function isActive(pathname: string | null, href: string) {
   if (!pathname) return false;
   if (href === "/dashboard") return pathname === "/dashboard";
+  // /admin è la Panoramica: attivo solo su match esatto, altrimenti
+  // resterebbe evidenziato su tutte le sub-route admin.
+  if (href === "/admin") return pathname === "/admin";
   return pathname === href || pathname.startsWith(href + "/");
 }
 

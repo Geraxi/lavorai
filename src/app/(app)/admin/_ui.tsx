@@ -243,19 +243,18 @@ export function ChartCard({
   );
 }
 
-export function PageTitle({ title, sub, actions }: { title: string; sub?: string; actions?: ReactNode }) {
+// Header pagina compatto: breadcrumb "Admin / X" + titolo + sub; azioni a destra.
+export function PageTitle({ title, sub, actions, crumb }: { title: string; sub?: string; actions?: ReactNode; crumb?: string }) {
   return (
-    <div style={{ marginBottom: 24, display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-      <div>
-        <div style={{ fontSize: 10.5, color: "var(--fg-subtle)", textTransform: "uppercase", letterSpacing: "0.14em", fontWeight: 600 }}>
-          Internal · Admin
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexShrink: 0, paddingBottom: 2 }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
+          Admin <span style={{ margin: "0 6px" }}>/</span> <span style={{ color: "var(--fg-muted)" }}>{crumb ?? title}</span>
         </div>
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: "-0.025em", margin: "6px 0 0" }}>
-          {title}
-        </h1>
-        {sub && <p style={{ fontSize: 13, color: "var(--fg-muted)", marginTop: 5 }}>{sub}</p>}
+        <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.025em", margin: "2px 0 0", lineHeight: 1.15 }}>{title}</h1>
+        {sub && <p style={{ fontSize: 12.5, color: "var(--fg-muted)", margin: "3px 0 0" }}>{sub}</p>}
       </div>
-      {actions && <div>{actions}</div>}
+      {actions && <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingTop: 6 }}>{actions}</div>}
     </div>
   );
 }
@@ -371,44 +370,54 @@ export function StatusPill({ label, tone = "info" }: { label: string; tone?: Ton
 // ────────────────────────────────────────────────────────────────────────
 // KPI premium: cifra grande, delta % trend, sparkline area, icona tone.
 // Usa gradient area chart per un look "market data".
+// Layout fedele al mockup: icona + label in alto, cifra grande + delta%
+// in basso a sinistra, sparkline area a destra (non sotto).
 export function KpiTrendCard({
   label,
   value,
   sub,
   delta,
+  deltaLabel,
   series,
   color = "hsl(var(--primary))",
   icon,
+  sparkKind = "area",
 }: {
   label: string;
   value: string | number;
   sub?: string;
   delta?: number; // percentuale (positiva/negativa)
+  deltaLabel?: string; // testo alternativo al delta % (es. "68%")
   series: number[];
   color?: string;
   icon?: ReactNode;
+  sparkKind?: "area" | "bars";
 }) {
   const trendUp = delta != null && delta >= 0;
-  const trendColor = delta == null ? "var(--fg-subtle)" : trendUp ? "hsl(var(--primary))" : "#f87171";
+  const trendColor = delta == null ? "hsl(var(--primary))" : trendUp ? "hsl(var(--primary))" : "#f87171";
   return (
     <div
       style={{
         position: "relative",
-        padding: "18px 18px 12px",
+        padding: "14px 16px 12px",
         borderRadius: 14,
         background: "var(--bg-elev)",
         border: "1px solid var(--border-ds)",
         overflow: "hidden",
         minWidth: 0,
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
         {icon && (
           <div
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 9,
+              width: 28,
+              height: 28,
+              borderRadius: 8,
               display: "grid",
               placeItems: "center",
               background: `color-mix(in srgb, ${color} 15%, transparent)`,
@@ -419,25 +428,40 @@ export function KpiTrendCard({
             {icon}
           </div>
         )}
-        <div style={{ fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 500 }}>{label}</div>
+        <div className="adm-ellipsis" style={{ fontSize: 11.5, color: "var(--fg-muted)", fontWeight: 500 }}>{label}</div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-        <div style={{ fontSize: 28, fontWeight: 700, color: "var(--fg)", letterSpacing: "-0.025em", lineHeight: 1, fontFeatureSettings: '"tnum"' }}>
-          {value}
-        </div>
-        {delta != null && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, fontWeight: 700, color: trendColor }}>
-            <span>{trendUp ? "↑" : "↓"}</span>
-            <span>{trendUp ? "+" : ""}{delta.toFixed(0)}%</span>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 46%", gap: 8, alignItems: "end", flex: 1, minHeight: 0 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+            <div className="adm-num" style={{ fontSize: 26, fontWeight: 700, color: "var(--fg)", letterSpacing: "-0.025em", lineHeight: 1 }}>
+              {value}
+            </div>
+            {(delta != null || deltaLabel) && (
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 12, fontWeight: 700, color: trendColor }}>
+                {delta != null && <span>{trendUp ? "↑" : "↓"}</span>}
+                <span>{deltaLabel ?? `${trendUp ? "+" : ""}${delta!.toFixed(0)}%`}</span>
+              </div>
+            )}
           </div>
-        )}
+          {sub && <div className="adm-ellipsis" style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 5 }}>{sub}</div>}
+        </div>
+        <div style={{ height: 44, minWidth: 0 }}>
+          {sparkKind === "bars" ? <SparkBars data={series} color={color} /> : <Sparkline data={series} color={color} height={44} />}
+        </div>
       </div>
-      {sub && <div style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
 
-      <div style={{ marginTop: 10, marginLeft: -18, marginRight: -18, marginBottom: -12 }}>
-        <Sparkline data={series} color={color} height={54} />
-      </div>
+// Mini bar chart per sparkline "a colonne" (KPI Nuovi utenti nel mockup).
+export function SparkBars({ data, color = "hsl(var(--primary))" }: { data: number[]; color?: string }) {
+  const max = Math.max(1, ...data);
+  return (
+    <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: "100%" }}>
+      {data.map((v, i) => (
+        <div key={i} style={{ flex: 1, height: `${Math.max(8, (v / max) * 100)}%`, background: color, opacity: v === 0 ? 0.25 : 0.9, borderRadius: 2 }} />
+      ))}
     </div>
   );
 }
@@ -482,18 +506,26 @@ export function Sparkline({
 
 // Line chart multi-serie SVG, con grid soft e legenda esterna. viewBox fisso,
 // preserveAspectRatio "none" per riempire il container in larghezza.
+// `fill` → il grafico riempie il contenitore flex (viewport fisso); la legenda
+// può essere resa dal caller nell'header della card (`legend={false}`).
 export function LineChart({
   series,
   labels,
   height = 260,
+  fill = false,
+  legend = true,
+  yFormat,
 }: {
   series: Array<{ label: string; color: string; data: number[] }>;
   labels: string[];
   height?: number;
+  fill?: boolean;
+  legend?: boolean;
+  yFormat?: (v: number) => string;
 }) {
   const W = 700;
   const H = height;
-  const padL = 30;
+  const padL = 34;
   const padR = 8;
   const padT = 12;
   const padB = 22;
@@ -504,22 +536,31 @@ export function LineChart({
   const allVals = series.flatMap((s) => s.data);
   const max = Math.max(1, ...allVals);
   const yTicks = 4;
+  const fmt = yFormat ?? ((v: number) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}K` : String(v)));
   const ptTo = (v: number, i: number) => {
     const x = padL + i * step;
     const y = padT + innerH - (v / max) * innerH;
     return [x, y] as const;
   };
   return (
-    <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 10, fontSize: 11.5 }}>
-        {series.map((s) => (
-          <div key={s.label} style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--fg-muted)" }}>
-            <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color }} />
-            {s.label}
-          </div>
-        ))}
-      </div>
-      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ display: "block" }}>
+    <div style={fill ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" } : undefined}>
+      {legend && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 10, fontSize: 11.5, flexShrink: 0 }}>
+          {series.map((s) => (
+            <div key={s.label} style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--fg-muted)" }}>
+              <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color }} />
+              {s.label}
+            </div>
+          ))}
+        </div>
+      )}
+      <svg
+        width="100%"
+        height={fill ? "100%" : H}
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        style={fill ? { display: "block", flex: 1, minHeight: 0 } : { display: "block" }}
+      >
         {/* grid */}
         {Array.from({ length: yTicks + 1 }).map((_, i) => {
           const y = padT + (i / yTicks) * innerH;
@@ -527,7 +568,7 @@ export function LineChart({
           return (
             <g key={i}>
               <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="var(--border-ds)" strokeWidth={0.5} strokeDasharray="2 3" />
-              <text x={padL - 6} y={y + 3} textAnchor="end" fontSize={9.5} fill="var(--fg-subtle)">{val}</text>
+              <text x={padL - 6} y={y + 3} textAnchor="end" fontSize={9.5} fill="var(--fg-subtle)">{fmt(val)}</text>
             </g>
           );
         })}
@@ -754,6 +795,43 @@ export function AlertRow({
       </div>
       <div style={{ fontSize: 11, color: "var(--fg-subtle)", whiteSpace: "nowrap" }}>{when}</div>
     </div>
+  );
+}
+
+// Legenda compatta (pallino + label) da usare nell'header delle card chart.
+export function ChartLegend({ items }: { items: Array<{ label: string; color: string }> }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 12, fontSize: 11.5, alignItems: "center" }}>
+      {items.map((s) => (
+        <span key={s.label} style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color }} />
+          {s.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Select-look statico (range/dropdown) per header card — solo estetico.
+export function FakeSelect({ label }: { label: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "5px 10px",
+        borderRadius: 8,
+        background: "var(--bg-sunken)",
+        border: "1px solid var(--border-ds)",
+        fontSize: 11.5,
+        color: "var(--fg)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+      <span style={{ color: "var(--fg-subtle)", fontSize: 10 }}>▾</span>
+    </span>
   );
 }
 

@@ -40,15 +40,17 @@ const HUB_CODE = "IT"; // Da qui partono gli archi verso ogni paese di provenien
 const PRIMARY_GREEN = "rgba(52, 211, 153, 1)";
 const PRIMARY_GREEN_SOFT = "rgba(52, 211, 153, 0.35)";
 
-export function AdminTrafficGlobe({ rows, height = 480 }: { rows: CountryRow[]; height?: number }) {
+export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
-  const [width, setWidth] = useState(0);
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  const width = size.width;
+  const height = size.height;
   const [hover, setHover] = useState<Point | null>(null);
 
   // Filtra e mappa a punti geolocalizzati; le righe con codice sconosciuto
   // finiscono in "Altri" (visibili nella lista, non sul globo).
-  const { points, arcs, total, unmapped } = useMemo(() => {
+  const { points, arcs, unmapped } = useMemo(() => {
     const total = rows.reduce((s, r) => s + r.count, 0) || 1;
     const max = Math.max(1, ...rows.map((r) => r.count));
     const hub = COUNTRY_CENTROIDS[HUB_CODE];
@@ -81,16 +83,18 @@ export function AdminTrafficGlobe({ rows, height = 480 }: { rows: CountryRow[]; 
         });
       }
     }
-    return { points, arcs, total, unmapped };
+    return { points, arcs, unmapped };
   }, [rows]);
 
-  // ResizeObserver — il globo va rigenerato con la larghezza del container.
+  // ResizeObserver — il globo riempie il contenitore (larghezza E altezza):
+  // la card ha altezza da griglia viewport, non fissa.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    const measure = () => setSize({ width: el.clientWidth, height: el.clientHeight });
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setWidth(el.clientWidth);
+    measure();
     return () => ro.disconnect();
   }, []);
 
@@ -108,12 +112,12 @@ export function AdminTrafficGlobe({ rows, height = 480 }: { rows: CountryRow[]; 
     };
     controls.addEventListener("start", stopAuto);
     // Punta verso l'Europa all'apertura
-    g.pointOfView({ lat: 30, lng: 15, altitude: 2.2 }, 0);
+    g.pointOfView({ lat: 30, lng: 15, altitude: 1.9 }, 0);
     return () => controls.removeEventListener("start", stopAuto);
-  }, [width]);
+  }, [width, height]);
 
-  const topForLegend = useMemo(
-    () => [...points].sort((a, b) => b.count - a.count).slice(0, 10),
+  const topPoint = useMemo(
+    () => [...points].sort((a, b) => b.count - a.count)[0] ?? null,
     [points],
   );
 
@@ -121,16 +125,13 @@ export function AdminTrafficGlobe({ rows, height = 480 }: { rows: CountryRow[]; 
     <div
       ref={containerRef}
       style={{
-        position: "relative",
-        width: "100%",
-        height,
-        borderRadius: 14,
+        position: "absolute",
+        inset: 0,
         overflow: "hidden",
-        background: "radial-gradient(ellipse at center, rgba(16,185,129,0.08) 0%, transparent 65%), #05070a",
-        border: "1px solid var(--border-ds)",
+        background: "radial-gradient(ellipse at 60% 45%, rgba(16,185,129,0.10) 0%, transparent 60%)",
       }}
     >
-      {width > 0 && (
+      {width > 0 && height > 0 && (
         <Globe
           ref={globeRef}
           width={width}
@@ -168,103 +169,39 @@ export function AdminTrafficGlobe({ rows, height = 480 }: { rows: CountryRow[]; 
         />
       )}
 
-      {/* Overlay: badge in alto a sinistra con conteggio totale */}
-      <div
-        style={{
-          position: "absolute",
-          top: 14,
-          left: 14,
-          padding: "8px 12px",
-          borderRadius: 10,
-          background: "rgba(10,15,20,0.75)",
-          border: "1px solid rgba(52,211,153,0.3)",
-          backdropFilter: "blur(8px)",
-          fontSize: 11.5,
-          color: "var(--fg-muted)",
-          pointerEvents: "none",
-        }}
-      >
-        <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-subtle)" }}>Visite totali</div>
-        <div style={{ fontSize: 20, fontWeight: 700, color: "#34d399", letterSpacing: "-0.02em", lineHeight: 1.1, marginTop: 2 }}>{total}</div>
-        {unmapped > 0 && (
-          <div style={{ fontSize: 10.5, color: "var(--fg-subtle)", marginTop: 4 }}>
-            {unmapped} da paesi non mappati
+      {/* Card flottante del paese in hover (come nel mockup) — il paese top
+          è mostrato di default finché non si passa su un altro punto. */}
+      {(hover ?? topPoint) && (
+        <div
+          style={{
+            position: "absolute",
+            top: 64,
+            right: 18,
+            padding: "10px 14px",
+            borderRadius: 10,
+            background: "rgba(10,15,20,0.82)",
+            border: "1px solid rgba(52,211,153,0.35)",
+            backdropFilter: "blur(8px)",
+            pointerEvents: "none",
+            display: "flex",
+            gap: 10,
+            alignItems: "center",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`https://flagcdn.com/${(hover ?? topPoint)!.code.toLowerCase()}.svg`} alt="" width={26} height={19} style={{ borderRadius: 3, objectFit: "cover" }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{(hover ?? topPoint)!.name}</div>
+            <div style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{(hover ?? topPoint)!.count} visite</div>
+            <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>{(hover ?? topPoint)!.pct.toFixed(pct((hover ?? topPoint)!))}% del totale</div>
           </div>
-        )}
-      </div>
-
-      {/* Overlay: mini-lista top paesi in alto a destra */}
-      <div
-        style={{
-          position: "absolute",
-          top: 14,
-          right: 14,
-          maxWidth: 260,
-          padding: "10px 12px",
-          borderRadius: 10,
-          background: "rgba(10,15,20,0.75)",
-          border: "1px solid var(--border-ds)",
-          backdropFilter: "blur(8px)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-        }}
-      >
-        <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--fg-subtle)", marginBottom: 2 }}>
-          Top paesi (7g)
         </div>
-        {topForLegend.map((p) => (
-          <button
-            key={p.code}
-            type="button"
-            onClick={() => globeRef.current?.pointOfView({ lat: p.lat, lng: p.lng, altitude: 1.6 }, 900)}
-            onMouseEnter={() => setHover(p)}
-            onMouseLeave={() => setHover(null)}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "20px 1fr auto",
-              gap: 8,
-              alignItems: "center",
-              padding: "3px 4px",
-              borderRadius: 6,
-              background: hover?.code === p.code ? "rgba(52,211,153,0.12)" : "transparent",
-              border: "none",
-              cursor: "pointer",
-              fontSize: 11.5,
-              color: "var(--fg)",
-              textAlign: "left",
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`https://flagcdn.com/${p.code.toLowerCase()}.svg`}
-              alt=""
-              width={18}
-              height={13}
-              loading="lazy"
-              style={{ borderRadius: 2, objectFit: "cover" }}
-            />
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-            <span style={{ color: "var(--fg-muted)", fontFeatureSettings: '"tnum"' }}>
-              <strong style={{ color: "var(--fg)" }}>{p.count}</strong>
-              <span style={{ marginLeft: 4, fontSize: 10, color: "var(--fg-subtle)" }}>{p.pct.toFixed(pct(p))}%</span>
-            </span>
-          </button>
-        ))}
-      </div>
+      )}
 
-      {/* Hint interazione */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 12,
-          left: 14,
-          fontSize: 10.5,
-          color: "var(--fg-subtle)",
-          pointerEvents: "none",
-        }}
-      >
-        Trascina per ruotare · scroll per zoom · click su un paese per centrarlo
+      {/* Hint interazione + paesi non mappati */}
+      <div style={{ position: "absolute", bottom: 10, right: 16, fontSize: 10.5, color: "var(--fg-subtle)", pointerEvents: "none", textAlign: "right" }}>
+        Trascina per ruotare · scroll per zoom
+        {unmapped > 0 && <span> · {unmapped} visite da paesi non mappati</span>}
       </div>
     </div>
   );

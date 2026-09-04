@@ -1,15 +1,6 @@
-import type { Metadata } from "next";
-import { AdminNudges } from "@/components/admin-nudges";
-import { PageTitle } from "../_ui";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Admin · Nudge", robots: { index: false } };
-export const dynamic = "force-dynamic";
-
-export default function AdminNudgesPage() {
-  return (
-    <>
-      <PageTitle title="Nudge onboarding" sub="Email a utenti bloccati per completare lo step mancante" />
-      <AdminNudges />
-    </>
-  );
+// Consolidata in /admin/automation (hub Automazione & Utenti).
+export default function LegacyAdminRedirect() {
+  redirect("/admin/automation");
 }

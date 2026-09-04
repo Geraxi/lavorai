@@ -7,9 +7,11 @@ export const dynamic = "force-dynamic";
 
 export default function AdminSystemPage() {
   return (
-    <>
-      <PageTitle title="Salute AI" sub="Verifica chiave Anthropic e che Chromium si avvii in produzione" />
-      <AdminAiHealth />
-    </>
+    <div className="adm-page" style={{ gridTemplateRows: "auto minmax(0,1fr)" }}>
+      <PageTitle title="Salute AI" sub="Verifica chiave Anthropic e che Chromium si avvii in produzione." />
+      <div className="adm-card-body scroll" style={{ paddingRight: 4 }}>
+        <AdminAiHealth />
+      </div>
+    </div>
   );
 }
