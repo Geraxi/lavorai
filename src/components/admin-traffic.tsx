@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { Icon } from "@/components/design/icon";
+import { AdminTrafficMap } from "@/components/admin-traffic-map";
 
 /**
  * Pannello admin "Traffico": visite, visitatori unici (sessionId distinti),
@@ -133,12 +134,7 @@ export async function AdminTraffic() {
       </div>
 
       {byCountry.length > 0 && (
-        <div style={{ marginTop: 14, fontSize: 12, color: "var(--fg-muted)" }}>
-          Paesi:{" "}
-          {byCountry
-            .map((c) => `${c.country ?? "??"} ${c._count._all}`)
-            .join(" · ")}
-        </div>
+        <AdminTrafficMap rows={byCountry.map((c) => ({ country: c.country, count: c._count._all }))} />
       )}
 
       <style>{`@media (max-width:800px){.admin-traffic-2col{grid-template-columns:1fr !important}}`}</style>
