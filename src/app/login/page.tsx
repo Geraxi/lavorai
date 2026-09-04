@@ -361,7 +361,7 @@ function LoginContent() {
              l'asset non è ancora salvato in prod — evita pannello
              bianco/nero durante la propagazione. */
           background:
-            url('/login-hero.jpg') center/cover no-repeat,
+            url('/login-hero.png') center/cover no-repeat,
             linear-gradient(165deg, hsl(155 55% 25%) 0%, hsl(160 60% 18%) 100%);
           padding: 80px 56px;
           display: flex;
