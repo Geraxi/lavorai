@@ -48,12 +48,20 @@ class InMemoryLimiter implements Limiter {
 class UpstashLimiter implements Limiter {
   constructor(private rl: Ratelimit) {}
   async limit(id: string): Promise<LimitResult> {
-    const res = await this.rl.limit(id);
-    return {
-      success: res.success,
-      remaining: res.remaining,
-      reset: res.reset,
-    };
+    try {
+      const res = await this.rl.limit(id);
+      return {
+        success: res.success,
+        remaining: res.remaining,
+        reset: res.reset,
+      };
+    } catch (err) {
+      // FAIL-OPEN: se Upstash non risponde (es. "database temporarily
+      // rate-limited" sul free tier) non blocchiamo login/candidature con
+      // un 500. Il rate limit è protezione anti-abuso, non funzione core.
+      console.warn("[rate-limit] Upstash non disponibile, fail-open:", err instanceof Error ? err.message : err);
+      return { success: true, remaining: 1, reset: Date.now() + 60_000 };
+    }
   }
 }
 
@@ -71,7 +79,8 @@ function buildLimiter(
         redis,
         limiter: Ratelimit.slidingWindow(max, `${windowMs} ms`),
         prefix,
-        analytics: true,
+        // analytics=true costa comandi extra a ogni chiamata: spento (quota Upstash).
+        analytics: false,
       }),
     );
   }
