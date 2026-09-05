@@ -8,6 +8,7 @@ import {
 import { saveUserFile, readUserFile } from "@/lib/storage";
 import { decryptJson } from "@/lib/crypto";
 import { isPortalId, PORTALS } from "@/lib/portals";
+import { isJobUrlAlive, markJobClosed } from "@/lib/job-liveness";
 import {
   extractFullProfile,
   tailorProfileForJob,
@@ -327,6 +328,25 @@ export async function processApplication(
       console.warn(`[worker] ${applicationId} URL resolve failed`, err);
     }
   }
+  // Annuncio ancora online? Un job chiuso (404 / "Job not found" / redirect
+  // alla lista del board) produceva form_not_found → failed o, in auto mode,
+  // awaiting_consent su un annuncio morto, bruciando cap giornaliero e quota
+  // Free. Qui lo chiudiamo nel pool e marchiamo l'application JOB_CLOSED.
+  if (!(await isJobUrlAlive(app.job.url))) {
+    console.warn(`[worker] ${applicationId} job non più online: ${app.job.url}`);
+    await markJobClosed(app.job.id);
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: {
+        status: "failed",
+        submitConfirmation: "JOB_CLOSED",
+        errorMessage: "Annuncio non più online (chiuso dall'azienda). Nessun invio effettuato.",
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
   // Prova il match sull'URL canonico (Job.url) PRIMA di quello risolto:
   // alcuni ATS (Greenhouse) redirigono a career page custom dove il form
   // non è raggiungibile. L'URL canonico porta al form puro dell'ATS.

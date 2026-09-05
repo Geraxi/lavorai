@@ -425,8 +425,10 @@ async function processUser(
   }
 
   // Daily cap = quante già create oggi
+  // Le candidature fallite (annuncio chiuso, form rotto, crediti) NON
+  // consumano cap/quota: l'utente non ha ricevuto nulla.
   const todayCount = await prisma.application.count({
-    where: { userId: user.id, createdAt: { gte: todayStart } },
+    where: { userId: user.id, createdAt: { gte: todayStart }, status: { not: "failed" } },
   });
   let remainingToday = Math.max(0, prefs.dailyCap - todayCount);
   if (remainingToday === 0) {
@@ -439,7 +441,7 @@ async function processUser(
   const limits = getLimits(tier);
   if (limits.monthlyApplications !== Infinity) {
     const monthCount = await prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: monthStart } },
+      where: { userId: user.id, createdAt: { gte: monthStart }, status: { not: "failed" } },
     });
     const remainingMonth = Math.max(
       0,
@@ -467,6 +469,7 @@ async function processUser(
   // fragile per auto-apply senza intervento utente.
   const jobs = await prisma.job.findMany({
     where: {
+      closedAt: null,
       // "linkedin" = job scovato da Apify il cui applyUrl è già stato
       // filtrato a un ATS supportato (vedi linkedin-apify.ts), quindi
       // il submit avviene sul form Greenhouse/Lever/Workable/BambooHR

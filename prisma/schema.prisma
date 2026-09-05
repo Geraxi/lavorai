@@ -379,10 +379,15 @@ model Job {
   // Usato per costruire l'URL canonico del form quando il job è linkato
   // da una career page custom (es. stripe.com/jobs?gh_jid=...)
   sourceSlug String?
+  // Annuncio non più online (404/“Job not found”/redirect alla lista del board).
+  // Settato dal worker (liveness check) o da sync-jobs quando il board non lo
+  // restituisce più. Il cron auto-apply lo esclude; riaperto se ricompare.
+  closedAt DateTime?
 
   applications Application[]
 
   @@unique([externalId, source])
+  @@index([closedAt])
 }
 
 /// Application Session: raggruppa candidature simili (stesso ruolo + settore)

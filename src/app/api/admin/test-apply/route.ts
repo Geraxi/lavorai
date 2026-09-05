@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { processApplication } from "@/lib/application-worker";
 import { findPortalAdapter } from "@/lib/portal-adapters";
+import { isJobUrlAlive } from "@/lib/job-liveness";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -157,31 +158,4 @@ export async function POST(request: NextRequest) {
       canaryExcerpt: after?.canaryLog?.slice(0, 600) ?? null,
     },
   });
-}
-
-/**
- * Verifica leggera che l'annuncio sia ancora online: segue i redirect e
- * considera "morto" un 404/410, o (per gli ATS) un redirect verso la lista
- * generica del board (Greenhouse: ...?error=true, /<slug> senza /jobs/<id>)
- * o verso la career page aziendale.
- */
-async function isJobUrlAlive(url: string): Promise<boolean> {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122.0 Safari/537.36" } });
-    clearTimeout(t);
-    if (res.status === 404 || res.status === 410) return false;
-    const final = res.url || url;
-    if (/[?&]error=true/i.test(final)) return false;
-    const wasAts = /greenhouse\.io|ashbyhq\.com|lever\.co|workable\.com|smartrecruiters\.com/i.test(url);
-    if (wasAts) {
-      const finalIsAts = /greenhouse\.io|ashbyhq\.com|lever\.co|workable\.com|smartrecruiters\.com/i.test(final);
-      if (!finalIsAts) return false; // redirect alla career page custom → l'adapter non troverà il form
-      if (/greenhouse\.io\/[^/]+\/?$/i.test(final)) return false; // tornato alla lista del board
-    }
-    return res.ok;
-  } catch {
-    return true; // in dubbio non escludiamo (timeout/rete): lo scoprirà l'adapter
-  }
 }

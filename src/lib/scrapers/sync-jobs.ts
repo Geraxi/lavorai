@@ -57,6 +57,7 @@ export async function syncAtsJobs(): Promise<{
 
   const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...li, ...demand.items];
   const upserted = await upsertJobs(all);
+  await closeMissingJobs(all);
   return {
     greenhouse: gh.length,
     lever: lv.length,
@@ -68,6 +69,40 @@ export async function syncAtsJobs(): Promise<{
     demandQueries: demand.queries,
     total: upserted,
   };
+}
+
+/**
+ * Board ATS che scarichiamo per intero (API ufficiale): se un job del pool
+ * con lo stesso source+sourceSlug non è più nella lista, è stato chiuso.
+ * Chiudiamo solo board per cui abbiamo ricevuto almeno 1 job (evita di
+ * chiudere tutto quando l'API risponde vuoto/404 per un glitch).
+ */
+const FULL_BOARD_SOURCES = new Set(["greenhouse", "lever", "ashby", "smartrecruiters", "workable"]);
+async function closeMissingJobs(items: JobListItem[]): Promise<number> {
+  const seen = new Map<string, Set<string>>();
+  for (const j of items) {
+    if (!FULL_BOARD_SOURCES.has(j.source)) continue;
+    const slug = (j as { sourceSlug?: string | null }).sourceSlug;
+    if (!slug) continue;
+    const key = `${j.source}::${slug}`;
+    if (!seen.has(key)) seen.set(key, new Set());
+    seen.get(key)!.add(j.externalId);
+  }
+  let closed = 0;
+  for (const [key, ids] of seen) {
+    const [source, sourceSlug] = key.split("::");
+    try {
+      const r = await prisma.job.updateMany({
+        where: { source, sourceSlug, closedAt: null, externalId: { notIn: [...ids] } },
+        data: { closedAt: new Date() },
+      });
+      closed += r.count;
+    } catch (err) {
+      console.warn("[sync-jobs] closeMissingJobs failed", key, err instanceof Error ? err.message : err);
+    }
+  }
+  if (closed > 0) console.log(`[sync-jobs] chiusi ${closed} annunci non più presenti sui board`);
+  return closed;
 }
 
 async function upsertJobs(items: JobListItem[]): Promise<number> {
@@ -100,6 +135,7 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
               postedAt: j.postedAt,
               sourceSlug: (j as { sourceSlug?: string | null }).sourceSlug ?? null,
               cachedAt: new Date(),
+              closedAt: null, // ricomparso sul board → riaperto
             },
             create: {
               externalId: j.externalId,
