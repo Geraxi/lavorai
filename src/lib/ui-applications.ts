@@ -23,21 +23,30 @@ export interface UIApplication {
 
 /**
  * Ritorna le applications reali dell'utente per il rendering UI.
- * Nessun padding con mock data: gli utenti nuovi vedono dashboard vuota.
+ * Mostra TUTTE le candidature (success, ready_to_apply, awaiting_consent,
+ * failed) così l'utente vede cosa sta succedendo invece di una dashboard vuota.
  */
 export async function getUIApplications(
   userId?: string,
 ): Promise<UIApplication[]> {
   const uid = userId ?? (await getDemoUser()).id;
-  // Solo candidature realmente consegnate (success + submittedVia).
-  // Le altre fasi pipeline (queued/applying/ready_to_apply/failed/
-  // awaiting_consent) non sono "inviate" e non vanno mostrate come tali
-  // nella dashboard.
+  // Mostra: candidature consegnate (success) + quelle in attesa di azione
+  // utente (ready_to_apply, awaiting_consent, needs_answers) + fallimenti
+  // recenti (failed < 48h). Escludi solo quelle in elaborazione transiente
+  // (queued, optimizing, applying) — quelle vengono mostrate via live polling.
   const rows = await prisma.application.findMany({
     where: {
       userId: uid,
-      status: "success",
-      submittedVia: { not: null },
+      OR: [
+        { status: "success" },
+        { status: "ready_to_apply" },
+        { status: "awaiting_consent" },
+        { status: "needs_answers" },
+        {
+          status: "failed",
+          createdAt: { gte: new Date(Date.now() - 48 * 3600_000) },
+        },
+      ],
     },
     orderBy: { createdAt: "desc" },
     include: { job: true },
@@ -74,9 +83,14 @@ function mapStatus(backend: string): UIApplication["status"] {
       return "rifiutata";
     case "ready_to_apply":
       return "pronta";
+    case "awaiting_consent":
+      return "pronta"; // User needs to approve
+    case "needs_answers":
+      return "pronta"; // User needs to answer questions
     case "queued":
     case "optimizing":
     case "applying":
+      return "pronta"; // In progress, will update soon
     case "needs_2fa":
     case "needs_session":
       return "pronta";

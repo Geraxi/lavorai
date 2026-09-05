@@ -182,16 +182,73 @@ export const leverAdapter: PortalAdapter = {
           error: "Bottone submit visibile non trovato (Lever).",
         };
       }
+
+      // HARDEN: cattura HTTP POST verso Lever endpoints per conferma HARD
+      const urlBefore = page.url();
+      const submissionResponsePromise = page
+        .waitForResponse(
+          (resp) => {
+            const u = resp.url().toLowerCase();
+            const m = resp.request().method().toUpperCase();
+            if (m !== "POST") return false;
+            // Lever endpoints: /postings/<id>/apply, /api/apply, ecc
+            return (
+              u.includes("lever.co") &&
+              (u.includes("/apply") ||
+                u.includes("/postings") ||
+                u.includes("/applications"))
+            );
+          },
+          { timeout: 20_000 },
+        )
+        .catch(() => null);
+
       await submit.first().click({ timeout: 5_000 });
+
+      const submissionResponse = await submissionResponsePromise;
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
+      await page.waitForTimeout(800);
+
       const bodyText = await page.locator("body").innerText().catch(() => "");
+      const finalUrl = page.url();
+
+      // HARD: catturata POST 2xx/3xx verso endpoint apply
+      if (submissionResponse) {
+        const status = submissionResponse.status();
+        if (status >= 200 && status < 400) {
+          console.log(`[lever] DETECTED via HTTP ${status}`);
+          return {
+            ok: true,
+            status: "submitted",
+            confirmation: `DETECTED_HTTP_${status}`,
+          };
+        }
+        // 4xx = validation failed server-side
+        if (status >= 400 && status < 500) {
+          return {
+            ok: false,
+            status: "validation_failed",
+            error: `Lever ha rifiutato la submission (HTTP ${status}).`,
+          };
+        }
+        // 5xx = server error
+        return {
+          ok: false,
+          status: "unknown_error",
+          error: `Lever server error (HTTP ${status}) — retry consigliato.`,
+        };
+      }
+
+      // SOFT: DOM confirmation fallback
       const confirmed =
         /thank|successful|submitted|grazie|received|confirm|applied|invi(at|o)/i.test(bodyText) ||
-        /thanks|confirmation/i.test(page.url());
+        /thanks|confirmation|success/i.test(finalUrl) ||
+        finalUrl !== urlBefore;
+
       return {
         ok: true,
         status: "submitted",
-        confirmation: confirmed ? "DETECTED" : "UNCONFIRMED",
+        confirmation: confirmed ? "DETECTED_DOM" : "UNCONFIRMED",
       };
     } catch (err) {
       return {

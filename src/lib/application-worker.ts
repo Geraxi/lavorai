@@ -587,17 +587,25 @@ export async function processApplication(
     if (isAtsSourceJob) {
       // Questo job È GIÀ da sorgente ATS ma l'adapter non ha confermato il
       // submit (form cambiato, campo mancante, ecc.). NON mandiamo a email
-      // scrapate: marchiamo failed così viene ritentato al ciclo successivo.
+      // scrapate: marchiamo ready_to_apply con messaggio esplicito invece di
+      // "failed" — così l'utente può vedere cosa è successo e agire.
+      const mode = app.user.preferences?.autoApplyMode ?? "manual";
+      const handoff = mode !== "auto";
       await prisma.application.update({
         where: { id: applicationId },
         data: {
-          status: "failed",
+          status: "ready_to_apply",
           errorMessage:
-            `Submit sul portale ${app.job.source} non confermato (form cambiato o campo mancante). ` +
-            `Verrà ritentato automaticamente.`,
+            `Submit sul portale ${app.job.source} non completamente confermato. ` +
+            `CV e lettera pronti — ${handoff ? "verifica e invia dal portale" : "verrà ritentato automaticamente"}.`,
           completedAt: new Date(),
         },
       });
+      if (handoff) {
+        await notifyApplicationManual(applicationId).catch((err) =>
+          console.error(`[worker] ${applicationId} notify manual (ats-retry) failed`, err),
+        );
+      }
       return;
     }
 

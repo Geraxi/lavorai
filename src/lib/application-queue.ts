@@ -17,19 +17,47 @@ import { processApplication } from "@/lib/application-worker";
  */
 
 export async function enqueueApplication(applicationId: string): Promise<void> {
+  // CRITICAL: If REDIS_URL is set, we MUST use BullMQ and MUST NOT silently
+  // fall back. Silent fallback was the root cause of idle Railway worker —
+  // jobs were going to HTTP self-invoke instead of Redis queue.
   if (process.env.REDIS_URL) {
     try {
       const { getApplicationsQueue } = await import("@/lib/bullmq-queue");
-      await getApplicationsQueue().add(
+      const queue = getApplicationsQueue();
+      const job = await queue.add(
         "process",
         { applicationId },
         {
           jobId: applicationId, // dedup: stesso app non enqueuato 2x
         },
       );
+      // LOUD SUCCESS: confirm job was enqueued to Redis
+      console.log(`[queue] ✓ Enqueued to BullMQ: app=${applicationId} job=${job.id} queue=${queue.name}`);
       return;
     } catch (err) {
-      console.error("[queue] BullMQ enqueue failed, fallback in-process", err);
+      // FAIL LOUD: if REDIS_URL is set but enqueue fails, this is a critical
+      // infrastructure error. Do NOT silently fall back to HTTP self-invoke —
+      // that defeats the whole worker architecture and leaves Railway idle.
+      console.error(`[queue] ❌ CRITICAL: BullMQ enqueue FAILED for app=${applicationId}`, err);
+      console.error(`[queue] REDIS_URL is set but queue is broken. Worker will be IDLE. Fix Redis connection.`);
+      
+      // Mark application as failed so user sees error instead of stuck state
+      try {
+        const { prisma } = await import("@/lib/db");
+        await prisma.application.update({
+          where: { id: applicationId },
+          data: {
+            status: "failed",
+            errorMessage: `Errore infrastruttura: impossibile accodare la candidatura (Redis connection failed). Contatta supporto.`,
+            completedAt: new Date(),
+          },
+        });
+      } catch (dbErr) {
+        console.error(`[queue] Failed to mark app ${applicationId} as failed after Redis error`, dbErr);
+      }
+      
+      // Re-throw to surface error to caller (API endpoint will return 500)
+      throw new Error(`BullMQ enqueue failed: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -89,6 +117,10 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
     try {
       // Fire-and-forget: non aspettare la risposta. La function chiamata
       // ha 300s tutti suoi per completare il processApplication.
+      // HARDENED: se fetch() fallisce (network, timeout, etc), marchiamo
+      // l'application come "failed" con errorMessage esplicito invece di
+      // lasciare lo status "queued" silenzioso. L'utente vedrà "errore di
+      // sistema" e può ritentare; noi loggiamo per diagnostica infra.
       void fetch(`${baseUrl}/api/applications/process`, {
         method: "POST",
         headers: {
@@ -99,8 +131,22 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
         // keepalive: la connessione può chiudersi prima della risposta
         // senza abortire la request lato server.
         keepalive: true,
-      }).catch((err) => {
+      }).catch(async (err) => {
         console.error(`[queue] self-invoke failed for ${applicationId}`, err);
+        // Mark application as failed so it doesn't stay stuck in "queued" forever
+        try {
+          const { prisma } = await import("@/lib/db");
+          await prisma.application.update({
+            where: { id: applicationId },
+            data: {
+              status: "failed",
+              errorMessage: `Errore infrastruttura: impossibile avviare il worker (${err instanceof Error ? err.message : "network error"}). Riprova o contatta supporto.`,
+              completedAt: new Date(),
+            },
+          });
+        } catch (dbErr) {
+          console.error(`[queue] failed to mark application ${applicationId} as failed`, dbErr);
+        }
       });
       return;
     } catch (err) {
