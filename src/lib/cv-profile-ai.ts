@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json";
 import type { ExtractedProfile } from "@/lib/cv-profile";
 import { extractProfile as extractProfileRegex } from "@/lib/cv-profile";
 
@@ -90,7 +91,7 @@ export async function extractProfileAI(
       .trim();
     console.log("[cv-profile-ai] RAW RESPONSE:", raw);
     const cleaned = stripCodeFence(raw);
-    const parsed = JSON.parse(cleaned) as Partial<ExtractedProfile>;
+    const parsed = parseModelJson(cleaned) as Partial<ExtractedProfile>;
 
     // Normalizza stringhe: null/undefined → ""; email/phone/city fallback a session
     const str = (v: unknown): string =>
@@ -135,8 +136,8 @@ export async function extractProfileAI(
 }
 
 function stripCodeFence(text: string): string {
-  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  return fenced ? fenced[1].trim() : text;
+  // Tollerante: fence ovunque + preamboli/code (vedi model-json.ts).
+  return extractJsonBlock(stripFences(text));
 }
 
 function toTitleCase(s: string): string {

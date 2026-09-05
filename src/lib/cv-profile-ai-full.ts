@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json";
 import {
   CVProfileSchema,
   EMPTY_PROFILE,
@@ -26,8 +27,8 @@ function client(): Anthropic | null {
 }
 
 function stripCodeFence(text: string): string {
-  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  return fenced ? fenced[1].trim() : text;
+  // Tollerante: fence ovunque + preamboli/code (vedi model-json.ts).
+  return extractJsonBlock(stripFences(text));
 }
 
 // ------------------------- EXTRACTION -------------------------
@@ -111,7 +112,7 @@ export async function extractFullProfile(cvText: string): Promise<CVProfile> {
       .join("")
       .trim();
     const cleaned = stripCodeFence(raw);
-    const parsed = JSON.parse(cleaned);
+    const parsed = parseModelJson(cleaned);
     const r = CVProfileSchema.safeParse(parsed);
     if (!r.success) {
       console.error("[cv-profile-ai-full] schema mismatch", r.error.issues);
@@ -181,7 +182,7 @@ Riscrivi il profilo per questo job, rispettando le regole ferree. Output in ${in
       .join("")
       .trim();
     const cleaned = stripCodeFence(raw);
-    const parsed = JSON.parse(cleaned);
+    const parsed = parseModelJson(cleaned);
     const r = CVProfileSchema.safeParse(parsed);
     if (!r.success) {
       console.error("[tailor] schema mismatch, falling back", r.error.issues);

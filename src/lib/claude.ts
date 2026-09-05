@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json";
 import type { OptimizationResult } from "@/types/cv";
 import {
   SYSTEM_PROMPT,
@@ -99,7 +100,7 @@ export async function optimizeCV(
     const cleaned = stripCodeFence(rawText);
 
     try {
-      const parsed = JSON.parse(cleaned) as OptimizationResult;
+      const parsed = parseModelJson(cleaned) as OptimizationResult;
       validateShape(parsed);
       return parsed;
     } catch (err) {
@@ -204,8 +205,8 @@ ${hints.map((h, i) => `${i + 1}. ${h}`).join("\n")}`;
 }
 
 function stripCodeFence(text: string): string {
-  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/);
-  return fenced ? fenced[1].trim() : text;
+  // Tollerante: fence ovunque + preamboli/code (vedi model-json.ts).
+  return extractJsonBlock(stripFences(text));
 }
 
 function validateShape(data: unknown): asserts data is OptimizationResult {
