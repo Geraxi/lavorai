@@ -54,41 +54,42 @@ export const workableAdapter: PortalAdapter = {
       }
 
       // ----- CV (obbligatorio) -----
-      const cvInput = page.locator('input[type="file"]');
-      if ((await cvInput.count()) === 0) {
+      // Workable ha spesso DUE input file: il primo è la FOTO (accept
+      // immagini), il secondo è il Resume (accept pdf/doc, required). Il
+      // vecchio `.first()` caricava il PDF nel campo foto → CV vuoto →
+      // validazione client bloccava il submit senza alcuna POST (UNCONFIRMED).
+      const fileInputs = page.locator('input[type="file"]');
+      const nFiles = await fileInputs.count();
+      if (nFiles === 0) {
         return { ok: false, status: "missing_field", error: "Input upload CV non trovato (Workable)." };
       }
-      await cvInput.first().setInputFiles(input.cvLocalPath).catch(() => void 0);
-      const cvBase = input.cvLocalPath.split(/[\\/]/).pop() || "cv";
+      let cvIdx = -1;
+      let photoIdx = -1;
+      for (let i = 0; i < nFiles; i++) {
+        const el = fileInputs.nth(i);
+        const accept = ((await el.getAttribute("accept").catch(() => "")) ?? "").toLowerCase();
+        const required = (await el.evaluate((e) => (e as HTMLInputElement).required).catch(() => false)) as boolean;
+        const ctx = ((await el.evaluate((e) => (e.closest("[data-ui], fieldset, section, div")?.textContent ?? "")).catch(() => "")) as string)
+          .toLowerCase();
+        const isImageOnly = accept.length > 0 && /image|\.jpg|\.png|\.gif/.test(accept) && !/pdf|doc|rtf|odt/.test(accept);
+        if (isImageOnly) { if (photoIdx < 0) photoIdx = i; continue; }
+        const looksResume = /pdf|doc|rtf|odt/.test(accept) || /resume|cv\b|curriculum/.test(ctx) || required;
+        if (looksResume && cvIdx < 0) cvIdx = i;
+      }
+      if (cvIdx < 0) cvIdx = nFiles === 1 ? 0 : (photoIdx === 0 && nFiles > 1 ? 1 : 0);
+      const cvInput = fileInputs.nth(cvIdx);
+      await cvInput.setInputFiles(input.cvLocalPath).catch(() => void 0);
+      console.log(`[workable] resume → file input #${cvIdx + 1}/${nFiles}${photoIdx >= 0 ? ` (foto=#${photoIdx + 1} saltata)` : ""}`);
       let cvOk = false;
       for (let i = 0; i < 12 && !cvOk; i++) {
         await page.waitForTimeout(400);
-        cvOk = await page
-          .evaluate((name) => {
-            try {
-              // 1. filename mostrato nel body
-              const body = (document.body.innerText || "").toLowerCase();
-              if (name && body.includes(name.toLowerCase())) return true;
-              // 2. indicatore testuale di upload riuscito (Workable mostra
-              //    "Resume Uploaded" / "uploaded" / "caricato")
-              if (/uploaded|attached|caricato|uploaded successfully/i.test(body))
-                return true;
-              // 3. file ancora in input.files (alcuni form non lo azzerano)
-              const files = document.querySelectorAll('input[type="file"]');
-              for (const f of Array.from(files)) {
-                if ((f as HTMLInputElement).files && (f as HTMLInputElement).files!.length > 0)
-                  return true;
-              }
-              // 4. indicatori UI generici
-              const ind = document.querySelector(
-                "[class*='uploaded'], [class*='attachment'], [class*='file-name'], [class*='filename']",
-              );
-              return !!(ind && (ind.textContent || "").trim());
-            } catch {
-              return false;
-            }
-          }, cvBase)
-          .catch(() => false);
+        // Prova diretta: il file è nell'input scelto (o la UI mostra il nome).
+        cvOk = (await cvInput.evaluate((e) => ((e as HTMLInputElement).files?.length ?? 0) > 0).catch(() => false)) as boolean;
+        if (!cvOk) {
+          const cvBase = (input.cvLocalPath.split(/[\\/]/).pop() || "").toLowerCase();
+          const body = ((await page.locator("body").innerText().catch(() => "")) ?? "").toLowerCase();
+          cvOk = (!!cvBase && body.includes(cvBase)) || /uploaded successfully|resume uploaded|file uploaded/.test(body);
+        }
       }
 
       // ----- Cover letter (opzionale) -----
@@ -98,14 +99,7 @@ export const workableAdapter: PortalAdapter = {
       }
 
       // ----- GDPR / consenso -----
-      for (const sel of [
-        'input[type="checkbox"][name="gdpr"]',
-        'input[type="checkbox"][name*="consent" i]',
-        'input[type="checkbox"][name*="privacy" i]',
-      ]) {
-        const cb = page.locator(sel);
-        if ((await cb.count()) > 0) await cb.first().check({ timeout: 1500 }).catch(() => void 0);
-      }
+      await ensureConsent(page);
 
       // ----- Campi custom obbligatori (CA_*/QA_*) via AI answerer -----
       let pendingQuestions: import("./types").PendingQuestion[] = [];
@@ -175,9 +169,19 @@ export const workableAdapter: PortalAdapter = {
       // Workable POSTa la candidatura a un endpoint api (applicants/candidate).
       // Lo status HTTP 2xx/3xx = prova OGGETTIVA di consegna, indipendente
       // dal testo della thank-you page (che varia per azienda/lingua).
-      const submit = page.locator(
-        'button[type="submit"], button:has-text("Submit"), button:has-text("Apply"), button:has-text("Invia"), button:has-text("Send")',
-      );
+      // Banner cookie (fixed, in basso): copre il bottone "Submit application"
+      // → il click andava in timeout ed era silenziato. Lo chiudiamo prima.
+      for (const label of [/decline all|reject all|rifiuta/i, /accept all|accetta/i]) {
+        const cookieBtn = page.getByRole("button", { name: label });
+        if ((await cookieBtn.count()) > 0) {
+          await cookieBtn.first().click({ timeout: 2000 }).catch(() => void 0);
+          await page.waitForTimeout(300);
+          break;
+        }
+      }
+      await ensureConsent(page); // ri-render dopo le risposte AI può aver resettato la checkbox
+      let submit = page.getByRole("button", { name: /submit application|invia candidatura|submit|apply|invia|send/i });
+      if ((await submit.count()) === 0) submit = page.locator('button[type="submit"]');
       if ((await submit.count()) === 0) {
         return { ok: false, status: "missing_field", error: "Bottone submit Workable non trovato." };
       }
@@ -213,7 +217,15 @@ export const workableAdapter: PortalAdapter = {
       };
       page.on("response", onResponse);
 
-      await submit.first().click().catch(() => void 0);
+      await submit.first().scrollIntoViewIfNeeded().catch(() => void 0);
+      let clickError: string | null = null;
+      try {
+        await submit.first().click({ timeout: 8000 });
+      } catch (err) {
+        clickError = err instanceof Error ? err.message.split("\n")[0] : String(err);
+        console.warn(`[workable] click submit fallito (${clickError}) → retry force`);
+        await submit.first().click({ timeout: 5000, force: true }).catch(() => void 0);
+      }
       // attendi che il network si quieti (cattura tutte le POST)
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
       await page.waitForTimeout(1200);
@@ -243,6 +255,19 @@ export const workableAdapter: PortalAdapter = {
           confirmation: `DETECTED_HTTP_${any2xx.status}`,
         };
       }
+      // Nessuna POST: quasi sempre validazione client (campo required vuoto,
+      // consenso, file). Raccogliamo i messaggi e lo diciamo chiaramente
+      // invece di un UNCONFIRMED muto.
+      const clientErrors = (await page
+        .evaluate(`Array.from(document.querySelectorAll('[aria-invalid="true"], [role="alert"], [class*="error" i], [class*="invalid" i]')).map((e) => { const l = e.id ? document.querySelector('label[for="' + e.id + '"]') : null; return ((l && l.textContent) || e.getAttribute('aria-label') || e.textContent || e.getAttribute('name') || '').replace(/\\s+/g, ' ').trim().slice(0, 80); }).filter(Boolean).slice(0, 8)`)
+        .catch(() => [])) as string[];
+      if (postLog.length === 0 && (clientErrors.length > 0 || clickError)) {
+        return {
+          ok: false,
+          status: "validation_failed",
+          error: `Submit Workable senza POST: ${clickError ? `click fallito (${clickError}); ` : ""}${clientErrors.length ? `campi non validi: ${[...new Set(clientErrors)].join(" | ")}` : "validazione client-side"}`,
+        };
+      }
       // Prova SOFT: thank-you nel body / url cambiata.
       const softConfirmed =
         /thank|applied|submitted|grazie|received|confirm|invi(at|o)|application has been/i.test(bodyText) ||
@@ -262,3 +287,33 @@ export const workableAdapter: PortalAdapter = {
     }
   },
 };
+
+/**
+ * Spunta le checkbox di consenso (GDPR/privacy). Workable ri-renderizza il
+ * form dopo le risposte AI e può resettare l'input: va richiamata anche
+ * subito prima del submit.
+ */
+async function ensureConsent(page: import("playwright").Page): Promise<void> {
+  for (const sel of [
+    'input[type="checkbox"][name="gdpr"]',
+    'input[type="checkbox"][name*="consent" i]',
+    'input[type="checkbox"][name*="privacy" i]',
+  ]) {
+    const cb = page.locator(sel);
+    if ((await cb.count()) === 0) continue;
+    const first = cb.first();
+    const already = (await first.isChecked().catch(() => false)) as boolean;
+    if (already) continue;
+    await first.check({ timeout: 1500, force: true }).catch(() => void 0);
+    if (!((await first.isChecked().catch(() => false)) as boolean)) {
+      // input nascosto dietro una UI custom: clicca la label collegata
+      const id = await first.getAttribute("id").catch(() => null);
+      const label = id ? page.locator(`label[for="${id}"]`) : first.locator("xpath=ancestor::label[1]");
+      if ((await label.count()) > 0) await label.first().click({ timeout: 1500 }).catch(() => void 0);
+      if (!((await first.isChecked().catch(() => false)) as boolean)) {
+        await first.evaluate((e) => { const i = e as HTMLInputElement; i.checked = true; i.dispatchEvent(new Event("change", { bubbles: true })); i.dispatchEvent(new Event("input", { bubbles: true })); }).catch(() => void 0);
+      }
+    }
+    console.log(`[workable] consenso ${sel}: ${(await first.isChecked().catch(() => false)) ? "spuntato" : "NON spuntato"}`);
+  }
+}
