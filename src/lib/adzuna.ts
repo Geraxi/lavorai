@@ -41,7 +41,7 @@ export interface AdzunaJob {
   created: string;
 }
 
-export type JobListItem = Omit<Job, "cachedAt">;
+export type JobListItem = Omit<Job, "cachedAt" | "closedAt"> & { closedAt?: Date | null };
 
 interface AdzunaSearchResponse {
   count: number;
