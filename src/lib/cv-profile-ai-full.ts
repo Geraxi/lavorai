@@ -173,7 +173,7 @@ Riscrivi il profilo per questo job, rispettando le regole ferree. Output in ${in
   try {
     const resp = await c.messages.create({
       model: MODEL,
-      max_tokens: 3500,
+      max_tokens: 6000, // 3500 troncava il profilo (JSON "Unterminated string") → fallback al CV sorgente
       system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userPrompt }],
     });
