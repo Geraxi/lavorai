@@ -3,20 +3,15 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
-import { CompanyLogo } from "@/components/design/company-logo";
+import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import { StatusChip } from "@/components/design/status-chip";
-import {
-  SectionCard,
-  SectionHead,
-  SectionBody,
-} from "@/components/design/section-card";
 import { ThemeToggle } from "@/components/design/theme-toggle";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { WelcomeModal } from "@/components/welcome-modal";
 import { DashboardLiveRefresh } from "@/components/dashboard-live-refresh";
-import { SessionsStatus } from "@/components/sessions-status";
 import { PostLoginCheckout } from "@/components/post-login-checkout";
 import { AutoApplyToggle } from "@/components/auto-apply-toggle";
+import { NewSearchButton } from "@/components/new-search-button";
 import { getUIApplications } from "@/lib/ui-applications";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
@@ -26,14 +21,24 @@ export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
 /**
- * Dashboard come "Live System": un'unica vista col solo focus che conta
- * — auto-apply attivo, progresso del mese, lista candidature live.
- * Niente KPI grid, niente checklist se completata, niente fronzoli.
+ * Dashboard fit-to-viewport (nessuno scroll di pagina):
+ *   hero · banner AI (pipeline) · [Questa settimana | Prossimi colloqui]
+ *   · [Candidature recenti | Messaggi e notifiche] · banner Scopri.
+ * Tutti i numeri sono reali (Prisma), niente mock.
  */
 export default async function DashboardPage() {
   const t = await getTranslations("dashboardPage");
   const user = await getCurrentUser();
   if (!user) return null;
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  // Settimana corrente lun→dom
+  const weekStart = new Date(todayStart);
+  weekStart.setDate(todayStart.getDate() - ((todayStart.getDay() + 6) % 7));
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  const sevenDaysAgo = new Date(todayStart.getTime() - 7 * 86400_000);
 
   const [applications, onboarding, prefs] = await Promise.all([
     getUIApplications(user.id),
@@ -43,751 +48,338 @@ export default async function DashboardPage() {
       select: { autoApplyMode: true, dailyCap: true },
     }),
   ]);
-  const greetingName = (user.name ?? user.email.split("@")[0]).split(/\s+/)[0];
-  const showWelcome = !user.welcomeSeenAt;
 
-  // Counts su tutta la pipeline (non solo delivered).
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const todayStart = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  );
-
-  // Parallelizza tutto: prima erano 3 blocchi sequenziali (6 counts +
-  // 1 findMany 7-day + 1 findFirst lastApp). Ora un unico Promise.all
-  // → il tempo totale è quello della query più lenta (~50-150ms su Neon)
-  // invece della somma sequenziale.
-  const sevenDaysAgo = new Date(todayStart);
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const delivered = { userId: user.id, status: "success", submittedVia: { not: null } } as const;
 
   const [
-    deliveredMonth,
-    deliveredToday,
-    viewedMonth,
-    repliesMonth,
-    pendingCount,
-    applyingCount,
-    failedMonth,
-    lastWeekApps,
-    lastApp,
+    sentWeek,
+    viewedWeek,
+    interviewsWeek,
+    offersWeek,
+    sentToday,
+    matchedTotal,
+    cvPrepared,
+    jobsFound,
+    upcomingInterviews,
+    replies,
+    pendingQuestions,
+    awaitingConsent,
   ] = await Promise.all([
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        status: "success",
-        submittedVia: { not: null },
-        createdAt: { gte: monthStart },
-      },
-    }),
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        status: "success",
-        submittedVia: { not: null },
-        createdAt: { gte: todayStart },
-      },
-    }),
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        status: "success",
-        submittedVia: { not: null },
-        viewedAt: { not: null },
-        createdAt: { gte: monthStart },
-      },
-    }),
-    // Risposte REALI: candidature con almeno una reply umana del recruiter
-    // (lastReplyAt è settato solo per risposte umane, non per aperture email).
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        lastReplyAt: { not: null },
-        createdAt: { gte: monthStart },
-      },
-    }),
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        status: { in: ["awaiting_consent", "queued", "ready_to_apply"] },
-      },
-    }),
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        status: { in: ["optimizing", "applying"] },
-      },
-    }),
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        status: "failed",
-        createdAt: { gte: monthStart },
-      },
-    }),
+    prisma.application.count({ where: { ...delivered, createdAt: { gte: weekStart } } }),
+    prisma.application.count({ where: { ...delivered, viewedAt: { not: null }, lastReplyAt: null, createdAt: { gte: weekStart } } }),
+    prisma.application.count({ where: { userId: user.id, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }], createdAt: { gte: weekStart } } }),
+    prisma.application.count({ where: { userId: user.id, userStatus: "offerta", createdAt: { gte: weekStart } } }),
+    prisma.application.count({ where: { ...delivered, createdAt: { gte: todayStart } } }),
+    prisma.application.count({ where: { userId: user.id } }),
+    prisma.application.count({ where: { userId: user.id, status: { in: ["ready_to_apply", "awaiting_consent"] } } }),
+    prisma.job.count({ where: { cachedAt: { gte: sevenDaysAgo } } }),
     prisma.application.findMany({
-      where: {
-        userId: user.id,
-        status: "success",
-        submittedVia: { not: null },
-        createdAt: { gte: sevenDaysAgo },
+      where: { userId: user.id, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }, { interviewSessions: { some: {} } }] },
+      orderBy: { lastReplyAt: "desc" },
+      take: 3,
+      select: {
+        id: true,
+        createdAt: true,
+        lastReplyAt: true,
+        job: { select: { title: true, company: true } },
+        interviewSessions: { select: { startedAt: true, createdAt: true }, orderBy: { createdAt: "desc" }, take: 1 },
       },
-      select: { createdAt: true },
     }),
-    prisma.application.findFirst({
-      where: { userId: user.id },
-      select: { createdAt: true },
-      orderBy: { createdAt: "desc" },
+    prisma.applicationReply.findMany({
+      where: { application: { userId: user.id }, isHuman: true },
+      orderBy: { receivedAt: "desc" },
+      take: 3,
+      select: { id: true, kind: true, subject: true, receivedAt: true, application: { select: { job: { select: { company: true } } } } },
     }),
+    prisma.userAnswer.count({ where: { userId: user.id, OR: [{ answer: null }, { answer: "" }] } }),
+    prisma.application.count({ where: { userId: user.id, status: "awaiting_consent" } }),
   ]);
 
-  // 7-day daily count per la mini bar chart.
-  const dailyCounts = Array.from({ length: 7 }, (_, i) => {
-    const day = new Date(sevenDaysAgo);
-    day.setDate(day.getDate() + i);
-    const next = new Date(day);
-    next.setDate(next.getDate() + 1);
-    const count = lastWeekApps.filter(
-      (a) => a.createdAt >= day && a.createdAt < next,
-    ).length;
-    const dayLabel = day
-      .toLocaleDateString("it-IT", { weekday: "short" })
-      .slice(0, 3);
-    return { day: dayLabel, count, isToday: i === 6 };
-  });
-
-  // Niente target mensile fittizio: il progresso reale è per-round
-  // nel widget SessionsStatus sotto. Qui mostriamo solo il counter.
+  const greetingName = (user.name ?? user.email.split("@")[0]).split(/\s+/)[0];
+  const showWelcome = !user.welcomeSeenAt;
   const autoMode = prefs?.autoApplyMode ?? "manual";
   const isLive = autoMode === "auto" || autoMode === "hybrid";
-  const dailyCap = prefs?.dailyCap ?? 25;
+  const allDone = onboarding.hasUploadedCv && onboarding.hasSetPreferences && onboarding.hasFirstApplication;
 
-  // lastApp è già caricato nel Promise.all sopra (parallelizzato).
-  // Prossima run: prossima delle 3 ore tattiche (08/12/16 UTC).
+  // Prossima run tattica (08/12/16 UTC) → ora locale
   const nextRun = (() => {
-    const nowUtc = new Date();
-    const hour = nowUtc.getUTCHours();
-    const tactical = [8, 12, 16];
-    const next = tactical.find((h) => h > hour) ?? tactical[0];
-    const nextDate = new Date(nowUtc);
-    if (next <= hour) nextDate.setUTCDate(nextDate.getUTCDate() + 1);
-    nextDate.setUTCHours(next, 0, 0, 0);
-    return nextDate;
+    const h = now.getUTCHours();
+    const slots = [8, 12, 16];
+    const next = slots.find((s) => s > h) ?? slots[0];
+    const d = new Date(now);
+    if (next <= h) d.setUTCDate(d.getUTCDate() + 1);
+    d.setUTCHours(next, 0, 0, 0);
+    return d;
   })();
 
-  const allChecklistDone =
-    onboarding.hasUploadedCv &&
-    onboarding.hasSetPreferences &&
-    onboarding.hasFirstApplication;
+  // Notifiche: risposte reali dei recruiter + avvisi di sistema (reali).
+  type Notice = { id: string; icon: "inbox" | "briefcase" | "bell" | "file" | "zap"; color: string; title: string; sub: string; href: string };
+  const notices: Notice[] = [];
+  for (const r of replies) {
+    const company = r.application.job.company ?? "Recruiter";
+    notices.push({
+      id: r.id,
+      icon: "inbox",
+      color: r.kind === "colloquio" ? "#7E3FF2" : r.kind === "rifiutata" ? "#EF3E42" : "#FE5FA3",
+      title: r.kind === "colloquio" ? "Invito a colloquio" : r.kind === "rifiutata" ? "Risposta ricevuta (rifiuto)" : "Feedback ricevuto",
+      sub: `${company} · ${relTime(r.receivedAt)}`,
+      href: "/applications",
+    });
+  }
+  if (pendingQuestions > 0)
+    notices.push({ id: "q", icon: "file", color: "#1F6BFF", title: `${pendingQuestions} ${pendingQuestions === 1 ? "domanda da rispondere" : "domande da rispondere"}`, sub: "Sblocca le candidature in attesa", href: "/questions" });
+  if (awaitingConsent > 0)
+    notices.push({ id: "c", icon: "zap", color: "#FFB400", title: `${awaitingConsent} ${awaitingConsent === 1 ? "candidatura da approvare" : "candidature da approvare"}`, sub: "Modalità review: conferma per inviare", href: "/applications" });
+  if (!allDone)
+    notices.push({ id: "p", icon: "bell", color: "#FF2954", title: "Promemoria: completa il tuo profilo", sub: "La tua visibilità può aumentare del 40%", href: onboarding.hasUploadedCv ? "/preferences" : "/cv" });
+  const noticeList = notices.slice(0, 3);
+
+  const weekTotal = Math.max(1, sentWeek);
+  const seg = (n: number) => `${Math.min(100, (n / weekTotal) * 100)}%`;
 
   return (
     <>
       <WelcomeModal show={showWelcome} />
       <PostLoginCheckout />
       <DashboardLiveRefresh />
-      <AppTopbar
-        title={t("title")}
-        actions={
-          <>
-            <ThemeToggle />
-            <AutoApplyToggle />
-          </>
-        }
-      />
+      <AppTopbar title={t("title")} actions={<ThemeToggle />} />
 
-      <div
-        className="dashboard-grid"
-        style={{
-          padding: "24px 32px 80px",
-          width: "100%",
-          margin: "0 auto",
-        }}
-      >
-        {/* Greeting compatto */}
-        <div className="dashboard-hero">
-          <h1
-            style={{
-              margin: 0,
-            }}
-          >
-            {t("greeting", { name: greetingName })}
-          </h1>
-          <p>
-            {deliveredMonth > 0
-              ? viewedMonth > 0
-                ? t("subtitleWithViews", {
-                    sent: deliveredMonth,
-                    viewed: viewedMonth,
-                  })
-                : t("subtitleSentOnly", { sent: deliveredMonth })
-              : t("subtitleEmpty")}
-          </p>
-        </div>
-
-        {/* Onboarding checklist solo se incompleto */}
-        {!allChecklistDone && (
-          <div className="dashboard-onboarding">
-            <OnboardingChecklist state={onboarding} />
+      <div className="fit-page" style={{ gridTemplateColumns: "1.35fr 1fr", gridTemplateRows: "auto auto minmax(0,1fr) minmax(0,1.15fr) auto" }}>
+        {/* Hero */}
+        <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
+          <div>
+            <h1 className="fit-h1">{t("greeting", { name: greetingName })} 👋</h1>
+            <p className="fit-hero-sub">
+              A <span style={{ color: "hsl(var(--primary))", fontWeight: 600 }}>LavorAI</span> sta lavorando per te. Più opportunità, più persone nel posto giusto.
+            </p>
           </div>
-        )}
-
-        {/* Round attivi + prompt round completati */}
-        <div className="dashboard-round" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <SessionsStatus />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+            <AutoApplyToggle />
+            <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+              {isLive ? <>Prossima ricerca {fmtNext(nextRun)}</> : "Auto-apply in pausa"}
+            </div>
+          </div>
         </div>
 
-        {/* PROGRESS HERO — il cuore della dashboard, green glass */}
-        <SectionCard
-          className="dashboard-stats"
-          style={{
-            position: "relative",
-            padding: "28px 30px",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: 16,
-              flexWrap: "wrap",
-              position: "relative",
-              zIndex: 1,
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 240 }}>
-              <div
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  fontSize: 11.5,
-                  fontWeight: 500,
-                  padding: "3px 10px",
-                  borderRadius: 999,
-                  background: isLive
-                    ? "hsl(var(--primary)/0.15)"
-                    : "var(--bg-sunken)",
-                  color: isLive ? "hsl(var(--primary))" : "var(--fg-muted)",
-                  border: isLive
-                    ? "1px solid hsl(var(--primary)/0.3)"
-                    : "1px solid var(--border-ds)",
-                }}
-              >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: isLive
-                      ? "hsl(var(--primary))"
-                      : "var(--fg-subtle)",
-                    animation: isLive
-                      ? "pulse-dot 1.6s ease-in-out infinite"
-                      : "none",
-                  }}
-                />
-                {isLive ? t("autoApplyActive") : t("autoApplyPaused")}
+        {/* Banner AI / onboarding */}
+        <div style={{ gridColumn: "1 / -1" }}>
+          {!allDone ? (
+            <OnboardingChecklist state={onboarding} />
+          ) : (
+            <div className="fit-card ds-glass-green" style={{ flexDirection: "row", alignItems: "center", gap: 20, padding: "18px 22px", position: "relative", overflow: "hidden" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 12, background: "hsl(var(--primary))", color: "#04130c", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                    <Icon name="zap" size={18} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>L&apos;AI sta cercando e candidando per te</div>
+                    <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 2 }}>Trova opportunità, adatta il tuo CV e invia candidature in automatico.</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 16, flexWrap: "wrap" }}>
+                  <Step icon="search" label="Ricerca" sub={`${fmtN(jobsFound)} trovate`} />
+                  <Arrow />
+                  <Step icon="target" label="Match" sub={`${fmtN(matchedTotal)} compatibili`} />
+                  <Arrow />
+                  <Step icon="file" label="CV" sub={`${fmtN(cvPrepared)} preparate`} blue />
+                  <Arrow />
+                  <Step icon="send" label="Candidatura" sub={`${fmtN(sentToday)} inviate oggi`} />
+                </div>
               </div>
-
-              {/* Activity timeline: ultima esecuzione + prossima run tattica.
-                  Mostra all'utente che il sistema sta lavorando con ritmo
-                  prevedibile (3 batch/giorno alle 08/12/16 UTC). */}
-              {isLive && (
-                <ActivityIndicator
-                  lastRunAt={lastApp?.createdAt ?? null}
-                  nextRunAt={nextRun}
-                  lastLabel={t("activityLastRun")}
-                  nextLabel={t("activityNextRun")}
-                  neverLabel={t("activityNever")}
-                />
-              )}
-
-              <div
-                style={{
-                  marginTop: 12,
-                  fontSize: 36,
-                  fontWeight: 600,
-                  letterSpacing: "-0.025em",
-                  lineHeight: 1.05,
-                  fontFeatureSettings: '"tnum"',
-                }}
-              >
-                {deliveredMonth}
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: "var(--fg-muted)",
-                  marginTop: 2,
-                }}
-              >
-                {t("appsThisMonth")}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end", flexShrink: 0 }}>
+                <Link href="/applications" className="ds-btn ds-btn-sm">Vedi attività <Icon name="arrow-right" size={13} /></Link>
+                <NewSearchButton />
               </div>
             </div>
+          )}
+        </div>
 
-            {/* Mini bar chart 7 giorni — sostituisce le 4 MiniStat
-                inline che affollavano la riga. A colpo d'occhio: trend
-                settimanale + posizione di oggi rispetto agli altri giorni. */}
-            <WeeklyChart
-              data={dailyCounts}
-              ariaLabel={t("weeklyChartAriaLabel")}
-            />
+        {/* Questa settimana */}
+        <div className="fit-card">
+          <div className="fit-card-head">
+            <div>
+              <div className="fit-card-title">Questa settimana</div>
+              <div className="fit-card-sub">Il tuo progresso verso nuove opportunità.</div>
+            </div>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--fg-muted)" }}>
+              <Icon name="calendar" size={13} /> {fmtRange(weekStart, weekEnd)}
+            </span>
           </div>
-
-          {/* Daily cap progress bar — visuale del consumo del cap
-              giornaliero. Sostituisce la lettura mentale "deliveredToday
-              / dailyCap". */}
-          <DailyCapBar
-            sent={deliveredToday}
-            cap={dailyCap}
-            label={t("dailyCapLabel", { sent: deliveredToday, cap: dailyCap })}
-          />
-
-          {/* Pipeline secondaria — più piccola, sotto la cap bar */}
-          <div
-            style={{
-              display: "flex",
-              gap: 22,
-              marginTop: 18,
-              flexWrap: "wrap",
-              fontSize: 12,
-              color: "var(--fg-muted)",
-            }}
-          >
-            <PipelineStat label={t("statQueued")} value={pendingCount} />
-            <PipelineStat
-              label={t("statSending")}
-              value={applyingCount}
-              live
-            />
-            {/* "Viste" mostrato solo quando > 0: il dato arriva quando il
-                recruiter clicca il tracking link `lavorai.it/r/<token>`
-                dentro la cover letter dall'ATS. Mostrare uno 0 statico
-                quando non c'è ancora alcun click dà un segnale fuorviante. */}
-            {viewedMonth > 0 && (
-              <PipelineStat
-                label={t("statOpened")}
-                value={viewedMonth}
-              />
-            )}
-            {/* Risposte VERE del recruiter (reply email parsate via inbound),
-                distinte dalle aperture. Mostrate solo quando > 0. */}
-            {repliesMonth > 0 && (
-              <PipelineStat label="Risposte" value={repliesMonth} />
-            )}
+          <div className="fit-body" style={{ justifyContent: "center" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+              <Big n={sentWeek} label="Candidature inviate" />
+              <Big n={viewedWeek} label="In valutazione" />
+              <Big n={interviewsWeek} label="Colloqui" />
+              <Big n={offersWeek} label="Offerte" />
+            </div>
+            <div style={{ position: "relative", height: 6, borderRadius: 999, background: "var(--bg-sunken)", marginTop: 18, overflow: "hidden" }}>
+              <div style={{ position: "absolute", inset: 0, width: seg(sentWeek), background: "hsl(var(--primary))" }} />
+              <div style={{ position: "absolute", inset: 0, width: seg(viewedWeek), background: "#1F6BFF" }} />
+              <div style={{ position: "absolute", inset: 0, width: seg(interviewsWeek), background: "#7E3FF2" }} />
+              <div style={{ position: "absolute", inset: 0, width: seg(offersWeek), background: "#FFB400" }} />
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <Link href="/analytics" className="fit-link">Vedi analisi <Icon name="arrow-right" size={12} /></Link>
+            </div>
           </div>
-        </SectionCard>
+        </div>
 
-        {/* Live applications list */}
-        <SectionCard className="dashboard-recent">
-          <SectionHead
-            icon={<Icon name="briefcase" size={15} />}
-            title={
-              <>
-                Candidature recenti
-                <span className="ds-chip">{applications.length}</span>
-              </>
-            }
-            actions={
-              applications.length > 0 ? (
-                <Link href="/applications" className="ds-btn ds-btn-sm">
-                  Vedi tutto
-                </Link>
-              ) : null
-            }
-          />
-          <SectionBody flush>
-            {applications.length === 0 ? (
-              <div
-                style={{
-                  padding: "60px 24px",
-                  textAlign: "center",
-                }}
-              >
-                <Icon
-                  name="briefcase"
-                  size={28}
-                  style={{ color: "var(--fg-subtle)" }}
-                />
-                <div
-                  style={{
-                    marginTop: 14,
-                    fontWeight: 500,
-                    fontSize: 14,
-                  }}
-                >
-                  Nessuna candidatura ancora
-                </div>
-                <div
-                  style={{
-                    marginTop: 6,
-                    fontSize: 13,
-                    color: "var(--fg-muted)",
-                    maxWidth: 360,
-                    margin: "6px auto 0",
-                  }}
-                >
-                  Imposta i tuoi ruoli in Preferenze e attiva l&apos;auto-apply.
-                  La prima candidatura parte entro 30 minuti.
-                </div>
-                <Link
-                  href="/preferences"
-                  className="ds-btn ds-btn-primary"
-                  style={{
-                    marginTop: 18,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  <Icon name="zap" size={13} /> Avvia l&apos;auto-apply
-                </Link>
-              </div>
+        {/* Prossimi colloqui */}
+        <div className="fit-card">
+          <div className="fit-card-head">
+            <div className="fit-card-title"><Icon name="calendar" size={15} /> Prossimi colloqui</div>
+            <Link href="/interview" className="fit-link">Vedi tutti <Icon name="arrow-right" size={12} /></Link>
+          </div>
+          <div className="fit-body fit-scroll">
+            {upcomingInterviews.length === 0 ? (
+              <Empty icon="calendar" text="Nessun colloquio in programma. Quando un recruiter ti invita, lo vedrai qui." />
             ) : (
-              <div>
-                {applications.slice(0, 5).map((a) => (
-                  <Link
-                    href={`/applications`}
-                    key={a.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      padding: "14px 18px",
-                      borderBottom: "1px solid var(--border-ds)",
-                      textDecoration: "none",
-                      color: "inherit",
-                      transition: "background 0.15s",
-                    }}
-                    className="hover:bg-[var(--bg-elev)]"
-                  >
-                    <CompanyLogo company={a.company} color={a.color} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 500,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {a.company}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12.5,
-                          color: "var(--fg-muted)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {a.role} · {a.location}
-                      </div>
+              upcomingInterviews.map((a) => {
+                const when = a.interviewSessions[0]?.startedAt ?? a.lastReplyAt ?? a.createdAt;
+                const company = a.job.company ?? "Azienda";
+                return (
+                  <Link key={a.id} href="/interview" className="fit-row" style={{ gridTemplateColumns: "44px 32px 1fr auto", textDecoration: "none", color: "inherit" }}>
+                    <div style={{ textAlign: "center", padding: "4px 0", borderRadius: 8, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", lineHeight: 1.1 }}>
+                      <div style={{ fontSize: 9.5, textTransform: "uppercase", color: "var(--fg-subtle)", fontWeight: 600 }}>{when.toLocaleDateString("it-IT", { weekday: "short" }).replace(".", "")}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700 }}>{when.getDate()} {when.toLocaleDateString("it-IT", { month: "short" }).replace(".", "")}</div>
                     </div>
-                    <div
-                      className="hidden md:block"
-                      style={{
-                        fontSize: 12,
-                        color: "var(--fg-muted)",
-                        fontFeatureSettings: '"tnum"',
-                        minWidth: 70,
-                        textAlign: "right",
-                      }}
-                    >
-                      {a.applied}
+                    <CompanyLogo company={company} color={companyColor(company)} size={32} rounded={8} />
+                    <div style={{ minWidth: 0 }}>
+                      <div className="fit-ellipsis" style={{ fontWeight: 600 }}>{company}</div>
+                      <div className="fit-ellipsis" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{a.job.title}</div>
                     </div>
-                    <div style={{ minWidth: 90, textAlign: "right" }}>
-                      <StatusChip status={a.status} />
+                    <div style={{ textAlign: "right", fontSize: 12, color: "var(--fg-muted)" }}>
+                      <div>{a.interviewSessions[0]?.startedAt ? when.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "da fissare"}</div>
+                      <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>Video call</div>
                     </div>
-                    <Icon
-                      name="chevron-right"
-                      size={14}
-                      style={{ color: "var(--fg-subtle)" }}
-                    />
                   </Link>
-                ))}
-                {failedMonth > 0 && (
-                  <div
-                    style={{
-                      padding: "12px 18px",
-                      fontSize: 12.5,
-                      color: "var(--fg-muted)",
-                      borderBottom: "1px solid var(--border-ds)",
-                      background: "var(--bg-elev)",
-                    }}
-                  >
-                    {failedMonth} candidatur{failedMonth === 1 ? "a" : "e"}{" "}
-                    fallit{failedMonth === 1 ? "a" : "e"} questo mese — non incluse
-                    sopra.
-                  </div>
-                )}
-              </div>
+                );
+              })
             )}
-          </SectionBody>
-        </SectionCard>
-      </div>
+          </div>
+        </div>
 
-      <style>{`
-        @keyframes pulse-dot {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(1.4); }
-        }
-      `}</style>
+        {/* Candidature recenti */}
+        <div className="fit-card">
+          <div className="fit-card-head">
+            <div className="fit-card-title"><Icon name="file" size={15} /> Candidature recenti</div>
+            <Link href="/applications" className="fit-link">Vedi tutte <Icon name="arrow-right" size={12} /></Link>
+          </div>
+          <div className="fit-body fit-scroll">
+            {applications.length === 0 ? (
+              <Empty icon="briefcase" text="Nessuna candidatura ancora. Imposta i ruoli in Preferenze e attiva l'auto-apply." cta={{ href: "/preferences", label: "Avvia l'auto-apply" }} />
+            ) : (
+              applications.slice(0, 5).map((a) => (
+                <Link key={a.id} href="/applications" className="fit-row" style={{ gridTemplateColumns: "32px 1fr auto auto 14px", textDecoration: "none", color: "inherit" }}>
+                  <CompanyLogo company={a.company} color={a.color} size={32} rounded={8} />
+                  <div style={{ minWidth: 0 }}>
+                    <div className="fit-ellipsis" style={{ fontWeight: 600 }}>{a.company}</div>
+                    <div className="fit-ellipsis" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{a.role} · {a.location}</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>{a.applied}</div>
+                  <StatusChip status={a.status} />
+                  <Icon name="chevron-right" size={14} style={{ color: "var(--fg-subtle)" }} />
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Messaggi e notifiche */}
+        <div className="fit-card">
+          <div className="fit-card-head">
+            <div className="fit-card-title">
+              <Icon name="bell" size={15} /> Messaggi e notifiche
+              {noticeList.length > 0 && <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 999, background: "#EF3E42", color: "#fff" }}>{noticeList.length}</span>}
+            </div>
+            <Link href="/applications" className="fit-link">Vedi tutte <Icon name="arrow-right" size={12} /></Link>
+          </div>
+          <div className="fit-body fit-scroll">
+            {noticeList.length === 0 ? (
+              <Empty icon="inbox" text="Nessuna notifica. Le risposte dei recruiter arriveranno qui." />
+            ) : (
+              noticeList.map((n) => (
+                <Link key={n.id} href={n.href} className="fit-row" style={{ gridTemplateColumns: "36px 1fr 14px", textDecoration: "none", color: "inherit" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: n.color, color: "#fff", display: "grid", placeItems: "center" }}>
+                    <Icon name={n.icon} size={16} />
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="fit-ellipsis" style={{ fontWeight: 600 }}>{n.title}</div>
+                    <div className="fit-ellipsis" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{n.sub}</div>
+                  </div>
+                  <Icon name="chevron-right" size={14} style={{ color: "var(--fg-subtle)" }} />
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Scopri */}
+        <div className="fit-card ds-glass-green" style={{ gridColumn: "1 / -1", flexDirection: "row", alignItems: "center", gap: 16, padding: "16px 22px" }}>
+          <div style={{ width: 44, height: 44, borderRadius: 999, background: "hsl(var(--primary)/0.15)", color: "hsl(var(--primary))", display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <Icon name="globe" size={20} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em" }}>Scopri nuove opportunità</div>
+            <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 2 }}>Esplora aziende e ruoli in linea con il tuo profilo, o cerca manualmente.</div>
+          </div>
+          <Link href="/discover" className="ds-btn ds-btn-primary">Esplora ora <Icon name="arrow-right" size={14} /></Link>
+        </div>
+      </div>
     </>
   );
 }
 
-/**
- * 7-day bar chart compatto delle candidature inviate. Sostituisce
- * 4 MiniStat lineari con UNA visualizzazione che dice trend + posizione
- * di oggi a colpo d'occhio. Pure-CSS (nessuna libreria charting → 0 KB
- * di overhead).
- */
-function WeeklyChart({
-  data,
-  ariaLabel,
-}: {
-  data: Array<{ day: string; count: number; isToday: boolean }>;
-  ariaLabel: string;
-}) {
-  const max = Math.max(1, ...data.map((d) => d.count));
+function Step({ icon, label, sub, blue }: { icon: "search" | "target" | "file" | "send"; label: string; sub: string; blue?: boolean }) {
   return (
-    <div
-      role="img"
-      aria-label={ariaLabel}
-      style={{
-        display: "flex",
-        alignItems: "flex-end",
-        gap: 6,
-        height: 60,
-        marginTop: 16,
-        flexWrap: "nowrap",
-      }}
-    >
-      {data.map((d, i) => {
-        const heightPct = (d.count / max) * 100;
-        return (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 4,
-              minWidth: 0,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 10,
-                color: "var(--fg-subtle)",
-                fontFeatureSettings: '"tnum"',
-                opacity: d.count > 0 ? 1 : 0.4,
-                lineHeight: 1,
-              }}
-            >
-              {d.count}
-            </div>
-            <div
-              title={`${d.day}: ${d.count}`}
-              style={{
-                width: "100%",
-                maxWidth: 28,
-                height: `${Math.max(2, heightPct * 0.4)}px`,
-                minHeight: 2,
-                background: d.isToday
-                  ? "hsl(var(--primary))"
-                  : d.count > 0
-                    ? "hsl(var(--primary) / 0.35)"
-                    : "var(--border-ds)",
-                borderRadius: 3,
-                transition: "background 0.2s",
-              }}
-            />
-            <div
-              style={{
-                fontSize: 10,
-                color: d.isToday ? "var(--fg)" : "var(--fg-subtle)",
-                fontWeight: d.isToday ? 600 : 400,
-                textTransform: "lowercase",
-                lineHeight: 1,
-              }}
-            >
-              {d.day}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * Progress bar visiva dell'utilizzo del cap giornaliero. Più immediato
- * di "22 / 33 oggi" testuale.
- */
-function DailyCapBar({
-  sent,
-  cap,
-  label,
-}: {
-  sent: number;
-  cap: number;
-  label: string;
-}) {
-  const pct = Math.min(100, cap > 0 ? (sent / cap) * 100 : 0);
-  return (
-    <div style={{ marginTop: 24 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          marginBottom: 6,
-          fontSize: 11.5,
-          color: "var(--fg-muted)",
-        }}
-      >
-        <span>{label}</span>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 96 }}>
+      <div style={{ width: 44, height: 44, borderRadius: 999, background: blue ? "rgba(31,107,255,0.18)" : "hsl(var(--primary)/0.14)", color: blue ? "#5B9BFF" : "hsl(var(--primary))", display: "grid", placeItems: "center" }}>
+        <Icon name={icon} size={18} />
       </div>
-      <div
-        style={{
-          height: 6,
-          borderRadius: 999,
-          background: "var(--border-ds)",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${pct}%`,
-            background: "hsl(var(--primary))",
-            transition: "width 0.4s ease",
-          }}
-        />
-      </div>
+      <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: -3 }}>{sub}</div>
     </div>
   );
 }
-
-/**
- * Activity indicator: "Ultima run: 2 ore fa · Prossima: oggi 16:00".
- * Dà all'utente un ritmo prevedibile dell'auto-apply (3 batch/giorno).
- */
-function ActivityIndicator({
-  lastRunAt,
-  nextRunAt,
-  lastLabel,
-  nextLabel,
-  neverLabel,
-}: {
-  lastRunAt: Date | null;
-  nextRunAt: Date;
-  lastLabel: string;
-  nextLabel: string;
-  neverLabel: string;
-}) {
+function Arrow() {
+  return <Icon name="arrow-right" size={14} style={{ color: "var(--fg-subtle)", marginBottom: 34 }} />;
+}
+function Big({ n, label }: { n: number; label: string }) {
   return (
-    <div
-      style={{
-        marginTop: 10,
-        fontSize: 11.5,
-        color: "var(--fg-muted)",
-        display: "flex",
-        gap: 16,
-        flexWrap: "wrap",
-        alignItems: "center",
-      }}
-    >
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-        <span
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: "50%",
-            background: lastRunAt ? "hsl(var(--primary))" : "var(--fg-subtle)",
-            opacity: 0.7,
-          }}
-        />
-        {lastLabel}:{" "}
-        <strong style={{ color: "var(--fg)", fontWeight: 500 }}>
-          {lastRunAt ? formatRelativeTime(lastRunAt) : neverLabel}
-        </strong>
-      </span>
-      <span style={{ opacity: 0.4 }}>·</span>
-      <span>
-        {nextLabel}:{" "}
-        <strong style={{ color: "var(--fg)", fontWeight: 500 }}>
-          {formatNextRun(nextRunAt)}
-        </strong>
-      </span>
+    <div>
+      <div className="fit-num" style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1 }}>{n}</div>
+      <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 6 }}>{label}</div>
     </div>
   );
 }
-
-function formatRelativeTime(d: Date): string {
-  const diffMin = Math.round((Date.now() - d.getTime()) / 60_000);
-  if (diffMin < 1) return "ora";
-  if (diffMin < 60) return `${diffMin} min fa`;
-  const diffH = Math.round(diffMin / 60);
-  if (diffH < 24) return `${diffH}h fa`;
-  const diffD = Math.round(diffH / 24);
-  return diffD === 1 ? "ieri" : `${diffD}g fa`;
-}
-
-function formatNextRun(d: Date): string {
-  const isToday = d.toDateString() === new Date().toDateString();
-  const hh = d.getHours().toString().padStart(2, "0");
-  const mm = d.getMinutes().toString().padStart(2, "0");
-  return isToday ? `oggi ${hh}:${mm}` : `domani ${hh}:${mm}`;
-}
-
-/**
- * Compact secondary pipeline stat — più piccolo del vecchio MiniStat,
- * sta su una riga senza occupare lo spazio del numero hero.
- */
-function PipelineStat({
-  label,
-  value,
-  live,
-}: {
-  label: string;
-  value: number;
-  live?: boolean;
-}) {
+function Empty({ icon, text, cta }: { icon: "calendar" | "briefcase" | "inbox"; text: string; cta?: { href: string; label: string } }) {
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 6,
-        fontFeatureSettings: '"tnum"',
-      }}
-    >
-      <strong
-        style={{ color: "var(--fg)", fontWeight: 600, fontSize: 13 }}
-      >
-        {value}
-      </strong>
-      {live && value > 0 && (
-        <span
-          style={{
-            width: 5,
-            height: 5,
-            borderRadius: "50%",
-            background: "hsl(38 92% 60%)",
-            animation: "pulse-dot 1.6s ease-in-out infinite",
-          }}
-        />
-      )}
-      <span>{label.toLowerCase()}</span>
-    </span>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 8, padding: 12 }}>
+      <Icon name={icon} size={22} style={{ color: "var(--fg-subtle)" }} />
+      <div style={{ fontSize: 12.5, color: "var(--fg-muted)", maxWidth: 320 }}>{text}</div>
+      {cta && <Link href={cta.href} className="ds-btn ds-btn-sm ds-btn-primary">{cta.label}</Link>}
+    </div>
   );
+}
+function fmtN(n: number) {
+  return n.toLocaleString("it-IT");
+}
+function fmtRange(a: Date, b: Date) {
+  const m = (d: Date) => d.toLocaleDateString("it-IT", { month: "short" }).replace(".", "");
+  return a.getMonth() === b.getMonth() ? `${a.getDate()} – ${b.getDate()} ${m(b)}` : `${a.getDate()} ${m(a)} – ${b.getDate()} ${m(b)}`;
+}
+function fmtNext(d: Date) {
+  const today = d.toDateString() === new Date().toDateString();
+  const hh = `${d.getHours()}`.padStart(2, "0");
+  const mm = `${d.getMinutes()}`.padStart(2, "0");
+  return `${today ? "oggi" : "domani"} alle ${hh}:${mm}`;
+}
+function relTime(d: Date) {
+  const min = Math.round((Date.now() - d.getTime()) / 60_000);
+  if (min < 60) return `${Math.max(1, min)} min fa`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `${h}h fa`;
+  const g = Math.round(h / 24);
+  return g === 1 ? "ieri" : `${g}g fa`;
 }

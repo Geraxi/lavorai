@@ -1187,3 +1187,59 @@
   .dashboard-stats,
   .dashboard-recent { grid-column: 1; }
 }
+
+/* ============================================================
+   FIT-TO-VIEWPORT (pagine utente: Dashboard, Domande, Analisi)
+   La pagina riempie l'area main senza scroll; lo scroll, se serve,
+   vive DENTRO le card (.fit-scroll). Sotto 1000px o su schermi molto
+   bassi si torna al flusso normale.
+   ============================================================ */
+.fit-page {
+  flex: 1; min-height: 0; display: grid; gap: 14px;
+  padding: 16px 28px 18px; overflow: hidden;
+}
+.fit-page > * { min-height: 0; min-width: 0; }
+.fit-card {
+  background: linear-gradient(180deg, #ffffff0a, #ffffff04);
+  border: 1px solid var(--border-ds); border-radius: 18px;
+  padding: 16px 18px; min-height: 0; min-width: 0; overflow: hidden;
+  display: flex; flex-direction: column; box-shadow: var(--shadow-premium);
+}
+.fit-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-shrink: 0; }
+.fit-card-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+.fit-card-sub { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
+.fit-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fit-scroll { overflow-y: auto; }
+.fit-scroll::-webkit-scrollbar { width: 6px; }
+.fit-scroll::-webkit-scrollbar-thumb { background: var(--border-ds); border-radius: 3px; }
+.fit-link { font-size: 12.5px; color: hsl(var(--primary)); font-weight: 600; text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.fit-link:hover { text-decoration: underline; }
+.fit-kpi { padding: 14px 16px; }
+.fit-kpi .lbl { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-muted); }
+.fit-kpi .ico { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; }
+.fit-kpi .val { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; margin-top: 8px; line-height: 1; font-feature-settings: "tnum"; display: flex; align-items: baseline; gap: 8px; }
+.fit-kpi .delta { font-size: 12px; font-weight: 600; }
+.fit-kpi .sub { font-size: 11.5px; color: var(--fg-subtle); margin-top: 5px; }
+.fit-row { display: grid; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border-ds); font-size: 13px; }
+.fit-row:last-child { border-bottom: 0; }
+.fit-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fit-num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+.fit-h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; margin: 0; }
+.fit-hero-sub { font-size: 14px; color: var(--fg-muted); margin-top: 6px; }
+.fit-input {
+  width: 100%; border-radius: 12px; border: 1px solid var(--border-ds);
+  background: var(--bg-sunken); color: var(--fg); padding: 12px 14px;
+  font-size: 14px; font-family: inherit; outline: none;
+}
+.fit-input:focus { border-color: hsl(var(--primary)/0.5); }
+@media (max-height: 860px) {
+  .fit-page { gap: 10px; padding: 12px 22px 12px; }
+  .fit-card { padding: 12px 14px; border-radius: 14px; }
+  .fit-card-head { margin-bottom: 6px; }
+  .fit-h1 { font-size: 24px; }
+  .fit-kpi .val { font-size: 22px; margin-top: 5px; }
+}
+@media (max-width: 1000px), (max-height: 640px) {
+  .fit-page { overflow: auto; height: auto; grid-template-columns: 1fr !important; grid-template-rows: none !important; }
+  .fit-card { min-height: 200px; }
+}
