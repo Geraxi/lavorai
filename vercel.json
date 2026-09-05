@@ -5,6 +5,17 @@
   "installCommand": "npm install",
   "outputDirectory": ".next",
   "crons": [
-    { "path": "/api/cron/nudges", "schedule": "0 10 * * *" }
+    {
+      "path": "/api/cron/nudges",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/auto-apply",
+      "schedule": "0 8,12,16 * * *"
+    },
+    {
+      "path": "/api/cron/sync-jobs",
+      "schedule": "30 5 * * *"
+    }
   ]
 }

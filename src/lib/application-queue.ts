@@ -27,6 +27,7 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
           jobId: applicationId, // dedup: stesso app non enqueuato 2x
         },
       );
+      console.log(`[queue] enqueued via bullmq app=${applicationId}`);
       return;
     } catch (err) {
       console.error("[queue] BullMQ enqueue failed, fallback in-process", err);
@@ -102,6 +103,7 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
       }).catch((err) => {
         console.error(`[queue] self-invoke failed for ${applicationId}`, err);
       });
+      console.log(`[queue] enqueued via self-invoke app=${applicationId} (REDIS_URL ${process.env.REDIS_URL ? "set but failed" : "not set"})`);
       return;
     } catch (err) {
       console.error("[queue] self-invoke setup failed", err);
@@ -111,6 +113,7 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
   // Ultimo fallback: in-process (SOLO dev locale — in prod pericoloso
   // perché la function del caller morirà con TIMEOUT + tutti gli app
   // in-flight persi).
+  console.warn(`[queue] enqueued via in-process app=${applicationId} (solo dev)`);
   void processApplication(applicationId).catch((err) => {
     console.error("[queue] in-process worker error", err);
   });

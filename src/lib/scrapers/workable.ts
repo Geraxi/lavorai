@@ -121,7 +121,15 @@ function mapJob(
     remote: Boolean(j.remote || j.telecommuting) || /\bremote|remoto\b/i.test(locStr),
     salaryMin: null,
     salaryMax: null,
-    category: j.department ?? "IT Jobs",
+    // Workable a volte restituisce department come array (o vuoto) → Prisma
+    // Job.category è String? → normalizza, altrimenti l'upsert fallisce per
+    // TUTTI gli annunci Workable (visto nei log: "Expected String, provided (String)").
+    category: (() => {
+      const d: unknown = j.department;
+      if (Array.isArray(d)) return d.filter(Boolean).map(String).join(", ") || "IT Jobs";
+      if (typeof d === "string" && d.trim()) return d;
+      return "IT Jobs";
+    })(),
     postedAt: j.published_on || j.created_at ? new Date(j.published_on ?? j.created_at!) : new Date(),
     recruiterEmail: null,
     recruiterScrapedAt: null,
