@@ -49,7 +49,13 @@ export default async function AdminDeliveryPage() {
     }),
   ]);
 
-  const isConf = (a: { submitConfirmation: string | null }) => !!a.submitConfirmation?.startsWith("DETECTED");
+  // Consegna "provata": ATS con conferma HTTP/DOM (DETECTED_*) OPPURE email al
+  // recruiter accettata dall'SMTP (EMAIL_SENT). Allineato alla Panoramica:
+  // prima contavamo solo DETECTED_* → tasso 0% anche con centinaia di email
+  // consegnate, perché l'invio ATS è disabilitato/dry-run in produzione.
+  const isAts = (a: { submitConfirmation: string | null }) => !!a.submitConfirmation?.startsWith("DETECTED");
+  const isEmail = (a: { submitConfirmation: string | null }) => a.submitConfirmation === "EMAIL_SENT";
+  const isConf = (a: { submitConfirmation: string | null }) => isAts(a) || isEmail(a);
   const isUnconf = (a: { status: string; submitConfirmation: string | null }) =>
     a.status === "success" && (!a.submitConfirmation || a.submitConfirmation === "UNCONFIRMED");
 
@@ -57,6 +63,8 @@ export default async function AdminDeliveryPage() {
   const inviate = apps14d.filter((a) => !["queued", "ready_to_apply", "awaiting_consent"].includes(a.status)).length;
   const rilevate = apps14d.filter((a) => !!a.submitConfirmation).length;
   const confermate = apps14d.filter(isConf).length;
+  const confAts = apps14d.filter(isAts).length;
+  const confEmail = apps14d.filter(isEmail).length;
   const nonConf = apps14d.filter(isUnconf).length;
   const rate = tentate > 0 ? (confermate / tentate) * 100 : 0;
 
@@ -142,7 +150,7 @@ export default async function AdminDeliveryPage() {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
         <KpiTrendCard label="Tasso di consegna verificata" value={`${rate.toFixed(1)}%`} sub={`Ultimi ${DAYS} giorni`} delta={rate - pRate} series={sRate} color="hsl(var(--primary))" icon={<Send size={15} />} />
         <KpiTrendCard label="Candidature tentate" value={tentate.toLocaleString("it-IT")} sub="Tutti i portali" delta={dPct(tentate, pTentate)} series={sTentate} color="#60a5fa" icon={<FileCheck size={15} />} />
-        <KpiTrendCard label="Confermate (HTTP/DOM)" value={confermate.toLocaleString("it-IT")} sub="submitConfirmation DETECTED_*" delta={dPct(confermate, pConf)} series={sConf} color="hsl(var(--primary))" icon={<CheckCircle2 size={15} />} />
+        <KpiTrendCard label="Confermate" value={confermate.toLocaleString("it-IT")} sub={`ATS ${confAts} · email ${confEmail}`} delta={dPct(confermate, pConf)} series={sConf} color="hsl(var(--primary))" icon={<CheckCircle2 size={15} />} />
         <KpiTrendCard label="Non confermate" value={nonConf.toLocaleString("it-IT")} sub="success senza prova hard" delta={dPct(nonConf, pNon)} series={sNon} color="#f87171" icon={<AlertTriangle size={15} />} />
       </div>
 
