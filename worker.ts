@@ -58,6 +58,33 @@ async function main(): Promise<void> {
     console.log("[worker] connected to Redis, ready for jobs");
   });
 
+  // Scheduler auto-apply nel worker (processo persistente): 3 batch/giorno
+  // alle ore UTC in AUTO_APPLY_HOURS (default "8,12,16"). Vercel Hobby non
+  // permette cron più frequenti di 1/giorno, quindi la cadenza promessa in
+  // dashboard vive qui. Disattivabile con WORKER_AUTO_APPLY_CRON=false.
+  if ((process.env.WORKER_AUTO_APPLY_CRON ?? "true") !== "false") {
+    const hours = (process.env.AUTO_APPLY_HOURS ?? "8,12,16")
+      .split(",")
+      .map((h) => Number(h.trim()))
+      .filter((h) => Number.isInteger(h) && h >= 0 && h < 24);
+    let lastRunKey = "";
+    console.log(`[worker] auto-apply scheduler attivo alle ore UTC ${hours.join(",")}`);
+    setInterval(async () => {
+      const now = new Date();
+      const key = `${now.toISOString().slice(0, 10)}T${now.getUTCHours()}`;
+      if (!hours.includes(now.getUTCHours()) || now.getUTCMinutes() > 4 || key === lastRunKey) return;
+      lastRunKey = key;
+      try {
+        const { runAutoApplyCron } = await import("./src/lib/auto-apply-cron");
+        const t0 = Date.now();
+        const stats = await runAutoApplyCron();
+        console.log(`[worker] auto-apply cron ${Date.now() - t0}ms`, stats);
+      } catch (err) {
+        console.error("[worker] auto-apply cron failed", err);
+      }
+    }, 60_000);
+  }
+
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     console.log(`[worker] ${signal} received, draining...`);
