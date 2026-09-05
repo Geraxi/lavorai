@@ -207,22 +207,80 @@ export const smartrecruitersAdapter: PortalAdapter = {
           error: "Bottone submit SmartRecruiters non trovato.",
         };
       }
+
+      // HARDEN: cattura HTTP POST per conferma HARD
+      const urlBefore = page.url();
+      const submissionResponsePromise = page
+        .waitForResponse(
+          (resp) => {
+            const u = resp.url().toLowerCase();
+            const m = resp.request().method().toUpperCase();
+            if (m !== "POST") return false;
+            // SmartRecruiters endpoints: /candidate-applications, /api/application, etc
+            return (
+              u.includes("smartrecruiters.com") &&
+              (u.includes("/application") ||
+                u.includes("/candidate") ||
+                u.includes("/submit"))
+            );
+          },
+          { timeout: 20_000 },
+        )
+        .catch(() => null);
+
       await submit.first().click({ timeout: 5_000 });
+
+      const submissionResponse = await submissionResponsePromise;
       await page
         .waitForLoadState("networkidle", { timeout: 15_000 })
         .catch(() => void 0);
+      await page.waitForTimeout(800);
+
+      const finalUrl = page.url();
       const bodyText = await page
         .locator("body")
         .innerText()
         .catch(() => "");
+
+      // HARD: captured POST with 2xx/3xx
+      if (submissionResponse) {
+        const status = submissionResponse.status();
+        if (status >= 200 && status < 400) {
+          console.log(`[smartrecruiters] DETECTED via HTTP ${status}`);
+          return {
+            ok: true,
+            status: "submitted",
+            confirmation: `DETECTED_HTTP_${status}`,
+          };
+        }
+        // 4xx = validation failed
+        if (status >= 400 && status < 500) {
+          return {
+            ok: false,
+            status: "validation_failed",
+            error: `SmartRecruiters ha rifiutato la submission (HTTP ${status}).`,
+          };
+        }
+        // 5xx = server error
+        return {
+          ok: false,
+          status: "unknown_error",
+          error: `SmartRecruiters server error (HTTP ${status}) — retry consigliato.`,
+        };
+      }
+
+      // SOFT: DOM confirmation fallback
       const confirmed =
         /thank|applied|submitted|grazie|received|confirm|successfully/i.test(
           bodyText,
-        ) || /thanks|confirm|success/i.test(page.url());
+        ) ||
+        /thanks|confirm|success/i.test(finalUrl) ||
+        finalUrl !== urlBefore;
+
       return {
         ok: true,
         status: "submitted",
-        confirmation: confirmed ? "DETECTED" : "UNCONFIRMED",
+        confirmation: confirmed ? "DETECTED_DOM" : "UNCONFIRMED",
       };
     } catch (err) {
       return {

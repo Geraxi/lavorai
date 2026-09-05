@@ -89,6 +89,10 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
     try {
       // Fire-and-forget: non aspettare la risposta. La function chiamata
       // ha 300s tutti suoi per completare il processApplication.
+      // HARDENED: se fetch() fallisce (network, timeout, etc), marchiamo
+      // l'application come "failed" con errorMessage esplicito invece di
+      // lasciare lo status "queued" silenzioso. L'utente vedrà "errore di
+      // sistema" e può ritentare; noi loggiamo per diagnostica infra.
       void fetch(`${baseUrl}/api/applications/process`, {
         method: "POST",
         headers: {
@@ -99,8 +103,22 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
         // keepalive: la connessione può chiudersi prima della risposta
         // senza abortire la request lato server.
         keepalive: true,
-      }).catch((err) => {
+      }).catch(async (err) => {
         console.error(`[queue] self-invoke failed for ${applicationId}`, err);
+        // Mark application as failed so it doesn't stay stuck in "queued" forever
+        try {
+          const { prisma } = await import("@/lib/db");
+          await prisma.application.update({
+            where: { id: applicationId },
+            data: {
+              status: "failed",
+              errorMessage: `Errore infrastruttura: impossibile avviare il worker (${err instanceof Error ? err.message : "network error"}). Riprova o contatta supporto.`,
+              completedAt: new Date(),
+            },
+          });
+        } catch (dbErr) {
+          console.error(`[queue] failed to mark application ${applicationId} as failed`, dbErr);
+        }
       });
       return;
     } catch (err) {
