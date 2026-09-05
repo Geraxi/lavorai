@@ -20,7 +20,7 @@ const SUGGESTIONS = [
  * ha accesso allo snapshot live della piattaforma (via /api/admin/
  * assistant). Floating panel a destra, toggle con bottone fisso.
  */
-export function AdminAssistant() {
+export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -60,6 +60,42 @@ export function AdminAssistant() {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     void send(input);
+  }
+
+  if (embedded) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 0 }}>
+        {(messages.length > 0 || loading) && (
+          <div ref={scrollRef} style={{ maxHeight: 180, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingRight: 4 }}>
+            {messages.map((m, i) => (
+              <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "92%", padding: "8px 11px", borderRadius: 10, background: m.role === "user" ? "hsl(var(--primary) / 0.18)" : "var(--bg-sunken)", border: `1px solid ${m.role === "user" ? "hsl(var(--primary) / 0.3)" : "var(--border-ds)"}`, fontSize: 12.5, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>
+                {m.content}
+              </div>
+            ))}
+            {loading && <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>sto leggendo i dati…</div>}
+          </div>
+        )}
+        <form onSubmit={onSubmit} style={{ display: "flex", gap: 8 }}>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Es. Mostrami gli utenti bloccati per CV e invia un nudge…"
+            disabled={loading}
+            style={{ flex: 1, padding: "10px 12px", borderRadius: 10, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", color: "var(--fg)", fontSize: 13, outline: "none", minWidth: 0 }}
+          />
+          <button type="submit" disabled={loading || !input.trim()} aria-label="Invia" style={{ width: 40, borderRadius: 10, border: "1px solid var(--border-ds)", background: "var(--bg-sunken)", color: "var(--fg)", cursor: "pointer" }}>
+            <Icon name="send" size={14} />
+          </button>
+        </form>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {SUGGESTIONS.map((c) => (
+            <button key={c} type="button" onClick={() => void send(c)} className="adm-pill neutral" style={{ fontWeight: 500, fontSize: 11, cursor: "pointer" }}>
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (

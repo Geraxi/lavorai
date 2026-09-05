@@ -28,16 +28,17 @@ interface TestApplyResult {
  * generazione CV + adapter ATS + Chromium. In dry-run il form è compilato
  * ma non inviato. Prova definitiva che il pipeline funziona su serverless.
  */
-export function AdminTestApply() {
+export function AdminTestApply({ embedded = false }: { embedded?: boolean } = {}) {
   const [appId, setAppId] = useState("");
   const [realSubmit, setRealSubmit] = useState(false);
   const [loading, setLoading] = useState(false);
   const [res, setRes] = useState<TestApplyResult | null>(null);
 
-  async function run() {
+  async function run(forceReal?: boolean) {
     if (loading) return;
+    const real = forceReal ?? realSubmit;
     if (
-      realSubmit &&
+      real &&
       !confirm(
         "INVIO REALE: questa candidatura verrà inviata DAVVERO all'azienda. Continuare?",
       )
@@ -51,7 +52,7 @@ export function AdminTestApply() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           applicationId: appId.trim() || undefined,
-          realSubmit,
+          realSubmit: real,
         }),
       });
       setRes((await r.json()) as TestApplyResult);
@@ -69,80 +70,38 @@ export function AdminTestApply() {
 
   return (
     <section
-      style={{
-        padding: 18,
-        borderRadius: 14,
-        background: "var(--bg-elev)",
-        border: "1px solid var(--border-ds)",
-        marginBottom: 16,
-      }}
+      style={embedded ? undefined : { padding: 18, borderRadius: 14, background: "var(--bg-elev)", border: "1px solid var(--border-ds)", marginBottom: 16 }}
     >
-      <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>
-        🧪 Test candidatura end-to-end (su Vercel)
-      </h2>
-      <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 12px", lineHeight: 1.6 }}>
-        Esegue UNA candidatura in-process su produzione: generazione CV +
-        adapter ATS + Chromium. Con dry-run ON il form è compilato ma NON
-        inviato. Se lasci vuoto, sceglie una tua candidatura su portale
-        supportato.
-      </p>
+      {!embedded && (
+        <>
+          <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>🧪 Test candidatura end-to-end (su Vercel)</h2>
+          <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 12px", lineHeight: 1.6 }}>
+            Esegue UNA candidatura in-process su produzione: generazione CV + adapter ATS + Chromium. Con dry-run ON il form è compilato ma NON inviato. Se lasci vuoto, sceglie una tua candidatura su portale supportato.
+          </p>
+        </>
+      )}
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-        <input
-          value={appId}
-          onChange={(e) => setAppId(e.target.value)}
-          placeholder="applicationId (opzionale)"
-          style={{
-            flex: "1 1 240px",
-            borderRadius: 10,
-            border: "1px solid var(--border-ds)",
-            background: "var(--bg)",
-            color: "var(--fg)",
-            padding: "9px 11px",
-            fontSize: 13,
-          }}
-        />
-        <button
-          type="button"
-          onClick={run}
-          disabled={loading}
-          style={{
-            padding: "9px 18px",
-            borderRadius: 10,
-            border: "none",
-            background: realSubmit ? "#dc2626" : "hsl(var(--primary))",
-            color: realSubmit ? "#fff" : "#001a0d",
-            fontSize: 13.5,
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
-        >
-          {loading
-            ? "Eseguo (~30-60s)…"
-            : realSubmit
-              ? "Esegui INVIO REALE"
-              : "Esegui test (dry-run)"}
+      <label style={{ display: "block", fontSize: 12.5, color: "var(--fg-muted)", marginBottom: 6 }}>Application ID (opzionale)</label>
+      <input
+        value={appId}
+        onChange={(e) => setAppId(e.target.value)}
+        placeholder="es. 123456"
+        style={{ width: "100%", borderRadius: 10, border: "1px solid var(--border-ds)", background: "var(--bg-sunken)", color: "var(--fg)", padding: "10px 12px", fontSize: 13, marginBottom: 12, outline: "none" }}
+      />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <button type="button" onClick={() => run(false)} disabled={loading} className="adm-btn primary" style={{ padding: "9px 16px", fontSize: 13 }}>
+          ▶ {loading ? "Eseguo (~30-60s)…" : "Esegui test (dry-run)"}
+        </button>
+        <button type="button" onClick={() => run(true)} disabled={loading} className="adm-btn" style={{ padding: "9px 16px", fontSize: 13 }}>
+          ⚡ Esegui test reale
         </button>
       </div>
-
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 7,
-          fontSize: 12.5,
-          color: realSubmit ? "#fca5a5" : "var(--fg-muted)",
-          marginBottom: 12,
-          cursor: "pointer",
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={realSubmit}
-          onChange={(e) => setRealSubmit(e.target.checked)}
-        />
-        Invio REALE (toglie il dry-run solo per questa candidatura — la manda
-        davvero all&apos;azienda)
+      <label style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 13, color: realSubmit ? "#fca5a5" : "var(--fg)", marginBottom: 12, cursor: "pointer" }}>
+        <input type="checkbox" checked={realSubmit} onChange={(e) => setRealSubmit(e.target.checked)} style={{ marginTop: 3 }} />
+        <span>
+          Invio REALE (solo questa candidatura)
+          <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-subtle)", marginTop: 1 }}>La manda davvero all&apos;azienda</span>
+        </span>
       </label>
 
       {res && (

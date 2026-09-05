@@ -36,7 +36,7 @@ interface DirectoryUser {
  * Pannello admin: nudge di onboarding agli utenti bloccati.
  * Mostra l'anteprima dei destinatari (per step) e permette di inviare.
  */
-export function AdminNudges() {
+export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
   const { data, mutate, isLoading } = useSWR<{
     count: number;
     candidates: Candidate[];
@@ -94,65 +94,26 @@ export function AdminNudges() {
 
   return (
     <section
-      style={{
-        padding: 18,
-        borderRadius: 14,
-        background: "var(--bg-elev)",
-        border: "1px solid var(--border-ds)",
-        marginBottom: 16,
-      }}
+      style={embedded ? undefined : { padding: 18, borderRadius: 14, background: "var(--bg-elev)", border: "1px solid var(--border-ds)", marginBottom: 16 }}
     >
-      <h2
-        style={{
-          fontSize: 15,
-          fontWeight: 700,
-          letterSpacing: "-0.01em",
-          marginBottom: 4,
-        }}
-      >
-        Nudge onboarding
-      </h2>
-      <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 14px" }}>
-        Email che ricordano agli utenti bloccati di completare lo step mancante
-        (verifica → CV → preferenze → 1ª candidatura). Esclude test/interni, max
-        1 ogni 5 giorni per utente, rispetta la quota email.
-      </p>
+      {!embedded && (
+        <>
+          <h2 style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", marginBottom: 4 }}>Nudge onboarding</h2>
+          <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 14px" }}>
+            Email che ricordano agli utenti bloccati di completare lo step mancante (verifica → CV → preferenze → 1ª candidatura). Esclude test/interni, max 1 ogni 5 giorni per utente, rispetta la quota email.
+          </p>
+        </>
+      )}
 
-      <div style={{ marginBottom: 14 }}>
-        <label
-          style={{
-            display: "block",
-            fontSize: 11,
-            color: "var(--fg-subtle)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            fontWeight: 600,
-            marginBottom: 6,
-          }}
-        >
-          Destinatario
-        </label>
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", fontSize: 12.5, color: "var(--fg-muted)", marginBottom: 6 }}>Destinatari</label>
         <div style={{ position: "relative" }}>
           <select
             value={onlyEmail}
             onChange={(e) => setOnlyEmail(e.target.value)}
-            style={{
-              width: "100%",
-              borderRadius: 10,
-              border: "1px solid var(--border-ds)",
-              background: "var(--bg)",
-              color: "var(--fg)",
-              padding: "10px 36px 10px 12px",
-              fontSize: 13,
-              appearance: "none",
-              WebkitAppearance: "none",
-              MozAppearance: "none",
-              cursor: "pointer",
-            }}
+            style={{ width: "100%", borderRadius: 10, border: "1px solid var(--border-ds)", background: "var(--bg-sunken)", color: "var(--fg)", padding: "10px 36px 10px 12px", fontSize: 13, appearance: "none", WebkitAppearance: "none", MozAppearance: "none", cursor: "pointer" }}
           >
-            <option value="">
-              Tutti gli utenti candidati al nudge ({data?.count ?? 0})
-            </option>
+            <option value="">Tutti gli utenti candidati al nudge ({data?.count ?? 0})</option>
             {(directory?.users ?? []).length === 0 ? (
               <option disabled>caricamento utenti…</option>
             ) : (
@@ -160,77 +121,38 @@ export function AdminNudges() {
                 <option disabled>──── utenti reali ({directory?.users.length ?? 0}) ────</option>
                 {(directory?.users ?? []).map((u) => (
                   <option key={u.email} value={u.email}>
-                    {u.email}
-                    {u.name ? ` · ${u.name}` : ""}
-                    {u.tier !== "free" ? ` · ${u.tier}` : ""}
+                    {u.email}{u.name ? ` · ${u.name}` : ""}{u.tier !== "free" ? ` · ${u.tier}` : ""}
                   </option>
                 ))}
               </>
             )}
           </select>
-          <span
-            aria-hidden
-            style={{
-              position: "absolute",
-              right: 12,
-              top: "50%",
-              transform: "translateY(-50%)",
-              pointerEvents: "none",
-              color: "var(--fg-subtle)",
-              fontSize: 11,
-            }}
-          >
-            ▼
-          </span>
+          <span aria-hidden style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--fg-subtle)", fontSize: 11 }}>▼</span>
         </div>
         {onlyEmail && (
-          <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 6 }}>
-            Selezionato: <strong style={{ color: "var(--fg)" }}>{onlyEmail}</strong>
-          </div>
+          <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 6 }}>Selezionato: <strong style={{ color: "var(--fg)" }}>{onlyEmail}</strong></div>
         )}
-        <label
-          style={{
-            fontSize: 12,
-            color: "var(--fg-muted)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            cursor: "pointer",
-            marginTop: 10,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={ignoreCooldown}
-            onChange={(e) => setIgnoreCooldown(e.target.checked)}
-          />
-          ignora cooldown (consenti invio anche se già nudgato di recente)
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 13, color: "var(--fg)", cursor: "pointer", marginTop: 10 }}>
+          <input type="checkbox" checked={ignoreCooldown} onChange={(e) => setIgnoreCooldown(e.target.checked)} style={{ marginTop: 3 }} />
+          <span>
+            Ignora cooldown
+            <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-subtle)", marginTop: 1 }}>Consenti invio anche se già nudgato di recente</span>
+          </span>
         </label>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         <button
           type="button"
-          onClick={() => run(true)}
+          onClick={() => { if (confirm("Inviare i nudge email REALI agli utenti elencati? Verranno mandate email vere.")) run(false); }}
           disabled={sending}
-          style={btn(false)}
+          className="adm-btn primary"
+          style={{ padding: "9px 16px", fontSize: 13 }}
         >
-          {sending ? "…" : "Anteprima (dry-run)"}
+          ➤ {sending ? "Invio…" : "Invia nudge reali"}
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (
-              confirm(
-                "Inviare i nudge email REALI agli utenti elencati? Verranno mandate email vere.",
-              )
-            )
-              run(false);
-          }}
-          disabled={sending}
-          style={btn(true)}
-        >
-          {sending ? "Invio…" : "Invia nudge reali"}
+        <button type="button" onClick={() => run(true)} disabled={sending} className="adm-btn" style={{ padding: "9px 16px", fontSize: 13 }}>
+          👁 {sending ? "…" : "Anteprima (dry-run)"}
         </button>
       </div>
 

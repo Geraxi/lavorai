@@ -44,7 +44,7 @@ const AUDIENCE_LABEL: Record<string, string> = {
  * Pannello admin per creare e gestire i popup mostrati agli utenti
  * (sondaggi, feedback, proposte di miglioramento) + lettura risposte.
  */
-export function AdminPopups() {
+export function AdminPopups({ embedded = false }: { embedded?: boolean } = {}) {
   const { data, mutate } = useSWR<{ popups: PopupRow[] }>(
     "/api/admin/popups",
     fetcher,
@@ -60,6 +60,7 @@ export function AdminPopups() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openResponses, setOpenResponses] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(!embedded);
 
   async function create() {
     if (saving) return;
@@ -126,30 +127,24 @@ export function AdminPopups() {
 
   return (
     <section
-      style={{
-        padding: 18,
-        borderRadius: 14,
-        background: "var(--bg-elev)",
-        border: "1px solid var(--border-ds)",
-        marginBottom: 16,
-      }}
+      style={embedded ? undefined : { padding: 18, borderRadius: 14, background: "var(--bg-elev)", border: "1px solid var(--border-ds)", marginBottom: 16 }}
     >
-      <h2
-        style={{
-          fontSize: 15,
-          fontWeight: 700,
-          letterSpacing: "-0.01em",
-          marginBottom: 4,
-        }}
-      >
-        📣 Popup &amp; sondaggi utenti
-      </h2>
-      <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 14px" }}>
-        Crea popup mostrati dentro l&apos;app (gradimento, feedback, proposte di
-        miglioramento). Ogni utente lo vede una volta sola.
-      </p>
+      {!embedded && (
+        <>
+          <h2 style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em", marginBottom: 4 }}>📣 Popup &amp; sondaggi utenti</h2>
+          <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 14px" }}>
+            Crea popup mostrati dentro l&apos;app (gradimento, feedback, proposte di miglioramento). Ogni utente lo vede una volta sola.
+          </p>
+        </>
+      )}
+      {embedded && (
+        <button type="button" className="adm-btn primary" onClick={() => setShowForm((v) => !v)} style={{ padding: "9px 16px", fontSize: 13, marginBottom: 12 }}>
+          {showForm ? "✕ Chiudi" : "+ Nuovo popup"}
+        </button>
+      )}
 
       {/* FORM CREAZIONE */}
+      {showForm && (
       <div
         style={{
           display: "grid",
@@ -258,6 +253,7 @@ export function AdminPopups() {
           {saving ? "Creo…" : "Crea popup"}
         </button>
       </div>
+      )}
 
       {/* LISTA POPUP */}
       {popups.length === 0 ? (
