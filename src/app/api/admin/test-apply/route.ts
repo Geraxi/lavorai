@@ -110,6 +110,34 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  // Marker del test admin dentro canaryLog (merge, non sovrascrive la
+  // diagnostica dell'adapter): la card "Ultimo test" in /admin/automation
+  // legge QUESTO, non l'ultima candidatura qualsiasi.
+  try {
+    let existing: Record<string, unknown> = {};
+    try { existing = after?.canaryLog ? (JSON.parse(after.canaryLog) as Record<string, unknown>) : {}; } catch { existing = { raw: after?.canaryLog }; }
+    await prisma.application.update({
+      where: { id: appId },
+      data: {
+        canaryLog: JSON.stringify({
+          ...existing,
+          adminTest: {
+            at: new Date().toISOString(),
+            dryRun,
+            realSubmit: forceRealSubmit,
+            adapter: adapter?.id ?? null,
+            status: after?.status ?? null,
+            submitConfirmation: after?.submitConfirmation ?? null,
+            error: runError ?? after?.errorMessage ?? null,
+            ms: Date.now() - t0,
+          },
+        }),
+      },
+    });
+  } catch (err) {
+    console.warn("[test-apply] marker adminTest non salvato", err);
+  }
+
   return NextResponse.json({
     ok: !runError,
     dryRun,

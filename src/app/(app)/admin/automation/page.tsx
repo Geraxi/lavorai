@@ -38,17 +38,18 @@ export default async function AdminAutomationPage() {
     return dayKeys.map((k) => m.get(k) ?? 0);
   };
 
-  const [apps14d, appsPrev7, emails14d, emailsPrev7, activeUsers, activePrev, lastTest, nudges7d, popups] = await Promise.all([
+  const [apps14d, appsPrev7, emails14d, emailsPrev7, activeUsers, activePrev, testRows, nudges7d, popups] = await Promise.all([
     prisma.application.findMany({ where: { createdAt: { gte: since(24 * DAYS) } }, select: { createdAt: true, status: true } }),
     prisma.application.count({ where: { createdAt: { gte: since(24 * 14), lt: since(24 * 7) } } }),
     prisma.emailLog.findMany({ where: { createdAt: { gte: since(24 * DAYS) } }, select: { createdAt: true, kind: true } }).catch(() => [] as { createdAt: Date; kind: string }[]),
     prisma.emailLog.count({ where: { createdAt: { gte: since(24 * 14), lt: since(24 * 7) } } }).catch(() => 0),
     prisma.user.count({ where: { lastLoginAt: { gte: since(24 * 30) } } }),
     prisma.user.count({ where: { lastLoginAt: { gte: since(24 * 60), lt: since(24 * 30) } } }),
-    prisma.application.findFirst({
+    prisma.application.findMany({
+      where: { canaryLog: { contains: "\"adminTest\"" } },
       orderBy: { createdAt: "desc" },
-      where: { status: { in: ["success", "failed"] } },
-      select: { createdAt: true, status: true, portal: true, submitConfirmation: true, startedAt: true, completedAt: true, job: { select: { title: true, company: true } } },
+      take: 20,
+      select: { id: true, createdAt: true, status: true, portal: true, submitConfirmation: true, canaryLog: true, job: { select: { title: true, company: true, url: true } } },
     }),
     prisma.emailLog.findMany({ where: { createdAt: { gte: since(24 * 7) }, kind: { contains: "nudge" } }, select: { createdAt: true } }).catch(() => [] as { createdAt: Date }[]),
     prisma.adminPopup.findMany({ orderBy: { createdAt: "desc" }, take: 4, select: { id: true, title: true, kind: true, active: true, _count: { select: { responses: true } } } }).catch(() => []),
@@ -66,13 +67,27 @@ export default async function AdminAutomationPage() {
   // Nudge stats per giorno della settimana (L..D)
   const dow = [0, 0, 0, 0, 0, 0, 0];
   for (const n of nudges7d) dow[(n.createdAt.getDay() + 6) % 7]++;
-  const testSecs = lastTest?.startedAt && lastTest?.completedAt ? Math.round((lastTest.completedAt.getTime() - lastTest.startedAt.getTime()) / 1000) : null;
+  // Ultimo test admin: il marker adminTest sta in canaryLog; prendiamo il più recente per `at`.
+  type AdminTest = { at: string; dryRun: boolean; realSubmit: boolean; adapter: string | null; status: string | null; submitConfirmation: string | null; error: string | null; ms: number };
+  const lastTest = testRows
+    .map((r) => {
+      try {
+        const j = JSON.parse(r.canaryLog ?? "{}") as { adminTest?: AdminTest };
+        return j.adminTest ? { ...r, t: j.adminTest } : null;
+      } catch {
+        return null;
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x)
+    .sort((a, b) => b.t.at.localeCompare(a.t.at))[0] ?? null;
+  const testOk = lastTest ? (lastTest.t.submitConfirmation === "DRY_RUN" || !!lastTest.t.submitConfirmation?.startsWith("DETECTED")) && !lastTest.t.error : false;
+  const testSecs = lastTest ? Math.round(lastTest.t.ms / 1000) : null;
 
   const PROMPTS = ["Quanti utenti sono bloccati?", "Invia un nudge agli utenti senza CV", "Mostrami gli errori di invio", "Crea un popup per feedback", "Quali posizioni hanno più drop-off?"];
   const CHIPS = ["Utenti senza CV", "Errori ultimi 24h", "Riepilogo candidature", "Invia nudge", "Crea popup", "Analizza performance"];
 
   return (
-    <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(0,1.05fr) minmax(0,1fr) minmax(0,0.95fr)" }}>
+    <div className="adm-page" style={{ gridTemplateRows: "auto auto auto auto minmax(0,1fr)", height: "100%", overflowY: "auto", paddingRight: 4 }}>
       <PageTitle
         title="Automazione & Utenti"
         sub="Gestisci test, nudges, popup e l'assistente AI. Tutto in un'unica schermata."
@@ -88,26 +103,27 @@ export default async function AdminAutomationPage() {
 
       {/* 1 · Test invio */}
       <Section n={1} icon={<FlaskConical size={16} />} title="Test invio candidatura" sub="Esegui un apply end-to-end su Vercel. Genera CV + adapter ATS + Chromium." cols="minmax(0,1.3fr) minmax(0,1fr)">
-        <div className="adm-card-body scroll"><AdminTestApply embedded /></div>
-        <Side title="Ultimo test" right={lastTest ? <span className={`adm-pill ${lastTest.status === "success" ? "good" : "bad"}`}><span className="dot" />{lastTest.status === "success" ? "Completato" : "Fallito"}</span> : null} when={lastTest ? fmtDT(lastTest.createdAt) : undefined}>
+        <div><AdminTestApply embedded /></div>
+        <Side title="Ultimo test" right={lastTest ? <span className={`adm-pill ${testOk ? "good" : "bad"}`}><span className="dot" />{testOk ? (lastTest.t.dryRun ? "Dry-run OK" : "Completato") : "Fallito"}</span> : null} when={lastTest ? fmtDT(new Date(lastTest.t.at)) : undefined}>
           {lastTest ? (
             <>
-              <KV k="Azienda" v={<span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>{lastTest.job?.company ?? "—"}<ExternalLink size={11} style={{ color: "var(--fg-subtle)" }} /></span>} />
+              <KV k="Azienda" v={<a href={lastTest.job?.url ?? "#"} target="_blank" rel="noreferrer" style={{ display: "inline-flex", gap: 6, alignItems: "center", color: "inherit", textDecoration: "none" }}>{lastTest.job?.company ?? "—"}<ExternalLink size={11} style={{ color: "var(--fg-subtle)" }} /></a>} />
               <KV k="Posizione" v={lastTest.job?.title ?? "—"} />
-              <KV k="Portale" v={<span style={{ textTransform: "capitalize" }}>{lastTest.portal}</span>} />
-              <KV k="Risultato" v={<span style={{ display: "inline-flex", gap: 6, alignItems: "center", color: lastTest.status === "success" ? "hsl(var(--primary))" : "#f87171", fontWeight: 600 }}><CheckCircle2 size={12} />{lastTest.status === "success" ? "Candidatura inviata" : "Invio fallito"}</span>} />
+              <KV k="Portale" v={<span style={{ textTransform: "capitalize" }}>{lastTest.t.adapter ?? lastTest.portal}</span>} />
+              <KV k="Modalità" v={lastTest.t.realSubmit ? "Invio REALE" : lastTest.t.dryRun ? "Dry-run (nessun invio)" : "Invio (flag prod)"} />
+              <KV k="Risultato" v={<span style={{ display: "inline-flex", gap: 6, alignItems: "center", color: testOk ? "hsl(var(--primary))" : "#f87171", fontWeight: 600 }}><CheckCircle2 size={12} />{lastTest.t.submitConfirmation ?? lastTest.t.status ?? "—"}</span>} />
+              {lastTest.t.error && <KV k="Errore" v={<span title={lastTest.t.error} style={{ color: "#fca5a5" }}>{lastTest.t.error.split(/\n/)[0].slice(0, 90)}</span>} />}
               <KV k="Tempo" v={testSecs != null ? `${testSecs} secondi` : "—"} />
-              <div style={{ marginTop: 8, textAlign: "right" }}><span className="adm-btn sm">Vedi log</span></div>
             </>
           ) : (
-            <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>Nessun test eseguito</div>
+            <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>Nessun test eseguito da questo pannello. Il risultato del primo test comparirà qui.</div>
           )}
         </Side>
       </Section>
 
       {/* 2 · Nudge */}
       <Section n={2} icon={<BellRing size={16} />} title="Nudge onboarding" sub="Email a utenti bloccati per completare lo step mancante (verifica → CV → preferenze → 1ª candidatura)." cols="minmax(0,1.3fr) minmax(0,1fr)">
-        <div className="adm-card-body scroll"><AdminNudges embedded /></div>
+        <div><AdminNudges embedded /></div>
         <Side title="Statistiche nudges" when="ultimi 7 giorni" right={<span className="adm-btn sm" style={{ marginLeft: "auto" }}><History size={11} />Vedi storico</span>}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch" }}>
             <div style={{ display: "grid", gap: 8, alignContent: "start" }}>
@@ -155,7 +171,7 @@ export default async function AdminAutomationPage() {
 
 function Section({ n, icon, title, sub, cols, children }: { n: number; icon: React.ReactNode; title: string; sub: string; cols: string; children: React.ReactNode }) {
   return (
-    <section className="adm-card">
+    <section className="adm-card" style={{ overflow: "visible", flexShrink: 0 }}>
       <div className="adm-card-head" style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 12, alignItems: "flex-start", minWidth: 0 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: "hsl(var(--primary)/0.14)", color: "hsl(var(--primary))", display: "grid", placeItems: "center", flexShrink: 0 }}>{icon}</div>
@@ -172,7 +188,7 @@ function Section({ n, icon, title, sub, cols, children }: { n: number; icon: Rea
 
 function Side({ title, right, when, children }: { title: string; right?: React.ReactNode; when?: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", borderRadius: 12, padding: 14, minHeight: 0, overflow: "auto" }}>
+    <div style={{ background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", borderRadius: 12, padding: 14 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
           <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--fg)", whiteSpace: "nowrap" }}>{title}</span>
