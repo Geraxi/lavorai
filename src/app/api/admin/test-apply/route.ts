@@ -55,7 +55,22 @@ export async function POST(request: NextRequest) {
       take: 100,
       select: { id: true, job: { select: { url: true, title: true, company: true } } },
     });
-    const match = candidates.find((c) => findPortalAdapter(c.job.url));
+    // Solo job con adapter ATS e ancora ONLINE: un annuncio chiuso (es.
+    // Greenhouse → redirect a ?error=true o alla career page) produce un
+    // form_not_found che non dice nulla sullo stato della pipeline.
+    const withAdapter = candidates.filter((c) => findPortalAdapter(c.job.url)).slice(0, 15);
+    let match: (typeof candidates)[number] | undefined;
+    const skipped: string[] = [];
+    for (const c of withAdapter) {
+      if (await isJobUrlAlive(c.job.url)) { match = c; break; }
+      skipped.push(`${c.job.company ?? "?"} · ${c.job.title}`);
+    }
+    if (!match && skipped.length > 0) {
+      return NextResponse.json({
+        ok: false,
+        message: `Le ${skipped.length} candidature ATS più recenti puntano ad annunci non più online (${skipped.slice(0, 3).join(" | ")}${skipped.length > 3 ? " | …" : ""}). Passa un applicationId di un annuncio ancora aperto.`,
+      });
+    }
     if (!match) {
       return NextResponse.json({
         ok: false,
@@ -114,4 +129,31 @@ export async function POST(request: NextRequest) {
       canaryExcerpt: after?.canaryLog?.slice(0, 600) ?? null,
     },
   });
+}
+
+/**
+ * Verifica leggera che l'annuncio sia ancora online: segue i redirect e
+ * considera "morto" un 404/410, o (per gli ATS) un redirect verso la lista
+ * generica del board (Greenhouse: ...?error=true, /<slug> senza /jobs/<id>)
+ * o verso la career page aziendale.
+ */
+async function isJobUrlAlive(url: string): Promise<boolean> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(url, { redirect: "follow", signal: ctrl.signal, headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122.0 Safari/537.36" } });
+    clearTimeout(t);
+    if (res.status === 404 || res.status === 410) return false;
+    const final = res.url || url;
+    if (/[?&]error=true/i.test(final)) return false;
+    const wasAts = /greenhouse\.io|ashbyhq\.com|lever\.co|workable\.com|smartrecruiters\.com/i.test(url);
+    if (wasAts) {
+      const finalIsAts = /greenhouse\.io|ashbyhq\.com|lever\.co|workable\.com|smartrecruiters\.com/i.test(final);
+      if (!finalIsAts) return false; // redirect alla career page custom → l'adapter non troverà il form
+      if (/greenhouse\.io\/[^/]+\/?$/i.test(final)) return false; // tornato alla lista del board
+    }
+    return res.ok;
+  } catch {
+    return true; // in dubbio non escludiamo (timeout/rete): lo scoprirà l'adapter
+  }
 }
