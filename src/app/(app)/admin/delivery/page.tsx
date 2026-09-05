@@ -87,13 +87,21 @@ export default async function AdminDeliveryPage() {
   const sNon = bucket(apps14d.filter(isUnconf));
   const sRate = sTentate.map((t, i) => (t > 0 ? Math.round((sConf[i] / t) * 100) : 0));
 
-  // Per portale
-  const portals = new Map<string, { t: number; c: number }>();
+  // Per portale — con breakdown diagnostico dell'esito (cosa ha scritto il worker).
+  type PB = { t: number; c: number; ats: number; email: number; unconf: number; dry: number; captcha: number; failed: number; wait: number };
+  const portals = new Map<string, PB>();
   for (const a of apps14d) {
     const k = a.portal || "sconosciuto";
-    const cur = portals.get(k) ?? { t: 0, c: 0 };
+    const cur = portals.get(k) ?? { t: 0, c: 0, ats: 0, email: 0, unconf: 0, dry: 0, captcha: 0, failed: 0, wait: 0 };
     cur.t++;
     if (isConf(a)) cur.c++;
+    if (isAts(a)) cur.ats++;
+    else if (isEmail(a)) cur.email++;
+    else if (a.submitConfirmation === "UNCONFIRMED" || a.submitConfirmation === "UNKNOWN") cur.unconf++;
+    else if (a.submitConfirmation === "DRY_RUN") cur.dry++;
+    else if (a.submitConfirmation === "CAPTCHA") cur.captcha++;
+    else if (a.status === "failed") cur.failed++;
+    else cur.wait++;
     portals.set(k, cur);
   }
   const portalRows = [...portals.entries()].map(([portal, v]) => ({ portal, ...v, rate: v.t > 0 ? (v.c / v.t) * 100 : 0 })).sort((a, b) => b.t - a.t);
@@ -183,13 +191,13 @@ export default async function AdminDeliveryPage() {
             <div className="adm-card-title">Consegne per portale</div>
             <FakeSelect label={`Ultimi ${DAYS} giorni`} />
           </div>
-          <div className="adm-th" style={{ gridTemplateColumns: "1fr 54px 64px 54px 70px" }}>
-            <div>Portale</div><div style={{ textAlign: "right" }}>Tentate</div><div style={{ textAlign: "right" }}>Confermate</div><div style={{ textAlign: "right" }}>Tasso</div><div />
+          <div className="adm-th" style={{ gridTemplateColumns: "1fr 46px 52px 50px 1fr" }}>
+            <div>Portale</div><div style={{ textAlign: "right" }}>Tentate</div><div style={{ textAlign: "right" }}>Conf.</div><div style={{ textAlign: "right" }}>Tasso</div><div>Esito (ATS · email · unconf · dry · captcha · failed · attesa)</div>
           </div>
           <div className="adm-card-body scroll">
             {portalRows.length === 0 && <div style={{ padding: "14px 0", fontSize: 12, color: "var(--fg-subtle)" }}>Nessun dato</div>}
             {portalRows.map((p) => (
-              <div key={p.portal} className="adm-tr" style={{ gridTemplateColumns: "1fr 54px 64px 54px 70px", padding: "7px 0" }}>
+              <div key={p.portal} className="adm-tr" style={{ gridTemplateColumns: "1fr 46px 52px 50px 1fr", padding: "7px 0" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <PortalBadge portal={p.portal} />
                   <span className="adm-ellipsis" style={{ color: "var(--fg)", textTransform: "capitalize" }}>{p.portal}</span>
@@ -197,8 +205,8 @@ export default async function AdminDeliveryPage() {
                 <div className="adm-num" style={{ textAlign: "right", color: "var(--fg)" }}>{p.t}</div>
                 <div className="adm-num" style={{ textAlign: "right", color: "var(--fg-muted)" }}>{p.c}</div>
                 <div className="adm-num" style={{ textAlign: "right", color: rateColor(p.rate), fontWeight: 700 }}>{p.rate.toFixed(1)}%</div>
-                <div style={{ height: 6, background: "var(--bg-sunken)", borderRadius: 3, overflow: "hidden" }}>
-                  <div style={{ width: `${p.rate}%`, height: "100%", background: rateColor(p.rate), borderRadius: 3 }} />
+                <div className="adm-num" style={{ fontSize: 11, color: "var(--fg-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title="ATS DETECTED · EMAIL_SENT · UNCONFIRMED · DRY_RUN · CAPTCHA · failed · in attesa">
+                  <b style={{ color: "hsl(var(--primary))" }}>{p.ats}</b> · {p.email} · <span style={{ color: "#fbbf24" }}>{p.unconf}</span> · {p.dry} · {p.captcha} · <span style={{ color: "#f87171" }}>{p.failed}</span> · {p.wait}
                 </div>
               </div>
             ))}
