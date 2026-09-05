@@ -35,7 +35,7 @@ export default async function AdminDeliveryPage() {
   const [apps14d, apps28d, failedRecent] = await Promise.all([
     prisma.application.findMany({
       where: { createdAt: { gte: since(24 * DAYS) } },
-      select: { createdAt: true, status: true, portal: true, submitConfirmation: true, errorMessage: true },
+      select: { createdAt: true, status: true, portal: true, submitConfirmation: true, errorMessage: true, canaryLog: true },
     }),
     prisma.application.findMany({
       where: { createdAt: { gte: since(24 * DAYS * 2), lt: since(24 * DAYS) } },
@@ -45,7 +45,7 @@ export default async function AdminDeliveryPage() {
       where: { status: "failed", errorMessage: { not: null }, createdAt: { gte: since(24 * 7) } },
       orderBy: { createdAt: "desc" },
       take: 20,
-      select: { createdAt: true, portal: true, errorMessage: true },
+      select: { createdAt: true, portal: true, errorMessage: true, canaryLog: true },
     }),
   ]);
 
@@ -106,19 +106,34 @@ export default async function AdminDeliveryPage() {
   }
   const portalRows = [...portals.entries()].map(([portal, v]) => ({ portal, ...v, rate: v.t > 0 ? (v.c / v.t) * 100 : 0 })).sort((a, b) => b.t - a.t);
 
+  // Motivo reale del fallimento adapter: il worker lo persiste in canaryLog
+  // ({adapterFailure, error}) perché errorMessage viene poi sovrascritto dal
+  // messaggio generico "Submit ... non confermato".
+  const adapterFail = (c: string | null | undefined): { status: string | null; error: string | null } => {
+    if (!c) return { status: null, error: null };
+    try {
+      const j = JSON.parse(c) as { adapterFailure?: string; error?: string; submitHttpStatus?: number | null; bodyTextAfterSubmit?: string };
+      if (j.adapterFailure) return { status: j.adapterFailure, error: j.error ?? null };
+      if (j.submitHttpStatus != null || j.bodyTextAfterSubmit) return { status: `canary_http_${j.submitHttpStatus ?? "none"}`, error: (j.bodyTextAfterSubmit ?? "").slice(0, 200) };
+    } catch { /* not json */ }
+    return { status: null, error: null };
+  };
+
   // Cause non conferma
   const CAUSES: Array<{ label: string; color: string; re: RegExp }> = [
-    { label: "AI temporaneamente non disponibile", color: "#f87171", re: /credit balance|crediti|overload|rate limit|anthropic/i },
-    { label: "Form non trovato / cambiato", color: "#fbbf24", re: /form.*not.*found|no form|selector|apply button|not_found/i },
-    { label: "Campi mancanti / non validi", color: "#60a5fa", re: /required|missing|invalid|validation/i },
-    { label: "Errore HTTP (4xx/5xx)", color: "#a78bfa", re: /\b[45]\d\d\b|http|network|fetch failed|timeout/i },
-    { label: "Captcha / anti-bot", color: "#94a3b8", re: /captcha|bot|cloudflare|challenge/i },
+    { label: "Form non trovato (form_not_found)", color: "#fbbf24", re: /^form_not_found$|form.*not.*found|no form|apply button|non trovat/i },
+    { label: "Campo mancante (missing_field)", color: "#60a5fa", re: /^missing_field$|required|missing|campo/i },
+    { label: "Validazione rifiutata (validation_failed)", color: "#a78bfa", re: /^validation_failed$|invalid|validation|rifiutat/i },
+    { label: "Captcha / anti-bot", color: "#94a3b8", re: /^captcha$|captcha|cloudflare|challenge/i },
+    { label: "AI / crediti", color: "#f87171", re: /credit balance|crediti|overload|rate limit|anthropic/i },
+    { label: "Sconosciuto (unknown_error)", color: "#fb923c", re: /^unknown_error$|timeout|network|fetch failed|\b5\d\d\b/i },
   ];
   const causeCount = new Map<string, number>(CAUSES.map((c) => [c.label, 0]));
   let otherCause = 0;
   for (const a of apps14d) {
     if (isConf(a) || (a.status !== "failed" && !isUnconf(a))) continue;
-    const raw = a.errorMessage ?? "";
+    const af = adapterFail(a.canaryLog);
+    const raw = af.status ? `${af.status} ${af.error ?? ""}` : (a.errorMessage ?? "");
     const hit = CAUSES.find((c) => c.re.test(raw));
     if (hit) causeCount.set(hit.label, (causeCount.get(hit.label) ?? 0) + 1);
     else otherCause++;
@@ -205,7 +220,7 @@ export default async function AdminDeliveryPage() {
                 <div className="adm-num" style={{ textAlign: "right", color: "var(--fg)" }}>{p.t}</div>
                 <div className="adm-num" style={{ textAlign: "right", color: "var(--fg-muted)" }}>{p.c}</div>
                 <div className="adm-num" style={{ textAlign: "right", color: rateColor(p.rate), fontWeight: 700 }}>{p.rate.toFixed(1)}%</div>
-                <div className="adm-num" style={{ fontSize: 11, color: "var(--fg-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title="ATS DETECTED · EMAIL_SENT · UNCONFIRMED · DRY_RUN · CAPTCHA · failed · in attesa">
+                <div className="adm-num" style={{ fontSize: 11, color: "var(--fg-muted)", whiteSpace: "normal", lineHeight: 1.3 }} title="ATS DETECTED · EMAIL_SENT · UNCONFIRMED · DRY_RUN · CAPTCHA · failed · in attesa">
                   <b style={{ color: "hsl(var(--primary))" }}>{p.ats}</b> · {p.email} · <span style={{ color: "#fbbf24" }}>{p.unconf}</span> · {p.dry} · {p.captcha} · <span style={{ color: "#f87171" }}>{p.failed}</span> · {p.wait}
                 </div>
               </div>
@@ -261,14 +276,16 @@ export default async function AdminDeliveryPage() {
           <div className="adm-card-body scroll">
             {failedRecent.length === 0 && <div style={{ padding: "14px 0", fontSize: 12, color: "var(--fg-subtle)" }}>Nessun errore negli ultimi 7 giorni</div>}
             {failedRecent.map((e, i) => {
-              const cls = classify(e.errorMessage ?? "");
+              const af = adapterFail(e.canaryLog);
+              const cls = af.status ? { type: af.status, c: "#f87171" } : classify(e.errorMessage ?? "");
+              const msg = af.error ? `${af.error}` : (e.errorMessage ?? "").split(/\n/)[0];
               return (
-                <div key={i} className="adm-tr" style={{ gridTemplateColumns: "12px 52px 90px 120px 1fr", padding: "6px 0", fontSize: 12 }}>
+                <div key={i} className="adm-tr" style={{ gridTemplateColumns: "12px 52px 90px 120px 1fr", padding: "6px 0", fontSize: 12 }} title={`${e.errorMessage ?? ""}\n\n${af.error ?? ""}`}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: cls.c, boxShadow: `0 0 5px ${cls.c}` }} />
                   <span className="adm-num" style={{ color: "var(--fg-muted)" }}>{e.createdAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</span>
                   <span className="adm-ellipsis" style={{ color: "var(--fg)", textTransform: "capitalize" }}>{e.portal || "—"}</span>
                   <span className="adm-ellipsis" style={{ color: "var(--fg-muted)", fontFamily: "ui-monospace, monospace", fontSize: 11 }}>{cls.type}</span>
-                  <span className="adm-ellipsis" style={{ color: "var(--fg-muted)" }}>{(e.errorMessage ?? "").split(/\n/)[0]}</span>
+                  <span style={{ color: "var(--fg-muted)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{msg}</span>
                 </div>
               );
             })}
