@@ -91,7 +91,7 @@ export default async function AnalyticsPage() {
   return (
     <>
       <AppTopbar title="Analisi" breadcrumb="Lavoro" />
-      <div className="fit-page" style={{ gridTemplateColumns: "repeat(3, minmax(0,1fr))", gridTemplateRows: "auto auto minmax(0,1.15fr) minmax(0,1fr) auto" }}>
+      <div className="fit-page" style={{ gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gridTemplateRows: "auto auto minmax(0,1.2fr) minmax(0,1fr) minmax(0,0.9fr) auto" }}>
         {/* Header */}
         <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 16 }}>
           <div>
@@ -109,8 +109,9 @@ export default async function AnalyticsPage() {
           <Kpi icon="zap" color={C.sent} label="Tempo risparmiato" value={isEmpty ? "0m" : savedLabel} sub="stima 15 min/candidatura" />
         </div>
 
-        {/* Andamento */}
-        <div className="fit-card" style={{ gridColumn: "1 / 3" }}>
+        {/* Andamento + Totali */}
+        <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "minmax(0,2.6fr) minmax(0,1fr)", gap: 14, minHeight: 0 }}>
+        <div className="fit-card">
           <div className="fit-card-head">
             <div className="fit-card-title">Andamento candidature</div>
             <div style={{ display: "flex", gap: 14, fontSize: 11.5, color: "var(--fg-muted)" }}>
@@ -161,10 +162,12 @@ export default async function AnalyticsPage() {
           </div>
         </div>
 
+        </div>
+
         {/* Top aziende */}
         <div className="fit-card">
           <div className="fit-card-head">
-            <div><div className="fit-card-title">Top aziende</div><div className="fit-card-sub">Aziende con più candidature inviate.</div></div>
+            <div><div className="fit-card-title">Top aziende</div><div className="fit-card-sub">Aziende che hanno pubblicato più opportunità rilevanti per te.</div></div>
             <Link href="/applications" className="fit-link">Vedi tutte <Icon name="arrow-right" size={12} /></Link>
           </div>
           <div className="fit-body fit-scroll" style={{ justifyContent: topCompanies.length ? "flex-start" : "center" }}>
@@ -178,6 +181,7 @@ export default async function AnalyticsPage() {
         <div className="fit-card">
           <div className="fit-card-head">
             <div><div className="fit-card-title">Canali di invio</div><div className="fit-card-sub">Da quali fonti provengono le opportunità.</div></div>
+            <Link href="/applications" className="fit-link">Vedi tutte <Icon name="arrow-right" size={12} /></Link>
           </div>
           <div className="fit-body fit-scroll" style={{ justifyContent: channels.length ? "flex-start" : "center" }}>
             {channels.length === 0 ? <Muted>Nessun dato.</Muted> : channels.map((c) => (
@@ -187,21 +191,19 @@ export default async function AnalyticsPage() {
         </div>
 
         {/* Round attivi */}
-        <div className="fit-card">
+        <div className="fit-card" style={{ gridColumn: "1 / -1" }}>
           <div className="fit-card-head">
-            <div><div className="fit-card-title"><Icon name="target" size={14} /> Round attivi</div><div className="fit-card-sub">Candidature in corso per ruolo.</div></div>
+            <div><div className="fit-card-title"><Icon name="target" size={14} /> Round attivi</div><div className="fit-card-sub">Candidature in corso suddivise per ruolo.</div></div>
             <Link href="/applications" className="fit-link">Vedi tutti <Icon name="arrow-right" size={12} /></Link>
           </div>
           <div className="fit-body fit-scroll" style={{ justifyContent: activeSessions.length ? "flex-start" : "center" }}>
             {activeSessions.length === 0 ? <Muted>Nessun round attivo. Avviane uno dalla dashboard.</Muted> : activeSessions.map((s) => {
               const pct = Math.min(100, Math.round((s.sentCount / Math.max(1, s.targetCount)) * 100));
               return (
-                <div key={s.id} style={{ padding: "7px 0", borderBottom: "1px solid var(--border-ds)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 5 }}>
-                    <span className="fit-ellipsis" style={{ fontWeight: 500 }}>{s.title ?? s.label}</span>
-                    <span className="fit-num" style={{ color: "var(--fg-muted)", fontSize: 11.5, whiteSpace: "nowrap" }}>{s.sentCount} / {s.targetCount} · {s.status === "paused" ? "in pausa" : "attivo"}</span>
-                  </div>
+                <div key={s.id} className="fit-row" style={{ gridTemplateColumns: "minmax(160px,0.6fr) 1fr auto", padding: "7px 0" }}>
+                  <span className="fit-ellipsis" style={{ fontWeight: 500 }}>{s.title ?? s.label}</span>
                   <div style={{ height: 4, borderRadius: 999, background: "var(--bg-sunken)", overflow: "hidden" }}><div style={{ width: `${pct}%`, height: "100%", background: s.status === "paused" ? "var(--fg-subtle)" : C.sent }} /></div>
+                  <span className="fit-num mono" style={{ color: "var(--fg-muted)", fontSize: 11.5, whiteSpace: "nowrap" }}>{s.sentCount} / {s.targetCount} · {s.status === "paused" ? "in pausa" : "attivo"}</span>
                 </div>
               );
             })}
@@ -213,7 +215,7 @@ export default async function AnalyticsPage() {
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <div style={{ flexShrink: 0 }}>
               <div className="fit-card-title"><Icon name="globe" size={14} /> Per portale ATS</div>
-              <div className="fit-card-sub">Distribuzione delle candidature per portale.</div>
+              <div className="fit-card-sub">Distribuzione delle candidature inviate per portale.</div>
             </div>
             <div style={{ flex: 1, display: "grid", gridTemplateColumns: `repeat(${Math.max(1, portals.length)}, minmax(0,1fr))`, gap: 10 }}>
               {portals.length === 0 ? <Muted>Nessun dato.</Muted> : portals.map((r) => (
