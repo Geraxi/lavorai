@@ -346,6 +346,47 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
 
       // b) checkbox
       if (type === "checkbox") {
+        // b1) GRUPPO di checkbox con lo stesso name (Greenhouse multi-select:
+        //     es. lista paesi, "in quali sedi puoi lavorare"). Una sola
+        //     domanda con le opzioni — NON N domande obbligatorie separate
+        //     (bug: 30 checkbox "Australia/Belgium/…" → 30 pending questions).
+        //     Trattato come radio: la fill sceglie l'opzione con label uguale.
+        const cname = (el as HTMLInputElement).name;
+        const cgroup = cname
+          ? (Array.from(
+              document.querySelectorAll(`input[type=checkbox][name="${CSS.escape(cname)}"]`),
+            ) as HTMLInputElement[])
+          : [];
+        if (cgroup.length >= 2) {
+          if (seen.has("cbg:" + cname)) continue;
+          seen.add("cbg:" + cname);
+          if (cgroup.some((c) => c.checked)) continue;
+          const creq =
+            cgroup.some((c) => c.required || c.getAttribute("aria-required") === "true") ||
+            label.includes("*");
+          if (!creq) continue;
+          const copts = cgroup
+            .map((c) => {
+              const cid = c.getAttribute("id");
+              let t = cid
+                ? document.querySelector(`label[for="${CSS.escape(cid)}"]`)?.textContent ?? ""
+                : "";
+              if (!t) t = c.closest("label")?.textContent ?? c.value ?? "";
+              return t.replace(/\s+/g, " ").trim();
+            })
+            .filter(Boolean);
+          const ccont = el.closest("fieldset, [class*='field'], [class*='question']");
+          let cq =
+            ccont?.querySelector("legend")?.textContent ??
+            ccont?.querySelector("label")?.textContent ??
+            cname;
+          cq = (cq || cname).replace(/\s+/g, " ").trim();
+          cgroup.forEach((c) => c.setAttribute(tag, String(idx)));
+          out.push({ idx, label: cq, kind: "radio", options: copts });
+          idx++;
+          continue;
+        }
+        // b2) checkbox singola (consenso, dichiarazione)
         if ((el as HTMLInputElement).checked) continue;
         if (!required) continue;
         el.setAttribute(tag, String(idx));

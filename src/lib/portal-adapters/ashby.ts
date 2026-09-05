@@ -1,4 +1,5 @@
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
+import { detectBlockingCaptcha, challengeAppearedAfterSubmit } from "./captcha";
 
 /**
  * Ashby ATS — `jobs.ashbyhq.com/<company>/<uuid>`.
@@ -220,26 +221,16 @@ export const ashbyAdapter: PortalAdapter = {
         await consent.nth(i).check({ timeout: 1500 }).catch(() => void 0);
       }
 
-      // Captcha (Turnstile/hCaptcha/reCAPTCHA): se presente e non risolto NON
-      // fingiamo l'invio — per design non è aggirabile. Segnaliamo così il
-      // worker dice all'utente "completa captcha e invia tu".
-      const hasCaptcha = await page
-        .evaluate(() => {
-          const resp = document.querySelector(
-            'textarea[name="g-recaptcha-response"], #g-recaptcha-response',
-          ) as HTMLTextAreaElement | null;
-          const widget = document.querySelector(
-            '.g-recaptcha, .grecaptcha-badge, iframe[src*="recaptcha"], [class*="hcaptcha"], iframe[src*="hcaptcha"], iframe[src*="turnstile"], [class*="cf-turnstile"]',
-          );
-          return !!widget && (!resp || !resp.value.trim());
-        })
-        .catch(() => false);
-      if (hasCaptcha) {
+      // Captcha: bloccante SOLO se interattivo (vedi ./captcha.ts). Il badge
+      // reCAPTCHA invisibile di Ashby non blocca l'invio.
+      const captcha = await detectBlockingCaptcha(page);
+      console.log(`[ashby] captcha check: ${captcha.kind ?? "none"} → ${captcha.blocking ? "BLOCCANTE" : "ok"} (${captcha.detail})`);
+      if (captcha.blocking) {
         return {
           ok: false,
           status: "captcha",
           error:
-            "Il form Ashby ha un captcha che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.",
+            `Il form Ashby ha un captcha interattivo (${captcha.kind}) che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.`,
         };
       }
 
@@ -350,6 +341,14 @@ export const ashbyAdapter: PortalAdapter = {
           ok: true,
           status: "submitted",
           confirmation: "DETECTED_DOM",
+        };
+      }
+
+      if (await challengeAppearedAfterSubmit(page)) {
+        return {
+          ok: false,
+          status: "captcha",
+          error: "Dopo il click su Invia si è aperta una challenge reCAPTCHA: completa il captcha e invia manualmente (CV e risposte pronti).",
         };
       }
 

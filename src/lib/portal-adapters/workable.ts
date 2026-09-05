@@ -1,4 +1,5 @@
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
+import { detectBlockingCaptcha } from "./captcha";
 
 /*
  * Workable ATS: apply.workable.com/<slug>/j/<id>/apply/
@@ -146,14 +147,11 @@ export const workableAdapter: PortalAdapter = {
         console.warn("[workable] ai-answer failed", err);
       }
 
-      // ----- Captcha? -----
-      const hasCaptcha = await page.evaluate(() => {
-        const resp = document.querySelector('textarea[name="g-recaptcha-response"], #g-recaptcha-response') as HTMLTextAreaElement | null;
-        const widget = document.querySelector('.g-recaptcha, .grecaptcha-badge, iframe[src*="recaptcha"], [class*="hcaptcha"], iframe[src*="hcaptcha"], .cf-turnstile, iframe[src*="turnstile"]');
-        return !!widget && (!resp || !resp.value.trim());
-      }).catch(() => false);
-      if (hasCaptcha) {
-        return { ok: false, status: "captcha", error: "Form Workable con captcha: completa l'invio a mano (CV e risposte pronti)." };
+      // ----- Captcha? (bloccante solo se interattivo, vedi ./captcha.ts) -----
+      const captcha = await detectBlockingCaptcha(page);
+      console.log(`[workable] captcha check: ${captcha.kind ?? "none"} → ${captcha.blocking ? "BLOCCANTE" : "ok"} (${captcha.detail})`);
+      if (captcha.blocking) {
+        return { ok: false, status: "captcha", error: `Form Workable con captcha interattivo (${captcha.kind}): completa l'invio a mano (CV e risposte pronti).` };
       }
 
       if (pendingQuestions.length > 0) {

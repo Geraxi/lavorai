@@ -5,6 +5,7 @@ import type {
   CanaryLog,
 } from "./types";
 import type { Page } from "playwright";
+import { detectBlockingCaptcha, challengeAppearedAfterSubmit } from "./captcha";
 
 /**
  * Canary helper: scatta uno screenshot della page corrente e lo
@@ -426,28 +427,18 @@ export const greenhouseAdapter: PortalAdapter = {
         console.warn("[greenhouse] ai-answer failed", err);
       }
 
-      // reCAPTCHA: alcuni form (es. Monzo) hanno un captcha che blocca il
-      // submit automatico — PER DESIGN, non è aggirabile (né dovrebbe esserlo).
-      // Lo rileviamo: se presente e non risolto, NON fingiamo. Lo segnaliamo
-      // così il worker dice all'utente "tutto pronto, completa tu captcha+invio".
-      const hasCaptcha = await page
-        .evaluate(() => {
-          const resp = document.querySelector(
-            'textarea[name="g-recaptcha-response"], #g-recaptcha-response',
-          ) as HTMLTextAreaElement | null;
-          const widget = document.querySelector(
-            '.g-recaptcha, .grecaptcha-badge, iframe[src*="recaptcha"], [class*="hcaptcha"], iframe[src*="hcaptcha"]',
-          );
-          // captcha presente E non risolto (response vuota)
-          return !!widget && (!resp || !resp.value.trim());
-        })
-        .catch(() => false);
-      if (hasCaptcha) {
+      // Captcha: bloccante SOLO se interattivo (checkbox/challenge/hCaptcha/
+      // Turnstile visibili). Il badge reCAPTCHA invisibile — presente su quasi
+      // tutti i form Greenhouse — NON blocca: il token nasce al click su Invia.
+      // (Prima: badge + textarea vuota = "captcha" → 0 submit in produzione.)
+      const captcha = await detectBlockingCaptcha(page);
+      console.log(`[greenhouse] captcha check: ${captcha.kind ?? "none"} → ${captcha.blocking ? "BLOCCANTE" : "ok"} (${captcha.detail})`);
+      if (captcha.blocking) {
         return {
           ok: false,
           status: "captcha",
           error:
-            "Il form ha un reCAPTCHA che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.",
+            `Il form ha un captcha interattivo (${captcha.kind}) che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.`,
         };
       }
 
@@ -662,6 +653,17 @@ export const greenhouseAdapter: PortalAdapter = {
           ok: true,
           status: "submitted",
           confirmation: "DETECTED_DOM",
+          canary: canaryFull,
+        };
+      }
+
+      // Dopo il click: se si è aperta una challenge reCAPTCHA (immagini) il
+      // captcha ha bloccato davvero → segnaliamo come captcha, non unknown.
+      if (await challengeAppearedAfterSubmit(page)) {
+        return {
+          ok: false,
+          status: "captcha",
+          error: "Dopo il click su Invia si è aperta una challenge reCAPTCHA: completa il captcha e invia manualmente (CV e risposte pronti).",
           canary: canaryFull,
         };
       }
