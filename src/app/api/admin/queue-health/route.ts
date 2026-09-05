@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     openApplications: openWithUrl.length,
     openWithAtsAdapter: openWithAdapter,
     verdict: [
-      env.PORTAL_SUBMIT_ENABLED !== "true" ? "PORTAL_SUBMIT_ENABLED non è 'true' su Vercel: se le candidature vengono processate qui (self-invoke), gli adapter ATS non partono mai." : null,
+      env.PORTAL_SUBMIT_ENABLED === "false" ? "PORTAL_SUBMIT_ENABLED=false su Vercel: gli adapter ATS sono spenti esplicitamente." : null,
       env.PORTAL_SUBMIT_DRY_RUN === "true" ? "PORTAL_SUBMIT_DRY_RUN=true su Vercel: i form vengono compilati ma non inviati." : null,
       !env.REDIS_URL ? "REDIS_URL assente su Vercel: la coda NON va al worker Railway, tutto gira in serverless su Vercel." : null,
       env.REDIS_URL && redis.error ? `REDIS_URL presente ma Redis non risponde (${redis.error}): enqueue fallisce e ripiega su self-invoke.` : null,

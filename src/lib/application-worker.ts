@@ -286,7 +286,11 @@ export async function processApplication(
   //    (a) Portal adapter (Greenhouse/Lever/Workable): submit diretto nel form ATS
   //    (b) Email recruiter (scraped dall'annuncio)
   //    (c) Manual: ready_to_apply con istruzioni
-  const portalSubmitEnabled = process.env.PORTAL_SUBMIT_ENABLED === "true";
+  // Default ON: l'invio via form ATS è il cuore del prodotto. Si spegne
+  // solo con PORTAL_SUBMIT_ENABLED=false esplicito (prima: acceso solo con
+  // "true" → bastava dimenticare la env su Vercel per non avere mai un
+  // submit ATS e finire sempre in email/manual).
+  const portalSubmitEnabled = process.env.PORTAL_SUBMIT_ENABLED !== "false";
   // Passo 1: risoluzione URL reale
   //   - HTTP redirect follow (funziona per short-URL normali)
   //   - Adzuna wrapper? Serve Playwright per estrarre il vero link

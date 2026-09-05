@@ -50,9 +50,16 @@ export function createApplicationsWorker(
   return new Worker<{ applicationId: string }>(APPLICATIONS_QUEUE, processor, {
     connection: connection(),
     concurrency: Number(process.env.WORKER_CONCURRENCY ?? 2),
-    // Lock rinnovato ogni 30s, scade dopo 5min se worker muore
+    // Lock rinnovato ogni 60s, scade dopo 5min se worker muore
     lockDuration: 5 * 60 * 1000,
-    lockRenewTime: 30 * 1000,
+    lockRenewTime: 60 * 1000,
+    // Upstash free tier = 10k comandi/giorno. Con i default BullMQ
+    // (poll bloccante ogni 5s + check stalled ogni 30s) un worker IDLE
+    // consuma ~20k comandi/giorno → "database temporarily rate-limited"
+    // → Vercel non riesce ad accodare e il worker resta muto. Con poll a
+    // 60s e stalled-check a 5min scendiamo sotto ~2k/giorno a vuoto.
+    drainDelay: Number(process.env.WORKER_DRAIN_DELAY_S ?? 60),
+    stalledInterval: 5 * 60 * 1000,
   });
 }
 

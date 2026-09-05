@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
   const dryRun = forceRealSubmit
     ? false
     : process.env.PORTAL_SUBMIT_DRY_RUN === "true";
-  const portalEnabled = process.env.PORTAL_SUBMIT_ENABLED === "true";
+  const portalEnabled = process.env.PORTAL_SUBMIT_ENABLED !== "false";
 
   // Trova la candidatura da testare.
   let appId = body.applicationId?.trim();
