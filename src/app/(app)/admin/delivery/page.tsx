@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, LineChart, ChartLegend, FakeSelect, Donut, compactNumber } from "../_ui";
 import { Send, FileCheck, CheckCircle2, AlertTriangle, Download, Copy } from "lucide-react";
+import { RetryCaptchaButton } from "../_retry-captcha-button";
 
 export const metadata: Metadata = { title: "Admin · Consegna", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -165,6 +166,7 @@ export default async function AdminDeliveryPage() {
           <>
             <FakeSelect label={`Ultimi ${DAYS} giorni`} />
             <span className="adm-pill good"><span className="dot" />Sistema operativo</span>
+            <RetryCaptchaButton />
             <button type="button" className="adm-btn"><Download size={13} />Esporta report</button>
           </>
         }
