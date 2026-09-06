@@ -180,8 +180,14 @@ export const workableAdapter: PortalAdapter = {
         }
       }
       await ensureConsent(page); // ri-render dopo le risposte AI può aver resettato la checkbox
-      let submit = page.getByRole("button", { name: /submit application|invia candidatura|submit|apply|invia|send/i });
+      // Bottone preciso: type=submit con testo Submit/Invia (evita match su
+      // "Import resume" o sui bottoni del banner cookie che sono type=submit).
+      let submit = page.locator('button[type="submit"]').filter({ hasText: /submit|invia|apply|send/i });
+      if ((await submit.count()) === 0) submit = page.getByRole("button", { name: /submit application|invia candidatura|submit|apply|invia|send/i });
       if ((await submit.count()) === 0) submit = page.locator('button[type="submit"]');
+      const submitText = ((await submit.first().textContent().catch(() => "")) ?? "").replace(/\s+/g, " ").trim().slice(0, 60);
+      const submitDisabled = (await submit.first().isDisabled().catch(() => false)) as boolean;
+      console.log(`[workable] submit button: "${submitText}" disabled=${submitDisabled} (match=${await submit.count()})`);
       if ((await submit.count()) === 0) {
         return { ok: false, status: "missing_field", error: "Bottone submit Workable non trovato." };
       }
@@ -234,6 +240,38 @@ export const workableAdapter: PortalAdapter = {
         `[workable] post-submit network: ${postLog.length} POST/PUT — ${postLog.slice(0, 4).map((p) => `${p.status} ${p.url.split("/").slice(2, 5).join("/")}`).join(" | ")}`,
       );
       const bodyText = await page.locator("body").innerText().catch(() => "");
+
+      // Diagnostica post-click (finisce nei log Vercel/Railway): cosa mostra la
+      // pagina, quali campi risultano segnalati. Serve quando non parte nessuna
+      // POST: la validazione client di Workable non usa classi "error".
+      if (postLog.length === 0) {
+        const diag = (await page
+          .evaluate(`(() => {
+            const bad = [];
+            document.querySelectorAll('[aria-invalid="true"], [role="alert"], [data-ui*="error" i], [class*="error" i], [class*="invalid" i], [class*="Error"]').forEach((e) => {
+              const l = e.id ? document.querySelector('label[for="' + e.id + '"]') : null;
+              const t = ((l && l.textContent) || e.getAttribute('aria-label') || e.textContent || e.getAttribute('name') || '').replace(/\\s+/g, ' ').trim().slice(0, 70);
+              if (t) bad.push(t);
+            });
+            const reqEmpty = [];
+            document.querySelectorAll('input, textarea, select').forEach((el) => {
+              const req = el.required || el.getAttribute('aria-required') === 'true';
+              if (!req) return;
+              const t = (el.type || el.tagName).toLowerCase();
+              let empty = false;
+              if (t === 'file') empty = !(el.files && el.files.length);
+              else if (t === 'radio') empty = !document.querySelector('input[type=radio][name="' + el.name + '"]:checked');
+              else if (t === 'checkbox') empty = !el.checked;
+              else empty = !(el.value || '').trim();
+              if (empty) { const l = el.id ? document.querySelector('label[for="' + el.id + '"]') : null; reqEmpty.push((t + ':' + (el.name || el.id || '') + ' ' + ((l && l.textContent) || el.getAttribute('aria-label') || '')).replace(/\\s+/g, ' ').trim().slice(0, 60)); }
+            });
+            const txt = (document.body.innerText || '').replace(/\\s+/g, ' ');
+            const hints = (txt.match(/[^.]{0,60}(required|obbligatori|invalid|non valid|please|must|error|errore)[^.]{0,60}/gi) || []).slice(0, 6);
+            return { bad: [...new Set(bad)].slice(0, 10), reqEmpty: reqEmpty.slice(0, 10), hints, title: document.title, textLen: txt.length, tail: txt.slice(-300) };
+          })()`)
+          .catch((e) => ({ error: String(e) }))) as Record<string, unknown>;
+        console.log(`[workable] post-click diag url=${page.url()} → ${JSON.stringify(diag).slice(0, 1500)}`);
+      }
 
       // Prova HARD: 2xx/3xx su endpoint di applicazione = consegnato.
       if (detectedStatus !== null) {
