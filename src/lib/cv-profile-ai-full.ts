@@ -26,6 +26,20 @@ function client(): Anthropic | null {
   return cached;
 }
 
+/**
+ * Claude a volte sfora i limiti dello schema (skill di 70 caratteri, livello
+ * lingua "C1 (IELTS 7.5, certificato 2022)", endDate discorsiva): prima
+ * scartavamo TUTTO il profilo → utente con profilo vuoto → niente auto-apply.
+ * Qui tronchiamo le stringhe ai massimi dello schema, ricorsivamente.
+ */
+const CLIP: Record<string, number> = { name: 60, level: 20, startDate: 20, endDate: 20, label: 40, role: 120, company: 120, location: 120, degree: 160, school: 160, notes: 500, description: 2000, summary: 1200, title: 120, firstName: 80, lastName: 80, email: 160, phone: 40, city: 120, url: 300 };
+function clipProfileStrings(v: unknown, key = ""): unknown {
+  if (typeof v === "string") { const max = CLIP[key]; return max && v.length > max ? v.slice(0, max).trim() : v; }
+  if (Array.isArray(v)) return v.map((x) => clipProfileStrings(x, key)).filter((x) => x !== undefined);
+  if (v && typeof v === "object") { const o: Record<string, unknown> = {}; for (const [k, val] of Object.entries(v as Record<string, unknown>)) o[k] = clipProfileStrings(val, k); return o; }
+  return v;
+}
+
 function stripCodeFence(text: string): string {
   // Tollerante: fence ovunque + preamboli/code (vedi model-json.ts).
   return extractJsonBlock(stripFences(text));
@@ -113,7 +127,7 @@ export async function extractFullProfile(cvText: string): Promise<CVProfile> {
       .trim();
     const cleaned = stripCodeFence(raw);
     const parsed = parseModelJson(cleaned);
-    const r = CVProfileSchema.safeParse(parsed);
+    const r = CVProfileSchema.safeParse(clipProfileStrings(parsed));
     if (!r.success) {
       console.error("[cv-profile-ai-full] schema mismatch", r.error.issues);
       return { ...EMPTY_PROFILE };
@@ -183,7 +197,7 @@ Riscrivi il profilo per questo job, rispettando le regole ferree. Output in ${in
       .trim();
     const cleaned = stripCodeFence(raw);
     const parsed = parseModelJson(cleaned);
-    const r = CVProfileSchema.safeParse(parsed);
+    const r = CVProfileSchema.safeParse(clipProfileStrings(parsed));
     if (!r.success) {
       console.error("[tailor] schema mismatch, falling back", r.error.issues);
       return input.profile;

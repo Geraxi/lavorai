@@ -29,7 +29,7 @@ export interface GlobeFilters {
 const COLORS = { open: "#22c55e", sent: "#3b82f6", ready: "#f59e0b" } as const;
 
 type Pt = { lat: number; lng: number; color: string; size: number; label: string; kind: keyof typeof COLORS; name: string; n: number };
-type Lbl = { lat: number; lng: number; text: string; size: number; color: string };
+type Ring = { lat: number; lng: number; color: () => string };
 
 export function DashboardGlobe({ markers, filters, height = 560 }: { markers: CityMarker[]; filters: GlobeFilters; height?: number }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -61,7 +61,7 @@ export function DashboardGlobe({ markers, filters, height = 560 }: { markers: Ci
     return () => c.removeEventListener("start", stop);
   }, [width]);
 
-  const { points, labels } = useMemo(() => {
+  const { points, rings } = useMemo(() => {
     const points: Pt[] = [];
     const maxOpen = Math.max(1, ...markers.map((m) => m.open));
     for (const m of markers) {
@@ -69,12 +69,10 @@ export function DashboardGlobe({ markers, filters, height = 560 }: { markers: Ci
       if (filters.sent && m.sent > 0) points.push({ lat: m.lat + 0.9, lng: m.lng + 0.9, color: COLORS.sent, size: 0.45, label: `${m.name} · ${m.sent} candidature inviate`, kind: "sent", name: m.name, n: m.sent });
       if (filters.ready && m.ready > 0) points.push({ lat: m.lat - 0.9, lng: m.lng - 0.9, color: COLORS.ready, size: 0.42, label: `${m.name} · ${m.ready} posizioni pronte`, kind: "ready", name: m.name, n: m.ready });
     }
-    const labels: Lbl[] = [...markers]
-      .filter((m) => (filters.open && m.open > 0) || (filters.sent && m.sent > 0) || (filters.ready && m.ready > 0))
-      .sort((a, b) => b.open + b.sent * 3 - (a.open + a.sent * 3))
-      .slice(0, 14)
-      .map((m) => ({ lat: m.lat, lng: m.lng, text: `${m.name} · ${m.open > 0 ? `${m.open} posizioni` : m.sent > 0 ? `${m.sent} inviate` : `${m.ready} pronte`}`, size: 1.05, color: "rgba(255,255,255,0.92)" }));
-    return { points, labels };
+    const rings: Ring[] = markers
+      .filter((m) => (filters.sent && m.sent > 0) || (filters.ready && m.ready > 0))
+      .map((m) => ({ lat: m.lat, lng: m.lng, color: () => (m.sent > 0 && filters.sent ? "rgba(59,130,246,0.55)" : "rgba(245,158,11,0.5)") }));
+    return { points, rings };
   }, [markers, filters]);
 
   return (
@@ -94,21 +92,19 @@ export function DashboardGlobe({ markers, filters, height = 560 }: { markers: Ci
           pointLat={(d: object) => (d as Pt).lat}
           pointLng={(d: object) => (d as Pt).lng}
           pointColor={(d: object) => (d as Pt).color}
-          pointAltitude={(d: object) => 0.02 + (d as Pt).size * 0.05}
-          pointRadius={(d: object) => (d as Pt).size * 0.55}
+          pointAltitude={0.006}
+          pointRadius={(d: object) => 0.35 + (d as Pt).size * 0.75}
           pointLabel={(d: object) => {
             const p = d as Pt;
             return `<div style="background:#0b1220;border:1px solid ${p.color}66;border-radius:10px;padding:8px 12px;font-family:system-ui;color:#e5e7eb;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.5)"><div style="font-weight:700;color:#fff">${p.name}</div><div style="color:${p.color}">${p.n} ${p.kind === "open" ? "posizioni aperte" : p.kind === "sent" ? "candidature inviate" : "posizioni pronte"}</div></div>`;
           }}
-          labelsData={labels}
-          labelLat={(d: object) => (d as Lbl).lat}
-          labelLng={(d: object) => (d as Lbl).lng}
-          labelText={(d: object) => (d as Lbl).text}
-          labelSize={(d: object) => (d as Lbl).size}
-          labelColor={(d: object) => (d as Lbl).color}
-          labelDotRadius={0.25}
-          labelAltitude={0.02}
-          labelResolution={2}
+          ringsData={rings}
+          ringLat={(d: object) => (d as Ring).lat}
+          ringLng={(d: object) => (d as Ring).lng}
+          ringColor={(d: object) => (d as Ring).color}
+          ringMaxRadius={2.6}
+          ringPropagationSpeed={1.2}
+          ringRepeatPeriod={1400}
         />
       )}
     </div>

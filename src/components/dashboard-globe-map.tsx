@@ -48,9 +48,7 @@ export function DashboardGlobeMap({ markers, height }: { markers: CityMarker[]; 
             {l.label}
           </button>
         ))}
-      </div>
-      <div style={{ position: "absolute", left: 14, bottom: 10, fontSize: 11, color: "var(--fg-subtle)", pointerEvents: "none" }}>
-        Trascina per ruotare · scroll per zoom · passa sui pin per il dettaglio
+        <div style={{ fontSize: 10.5, color: "var(--fg-subtle)", marginTop: 6, lineHeight: 1.4 }}>Trascina per ruotare · scroll per zoom · passa sui pin per il dettaglio</div>
       </div>
     </div>
   );

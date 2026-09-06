@@ -38,7 +38,7 @@ export default async function DashboardPage() {
   const since30 = new Date(now.getTime() - 30 * 86400_000);
   const delivered = { userId: user.id, status: "success", submittedVia: { not: null } } as const;
 
-  const [applications, onboarding, openJobs, sentApps, readyApps, interviews, sentMonth, readyCount] = await Promise.all([
+  const [applications, onboarding, openJobs, sentApps, readyApps, interviews, sentMonth, readyCount, openCount] = await Promise.all([
     getUIApplications(user.id),
     getOnboardingState(user.id),
     prisma.job.findMany({ where: { closedAt: null, cachedAt: { gte: since30 } }, select: { location: true, remote: true }, take: 6000 }),
@@ -52,6 +52,7 @@ export default async function DashboardPage() {
     }),
     prisma.application.count({ where: { ...delivered, createdAt: { gte: monthStart } } }),
     prisma.application.count({ where: { userId: user.id, status: { in: ["ready_to_apply", "awaiting_consent"] } } }),
+    prisma.job.count({ where: { closedAt: null, cachedAt: { gte: since30 } } }),
   ]);
 
   // Aggregazione per città (pin del globo)
@@ -86,7 +87,7 @@ export default async function DashboardPage() {
             <h1 className="fit-h1">{t("greeting", { name: greetingName })} 👋</h1>
             <p className="fit-hero-sub" style={{ lineHeight: 1.5 }}>Il mondo è pieno di opportunità. Tu concentrati sul percorso, noi ti aiutiamo a trovarle.</p>
           </div>
-          <KpiCard href="/jobs" icon="map-pin" color="#22c55e" n={openJobs.length} label="Posizioni aperte" sub="nel mondo" />
+          <KpiCard href="/jobs" icon="map-pin" color="#22c55e" n={openCount} label="Posizioni aperte" sub="nel mondo" />
           <KpiCard href="/applications" icon="send" color="#3b82f6" n={sentMonth} label="Candidature inviate" sub="questo mese" />
           <KpiCard href="/applications" icon="star" color="#f59e0b" n={readyCount} label="Posizioni pronte" sub="da approvare o inviare" />
           <KpiCard href="/interview" icon="user" color="#a78bfa" n={interviews.length} label="Colloqui in programma" sub="prossimi 14 giorni" />
@@ -100,8 +101,7 @@ export default async function DashboardPage() {
         {/* Colonna destra */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
           <div className="fit-card" style={{ padding: 14, gap: 10 }}>
-            <div style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6 }}><Icon name="zap" size={13} /> Auto-apply</div>
-            <AutoApplyToggle />
+            <div style={{ fontSize: 12.5, color: "var(--fg-muted)", lineHeight: 1.45 }}>Avvia un nuovo round su un ruolo specifico: l'AI cerca, prepara il CV e candida.</div>
             <NewSearchButton />
           </div>
           {!allDone ? (
