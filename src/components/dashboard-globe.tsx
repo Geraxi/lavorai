@@ -5,8 +5,7 @@
  *
  * LIVELLO VISIVO: Terra realistica (blue marble + rilievo + strato nuvole in
  * lenta deriva), luce ambientale piena + luce direzionale in alto a destra,
- * atmosfera blu. Persona sdraiata = elemento HTML ancorato a lat/lng, scalata
- * col raggio apparente della Terra. Drag = ruota, scroll = zoom limitato,
+ * atmosfera blu. Drag = ruota, scroll = zoom limitato,
  * idle = rotazione lentissima che riprende dopo 8s.
  * LIVELLO DATI (HTML reale): pin a 4 stati per città con cluster angolare,
  * tooltip in hover, max 3 job card compatte di default + quella selezionata,
@@ -24,8 +23,6 @@ export const PIN_LABELS: Record<PinKind, string> = { open: "Opportunità", sent:
 export type GlobeFilter = "all" | PinKind;
 
 const KIND_PRIORITY: PinKind[] = ["sent", "saved", "desired", "open"];
-/** Punto in cui è ancorata la persona sdraiata (Atlantico, tra Americhe e Africa). */
-const PERSON = { lat: 6, lng: -26 };
 
 export function markerKind(m: CityMarker, filter: GlobeFilter): PinKind | null {
   if (filter !== "all") return m.counts[filter] > 0 ? filter : null;
@@ -84,14 +81,13 @@ export function buildPins(markers: CityMarker[], filter: GlobeFilter, mergeDeg =
   return pins;
 }
 
-/** Card visibili di default: 3 pin rilevanti, distanti tra loro e lontani dalla persona. */
+/** Card visibili di default: 3 pin rilevanti e distanti tra loro. */
 export function pickFeatured(pins: GlobePin[], visible: (p: GlobePin) => boolean, screen?: (p: GlobePin) => { x: number; y: number }): string[] {
   const score = (p: GlobePin) => p.cities.reduce((s, c) => s + c.counts.sent * 100 + c.counts.saved * 60 + c.counts.desired * 40 + (c.jobs[0]?.match ?? 0), 0) + Math.min(p.total, 20);
   const out: GlobePin[] = [];
   for (const p of [...pins].sort((a, b) => score(b) - score(a))) {
     if (out.length >= 3) break;
     if (!p.job || !visible(p)) continue;
-    if (angularDistance(p.lat, p.lng, PERSON.lat, PERSON.lng) < 42) continue;
     if (out.some((o) => angularDistance(o.lat, o.lng, p.lat, p.lng) < 20)) continue;
     // Le card sono larghe ~270px: due pin vicini sullo schermo si coprirebbero.
     if (screen && out.some((o) => { const a = screen(o), b = screen(p); return Math.abs(a.x - b.x) < 600 && Math.abs(a.y - b.y) < 200; })) continue;
@@ -160,7 +156,6 @@ export function DashboardGlobe({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
-  const personElRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [view, setView] = useState(0); // incrementa a fine interazione → ricalcolo card in vista
   const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -176,7 +171,7 @@ export function DashboardGlobe({
     return () => ro.disconnect();
   }, []);
 
-  // Setup scena: luci, nuvole, controlli, persona, posizionamento card.
+  // Setup scena: luci, nuvole, controlli, posizionamento card.
   useEffect(() => {
     const g = globeRef.current;
     if (!g || !height) return;
@@ -214,13 +209,8 @@ export function DashboardGlobe({
     c.addEventListener("start", stop);
     c.addEventListener("end", end);
 
-    const cam = g.camera() as { position: { length: () => number }; fov?: number };
-    const radiusPx = () => { const fov = ((cam.fov ?? 50) * Math.PI) / 180; return (100 / cam.position.length()) * (height / 2) / Math.tan(fov / 2); };
     const root = ref.current;
     const tick = () => {
-      // Persona ≈ 42% del raggio in larghezza (≈ 40% del diametro in lunghezza).
-      const el = personElRef.current;
-      if (el) el.style.width = `${Math.max(48, Math.min(360, radiusPx() * 0.42))}px`;
       // Card verso l'esterno del globo, ma mai fuori dall'hero.
       if (!root) return;
       const rb = root.getBoundingClientRect();
@@ -281,21 +271,13 @@ export function DashboardGlobe({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pins, view, width]);
 
-  type Item = { type: "person"; lat: number; lng: number } | { type: "pin"; lat: number; lng: number; pin: GlobePin; card: boolean; selected: boolean };
+  type Item = { type: "pin"; lat: number; lng: number; pin: GlobePin; card: boolean; selected: boolean };
   const items = useMemo<Item[]>(() => [
-    { type: "person", ...PERSON },
     ...pins.map((p): Item => { const selected = p.key === selectedKey; return { type: "pin", lat: p.lat, lng: p.lng, pin: p, selected, card: selected || (selectedKey == null && featured.includes(p.key)) }; }),
   ], [pins, featured, selectedKey]);
 
   const makeEl = (d: object) => {
     const item = d as Item;
-    if (item.type === "person") {
-      const el = document.createElement("div");
-      el.className = "dg-person";
-      el.innerHTML = '<img src="/hero-person.png" alt="" draggable="false" />';
-      personElRef.current = el;
-      return el;
-    }
     const { pin: p, card, selected } = item;
     const color = PIN_COLORS[p.kind];
     const el = document.createElement("div");
@@ -341,7 +323,7 @@ export function DashboardGlobe({
           htmlElementsData={items}
           htmlLat={(d: object) => (d as Item).lat}
           htmlLng={(d: object) => (d as Item).lng}
-          htmlAltitude={(d: object) => ((d as Item).type === "person" ? 0.02 : 0.012)}
+          htmlAltitude={() => 0.012}
           htmlElement={makeEl}
           htmlElementVisibilityModifier={(el: HTMLElement, isVisible: boolean) => {
             el.style.opacity = isVisible ? "1" : "0";
