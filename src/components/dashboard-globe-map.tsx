@@ -15,7 +15,7 @@ import { PIN_COLORS, PIN_LABELS, buildPins, JobCard, type GlobeFilter, type Glob
 
 const DashboardGlobe = dynamic(() => import("./dashboard-globe").then((m) => m.DashboardGlobe), {
   ssr: false,
-  loading: () => <div className="dg-fallback"><div className="dg-fallback-earth" /></div>,
+  loading: () => <div className="dg-fallback"><div className="dg-fallback-earth" /><span>Carico il mondo…</span></div>,
 });
 
 const FILTERS: Array<{ key: GlobeFilter; label: string }> = [
@@ -37,7 +37,7 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [sheet, setSheet] = useState<GlobePin | null>(null);
 
-  const mobilePins = useMemo(() => buildPins(markers, filter, 360, 18).filter((p) => p.job).slice(0, 12), [markers, filter]);
+  const mobilePins = useMemo(() => buildPins(markers, filter, 3).filter((p) => p.job).slice(0, 12), [markers, filter]);
   const count = (k: GlobeFilter) => (k === "all" ? stats.counts.open + stats.counts.sent + stats.counts.desired + stats.counts.saved : stats.counts[k]);
   const sheetJobs = sheet ? sheet.cities.flatMap((c) => c.jobs).filter((j) => filter === "all" || j.kind === filter) : [];
 
@@ -70,7 +70,7 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
           <span key={l.key} className="dg-legend-row"><i style={{ background: PIN_COLORS[l.key], boxShadow: `0 0 6px ${PIN_COLORS[l.key]}` }} />{l.label}</span>
         ))}
       </div>
-      <div className="dg-hint" aria-hidden="true">Clicca un pin · passa sopra per il dettaglio</div>
+      <div className="dg-hint" aria-hidden="true">Trascina per ruotare · scroll per zoom · clicca un pin</div>
 
       {markers.length === 0 && (
         <div className="dg-empty">
