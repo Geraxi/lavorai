@@ -12,6 +12,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { CityMarker, GlobeStats, PinKind } from "@/lib/dashboard-globe-data";
 import { PIN_COLORS, PIN_LABELS, buildPins, JobCard, type GlobeFilter, type GlobePin } from "./dashboard-globe";
+import { useDashboardFocus } from "./dashboard-focus";
+import { regionAltitude } from "@/lib/city-centroids";
 
 const DashboardGlobe = dynamic(() => import("./dashboard-globe").then((m) => m.DashboardGlobe), {
   ssr: false,
@@ -36,6 +38,8 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
   const [filter, setFilter] = useState<GlobeFilter>("all");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [sheet, setSheet] = useState<GlobePin | null>(null);
+  const { region, setRegionKey } = useDashboardFocus();
+  const focus = region ? { key: region.key, lat: region.lat, lng: region.lng, altitude: regionAltitude(region.radius) } : null;
 
   const mobilePins = useMemo(() => buildPins(markers, filter, 3).filter((p) => p.job).slice(0, 12), [markers, filter]);
   const count = (k: GlobeFilter) => (k === "all" ? stats.counts.open + stats.counts.sent + stats.counts.desired + stats.counts.saved : stats.counts[k]);
@@ -44,7 +48,7 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
   return (
     <section className="dg-hero" aria-label="Mappa globale delle opportunità">
       <div className="dg-stage">
-        <DashboardGlobe markers={markers} filter={filter} selectedKey={selectedKey} onSelect={(k) => { setSelectedKey(k); setSheet(null); }} onMore={(p) => setSheet(p)} />
+        <DashboardGlobe markers={markers} filter={filter} selectedKey={selectedKey} onSelect={(k) => { setSelectedKey(k); setSheet(null); }} onMore={(p) => setSheet(p)} focus={focus} />
       </div>
 
       {greeting && <div className="dg-greeting">{greeting}</div>}
@@ -63,6 +67,7 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
         <div className="dg-status-title"><span className="dg-live" /> LavorAI sta cercando per te</div>
         <div className="dg-status-line"><b>{stats.analyzed.toLocaleString("it-IT")}</b> analizzate · <b>{stats.compatible.toLocaleString("it-IT")}</b> compatibili · <b>{stats.newOpportunities.toLocaleString("it-IT")}</b> nuove</div>
         <div className="dg-status-searching">Ricerca in corso<span className="dg-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></div>
+        {region && <button type="button" className="dg-zone" onClick={() => setRegionKey(null)}>Zona: <b>{region.name}</b> <span aria-hidden="true">×</span></button>}
       </div>
 
       <div className="dg-legend" aria-label="Legenda">

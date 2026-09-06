@@ -145,14 +145,18 @@ function jobCardHtml(pin: GlobePin, selected: boolean): string {
   </div>`;
 }
 
+export interface GlobeFocus { key: string; lat: number; lng: number; altitude: number }
+
 export function DashboardGlobe({
-  markers, filter, selectedKey, onSelect, onMore,
+  markers, filter, selectedKey, onSelect, onMore, focus,
 }: {
   markers: CityMarker[];
   filter: GlobeFilter;
   selectedKey: string | null;
   onSelect: (key: string | null) => void;
   onMore: (pin: GlobePin) => void;
+  /** Zona a fuoco (regione/paese/area): il globo ci zooma sopra. */
+  focus?: GlobeFocus | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
@@ -184,7 +188,8 @@ export function DashboardGlobe({
     // Il globo riempie l'hero: raggio ≈ 46% dell'altezza; zoom tra 42% e 52%.
     const portrait = width < height;
     const alt = portrait ? Math.min(3.2, 1.33 * (height / width) * 1.15) : 1.33;
-    c.minDistance = portrait ? 100 * (1 + alt) : 218;
+    // Zoom manuale fino al livello città (min 128) e mai oltre la vista intera.
+    c.minDistance = 128;
     c.maxDistance = portrait ? 100 * (1 + alt) + 60 : 260;
     g.pointOfView({ lat: 18, lng: -4, altitude: alt }, 0);
 
@@ -241,6 +246,20 @@ export function DashboardGlobe({
     };
   }, [width, height, reducedMotion]);
 
+  // Zoom animato sulla zona scelta dal pannello regioni; reset = vista intera.
+  const defaultPov = useRef({ lat: 18, lng: -4, altitude: 1.33 });
+  useEffect(() => {
+    const g = globeRef.current;
+    if (!g || !height) return;
+    const c = g.controls();
+    c.autoRotate = false;
+    if (focus) g.pointOfView({ lat: focus.lat, lng: focus.lng, altitude: focus.altitude }, 900);
+    else { g.pointOfView(defaultPov.current, 900); if (!reducedMotion) setTimeout(() => { c.autoRotate = true; }, 1000); }
+    const t = setTimeout(() => setView((v) => v + 1), 950);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.key, height]);
+
   // Cluster: ~30px alla scala attuale.
   const pins = useMemo(() => {
     const g = globeRef.current;
@@ -249,7 +268,7 @@ export function DashboardGlobe({
       const cam = g.camera() as { position: { length: () => number }; fov?: number };
       const fov = ((cam.fov ?? 50) * Math.PI) / 180;
       const r = (100 / cam.position.length()) * (height / 2) / Math.tan(fov / 2);
-      mergeDeg = Math.max(2, Math.min(8, 30 / ((r * Math.PI) / 180)));
+      mergeDeg = Math.max(0.25, Math.min(8, 30 / ((r * Math.PI) / 180)));
     }
     return buildPins(markers, filter, mergeDeg);
     // eslint-disable-next-line react-hooks/exhaustive-deps

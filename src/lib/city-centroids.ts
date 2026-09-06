@@ -29,11 +29,34 @@ export const CITIES: CityInfo[] = [
   C("Firenze", 43.77, 11.25, "IT", "florence"),
   C("Napoli", 40.85, 14.27, "IT", "naples"),
   C("Genova", 44.41, 8.93, "IT", "genoa"),
-  C("Venezia", 45.44, 12.33, "IT", "venice", "padova", "padua", "treviso"),
+  C("Venezia", 45.44, 12.33, "IT", "venice", "mestre"),
   C("Verona", 45.44, 10.99, "IT"),
   C("Bari", 41.12, 16.87, "IT"),
-  C("Palermo", 38.12, 13.36, "IT", "catania"),
-  C("Trento", 46.07, 11.12, "IT", "bolzano"),
+  C("Palermo", 38.12, 13.36, "IT"),
+  C("Catania", 37.5, 15.09, "IT"),
+  C("Trento", 46.07, 11.12, "IT"),
+  C("Bolzano", 46.5, 11.35, "IT", "bozen", "vipiteno"),
+  C("Bergamo", 45.7, 9.67, "IT"),
+  C("Brescia", 45.54, 10.22, "IT"),
+  C("Monza", 45.58, 9.27, "IT"),
+  C("Como", 45.81, 9.09, "IT", "varese", "lecco"),
+  C("Parma", 44.8, 10.33, "IT", "reggio emilia"),
+  C("Modena", 44.65, 10.93, "IT"),
+  C("Padova", 45.41, 11.88, "IT", "padua"),
+  C("Treviso", 45.67, 12.24, "IT"),
+  C("Trieste", 45.65, 13.78, "IT", "udine"),
+  C("Pisa", 43.72, 10.4, "IT", "livorno", "lucca"),
+  C("Perugia", 43.11, 12.39, "IT", "terni"),
+  C("Ancona", 43.62, 13.52, "IT", "pesaro"),
+  C("L'Aquila", 42.35, 13.4, "IT", "l aquila", "pescara", "chieti"),
+  C("Campobasso", 41.56, 14.66, "IT", "isernia"),
+  C("Salerno", 40.68, 14.77, "IT", "caserta"),
+  C("Lecce", 40.35, 18.17, "IT", "brindisi", "taranto"),
+  C("Potenza", 40.64, 15.8, "IT"),
+  C("Matera", 40.67, 16.6, "IT"),
+  C("Catanzaro", 38.91, 16.59, "IT", "cosenza", "reggio calabria"),
+  C("Cagliari", 39.22, 9.12, "IT", "sassari"),
+  C("Aosta", 45.74, 7.32, "IT"),
   C("Londra", 51.51, -0.13, "GB", "london"),
   C("Manchester", 53.48, -2.24, "GB"),
   C("Edimburgo", 55.95, -3.19, "GB", "edinburgh"),
@@ -101,6 +124,51 @@ export const CITIES: CityInfo[] = [
   C("Città del Capo", -33.92, 18.42, "ZA", "cape town", "johannesburg"),
 ];
 
+/** Regioni italiane: centroide + raggio (gradi) per lo zoom e l'appartenenza dei pin. */
+export interface RegionInfo { key: string; name: string; lat: number; lng: number; radius: number; aliases: string[]; group: "Italia" | "Paesi" | "Aree" }
+const R = (key: string, name: string, lat: number, lng: number, radius: number, group: RegionInfo["group"] = "Italia", ...aliases: string[]): RegionInfo => ({ key, name, lat, lng, radius, group, aliases: [name.toLowerCase(), ...aliases.map((a) => a.toLowerCase())] });
+export const REGIONS: RegionInfo[] = [
+  R("lombardia", "Lombardia", 45.62, 9.77, 1.3, "Italia", "lombardy"),
+  R("lazio", "Lazio", 41.98, 12.77, 1.2),
+  R("piemonte", "Piemonte", 45.06, 7.92, 1.3, "Italia", "piedmont"),
+  R("veneto", "Veneto", 45.65, 11.85, 1.2),
+  R("emilia-romagna", "Emilia-Romagna", 44.53, 11.04, 1.4, "Italia", "emilia romagna", "emilia"),
+  R("toscana", "Toscana", 43.45, 11.1, 1.2, "Italia", "tuscany"),
+  R("liguria", "Liguria", 44.3, 8.8, 0.9),
+  R("campania", "Campania", 40.86, 14.85, 1.1),
+  R("puglia", "Puglia", 40.9, 17.0, 1.6, "Italia", "apulia"),
+  R("sicilia", "Sicilia", 37.6, 14.0, 1.7, "Italia", "sicily"),
+  R("sardegna", "Sardegna", 40.05, 9.05, 1.6, "Italia", "sardinia"),
+  R("trentino-alto-adige", "Trentino-Alto Adige", 46.35, 11.3, 0.9, "Italia", "trentino", "alto adige", "südtirol", "sudtirol", "south tyrol"),
+  R("friuli-venezia-giulia", "Friuli-Venezia Giulia", 46.05, 13.1, 0.9, "Italia", "friuli"),
+  R("marche", "Marche", 43.35, 13.2, 0.9),
+  R("umbria", "Umbria", 42.95, 12.5, 0.8),
+  R("abruzzo", "Abruzzo", 42.25, 13.85, 0.9),
+  R("molise", "Molise", 41.65, 14.65, 0.6),
+  R("basilicata", "Basilicata", 40.5, 16.1, 0.9),
+  R("calabria", "Calabria", 39.0, 16.5, 1.2),
+  R("valle-d-aosta", "Valle d'Aosta", 45.74, 7.4, 0.5, "Italia", "valle d aosta", "aosta valley"),
+  R("italia", "Italia", 42.5, 12.5, 6.5, "Paesi"),
+  R("regno-unito", "Regno Unito", 53.5, -2.5, 5, "Paesi"),
+  R("germania", "Germania", 51.1, 10.4, 5, "Paesi"),
+  R("francia", "Francia", 46.6, 2.4, 5, "Paesi"),
+  R("spagna", "Spagna", 40.3, -3.7, 5, "Paesi"),
+  R("svizzera", "Svizzera", 46.8, 8.2, 2.2, "Paesi"),
+  R("paesi-bassi", "Paesi Bassi", 52.2, 5.3, 2, "Paesi"),
+  R("stati-uniti", "Stati Uniti", 39.5, -98.4, 22, "Paesi"),
+  R("europa", "Europa", 50, 10, 24, "Aree"),
+  R("nord-america", "Nord America", 42, -95, 32, "Aree"),
+  R("america-latina", "America Latina", -12, -60, 34, "Aree"),
+  R("medio-oriente", "Medio Oriente", 28, 45, 16, "Aree"),
+  R("asia", "Asia", 30, 100, 40, "Aree"),
+  R("oceania", "Oceania", -28, 140, 24, "Aree"),
+  R("africa", "Africa", 2, 20, 34, "Aree"),
+];
+/** Altitudine camera (react-globe.gl) per inquadrare una regione di dato raggio. */
+export function regionAltitude(radiusDeg: number): number {
+  return Math.max(0.28, Math.min(2.2, radiusDeg * 0.075));
+}
+
 const COUNTRY_ALIASES: Record<string, string> = {
   italia: "IT", italy: "IT", "united kingdom": "GB", uk: "GB", england: "GB", "regno unito": "GB",
   germany: "DE", germania: "DE", deutschland: "DE", france: "FR", francia: "FR", spain: "ES", spagna: "ES", españa: "ES",
@@ -127,6 +195,11 @@ export function matchCity(location: string | null | undefined): { key: string; n
     if (l.includes(` ${alias}`) || l.includes(`${alias},`) || l.includes(` ${alias} `)) {
       return { key: c.name, name: c.name, lat: c.lat, lng: c.lng, cc: c.cc };
     }
+  }
+  // Solo regione ("Basilicata, Italia", "Remote - Lombardia") → centroide regionale
+  for (const r of REGIONS) {
+    if (r.group !== "Italia") continue;
+    if (r.aliases.some((a) => l.includes(` ${a} `) || l.includes(` ${a},`))) return { key: `reg:${r.key}`, name: r.name, lat: r.lat, lng: r.lng, cc: "IT" };
   }
   for (const [alias, cc] of Object.entries(COUNTRY_ALIASES)) {
     if (l.includes(` ${alias} `) || l.includes(` ${alias},`)) {

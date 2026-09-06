@@ -12,6 +12,8 @@ import { PostLoginCheckout } from "@/components/post-login-checkout";
 import { AutoApplyToggle } from "@/components/auto-apply-toggle";
 import { NewSearchButton } from "@/components/new-search-button";
 import { DashboardGlobeMap } from "@/components/dashboard-globe-map";
+import { DashboardFocusProvider } from "@/components/dashboard-focus";
+import { DashboardRegionPanel } from "@/components/dashboard-region-panel";
 import { getDashboardGlobeData, type GlobeJob } from "@/lib/dashboard-globe-data";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
@@ -76,6 +78,7 @@ export default async function DashboardPage() {
       <DashboardLiveRefresh />
       <AppTopbar title={t("title")} actions={<><ThemeToggle /><AutoApplyToggle /><NewSearchButton /></>} />
 
+      <DashboardFocusProvider>
       <div className="fit-page dg-page">
         <DashboardGlobeMap markers={globe.markers} stats={globe.stats} greeting={greeting} />
 
@@ -86,6 +89,8 @@ export default async function DashboardPage() {
             <Link role="listitem" href="/interview" className="dg-sum"><span className="fit-num">{interviews.length}</span><small>Colloqui</small></Link>
             <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{offersCount}</span><small>Offerte</small></Link>
           </div>
+
+          <DashboardRegionPanel markers={globe.markers} />
 
           {!allDone && <OnboardingChecklist state={onboarding} />}
 
@@ -146,6 +151,7 @@ export default async function DashboardPage() {
           </div>
         </aside>
       </div>
+      </DashboardFocusProvider>
     </>
   );
 }
