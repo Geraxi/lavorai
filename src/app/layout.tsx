@@ -10,6 +10,7 @@ import { TrackPageView } from "@/components/track-page-view";
 import { TrackReferral } from "@/components/track-referral";
 import { TrackAttribution } from "@/components/track-attribution";
 import { TrackingPixels } from "@/components/tracking-pixels";
+import { Analytics } from "@vercel/analytics/next";
 import { assertEnvOrCrash } from "@/lib/env";
 import "./globals.css";
 
@@ -40,6 +41,8 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  // Google Search Console: NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION su Vercel.
+  verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } : undefined,
   title: {
     // Title ottimizzato per keyword ad ALTA INTENT commerciale (chi cerca
     // ATTIVAMENTE un tool di auto-apply) invece del generico "ricerca lavoro"
@@ -121,6 +124,7 @@ export default async function RootLayout({
           {/* Meta Pixel + Google Ads + GA4 — solo se ENV NEXT_PUBLIC_*
               impostate + consent GDPR accettato. Vedi tracking-pixels.tsx. */}
           <TrackingPixels />
+          <Analytics />
         </NextIntlClientProvider>
       </body>
     </html>

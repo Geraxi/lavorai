@@ -47,6 +47,26 @@ export async function POST(request: NextRequest) {
 
   try {
     const s = stripe();
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+    // Guardia anti-doppio abbonamento: se il customer ha già una subscription
+    // viva (active/trialing/past_due), NON apriamo un secondo checkout (è
+    // successo: stesso utente addebitato due volte). Lo mandiamo al portale
+    // Stripe, dove può cambiare piano o aggiornare la carta.
+    if (user.stripeCustomerId) {
+      const existing = await s.subscriptions.list({ customer: user.stripeCustomerId, status: "all", limit: 10 });
+      const live = existing.data.find((sub) => ["active", "trialing", "past_due", "unpaid"].includes(sub.status));
+      if (live) {
+        const portal = await s.billingPortal.sessions.create({ customer: user.stripeCustomerId, return_url: `${siteUrl}/settings` });
+        return NextResponse.json({
+          url: portal.url,
+          alreadySubscribed: true,
+          message: live.status === "past_due" || live.status === "unpaid"
+            ? "Hai già un abbonamento con un pagamento in sospeso: aggiorna la carta dal portale."
+            : "Hai già un abbonamento attivo: gestiscilo dal portale.",
+        });
+      }
+    }
 
     // Ottieni (o crea) customer Stripe
     let customerId = user.stripeCustomerId;
@@ -62,8 +82,6 @@ export async function POST(request: NextRequest) {
         data: { stripeCustomerId: customerId },
       });
     }
-
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
     const session = await s.checkout.sessions.create({
       customer: customerId,

@@ -27,6 +27,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
+    "@vercel/analytics": "^2.0.1",
     "@vercel/blob": "^2.3.3",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.75.2",

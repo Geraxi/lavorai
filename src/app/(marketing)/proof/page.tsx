@@ -3,7 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 
 export const metadata: Metadata = {
-  title: "Prova — LavorAI",
+  title: "Prova di consegna: candidature confermate",
   description:
     "Numeri reali, non promesse. Ogni candidatura confermata via HTTP è una prova oggettiva di consegna.",
   openGraph: {

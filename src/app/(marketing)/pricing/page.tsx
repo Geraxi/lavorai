@@ -5,7 +5,7 @@ import { SectionPricing } from "@/components/sections/pricing";
 import { SectionFaq } from "@/components/sections/faq";
 
 export const metadata: Metadata = {
-  title: "Prezzi · LavorAI",
+  title: "Prezzi: Free, Pro e Pro+",
   description:
     "Piani LavorAI: Free (3 candidature), Pro (€19.99/mese, 50 candidature), Pro+ (€39.99/mese, illimitate + Founder Coach).",
   alternates: { canonical: "/pricing" },

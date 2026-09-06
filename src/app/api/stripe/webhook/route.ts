@@ -58,6 +58,20 @@ export async function POST(request: NextRequest) {
         // Recupera la subscription per leggere price/status/period_end.
         const sub = await stripe().subscriptions.retrieve(subscriptionId);
         const item = sub.items.data[0];
+
+        // Se il customer aveva già un'altra subscription viva (doppio checkout),
+        // cancelliamo la vecchia subito: mai due addebiti per lo stesso utente.
+        try {
+          const others = await stripe().subscriptions.list({ customer: customerId, status: "all", limit: 10 });
+          for (const o of others.data) {
+            if (o.id !== sub.id && ["active", "trialing", "past_due", "unpaid"].includes(o.status)) {
+              await stripe().subscriptions.cancel(o.id, { prorate: true });
+              console.warn(`[stripe/webhook] cancellata subscription duplicata ${o.id} per customer ${customerId}`);
+            }
+          }
+        } catch (e) {
+          console.error("[stripe/webhook] dedupe subscriptions failed", e);
+        }
         const priceId = item?.price.id;
         const tier = priceId ? priceIdToTier(priceId) ?? "free" : "free";
         const anyItem = item as unknown as { current_period_end?: number };
@@ -157,6 +171,32 @@ export async function POST(request: NextRequest) {
             where: { stripeCustomerId: customerId },
             data: { subscriptionStatus: "past_due" },
           });
+          // Dunning: avvisiamo l'utente con il link al portale per aggiornare
+          // la carta (Stripe ritenta da solo, ma senza carta valida perde il piano).
+          const u = await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { email: true, name: true } });
+          if (u?.email && process.env.RESEND_API_KEY) {
+            try {
+              const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
+              const portal = await stripe().billingPortal.sessions.create({ customer: customerId, return_url: `${siteUrl}/settings` });
+              const { Resend } = await import("resend");
+              const { sendWithinQuota } = await import("@/lib/email-quota");
+              const amount = inv.amount_due ? `${(inv.amount_due / 100).toFixed(2).replace(".", ",")} €` : "";
+              await sendWithinQuota("payment_failed", u.email, async () => {
+                await new Resend(process.env.RESEND_API_KEY).emails.send({
+                  from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>",
+                  to: u.email,
+                  subject: "Pagamento non riuscito — aggiorna la carta per non perdere il piano",
+                  html: `<p>Ciao${u.name ? ` ${u.name.split(" ")[0]}` : ""},</p>
+<p>il rinnovo del tuo abbonamento LavorAI${amount ? ` (${amount})` : ""} non è andato a buon fine: la banca ha rifiutato la carta.</p>
+<p>Stripe riproverà nei prossimi giorni, ma se la carta non è valida il piano tornerà a Free e le candidature automatiche si fermeranno.</p>
+<p><a href="${portal.url}" style="display:inline-block;padding:10px 16px;background:#16a34a;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Aggiorna la carta</a></p>
+<p style="color:#666;font-size:13px">Se hai già sistemato, ignora questa email. Per qualsiasi dubbio rispondi pure qui.</p>`,
+                });
+              });
+            } catch (e) {
+              console.error("[stripe/webhook] payment_failed email error", e);
+            }
+          }
         }
         break;
       }

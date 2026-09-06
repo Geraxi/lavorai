@@ -4,7 +4,7 @@ import { SiteNav } from "@/components/site-nav";
 import { InterviewBuddyClient } from "./interview-buddy-client";
 
 export const metadata: Metadata = {
-  title: "Interview Buddy · mock interview AI gratis · LavorAI",
+  title: "Interview Buddy: simula il colloquio con l'AI, gratis",
   description:
     "Practica un colloquio di 5 domande con AI. Carica un annuncio reale, ricevi feedback specifico turn-by-turn + summary finale con score. Gratis, niente registrazione.",
   alternates: { canonical: "/interview-buddy" },

@@ -15,7 +15,7 @@ import { LiveStatsBadge } from "@/components/live-stats-badge";
  */
 export const metadata: Metadata = {
   title:
-    "Auto candidatura lavoro: invia CV automaticamente | LavorAI",
+    "Auto candidatura lavoro: invia CV automaticamente",
   description:
     "Cerchi un software per candidarti automaticamente ai lavori? LavorAI invia CV + lettera motivazionale AI a 50 offerte/mese al posto tuo. 3 candidature gratis, no carta. Provalo in 2 minuti.",
   alternates: { canonical: "/auto-candidatura" },
