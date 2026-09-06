@@ -132,6 +132,26 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           .adm-page { height: auto; grid-template-columns: 1fr !important; grid-template-rows: none !important; }
           .adm-card { min-height: 220px; }
         }
+        /* ── Tablet: tabelle scorrono in orizzontale dentro la card, KPI a 2 colonne ── */
+        @media (max-width: 900px) {
+          .adm-content { padding: 10px 12px 16px; }
+          .adm-page > div[style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+          .adm-page > div[style*="repeat(5"], .adm-page > div[style*="repeat(4"], .adm-page > div[style*="repeat(3"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .adm-card { overflow-x: auto; -webkit-overflow-scrolling: touch; min-height: 0; }
+          .adm-th, .adm-tr { min-width: 560px; }
+          .adm-quote { display: none; }
+          .adm-topbar { flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
+          .adm-topbar > * { min-width: 0; }
+        }
+        /* ── Telefono: ogni riga diventa una scheda a 2 colonne, header nascosto ── */
+        @media (max-width: 640px) {
+          .adm-page > div[style*="repeat(5"], .adm-page > div[style*="repeat(4"], .adm-page > div[style*="repeat(3"], .adm-page > div[style*="repeat(2"] { grid-template-columns: 1fr !important; }
+          .adm-card { overflow-x: hidden; min-height: 0; }
+          .adm-th { display: none; }
+          .adm-tr { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; row-gap: 4px; padding: 10px 0; }
+          .adm-tr > * { min-width: 0; }
+          .adm-page h1 { font-size: 20px !important; }
+        }
       `}</style>
     </div>
   );

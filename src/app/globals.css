@@ -1429,3 +1429,26 @@
   .dg-pin-glow, .dg-live, .dg-dots i, .dg-fallback-earth { animation: none !important; }
   .dg-card, .dg-sheet { animation: none; } .dg-globe { transition: none; transform: none !important; }
 }
+
+/* ============================================================
+   RESPONSIVE PAGINE APP — tabelle e layout a due colonne fisse
+   ============================================================ */
+@media (max-width: 900px) {
+  /* Tabelle (Candidature, ecc.): scroll orizzontale dentro la card */
+  .ds-section-card:has(> .ds-tbl) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .ds-tbl { min-width: 640px; }
+  /* Layout con colonna fissa (Inbox 360px | 1fr, dettaglio job 1fr | 360px) */
+  [style*="360px 1fr"], [style*="1fr 360px"] { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 640px) {
+  /* Ogni riga della tabella diventa una scheda */
+  .ds-tbl { min-width: 0; font-size: 13px; }
+  .ds-tbl thead { display: none; }
+  .ds-tbl, .ds-tbl tbody, .ds-tbl tr, .ds-tbl td { display: block; width: 100% !important; box-sizing: border-box; }
+  .ds-tbl tr { border: 1px solid var(--border-ds); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; background: var(--bg-elev); }
+  .ds-tbl td { padding: 3px 0 !important; border: 0 !important; }
+  .ds-tbl td:empty { display: none; }
+  .ds-tbl tbody tr:hover td { background: transparent; }
+  /* Griglie auto-fill con minimo > viewport */
+  [style*="minmax(320px"], [style*="minmax(310px"] { grid-template-columns: 1fr !important; }
+}

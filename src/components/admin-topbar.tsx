@@ -26,6 +26,7 @@ export function AdminTopbar({ userName, email, rangeLabel = "Ultimi 14 giorni" }
 
   return (
     <div
+      className="adm-topbar"
       style={{
         display: "flex",
         alignItems: "center",
