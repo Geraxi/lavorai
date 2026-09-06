@@ -35,6 +35,7 @@ export function DashboardGlobe({ markers, filters, onSelect }: { markers: CityMa
   const ref = useRef<HTMLDivElement>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const personElRef = useRef<HTMLDivElement | null>(null);
   const width = size.w;
   const height = size.h;
 
@@ -62,8 +63,24 @@ export function DashboardGlobe({ markers, filters, onSelect }: { markers: CityMa
     c.maxDistance = 380;
     const stop = () => { c.autoRotate = false; };
     c.addEventListener("start", stop);
+    // La persona è un elemento HTML (px): la scaliamo col raggio apparente del
+    // globo, così resta ~1/3 del raggio a qualsiasi zoom invece di dominare
+    // la scena quando la Terra è piccola.
+    const cam = g.camera() as { position: { length: () => number }; fov?: number };
+    const fitPerson = () => {
+      const el = personElRef.current;
+      if (!el || !height) return;
+      const dist = cam.position.length();
+      const fov = ((cam.fov ?? 50) * Math.PI) / 180;
+      const radiusPx = (100 / dist) * (height / 2) / Math.tan(fov / 2);
+      const w = Math.max(28, Math.min(120, radiusPx * 0.34));
+      el.style.width = `${w}px`;
+    };
+    fitPerson();
+    c.addEventListener("change", fitPerson);
+    const t = setInterval(fitPerson, 500); // primo render / resize
     g.pointOfView({ lat: 38, lng: 8, altitude: 1.9 }, 0);
-    return () => c.removeEventListener("start", stop);
+    return () => { c.removeEventListener("start", stop); c.removeEventListener("change", fitPerson); clearInterval(t); };
   }, [width, height]);
 
   type Pin = { type: "pin"; lat: number; lng: number; kind: keyof typeof COLORS; name: string; n: number; scale: number; marker: CityMarker };
@@ -92,8 +109,9 @@ export function DashboardGlobe({ markers, filters, onSelect }: { markers: CityMa
     const item = d as HtmlItem;
     if (item.type === "person") {
       const el = document.createElement("div");
-      el.style.cssText = "width:150px;height:auto;transform:translate(-56%,-40%) rotate(-22deg);pointer-events:none;filter:drop-shadow(0 14px 22px rgba(0,0,0,.5));transition:opacity .25s";
+      el.style.cssText = "width:80px;height:auto;transform:translate(-55%,-42%) rotate(-22deg);pointer-events:none;filter:drop-shadow(0 10px 16px rgba(0,0,0,.5));transition:opacity .25s";
       el.innerHTML = '<img src="/hero-person.png" alt="" draggable="false" style="width:100%;height:auto;display:block;user-select:none" />';
+      personElRef.current = el;
       return el;
     }
     const p = item;
