@@ -1268,7 +1268,16 @@
 /* Il globo occupa quasi tutta l'altezza dell'hero, leggermente a destra */
 .dg-stage { position: absolute; inset: 0; }
 /* Canvas WebGL: riempie l'hero, spostato leggermente a destra (il saluto sta a sinistra) */
-.dg-globe { position: absolute; top: 0; bottom: 0; left: 7%; width: 100%; cursor: grab; }
+.dg-globe { position: absolute; top: 0; bottom: 0; left: 0; width: 112%; cursor: grab; }
+/* Velatura dietro saluto/stato (alto-sx), legenda (basso-sx) e hint (basso-dx):
+   quando si zooma, i pin passano sotto i testi senza confonderli. */
+.dg-hero::before {
+  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background:
+    radial-gradient(520px 340px at 0% 0%, rgba(2,7,17,0.92), rgba(2,7,17,0.55) 55%, transparent 100%),
+    radial-gradient(320px 180px at 0% 100%, rgba(2,7,17,0.85), transparent 100%),
+    radial-gradient(360px 120px at 100% 100%, rgba(2,7,17,0.7), transparent 100%);
+}
 .dg-globe:active { cursor: grabbing; }
 .dg-globe canvas { outline: none; }
 
@@ -1335,7 +1344,7 @@
 .dg-card-cta:hover { filter: brightness(1.08); transform: translateY(-1px); }
 
 /* Filtri: attaccati al bordo alto del globo */
-.dg-filters { position: absolute; top: 12px; left: max(370px, 52%); transform: translateX(-50%); z-index: 5; display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(5,13,25,0.7); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(10px); }
+.dg-filters { position: absolute; top: 12px; right: 16px; z-index: 5; display: flex; gap: 2px; padding: 3px; border-radius: 999px; background: rgba(5,13,25,0.7); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(10px); }
 .dg-pill { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; border: none; background: transparent; color: #b9c0cc; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: inherit; transition: background .14s var(--ease-premium), color .14s; white-space: nowrap; }
 .dg-pill:hover { color: #F7F8FA; background: rgba(255,255,255,0.05); }
 .dg-pill.is-active { background: rgba(46,214,154,0.16); color: #2ED69A; }
@@ -1402,7 +1411,6 @@
   .dg-side .fit-card { min-height: 0; }
   .dg-greeting { max-width: 280px; } .dg-greeting .fit-h1 { font-size: 22px; } .dg-head-sub { display: none; }
   .dg-status { top: 120px; }
-  .dg-filters { left: 50%; }
 }
 @media (max-width: 768px) {
   .dg-page { padding: 12px 14px 24px; }
@@ -1411,7 +1419,7 @@
   .dg-globe { left: 0; width: 100%; }
   .dg-pin .dg-card-anchor { display: none; }
   .dg-greeting { max-width: 240px; } .dg-status { top: 96px; }
-  .dg-filters { position: relative; top: auto; left: 0; transform: none; margin: 10px 12px 0; width: max-content; max-width: calc(100% - 24px); overflow-x: auto; }
+  .dg-filters { position: relative; top: auto; right: auto; margin: 10px 12px 0; width: max-content; max-width: calc(100% - 24px); overflow-x: auto; }
   .dg-legend, .dg-hint { display: none; }
   .dg-sheet { top: 12px; right: 12px; bottom: auto; max-height: 70%; width: calc(100% - 24px); }
   .dg-mobile-cards { display: flex; gap: 10px; overflow-x: auto; padding: 12px 12px 4px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }

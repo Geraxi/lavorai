@@ -89,8 +89,13 @@ export function pickFeatured(pins: GlobePin[], visible: (p: GlobePin) => boolean
     if (out.length >= 3) break;
     if (!p.job || !visible(p)) continue;
     if (out.some((o) => angularDistance(o.lat, o.lng, p.lat, p.lng) < 20)) continue;
-    // Le card sono larghe ~270px: due pin vicini sullo schermo si coprirebbero.
-    if (screen && out.some((o) => { const a = screen(o), b = screen(p); return Math.abs(a.x - b.x) < 600 && Math.abs(a.y - b.y) < 200; })) continue;
+    // Le card sono larghe ~270px: due pin vicini sullo schermo si coprirebbero,
+    // e una card non deve nascondere altri pin.
+    if (screen) {
+      const b = screen(p);
+      if (out.some((o) => { const a = screen(o); return Math.abs(a.x - b.x) < 600 && Math.abs(a.y - b.y) < 200; })) continue;
+      if (pins.some((q) => { if (q === p || !visible(q)) return false; const a = screen(q); return Math.abs(a.x - b.x) < 300 && Math.abs(a.y - b.y) < 150; })) continue;
+    }
     out.push(p);
   }
   return out.map((p) => p.key);
@@ -266,9 +271,12 @@ export function DashboardGlobe({
     let mergeDeg = 4.5;
     if (g && height) {
       const cam = g.camera() as { position: { length: () => number }; fov?: number };
+      // Scala apparente (px per grado) al centro della superficie visibile,
+      // con prospettiva: f · (100·π/180) / (distanza − raggio).
       const fov = ((cam.fov ?? 50) * Math.PI) / 180;
-      const r = (100 / cam.position.length()) * (height / 2) / Math.tan(fov / 2);
-      mergeDeg = Math.max(0.25, Math.min(8, 30 / ((r * Math.PI) / 180)));
+      const f = (height / 2) / Math.tan(fov / 2);
+      const pxPerDeg = (f * (100 * Math.PI) / 180) / Math.max(5, cam.position.length() - 100);
+      mergeDeg = Math.max(0.2, Math.min(8, 30 / pxPerDeg));
     }
     return buildPins(markers, filter, mergeDeg);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -280,8 +288,8 @@ export function DashboardGlobe({
       if (!g || !width) return true;
       const s = g.getScreenCoords(p.lat, p.lng, 0.01);
       // Fuori dalle zone del saluto/stato (alto-sinistra) e dei filtri (alto).
-      if (s.y < 110) return false;
-      if (s.x < 420 && s.y < 250) return false;
+      if (s.x < 460 && s.y < 300) return false; // saluto + stato
+      if (s.y < 70 && s.x > width - 560) return false; // filtri
       const pov = g.pointOfView();
       return angularDistance(pov.lat, pov.lng, p.lat, p.lng) < 62;
     };
