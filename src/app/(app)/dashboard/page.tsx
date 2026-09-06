@@ -41,7 +41,7 @@ export default async function DashboardPage() {
   const [applications, onboarding, openJobs, sentApps, readyApps, interviews, sentMonth, readyCount, openCount] = await Promise.all([
     getUIApplications(user.id),
     getOnboardingState(user.id),
-    prisma.job.findMany({ where: { closedAt: null, cachedAt: { gte: since30 } }, select: { location: true, remote: true }, take: 6000 }),
+    prisma.job.findMany({ where: { closedAt: null, cachedAt: { gte: since30 } }, select: { location: true, remote: true, title: true, company: true }, orderBy: { cachedAt: "desc" }, take: 6000 }),
     prisma.application.findMany({ where: delivered, select: { job: { select: { location: true } } }, take: 2000 }),
     prisma.application.findMany({ where: { userId: user.id, status: { in: ["ready_to_apply", "awaiting_consent"] } }, select: { id: true, createdAt: true, job: { select: { title: true, company: true, location: true } } }, orderBy: { createdAt: "desc" }, take: 200 }),
     prisma.application.findMany({
@@ -57,14 +57,15 @@ export default async function DashboardPage() {
 
   // Aggregazione per città (pin del globo)
   const byCity = new Map<string, CityMarker>();
-  const bump = (loc: string | null | undefined, k: "open" | "sent" | "ready") => {
+  const bump = (loc: string | null | undefined, k: "open" | "sent" | "ready", sample?: { title: string; company: string | null }) => {
     const c = matchCity(loc);
     if (!c) return;
-    const m = byCity.get(c.key) ?? { key: c.key, name: c.name, lat: c.lat, lng: c.lng, open: 0, sent: 0, ready: 0 };
+    const m = byCity.get(c.key) ?? { key: c.key, name: c.name, lat: c.lat, lng: c.lng, open: 0, sent: 0, ready: 0, samples: [] as Array<{ title: string; company: string | null }> };
     m[k]++;
+    if (sample && (m.samples?.length ?? 0) < 4) m.samples!.push(sample);
     byCity.set(c.key, m);
   };
-  for (const j of openJobs) bump(j.location, "open");
+  for (const j of openJobs) bump(j.location, "open", { title: j.title, company: j.company });
   for (const a of sentApps) bump(a.job.location, "sent");
   for (const a of readyApps) bump(a.job.location, "ready");
   const markers = [...byCity.values()];
