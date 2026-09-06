@@ -32,27 +32,6 @@ export function DashboardGlobeMap({ markers, height }: { markers: CityMarker[]; 
       <div style={{ position: "absolute", inset: 0 }}>
         <DashboardGlobe markers={markers} filters={filters} height={height ?? 560} />
       </div>
-      {/* Persona sdraiata sul globo (PNG trasparente, come nel mockup). Non
-          intercetta il mouse: il globo sotto resta trascinabile. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/hero-person.png"
-        alt=""
-        aria-hidden
-        draggable={false}
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "50%",
-          width: "min(19%, 150px)",
-          height: "auto",
-          transform: "translate(-58%, -42%) rotate(-8deg)",
-          pointerEvents: "none",
-          userSelect: "none",
-          filter: "drop-shadow(0 14px 22px rgba(0,0,0,0.45))",
-          zIndex: 2,
-        }}
-      />
       {/* Legenda / filtri */}
       <div className="fit-card" style={{ position: "absolute", top: 12, right: 12, padding: "10px 12px", gap: 6, width: 200, background: "rgba(10,14,20,0.72)", backdropFilter: "blur(10px)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 600, marginBottom: 2 }}>

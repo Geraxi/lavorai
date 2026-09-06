@@ -9,6 +9,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Globe, { type GlobeMethods } from "react-globe.gl";
+import * as THREE from "three";
 
 export interface CityMarker {
   key: string;
@@ -61,6 +62,21 @@ export function DashboardGlobe({ markers, filters, height = 560 }: { markers: Ci
     return () => c.removeEventListener("start", stop);
   }, [width]);
 
+  // Persona sdraiata: piano texturizzato ANCORATO a lat/lng sulla superficie
+  // (objectFacesSurface → giace tangente al globo), quindi ruota con la Terra
+  // e viene nascosto quando passa sul retro. Più piccolo del mockup.
+  const PERSON = { lat: 5, lng: -23 };
+  const personObj = useMemo(() => {
+    const W = 11; // raggio globo = 100 unità
+    const H = W * (399 / 215);
+    const tex = new THREE.TextureLoader().load("/hero-person.png");
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
+    mesh.rotation.z = -0.35; // leggera inclinazione come nel mockup
+    return mesh;
+  }, []);
+
   const { points, rings } = useMemo(() => {
     const points: Pt[] = [];
     const maxOpen = Math.max(1, ...markers.map((m) => m.open));
@@ -98,6 +114,12 @@ export function DashboardGlobe({ markers, filters, height = 560 }: { markers: Ci
             const p = d as Pt;
             return `<div style="background:#0b1220;border:1px solid ${p.color}66;border-radius:10px;padding:8px 12px;font-family:system-ui;color:#e5e7eb;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.5)"><div style="font-weight:700;color:#fff">${p.name}</div><div style="color:${p.color}">${p.n} ${p.kind === "open" ? "posizioni aperte" : p.kind === "sent" ? "candidature inviate" : "posizioni pronte"}</div></div>`;
           }}
+          objectsData={[PERSON]}
+          objectLat={(d: object) => (d as { lat: number }).lat}
+          objectLng={(d: object) => (d as { lng: number }).lng}
+          objectAltitude={0.012}
+          objectFacesSurfaces
+          objectThreeObject={() => personObj}
           ringsData={rings}
           ringLat={(d: object) => (d as Ring).lat}
           ringLng={(d: object) => (d as Ring).lng}
