@@ -78,7 +78,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   };
 
   return (
-    <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(0,1fr)" }}>
+    <div className="adm-page">
       <PageTitle
         title={`Utenti reali (${total})`}
         sub="Gestisci gli utenti reali della piattaforma. Sono esclusi automaticamente test e account interni."

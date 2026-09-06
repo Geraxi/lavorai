@@ -241,7 +241,7 @@ export default async function AdminOverviewPage() {
   const nInfo = alerts.filter((a) => a.tone === "info").length;
 
   return (
-    <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(0,1.5fr) minmax(0,1.15fr) minmax(0,1fr)" }}>
+    <div className="adm-page">
       <PageTitle
         title="Panoramica"
         sub="Controlla lo stato della piattaforma, monitora le performance e gestisci le operazioni."

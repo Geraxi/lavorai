@@ -158,7 +158,7 @@ export default async function AdminDeliveryPage() {
   const rateColor = (r: number) => (r >= 90 ? "hsl(var(--primary))" : r >= 70 ? "#fbbf24" : "#f87171");
 
   return (
-    <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(0,1.35fr) minmax(0,1fr) minmax(0,0.95fr)" }}>
+    <div className="adm-page">
       <PageTitle
         title="Consegna"
         sub="Monitora la consegna delle candidature e verifica il corretto invio su tutti i portali."

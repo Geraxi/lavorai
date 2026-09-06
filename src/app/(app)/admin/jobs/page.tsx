@@ -100,7 +100,7 @@ export default async function AdminJobsPage() {
   const fmtDT = (d: Date | null) => (d ? `${d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit" })}, ${d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}` : "—");
 
   return (
-    <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(0,1fr)" }}>
+    <div className="adm-page">
       <PageTitle
         title="Job pool & motore"
         sub="Gestisci le fonti di annunci, monitora il motore di ricerca e controlla le automazioni."
@@ -117,7 +117,7 @@ export default async function AdminJobsPage() {
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,2fr) minmax(0,1fr)", gap: 12, minHeight: 0 }}>
         {/* Colonna sinistra */}
-        <div style={{ display: "grid", gridTemplateRows: "minmax(0,1fr) minmax(0,1.25fr) minmax(0,0.9fr)", gap: 12, minHeight: 0 }}>
+        <div style={{ display: "grid", gap: 12, minHeight: 0 }}>
           <div className="adm-card">
             <div className="adm-card-head" style={{ alignItems: "center" }}>
               <div className="adm-card-title">Andamento annunci nel pool</div>
@@ -184,7 +184,7 @@ export default async function AdminJobsPage() {
         </div>
 
         {/* Colonna destra */}
-        <div style={{ display: "grid", gridTemplateRows: "minmax(0,1fr) auto auto minmax(0,0.8fr)", gap: 12, minHeight: 0 }}>
+        <div style={{ display: "grid", gap: 12, minHeight: 0 }}>
           <div className="adm-card">
             <div className="adm-card-head"><div className="adm-card-title">Distribuzione per fonte</div></div>
             <div className="adm-card-body" style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
