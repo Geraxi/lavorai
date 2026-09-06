@@ -87,7 +87,7 @@ export default async function AdminAutomationPage() {
   const CHIPS = ["Utenti senza CV", "Errori ultimi 24h", "Riepilogo candidature", "Invia nudge", "Crea popup", "Analizza performance"];
 
   return (
-    <div className="adm-page" style={{ gridTemplateRows: "auto auto auto auto minmax(0,1fr)", height: "100%", overflowY: "auto", paddingRight: 4 }}>
+    <div className="adm-page">
       <PageTitle
         title="Automazione & Utenti"
         sub="Gestisci test, nudges, popup e l'assistente AI. Tutto in un'unica schermata."

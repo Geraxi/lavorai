@@ -208,13 +208,13 @@ export default async function AdminDeliveryPage() {
             <div className="adm-card-title">Consegne per portale</div>
             <FakeSelect label={`Ultimi ${DAYS} giorni`} />
           </div>
-          <div className="adm-th" style={{ gridTemplateColumns: "1fr 46px 52px 50px 1fr" }}>
-            <div>Portale</div><div style={{ textAlign: "right" }}>Tentate</div><div style={{ textAlign: "right" }}>Conf.</div><div style={{ textAlign: "right" }}>Tasso</div><div>Esito (ATS · email · unconf · dry · captcha · failed · attesa)</div>
+          <div className="adm-th" style={{ gridTemplateColumns: "1fr 64px 64px 64px" }}>
+            <div>Portale</div><div style={{ textAlign: "right" }}>Tentate</div><div style={{ textAlign: "right" }}>Confermate</div><div style={{ textAlign: "right" }}>Tasso</div>
           </div>
           <div className="adm-card-body scroll">
             {portalRows.length === 0 && <div style={{ padding: "14px 0", fontSize: 12, color: "var(--fg-subtle)" }}>Nessun dato</div>}
             {portalRows.map((p) => (
-              <div key={p.portal} className="adm-tr" style={{ gridTemplateColumns: "1fr 46px 52px 50px 1fr", padding: "7px 0" }}>
+              <div key={p.portal} className="adm-tr" style={{ gridTemplateColumns: "1fr 64px 64px 64px", padding: "8px 0", rowGap: 4 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                   <PortalBadge portal={p.portal} />
                   <span className="adm-ellipsis" style={{ color: "var(--fg)", textTransform: "capitalize" }}>{p.portal}</span>
@@ -222,8 +222,10 @@ export default async function AdminDeliveryPage() {
                 <div className="adm-num" style={{ textAlign: "right", color: "var(--fg)" }}>{p.t}</div>
                 <div className="adm-num" style={{ textAlign: "right", color: "var(--fg-muted)" }}>{p.c}</div>
                 <div className="adm-num" style={{ textAlign: "right", color: rateColor(p.rate), fontWeight: 700 }}>{p.rate.toFixed(1)}%</div>
-                <div className="adm-num" style={{ fontSize: 11, color: "var(--fg-muted)", whiteSpace: "normal", lineHeight: 1.3 }} title="ATS DETECTED · EMAIL_SENT · UNCONFIRMED · DRY_RUN · CAPTCHA · failed · in attesa">
-                  <b style={{ color: "hsl(var(--primary))" }}>{p.ats}</b> · {p.email} · <span style={{ color: "#fbbf24" }}>{p.unconf}</span> · {p.dry} · {p.captcha} · <span style={{ color: "#f87171" }}>{p.failed}</span> · {p.wait}
+                <div style={{ gridColumn: "1 / -1", display: "flex", flexWrap: "wrap", gap: 6, fontSize: 10.5, color: "var(--fg-muted)" }}>
+                  {([["ATS", p.ats, "hsl(var(--primary))"], ["email", p.email, null], ["non conf.", p.unconf, "#fbbf24"], ["dry-run", p.dry, null], ["captcha", p.captcha, null], ["failed", p.failed, "#f87171"], ["in attesa", p.wait, null]] as Array<[string, number, string | null]>).map(([l, n, c]) => (
+                    <span key={l} style={{ padding: "1px 7px", borderRadius: 999, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", color: c && n > 0 ? c : "var(--fg-muted)", fontWeight: n > 0 ? 700 : 500 }}>{l} {n}</span>
+                  ))}
                 </div>
               </div>
             ))}

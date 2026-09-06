@@ -31,8 +31,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         .adm-content {
           flex: 1;
           min-height: 0;
-          overflow: hidden;
-          padding: 14px 22px 18px;
+          overflow: auto;                 /* la pagina admin scorre se il contenuto non ci sta */
+          padding: 14px 22px 22px;
           display: flex;
           flex-direction: column;
         }
@@ -41,10 +41,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         /* ── Primitive condivise ─────────────────────────────────── */
         .adm-page {
           display: grid;
-          gap: 12px;
-          height: 100%;
+          gap: 14px;
+          height: auto;
           min-height: 0;
+          align-content: start;
+          /* Le righe prendono l'altezza del contenuto: niente card schiacciate
+             per forzare tutto nel viewport. */
+          grid-template-rows: none !important;
         }
+        .adm-page [style*="grid-template-rows"] { grid-template-rows: none !important; }
         .adm-card {
           background: var(--bg-elev);
           border: 1px solid var(--border-ds);
@@ -52,7 +57,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           padding: 16px 18px;
           min-height: 0;
           min-width: 0;
-          overflow: hidden;
+          overflow: visible;              /* niente contenuti tagliati */
           display: flex;
           flex-direction: column;
         }
@@ -67,7 +72,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         .adm-card-title { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--fg); }
         .adm-card-sub { font-size: 11.5px; color: var(--fg-subtle); margin-top: 2px; }
         .adm-card-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-        .adm-card-body.scroll { overflow-y: auto; }
+        .adm-card-body.scroll { overflow-y: auto; max-height: 440px; }   /* liste lunghe: scroll interno */
         .adm-card-body.scroll::-webkit-scrollbar { width: 6px; }
         .adm-card-body.scroll::-webkit-scrollbar-thumb { background: var(--border-ds); border-radius: 3px; }
         .adm-link { font-size: 11.5px; color: hsl(var(--primary)); text-decoration: none; font-weight: 600; white-space: nowrap; }
@@ -106,7 +111,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         .adm-btn.primary:hover { filter: brightness(1.08); }
         .adm-btn.sm { padding: 4px 9px; font-size: 11px; border-radius: 7px; }
         .adm-quote { font-size: 12px; color: var(--fg-subtle); font-style: italic; white-space: nowrap; }
-        .adm-fill { flex: 1; min-height: 0; }
+        .adm-fill { flex: 1; min-height: 230px; }
+        .adm-th > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
         .adm-svg-fill { width: 100%; height: 100%; display: block; }
 
         /* Schermi bassi (laptop 13"): compatta padding e cifre per restare fit. */
