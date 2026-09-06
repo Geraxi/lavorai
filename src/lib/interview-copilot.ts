@@ -73,7 +73,6 @@ export async function suggestAnswer(
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 350,
-    temperature: 0.4,
     system,
     messages: [{ role: "user", content: userPrompt }],
   });

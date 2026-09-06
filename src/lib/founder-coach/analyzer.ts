@@ -40,7 +40,6 @@ export async function analyzeOpportunity(
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 2200,
-    temperature: 0.4,
     system,
     messages: [{ role: "user", content: userPrompt }],
   });

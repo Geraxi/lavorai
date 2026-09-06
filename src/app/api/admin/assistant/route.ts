@@ -80,7 +80,6 @@ Note di dominio:
     const resp = await client.messages.create({
       model: MODEL,
       max_tokens: 1800,
-      temperature: 0.3,
       system,
       messages: anthropicMessages,
     });
