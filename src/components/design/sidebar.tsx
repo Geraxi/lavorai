@@ -140,6 +140,7 @@ export function AppSidebar({
           {adminItems.map((it) => (
             <NavItem key={it.href} item={it} active={isActive(pathname, it.href)} />
           ))}
+          <AdminAssistantNavButton />
         </>
       )}
 
@@ -245,6 +246,24 @@ export function AppSidebar({
         </Link>
       </div>
     </aside>
+  );
+}
+
+/** Voce "Assistente AI" (solo admin): apre il pannello chat montato nel layout. */
+function AdminAssistantNavButton() {
+  return (
+    <button
+      type="button"
+      className="ds-nav-item"
+      onClick={() => window.dispatchEvent(new CustomEvent("lavorai:admin-assistant", { detail: { open: true } }))}
+      style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: "var(--radius-sm)", fontSize: 14.5, color: "var(--fg-muted)", background: "transparent", border: 0, width: "100%", cursor: "pointer", font: "inherit", textAlign: "left" }}
+    >
+      <span className="relative z-10 flex min-w-0 flex-1 items-center gap-2.5">
+        <Icon name="sparkles" size={17} style={{ flexShrink: 0, opacity: 0.75, color: "hsl(var(--primary))" }} />
+        <span className="truncate">Assistente AI</span>
+      </span>
+      <span className="ds-dot ds-dot-green" style={{ flexShrink: 0 }} />
+    </button>
   );
 }
 

@@ -55,6 +55,14 @@ Rispondi a domande operative, analitiche e strategiche del founder usando lo SNA
 ${snapshot}
 === FINE SNAPSHOT ===
 
+CONOSCENZA DEL PRODOTTO (per domande su come funziona la piattaforma):
+- Stack: Next.js 15 App Router + Prisma/Postgres su Vercel; worker Playwright su Railway (coda BullMQ su Upstash Redis, fallback self-invoke /api/applications/process su Vercel); email via Resend; pagamenti Stripe (checkout, portal, webhook).
+- Piani: Free (3 candidature totali, no carta), Pro €19.99/mese (50 candidature/mese), Pro+ €39.99/mese (illimitate + Founder Coach + Interview Copilot). Paywall dopo il limite; upgrade nudge email agli utenti Free attivi.
+- Pipeline candidatura: job dal pool (Greenhouse, Lever, Workable, Ashby, SmartRecruiters via API + Adzuna) → match col profilo CV (quickMatchScore) e ruoli/località delle preferenze → CV e cover letter riscritti da Claude → invio: (a) adapter ATS Playwright che compila e invia il form (conferma DETECTED_HTTP/DOM), (b) email al recruiter se trovata, (c) ready_to_apply manuale. Captcha interattivo → CAPTCHA (riaccodabile da Admin → Consegna). Domande obbligatorie sconosciute → needs_answers (l'utente risponde in /questions).
+- Cron (Vercel Hobby, max 2): nudges 10:00 UTC, sync-jobs 05:30 UTC; auto-apply schedulato dal worker Railway alle 8/12/16 UTC. Job chiusi (404/board) marcati closedAt ed esclusi.
+- Pagine admin: Panoramica, Traffico (PageView + globo), Consegna (verità consegna, retry captcha), Utenti, Job pool & motore (sync, salute AI), Automazione & Utenti (test apply, nudge, popup, assistente). Utente: Dashboard (globo opportunità con pin per città, regioni), Candidature, CV per posizione, Domande, Job board, Analisi, Colloqui, Founder Coach, Preferenze, Impostazioni.
+- Marketing/SEO: landing /auto-candidatura, /analizza-cv, /optimize, /proof, /interview-buddy, /pricing; sitemap.xml; Vercel Analytics e GA/Meta pixel via env.
+
 Note di dominio:
 - "Utenti reali" = esclusi account test (testmail.app, postdbpush-) e interni (founder, tester).
 - "Consegna confermata" = candidatura con submitConfirmation DETECTED_HTTP/DOM (prova hard che è arrivata all'ATS). UNCONFIRMED/null = sospetta.
@@ -71,7 +79,7 @@ Note di dominio:
   try {
     const resp = await client.messages.create({
       model: MODEL,
-      max_tokens: 1200,
+      max_tokens: 1800,
       temperature: 0.3,
       system,
       messages: anthropicMessages,
@@ -114,6 +122,22 @@ async function buildSnapshot(): Promise<string> {
     emailsByKind7d,
     activeSessions,
     autoApplyModes,
+    views7d,
+    sessions7d,
+    topRefs7d,
+    topPaths7d,
+    topCountries7d,
+    failReasons30d,
+    captcha30d,
+    needsAnswers,
+    interviews,
+    subStatuses,
+    jobsClosed,
+    jobs24h,
+    jobs7d,
+    lastSyncBySource,
+    deliveredByPortal30d,
+    recentApps,
   ] = await Promise.all([
     prisma.user.findMany({ select: { email: true, tier: true, emailVerified: true, createdAt: true, _count: { select: { applications: true } } } }),
     prisma.user.count({ where: { tier: { in: ["pro", "pro_plus"] } } }),
@@ -129,6 +153,22 @@ async function buildSnapshot(): Promise<string> {
     prisma.emailLog.groupBy({ by: ["kind"], where: { createdAt: { gte: since(24 * 7) } }, _count: { _all: true } }),
     prisma.applicationSession.count({ where: { status: { in: ["active", "auto"] } } }),
     prisma.userPreferences.groupBy({ by: ["autoApplyMode"], _count: { _all: true } }),
+    prisma.pageView.count({ where: { ts: { gte: since(24 * 7) } } }).catch(() => 0),
+    prisma.pageView.findMany({ where: { ts: { gte: since(24 * 7) } }, distinct: ["sessionId"], select: { sessionId: true } }).then((r) => r.length).catch(() => 0),
+    prisma.pageView.groupBy({ by: ["referrer"], where: { ts: { gte: since(24 * 7) }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 10 }).catch(() => []),
+    prisma.pageView.groupBy({ by: ["path"], where: { ts: { gte: since(24 * 7) } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 12 }).catch(() => []),
+    prisma.pageView.groupBy({ by: ["country"], where: { ts: { gte: since(24 * 7) }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 8 }).catch(() => []),
+    prisma.application.groupBy({ by: ["errorMessage"], where: { status: "failed", createdAt: { gte: since(24 * 30) } }, _count: { _all: true }, orderBy: { _count: { errorMessage: "desc" } }, take: 10 }).catch(() => []),
+    prisma.application.count({ where: { submitConfirmation: "CAPTCHA", createdAt: { gte: since(24 * 30) } } }),
+    prisma.application.count({ where: { status: "needs_answers" } }),
+    prisma.application.count({ where: { OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }] } }),
+    prisma.user.groupBy({ by: ["subscriptionStatus"], _count: { _all: true } }).catch(() => []),
+    prisma.job.count({ where: { closedAt: { not: null } } }),
+    prisma.job.count({ where: { cachedAt: { gte: since(24) } } }),
+    prisma.job.count({ where: { cachedAt: { gte: since(24 * 7) } } }),
+    prisma.job.groupBy({ by: ["source"], _max: { cachedAt: true } }),
+    prisma.application.groupBy({ by: ["portal"], where: { status: "success", submittedVia: { not: null }, createdAt: { gte: since(24 * 30) } }, _count: { _all: true }, orderBy: { _count: { portal: "desc" } }, take: 10 }).catch(() => []),
+    prisma.application.findMany({ where: { createdAt: { gte: since(24 * 3) } }, orderBy: { createdAt: "desc" }, take: 25, select: { createdAt: true, status: true, portal: true, submittedVia: true, submitConfirmation: true, errorMessage: true, user: { select: { email: true } }, job: { select: { company: true, title: true, source: true } } } }).catch(() => []),
   ]);
 
   const real = allUsers.filter((u) => !isTestAccount(u.email));
@@ -159,5 +199,27 @@ async function buildSnapshot(): Promise<string> {
     `EMAIL 7g: ${emailsByKind7d.map((r) => `${r.kind}=${r._count._all}`).join(", ") || "nessuna"}.`,
     `AUTO-APPLY mode utenti: ${autoApplyModes.map((r) => `${r.autoApplyMode}=${r._count._all}`).join(", ") || "nessuna pref"}.`,
     `SESSIONI attive: ${activeSessions}.`,
+    ``,
+    `TRAFFICO 7g (PageView interno): ${views7d} viste, ${sessions7d} sessioni uniche.`,
+    `  Top referrer: ${topRefs7d.map((r) => `${shortRef(r.referrer)}=${r._count._all}`).join(", ") || "nessuno (tutto diretto/sconosciuto)"}.`,
+    `  Top pagine: ${topPaths7d.map((r) => `${r.path}=${r._count._all}`).join(", ") || "-"}.`,
+    `  Paesi: ${topCountries7d.map((r) => `${r.country}=${r._count._all}`).join(", ") || "-"}.`,
+    `  Nota: Vercel Web Analytics e GA non sono nello snapshot; qui c'è solo il beacon interno.`,
+    ``,
+    `CONSEGNA 30g per portale (success): ${deliveredByPortal30d.map((r) => `${r.portal}=${r._count._all}`).join(", ") || "nessuna"}.`,
+    `  Captcha 30g: ${captcha30d}. In attesa risposte utente (needs_answers): ${needsAnswers}. Colloqui segnalati: ${interviews}.`,
+    `  Motivi di fallimento 30g: ${failReasons30d.map((r) => `"${(r.errorMessage ?? "n/d").slice(0, 80)}"=${r._count._all}`).join("; ") || "nessuno"}.`,
+    ``,
+    `JOB: ${jobs24h} nuovi 24h, ${jobs7d} nuovi 7g, ${jobsClosed} chiusi (non più online).`,
+    `  Ultimo sync per fonte: ${lastSyncBySource.map((r) => `${r.source}=${r._max.cachedAt ? r._max.cachedAt.toISOString().slice(0, 16) : "mai"}`).join(", ")}.`,
+    ``,
+    `ABBONAMENTI (stato Stripe salvato su user.subscriptionStatus): ${subStatuses.map((r) => `${r.subscriptionStatus ?? "nessuno"}=${r._count._all}`).join(", ") || "-"}.`,
+    ``,
+    `ULTIME CANDIDATURE (3g, max 25): ${recentApps.length ? recentApps.map((a) => `${a.createdAt.toISOString().slice(5, 16)} ${a.user.email.split("@")[0]}@ → ${a.job.company ?? "?"} "${a.job.title.slice(0, 40)}" [${a.job.source}/${a.portal}] ${a.status}${a.submitConfirmation ? `/${a.submitConfirmation}` : ""}${a.errorMessage ? ` err:${a.errorMessage.slice(0, 50)}` : ""}`).join("; ") : "nessuna"}.`,
   ].join("\n");
+}
+
+function shortRef(r: string | null): string {
+  if (!r) return "diretto";
+  try { return new URL(r).hostname.replace(/^www\./, ""); } catch { return r.slice(0, 40); }
 }

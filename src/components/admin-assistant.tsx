@@ -11,7 +11,9 @@ interface Msg {
 const SUGGESTIONS = [
   "Quanti utenti reali ho e quanti pagano?",
   "Le candidature arrivano davvero alle aziende?",
-  "Perché nessuno converte a pagamento?",
+  "Da dove arriva il traffico questa settimana?",
+  "Quali errori bloccano le candidature?",
+  "Il job pool è aggiornato?",
   "Cosa dovrei sistemare per primo?",
 ];
 
@@ -30,6 +32,15 @@ export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  // Apertura dalla voce "Assistente AI" della sidebar (evento globale) + Esc per chiudere.
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("lavorai:admin-assistant", onOpen);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("lavorai:admin-assistant", onOpen); window.removeEventListener("keydown", onKey); };
+  }, []);
 
   async function send(text: string) {
     const q = text.trim();
@@ -100,17 +111,6 @@ export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}
 
   return (
     <>
-      {/* Toggle FAB */}
-      {!open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="admin-ai-fab"
-          aria-label="Apri assistente AI"
-        >
-          <Icon name="sparkles" size={20} />
-        </button>
-      )}
 
       {open && (
         <div className="admin-ai-panel">

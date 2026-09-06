@@ -9,6 +9,7 @@ import { CoverageWarning } from "@/components/coverage-warning";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
+import { AdminAssistant } from "@/components/admin-assistant";
 
 /**
  * App layout. Strippato delle 2 prisma.count() che giravano su OGNI
@@ -68,6 +69,8 @@ export default async function AppLayout({
         <UpgradePrompt />
         {children}
       </AppShell>
+      {/* Assistente AI admin: pannello globale, si apre dalla voce in sidebar */}
+      {isAdmin(user.email) && <AdminAssistant />}
       <CommandPalette />
       <UserPopup />
     </>
