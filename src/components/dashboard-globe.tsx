@@ -29,20 +29,21 @@ export interface GlobeFilters {
 
 const COLORS = { open: "#22c55e", sent: "#3b82f6", ready: "#f59e0b" } as const;
 
-type Pt = { lat: number; lng: number; color: string; size: number; label: string; kind: keyof typeof COLORS; name: string; n: number };
-type Ring = { lat: number; lng: number; color: () => string };
 
-export function DashboardGlobe({ markers, filters, height = 560 }: { markers: CityMarker[]; filters: GlobeFilters; height?: number }) {
+export function DashboardGlobe({ markers, filters }: { markers: CityMarker[]; filters: GlobeFilters; height?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
-  const [width, setWidth] = useState(0);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const width = size.w;
+  const height = size.h;
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setWidth(el.clientWidth);
+    measure();
     return () => ro.disconnect();
   }, []);
 
@@ -54,46 +55,60 @@ export function DashboardGlobe({ markers, filters, height = 560 }: { markers: Ci
     c.autoRotateSpeed = 0.5;
     c.enableZoom = true;
     c.enablePan = false;
-    c.minDistance = 160;
-    c.maxDistance = 420;
+    // Limiti di zoom: il globo non deve mai uscire dal riquadro (il
+    // contenitore ha comunque overflow hidden).
+    c.minDistance = 190;
+    c.maxDistance = 380;
     const stop = () => { c.autoRotate = false; };
     c.addEventListener("start", stop);
     g.pointOfView({ lat: 38, lng: 8, altitude: 1.9 }, 0);
     return () => c.removeEventListener("start", stop);
-  }, [width]);
+  }, [width, height]);
 
-  // Persona sdraiata: piano texturizzato ANCORATO a lat/lng sulla superficie
-  // (objectFacesSurface → giace tangente al globo), quindi ruota con la Terra
-  // e viene nascosto quando passa sul retro. Più piccolo del mockup.
-  const PERSON = { lat: 5, lng: -23 };
+  // Persona sdraiata: sprite (sempre rivolta alla camera) ancorata a lat/lng:
+  // ruota con la Terra, viene occlusa quando passa sul retro e non si
+  // "appiattisce" di taglio come farebbe un piano tangente.
+  const PERSON = { lat: 4, lng: -24 };
   const personObj = useMemo(() => {
-    const W = 11; // raggio globo = 100 unità
+    const W = 15; // raggio globo = 100 unità
     const H = W * (399 / 215);
     const tex = new THREE.TextureLoader().load("/hero-person.png");
     tex.colorSpace = THREE.SRGBColorSpace;
-    const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
-    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat);
-    mesh.rotation.z = -0.35; // leggera inclinazione come nel mockup
-    return mesh;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true, depthWrite: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(W, H, 1);
+    sprite.material.rotation = -0.25;
+    return sprite;
   }, []);
 
-  const { points, rings } = useMemo(() => {
-    const points: Pt[] = [];
+  type Pin = { lat: number; lng: number; kind: keyof typeof COLORS; name: string; n: number; scale: number };
+  const pins = useMemo(() => {
+    const out: Pin[] = [];
     const maxOpen = Math.max(1, ...markers.map((m) => m.open));
     for (const m of markers) {
-      if (filters.open && m.open > 0) points.push({ lat: m.lat, lng: m.lng, color: COLORS.open, size: 0.35 + (m.open / maxOpen) * 0.9, label: `${m.name} · ${m.open} posizioni aperte`, kind: "open", name: m.name, n: m.open });
-      if (filters.sent && m.sent > 0) points.push({ lat: m.lat + 0.9, lng: m.lng + 0.9, color: COLORS.sent, size: 0.45, label: `${m.name} · ${m.sent} candidature inviate`, kind: "sent", name: m.name, n: m.sent });
-      if (filters.ready && m.ready > 0) points.push({ lat: m.lat - 0.9, lng: m.lng - 0.9, color: COLORS.ready, size: 0.42, label: `${m.name} · ${m.ready} posizioni pronte`, kind: "ready", name: m.name, n: m.ready });
+      // Un solo pin per città, con priorità: inviate > pronte > aperte.
+      if (filters.sent && m.sent > 0) out.push({ lat: m.lat, lng: m.lng, kind: "sent", name: m.name, n: m.sent, scale: 1 });
+      else if (filters.ready && m.ready > 0) out.push({ lat: m.lat, lng: m.lng, kind: "ready", name: m.name, n: m.ready, scale: 0.95 });
+      else if (filters.open && m.open > 0) out.push({ lat: m.lat, lng: m.lng, kind: "open", name: m.name, n: m.open, scale: 0.75 + (m.open / maxOpen) * 0.45 });
     }
-    const rings: Ring[] = markers
-      .filter((m) => (filters.sent && m.sent > 0) || (filters.ready && m.ready > 0))
-      .map((m) => ({ lat: m.lat, lng: m.lng, color: () => (m.sent > 0 && filters.sent ? "rgba(59,130,246,0.55)" : "rgba(245,158,11,0.5)") }));
-    return { points, rings };
+    return out;
   }, [markers, filters]);
 
+  const makePin = (d: object) => {
+    const p = d as Pin;
+    const el = document.createElement("div");
+    const sz = Math.round(22 * p.scale);
+    el.style.cssText = `width:${sz}px;height:${sz}px;transform:translate(-50%,-100%);cursor:pointer;pointer-events:auto;filter:drop-shadow(0 3px 4px rgba(0,0,0,.55));transition:transform .15s`;
+    el.innerHTML = `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}"><path d="M12 22s7-7.1 7-12.5A7 7 0 0 0 5 9.5C5 14.9 12 22 12 22z" fill="${COLORS[p.kind]}" stroke="rgba(255,255,255,.9)" stroke-width="1.4"/><circle cx="12" cy="9.5" r="2.6" fill="#fff"/></svg>`;
+    el.title = `${p.name} · ${p.n} ${p.kind === "open" ? "posizioni aperte" : p.kind === "sent" ? "candidature inviate" : "posizioni pronte"}`;
+    el.onmouseenter = () => { el.style.transform = "translate(-50%,-100%) scale(1.25)"; };
+    el.onmouseleave = () => { el.style.transform = "translate(-50%,-100%)"; };
+    return el;
+  };
+
   return (
-    <div ref={ref} style={{ position: "relative", width: "100%", height, overflow: "hidden", borderRadius: 20 }}>
-      {width > 0 && (
+    <div ref={ref} style={{ position: "absolute", inset: 0, overflow: "hidden", borderRadius: 20 }}>
+      {width > 0 && height > 0 && (
         <Globe
           ref={globeRef}
           width={width}
@@ -104,29 +119,18 @@ export function DashboardGlobe({ markers, filters, height = 560 }: { markers: Ci
           atmosphereAltitude={0.16}
           globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
           bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
-          pointsData={points}
-          pointLat={(d: object) => (d as Pt).lat}
-          pointLng={(d: object) => (d as Pt).lng}
-          pointColor={(d: object) => (d as Pt).color}
-          pointAltitude={0.006}
-          pointRadius={(d: object) => 0.35 + (d as Pt).size * 0.75}
-          pointLabel={(d: object) => {
-            const p = d as Pt;
-            return `<div style="background:#0b1220;border:1px solid ${p.color}66;border-radius:10px;padding:8px 12px;font-family:system-ui;color:#e5e7eb;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,.5)"><div style="font-weight:700;color:#fff">${p.name}</div><div style="color:${p.color}">${p.n} ${p.kind === "open" ? "posizioni aperte" : p.kind === "sent" ? "candidature inviate" : "posizioni pronte"}</div></div>`;
-          }}
+          htmlElementsData={pins}
+          htmlLat={(d: object) => (d as Pin).lat}
+          htmlLng={(d: object) => (d as Pin).lng}
+          htmlAltitude={0.01}
+          htmlElement={makePin}
+          htmlElementVisibilityModifier={(el: HTMLElement, isVisible: boolean) => { el.style.opacity = isVisible ? "1" : "0"; el.style.pointerEvents = isVisible ? "auto" : "none"; }}
+          htmlTransitionDuration={0}
           objectsData={[PERSON]}
           objectLat={(d: object) => (d as { lat: number }).lat}
           objectLng={(d: object) => (d as { lng: number }).lng}
           objectAltitude={0.012}
-          objectFacesSurfaces
           objectThreeObject={() => personObj}
-          ringsData={rings}
-          ringLat={(d: object) => (d as Ring).lat}
-          ringLng={(d: object) => (d as Ring).lng}
-          ringColor={(d: object) => (d as Ring).color}
-          ringMaxRadius={2.6}
-          ringPropagationSpeed={1.2}
-          ringRepeatPeriod={1400}
         />
       )}
     </div>

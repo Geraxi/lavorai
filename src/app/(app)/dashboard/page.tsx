@@ -94,8 +94,8 @@ export default async function DashboardPage() {
         </div>
 
         {/* Globo */}
-        <div style={{ minHeight: 480, minWidth: 0, position: "relative" }}>
-          <DashboardGlobeMap markers={markers} height={580} />
+        <div style={{ minHeight: 520, minWidth: 0, position: "relative", overflow: "hidden", borderRadius: 20 }}>
+          <DashboardGlobeMap markers={markers} height={520} />
         </div>
 
         {/* Colonna destra */}

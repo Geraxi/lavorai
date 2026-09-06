@@ -28,9 +28,9 @@ const LEGEND: Array<{ key: keyof GlobeFilters; label: string; color: string; ico
 export function DashboardGlobeMap({ markers, height }: { markers: CityMarker[]; height?: number }) {
   const [filters, setFilters] = useState<GlobeFilters>({ open: true, sent: true, ready: true });
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: height ?? 480 }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: height ?? 480, overflow: "hidden", borderRadius: 20 }}>
       <div style={{ position: "absolute", inset: 0 }}>
-        <DashboardGlobe markers={markers} filters={filters} height={height ?? 560} />
+        <DashboardGlobe markers={markers} filters={filters} />
       </div>
       {/* Legenda / filtri */}
       <div className="fit-card" style={{ position: "absolute", top: 12, right: 12, padding: "10px 12px", gap: 6, width: 200, background: "rgba(10,14,20,0.72)", backdropFilter: "blur(10px)" }}>
