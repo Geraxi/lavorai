@@ -21,9 +21,9 @@ export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
 /**
- * Dashboard utente. Gerarchia: 1) globo delle opportunità (hero), 2) stato
- * live dell'AI, 3) opportunità consigliate, 4) progresso candidature,
- * 5) prossimi colloqui. Tutti i numeri sono reali.
+ * Dashboard utente, tutta in un viewport (nessuno scroll di pagina).
+ * Sinistra: globo hero con saluto, filtri, pin e card. Destra: riepilogo
+ * candidature, opportunità consigliate, prossimi colloqui. Numeri reali.
  */
 export default async function DashboardPage() {
   const t = await getTranslations("dashboardPage");
@@ -40,7 +40,7 @@ export default async function DashboardPage() {
     prisma.application.findMany({
       where: { userId: user.id, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }, { interviewSessions: { some: {} } }] },
       orderBy: { lastReplyAt: "desc" },
-      take: 4,
+      take: 3,
       select: { id: true, createdAt: true, lastReplyAt: true, job: { select: { title: true, company: true } }, interviewSessions: { select: { startedAt: true }, orderBy: { createdAt: "desc" }, take: 1 } },
     }),
   ]);
@@ -61,6 +61,14 @@ export default async function DashboardPage() {
   const showWelcome = !user.welcomeSeenAt;
   const allDone = onboarding.hasUploadedCv && onboarding.hasSetPreferences && onboarding.hasFirstApplication;
 
+  const greeting = (
+    <>
+      <h1 className="fit-h1">{t("greeting", { name: greetingName })} 👋</h1>
+      <p className="dg-head-lead">LavorAI sta cercando opportunità per te in tutto il mondo.</p>
+      <p className="dg-head-sub">Esplora dove stiamo trovando le migliori opportunità per il tuo profilo.</p>
+    </>
+  );
+
   return (
     <>
       <WelcomeModal show={showWelcome} />
@@ -68,55 +76,51 @@ export default async function DashboardPage() {
       <DashboardLiveRefresh />
       <AppTopbar title={t("title")} actions={<><ThemeToggle /><AutoApplyToggle /><NewSearchButton /></>} />
 
-      <div className="dg-page">
-        <header className="dg-head">
-          <h1 className="fit-h1">{t("greeting", { name: greetingName })} 👋</h1>
-          <p className="dg-head-lead">LavorAI sta cercando opportunità per te in tutto il mondo.</p>
-          <p className="dg-head-sub">Esplora dove stiamo trovando le migliori opportunità per il tuo profilo.</p>
-        </header>
+      <div className="fit-page dg-page">
+        <DashboardGlobeMap markers={globe.markers} stats={globe.stats} greeting={greeting} />
 
-        <DashboardGlobeMap markers={globe.markers} stats={globe.stats} featuredKeys={globe.featuredKeys} />
+        <aside className="dg-side">
+          <div className="dg-summary" role="list">
+            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{sentCount}</span><small>Candidature inviate</small></Link>
+            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{viewedCount}</span><small>In valutazione</small></Link>
+            <Link role="listitem" href="/interview" className="dg-sum"><span className="fit-num">{interviews.length}</span><small>Colloqui</small></Link>
+            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{offersCount}</span><small>Offerte</small></Link>
+          </div>
 
-        {/* Riepilogo candidature: una sola riga compatta */}
-        <div className="dg-summary" role="list">
-          <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{sentCount}</span><small>Candidature inviate</small></Link>
-          <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{viewedCount}</span><small>In valutazione</small></Link>
-          <Link role="listitem" href="/interview" className="dg-sum"><span className="fit-num">{interviews.length}</span><small>Colloqui</small></Link>
-          <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{offersCount}</span><small>Offerte</small></Link>
-        </div>
+          {!allDone && <OnboardingChecklist state={onboarding} />}
 
-        <div className="dg-cols">
-          <div className="fit-card">
+          <div className="fit-card dg-side-card">
             <div className="fit-card-head">
               <div className="fit-card-title"><Icon name="sparkles" size={15} /> Opportunità consigliate</div>
               <Link href="/jobs" className="fit-link">Vedi tutte <Icon name="arrow-right" size={12} /></Link>
             </div>
-            {recommended.length === 0 ? (
-              <Empty text="Appena il tuo profilo e le preferenze sono pronti, qui compaiono gli annunci più compatibili." cta={{ href: "/preferences", label: "Imposta le preferenze" }} />
-            ) : (
-              recommended.slice(0, 5).map((j) => {
-                const company = j.company ?? "Azienda";
-                return (
-                  <Link key={j.id} href={j.href} className="fit-row" style={{ gridTemplateColumns: "34px 1fr auto", textDecoration: "none", color: "inherit" }}>
-                    <CompanyLogo company={company} color={companyColor(company)} size={34} rounded={9} />
-                    <div style={{ minWidth: 0 }}>
-                      <div className="fit-ellipsis" style={{ fontWeight: 600 }}>{j.title}</div>
-                      <div className="fit-ellipsis" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{company}{j.location ? ` · ${j.location}` : ""}</div>
-                    </div>
-                    {j.match != null ? <span className="dg-chip" style={{ ["--c" as string]: "#2ED69A" }}>{Math.round(j.match)}% match</span> : <span className="dg-chip" style={{ ["--c" as string]: "#2ED69A" }}>Aperta</span>}
-                  </Link>
-                );
-              })
-            )}
+            <div className="fit-body fit-scroll">
+              {recommended.length === 0 ? (
+                <Empty text="Appena il tuo profilo e le preferenze sono pronti, qui compaiono gli annunci più compatibili." cta={{ href: "/preferences", label: "Imposta le preferenze" }} />
+              ) : (
+                recommended.slice(0, 4).map((j) => {
+                  const company = j.company ?? "Azienda";
+                  return (
+                    <Link key={j.id} href={j.href} className="fit-row" style={{ gridTemplateColumns: "30px 1fr auto", textDecoration: "none", color: "inherit" }}>
+                      <CompanyLogo company={company} color={companyColor(company)} size={30} rounded={8} />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="fit-ellipsis" style={{ fontWeight: 600, fontSize: 12.5 }}>{j.title}</div>
+                        <div className="fit-ellipsis" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{company}{j.location ? ` · ${j.location}` : ""}</div>
+                      </div>
+                      <span className="dg-chip" style={{ ["--c" as string]: "#2ED69A" }}>{j.match != null ? `${Math.round(j.match)}%` : "Aperta"}</span>
+                    </Link>
+                  );
+                })
+              )}
+            </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
-            {!allDone && <OnboardingChecklist state={onboarding} />}
-            <div className="fit-card">
-              <div className="fit-card-head">
-                <div className="fit-card-title"><Icon name="calendar" size={15} /> Prossimi colloqui</div>
-                <Link href="/interview" className="fit-link">Vedi tutti <Icon name="arrow-right" size={12} /></Link>
-              </div>
+          <div className="fit-card dg-side-card">
+            <div className="fit-card-head">
+              <div className="fit-card-title"><Icon name="calendar" size={15} /> Prossimi colloqui</div>
+              <Link href="/interview" className="fit-link">Vedi tutti <Icon name="arrow-right" size={12} /></Link>
+            </div>
+            <div className="fit-body fit-scroll">
               {interviews.length === 0 ? (
                 <Empty text="Nessun colloquio in programma. Quando un recruiter ti invita, lo vedrai qui." />
               ) : (
@@ -124,15 +128,15 @@ export default async function DashboardPage() {
                   const when = a.interviewSessions[0]?.startedAt ?? a.lastReplyAt ?? a.createdAt;
                   const company = a.job.company ?? "Azienda";
                   return (
-                    <Link key={a.id} href="/interview" className="fit-row" style={{ gridTemplateColumns: "34px 1fr auto", textDecoration: "none", color: "inherit" }}>
-                      <CompanyLogo company={company} color={companyColor(company)} size={34} rounded={9} />
+                    <Link key={a.id} href="/interview" className="fit-row" style={{ gridTemplateColumns: "30px 1fr auto", textDecoration: "none", color: "inherit" }}>
+                      <CompanyLogo company={company} color={companyColor(company)} size={30} rounded={8} />
                       <div style={{ minWidth: 0 }}>
-                        <div className="fit-ellipsis" style={{ fontWeight: 600 }}>{company}</div>
-                        <div className="fit-ellipsis" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{a.job.title} · Video call</div>
+                        <div className="fit-ellipsis" style={{ fontWeight: 600, fontSize: 12.5 }}>{company}</div>
+                        <div className="fit-ellipsis" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{a.job.title} · Video call</div>
                       </div>
-                      <div style={{ textAlign: "right", fontSize: 12, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
+                      <div style={{ textAlign: "right", fontSize: 11.5, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
                         <div style={{ fontWeight: 600, color: "var(--fg)" }}>{when.getDate()} {when.toLocaleDateString("it-IT", { month: "short" }).replace(".", "")}</div>
-                        <div style={{ fontSize: 11, color: "var(--fg-subtle)" }}>{a.interviewSessions[0]?.startedAt ? when.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "da fissare"}</div>
+                        <div style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}>{a.interviewSessions[0]?.startedAt ? when.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "da fissare"}</div>
                       </div>
                     </Link>
                   );
@@ -140,7 +144,7 @@ export default async function DashboardPage() {
               )}
             </div>
           </div>
-        </div>
+        </aside>
       </div>
     </>
   );
@@ -148,7 +152,7 @@ export default async function DashboardPage() {
 
 function Empty({ text, cta }: { text: string; cta?: { href: string; label: string } }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, padding: "10px 0 4px", fontSize: 12.5, color: "var(--fg-muted)" }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, padding: "6px 0 2px", fontSize: 12, color: "var(--fg-muted)" }}>
       <span>{text}</span>
       {cta && <Link href={cta.href} className="ds-btn ds-btn-sm ds-btn-primary">{cta.label}</Link>}
     </div>

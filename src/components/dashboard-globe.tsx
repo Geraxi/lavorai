@@ -1,26 +1,22 @@
 "use client";
 
 /**
- * Globo 3D della dashboard utente (react-globe.gl / three.js, WebGL).
+ * Globo hero della dashboard utente.
  *
- * LIVELLO VISIVO: Terra realistica + persona sdraiata (elemento HTML ancorato
- * a lat/lng, scalato col raggio apparente della Terra).
- * LIVELLO DATI: pin geolocalizzati a 4 stati (aperte / inviate / desiderate /
- * salvate), cluster con conteggio, tooltip in hover, job card flottanti
- * (3-5 di default + quella selezionata). Tutto HTML reale, niente dati
- * "cotti" nell'immagine.
- *
- * Drag = ruota, scroll = zoom limitato, idle = rotazione lentissima che
- * riprende dopo 8s di inattività. SSR disabilitato dal wrapper.
+ * LIVELLO VISIVO: immagine ad alta risoluzione (Terra realistica con nuvole +
+ * persona sdraiata), scelta per fedeltà al riferimento invece del WebGL.
+ * LIVELLO DATI (HTML reale): pin geolocalizzati a 4 stati proiettati sulla
+ * stessa immagine (vedi globe-projection.ts), cluster per vicinanza in pixel,
+ * tooltip in hover, max 3 job card di default + quella selezionata.
+ * Parallasse leggera al mouse per profondità; prefers-reduced-motion rispettato.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Globe, { type GlobeMethods } from "react-globe.gl";
 import type { CityMarker, GlobeJob, PinKind } from "@/lib/dashboard-globe-data";
-import { PERSON_ANCHOR } from "@/lib/dashboard-globe-data";
+import { projectToGlobe, GLOBE_CENTER, PERSON_BOX } from "@/lib/globe-projection";
 
 export const PIN_COLORS: Record<PinKind, string> = { open: "#2ED69A", sent: "#3B82F6", desired: "#9B5CFF", saved: "#F6B73C" };
-export const PIN_LABELS: Record<PinKind, string> = { open: "Opportunità", sent: "Candidatura inviata", desired: "Posizione desiderata", saved: "Salvata" };
+export const PIN_LABELS: Record<PinKind, string> = { open: "Opportunità", sent: "Inviata", desired: "Desiderata", saved: "Salvata" };
 export type GlobeFilter = "all" | PinKind;
 
 const KIND_PRIORITY: PinKind[] = ["sent", "saved", "desired", "open"];
@@ -34,9 +30,20 @@ export function markerTotal(m: CityMarker, filter: GlobeFilter): number {
   return m.counts.open + m.counts.sent + m.counts.desired + m.counts.saved;
 }
 
-function esc(s: string | null | undefined): string {
-  return (s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
+/** Pin sulla mappa: una città o un cluster di città vicine. */
+export interface GlobePin {
+  key: string;
+  name: string;
+  country: string;
+  x: number; // frazione immagine
+  y: number;
+  kind: PinKind;
+  total: number;
+  isNew: boolean;
+  cities: CityMarker[];
+  job: GlobeJob | null;
 }
+
 function initials(company: string | null): string {
   const w = (company ?? "?").trim().split(/\s+/).filter(Boolean);
   return ((w[0]?.[0] ?? "?") + (w[1]?.[0] ?? "")).toUpperCase();
@@ -47,194 +54,150 @@ function hue(s: string): number {
   return h % 360;
 }
 
-/** HTML della job card (usata sia sul globo sia nella lista mobile). */
-export function jobCardHtml(m: CityMarker, kind: PinKind, opts: { selected?: boolean; compact?: boolean } = {}): string {
-  const jobs = m.jobs.filter((j) => j.kind === kind).length ? m.jobs.filter((j) => j.kind === kind) : m.jobs;
-  const j: GlobeJob | undefined = jobs[0];
-  const color = PIN_COLORS[kind];
-  const more = Math.max(0, markerTotal(m, kind === "open" ? "open" : "all") - 1);
-  const company = j?.company ?? (kind === "desired" ? "Località desiderata" : "Azienda");
-  const cta = kind === "sent" ? "Vedi candidatura" : kind === "saved" ? "Approva e invia" : kind === "desired" ? "Cerca qui" : "Invia candidatura";
-  const href = j?.href ?? `/jobs?q=${encodeURIComponent(m.name)}`;
-  const match = j?.match != null ? `<span class="dg-chip" style="--c:${PIN_COLORS.open}">${Math.round(j.match)}% match</span>` : "";
-  const status = `<span class="dg-chip" style="--c:${color}">${esc(PIN_LABELS[kind])}</span>`;
-  const list = more > 0 && jobs.length > 1
-    ? `<div class="dg-card-more">${jobs.slice(1, 3).map((x) => `<a href="${esc(x.href)}" class="dg-card-row"><b>${esc(x.company ?? "Azienda")}</b><span>${esc(x.title)}</span></a>`).join("")}${more > 2 ? `<a href="/jobs?q=${encodeURIComponent(m.name)}" class="dg-card-row dg-card-all">e altre ${more - 2} a ${esc(m.name)} →</a>` : ""}</div>`
-    : "";
-  return `<div class="dg-card${opts.selected ? " is-selected" : ""}${opts.compact ? " is-compact" : ""}" style="--c:${color}">
-    <div class="dg-card-head">
-      <span class="dg-logo" style="background:hsl(${hue(company)} 45% 22%);color:hsl(${hue(company)} 70% 78%)">${esc(initials(company))}</span>
-      <div class="dg-card-txt">
-        <div class="dg-card-co">${esc(company)}${m.counts.open + m.counts.sent + m.counts.saved > 1 && !opts.compact ? `<span class="dg-cluster-n">${markerTotal(m, "all")}</span>` : ""}</div>
-        <div class="dg-card-role">${esc(j?.title ?? (kind === "desired" ? "Le opportunità qui vengono cercate per te" : "Nessun annuncio"))}</div>
-        <div class="dg-card-loc">${esc(m.name)}${m.country ? `, ${esc(m.country)}` : ""}</div>
+/** Raggruppa le città visibili col filtro in pin, unendo quelle entro `mergePx`. */
+export function buildPins(markers: CityMarker[], filter: GlobeFilter, sizePx: number, mergePx = 30): GlobePin[] {
+  const pts = markers
+    .map((m) => ({ m, kind: markerKind(m, filter), p: projectToGlobe(m.lat, m.lng) }))
+    .filter((r): r is { m: CityMarker; kind: PinKind; p: ReturnType<typeof projectToGlobe> } => r.kind != null && r.p.visible)
+    .sort((a, b) => markerTotal(b.m, filter) - markerTotal(a.m, filter));
+  const pins: GlobePin[] = [];
+  for (const r of pts) {
+    const near = pins.find((p) => Math.hypot((p.x - r.p.x) * sizePx, (p.y - r.p.y) * sizePx) < mergePx);
+    if (near) {
+      near.cities.push(r.m);
+      near.total += markerTotal(r.m, filter);
+      near.isNew = near.isNew || r.m.isNew;
+      if (KIND_PRIORITY.indexOf(r.kind) < KIND_PRIORITY.indexOf(near.kind)) near.kind = r.kind;
+      continue;
+    }
+    const job = r.m.jobs.find((j) => j.kind === r.kind) ?? r.m.jobs[0] ?? null;
+    pins.push({ key: r.m.key, name: r.m.name, country: r.m.country, x: r.p.x, y: r.p.y, kind: r.kind, total: markerTotal(r.m, filter), isNew: r.m.isNew, cities: [r.m], job });
+  }
+  return pins;
+}
+
+/** Card visibili di default: 3 pin rilevanti, distanti tra loro e fuori dalla persona. */
+export function pickFeatured(pins: GlobePin[], sizePx: number): string[] {
+  const score = (p: GlobePin) => p.cities.reduce((s, c) => s + c.counts.sent * 100 + c.counts.saved * 60 + c.counts.desired * 40 + (c.jobs[0]?.match ?? 0), 0) + Math.min(p.total, 20);
+  const out: GlobePin[] = [];
+  for (const p of [...pins].sort((a, b) => score(b) - score(a))) {
+    if (out.length >= 3) break;
+    if (!p.job) continue;
+    if (p.x > PERSON_BOX.x0 - 0.06 && p.x < PERSON_BOX.x1 + 0.06 && p.y > PERSON_BOX.y0 - 0.06 && p.y < PERSON_BOX.y1 + 0.06) continue;
+    if (out.some((o) => Math.hypot((o.x - p.x) * sizePx, (o.y - p.y) * sizePx) < 260)) continue;
+    out.push(p);
+  }
+  return out.map((p) => p.key);
+}
+
+export function JobCard({ pin, selected, compact, onMore }: { pin: GlobePin; selected?: boolean; compact?: boolean; onMore?: (pin: GlobePin) => void }) {
+  const j = pin.job;
+  const color = PIN_COLORS[pin.kind];
+  const company = j?.company ?? (pin.kind === "desired" ? "Località desiderata" : "Azienda");
+  const cta = pin.kind === "sent" ? "Vedi candidatura" : pin.kind === "saved" ? "Approva e invia" : pin.kind === "desired" ? "Cerca qui" : "Invia candidatura";
+  const href = j?.href ?? `/jobs?q=${encodeURIComponent(pin.name)}`;
+  return (
+    <div className={`dg-card${selected ? " is-selected" : ""}${compact ? " is-compact" : ""}`} style={{ ["--c" as string]: color }}>
+      <div className="dg-card-head">
+        <span className="dg-logo" style={{ background: `hsl(${hue(company)} 45% 22%)`, color: `hsl(${hue(company)} 70% 78%)` }}>{initials(company)}</span>
+        <div className="dg-card-txt">
+          <div className="dg-card-co">{company}</div>
+          <div className="dg-card-role">{j?.title ?? (pin.kind === "desired" ? "Cerchiamo opportunità qui" : "Nessun annuncio")}</div>
+          <div className="dg-card-loc">{pin.name}{pin.country ? `, ${pin.country}` : ""}</div>
+        </div>
       </div>
+      <div className="dg-card-chips">
+        <span className="dg-chip" style={{ ["--c" as string]: color }}>{PIN_LABELS[pin.kind]}</span>
+        {j?.match != null && <span className="dg-chip" style={{ ["--c" as string]: PIN_COLORS.open }}>{Math.round(j.match)}% match</span>}
+      </div>
+      {pin.total > 1 && (
+        <button type="button" className="dg-card-more" onClick={(e) => { e.stopPropagation(); onMore?.(pin); }}>
+          {pin.name} · {pin.total} opportunità →
+        </button>
+      )}
+      <a href={href} className="dg-card-cta" onClick={(e) => e.stopPropagation()}>{cta} <span aria-hidden="true">→</span></a>
     </div>
-    <div class="dg-card-chips">${match}${status}</div>
-    ${list}
-    <a href="${esc(href)}" class="dg-card-cta">${cta} <span aria-hidden="true">→</span></a>
-  </div>`;
+  );
 }
 
 export function DashboardGlobe({
-  markers, filter, featuredKeys, selectedKey, onSelect,
+  markers, filter, selectedKey, onSelect, onMore,
 }: {
   markers: CityMarker[];
   filter: GlobeFilter;
-  featuredKeys: string[];
   selectedKey: string | null;
   onSelect: (key: string | null) => void;
+  onMore: (pin: GlobePin) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const globeRef = useRef<GlobeMethods | undefined>(undefined);
-  const [size, setSize] = useState({ w: 0, h: 0 });
-  const personElRef = useRef<HTMLDivElement | null>(null);
-  const width = size.w;
-  const height = size.h;
+  const [size, setSize] = useState(0);
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const reducedMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const measure = () => setSize({ w: el.clientWidth, h: el.clientHeight });
+    const measure = () => setSize(el.clientWidth);
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     measure();
     return () => ro.disconnect();
   }, []);
 
-  useEffect(() => {
-    const g = globeRef.current;
-    if (!g) return;
-    const c = g.controls();
-    c.autoRotate = !reducedMotion;
-    c.autoRotateSpeed = 0.35;
-    c.enableZoom = true;
-    c.enablePan = false;
-    c.zoomSpeed = 0.5;
-    // Il globo è dimensionato sull'altezza: su viewport stretti (mobile)
-    // alziamo la camera perché la Terra stia dentro la larghezza.
-    const alt = width < height ? Math.min(3.2, 1.4 * (height / width) * 1.15) : 1.4;
-    c.minDistance = Math.min(225, 100 * (1 + alt));
-    c.maxDistance = Math.max(320, 100 * (1 + alt) + 60);
-    let resume: ReturnType<typeof setTimeout> | undefined;
-    const stop = () => { c.autoRotate = false; if (resume) clearTimeout(resume); };
-    const end = () => { if (resume) clearTimeout(resume); if (!reducedMotion) resume = setTimeout(() => { c.autoRotate = true; }, 8000); };
-    c.addEventListener("start", stop);
-    c.addEventListener("end", end);
-    // La persona è un elemento HTML (px): la scaliamo col raggio apparente del
-    // globo (~metà del raggio, come nel riferimento) a qualsiasi zoom.
-    const cam = g.camera() as { position: { length: () => number }; fov?: number };
-    const fitPerson = () => {
-      const el = personElRef.current;
-      if (!el || !height) return;
-      const dist = cam.position.length();
-      const fov = ((cam.fov ?? 50) * Math.PI) / 180;
-      const radiusPx = (100 / dist) * (height / 2) / Math.tan(fov / 2);
-      el.style.width = `${Math.max(40, Math.min(220, radiusPx * 0.5))}px`;
-    };
-    // Le card si aprono verso l'ESTERNO del globo (lato in cui si trova il
-    // pin rispetto al centro), ricalcolato mentre la Terra ruota.
-    const root = ref.current;
-    const placeCards = () => {
-      if (!root) return;
-      const rb = root.getBoundingClientRect();
-      const mid = rb.left + root.clientWidth / 2;
-      root.querySelectorAll<HTMLElement>(".dg-pin.has-card").forEach((pin) => {
-        const r = pin.getBoundingClientRect();
-        const y = r.top - rb.top;
-        pin.classList.toggle("side-r", r.left >= mid);
-        pin.classList.toggle("side-l", r.left < mid);
-        // Vicino al bordo alto/basso la card si estende verso l'interno
-        // invece di uscire dall'hero (o finire sotto i filtri).
-        pin.classList.toggle("edge-top", y < 150);
-        pin.classList.toggle("edge-bottom", y > root.clientHeight - 130);
-      });
-    };
-    const onChange = () => { fitPerson(); placeCards(); };
-    onChange();
-    c.addEventListener("change", onChange);
-    const t = setInterval(onChange, 400);
-    g.pointOfView({ lat: 22, lng: 5, altitude: alt }, 0);
-    return () => { c.removeEventListener("start", stop); c.removeEventListener("end", end); c.removeEventListener("change", onChange); clearInterval(t); if (resume) clearTimeout(resume); };
-  }, [width, height, reducedMotion]);
+  const pins = useMemo(() => buildPins(markers, filter, size || 800), [markers, filter, size]);
+  const featured = useMemo(() => pickFeatured(pins, size || 800), [pins, size]);
 
-  type Item = { type: "person"; lat: number; lng: number } | { type: "pin"; lat: number; lng: number; m: CityMarker; kind: PinKind; card: boolean; selected: boolean };
-  const items = useMemo<Item[]>(() => {
-    const out: Item[] = [{ type: "person", ...PERSON_ANCHOR }];
-    for (const m of markers) {
-      const kind = markerKind(m, filter);
-      if (!kind) continue; // marker non visibile col filtro → non renderizzato
-      const selected = m.key === selectedKey;
-      out.push({ type: "pin", lat: m.lat, lng: m.lng, m, kind, selected, card: selected || (selectedKey == null && featuredKeys.includes(m.key)) });
-    }
-    return out;
-  }, [markers, filter, featuredKeys, selectedKey]);
-
-  const makeEl = (d: object) => {
-    const item = d as Item;
-    if (item.type === "person") {
-      const el = document.createElement("div");
-      el.className = "dg-person";
-      el.innerHTML = '<img src="/hero-person.png" alt="" draggable="false" />';
-      personElRef.current = el;
-      return el;
-    }
-    const { m, kind, card, selected } = item;
-    const color = PIN_COLORS[kind];
-    const total = markerTotal(m, filter);
-    const el = document.createElement("div");
-    el.className = `dg-pin${m.isNew && !reducedMotion ? " is-new" : ""}${selected ? " is-selected" : ""}${card ? " has-card" : ""}`;
-    el.style.setProperty("--c", color);
-    const j = m.jobs.find((x) => x.kind === kind) ?? m.jobs[0];
-    const tip = j
-      ? `<b>${esc(j.company ?? m.name)}</b><span>${esc(j.title)}</span>${j.match != null ? `<em>${Math.round(j.match)}% match</em>` : ""}`
-      : `<b>${esc(m.name)}</b><span>${esc(PIN_LABELS[kind])}</span>`;
-    el.innerHTML = `
-      <div class="dg-pin-body" role="button" tabindex="0" aria-label="${esc(m.name)}: ${total} ${esc(PIN_LABELS[kind].toLowerCase())}">
-        <span class="dg-pin-glow"></span>
-        <svg viewBox="0 0 24 24" width="26" height="26"><path d="M12 22s7-7.1 7-12.5A7 7 0 0 0 5 9.5C5 14.9 12 22 12 22z" fill="${color}" stroke="rgba(255,255,255,.85)" stroke-width="1.3"/><circle cx="12" cy="9.5" r="2.7" fill="#fff"/></svg>
-        ${total > 1 ? `<span class="dg-pin-count">${total}</span>` : ""}
-        <div class="dg-tip">${tip}</div>
-      </div>
-      ${card ? `<div class="dg-card-anchor">${jobCardHtml(m, kind, { selected })}</div>` : ""}`;
-    // Il canvas sotto cattura il drag: qui fermiamo la propagazione e gestiamo il click.
-    const stop = (e: Event) => e.stopPropagation();
-    el.addEventListener("pointerdown", stop);
-    el.addEventListener("mousedown", stop);
-    el.addEventListener("touchstart", stop, { passive: true });
-    el.addEventListener("wheel", stop, { passive: true });
-    const body = el.querySelector(".dg-pin-body") as HTMLElement;
-    body.addEventListener("click", (e) => { e.stopPropagation(); onSelect(selected ? null : m.key); });
-    body.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(selected ? null : m.key); } });
-    return el;
+  const onMove = (e: React.MouseEvent) => {
+    if (reducedMotion || !ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    setTilt({ x: ((e.clientX - r.left) / r.width - 0.5) * 2, y: ((e.clientY - r.top) / r.height - 0.5) * 2 });
   };
 
   return (
-    <div ref={ref} className="dg-globe" onClick={() => onSelect(null)}>
-      {width > 0 && height > 0 && (
-        <Globe
-          ref={globeRef}
-          width={width}
-          height={height}
-          backgroundColor="rgba(0,0,0,0)"
-          showAtmosphere
-          atmosphereColor="#6fb7ff"
-          atmosphereAltitude={0.18}
-          globeImageUrl="//unpkg.com/three-globe/example/img/earth-blue-marble.jpg"
-          bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
-          htmlElementsData={items}
-          htmlLat={(d: object) => (d as Item).lat}
-          htmlLng={(d: object) => (d as Item).lng}
-          htmlAltitude={(d: object) => ((d as Item).type === "person" ? 0.02 : 0.012)}
-          htmlElement={makeEl}
-          htmlElementVisibilityModifier={(el: HTMLElement, isVisible: boolean) => {
-            el.style.opacity = isVisible ? "1" : "0";
-            el.style.pointerEvents = isVisible && el.classList.contains("dg-pin") ? "auto" : "none";
-          }}
-          htmlTransitionDuration={0}
-        />
-      )}
+    <div
+      ref={ref}
+      className="dg-globe"
+      onMouseMove={onMove}
+      onMouseLeave={() => setTilt({ x: 0, y: 0 })}
+      onClick={() => onSelect(null)}
+      style={{ transform: `perspective(1400px) rotateY(${tilt.x * 3}deg) rotateX(${-tilt.y * 3}deg)` }}
+    >
+      <img src="/hero-globe.webp" alt="" className="dg-earth" draggable={false} />
+      {pins.map((p) => {
+        const selected = p.key === selectedKey;
+        const card = selected || (selectedKey == null && featured.includes(p.key));
+        const sideR = p.x >= GLOBE_CENTER.x;
+        const edgeTop = p.y < 0.16;
+        const edgeBottom = p.y > 0.86;
+        const color = PIN_COLORS[p.kind];
+        return (
+          <div
+            key={p.key}
+            className={`dg-pin${p.isNew && !reducedMotion ? " is-new" : ""}${selected ? " is-selected" : ""}${card ? " has-card" : ""} ${sideR ? "side-r" : "side-l"}${edgeTop ? " edge-top" : ""}${edgeBottom ? " edge-bottom" : ""}`}
+            style={{ left: `${p.x * 100}%`, top: `${p.y * 100}%`, ["--c" as string]: color }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="dg-pin-body"
+              aria-label={`${p.name}: ${p.total} ${PIN_LABELS[p.kind].toLowerCase()}`}
+              onClick={() => onSelect(selected ? null : p.key)}
+            >
+              <span className="dg-pin-glow" />
+              <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 22s7-7.1 7-12.5A7 7 0 0 0 5 9.5C5 14.9 12 22 12 22z" fill={color} stroke="rgba(255,255,255,.85)" strokeWidth="1.3" /><circle cx="12" cy="9.5" r="2.7" fill="#fff" /></svg>
+              {p.total > 1 && <span className="dg-pin-count">{p.total}</span>}
+              {!card && (
+                <span className="dg-tip">
+                  <b>{p.job?.company ?? p.name}</b>
+                  <span>{p.job?.title ?? PIN_LABELS[p.kind]}</span>
+                  {p.job?.match != null && <em>{Math.round(p.job.match)}% match</em>}
+                </span>
+              )}
+            </button>
+            {card && <div className="dg-card-anchor"><JobCard pin={p} selected={selected} onMore={onMore} /></div>}
+          </div>
+        );
+      })}
     </div>
   );
 }
