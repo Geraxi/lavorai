@@ -92,6 +92,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         .adm-pill.bad  { background: rgba(248,113,113,0.14); color: #f87171; }
         .adm-pill.info { background: rgba(96,165,250,0.14); color: #60a5fa; }
         .adm-pill.neutral { background: var(--bg-sunken); color: var(--fg-muted); border: 1px solid var(--border-ds); }
+        .adm-kpi-link { transition: border-color .15s, transform .15s; }
+        .adm-kpi-link:hover { border-color: hsl(var(--primary)/0.5) !important; transform: translateY(-1px); }
         .adm-th {
           display: grid; gap: 10px; align-items: center;
           font-size: 10.5px; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: 0.06em;

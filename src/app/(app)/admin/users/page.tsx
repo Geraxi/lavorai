@@ -3,7 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { PageTitle, KpiTrendCard, TierChip, compactNumber } from "../_ui";
-import { Users, CheckCircle2, Activity, UserPlus, Search, ChevronDown, MoreVertical, Copy, Mail, RotateCcw, Ban, Trash2, Download, X } from "lucide-react";
+import { Users, CheckCircle2, Activity, UserPlus, Search, MoreVertical, Copy, Mail, RotateCcw, Ban, Trash2, Download, X } from "lucide-react";
 
 export const metadata: Metadata = { title: "Admin · Utenti", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ const H = 3600_000;
 const PAGE = 10;
 
 interface PageProps {
-  searchParams?: Promise<{ includeTest?: string; sel?: string; p?: string }>;
+  searchParams?: Promise<{ includeTest?: string; sel?: string; p?: string; plan?: string }>;
 }
 
 /**
@@ -23,6 +23,8 @@ interface PageProps {
 export default async function AdminUsersPage({ searchParams }: PageProps) {
   const sp = (await searchParams) ?? {};
   const includeTest = sp.includeTest === "1";
+  // Filtro piano: paying (abbonamento attivo) | pro | pro_plus | free | unpaid (tier pro senza abbonamento attivo)
+  const plan = sp.plan ?? "";
   const page = Math.max(1, Number(sp.p ?? 1) || 1);
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
@@ -32,12 +34,21 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
     take: 500,
     select: {
       id: true, email: true, name: true, tier: true, emailVerified: true, createdAt: true, lastLoginAt: true,
+      subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true, stripePriceId: true,
       referralCode: true, referredById: true, signupReferrer: true, signupUtmSource: true,
       preferences: { select: { autoApplyMode: true, autoApplyOn: true, dailyCap: true, matchMin: true, rolesJson: true, locationsJson: true } },
       _count: { select: { applications: true, cvDocuments: true } },
     },
   });
-  const users = includeTest ? raw : raw.filter((u) => !isTestAccount(u.email));
+  const base = includeTest ? raw : raw.filter((u) => !isTestAccount(u.email));
+  const live = (u: { subscriptionStatus: string | null }) => u.subscriptionStatus === "active" || u.subscriptionStatus === "trialing";
+  const isPro = (u: { tier: string }) => u.tier === "pro" || u.tier === "pro_plus";
+  const users = plan === "paying" ? base.filter((u) => isPro(u) && live(u))
+    : plan === "unpaid" ? base.filter((u) => isPro(u) && !live(u))
+    : plan === "pro" || plan === "pro_plus" || plan === "free" ? base.filter((u) => u.tier === plan)
+    : base;
+  const payingCount = base.filter((u) => isPro(u) && live(u)).length;
+  const unpaidProCount = base.filter((u) => isPro(u) && !live(u)).length;
 
   const total = users.length;
   const verified = users.filter((u) => !!u.emailVerified).length;
@@ -71,6 +82,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   const qs = (extra: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
     if (includeTest) p.set("includeTest", "1");
+    if (plan) p.set("plan", plan);
     if (page > 1) p.set("p", String(page));
     for (const [k, v] of Object.entries(extra)) v == null ? p.delete(k) : p.set(k, v);
     const s = p.toString();
@@ -97,6 +109,12 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
         <KpiTrendCard label="Nuovi utenti" value={new7.toLocaleString("it-IT")} sub="negli ultimi 7 giorni" series={newSeries.slice(-7)} color="#22d3ee" icon={<UserPlus size={15} />} sparkKind="bars" />
       </div>
 
+      {plan === "paying" && (
+        <div className="adm-card" style={{ padding: "10px 14px", fontSize: 12.5, color: "var(--fg-muted)" }}>
+          <b style={{ color: "var(--fg)" }}>{payingCount}</b> {payingCount === 1 ? "utente con abbonamento Stripe attivo" : "utenti con abbonamento Stripe attivo"} (active/trialing).
+          {unpaidProCount > 0 && <> Altri <b style={{ color: "#fbbf24" }}>{unpaidProCount}</b> hanno il piano Pro nel database ma nessun pagamento attivo (past_due, cancellato o mai pagato): <Link href={qs({ plan: "unpaid", p: undefined, sel: undefined })} className="adm-link">vedili</Link>.</>}
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 360px", gap: 12, minHeight: 0 }}>
         {/* Tabella */}
         <div className="adm-card" style={{ padding: "14px 16px" }}>
@@ -105,8 +123,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--fg-subtle)" }} />
               <input type="search" placeholder="Cerca utenti, email o codice…" style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: 8, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", color: "var(--fg)", fontSize: 12.5, outline: "none" }} />
             </div>
-            {["Tutti gli stati", "Tutti i piani", "Tutti i ruoli", "Tutti i sorgenti"].map((l) => (
-              <span key={l} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", color: "var(--fg-muted)", fontSize: 12 }}>{l}<ChevronDown size={12} /></span>
+            {([["", "Tutti i piani"], ["paying", `Paganti (${payingCount})`], ["unpaid", `Pro senza pagamento (${unpaidProCount})`], ["free", "Free"]] as const).map(([k, l]) => (
+              <Link key={k || "all"} href={qs({ plan: k || undefined, p: undefined, sel: undefined })} className={`adm-pill ${plan === k ? "good" : "neutral"}`} style={{ justifyContent: "center", padding: "8px 12px", fontSize: 12, textDecoration: "none" }}>{l}</Link>
             ))}
           </div>
 
@@ -182,6 +200,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                 <KV k="Verificato" v={fmt2(selected.emailVerified)} />
                 <KV k="Ultimo accesso" v={fmt2(selected.lastLoginAt)} />
                 <KV k="Piano" v={<span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><TierChip tier={selected.tier} /><span className="adm-btn sm">Cambia</span></span>} />
+                <KV k="Abbonamento" v={<span className={`adm-pill ${live(selected) ? "good" : selected.subscriptionStatus ? "warn" : "neutral"}`} style={{ padding: "2px 8px", fontSize: 10.5 }}><span className="dot" />{selected.subscriptionStatus ?? "nessuno"}</span>} />
+                <KV k="Stripe" v={selected.stripeCustomerId ? <a href={`https://dashboard.stripe.com/customers/${selected.stripeCustomerId}`} target="_blank" rel="noreferrer" className="adm-link" style={{ fontSize: 11.5 }}>{selected.stripeCustomerId} ↗</a> : "—"} />
                 <KV k="Sorgente" v={source(selected.signupReferrer, selected.signupUtmSource)} />
                 <KV k="Codice referral" v={selected.referralCode ?? "—"} />
                 <KV k="Arrivato da" v={selected.referredById ?? "—"} />

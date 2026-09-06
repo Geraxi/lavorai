@@ -88,7 +88,7 @@ export default async function AdminOverviewPage() {
     recentPopups,
     recentEmails,
   ] = await Promise.all([
-    prisma.user.findMany({ select: { email: true, tier: true, createdAt: true } }),
+    prisma.user.findMany({ select: { email: true, tier: true, createdAt: true, subscriptionStatus: true } }),
     prisma.application.findMany({
       where: { createdAt: { gte: since(24 * DAYS) } },
       select: { createdAt: true, status: true, replyCount: true, lastReplyKind: true, userStatus: true, atsScore: true, job: { select: { company: true } } },
@@ -130,9 +130,13 @@ export default async function AdminOverviewPage() {
 
   const realUsers = allUsersLite.filter((u) => !isTestAccount(u.email));
   const realTotal = realUsers.length;
-  const payingPro = realUsers.filter((u) => u.tier === "pro").length;
-  const payingProPlus = realUsers.filter((u) => u.tier === "pro_plus").length;
-  const freeUsers = realTotal - payingPro - payingProPlus;
+  // "Pagante" = abbonamento Stripe vivo (active/trialing). Un tier pro con
+  // abbonamento past_due/canceled/assente NON genera ricavi e va mostrato a parte.
+  const isPaying = (u: { tier: string; subscriptionStatus: string | null }) => (u.tier === "pro" || u.tier === "pro_plus") && (u.subscriptionStatus === "active" || u.subscriptionStatus === "trialing");
+  const payingPro = realUsers.filter((u) => u.tier === "pro" && isPaying(u)).length;
+  const payingProPlus = realUsers.filter((u) => u.tier === "pro_plus" && isPaying(u)).length;
+  const proWithoutPayment = realUsers.filter((u) => (u.tier === "pro" || u.tier === "pro_plus") && !isPaying(u)).length;
+  const freeUsers = realTotal - payingPro - payingProPlus - proWithoutPayment;
 
   // ── Serie 14gg ────────────────────────────────────────────────────────
   const bucket = (dates: Date[]) => {
@@ -253,7 +257,7 @@ export default async function AdminOverviewPage() {
         <KpiTrendCard label="Utenti totali" value={realTotal.toLocaleString("it-IT")} sub={`+${sum(usersSeries)} nuovi (${DAYS}g)`} delta={delta(sum(usersSeries), usersPrev14)} series={usersSeries} color="hsl(var(--primary))" icon={<Users size={15} />} />
         <KpiTrendCard label="Candidature totali" value={compactNumber(apps28dCount + apps14dRows.length)} sub={`+${apps14dRows.length.toLocaleString("it-IT")} (${DAYS}g)`} delta={delta(apps14dRows.length, apps28dCount)} series={appsSeries} color="#60a5fa" icon={<FileText size={15} />} />
         <KpiTrendCard label="Aziende attive" value={compactNumber(distinctCompanies)} sub={`+${sum(companiesSeries)} con candidature (${DAYS}g)`} series={companiesSeries} color="#a78bfa" icon={<Building2 size={15} />} />
-        <KpiTrendCard label="Ricavi (EUR)" value={`€${mrr.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`} sub="Mese in corso · MRR" deltaLabel={`${payingPro + payingProPlus} paganti`} series={usersSeries.map((_, i) => mrr * (0.7 + i * 0.022))} color="hsl(var(--primary))" icon={<Wallet size={15} />} />
+        <KpiTrendCard href="/admin/users?plan=paying" label="Ricavi (EUR)" value={`€${mrr.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`} sub={proWithoutPayment > 0 ? `MRR · ${proWithoutPayment} piani Pro senza pagamento attivo` : "Mese in corso · MRR (abbonamenti Stripe attivi)"} deltaLabel={`${payingPro + payingProPlus} paganti`} series={usersSeries.map((_, i) => mrr * (0.7 + i * 0.022))} color="hsl(var(--primary))" icon={<Wallet size={15} />} />
         <KpiTrendCard label="Crediti AI utilizzati" value={compactNumber(aiUsed)} sub={`su ${compactNumber(aiCapacity)}`} deltaLabel={`${aiPct}%`} series={appsSeries} color="#a78bfa" icon={<Zap size={15} />} />
       </div>
 

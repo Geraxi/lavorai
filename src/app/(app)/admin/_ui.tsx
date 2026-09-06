@@ -382,6 +382,7 @@ export function KpiTrendCard({
   color = "hsl(var(--primary))",
   icon,
   sparkKind = "area",
+  href,
 }: {
   label: string;
   value: string | number;
@@ -392,12 +393,18 @@ export function KpiTrendCard({
   color?: string;
   icon?: ReactNode;
   sparkKind?: "area" | "bars";
+  /** Se presente la card è cliccabile e porta al dettaglio. */
+  href?: string;
 }) {
   const trendUp = delta != null && delta >= 0;
   const trendColor = delta == null ? "hsl(var(--primary))" : trendUp ? "hsl(var(--primary))" : "#f87171";
+  const Tag = (href ? Link : "div") as React.ElementType;
   return (
-    <div
+    <Tag
+      {...(href ? { href, className: "adm-kpi-link", title: "Apri il dettaglio" } : {})}
       style={{
+        textDecoration: "none",
+        cursor: href ? "pointer" : undefined,
         position: "relative",
         padding: "14px 16px 12px",
         borderRadius: 14,
@@ -450,7 +457,7 @@ export function KpiTrendCard({
           {sparkKind === "bars" ? <SparkBars data={series} color={color} /> : <Sparkline data={series} color={color} height={44} />}
         </div>
       </div>
-    </div>
+    </Tag>
   );
 }
 
