@@ -36,7 +36,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           display: flex;
           flex-direction: column;
         }
-        .adm-content > * { min-height: 0; }
+        /* La pagina NON deve mai comprimersi all'altezza del contenitore:
+           con min-height:0 sulle card le righe auto scendevano sotto il
+           contenuto e le card si sovrapponevano. */
+        .adm-content > * { flex: none; min-height: auto; }
+        .adm-page [style*="min-height"] { min-height: auto !important; }
 
         /* ── Primitive condivise ─────────────────────────────────── */
         .adm-page {
@@ -55,7 +59,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           border: 1px solid var(--border-ds);
           border-radius: 14px;
           padding: 16px 18px;
-          min-height: 0;
+          min-height: auto;
           min-width: 0;
           overflow: visible;              /* niente contenuti tagliati */
           display: flex;
