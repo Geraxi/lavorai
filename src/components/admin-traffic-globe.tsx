@@ -72,7 +72,7 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
         name: info.name,
         count: r.count,
         pct,
-        size: 0.2 + Math.sqrt(r.count / max) * 0.45,
+        size: 0.18 + Math.sqrt(r.count / max) * 0.32,
       });
       if (r.country?.toUpperCase() !== HUB_CODE && hub) {
         arcs.push({
@@ -122,8 +122,6 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
     () => [...points].sort((a, b) => b.count - a.count)[0] ?? null,
     [points],
   );
-  // Etichette solo per i primi 6 paesi, per non affollare il globo
-  const labels = useMemo(() => [...points].sort((a, b) => b.count - a.count).slice(0, 6), [points]);
 
   return (
     <div
@@ -147,54 +145,37 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
           // Texture terra "notte" — via unpkg (statico, cached), niente CDN esterni serviti a runtime dal codice del globo.
           globeImageUrl="/textures/earth-night.jpg"
           bumpImageUrl="/textures/earth-topology.png"
-          // Punti: dischi bassi e sottili (niente cilindri), dimensione ∝ √visite
+          // Barre in rilievo: altezza ∝ √visite (l'Italia svetta senza schiacciare
+          // gli altri), raggio contenuto, colore verde con leggera trasparenza.
           pointsData={points}
           pointLat={(d: object) => (d as Point).lat}
           pointLng={(d: object) => (d as Point).lng}
-          pointAltitude={0.006}
-          pointColor={() => PRIMARY_GREEN}
-          pointRadius={(d: object) => (d as Point).size}
+          pointAltitude={(d: object) => 0.03 + (d as Point).size * 0.6}
+          pointColor={(d: object) => ((d as Point).code === HUB_CODE ? "#6ee7b7" : "rgba(52, 211, 153, 0.92)")}
+          pointRadius={(d: object) => (d as Point).size * 0.55}
+          pointResolution={24}
           pointsMerge={false}
-          // Anelli che si propagano da ogni paese: raggio ∝ visite, l'Italia (hub) più ampio
-          ringsData={points}
+          // Un solo anello che pulsa dall'hub (Italia): dà vita senza affollare.
+          ringsData={points.filter((p) => p.code === HUB_CODE)}
           ringLat={(d: object) => (d as Point).lat}
           ringLng={(d: object) => (d as Point).lng}
-          ringAltitude={0.008}
-          ringColor={() => (t: number) => `rgba(52, 211, 153, ${Math.max(0, 0.9 * (1 - t))})`}
-          ringMaxRadius={(d: object) => 2 + (d as Point).size * 9}
-          ringPropagationSpeed={(d: object) => 0.8 + (d as Point).size * 2}
-          ringRepeatPeriod={(d: object) => ((d as Point).code === HUB_CODE ? 900 : 1600)}
-          // Etichette per i paesi principali (nome + visite), senza puntino
-          labelsData={labels}
-          labelLat={(d: object) => (d as Point).lat}
-          labelLng={(d: object) => (d as Point).lng}
-          labelText={(d: object) => `${(d as Point).name} · ${(d as Point).count}`}
-          labelSize={(d: object) => 0.9 + (d as Point).size * 0.8}
-          labelDotRadius={0}
-          labelColor={() => "rgba(229,231,235,0.85)"}
-          labelAltitude={0.012}
-          labelResolution={2}
-          labelIncludeDot={false}
-          pointLabel={(d: object) => {
-            const p = d as Point;
-            return `<div style="background:#0a0f14;border:1px solid rgba(52,211,153,0.4);border-radius:8px;padding:8px 12px;font-family:system-ui;color:#e5e7eb;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
-              <div style="font-weight:700;color:#fff;margin-bottom:2px">${p.name}</div>
-              <div style="color:#34d399">${p.count} visite</div>
-              <div style="color:#9ca3af;font-size:11px">${p.pct.toFixed(pct(p))}% del totale</div>
-            </div>`;
-          }}
+          ringAltitude={0.01}
+          ringColor={() => (t: number) => `rgba(52, 211, 153, ${Math.max(0, 0.6 * (1 - t))})`}
+          ringMaxRadius={4}
+          ringPropagationSpeed={1.2}
+          ringRepeatPeriod={1400}
           onPointHover={(d: object | null) => setHover(d as Point | null)}
           // Archi: sottili, altezza proporzionale alla distanza, sfumatura trasparente → verde,
           // spessore ∝ visite del paese di destinazione, scia animata lenta
           arcsData={arcs}
-          arcColor={() => ["rgba(52,211,153,0.12)", "rgba(52,211,153,0.75)", "#a7f3d0"]}
-          arcAltitudeAutoScale={0.3}
-          arcStroke={(d: object) => 0.22 + ((d as Arc).weight ?? 0) * 0.5}
+          arcColor={() => ["rgba(52,211,153,0.25)", "rgba(52,211,153,0.9)", "#a7f3d0"]}
+          arcAltitude={0.22}
+          arcStroke={(d: object) => 0.3 + ((d as Arc).weight ?? 0) * 0.45}
           arcCurveResolution={96}
-          arcDashLength={0.5}
-          arcDashGap={0.25}
+          arcDashLength={0.45}
+          arcDashGap={0.2}
           arcDashInitialGap={() => Math.random()}
-          arcDashAnimateTime={3200}
+          arcDashAnimateTime={2400}
           arcsTransitionDuration={0}
         />
       )}
