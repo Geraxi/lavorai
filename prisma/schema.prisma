@@ -180,6 +180,10 @@ model PageView {
   sessionId String?
   /// Country dal geo header Vercel (best-effort).
   country   String?
+  /// Suddivisione (regione/provincia) e città dai geo header Vercel
+  /// (x-vercel-ip-country-region, x-vercel-ip-city). Best-effort.
+  region    String?
+  city      String?
   /// User agent troncato.
   userAgent String?
   ts        DateTime @default(now())

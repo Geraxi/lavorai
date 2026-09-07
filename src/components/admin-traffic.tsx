@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, compactNumber } from "@/app/(app)/admin/_ui";
 import { AdminTrafficMap } from "@/components/admin-traffic-map";
 import { AdminRangeSelect } from "@/components/admin-range-select";
+import { itRegionOf } from "@/lib/it-regions";
 import { Eye, Users, UserPlus, Layers, Download } from "lucide-react";
 
 const H = 3600_000;
@@ -27,7 +28,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     dayKeys.push(d.toISOString().slice(0, 10));
   }
 
-  const [views14d, uniq7d, uniqPrev7, newUsers7, newUsersPrev7, topPaths, topReferrers, byCountry] = await Promise.all([
+  const [views14d, uniq7d, uniqPrev7, newUsers7, newUsersPrev7, topPaths, topReferrers, byCountry, itGeo] = await Promise.all([
     prisma.pageView.findMany({ where: { ts: { gte: since(24 * 2 * P) } }, select: { ts: true, sessionId: true } }).catch(() => [] as { ts: Date; sessionId: string }[]),
     prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
     prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * 2 * P), lt: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
@@ -36,7 +37,23 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     prisma.pageView.groupBy({ by: ["path"], where: { ts: { gte: since(24 * P) } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 12 }).catch(() => [] as Array<{ path: string; _count: { _all: number } }>),
     prisma.pageView.groupBy({ by: ["referrer"], where: { ts: { gte: since(24 * P) }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 12 }).catch(() => [] as Array<{ referrer: string | null; _count: { _all: number } }>),
     prisma.pageView.groupBy({ by: ["country"], where: { ts: { gte: since(24 * P) }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 30 }).catch(() => [] as Array<{ country: string | null; _count: { _all: number } }>),
+    // Regione/città delle visite italiane (geo header Vercel; null per le visite precedenti al tracking)
+    prisma.pageView.groupBy({ by: ["region", "city"], where: { ts: { gte: since(24 * P) }, country: "IT" }, _count: { _all: true } }).catch(() => [] as Array<{ region: string | null; city: string | null; _count: { _all: number } }>),
   ]);
+
+  // Aggregazione per regione italiana
+  const regionMap = new Map<string, { key: string; name: string; lat: number; lng: number; count: number; cities: Map<string, number> }>();
+  let itUnresolved = 0;
+  for (const g of itGeo) {
+    const n = Number((g._count as { _all: number })._all);
+    const r = itRegionOf(g.region, g.city);
+    if (!r) { itUnresolved += n; continue; }
+    const cur = regionMap.get(r.key) ?? { key: r.key, name: r.name, lat: r.lat, lng: r.lng, count: 0, cities: new Map<string, number>() };
+    cur.count += n;
+    if (g.city) cur.cities.set(g.city, (cur.cities.get(g.city) ?? 0) + n);
+    regionMap.set(r.key, cur);
+  }
+  const regions = [...regionMap.values()].sort((a, b) => b.count - a.count).map((r) => ({ key: r.key, name: r.name, lat: r.lat, lng: r.lng, count: r.count, topCities: [...r.cities.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c, n]) => `${c} (${n})`) }));
 
   const views7 = views14d.filter((v) => v.ts >= since(24 * P)).length;
   const viewsPrev7 = views14d.length - views7;
@@ -89,7 +106,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
       </div>
 
       <div className="adm-card" style={{ padding: 0, position: "relative" }}>
-        <AdminTrafficMap rows={byCountry.map((c) => ({ country: c.country, count: c._count._all }))} />
+        <AdminTrafficMap rows={byCountry.map((c) => ({ country: c.country, count: c._count._all }))} regions={regions} regionsUnresolved={itUnresolved} days={P} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, minHeight: 0 }}>

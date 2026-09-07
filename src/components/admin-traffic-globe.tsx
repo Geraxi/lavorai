@@ -41,7 +41,9 @@ interface Arc {
 const HUB_CODE = "IT"; // Da qui partono gli archi verso ogni paese di provenienza.
 const PRIMARY_GREEN = "rgba(52, 211, 153, 1)";
 
-export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
+export interface RegionPoint { key: string; name: string; lat: number; lng: number; count: number }
+
+export function AdminTrafficGlobe({ rows, regions = [] }: { rows: CountryRow[]; regions?: RegionPoint[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -65,6 +67,13 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
         continue;
       }
       const pct = (r.count / total) * 100;
+      // Italia: se abbiamo il dettaglio regionale, una barra per regione al posto di quella nazionale
+      if (r.country?.toUpperCase() === HUB_CODE && regions.length > 0) {
+        for (const g of regions) {
+          points.push({ lat: g.lat, lng: g.lng, code: `IT-${g.key}`, name: `${g.name} (Italia)`, count: g.count, pct: (g.count / total) * 100, size: 0.18 + Math.sqrt(g.count / max) * 0.32 });
+        }
+        continue;
+      }
       points.push({
         lat: info.lat,
         lng: info.lng,
@@ -86,7 +95,7 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
       }
     }
     return { points, arcs, unmapped };
-  }, [rows]);
+  }, [rows, regions]);
 
   // ResizeObserver — il globo riempie il contenitore (larghezza E altezza):
   // la card ha altezza da griglia viewport, non fissa.
@@ -151,12 +160,12 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
           pointLat={(d: object) => (d as Point).lat}
           pointLng={(d: object) => (d as Point).lng}
           pointAltitude={(d: object) => 0.02 + (d as Point).size * 0.22}
-          pointColor={(d: object) => ((d as Point).code === HUB_CODE ? "#6ee7b7" : "rgba(52, 211, 153, 0.92)")}
+          pointColor={(d: object) => ((d as Point).code.startsWith("IT") ? "#6ee7b7" : "rgba(52, 211, 153, 0.92)")}
           pointRadius={(d: object) => (d as Point).size * 0.5}
           pointResolution={24}
           pointsMerge={false}
           // Un solo anello che pulsa dall'hub (Italia): dà vita senza affollare.
-          ringsData={points.filter((p) => p.code === HUB_CODE)}
+          ringsData={points.filter((p) => p.code === HUB_CODE || (p.code.startsWith("IT-") && p.count === Math.max(...points.filter((q) => q.code.startsWith("IT-")).map((q) => q.count))))}
           ringLat={(d: object) => (d as Point).lat}
           ringLng={(d: object) => (d as Point).lng}
           ringAltitude={0.01}
@@ -200,7 +209,7 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`https://flagcdn.com/${(hover ?? topPoint)!.code.toLowerCase()}.svg`} alt="" width={26} height={19} style={{ borderRadius: 3, objectFit: "cover" }} />
+          <img src={`https://flagcdn.com/${(hover ?? topPoint)!.code.slice(0, 2).toLowerCase()}.svg`} alt="" width={26} height={19} style={{ borderRadius: 3, objectFit: "cover" }} />
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#fff" }}>{(hover ?? topPoint)!.name}</div>
             <div style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{(hover ?? topPoint)!.count} visite</div>

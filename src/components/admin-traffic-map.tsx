@@ -8,7 +8,7 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { Globe as GlobeIcon, List as ListIcon } from "lucide-react";
+import { Globe as GlobeIcon, List as ListIcon, MapPin } from "lucide-react";
 import { centroidOf } from "@/lib/country-centroids";
 
 const AdminTrafficGlobe = dynamic(() => import("./admin-traffic-globe").then((m) => m.AdminTrafficGlobe), {
@@ -22,9 +22,19 @@ interface Row {
   country: string | null;
   count: number;
 }
+export interface RegionRow {
+  key: string;
+  name: string;
+  lat: number;
+  lng: number;
+  count: number;
+  topCities: string[];
+}
 
-export function AdminTrafficMap({ rows }: { rows: Row[] }) {
-  const [mode, setMode] = useState<"map" | "list">("map");
+export function AdminTrafficMap({ rows, regions = [], regionsUnresolved = 0, days = 7 }: { rows: Row[]; regions?: RegionRow[]; regionsUnresolved?: number; days?: number }) {
+  const [mode, setMode] = useState<"map" | "list" | "regions">("map");
+  const regTotal = regions.reduce((s, r) => s + r.count, 0) + regionsUnresolved || 1;
+  const regMax = regions[0]?.count ?? 1;
   const total = rows.reduce((s, r) => s + r.count, 0) || 1;
   const sorted = [...rows].sort((a, b) => b.count - a.count);
   const max = sorted[0]?.count ?? 1;
@@ -37,11 +47,12 @@ export function AdminTrafficMap({ rows }: { rows: Row[] }) {
       <div style={{ position: "absolute", top: 14, left: 18, right: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 2, pointerEvents: "none" }}>
         <div>
           <div className="adm-card-title" style={{ fontSize: 15 }}>Traffico globale</div>
-          <div className="adm-card-sub" style={{ color: "var(--fg-muted)" }}>Utenti per paese (ultimi 7 giorni)</div>
+          <div className="adm-card-sub" style={{ color: "var(--fg-muted)" }}>{mode === "regions" ? `Visite dall'Italia per regione (ultimi ${days} giorni)` : `Utenti per paese (ultimi ${days} giorni)`}</div>
         </div>
         <div role="tablist" style={{ display: "inline-flex", padding: 3, borderRadius: 999, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", pointerEvents: "auto" }}>
           <Tab active={mode === "map"} onClick={() => setMode("map")} icon={<GlobeIcon size={12} />}>Mappa</Tab>
           <Tab active={mode === "list"} onClick={() => setMode("list")} icon={<ListIcon size={12} />}>Lista</Tab>
+          <Tab active={mode === "regions"} onClick={() => setMode("regions")} icon={<MapPin size={12} />}>Regioni IT</Tab>
         </div>
       </div>
 
@@ -57,7 +68,23 @@ export function AdminTrafficMap({ rows }: { rows: Row[] }) {
       {/* Destra: globo o lista completa */}
       <div style={{ minHeight: 0, minWidth: 0, position: "relative" }}>
         {mode === "map" ? (
-          <AdminTrafficGlobe rows={rows} />
+          <AdminTrafficGlobe rows={rows} regions={regions} />
+        ) : mode === "regions" ? (
+          <div style={{ padding: "64px 18px 14px 8px", height: "100%", overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+            {regions.length === 0 && <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>Nessuna visita italiana con regione nota nel periodo. Il dato viene salvato dalle visite successive all'attivazione del tracking regionale.</div>}
+            {regions.map((r) => (
+              <div key={r.key} style={{ display: "grid", gridTemplateColumns: "1fr 110px 40px 40px", gap: 10, alignItems: "center", fontSize: 12.5, padding: "5px 0", borderBottom: "1px solid var(--border-ds)" }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="adm-ellipsis" style={{ color: "var(--fg)", fontWeight: 600 }}>{r.name}</div>
+                  <div className="adm-ellipsis" style={{ color: "var(--fg-subtle)", fontSize: 11 }}>{r.topCities.join(" · ") || "—"}</div>
+                </div>
+                <div style={{ height: 5, background: "var(--bg-sunken)", borderRadius: 3, overflow: "hidden" }}><div style={{ width: `${(r.count / regMax) * 100}%`, height: "100%", background: "hsl(var(--primary))", opacity: 0.8 }} /></div>
+                <span className="adm-num" style={{ textAlign: "right", color: "var(--fg)", fontWeight: 600 }}>{r.count}</span>
+                <span className="adm-num" style={{ textAlign: "right", color: "var(--fg-subtle)" }}>{Math.round((r.count / regTotal) * 100)}%</span>
+              </div>
+            ))}
+            {regionsUnresolved > 0 && <div style={{ fontSize: 11.5, color: "var(--fg-subtle)", paddingTop: 8 }}>{regionsUnresolved} visite italiane senza regione nota.</div>}
+          </div>
         ) : (
           <div style={{ padding: "64px 18px 14px 8px", height: "100%", overflowY: "auto", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 24px", alignContent: "start" }}>
             {sorted.map((r) => (

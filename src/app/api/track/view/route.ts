@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
+import { decodeGeoHeader } from "@/lib/it-regions";
 import { auth } from "@/lib/auth";
 import { randomBytes } from "node:crypto";
 
@@ -32,6 +33,8 @@ export async function POST(request: NextRequest) {
     const session = await auth().catch(() => null);
     const userId = session?.user?.id ?? null;
     const country = request.headers.get("x-vercel-ip-country") ?? null;
+    const region = decodeGeoHeader(request.headers.get("x-vercel-ip-country-region"));
+    const city = decodeGeoHeader(request.headers.get("x-vercel-ip-city"));
     const ua = (request.headers.get("user-agent") ?? "").slice(0, 200);
 
     await prisma.pageView
@@ -42,6 +45,8 @@ export async function POST(request: NextRequest) {
           userId,
           sessionId: sid,
           country,
+          region,
+          city,
           userAgent: ua,
         },
       })
