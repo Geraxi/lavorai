@@ -39,6 +39,8 @@ export async function POST(req: NextRequest) {
       createdAt: { gte: since },
       OR: [
         { status: "ready_to_apply", submitConfirmation: "CAPTCHA" },
+        // Form compilato ma non inviato perché PORTAL_SUBMIT_DRY_RUN era attivo
+        { submitConfirmation: "DRY_RUN", status: { notIn: ["success", "queued", "optimizing", "applying"] } },
         { status: "failed", errorMessage: { contains: "non confermato", mode: "insensitive" } },
         { status: "failed", errorMessage: { contains: "captcha", mode: "insensitive" } },
       ],

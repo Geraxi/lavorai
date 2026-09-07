@@ -36,7 +36,7 @@ export function RetryCaptchaButton() {
     <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
       <button type="button" className="adm-btn primary" onClick={run} disabled={state === "running"}>
         <RefreshCw size={13} style={state === "running" ? { animation: "spin 1s linear infinite" } : undefined} />
-        {state === "running" ? "Ri-accodo…" : "Ri-accoda bloccate da captcha"}
+        {state === "running" ? "Ri-accodo…" : "Ri-accoda captcha e dry-run"}
       </button>
       {msg && <span style={{ fontSize: 12, color: state === "error" ? "#f87171" : "hsl(var(--primary))" }}>{msg}</span>}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
