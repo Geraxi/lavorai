@@ -150,9 +150,9 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
           pointsData={points}
           pointLat={(d: object) => (d as Point).lat}
           pointLng={(d: object) => (d as Point).lng}
-          pointAltitude={(d: object) => 0.03 + (d as Point).size * 0.6}
+          pointAltitude={(d: object) => 0.02 + (d as Point).size * 0.22}
           pointColor={(d: object) => ((d as Point).code === HUB_CODE ? "#6ee7b7" : "rgba(52, 211, 153, 0.92)")}
-          pointRadius={(d: object) => (d as Point).size * 0.55}
+          pointRadius={(d: object) => (d as Point).size * 0.5}
           pointResolution={24}
           pointsMerge={false}
           // Un solo anello che pulsa dall'hub (Italia): dà vita senza affollare.
@@ -168,14 +168,14 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
           // Archi: sottili, altezza proporzionale alla distanza, sfumatura trasparente → verde,
           // spessore ∝ visite del paese di destinazione, scia animata lenta
           arcsData={arcs}
-          arcColor={() => ["rgba(52,211,153,0.25)", "rgba(52,211,153,0.9)", "#a7f3d0"]}
-          arcAltitude={0.22}
-          arcStroke={(d: object) => 0.3 + ((d as Arc).weight ?? 0) * 0.45}
-          arcCurveResolution={96}
-          arcDashLength={0.45}
-          arcDashGap={0.2}
+          arcColor={() => ["rgba(52,211,153,0.2)", "rgba(52,211,153,0.85)", "#a7f3d0"]}
+          arcAltitudeAutoScale={0.4}
+          arcStroke={(d: object) => 0.22 + ((d as Arc).weight ?? 0) * 0.36}
+          arcCurveResolution={128}
+          arcDashLength={0.5}
+          arcDashGap={0.22}
           arcDashInitialGap={() => Math.random()}
-          arcDashAnimateTime={2400}
+          arcDashAnimateTime={2600}
           arcsTransitionDuration={0}
         />
       )}
