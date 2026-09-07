@@ -27,36 +27,68 @@ loadEnv({ path: ".env", override: false });
 
 import { createApplicationsWorker } from "./src/lib/bullmq-queue";
 import { processApplication } from "./src/lib/application-worker";
+import { claimApplication, findClaimableQueued } from "./src/lib/application-claim";
 
 async function main(): Promise<void> {
-  if (!process.env.REDIS_URL) {
-    console.error("[worker] REDIS_URL mancante — impossibile avviare BullMQ");
-    process.exit(1);
-  }
-
-  console.log("[worker] avvio BullMQ worker su queue 'applications'");
+  const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 2) || 2);
   console.log(
-    `[worker] concurrency=${process.env.WORKER_CONCURRENCY ?? 2}, auto-apply=${process.env.AUTO_APPLY_ENABLED ?? "false"}`,
+    `[worker] concurrency=${concurrency}, auto-apply=${process.env.AUTO_APPLY_ENABLED ?? "false"}, redis=${process.env.REDIS_URL ? "set" : "assente"}`,
   );
 
-  const worker = createApplicationsWorker(async (job) => {
-    console.log(`[worker] processing job ${job.id} (applicationId=${job.data.applicationId})`);
-    await processApplication(job.data.applicationId);
-    console.log(`[worker] completed job ${job.id}`);
-  });
+  // 1) BullMQ (se Redis è configurato). Opzionale: se Upstash è rate-limited o
+  //    assente, il polling DB qui sotto elabora comunque la coda.
+  let worker: ReturnType<typeof createApplicationsWorker> | null = null;
+  if (process.env.REDIS_URL) {
+    try {
+      worker = createApplicationsWorker(async (job) => {
+        const id = job.data.applicationId;
+        if (!(await claimApplication(id))) {
+          console.log(`[worker] job ${job.id} già preso in carico altrove, skip`);
+          return;
+        }
+        console.log(`[worker] processing job ${job.id} (applicationId=${id})`);
+        await processApplication(id);
+        console.log(`[worker] completed job ${job.id}`);
+      });
+      worker.on("failed", (job, err) => {
+        console.error(`[worker] job ${job?.id} failed (attempt ${job?.attemptsMade}/${job?.opts.attempts}):`, err.message);
+      });
+      worker.on("error", (err) => {
+        console.error("[worker] bullmq error (continuo col polling DB):", err.message);
+      });
+      worker.on("ready", () => {
+        console.log("[worker] connected to Redis, ready for jobs");
+      });
+    } catch (err) {
+      console.error("[worker] BullMQ non avviato, uso solo il polling DB", err);
+    }
+  }
 
-  worker.on("failed", (job, err) => {
-    console.error(
-      `[worker] job ${job?.id} failed (attempt ${job?.attemptsMade}/${job?.opts.attempts}):`,
-      err.message,
-    );
-  });
-  worker.on("error", (err) => {
-    console.error("[worker] worker error:", err);
-  });
-  worker.on("ready", () => {
-    console.log("[worker] connected to Redis, ready for jobs");
-  });
+  // 2) Polling DB: ogni WORKER_POLL_MS prende le candidature `queued` non ancora
+  //    in carico (claim atomico) e le elabora, fino a `concurrency` in parallelo.
+  //    È la via che funziona SEMPRE, anche con Redis rate-limited.
+  const pollMs = Math.max(5_000, Number(process.env.WORKER_POLL_MS ?? 15_000) || 15_000);
+  let active = 0;
+  console.log(`[worker] polling DB ogni ${pollMs / 1000}s`);
+  const poll = async () => {
+    if (active >= concurrency) return;
+    try {
+      const ids = await findClaimableQueued(concurrency - active);
+      for (const id of ids) {
+        if (!(await claimApplication(id))) continue;
+        active++;
+        console.log(`[worker] (poll) processing applicationId=${id} active=${active}`);
+        processApplication(id)
+          .then(() => console.log(`[worker] (poll) completed ${id}`))
+          .catch((err) => console.error(`[worker] (poll) ${id} failed:`, err instanceof Error ? err.message : err))
+          .finally(() => { active--; });
+      }
+    } catch (err) {
+      console.error("[worker] poll error:", err instanceof Error ? err.message : err);
+    }
+  };
+  void poll();
+  const pollTimer = setInterval(() => void poll(), pollMs);
 
   // Scheduler auto-apply nel worker (processo persistente): 3 batch/giorno
   // alle ore UTC in AUTO_APPLY_HOURS (default "8,12,16"). Vercel Hobby non
@@ -88,7 +120,8 @@ async function main(): Promise<void> {
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     console.log(`[worker] ${signal} received, draining...`);
-    await worker.close();
+    clearInterval(pollTimer);
+    if (worker) await worker.close();
     console.log("[worker] closed cleanly");
     process.exit(0);
   };

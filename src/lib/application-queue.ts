@@ -17,6 +17,11 @@ import { processApplication } from "@/lib/application-worker";
  */
 
 export async function enqueueApplication(applicationId: string): Promise<void> {
+  // La candidatura torna "prendibile": chi la elabora (worker Railway via
+  // BullMQ o polling DB, oppure self-invoke Vercel) la prende con claim atomico.
+  const { resetClaim } = await import("@/lib/application-claim");
+  await resetClaim(applicationId);
+
   if (process.env.REDIS_URL) {
     try {
       const { getApplicationsQueue } = await import("@/lib/bullmq-queue");

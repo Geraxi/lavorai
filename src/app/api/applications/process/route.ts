@@ -38,6 +38,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Claim atomico: se il worker Railway l'ha già presa (polling DB), qui non facciamo nulla.
+    const { claimApplication } = await import("@/lib/application-claim");
+    if (!(await claimApplication(parsed.data.applicationId))) {
+      console.log(`[/api/applications/process] ${parsed.data.applicationId} già presa in carico altrove, skip`);
+      return NextResponse.json({ ok: true, skipped: true });
+    }
     await processApplication(parsed.data.applicationId);
     return NextResponse.json({ ok: true });
   } catch (err) {
