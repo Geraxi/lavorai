@@ -29,6 +29,8 @@ interface Point {
 }
 
 interface Arc {
+  /** 0..1, ∝ √visite del paese di destinazione (spessore dell'arco). */
+  weight?: number;
   startLat: number;
   startLng: number;
   endLat: number;
@@ -38,7 +40,6 @@ interface Arc {
 
 const HUB_CODE = "IT"; // Da qui partono gli archi verso ogni paese di provenienza.
 const PRIMARY_GREEN = "rgba(52, 211, 153, 1)";
-const PRIMARY_GREEN_SOFT = "rgba(52, 211, 153, 0.35)";
 
 export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -71,7 +72,7 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
         name: info.name,
         count: r.count,
         pct,
-        size: 0.25 + (r.count / max) * 0.7,
+        size: 0.2 + Math.sqrt(r.count / max) * 0.45,
       });
       if (r.country?.toUpperCase() !== HUB_CODE && hub) {
         arcs.push({
@@ -80,6 +81,7 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
           endLat: info.lat,
           endLng: info.lng,
           color: PRIMARY_GREEN,
+          weight: Math.sqrt(r.count / max),
         });
       }
     }
@@ -112,7 +114,7 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
     };
     controls.addEventListener("start", stopAuto);
     // Punta verso l'Europa all'apertura
-    g.pointOfView({ lat: 30, lng: 15, altitude: 1.9 }, 0);
+    g.pointOfView({ lat: 32, lng: 12, altitude: 1.55 }, 0);
     return () => controls.removeEventListener("start", stopAuto);
   }, [width, height]);
 
@@ -120,6 +122,8 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
     () => [...points].sort((a, b) => b.count - a.count)[0] ?? null,
     [points],
   );
+  // Etichette solo per i primi 6 paesi, per non affollare il globo
+  const labels = useMemo(() => [...points].sort((a, b) => b.count - a.count).slice(0, 6), [points]);
 
   return (
     <div
@@ -141,14 +145,36 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
           atmosphereColor={PRIMARY_GREEN}
           atmosphereAltitude={0.18}
           // Texture terra "notte" — via unpkg (statico, cached), niente CDN esterni serviti a runtime dal codice del globo.
-          globeImageUrl="//unpkg.com/three-globe/example/img/earth-night.jpg"
-          bumpImageUrl="//unpkg.com/three-globe/example/img/earth-topology.png"
+          globeImageUrl="/textures/earth-night.jpg"
+          bumpImageUrl="/textures/earth-topology.png"
+          // Punti: dischi bassi e sottili (niente cilindri), dimensione ∝ √visite
           pointsData={points}
           pointLat={(d: object) => (d as Point).lat}
           pointLng={(d: object) => (d as Point).lng}
-          pointAltitude={(d: object) => (d as Point).size * 0.15}
+          pointAltitude={0.006}
           pointColor={() => PRIMARY_GREEN}
           pointRadius={(d: object) => (d as Point).size}
+          pointsMerge={false}
+          // Anelli che si propagano da ogni paese: raggio ∝ visite, l'Italia (hub) più ampio
+          ringsData={points}
+          ringLat={(d: object) => (d as Point).lat}
+          ringLng={(d: object) => (d as Point).lng}
+          ringAltitude={0.008}
+          ringColor={() => (t: number) => `rgba(52, 211, 153, ${Math.max(0, 0.9 * (1 - t))})`}
+          ringMaxRadius={(d: object) => 2 + (d as Point).size * 9}
+          ringPropagationSpeed={(d: object) => 0.8 + (d as Point).size * 2}
+          ringRepeatPeriod={(d: object) => ((d as Point).code === HUB_CODE ? 900 : 1600)}
+          // Etichette per i paesi principali (nome + visite), senza puntino
+          labelsData={labels}
+          labelLat={(d: object) => (d as Point).lat}
+          labelLng={(d: object) => (d as Point).lng}
+          labelText={(d: object) => `${(d as Point).name} · ${(d as Point).count}`}
+          labelSize={(d: object) => 0.9 + (d as Point).size * 0.8}
+          labelDotRadius={0}
+          labelColor={() => "rgba(229,231,235,0.85)"}
+          labelAltitude={0.012}
+          labelResolution={2}
+          labelIncludeDot={false}
           pointLabel={(d: object) => {
             const p = d as Point;
             return `<div style="background:#0a0f14;border:1px solid rgba(52,211,153,0.4);border-radius:8px;padding:8px 12px;font-family:system-ui;color:#e5e7eb;font-size:12px;box-shadow:0 8px 24px rgba(0,0,0,0.5)">
@@ -158,14 +184,18 @@ export function AdminTrafficGlobe({ rows }: { rows: CountryRow[] }) {
             </div>`;
           }}
           onPointHover={(d: object | null) => setHover(d as Point | null)}
+          // Archi: sottili, altezza proporzionale alla distanza, sfumatura trasparente → verde,
+          // spessore ∝ visite del paese di destinazione, scia animata lenta
           arcsData={arcs}
-          arcColor={() => [PRIMARY_GREEN_SOFT, PRIMARY_GREEN]}
-          arcAltitude={0.22}
-          arcStroke={0.35}
-          arcDashLength={0.45}
-          arcDashGap={0.2}
+          arcColor={() => ["rgba(52,211,153,0.12)", "rgba(52,211,153,0.75)", "#a7f3d0"]}
+          arcAltitudeAutoScale={0.3}
+          arcStroke={(d: object) => 0.22 + ((d as Arc).weight ?? 0) * 0.5}
+          arcCurveResolution={96}
+          arcDashLength={0.5}
+          arcDashGap={0.25}
           arcDashInitialGap={() => Math.random()}
-          arcDashAnimateTime={2400}
+          arcDashAnimateTime={3200}
+          arcsTransitionDuration={0}
         />
       )}
 
