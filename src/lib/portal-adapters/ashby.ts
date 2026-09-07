@@ -68,7 +68,7 @@ export const ashbyAdapter: PortalAdapter = {
             'input[aria-label*="First name" i], input[aria-label*="Name" i], input[name="_systemfield_name"]',
           )
           .first()
-          .waitFor({ timeout: 8_000 });
+          .waitFor({ timeout: 15_000 });
         formFound = true;
         break;
       } catch {
