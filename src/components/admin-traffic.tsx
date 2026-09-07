@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/db";
-import { PageTitle, KpiTrendCard, FakeSelect, compactNumber } from "@/app/(app)/admin/_ui";
+import { PageTitle, KpiTrendCard, compactNumber } from "@/app/(app)/admin/_ui";
 import { AdminTrafficMap } from "@/components/admin-traffic-map";
+import { AdminRangeSelect } from "@/components/admin-range-select";
 import { Eye, Users, UserPlus, Layers, Download } from "lucide-react";
 
-const DAYS = 14;
 const H = 3600_000;
 
 /**
@@ -11,9 +11,12 @@ const H = 3600_000;
  * header · 4 KPI · Traffico globale (lista paesi | globo) · [Top pagine | Top referrer].
  * Dati da PageView (beacon /api/track/view; esclude /admin e /api).
  */
-export async function AdminTraffic() {
+export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
+  // Periodo scelto (default 7g) confrontato col periodo precedente della stessa lunghezza.
+  const P = days;
+  const DAYS = P; // giorni nella sparkline = periodo corrente
 
   const dayKeys: string[] = [];
   const ds = new Date();
@@ -25,17 +28,17 @@ export async function AdminTraffic() {
   }
 
   const [views14d, uniq7d, uniqPrev7, newUsers7, newUsersPrev7, topPaths, topReferrers, byCountry] = await Promise.all([
-    prisma.pageView.findMany({ where: { ts: { gte: since(24 * DAYS) } }, select: { ts: true, sessionId: true } }).catch(() => [] as { ts: Date; sessionId: string }[]),
-    prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * 7) } } }).then((r) => r.length).catch(() => 0),
-    prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * 14), lt: since(24 * 7) } } }).then((r) => r.length).catch(() => 0),
-    prisma.user.count({ where: { createdAt: { gte: since(24 * 7) } } }),
-    prisma.user.count({ where: { createdAt: { gte: since(24 * 14), lt: since(24 * 7) } } }),
-    prisma.pageView.groupBy({ by: ["path"], where: { ts: { gte: since(24 * 7) } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 12 }).catch(() => [] as Array<{ path: string; _count: { _all: number } }>),
-    prisma.pageView.groupBy({ by: ["referrer"], where: { ts: { gte: since(24 * 7) }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 12 }).catch(() => [] as Array<{ referrer: string | null; _count: { _all: number } }>),
-    prisma.pageView.groupBy({ by: ["country"], where: { ts: { gte: since(24 * 7) }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 30 }).catch(() => [] as Array<{ country: string | null; _count: { _all: number } }>),
+    prisma.pageView.findMany({ where: { ts: { gte: since(24 * 2 * P) } }, select: { ts: true, sessionId: true } }).catch(() => [] as { ts: Date; sessionId: string }[]),
+    prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
+    prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * 2 * P), lt: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
+    prisma.user.count({ where: { createdAt: { gte: since(24 * P) } } }),
+    prisma.user.count({ where: { createdAt: { gte: since(24 * 2 * P), lt: since(24 * P) } } }),
+    prisma.pageView.groupBy({ by: ["path"], where: { ts: { gte: since(24 * P) } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 12 }).catch(() => [] as Array<{ path: string; _count: { _all: number } }>),
+    prisma.pageView.groupBy({ by: ["referrer"], where: { ts: { gte: since(24 * P) }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 12 }).catch(() => [] as Array<{ referrer: string | null; _count: { _all: number } }>),
+    prisma.pageView.groupBy({ by: ["country"], where: { ts: { gte: since(24 * P) }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 30 }).catch(() => [] as Array<{ country: string | null; _count: { _all: number } }>),
   ]);
 
-  const views7 = views14d.filter((v) => v.ts >= since(24 * 7)).length;
+  const views7 = views14d.filter((v) => v.ts >= since(24 * P)).length;
   const viewsPrev7 = views14d.length - views7;
   const bucket = (dates: Date[]) => {
     const m = new Map(dayKeys.map((k) => [k, 0]));
@@ -72,8 +75,8 @@ export async function AdminTraffic() {
         sub="Scopri da dove arrivano i tuoi visitatori e come interagiscono con la piattaforma."
         actions={
           <>
-            <FakeSelect label="Ultimi 7 giorni" />
-            <button type="button" className="adm-btn"><Download size={13} />Esporta</button>
+            <AdminRangeSelect value={P} />
+            <a href={`/api/admin/traffic-export?range=${P}`} className="adm-btn" download><Download size={13} />Esporta CSV</a>
           </>
         }
       />
@@ -92,7 +95,7 @@ export async function AdminTraffic() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, minHeight: 0 }}>
         <div className="adm-card">
           <div className="adm-card-head" style={{ marginBottom: 6 }}>
-            <div className="adm-card-title">Top pagine <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 12 }}>(ultimi 7 giorni)</span></div>
+            <div className="adm-card-title">Top pagine <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 12 }}>(ultimi {P} giorni)</span></div>
           </div>
           <div className="adm-th" style={{ gridTemplateColumns: "1fr 90px 46px 1fr" }}><div>Pagina</div><div style={{ textAlign: "right" }}>Visualizzazioni</div><div style={{ textAlign: "right" }}>%</div><div /></div>
           <div className="adm-card-body scroll">
@@ -104,7 +107,7 @@ export async function AdminTraffic() {
         </div>
         <div className="adm-card">
           <div className="adm-card-head" style={{ marginBottom: 6 }}>
-            <div className="adm-card-title">Top referrer <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 12 }}>(ultimi 7 giorni)</span></div>
+            <div className="adm-card-title">Top referrer <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 12 }}>(ultimi {P} giorni)</span></div>
           </div>
           <div className="adm-th" style={{ gridTemplateColumns: "1fr 60px 46px 1fr" }}><div>Sorgente</div><div style={{ textAlign: "right" }}>Visite</div><div style={{ textAlign: "right" }}>%</div><div /></div>
           <div className="adm-card-body scroll">

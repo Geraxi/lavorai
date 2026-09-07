@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, LineChart, ChartLegend, FakeSelect, Donut, compactNumber } from "../_ui";
+import { AdminRangeSelect } from "@/components/admin-range-select";
 import { Send, FileCheck, CheckCircle2, AlertTriangle, Download, Copy } from "lucide-react";
 import { RetryCaptchaButton } from "../_retry-captcha-button";
 
 export const metadata: Metadata = { title: "Admin · Consegna", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-const DAYS = 14;
+const RANGES = [7, 14, 30, 90];
 const H = 3600_000;
 const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -16,7 +17,9 @@ const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "
  * header · 4 KPI · [Funnel 2/3 | Per portale] · [Andamento 2/3 | Cause] · [Errori 1.4 | Log].
  * "Confermate" = submitConfirmation DETECTED_* (prova hard).
  */
-export default async function AdminDeliveryPage() {
+export default async function AdminDeliveryPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  const sp = (await searchParams) ?? {};
+  const DAYS = RANGES.includes(Number(sp.range)) ? Number(sp.range) : 14;
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
 
@@ -164,7 +167,7 @@ export default async function AdminDeliveryPage() {
         sub="Monitora la consegna delle candidature e verifica il corretto invio su tutti i portali."
         actions={
           <>
-            <FakeSelect label={`Ultimi ${DAYS} giorni`} />
+            <AdminRangeSelect value={DAYS} />
             <span className="adm-pill good"><span className="dot" />Sistema operativo</span>
             <RetryCaptchaButton />
             <button type="button" className="adm-btn"><Download size={13} />Esporta report</button>
@@ -206,7 +209,7 @@ export default async function AdminDeliveryPage() {
         <div className="adm-card">
           <div className="adm-card-head" style={{ alignItems: "center" }}>
             <div className="adm-card-title">Consegne per portale</div>
-            <FakeSelect label={`Ultimi ${DAYS} giorni`} />
+            <AdminRangeSelect value={DAYS} />
           </div>
           <div className="adm-th" style={{ gridTemplateColumns: "1fr 64px 64px 64px" }}>
             <div>Portale</div><div style={{ textAlign: "right" }}>Tentate</div><div style={{ textAlign: "right" }}>Confermate</div><div style={{ textAlign: "right" }}>Tasso</div>

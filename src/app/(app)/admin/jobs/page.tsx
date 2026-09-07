@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
-import { PageTitle, KpiTrendCard, LineChart, ChartLegend, FakeSelect, Donut, compactNumber } from "../_ui";
+import { PageTitle, KpiTrendCard, LineChart, ChartLegend, Donut, compactNumber } from "../_ui";
+import { AdminRangeSelect } from "@/components/admin-range-select";
 import { AdminSyncButton } from "@/components/admin-sync-button";
 import { AdminRetryCreditButton } from "@/components/admin-retry-credit-button";
 import { AdminAutoApplyButton } from "@/components/admin-autoapply-button";
@@ -11,7 +12,7 @@ import { Layers, Zap, Users as UsersIcon, Database, Settings2, RefreshCw, AlertT
 export const metadata: Metadata = { title: "Admin · Job pool", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-const DAYS = 14;
+const RANGES = [7, 14, 30, 90];
 const H = 3600_000;
 const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 const KNOWN_SOURCES = ["greenhouse", "lever", "ashby", "linkedin", "adzuna", "workable", "smartrecruiters", "indeed"];
@@ -21,7 +22,9 @@ const KNOWN_SOURCES = ["greenhouse", "lever", "ashby", "linkedin", "adzuna", "wo
  * sx: Andamento · Stato fonti ATS · Annunci recenti
  * dx: Distribuzione per fonte · Salute AI · Automazioni · Attività motore
  */
-export default async function AdminJobsPage() {
+export default async function AdminJobsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  const sp = (await searchParams) ?? {};
+  const DAYS = RANGES.includes(Number(sp.range)) ? Number(sp.range) : 14;
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
   const fresh7 = since(24 * 7);
@@ -123,7 +126,7 @@ export default async function AdminJobsPage() {
               <div className="adm-card-title">Andamento annunci nel pool</div>
               <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                 <ChartLegend items={[{ label: "Totale", color: "hsl(var(--primary))" }, { label: "Nuovi", color: "#60a5fa" }, { label: "Scaduti", color: "#f87171" }]} />
-                <FakeSelect label={`Ultimi ${DAYS} giorni`} />
+                <AdminRangeSelect value={DAYS} />
               </div>
             </div>
             <div className="adm-card-body">
