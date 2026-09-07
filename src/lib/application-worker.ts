@@ -549,6 +549,23 @@ export async function processApplication(
     //   - hybrid / manual → handoff: avvisiamo l'utente "completa tu in 1 click"
     //   - full auto → l'utente vuole zero coinvolgimento → saltiamo in
     //     silenzio (niente email che lo disturba), marcato CAPTCHA.
+    if (outcome.status === "job_closed") {
+      // L'adapter ha visto la pagina "Job not found": chiudi nel pool e non
+      // passare al fallback email (nessuna azienda da contattare).
+      console.warn(`[worker] ${applicationId} job chiuso rilevato dall'adapter ${adapter.id}: ${app.job.url}`);
+      await markJobClosed(app.job.id);
+      await prisma.application.update({
+        where: { id: applicationId },
+        data: {
+          status: "failed",
+          submitConfirmation: "JOB_CLOSED",
+          errorMessage: "Annuncio non più online (chiuso dall'azienda). Nessun invio effettuato.",
+          completedAt: new Date(),
+        },
+      });
+      return;
+    }
+
     if (outcome.status === "captcha") {
       const mode = app.user.preferences?.autoApplyMode ?? "manual";
       const handoff = mode !== "auto"; // hybrid/manual = chiedi all'utente

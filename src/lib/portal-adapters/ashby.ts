@@ -72,7 +72,16 @@ export const ashbyAdapter: PortalAdapter = {
         formFound = true;
         break;
       } catch {
-        // niente form, prossimo tentativo
+        // Niente form: annuncio chiuso? Ashby risponde 200 con "Job not found" (SPA,
+        // renderizzato in ritardo: lo controlliamo qui, dopo l'attesa del form).
+        const notFound = await page
+          .locator("text=/job not found|the job you requested was not found/i")
+          .count()
+          .catch(() => 0);
+        if (notFound > 0) {
+          return { ok: false, status: "job_closed", error: "Annuncio Ashby non più online (Job not found)." };
+        }
+        // altrimenti prossimo tentativo
       }
     }
 

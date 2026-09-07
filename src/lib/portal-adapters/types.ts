@@ -98,6 +98,8 @@ export type ApplyOutcome =
       ok: false;
       status:
         | "form_not_found"
+        /** L'annuncio non è più online (pagina "Job not found" / "no longer open"). */
+        | "job_closed"
         | "missing_field"
         | "captcha"
         | "validation_failed"

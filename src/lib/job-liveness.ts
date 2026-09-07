@@ -51,6 +51,18 @@ export async function markJobClosed(jobId: string): Promise<void> {
 }
 
 
+async function getText(url: string, timeoutMs = 8000): Promise<string | null> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch(url, { signal: ctrl.signal, headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36", accept: "text/html" } });
+    clearTimeout(t);
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
 async function getJson(url: string, timeoutMs = 8000): Promise<{ status: number; json: unknown } | null> {
   try {
     const ctrl = new AbortController();
@@ -94,11 +106,17 @@ async function checkViaAtsApi(url: string): Promise<boolean | null> {
     const slug = parts[0]; const uuid = parts[1];
     if (!slug || !uuid || !/^[0-9a-f-]{20,}$/i.test(uuid)) return null;
     const r = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}`);
-    if (!r || r.status !== 200) return null;
-    const jobs = (r.json as { jobs?: Array<{ id?: string; jobUrl?: string }> } | null)?.jobs;
-    if (!Array.isArray(jobs)) return null;
-    if (jobs.length === 0) return null; // board vuoto: non concludiamo
-    return jobs.some((j) => (j.id ?? "").toLowerCase() === uuid.toLowerCase() || (j.jobUrl ?? "").toLowerCase().includes(uuid.toLowerCase()));
+    const jobs = r && r.status === 200 ? (r.json as { jobs?: Array<{ id?: string; jobUrl?: string }> } | null)?.jobs : undefined;
+    if (Array.isArray(jobs) && jobs.length > 0) {
+      return jobs.some((j) => (j.id ?? "").toLowerCase() === uuid.toLowerCase() || (j.jobUrl ?? "").toLowerCase().includes(uuid.toLowerCase()));
+    }
+    // Board vuoto o API non disponibile: la pagina SPA di Ashby incorpora
+    // window.__appData con "posting":null quando l'annuncio non esiste più.
+    const html = await getText(`https://jobs.ashbyhq.com/${encodeURIComponent(slug)}/${encodeURIComponent(uuid)}`);
+    if (html == null) return null;
+    if (/"posting":null/.test(html)) return false;
+    if (/"posting":\{/.test(html)) return true;
+    return null;
   }
 
   // Lever: jobs.lever.co/<slug>/<uuid>[/apply]
