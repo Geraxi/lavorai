@@ -862,3 +862,83 @@ export function SectionHeader({ eyebrow, title }: { eyebrow?: string; title: str
     </div>
   );
 }
+
+// Funnel di consegna (imbuto orizzontale SVG). Usato in /admin/delivery.
+export function DeliveryFunnel({ steps }: { steps: Array<{ label: string; value: number }> }) {
+  // Imbuto orizzontale: ogni fase è una fascia la cui altezza segue √(valore/base)
+  // (così 1 su 353 resta visibile), collegata alla successiva con un raccordo.
+  const base = Math.max(1, steps[0]?.value ?? 1);
+  const W = 1000, H = 220, PAD = 8, MIN = 0.05;
+  const n = steps.length;
+  const colW = (W - PAD * 2) / n;
+  const hOf = (v: number) => Math.max(MIN, Math.sqrt(v / base)) * (H - PAD * 2);
+  const colors = ["hsl(var(--primary))", "#34d399", "#60a5fa", "#a78bfa"];
+  const bands = steps.map((s, i) => {
+    const h0 = hOf(s.value);
+    const h1 = i + 1 < n ? hOf(steps[i + 1].value) : h0;
+    const x0 = PAD + i * colW, x1 = x0 + colW;
+    const cy = H / 2;
+    // fascia piena per il 55% della colonna, poi raccordo curvo verso la fase successiva
+    const xm = x0 + colW * 0.55;
+    const c1 = xm + (x1 - xm) * 0.5;
+    const d = [
+      `M ${x0} ${cy - h0 / 2}`,
+      `L ${xm} ${cy - h0 / 2}`,
+      `C ${c1} ${cy - h0 / 2} ${c1} ${cy - h1 / 2} ${x1} ${cy - h1 / 2}`,
+      `L ${x1} ${cy + h1 / 2}`,
+      `C ${c1} ${cy + h1 / 2} ${c1} ${cy + h0 / 2} ${xm} ${cy + h0 / 2}`,
+      `L ${x0} ${cy + h0 / 2} Z`,
+    ].join(" ");
+    return { d, color: colors[i % colors.length], x0, xm, cy, h0 };
+  });
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ flex: 1, minHeight: 120, position: "relative" }}>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} aria-hidden="true">
+          <defs>
+            {bands.map((b, i) => (
+              <linearGradient key={i} id={`fg${i}`} x1="0" x2="1" y1="0" y2="0">
+                <stop offset="0%" stopColor={b.color} stopOpacity={0.55} />
+                <stop offset="100%" stopColor={b.color} stopOpacity={0.22} />
+              </linearGradient>
+            ))}
+          </defs>
+          {bands.map((b, i) => (
+            <path key={i} d={b.d} fill={`url(#fg${i})`} stroke={b.color} strokeOpacity={0.55} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          ))}
+          {/* separatori verticali leggeri tra le fasi */}
+          {bands.slice(1).map((b, i) => (
+            <line key={`s${i}`} x1={b.x0} x2={b.x0} y1={PAD} y2={H - PAD} stroke="var(--border-ds)" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
+          ))}
+        </svg>
+        {/* valori dentro/sopra ogni fascia */}
+        <div style={{ position: "absolute", inset: 0, display: "grid", gridTemplateColumns: `repeat(${n}, minmax(0,1fr))`, padding: `0 ${PAD}px` }}>
+          {steps.map((s, i) => (
+            <div key={s.label} style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", paddingLeft: 12, minWidth: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, background: "rgba(5,13,25,0.55)", backdropFilter: "blur(4px)", padding: "6px 10px", borderRadius: 10, border: "1px solid var(--border-ds)" }}>
+                <div className="adm-num" style={{ fontSize: 20, fontWeight: 700, color: "var(--fg)", letterSpacing: "-0.02em", lineHeight: 1 }}>{s.value.toLocaleString("it-IT")}</div>
+                <div style={{ fontSize: 11, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>{s.label} · <span className="adm-num" style={{ color: bands[i].color, fontWeight: 700 }}>{((s.value / base) * 100).toFixed(s.value / base < 0.1 ? 1 : 0)}%</span></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* cali tra una fase e la successiva */}
+      <div style={{ display: "grid", gridTemplateColumns: `repeat(${n}, minmax(0,1fr))`, padding: `0 ${PAD}px`, flexShrink: 0 }}>
+        {steps.map((s, i) => {
+          if (i === 0) return <div key={s.label} style={{ fontSize: 11, color: "var(--fg-subtle)", paddingLeft: 12 }}>Base del funnel</div>;
+          const prev = steps[i - 1].value;
+          const kept = prev > 0 ? (s.value / prev) * 100 : 0;
+          const lost = prev - s.value;
+          return (
+            <div key={s.label} style={{ fontSize: 11, color: "var(--fg-subtle)", paddingLeft: 12, display: "flex", gap: 6, alignItems: "baseline", minWidth: 0 }}>
+              <span className="adm-num" style={{ color: kept >= 50 ? "var(--fg-muted)" : "#f87171", fontWeight: 700 }}>−{lost.toLocaleString("it-IT")}</span>
+              <span className="adm-ellipsis">{steps[i - 1].label.toLowerCase()} → {s.label.toLowerCase()} · trattenute {kept.toFixed(kept < 10 ? 1 : 0)}%</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+

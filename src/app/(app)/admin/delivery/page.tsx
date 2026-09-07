@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
-import { PageTitle, KpiTrendCard, LineChart, ChartLegend, FakeSelect, Donut, compactNumber } from "../_ui";
+import { PageTitle, KpiTrendCard, LineChart, ChartLegend, FakeSelect, Donut, compactNumber, DeliveryFunnel } from "../_ui";
 import { AdminRangeSelect } from "@/components/admin-range-select";
 import { Send, FileCheck, CheckCircle2, AlertTriangle, Download, Copy } from "lucide-react";
 import { RetryCaptchaButton } from "../_retry-captcha-button";
@@ -195,7 +195,7 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
             </div>
           </div>
           <div className="adm-card-body">
-            <FunnelColumns
+            <DeliveryFunnel
               steps={[
                 { label: "Tentate", value: tentate },
                 { label: "Inviate", value: inviate },
@@ -337,38 +337,6 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
 }
 
 // Funnel a colonne (4 step) con drop % fra step — fedele al mockup.
-function FunnelColumns({ steps }: { steps: Array<{ label: string; value: number }> }) {
-  const base = Math.max(1, steps[0]?.value ?? 1);
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: `repeat(${steps.length * 2 - 1}, minmax(0,1fr))`, gap: 8, alignItems: "stretch" }}>
-      {steps.map((s, i) => {
-        const pct = (s.value / base) * 100;
-        return (
-          <div key={s.label} style={{ gridColumn: i * 2 + 1, display: "flex", flexDirection: "column", alignItems: "center", minHeight: 0 }}>
-            <div className="adm-num" style={{ fontSize: 18, fontWeight: 700, color: "var(--fg)", letterSpacing: "-0.02em", flexShrink: 0 }}>{s.value.toLocaleString("it-IT")}</div>
-            <div style={{ flex: 1, minHeight: 0, width: "100%", display: "flex", alignItems: "flex-end", padding: "6px 0" }}>
-              <div style={{ width: "100%", height: `${Math.max(12, pct)}%`, background: "linear-gradient(180deg, hsl(var(--primary)), color-mix(in srgb, hsl(var(--primary)) 55%, transparent))", borderRadius: 8 }} />
-            </div>
-            <div style={{ fontSize: 12, color: "var(--fg)", fontWeight: 600, flexShrink: 0 }}>{s.label}</div>
-            <div className="adm-num" style={{ fontSize: 12, color: "hsl(var(--primary))", fontWeight: 700, flexShrink: 0 }}>{pct.toFixed(1)}%</div>
-          </div>
-        );
-      })}
-      {steps.slice(1).map((s, i) => {
-        const drop = ((s.value - steps[i].value) / base) * 100;
-        return (
-          <div key={`d${i}`} style={{ gridColumn: i * 2 + 2, display: "grid", placeItems: "center", color: "var(--fg-subtle)" }}>
-            <div style={{ textAlign: "center" }}>
-              <div className="adm-num" style={{ fontSize: 11.5, fontWeight: 600, color: "var(--fg-muted)" }}>{drop >= 0 ? "+" : ""}{drop.toFixed(1)}%</div>
-              <div style={{ fontSize: 16, marginTop: 2 }}>→</div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function PortalBadge({ portal }: { portal: string }) {
   const letter = (portal[0] ?? "?").toUpperCase();
   const colors = ["#34d399", "#60a5fa", "#a78bfa", "#fbbf24", "#f87171", "#22d3ee", "#f472b6"];
