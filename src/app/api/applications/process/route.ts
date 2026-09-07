@@ -38,6 +38,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Precedenza al worker Railway (browser Playwright completo, nessun limite
+    // di 300s): questo fallback serverless aspetta PROCESS_FALLBACK_DELAY_MS
+    // (default 45s, > intervallo di polling del worker) e prende in carico
+    // solo ciò che il worker non ha già preso. Evita anche decine di browser
+    // serverless in parallelo (ETXTBSY / "browser has been closed").
+    const delay = Math.max(0, Number(process.env.PROCESS_FALLBACK_DELAY_MS ?? 45_000) || 0);
+    if (delay > 0 && process.env.NODE_ENV === "production") await new Promise((r) => setTimeout(r, delay));
     // Claim atomico: se il worker Railway l'ha già presa (polling DB), qui non facciamo nulla.
     const { claimApplication } = await import("@/lib/application-claim");
     if (!(await claimApplication(parsed.data.applicationId))) {
