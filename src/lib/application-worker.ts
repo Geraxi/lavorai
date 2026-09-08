@@ -401,6 +401,7 @@ export async function processApplication(
         // In "auto" l'utente non vuole essere interpellato: l'AI risponde
         // da sola a tutto ciò che è onestamente rispondibile (vedi ai-answer).
         autonomous: (app.user.preferences?.autoApplyMode ?? "manual") === "auto",
+        preferredCity: firstPreferredCity(app.user.preferences?.locationsJson),
         jobTitle: app.job.title,
         company: app.job.company,
         jobDescription: app.job.description,
@@ -1744,6 +1745,7 @@ interface AdapterSubmitInput {
   userNoticePeriod?: string | null;
   /** Auto-apply "auto": l'AI risponde da sola alle domande del form. */
   autonomous?: boolean;
+  preferredCity?: string | null;
   jobTitle?: string | null;
   company?: string | null;
   jobDescription?: string | null;
@@ -1809,6 +1811,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       userNoticePeriod: input.userNoticePeriod,
       applicationId: input.applicationId, // per naming canary assets
       autonomous: input.autonomous === true,
+      preferredCity: input.preferredCity,
       jobTitle: input.jobTitle,
       company: input.company,
       jobDescription: input.jobDescription,
@@ -1824,6 +1827,18 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     return outcome;
   } finally {
     if (browser) await browser.close().catch(() => void 0);
+  }
+}
+
+/** Prima località "vera" (non remote) dalle preferenze, per il campo City dei form. */
+function firstPreferredCity(locationsJson: string | null | undefined): string | null {
+  try {
+    const arr = JSON.parse(locationsJson ?? "[]");
+    if (!Array.isArray(arr)) return null;
+    const hit = arr.find((x) => typeof x === "string" && x.trim() && !/remot|ovunque|anywhere|italia$|italy$|europe|europa/i.test(x));
+    return hit ? String(hit).split(/[,(]/)[0].trim() : null;
+  } catch {
+    return null;
   }
 }
 

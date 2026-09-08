@@ -401,7 +401,7 @@ export const greenhouseAdapter: PortalAdapter = {
           lastName: p.lastName,
           email: p.email || input.userEmail,
           phone: p.phone || input.userPhone,
-          city: input.answers?.city || p.city,
+          city: input.answers?.city || p.city || input.preferredCity,
           country: input.answers?.country,
           linkedinUrl: input.answers?.linkedinUrl || findLink(/linkedin/i),
           portfolioUrl:
@@ -414,6 +414,9 @@ export const greenhouseAdapter: PortalAdapter = {
           languages: input.profile.languages,
           noticePeriod: input.answers?.noticePeriod ?? input.userNoticePeriod,
           highestEducation: input.answers?.highestEducation,
+          currentEmployer: p.experiences?.[0]?.company || null,
+          currentJobTitle: p.experiences?.[0]?.role || p.title || null,
+          school: p.education?.[0]?.school || null,
           cvText,
           jobTitle: input.jobTitle ?? p.title,
           company: input.company ?? null,

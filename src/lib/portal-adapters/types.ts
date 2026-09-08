@@ -51,6 +51,9 @@ export interface ApplyInput {
   /** true se l'utente è in auto-apply "auto": l'AI risponde da sola alle
    *  domande del form (vedi ai-answer.ts, modalità autonoma). */
   autonomous?: boolean;
+  /** Prima località desiderata dalle preferenze: fallback per "City" quando
+   *  il CV non riporta la città. */
+  preferredCity?: string | null;
   /** Dati dell'annuncio per le domande aperte ("perché noi?"). */
   jobTitle?: string | null;
   company?: string | null;

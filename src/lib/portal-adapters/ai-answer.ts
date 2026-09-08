@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import Anthropic from "@anthropic-ai/sdk";
+import { matchCity } from "@/lib/city-centroids";
 
 /**
  * AI answerer per i campi OBBLIGATORI di un form ATS che il fill
@@ -40,6 +41,10 @@ export interface CandidateContext {
   noticePeriod?: string | null;
   /** Titolo di studio più alto (es. "Bachelor", "Master"). */
   highestEducation?: string | null;
+  /** Ultimo datore di lavoro / ruolo / scuola dal CV (domande "current or previous employer"). */
+  currentEmployer?: string | null;
+  currentJobTitle?: string | null;
+  school?: string | null;
   /** Estratto del CV (testo) per rispondere a domande tipo "hai esperienza con X?". */
   cvText?: string | null;
   jobTitle?: string | null;
@@ -172,13 +177,14 @@ export async function answerRequiredFields(
     }
   }
 
-  // 3c. Modalità autonoma: regole deterministiche per le domande "di rito"
-  //     che non richiedono giudizio (EEO, "come ci hai conosciuto", consensi,
-  //     stipendio a testo libero). Niente AI, niente invenzioni.
-  if (ctx.autonomous) {
+  // 3c. Regole deterministiche per le domande "di rito" che non richiedono
+  //     giudizio (EEO "preferisco non dire", "come ci hai conosciuto",
+  //     consensi). In modalità autonoma anche stipendio/disponibilità/
+  //     modalità di lavoro a testo libero. Niente AI, niente invenzioni.
+  {
     for (const f of pending) {
       if (filledIdx.has(f.idx)) continue;
-      const rv = ruleAnswerForField(f, ctx);
+      const rv = ruleAnswerForField(f, ctx, ctx.autonomous === true);
       if (!rv) continue;
       const ok = await fillField(page, f, rv).catch(() => false);
       if (ok) {
@@ -249,7 +255,7 @@ function pickOption(options: string[] | undefined, prefs: RegExp[]): string | nu
  * umano risponde senza pensarci e che NON contengono fatti da verificare.
  * Ritorna null se la domanda non rientra in una categoria sicura.
  */
-function ruleAnswerForField(f: FieldDescriptor, ctx: CandidateContext): string | null {
+function ruleAnswerForField(f: FieldDescriptor, ctx: CandidateContext, autonomous: boolean): string | null {
   const l = f.label.toLowerCase();
   const hasOpts = !!f.options?.length;
 
@@ -268,6 +274,8 @@ function ruleAnswerForField(f: FieldDescriptor, ctx: CandidateContext): string |
   if (f.kind === "radio" && /privacy|gdpr|consent|acconsent|autorizz|trattamento|future (roles|opportunities)|keep (my|your) (data|cv)|talent pool/.test(l)) {
     return pickOption(f.options, [/^(yes|y|sì|si|agree|accept|acconsento|accetto)\b/i]);
   }
+  // Da qui in poi: solo in modalità autonoma (scelte che in ibrido lasciamo all'utente).
+  if (!autonomous) return null;
   // Stipendio: numerico solo se lo abbiamo, altrimenti "da concordare" nei campi testo.
   if (/salary|compensation|stipendio|retribuzione|\bral\b/.test(l)) {
     if (ctx.salaryExpectationEur) return String(ctx.salaryExpectationEur);
@@ -296,9 +304,30 @@ function ruleAnswerForField(f: FieldDescriptor, ctx: CandidateContext): string |
 }
 
 /** Mappa una label a un valore noto del profilo (per i campi standard). */
+const COUNTRY_NAME: Record<string, string> = {
+  IT: "Italy", DE: "Germany", FR: "France", ES: "Spain", GB: "United Kingdom", UK: "United Kingdom", NL: "Netherlands", CH: "Switzerland",
+  AT: "Austria", BE: "Belgium", PT: "Portugal", IE: "Ireland", SE: "Sweden", DK: "Denmark", NO: "Norway", FI: "Finland", PL: "Poland",
+  CZ: "Czech Republic", GR: "Greece", US: "United States", CA: "Canada", AE: "United Arab Emirates", LU: "Luxembourg",
+};
+
+/** Paese dedotto dalla città del profilo (es. "Milano" → "Italy"). */
+function inferCountry(ctx: CandidateContext): string | null {
+  if (ctx.country) return ctx.country;
+  if (!ctx.city) return null;
+  const m = matchCity(ctx.city);
+  return m ? (COUNTRY_NAME[m.cc.toUpperCase()] ?? m.cc) : null;
+}
+
 function profileValueForLabel(label: string, ctx: CandidateContext): string | null {
   const l = label.toLowerCase();
-  if (/\bcountry\b|paese|nazione/.test(l)) return ctx.country ?? null;
+  // Domande sul percorso (Greenhouse: "current or previous employer/title", "School").
+  if (/(current|previous|last|most recent|latest)\b.*\b(employer|company|organi[sz]ation)|datore di lavoro|azienda attuale/.test(l))
+    return ctx.currentEmployer ?? null;
+  if (/(current|previous|last|most recent|latest)\b.*\b(job )?title|ruolo attuale|posizione attuale|mansione/.test(l))
+    return ctx.currentJobTitle ?? null;
+  if (/^school\b|\bschool\b|university|università|ateneo|college|istituto/.test(l) && !/how did you hear/.test(l))
+    return ctx.school ?? null;
+  if (/\bcountry\b|paese|nazione|where (do )?you (currently )?(reside|live)|residence/.test(l)) return inferCountry(ctx);
   if (/\bcity\b|\btown\b|location|città|citt/.test(l)) return ctx.city ?? null;
   if (/salary|ral|compensation|stipendio|retribuzione/.test(l))
     return ctx.salaryExpectationEur ? String(ctx.salaryExpectationEur) : null;
