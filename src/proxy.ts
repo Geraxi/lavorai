@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isBotUserAgent } from "@/lib/bot-ua";
 
 /**
  * Proxy (ex-middleware in Next 15): due responsabilità accoppiate
@@ -50,7 +51,10 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/_next/") ||
     /\.[a-z0-9]+$/i.test(pathname); // file con estensione (favicon, .png, ecc.)
 
-  if (!skipI18n) {
+  // I crawler non ricevono cookie di lingua: vedono sempre l'italiano
+  // (vedi src/i18n/request.ts). Senza questo Googlebot, che esplora da IP
+  // USA, indicizzerebbe la versione inglese di lavorai.it.
+  if (!skipI18n && !isBotUserAgent(request.headers.get("user-agent"))) {
     const existing = request.cookies.get("NEXT_LOCALE")?.value;
     if (existing !== "it" && existing !== "en") {
       const country = (

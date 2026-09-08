@@ -1,5 +1,6 @@
 import { getRequestConfig } from "next-intl/server";
 import { cookies, headers } from "next/headers";
+import { isBotUserAgent } from "@/lib/bot-ua";
 
 const SUPPORTED = ["it", "en"] as const;
 type Locale = (typeof SUPPORTED)[number];
@@ -28,10 +29,14 @@ export default getRequestConfig(async () => {
   const fromCookie = c.get("NEXT_LOCALE")?.value;
   let locale: Locale = "it";
 
-  if (isLocale(fromCookie)) {
+  const h = await headers();
+  if (isBotUserAgent(h.get("user-agent"))) {
+    // SEO: ai crawler serviamo SEMPRE l'italiano (lingua canonica del sito),
+    // altrimenti Googlebot (IP USA) indicizza la versione inglese.
+    locale = "it";
+  } else if (isLocale(fromCookie)) {
     locale = fromCookie;
   } else {
-    const h = await headers();
     const country = (h.get("x-vercel-ip-country") ?? "").toUpperCase();
     if (country && country !== "IT") {
       locale = "en";

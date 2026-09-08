@@ -8,5 +8,8 @@ Disallow: /preferences
 Disallow: /analytics
 Disallow: /settings
 Disallow: /inbox
+Disallow: /admin
+Disallow: /onboarding
+Disallow: /r/
 
 Sitemap: https://lavorai.it/sitemap.xml

@@ -81,14 +81,9 @@ export function StructuredData() {
       availability: "https://schema.org/InStock",
       url: `${SITE_URL}/pricing`,
     })),
-    aggregateRating: {
-      "@type": "AggregateRating",
-      // PLACEHOLDER — sostituire con valori reali dopo raccolta recensioni
-      ratingValue: "4.6",
-      reviewCount: "47",
-      bestRating: "5",
-      worstRating: "1",
-    },
+    // Niente aggregateRating finché non ci sono recensioni reali raccolte
+    // sul sito: un rating inventato viola le linee guida Google e può
+    // costare un'azione manuale sui rich result.
   };
 
   const schemas = [organization, website, softwareApp];

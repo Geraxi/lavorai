@@ -20,6 +20,17 @@ export function SiteFooter() {
       ],
     },
     {
+      title: "Guide",
+      links: [
+        { href: "/guide/cv-ats-friendly", label: "CV ATS friendly" },
+        { href: "/guide/lettera-di-presentazione-esempio", label: "Lettera di presentazione" },
+        { href: "/guide/candidatura-spontanea-email", label: "Candidatura spontanea" },
+        { href: "/guide/quante-candidature-per-trovare-lavoro", label: "Quante candidature servono" },
+        { href: "/guide/software-candidature-automatiche", label: "Software auto-apply" },
+        { href: "/guide", label: "Tutte le guide" },
+      ],
+    },
+    {
       title: t("legal"),
       links: [
         { href: "/privacy", label: t("privacy") },
@@ -32,7 +43,7 @@ export function SiteFooter() {
   return (
     <footer className="relative border-t border-white/10 bg-black/20 backdrop-blur-3xl">
       <div className="container py-16">
-        <div className="grid gap-12 md:grid-cols-[2fr_1fr_1fr]">
+        <div className="grid gap-12 md:grid-cols-[2fr_1fr_1fr_1fr]">
           <div className="max-w-sm space-y-4">
             <Logo size="lg" />
             <p className="text-sm leading-relaxed text-muted-foreground">
