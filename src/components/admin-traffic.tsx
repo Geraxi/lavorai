@@ -86,7 +86,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
   const refMax = refs[0]?.[1] ?? 1;
 
   return (
-    <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(0,1.55fr) minmax(0,1fr)" }}>
+    <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(0,1fr) auto" }}>
       <PageTitle
         title="Traffico sito"
         sub="Scopri da dove arrivano i tuoi visitatori e come interagiscono con la piattaforma."
@@ -109,28 +109,29 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
         <AdminTrafficMap rows={byCountry.map((c) => ({ country: c.country, count: c._count._all }))} regions={regions} regionsUnresolved={itUnresolved} days={P} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, minHeight: 0 }}>
-        <div className="adm-card">
-          <div className="adm-card-head" style={{ marginBottom: 6 }}>
-            <div className="adm-card-title">Top pagine <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 12 }}>(ultimi {P} giorni)</span></div>
+      {/* Riga compatta: altezza fissa (~5 righe visibili, scroll per il resto) così il globo prende lo spazio. */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, height: 172, minHeight: 0 }}>
+        <div className="adm-card" style={{ padding: "10px 14px", minHeight: 0 }}>
+          <div className="adm-card-head" style={{ marginBottom: 4 }}>
+            <div className="adm-card-title" style={{ fontSize: 13 }}>Top pagine <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 11 }}>· {P}gg</span></div>
+            <span style={{ fontSize: 10.5, color: "var(--fg-subtle)", letterSpacing: 0.3, textTransform: "uppercase" }}>Viste · %</span>
           </div>
-          <div className="adm-th" style={{ gridTemplateColumns: "1fr 90px 46px 1fr" }}><div>Pagina</div><div style={{ textAlign: "right" }}>Visualizzazioni</div><div style={{ textAlign: "right" }}>%</div><div /></div>
-          <div className="adm-card-body scroll">
-            {paths.length === 0 && <div style={{ padding: "12px 0", fontSize: 12, color: "var(--fg-subtle)" }}>Nessun dato</div>}
+          <div className="adm-card-body scroll" style={{ minHeight: 0 }}>
+            {paths.length === 0 && <div style={{ padding: "8px 0", fontSize: 12, color: "var(--fg-subtle)" }}>Nessun dato</div>}
             {paths.map((p) => (
               <BarRow key={p.path} label={p.path} value={p.n} pct={(p.n / pathTotal) * 100} bar={(p.n / pathMax) * 100} />
             ))}
           </div>
         </div>
-        <div className="adm-card">
-          <div className="adm-card-head" style={{ marginBottom: 6 }}>
-            <div className="adm-card-title">Top referrer <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 12 }}>(ultimi {P} giorni)</span></div>
+        <div className="adm-card" style={{ padding: "10px 14px", minHeight: 0 }}>
+          <div className="adm-card-head" style={{ marginBottom: 4 }}>
+            <div className="adm-card-title" style={{ fontSize: 13 }}>Top referrer <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 11 }}>· {P}gg</span></div>
+            <span style={{ fontSize: 10.5, color: "var(--fg-subtle)", letterSpacing: 0.3, textTransform: "uppercase" }}>Visite · %</span>
           </div>
-          <div className="adm-th" style={{ gridTemplateColumns: "1fr 60px 46px 1fr" }}><div>Sorgente</div><div style={{ textAlign: "right" }}>Visite</div><div style={{ textAlign: "right" }}>%</div><div /></div>
-          <div className="adm-card-body scroll">
-            {refs.length === 0 && <div style={{ padding: "12px 0", fontSize: 12, color: "var(--fg-subtle)" }}>Tutto traffico diretto</div>}
+          <div className="adm-card-body scroll" style={{ minHeight: 0 }}>
+            {refs.length === 0 && <div style={{ padding: "8px 0", fontSize: 12, color: "var(--fg-subtle)" }}>Tutto traffico diretto</div>}
             {refs.map(([host, n]) => (
-              <BarRow key={host} label={host} value={n} pct={(n / refTotal) * 100} bar={(n / refMax) * 100} narrow />
+              <BarRow key={host} label={host} value={n} pct={(n / refTotal) * 100} bar={(n / refMax) * 100} />
             ))}
           </div>
         </div>
@@ -139,14 +140,14 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
   );
 }
 
-function BarRow({ label, value, pct, bar, narrow }: { label: string; value: number; pct: number; bar: number; narrow?: boolean }) {
+function BarRow({ label, value, pct, bar }: { label: string; value: number; pct: number; bar: number }) {
   return (
-    <div className="adm-tr" style={{ gridTemplateColumns: narrow ? "1fr 60px 46px 1fr" : "1fr 90px 46px 1fr", padding: "7px 0", fontSize: 12.5 }}>
+    <div className="adm-tr" style={{ gridTemplateColumns: "minmax(0,1fr) 44px 36px 1fr", padding: "3px 0", fontSize: 12, gap: 8, borderBottom: "none" }}>
       <div className="adm-ellipsis" style={{ color: "var(--fg)" }}>{label}</div>
       <div className="adm-num" style={{ textAlign: "right", color: "var(--fg)" }}>{value.toLocaleString("it-IT")}</div>
       <div className="adm-num" style={{ textAlign: "right", color: "hsl(var(--primary))", fontWeight: 700 }}>{Math.round(pct)}%</div>
-      <div style={{ height: 8, background: "var(--bg-sunken)", borderRadius: 4, overflow: "hidden" }}>
-        <div style={{ width: `${bar}%`, height: "100%", background: "linear-gradient(90deg, hsl(var(--primary)), color-mix(in srgb, hsl(var(--primary)) 55%, transparent))", borderRadius: 4 }} />
+      <div style={{ height: 5, background: "var(--bg-sunken)", borderRadius: 3, overflow: "hidden", alignSelf: "center" }}>
+        <div style={{ width: `${bar}%`, height: "100%", background: "linear-gradient(90deg, hsl(var(--primary)), color-mix(in srgb, hsl(var(--primary)) 55%, transparent))", borderRadius: 3 }} />
       </div>
     </div>
   );
