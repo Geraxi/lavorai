@@ -23,6 +23,7 @@
     color-scheme: dark;
     --bg: #010510;             /* Dark mode background - matches hero image */
     --bg-elev: rgba(255,255,255,0.03); /* Glass elevation */
+    --bg-surface: rgba(255,255,255,0.03); /* card piene (es. CV per posizione) */
     --bg-sunken: rgba(0,0,0,0.3);       
     --fg: #FFFFFF;             
     --fg-muted: rgba(255,255,255,0.7);
@@ -85,7 +86,12 @@
     color-scheme: light;
     --bg: #F3F7F3;
     --bg-elev: #E9F3EC;               /* superficie card: verde chiarissimo */
+    --bg-surface: #E9F3EC;
     --bg-sunken: rgba(5, 150, 105, 0.07);
+    /* Sidebar verde, voce attiva verde più deciso */
+    --sidebar-bg: #E2EFE6;
+    --nav-pill-bg: rgba(5, 150, 105, 0.22);
+    --nav-pill-border: rgba(5, 120, 80, 0.30);
     --fg: #0F1012;
     --fg-muted: rgba(15, 16, 18, 0.68);
     --fg-subtle: rgba(15, 16, 18, 0.46);

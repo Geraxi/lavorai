@@ -111,7 +111,7 @@ export function AppSidebar({
     <aside
       className="sticky top-0 flex h-screen flex-col gap-0.5 overflow-y-auto overflow-x-hidden border-r px-3 py-3.5"
       style={{
-        background: "var(--bg)",
+        background: "var(--sidebar-bg, var(--bg))",
         borderColor: "var(--border-ds)",
       }}
     >
@@ -292,8 +292,8 @@ function NavItem({ item, active }: { item: NavItem; active: boolean }) {
           style={{
             borderRadius: 10,
             background:
-              "linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01)), var(--bg-elev)",
-            border: "1px solid rgba(255,255,255,0.10)",
+              "var(--nav-pill-bg, linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01)), var(--bg-elev))",
+            border: "1px solid var(--nav-pill-border, rgba(255,255,255,0.10))",
             backdropFilter: "blur(12px) saturate(150%)",
             WebkitBackdropFilter: "blur(12px) saturate(150%)",
             boxShadow:
