@@ -1609,3 +1609,16 @@
   --primary-ds: #7FE0B5;
   color: var(--fg);
 }
+/* Dentro la sidebar scura le superfici "glass" tornano traslucide chiare
+   (il pannello auto-apply e la card utente), così il testo chiaro resta leggibile. */
+[data-theme="light"] aside .ds-glass,
+[data-theme="light"] aside .ds-card,
+[data-theme="light"] aside .fit-card {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--fg);
+  box-shadow: none;
+}
+[data-theme="light"] aside .ds-btn:not(.ds-btn-primary):not(.ds-btn-accent):not(.ds-btn-ghost) {
+  background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.22); color: var(--fg);
+}
