@@ -1,6 +1,7 @@
 "use client";
 
 import { Icon } from "@/components/design/icon";
+import { ThemeToggle } from "@/components/design/theme-toggle";
 
 export interface TopbarProps {
   title: string;
@@ -54,6 +55,7 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
           />
         </div>
         {actions}
+        <ThemeToggle />
       </div>
     </div>
   );

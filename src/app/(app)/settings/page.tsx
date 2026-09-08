@@ -14,7 +14,6 @@ import {
   DeleteAccountButton,
 } from "@/components/settings-actions";
 import { prisma } from "@/lib/db";
-import { ThemeToggle } from "@/components/design/theme-toggle";
 import { ReferralCard } from "@/components/referral-card";
 import { Suspense } from "react";
 import { PostCheckoutRefresh } from "@/components/post-checkout-refresh";
@@ -69,7 +68,6 @@ export default async function SettingsPage() {
             <SectionHead
               icon={<Icon name="user" size={14} />}
               title="Account"
-              actions={<ThemeToggle />}
             />
             <SectionBody>
               <div

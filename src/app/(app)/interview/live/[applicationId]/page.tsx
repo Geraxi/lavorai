@@ -69,7 +69,7 @@ export default function InterviewLiveComingSoon() {
             borderRadius: 999,
             background: "rgba(245, 158, 11, 0.18)",
             border: "1px solid rgba(245, 158, 11, 0.45)",
-            color: "#fbbf24",
+            color: "var(--amber)",
             fontSize: 13,
             fontWeight: 800,
             letterSpacing: "0.14em",

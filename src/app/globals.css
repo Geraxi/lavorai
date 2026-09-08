@@ -16,13 +16,11 @@
    ========================================================================= */
 
 @layer base {
-  :root {
-    /* Design system tokens (CSS custom props).
-       PALETTE: white + vivid green only. Tema scuro disabilitato
-       (vedi commento sotto al blocco [data-theme="dark"]).
-       Bg da cream (#FAFAF7) → bianco puro con micro-tint verde per
-       calore e identità brand. Green primary più saturo per matchare
-       aiapply / Linear / Vercel aesthetic. */
+  /* Tema SCURO (default del brand). Vale su :root e su qualsiasi wrapper
+     con data-theme="dark" (es. le landing marketing restano scure anche
+     se l'utente ha scelto il tema chiaro nell'app). */
+  :root, [data-theme="dark"] {
+    color-scheme: dark;
     --bg: #010510;             /* Dark mode background - matches hero image */
     --bg-elev: rgba(255,255,255,0.03); /* Glass elevation */
     --bg-sunken: rgba(0,0,0,0.3);       
@@ -79,13 +77,59 @@
     --radius-lg: 12px;
   }
 
-  /* Dark theme DISABILITATO per brand direction "white + green only".
-     Il blocco [data-theme="dark"] è stato commentato — la classe non
-     viene più applicata dal toggle (vedi theme-toggle.tsx). Lasciato
-     qui solo come reference se servisse reintrodurlo. */
-  /*
-  [data-theme="dark"] { ... }
-  */
+  /* Tema CHIARO: attivato dal toggle (localStorage "lavorai-theme" =
+     "light", vedi theme-script.tsx / theme-toggle.tsx) con
+     data-theme="light" su <html>. Off-white con micro-tint verde,
+     testo quasi nero, bordi e ombre tenui. */
+  [data-theme="light"] {
+    color-scheme: light;
+    --bg: #F6F7F4;
+    --bg-elev: #FFFFFF;
+    --bg-sunken: rgba(15, 40, 30, 0.05);
+    --fg: #0F1012;
+    --fg-muted: rgba(15, 16, 18, 0.68);
+    --fg-subtle: rgba(15, 16, 18, 0.46);
+    --border-ds: rgba(15, 40, 30, 0.10);
+    --border-strong: rgba(15, 40, 30, 0.22);
+    --green-bg: oklch(0.96 0.03 155);
+    --green-card: oklch(0.92 0.06 155);
+    --green-icon: oklch(0.52 0.17 155);
+    --green-deep: oklch(0.42 0.16 155);
+    --green-edge: rgba(15, 40, 30, 0.10);
+    --primary-ds: var(--green-icon);
+    --primary-weak: rgba(5, 150, 105, 0.12);
+    --primary-fg-ds: #FFFFFF;
+    --amber: oklch(0.6 0.15 70);
+    --amber-weak: rgba(217, 119, 6, 0.12);
+    --red-ds: oklch(0.55 0.19 25);
+    --red-weak: rgba(220, 38, 38, 0.10);
+    --blue: oklch(0.5 0.15 250);
+    --blue-weak: rgba(37, 99, 235, 0.10);
+    --shadow-lg: 0 12px 40px -8px rgba(15, 40, 30, 0.14), 0 2px 8px rgba(15, 40, 30, 0.06);
+    --shadow-sm: 0 1px 2px rgba(15, 40, 30, 0.08);
+    --shadow-premium: inset 0 1px 0 rgba(255,255,255,0.9), 0 12px 32px -12px rgba(15, 40, 30, 0.14), 0 1px 2px rgba(15, 40, 30, 0.05);
+    --shadow-hover: inset 0 1px 0 rgba(255,255,255,1), 0 18px 44px -14px rgba(15, 40, 30, 0.2), 0 2px 4px rgba(15, 40, 30, 0.06);
+
+    --background: 75 10% 97%;
+    --foreground: 240 6% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 6% 7%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 6% 7%;
+    --primary: 155 50% 34%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 150 12% 94%;
+    --secondary-foreground: 240 6% 12%;
+    --muted: 150 12% 94%;
+    --muted-foreground: 240 5% 42%;
+    --accent: 155 30% 92%;
+    --accent-foreground: 155 50% 22%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 150 10% 88%;
+    --input: 150 10% 88%;
+    --ring: 155 50% 34%;
+  }
 }
 
 @layer base {
@@ -97,8 +141,9 @@
     scroll-behavior: smooth;
   }
   body {
-    /* Background AMBIENTALE - matched to hero background image color */
-    background: #010510;
+    /* Background AMBIENTALE: dal token, così segue il tema (scuro =
+       colore dell'immagine hero, chiaro = off-white). */
+    background: var(--bg);
     background-attachment: fixed;
     color: var(--fg);
     font-family: var(--font-inter), -apple-system, "system-ui", sans-serif;
@@ -1493,3 +1538,48 @@
   .gd-cta { flex-direction: column; align-items: stretch; }
   .gd-cta .ds-btn { text-align: center; justify-content: center; }
 }
+
+/* ============================================================
+   TEMA CHIARO — override delle primitive costruite come "vetro su
+   fondo scuro" (bianco traslucido). Su fondo chiaro diventano superfici
+   bianche piene con bordo tenue; il resto segue i token.
+   ============================================================ */
+[data-theme="light"] .fit-card,
+[data-theme="light"] .ds-section-card,
+[data-theme="light"] .ds-card,
+[data-theme="light"] .ds-glass,
+[data-theme="light"] .adm-card {
+  background: var(--bg-elev);
+  color: var(--fg);
+  border-color: var(--border-ds);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+[data-theme="light"] .ds-glass-green { color: var(--fg); background: rgba(5,150,105,0.08); box-shadow: var(--shadow-sm); }
+[data-theme="light"] .ds-btn {
+  border-color: rgba(15,40,30,0.14);
+  background: #FFFFFF;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  box-shadow: 0 1px 2px rgba(15,40,30,0.06), 0 4px 12px -6px rgba(15,40,30,0.10);
+}
+[data-theme="light"] .ds-btn:hover { background: #FFFFFF; box-shadow: 0 2px 4px rgba(15,40,30,0.08), 0 10px 22px -8px rgba(15,40,30,0.16); }
+[data-theme="light"] .ds-btn-ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--fg-muted); }
+[data-theme="light"] .ds-btn-ghost:hover { background: var(--bg-sunken); color: var(--fg); }
+[data-theme="light"] .ds-btn-primary, [data-theme="light"] .ds-btn-primary:hover { color: #FFFFFF; }
+[data-theme="light"] .ds-chip { background: rgba(15,40,30,0.06); border-color: rgba(15,40,30,0.08); color: #3F4A46; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+[data-theme="light"] .ds-chip-green, [data-theme="light"] .ds-chip-amber, [data-theme="light"] .ds-chip-red, [data-theme="light"] .ds-chip-blue { color: #FFFFFF; }
+[data-theme="light"] .ds-input, [data-theme="light"] .ds-select, [data-theme="light"] .ds-textarea {
+  background: #FFFFFF; border-color: var(--border-strong); color: var(--fg); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none;
+}
+[data-theme="light"] .ds-input:focus, [data-theme="light"] .ds-select:focus, [data-theme="light"] .ds-textarea:focus { box-shadow: 0 0 0 4px hsl(var(--primary) / 0.12); }
+[data-theme="light"] .fit-input { background: #FFFFFF; border-color: var(--border-strong); }
+[data-theme="light"] .ds-toggle.on { background: hsl(var(--primary)); }
+[data-theme="light"] .ds-toggle::after { background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+[data-theme="light"] .ds-chart-bar { background: hsl(var(--primary) / 0.55); }
+[data-theme="light"] .ds-cv-preview { box-shadow: var(--shadow-lg); border: 1px solid var(--border-ds); }
+/* Admin: le card e la topbar seguono i token; solo i fondi "sunken" dei
+   log tecnici vanno schiariti. */
+[data-theme="light"] .adm-card-body.scroll[style*="bg-sunken"] { color: var(--fg-muted); }
+/* La dashboard con il globo resta una scena scura anche in tema chiaro
+   (l'immagine della Terra non ha una versione chiara): la hero mantiene
+   i suoi colori, il resto della pagina segue il tema. */
+[data-theme="light"] .dg-hero { background: #010510; color: #F7F8FA; }

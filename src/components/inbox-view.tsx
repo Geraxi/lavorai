@@ -204,7 +204,7 @@ export function InboxView({ sent, answers, replies, waiting }: { sent: InboxSent
                     <span style={{ fontSize: 12.5, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cleanLabel(a.label)}</span>
                     <span className={`ds-chip ${a.answer ? (SOURCE[a.source]?.cls ?? "") : "ds-chip-amber"}`} style={{ flexShrink: 0 }}>{a.answer ? (SOURCE[a.source]?.label ?? a.source) : "Manca"}</span>
                   </div>
-                  <div style={{ fontSize: 12, color: a.answer ? "var(--fg-muted)" : "#fbbf24", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.answer || "Non ancora risposto"}</div>
+                  <div style={{ fontSize: 12, color: a.answer ? "var(--fg-muted)" : "var(--amber)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.answer || "Non ancora risposto"}</div>
                 </button>
               ))
             )

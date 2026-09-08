@@ -184,7 +184,7 @@ export default function QuestionsPage() {
                       <div key={q.id} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--border-ds)", fontSize: 13.5 }}>
                         <div>
                           <div style={{ fontWeight: 600 }}>{cleanLabel(q.label)}</div>
-                          <div style={{ color: v ? "var(--fg-muted)" : "#fbbf24", marginTop: 3 }}>{v || "Non risposto"}</div>
+                          <div style={{ color: v ? "var(--fg-muted)" : "var(--amber)", marginTop: 3 }}>{v || "Non risposto"}</div>
                         </div>
                         <span className={`ds-chip ${v ? "ds-chip-green" : "ds-chip-amber"}`}>{v ? "OK" : "Manca"}</span>
                       </div>

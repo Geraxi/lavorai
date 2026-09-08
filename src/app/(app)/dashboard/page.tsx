@@ -4,7 +4,6 @@ import { getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
-import { ThemeToggle } from "@/components/design/theme-toggle";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { WelcomeModal } from "@/components/welcome-modal";
 import { DashboardLiveRefresh } from "@/components/dashboard-live-refresh";
@@ -76,7 +75,7 @@ export default async function DashboardPage() {
       <WelcomeModal show={showWelcome} />
       <PostLoginCheckout />
       <DashboardLiveRefresh />
-      <AppTopbar title={t("title")} actions={<><ThemeToggle /><AutoApplyToggle /><NewSearchButton /></>} />
+      <AppTopbar title={t("title")} actions={<><AutoApplyToggle /><NewSearchButton /></>} />
 
       <DashboardFocusProvider>
       <div className="fit-page dg-page">

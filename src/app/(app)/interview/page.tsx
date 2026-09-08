@@ -258,7 +258,7 @@ function ModeCard({
               borderRadius: 999,
               background: "rgba(245, 158, 11, 0.18)",
               border: "1px solid rgba(245, 158, 11, 0.45)",
-              color: "#fbbf24",
+              color: "var(--amber)",
               letterSpacing: "0.1em",
               textTransform: "uppercase",
             }}
