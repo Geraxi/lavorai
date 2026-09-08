@@ -84,14 +84,14 @@
      testo quasi nero, bordi e ombre tenui. */
   [data-theme="light"] {
     color-scheme: light;
-    --bg: #F3F7F3;
-    --bg-elev: #E9F3EC;               /* superficie card: verde chiarissimo */
-    --bg-surface: #E9F3EC;
-    --bg-sunken: rgba(5, 150, 105, 0.07);
-    /* Sidebar verde, voce attiva verde più deciso */
-    --sidebar-bg: #E2EFE6;
-    --nav-pill-bg: rgba(5, 150, 105, 0.22);
-    --nav-pill-border: rgba(5, 120, 80, 0.30);
+    --bg: #EEF5F0;
+    --bg-elev: #DDEDE2;               /* superficie card: verde chiaro deciso */
+    --bg-surface: #DDEDE2;
+    --bg-sunken: rgba(5, 150, 105, 0.11);
+    /* Sidebar verde più scura, voce attiva ancora più marcata */
+    --sidebar-bg: #CDE3D4;
+    --nav-pill-bg: rgba(5, 150, 105, 0.34);
+    --nav-pill-border: rgba(5, 120, 80, 0.42);
     --fg: #0F1012;
     --fg-muted: rgba(15, 16, 18, 0.68);
     --fg-subtle: rgba(15, 16, 18, 0.46);
@@ -118,7 +118,7 @@
 
     --background: 130 15% 96%;
     --foreground: 240 6% 7%;
-    --card: 140 25% 93%;
+    --card: 140 30% 90%;
     --card-foreground: 240 6% 7%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 6% 7%;
@@ -1555,9 +1555,9 @@
 [data-theme="light"] .ds-card,
 [data-theme="light"] .ds-glass,
 [data-theme="light"] .adm-card {
-  background: linear-gradient(180deg, #EDF6F0, #E6F1E9);
+  background: linear-gradient(180deg, #E2F0E6, #D8EADE);
   color: var(--fg);
-  border-color: var(--border-ds);
+  border-color: rgba(5, 120, 80, 0.22);
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 [data-theme="light"] .ds-glass-green { color: var(--fg); background: rgba(5,150,105,0.08); box-shadow: var(--shadow-sm); }
@@ -1565,16 +1565,16 @@
    ghost mantengono i loro colori (il selettore :not evita di vincere su
    di loro per specificità). */
 [data-theme="light"] .ds-btn:not(.ds-btn-primary):not(.ds-btn-accent):not(.ds-btn-ghost) {
-  border-color: rgba(5,120,80,0.22);
-  background: #DCEEE2;              /* verde chiaro brand */
+  border-color: rgba(5,120,80,0.30);
+  background: #C9E4D2;              /* verde chiaro brand, più deciso */
   color: #0F3D2A;
   backdrop-filter: none; -webkit-backdrop-filter: none;
   box-shadow: 0 1px 2px rgba(5,80,55,0.08), 0 4px 12px -6px rgba(5,80,55,0.12);
 }
-[data-theme="light"] .ds-btn:not(.ds-btn-primary):not(.ds-btn-accent):not(.ds-btn-ghost):hover { background: #CFE7D7; box-shadow: 0 2px 4px rgba(5,80,55,0.10), 0 10px 22px -8px rgba(5,80,55,0.18); }
+[data-theme="light"] .ds-btn:not(.ds-btn-primary):not(.ds-btn-accent):not(.ds-btn-ghost):hover { background: #BADBC6; box-shadow: 0 2px 4px rgba(5,80,55,0.10), 0 10px 22px -8px rgba(5,80,55,0.18); }
 [data-theme="light"] .ds-btn-ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--fg-muted); }
 [data-theme="light"] .ds-btn-ghost:hover { background: var(--bg-sunken); color: var(--fg); }
-[data-theme="light"] .ds-chip:not(.ds-chip-green):not(.ds-chip-amber):not(.ds-chip-red):not(.ds-chip-blue) { background: rgba(5,150,105,0.12); border-color: rgba(5,120,80,0.16); color: #1F5B3F; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+[data-theme="light"] .ds-chip:not(.ds-chip-green):not(.ds-chip-amber):not(.ds-chip-red):not(.ds-chip-blue) { background: rgba(5,150,105,0.18); border-color: rgba(5,120,80,0.16); color: #1F5B3F; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
 [data-theme="light"] .ds-chip-green, [data-theme="light"] .ds-chip-amber, [data-theme="light"] .ds-chip-red, [data-theme="light"] .ds-chip-blue { color: #FFFFFF; }
 [data-theme="light"] .ds-input, [data-theme="light"] .ds-select, [data-theme="light"] .ds-textarea {
   background: #FFFFFF; border-color: var(--border-strong); color: var(--fg); backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none;
@@ -1582,8 +1582,8 @@
 [data-theme="light"] .ds-input:focus, [data-theme="light"] .ds-select:focus, [data-theme="light"] .ds-textarea:focus { box-shadow: 0 0 0 4px hsl(var(--primary) / 0.12); }
 [data-theme="light"] .fit-input { background: #FFFFFF; border-color: var(--border-strong); }
 /* Bottoni "adm-btn" (admin) e topbar: stesso verde chiaro. */
-[data-theme="light"] .adm-btn { background: #DCEEE2; border-color: rgba(5,120,80,0.22); color: #0F3D2A; }
-[data-theme="light"] .adm-btn:hover { background: #CFE7D7; }
+[data-theme="light"] .adm-btn { background: #C9E4D2; border-color: rgba(5,120,80,0.30); color: #0F3D2A; }
+[data-theme="light"] .adm-btn:hover { background: #BADBC6; }
 [data-theme="light"] .ds-toggle.on { background: hsl(var(--primary)); }
 [data-theme="light"] .ds-toggle::after { background: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
 [data-theme="light"] .ds-chart-bar { background: hsl(var(--primary) / 0.55); }
