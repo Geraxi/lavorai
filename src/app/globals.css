@@ -1598,7 +1598,7 @@
 
 /* Sidebar in tema chiaro: pannello verde profondo con testo chiaro.
    I token di testo/bordo vengono ridefiniti solo dentro <aside>. */
-[data-theme="light"] aside {
+[data-theme="light"] .app-sidebar {
   --fg: #F2F8F4;
   --fg-muted: rgba(242, 248, 244, 0.74);
   --fg-subtle: rgba(242, 248, 244, 0.52);
@@ -1611,15 +1611,15 @@
 }
 /* Dentro la sidebar scura le superfici "glass" tornano traslucide chiare
    (il pannello auto-apply e la card utente), così il testo chiaro resta leggibile. */
-[data-theme="light"] aside .ds-glass,
-[data-theme="light"] aside .ds-card,
-[data-theme="light"] aside .fit-card {
+[data-theme="light"] .app-sidebar .ds-glass,
+[data-theme="light"] .app-sidebar .ds-card,
+[data-theme="light"] .app-sidebar .fit-card {
   background: rgba(255, 255, 255, 0.10);
   border-color: rgba(255, 255, 255, 0.18);
   color: var(--fg);
   box-shadow: none;
 }
-[data-theme="light"] aside .ds-btn:not(.ds-btn-primary):not(.ds-btn-accent):not(.ds-btn-ghost) {
+[data-theme="light"] .app-sidebar .ds-btn:not(.ds-btn-primary):not(.ds-btn-accent):not(.ds-btn-ghost) {
   background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.22); color: var(--fg);
 }
 /* Dashboard, colonna destra in tema chiaro: le regole .dg-* sono scritte
