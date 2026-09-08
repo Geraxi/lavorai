@@ -187,7 +187,7 @@ export function InboxView({ sent, answers, replies, waiting }: { sent: InboxSent
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
             {filters.map((f) => (
-              <button key={f.key} type="button" onClick={() => setFilter(f.key)} className={`ds-btn ds-btn-sm ${filter === f.key ? "ds-btn-primary" : "ds-btn-ghost"}`} style={{ padding: "4px 9px", fontSize: 12 }}>
+              <button key={f.key} type="button" onClick={() => setFilter(f.key)} className={`ds-btn ds-btn-sm ${filter === f.key ? "ds-btn-primary" : ""}`} style={{ padding: "4px 9px", fontSize: 12 }}>
                 <Icon name={f.icon} size={11} /> {f.label} <span style={{ opacity: 0.65, fontVariantNumeric: "tabular-nums" }}>{counts[f.key]}</span>
               </button>
             ))}
@@ -259,7 +259,7 @@ export function InboxView({ sent, answers, replies, waiting }: { sent: InboxSent
                 </div>
               </div>
               <a href={cur.url} target="_blank" rel="noreferrer" className="ds-btn ds-btn-sm" title="Apri annuncio"><Icon name="external" size={12} /> Annuncio</a>
-              <Link href={`/applications?id=${cur.id}`} className="ds-btn ds-btn-sm ds-btn-ghost" title="Dettagli">Dettagli</Link>
+              <Link href={`/applications?id=${cur.id}`} className="ds-btn ds-btn-sm" title="Dettagli">Dettagli</Link>
             </div>
 
             <div className="fit-body fit-scroll" style={{ padding: 18, gap: 14 }}>
@@ -395,7 +395,7 @@ function AnswerEditor({ answers, editKey, draft, setDraft, saving, notice, onSav
       {renderInput(a.kind, a.options, v, (nv) => setDraft((d) => ({ ...d, [a.labelKey]: nv })), `ans-${a.id}`, true)}
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" className="ds-btn ds-btn-sm ds-btn-primary" disabled={saving || !v.trim() || v.trim() === a.answer} onClick={() => onSave(a, v.trim())}>{saving ? "Salvo…" : "Salva"}</button>
-        <button type="button" className="ds-btn ds-btn-sm ds-btn-ghost" onClick={onCancel}>Chiudi</button>
+        <button type="button" className="ds-btn ds-btn-sm" onClick={onCancel}>Chiudi</button>
       </div>
       {a.answeredAt && <div style={{ fontSize: 11.5, color: "var(--fg-subtle)" }}>Ultimo aggiornamento: {fmtFull(a.answeredAt)}</div>}
     </div>
