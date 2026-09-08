@@ -89,9 +89,9 @@
     --bg-surface: #DDEDE2;
     --bg-sunken: rgba(5, 150, 105, 0.11);
     /* Sidebar verde più scura, voce attiva ancora più marcata */
-    --sidebar-bg: #CDE3D4;
-    --nav-pill-bg: rgba(5, 150, 105, 0.34);
-    --nav-pill-border: rgba(5, 120, 80, 0.42);
+    --sidebar-bg: #17493A;            /* verde profondo */
+    --nav-pill-bg: rgba(255, 255, 255, 0.16);
+    --nav-pill-border: rgba(255, 255, 255, 0.22);
     --fg: #0F1012;
     --fg-muted: rgba(15, 16, 18, 0.68);
     --fg-subtle: rgba(15, 16, 18, 0.46);
@@ -1595,3 +1595,17 @@
    (l'immagine della Terra non ha una versione chiara): la hero mantiene
    i suoi colori, il resto della pagina segue il tema. */
 [data-theme="light"] .dg-hero { background: #010510; color: #F7F8FA; }
+
+/* Sidebar in tema chiaro: pannello verde profondo con testo chiaro.
+   I token di testo/bordo vengono ridefiniti solo dentro <aside>. */
+[data-theme="light"] aside {
+  --fg: #F2F8F4;
+  --fg-muted: rgba(242, 248, 244, 0.74);
+  --fg-subtle: rgba(242, 248, 244, 0.52);
+  --border-ds: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --bg-sunken: rgba(255, 255, 255, 0.08);
+  --bg-elev: rgba(255, 255, 255, 0.10);
+  --primary-ds: #7FE0B5;
+  color: var(--fg);
+}
