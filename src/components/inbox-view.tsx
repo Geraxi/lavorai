@@ -192,8 +192,8 @@ export function InboxView({ sent, answers, replies, waiting }: { sent: InboxSent
                             </div>
                           ))}
                           <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                            <a href={s.url} target="_blank" rel="noreferrer" className="ds-btn ds-btn-sm ds-btn-ghost"><Icon name="external" size={12} /> Annuncio</a>
-                            <Link href={`/applications?id=${s.id}`} className="ds-btn ds-btn-sm ds-btn-ghost">Dettagli candidatura</Link>
+                            <a href={s.url} target="_blank" rel="noreferrer" className="ds-btn ds-btn-sm"><Icon name="external" size={12} /> Annuncio</a>
+                            <Link href={`/applications?id=${s.id}`} className="ds-btn ds-btn-sm">Dettagli candidatura</Link>
                           </div>
                         </div>
                       )}
@@ -242,7 +242,7 @@ export function InboxView({ sent, answers, replies, waiting }: { sent: InboxSent
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
                         {a.answer ? <span className={`ds-chip ${src.cls}`}>{saved[a.labelKey] ?? src.label}</span> : <span className="ds-chip ds-chip-amber">Da rispondere</span>}
-                        {!editing && <button type="button" className="ds-btn ds-btn-sm ds-btn-ghost" onClick={() => setEdit((s) => ({ ...s, [a.labelKey]: a.answer }))}>{a.answer ? "Modifica" : "Rispondi"}</button>}
+                        {!editing && <button type="button" className="ds-btn ds-btn-sm" onClick={() => setEdit((s) => ({ ...s, [a.labelKey]: a.answer }))}>{a.answer ? "Modifica" : "Rispondi"}</button>}
                       </div>
                     </div>
                   );
