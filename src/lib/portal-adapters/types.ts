@@ -48,6 +48,15 @@ export interface ApplyInput {
    *  (es. screenshot Blob filename). Non strettamente necessario per
    *  l'apply normale. */
   applicationId?: string;
+  /** true se l'utente è in auto-apply "auto": l'AI risponde da sola alle
+   *  domande del form (vedi ai-answer.ts, modalità autonoma). */
+  autonomous?: boolean;
+  /** Dati dell'annuncio per le domande aperte ("perché noi?"). */
+  jobTitle?: string | null;
+  company?: string | null;
+  jobDescription?: string | null;
+  /** Callback: risposte generate da AI/regole, da persistere come UserAnswer. */
+  onAiAnswers?: (answers: Array<{ label: string; kind: string; answer: string; source: "ai" | "rule" }>) => void;
 }
 
 /**

@@ -415,11 +415,14 @@ export const greenhouseAdapter: PortalAdapter = {
           noticePeriod: input.answers?.noticePeriod ?? input.userNoticePeriod,
           highestEducation: input.answers?.highestEducation,
           cvText,
-          jobTitle: p.title,
-          company: null,
+          jobTitle: input.jobTitle ?? p.title,
+          company: input.company ?? null,
+          jobDescription: input.jobDescription,
+          autonomous: input.autonomous === true,
           storedAnswers: input.storedAnswers,
         });
         pendingQuestions = ai.unanswered;
+        if (ai.given.length > 0) input.onAiAnswers?.(ai.given);
         aiDebug = `answered=${ai.answered} remaining=${ai.remainingRequired} | ${ai.details.join(" ; ")}`;
         console.log(`[greenhouse] ai-answer: ${aiDebug}`);
       } catch (err) {

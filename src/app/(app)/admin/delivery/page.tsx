@@ -36,6 +36,21 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
     return `${d} ${MONTHS[Number(m) - 1]}`;
   });
 
+  // Domande dei form che bloccano candidature (UserAnswer senza risposta),
+  // aggregate per testo: dice quali domande l'AI non sa ancora rispondere.
+  const blockingQ = await prisma.userAnswer
+    .groupBy({
+      by: ["label"],
+      where: { OR: [{ answer: null }, { answer: "" }] },
+      _count: { _all: true },
+      orderBy: { _count: { label: "desc" } },
+      take: 8,
+    })
+    .catch(() => [] as Array<{ label: string; _count: { _all: number } }>);
+  const waitingAuto = await prisma.application
+    .count({ where: { status: "needs_answers", user: { preferences: { autoApplyMode: "auto" } } } })
+    .catch(() => 0);
+
   const [apps14d, apps28d, failedRecent] = await Promise.all([
     prisma.application.findMany({
       where: { createdAt: { gte: since(24 * DAYS) } },
@@ -299,7 +314,23 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
           </div>
         </div>
 
-        <div className="adm-card">
+        <div style={{ display: "grid", gridTemplateRows: "auto minmax(0,1fr)", gap: 12, minHeight: 0 }}>
+        <div className="adm-card" style={{ padding: "10px 14px", minHeight: 0 }}>
+          <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 4 }}>
+            <div className="adm-card-title" style={{ fontSize: 13 }}>Domande che bloccano</div>
+            <span style={{ fontSize: 11, color: "var(--fg-subtle)" }}>{waitingAuto} in attesa con auto-apply</span>
+          </div>
+          <div style={{ display: "grid", gap: 3, fontSize: 11.5 }}>
+            {blockingQ.length === 0 && <div style={{ color: "var(--fg-subtle)" }}>Nessuna domanda senza risposta</div>}
+            {blockingQ.map((q) => (
+              <div key={q.label} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 28px", gap: 8 }}>
+                <span className="adm-ellipsis" style={{ color: "var(--fg-muted)" }} title={q.label}>{q.label}</span>
+                <span className="adm-num" style={{ textAlign: "right", color: "var(--fg)", fontWeight: 700 }}>{q._count._all}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="adm-card" style={{ minHeight: 0 }}>
           <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 6 }}>
             <div className="adm-card-title">Log tecnici (submitConfirmation)</div>
             <div style={{ display: "flex", gap: 6 }}>
@@ -330,6 +361,7 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
                 );
               })}
           </div>
+        </div>
         </div>
       </div>
     </div>

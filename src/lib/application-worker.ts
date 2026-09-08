@@ -398,6 +398,12 @@ export async function processApplication(
         userYearsExperience: app.user.yearsExperience,
         userEnglishLevel: app.user.englishLevel,
         userNoticePeriod: app.user.noticePeriod,
+        // In "auto" l'utente non vuole essere interpellato: l'AI risponde
+        // da sola a tutto ciò che è onestamente rispondibile (vedi ai-answer).
+        autonomous: (app.user.preferences?.autoApplyMode ?? "manual") === "auto",
+        jobTitle: app.job.title,
+        company: app.job.company,
+        jobDescription: app.job.description,
         forceRealSubmit: opts?.forceRealSubmit === true,
       }).catch((err) => {
         console.error(
@@ -1736,6 +1742,11 @@ interface AdapterSubmitInput {
   userYearsExperience?: number | null;
   userEnglishLevel?: string | null;
   userNoticePeriod?: string | null;
+  /** Auto-apply "auto": l'AI risponde da sola alle domande del form. */
+  autonomous?: boolean;
+  jobTitle?: string | null;
+  company?: string | null;
+  jobDescription?: string | null;
   /** Override chirurgico: forza l'invio REALE anche se PORTAL_SUBMIT_DRY_RUN=true.
    *  Usato dal test admin per un singolo invio confermato, senza toccare il
    *  flag globale (che farebbe partire il backlog dal worker locale). */
@@ -1797,10 +1808,47 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       userEnglishLevel: input.userEnglishLevel,
       userNoticePeriod: input.userNoticePeriod,
       applicationId: input.applicationId, // per naming canary assets
+      autonomous: input.autonomous === true,
+      jobTitle: input.jobTitle,
+      company: input.company,
+      jobDescription: input.jobDescription,
+      // Risposte generate in modalità autonoma → UserAnswer (source ai/rule):
+      // riusate identiche nelle candidature successive e visibili all'utente
+      // in /questions per correggerle. Non sovrascrive risposte dell'utente.
+      onAiAnswers: (given) => {
+        void persistAiAnswers(userId, given).catch((err) =>
+          console.error(`[worker] ${applicationId} persist AI answers failed`, err),
+        );
+      },
     });
     return outcome;
   } finally {
     if (browser) await browser.close().catch(() => void 0);
+  }
+}
+
+/**
+ * Salva le risposte date da AI/regole come UserAnswer riutilizzabili.
+ * Una risposta data dall'utente (source "user") non viene mai sovrascritta.
+ */
+async function persistAiAnswers(
+  userId: string,
+  given: Array<{ label: string; kind: string; answer: string; source: "ai" | "rule" }>,
+): Promise<void> {
+  const { normalizeLabel } = await import("@/lib/portal-adapters/ai-answer");
+  for (const g of given) {
+    const labelKey = normalizeLabel(g.label);
+    if (!labelKey || !g.answer.trim()) continue;
+    const existing = await prisma.userAnswer.findUnique({
+      where: { userId_labelKey: { userId, labelKey } },
+      select: { answer: true, source: true },
+    });
+    if (existing?.answer && existing.source === "user") continue;
+    await prisma.userAnswer.upsert({
+      where: { userId_labelKey: { userId, labelKey } },
+      create: { userId, labelKey, label: g.label, kind: g.kind, answer: g.answer, source: g.source, answeredAt: new Date() },
+      update: { answer: g.answer, source: g.source, answeredAt: new Date() },
+    });
   }
 }
 

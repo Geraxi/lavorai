@@ -43,6 +43,10 @@ export async function POST(req: NextRequest) {
         { submitConfirmation: "DRY_RUN", status: { notIn: ["success", "queued", "optimizing", "applying"] } },
         { status: "failed", errorMessage: { contains: "non confermato", mode: "insensitive" } },
         { status: "failed", errorMessage: { contains: "captcha", mode: "insensitive" } },
+        // In attesa di risposte, ma l'utente è in auto-apply "auto": da ora
+        // l'AI risponde da sola alle domande (ai-answer modalità autonoma),
+        // quindi si ritenta senza aspettare l'utente.
+        { status: "needs_answers", user: { preferences: { autoApplyMode: "auto" } } },
       ],
     },
     select: { id: true, job: { select: { url: true } } },
@@ -64,6 +68,7 @@ export async function POST(req: NextRequest) {
           errorMessage: null,
           submitConfirmation: null,
           submittedVia: null,
+          pendingQuestionsJson: null,
         },
       });
       await enqueueApplication(app.id);

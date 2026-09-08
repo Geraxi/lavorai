@@ -131,12 +131,15 @@ export const workableAdapter: PortalAdapter = {
           noticePeriod: input.answers?.noticePeriod ?? input.userNoticePeriod,
           highestEducation: input.answers?.highestEducation,
           cvText,
-          jobTitle: p.title,
-          company: null,
+          jobTitle: input.jobTitle ?? p.title,
+          company: input.company ?? null,
+          jobDescription: input.jobDescription,
+          autonomous: input.autonomous === true,
           storedAnswers: input.storedAnswers,
         });
         pendingQuestions = ai.unanswered;
-        console.log(`[workable] ai-answer: answered=${ai.answered} remaining=${ai.remainingRequired}`);
+        if (ai.given.length > 0) input.onAiAnswers?.(ai.given);
+        console.log(`[workable] ai-answer: answered=${ai.answered} remaining=${ai.remainingRequired} | ${ai.details.join(" ; ")}`);
       } catch (err) {
         console.warn("[workable] ai-answer failed", err);
       }

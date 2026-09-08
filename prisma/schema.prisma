@@ -212,6 +212,8 @@ model UserAnswer {
   optionsJson String? @db.Text
   /// Risposta dell'utente. null/"" = ancora da rispondere (pending).
   answer     String?  @db.Text
+  /// Chi ha risposto: "user" (in /questions) | "ai" | "rule" (auto-apply autonomo).
+  source     String   @default("user")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   answeredAt DateTime?

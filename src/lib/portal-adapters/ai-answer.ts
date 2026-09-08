@@ -46,6 +46,26 @@ export interface CandidateContext {
   company?: string | null;
   /** Risposte già date dall'utente a domande precedenti (riutilizzabili). */
   storedAnswers?: Array<{ label: string; answer: string; kind?: string }>;
+  /**
+   * Modalità AUTONOMA (utente in auto-apply "auto"): l'utente ha chiesto
+   * zero coinvolgimento, quindi rispondiamo noi a tutto ciò che si può
+   * rispondere onestamente (domande aperte dal CV, EEO "preferisco non
+   * dire", "come ci hai conosciuto", consensi, stipendio "da concordare").
+   * Restano all'utente SOLO le domande legali/fattuali che non conosciamo
+   * (diritto al lavoro fuori UE, clearance, precedenti penali, certificazioni
+   * specifiche, referenze).
+   */
+  autonomous?: boolean;
+  /** Descrizione dell'annuncio, per le domande aperte ("perché noi?"). */
+  jobDescription?: string | null;
+}
+
+/** Risposta data dall'AI o dalle regole, da persistere per riuso/revisione. */
+export interface GivenAnswer {
+  label: string;
+  kind: string;
+  answer: string;
+  source: "ai" | "rule";
 }
 
 /** Normalizza una label di domanda per il match cross-job (UserAnswer.labelKey). */
@@ -85,8 +105,11 @@ export async function answerRequiredFields(
   details: string[];
   /** Domande obbligatorie rimaste senza risposta → da chiedere all'utente. */
   unanswered: Array<{ label: string; kind: string; options?: string[] }>;
+  /** Risposte generate (AI/regole) da salvare come UserAnswer riutilizzabili. */
+  given: GivenAnswer[];
 }> {
   const details: string[] = [];
+  const given: GivenAnswer[] = [];
 
   // 1. Enumera + tagga i campi candidati (required & vuoti).
   let pending: FieldDescriptor[] = [];
@@ -94,10 +117,10 @@ export async function answerRequiredFields(
     pending = await collectRequiredEmptyFields(page);
   } catch (err) {
     console.warn("[ai-answer] collect failed", err);
-    return { answered: 0, remainingRequired: 0, details: ["collect_failed"], unanswered: [] };
+    return { answered: 0, remainingRequired: 0, details: ["collect_failed"], unanswered: [], given };
   }
   if (pending.length === 0) {
-    return { answered: 0, remainingRequired: 0, details: ["no_required_empty"], unanswered: [] };
+    return { answered: 0, remainingRequired: 0, details: ["no_required_empty"], unanswered: [], given };
   }
 
   // 2. Per i react-select, apri e leggi le opzioni (best-effort) così l'AI
@@ -145,6 +168,24 @@ export async function answerRequiredFields(
     }
   }
 
+  // 3c. Modalità autonoma: regole deterministiche per le domande "di rito"
+  //     che non richiedono giudizio (EEO, "come ci hai conosciuto", consensi,
+  //     stipendio a testo libero). Niente AI, niente invenzioni.
+  if (ctx.autonomous) {
+    for (const f of pending) {
+      if (filledIdx.has(f.idx)) continue;
+      const rv = ruleAnswerForField(f, ctx);
+      if (!rv) continue;
+      const ok = await fillField(page, f, rv).catch(() => false);
+      if (ok) {
+        answered++;
+        filledIdx.add(f.idx);
+        details.push(`rule:"${f.label.slice(0, 32)}"=${rv.slice(0, 24)}`);
+        given.push({ label: f.label, kind: f.kind, answer: rv, source: "rule" });
+      }
+    }
+  }
+
   // 4. Per il resto, chiedi a Claude (solo dai dati reali).
   const remaining = pending.filter((f) => !filledIdx.has(f.idx));
   let answers: AiAnswer[] = [];
@@ -165,6 +206,9 @@ export async function answerRequiredFields(
       answered++;
       filledIdx.add(f.idx);
       details.push(`ai:"${f.label.slice(0, 36)}"=${String(val).slice(0, 24)}`);
+      // Le risposte AI in modalità autonoma vengono salvate per coerenza
+      // tra candidature e per la revisione dell'utente in /questions.
+      if (ctx.autonomous) given.push({ label: f.label, kind: f.kind, answer: String(val), source: "ai" });
     }
   }
 
@@ -183,7 +227,68 @@ export async function answerRequiredFields(
     options: f.options ?? optByLabel.get(normalizeLabel(f.label)) ?? undefined,
   }));
 
-  return { answered, remainingRequired: stillEmpty.length, details, unanswered };
+  return { answered, remainingRequired: stillEmpty.length, details, unanswered, given };
+}
+
+/** Sceglie tra le opzioni quella che matcha una delle regex, in ordine di priorità. */
+function pickOption(options: string[] | undefined, prefs: RegExp[]): string | null {
+  if (!options?.length) return null;
+  for (const re of prefs) {
+    const hit = options.find((o) => re.test(o));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * Regole per la modalità autonoma. Coprono le domande che un candidato
+ * umano risponde senza pensarci e che NON contengono fatti da verificare.
+ * Ritorna null se la domanda non rientra in una categoria sicura.
+ */
+function ruleAnswerForField(f: FieldDescriptor, ctx: CandidateContext): string | null {
+  const l = f.label.toLowerCase();
+  const hasOpts = !!f.options?.length;
+
+  // EEO / diversità (USA/UK): gender, race, ethnicity, veteran, disability,
+  // sexual orientation → "prefer not to say" quando esiste.
+  if (/gender|sex\b|race|ethnic|veteran|disabilit|sexual orientation|pronoun|genere|etnia|disabile|orientamento/.test(l)) {
+    return pickOption(f.options, [/prefer not|decline|don'?t wish|rather not|preferisco non|non rispond|i do not wish|choose not/i]);
+  }
+  // Come ci hai conosciuto / fonte candidatura.
+  if (/how did you (hear|find|learn)|where did you (hear|find)|source|referral source|come (ci )?hai (conosciuto|trovato|saputo)|come sei venuto/.test(l)) {
+    if (hasOpts) return pickOption(f.options, [/job board/i, /linkedin/i, /company (website|careers)|careers? (page|site)/i, /online/i, /other|altro/i, /.*/]);
+    return "Job board";
+  }
+  // Consensi (privacy, GDPR, termini, comunicazioni future).
+  if (f.kind === "checkbox" && /privacy|gdpr|consent|agree|terms|acconsent|autorizz|accett|trattamento/.test(l)) return "Yes";
+  if (f.kind === "radio" && /privacy|gdpr|consent|acconsent|autorizz|trattamento|future (roles|opportunities)|keep (my|your) (data|cv)|talent pool/.test(l)) {
+    return pickOption(f.options, [/^(yes|y|sì|si|agree|accept|acconsento|accetto)\b/i]);
+  }
+  // Stipendio: numerico solo se lo abbiamo, altrimenti "da concordare" nei campi testo.
+  if (/salary|compensation|stipendio|retribuzione|\bral\b/.test(l)) {
+    if (ctx.salaryExpectationEur) return String(ctx.salaryExpectationEur);
+    if (f.kind === "text" || f.kind === "textarea") return "Negotiable / da concordare in base al ruolo";
+    return null;
+  }
+  // Disponibilità / data di inizio a testo libero.
+  if (/start date|available to start|availability|when can you start|disponibilit|data di inizio/.test(l)) {
+    if (ctx.noticePeriod) return ctx.noticePeriod;
+    if (f.kind === "text" || f.kind === "textarea") return "Available with standard notice period";
+    return pickOption(f.options, [/immediate|asap|subito/i, /1 month|30 days|4 weeks|un mese/i, /2 weeks|due settimane/i]);
+  }
+  // Modalità di lavoro preferita.
+  if (/remote|hybrid|on-?site|work (location|arrangement)|smart working|modalit/.test(l) && hasOpts) {
+    return pickOption(f.options, [/hybrid|ibrid/i, /remote|remoto/i, /flexible|open|any|indifferent|flessib/i]);
+  }
+  // Relocation: senza dati non promettiamo trasferimenti.
+  if (/relocat|trasferi/.test(l) && hasOpts) return pickOption(f.options, [/open to|willing|maybe|possibly|discuss|dipende|forse|open/i]);
+  // Firma / conferma di veridicità (campo testo "type your name").
+  if (/signature|firma|type your (full )?name|full name to confirm|certify/.test(l) && (f.kind === "text" || f.kind === "checkbox")) {
+    const name = [ctx.firstName, ctx.lastName].filter(Boolean).join(" ");
+    if (f.kind === "checkbox") return "Yes";
+    return name || null;
+  }
+  return null;
 }
 
 /** Mappa una label a un valore noto del profilo (per i campi standard). */
@@ -555,27 +660,49 @@ async function askClaude(
     noticePeriod: ctx.noticePeriod ?? null,
     highestEducation: ctx.highestEducation ?? null,
   };
+  // Lingua della domanda (euristica): il prompt è in italiano e il modello
+  // tende a rispondere in italiano anche a domande inglesi. Un hint esplicito
+  // per campo risolve il problema in modo affidabile.
+  const langOf = (label: string): "en" | "it" =>
+    /\b(perch[eé]|cosa|come|descrivi|raccont|quali|sei|hai|vorresti|motivo)\b/i.test(label) &&
+    !/\b(why|what|how|do you|tell us|describe|are you|please|would you|have you)\b/i.test(label)
+      ? "it"
+      : "en";
   const fieldList = fields.map((f) => ({
     idx: f.idx,
     question: f.label,
     type: f.kind,
     options: f.options ?? undefined,
+    ...(f.kind === "text" || f.kind === "textarea" ? { answerLanguage: langOf(f.label) } : {}),
   }));
 
-  const system =
+  const base =
     "Sei un assistente che compila form di candidatura per conto di un candidato reale. " +
     "REGOLA ASSOLUTA: usa SOLO i dati forniti del candidato (profilo + estratto CV). " +
     "NON inventare MAI fatti, qualifiche, autorizzazioni al lavoro, o esperienze non presenti nei dati. " +
-    "Se una domanda richiede un'informazione che non hai, rispondi value=null. " +
-    "Per domande sì/no su esperienze: rispondi 'Yes' solo se il CV lo supporta, altrimenti 'No' o null. " +
     "Per work authorization: rispondi onestamente in base a workAuthorization/country del candidato; se il paese del ruolo differisce e non hai prova del diritto al lavoro, NON dichiarare 'Yes'. " +
-    "Per i campi 'select'/'react-select' scegli ESATTAMENTE una delle options fornite (testo identico). " +
+    "Per i campi 'select'/'react-select'/'radio' scegli ESATTAMENTE una delle options fornite (testo identico). " +
     "Per checkbox di consenso privacy/GDPR rispondi 'Yes'. " +
-    'Rispondi SOLO con JSON: {"answers":[{"idx":N,"value":"..."|null}]}.';
+    'Rispondi SOLO con JSON valido: {"answers":[{"idx":N,"value":"..."|null}]}. Dentro le stringhe niente a capo letterali (usa \\n) e virgolette escapate.';
+
+  const system = ctx.autonomous
+    ? base +
+      " MODALITÀ AUTONOMA: il candidato ha scelto l'invio completamente automatico e non vuole essere interpellato. " +
+      "Rispondi a TUTTE le domande a cui si può rispondere onestamente con i dati disponibili: " +
+      "(1) domande aperte ('perché vuoi lavorare qui', 'parlaci di te', 'cosa ti attrae del ruolo', 'lettera di presentazione', 'cosa porteresti al team'): scrivi 3-6 frasi in prima persona, concrete, OBBLIGATORIAMENTE nella lingua indicata da 'answerLanguage' del campo ('en' → rispondi in inglese, 'it' → in italiano), basate su esperienze REALI del CV e sulla descrizione del ruolo, senza frasi fatte; " +
+      "(2) domande sì/no o a scelta su esperienze/competenze/strumenti: deduci dal CV ('Yes' se il CV lo supporta anche indirettamente, altrimenti 'No'); " +
+      "(3) anni di esperienza con una tecnologia: stima dal CV; " +
+      "(4) livello linguistico: dai dati; " +
+      "(5) per i select senza opzione palesemente corretta scegli la più neutra/onesta (es. 'Other', 'No preference', 'Prefer not to say'). " +
+      "Rispondi null SOLO per: diritto al lavoro/visto in un paese diverso da quello del candidato, security clearance, precedenti penali, certificazioni o licenze specifiche non nel CV, referenze con nomi, numeri di documenti, e domande che richiedono fatti personali assenti dai dati."
+    : base +
+      " Se una domanda richiede un'informazione che non hai, rispondi value=null. " +
+      "Per domande sì/no su esperienze: rispondi 'Yes' solo se il CV lo supporta, altrimenti 'No' o null.";
 
   const userMsg =
     `CANDIDATO:\n${JSON.stringify(profile, null, 2)}\n\n` +
     `RUOLO: ${ctx.jobTitle ?? "-"}${ctx.company ? ` @ ${ctx.company}` : ""}\n\n` +
+    (ctx.jobDescription ? `DESCRIZIONE ANNUNCIO (per le domande aperte):\n${ctx.jobDescription.slice(0, 3000)}\n\n` : "") +
     (ctx.cvText
       ? `ESTRATTO CV (per domande su esperienze):\n${ctx.cvText.slice(0, 4000)}\n\n`
       : "") +
@@ -584,13 +711,22 @@ async function askClaude(
   const client = new Anthropic({ apiKey });
   const res = await client.messages.create({
     model: MODEL,
-    max_tokens: 1500,
+    max_tokens: ctx.autonomous ? 3500 : 1500,
     system,
     messages: [{ role: "user", content: userMsg }],
   });
-  const text = res.content?.[0]?.type === "text" ? res.content[0].text : "";
+  // Il blocco di testo non è necessariamente il primo (es. blocchi thinking).
+  const text = (res.content ?? [])
+    .filter((c): c is Extract<typeof c, { type: "text" }> => c.type === "text")
+    .map((c) => c.text)
+    .join("\n");
   const json = extractJson(text);
-  if (!json || !Array.isArray(json.answers)) return [];
+  if (!json || !Array.isArray(json.answers)) {
+    console.warn(
+      `[ai-answer] risposta Claude non parsabile (${text.length} char, stop=${res.stop_reason}, blocks=${(res.content ?? []).map((c) => c.type).join(",")}): ${text.slice(0, 200).replace(/\s+/g, " ")}`,
+    );
+    return [];
+  }
   return json.answers
     .filter((a: unknown): a is AiAnswer => {
       return (
@@ -603,11 +739,27 @@ async function askClaude(
 }
 
 function extractJson(text: string): { answers?: unknown[] } | null {
+  const m = text.replace(/```(?:json)?/gi, "").match(/\{[\s\S]*\}/);
+  if (!m) return null;
   try {
-    const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return null;
     return JSON.parse(m[0]);
   } catch {
-    return null;
+    // Riparazione: i testi lunghi (domande aperte) arrivano spesso con a capo
+    // letterali dentro le stringhe → JSON non valido. Sostituisci i newline
+    // che si trovano DENTRO una stringa con "\n" escapato e riprova.
+    try {
+      let inStr = false;
+      let out = "";
+      for (let i = 0; i < m[0].length; i++) {
+        const ch = m[0][i];
+        if (ch === '"' && m[0][i - 1] !== "\\") inStr = !inStr;
+        if (inStr && (ch === "\n" || ch === "\r")) out += "\\n";
+        else if (inStr && ch === "\t") out += " ";
+        else out += ch;
+      }
+      return JSON.parse(out);
+    } catch {
+      return null;
+    }
   }
 }
