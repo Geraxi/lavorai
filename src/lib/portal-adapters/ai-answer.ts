@@ -63,6 +63,10 @@ export interface CandidateContext {
   autonomous?: boolean;
   /** Descrizione dell'annuncio, per le domande aperte ("perché noi?"). */
   jobDescription?: string | null;
+  /** Località dell'annuncio (es. "Berlin, Germany", "Remote - US"): serve
+   *  per dedurre il paese e rispondere onestamente a diritto al lavoro /
+   *  sponsorship quando la domanda non nomina il paese. */
+  jobLocation?: string | null;
 }
 
 /** Risposta data dall'AI o dalle regole, da persistere per riuso/revisione. */
@@ -71,9 +75,12 @@ export interface GivenAnswer {
   kind: string;
   answer: string;
   /** "user" = risposta data dall'utente in /questions, "profile" = dal profilo,
-   *  "rule" = regola deterministica, "ai" = Claude. */
-  source: "user" | "profile" | "ai" | "rule";
+   *  "rule" = regola deterministica, "ai" = Claude, "assumed" = default
+   *  conservativo dedotto (ultima risorsa, l'utente può correggerlo in /inbox). */
+  source: "user" | "profile" | "ai" | "rule" | "assumed";
 }
+
+export type AnswerSource = GivenAnswer["source"];
 
 /** Normalizza una label di domanda per il match cross-job (UserAnswer.labelKey). */
 export function normalizeLabel(label: string): string {
@@ -222,6 +229,27 @@ export async function answerRequiredFields(
     }
   }
 
+  // 4b. Ultima risorsa (modalità autonoma): nessuna candidatura deve
+  //     fermarsi ad aspettare l'utente. Per i campi ancora vuoti diamo la
+  //     risposta onesta e conservativa deducibile dal profilo (diritto al
+  //     lavoro da cittadinanza + paese dell'annuncio, "No" a clearance e
+  //     simili, opzione neutra nei select, "N/A" nei testi). Marcate
+  //     "assumed": l'utente le vede in /inbox e può correggerle una volta.
+  if (ctx.autonomous) {
+    for (const f of pending) {
+      if (filledIdx.has(f.idx)) continue;
+      const lv = lastResortAnswer(f, ctx);
+      if (!lv) continue;
+      const ok = await fillField(page, f, lv).catch(() => false);
+      if (ok) {
+        answered++;
+        filledIdx.add(f.idx);
+        details.push(`assumed:"${f.label.slice(0, 32)}"=${lv.slice(0, 24)}`);
+        given.push({ label: f.label, kind: f.kind, answer: lv, source: "assumed" });
+      }
+    }
+  }
+
   // 5. Ricalcola i required-vuoti rimasti e mappa le domande da chiedere.
   let stillEmpty: FieldDescriptor[] = [];
   try {
@@ -238,6 +266,94 @@ export async function answerRequiredFields(
   }));
 
   return { answered, remainingRequired: stillEmpty.length, details, unanswered, given };
+}
+
+// ---------- ultima risorsa: diritto al lavoro e default conservativi ----------
+
+const EU_EEA = new Set(["IT", "DE", "FR", "ES", "NL", "BE", "AT", "PT", "IE", "SE", "DK", "FI", "PL", "CZ", "GR", "LU", "HU", "RO", "BG", "HR", "SK", "SI", "EE", "LV", "LT", "CY", "MT", "NO", "IS", "LI", "CH"]);
+const COUNTRY_RE: Array<[RegExp, string]> = [
+  [/united states|\bu\.?s\.?a?\b|america/i, "US"], [/united kingdom|\buk\b|britain|england|london/i, "GB"], [/germany|deutschland|germania|berlin|munich/i, "DE"],
+  [/france|francia|paris/i, "FR"], [/spain|spagna|españa|madrid|barcelona/i, "ES"], [/italy|italia|milan|rome|roma/i, "IT"], [/netherlands|olanda|amsterdam/i, "NL"],
+  [/poland|polonia|warsaw/i, "PL"], [/ireland|irlanda|dublin/i, "IE"], [/switzerland|svizzera|zurich/i, "CH"], [/portugal|portogallo|lisbon/i, "PT"],
+  [/austria|vienna/i, "AT"], [/belgium|belgio|brussels/i, "BE"], [/sweden|svezia|stockholm/i, "SE"], [/denmark|danimarca|copenhagen/i, "DK"],
+  [/canada|toronto|vancouver/i, "CA"], [/australia|sydney|melbourne/i, "AU"], [/india|bangalore|bengaluru/i, "IN"], [/singapore/i, "SG"], [/emirates|dubai|\buae\b/i, "AE"],
+  [/israel/i, "IL"], [/japan/i, "JP"], [/brazil|brasil/i, "BR"], [/mexico/i, "MX"], [/czech|prague/i, "CZ"], [/hungary|budapest/i, "HU"], [/romania|bucharest/i, "RO"],
+  [/greece|athens/i, "GR"], [/finland|helsinki/i, "FI"], [/norway|oslo/i, "NO"], [/estonia|tallinn/i, "EE"], [/lithuania|vilnius/i, "LT"], [/latvia|riga/i, "LV"],
+];
+
+function countryCodeOf(text: string | null | undefined): string | null {
+  if (!text) return null;
+  for (const [re, cc] of COUNTRY_RE) if (re.test(text)) return cc;
+  const m = matchCity(text);
+  return m ? m.cc.toUpperCase() : null;
+}
+
+/** Paese del candidato: da country esplicito o dalla città del profilo. */
+function candidateCountry(ctx: CandidateContext): string | null {
+  return countryCodeOf(ctx.country) ?? countryCodeOf(ctx.city);
+}
+
+/**
+ * "Sei autorizzato a lavorare in X?" → true/false/null (null = non deducibile).
+ * Regola: cittadino UE → sì in UE/EEA/CH; permesso → sì solo nel paese di
+ * residenza; "serve sponsorship" → no ovunque tranne il paese di residenza;
+ * senza dati → sì solo nel paese di residenza. Mai "sì" per un paese
+ * extra-UE senza prova.
+ */
+function workAuthorizedIn(target: string | null, ctx: CandidateContext): boolean | null {
+  const home = candidateCountry(ctx);
+  if (!target) return null;
+  if (home && target === home) return true;
+  const wa = (ctx.workAuth ?? "").toLowerCase();
+  if (EU_EEA.has(target)) {
+    if (wa.includes("eu_citizen")) return true;
+    if (home && EU_EEA.has(home) && !wa) return true; // residente UE senza dato esplicito: presunto cittadino UE
+    return false;
+  }
+  return false;
+}
+
+/** Opzione "sì"/"no" tra quelle disponibili (o testo libero). */
+function yesNo(f: FieldDescriptor, yes: boolean): string | null {
+  if (f.options?.length) {
+    const pick = pickOption(f.options, yes ? [/^(yes|y|sì|si)\b/i, /^i (am|do|have)\b/i, /authori[sz]ed|eligible|not require|no sponsorship|without/i] : [/^(no|n)\b/i, /not (authori[sz]ed|eligible)|require|will need|sponsorship/i]);
+    return pick;
+  }
+  if (f.kind === "checkbox") return yes ? "Yes" : null;
+  return yes ? "Yes" : "No";
+}
+
+function lastResortAnswer(f: FieldDescriptor, ctx: CandidateContext): string | null {
+  const l = f.label.toLowerCase();
+  const target = countryCodeOf(f.label) ?? countryCodeOf(ctx.jobLocation) ?? candidateCountry(ctx);
+
+  // Sponsorship / visto: "will you require sponsorship?" → inverso dell'autorizzazione.
+  if (/sponsor|visa|visto|permit|permesso/.test(l)) {
+    const auth = workAuthorizedIn(target, ctx);
+    if (auth == null) return null;
+    const needs = !auth;
+    const asksNeed = /require|need|necessit|richied|will you/.test(l);
+    return yesNo(f, asksNeed ? needs : auth);
+  }
+  // Diritto al lavoro / autorizzazione.
+  if (/authori[sz]ed|eligib|legally|right to work|work in|lavorare in|cittadin|citizen|autorizzat|diritto/.test(l)) {
+    const auth = workAuthorizedIn(target, ctx);
+    return auth == null ? null : yesNo(f, auth);
+  }
+  // Clearance, precedenti, non-compete, conflitti, ex dipendente, parenti in azienda → No.
+  if (/clearance|criminal|convict|precedent|penal|background check|non-?compete|conflict|previously (worked|employed|applied)|already applied|relative|family member|referred by|ex.?dipendent/.test(l)) {
+    return yesNo(f, false) ?? (f.kind === "text" || f.kind === "textarea" ? "No" : null);
+  }
+  // Età minima / maggiore età → Yes.
+  if (/\b18\b|over 18|legal age|maggiore et|adult/.test(l)) return yesNo(f, true);
+  // Select/radio: opzione neutra o "No", altrimenti la prima vera.
+  if (f.options?.length) {
+    return pickOption(f.options, [/prefer not|decline|rather not|preferisco non/i, /^(no|n)\b/i, /none|nessun|n\/a|not applicable/i, /other|altro/i, /^(?!select|scegli|choose|--|—)/i]);
+  }
+  if (f.kind === "checkbox") return "Yes";
+  if (f.kind === "text") return "N/A";
+  if (f.kind === "textarea") return "Happy to discuss in an interview.";
+  return null;
 }
 
 /** Sceglie tra le opzioni quella che matcha una delle regex, in ordine di priorità. */

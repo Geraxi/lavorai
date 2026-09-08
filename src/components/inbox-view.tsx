@@ -65,6 +65,7 @@ const SOURCE: Record<string, { label: string; cls: string }> = {
   profile: { label: "Dal profilo", cls: "ds-chip-blue" },
   rule: { label: "Automatica", cls: "ds-chip-blue" },
   ai: { label: "Risposta AI", cls: "ds-chip-amber" },
+  assumed: { label: "Presunta · verifica", cls: "ds-chip-red" },
 };
 
 function cleanLabel(raw: string): string {
@@ -392,6 +393,7 @@ function AnswerEditor({ answers, editKey, draft, setDraft, saving, notice, onSav
         <span className={`ds-chip ${src.cls}`} style={{ flexShrink: 0 }}>{src.label}</span>
       </div>
       {a.source === "ai" && a.answer && <div style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Questa risposta l&apos;ha scritta l&apos;AI dai dati del tuo CV. Se la modifichi, useremo sempre la tua versione.</div>}
+      {a.source === "assumed" && a.answer && <div style={{ fontSize: 12.5, color: "var(--amber)" }}>Risposta dedotta in automatico (default prudente) per non bloccare la candidatura. Controllala: se la correggi, useremo sempre la tua versione.</div>}
       {renderInput(a.kind, a.options, v, (nv) => setDraft((d) => ({ ...d, [a.labelKey]: nv })), `ans-${a.id}`, true)}
       <div style={{ display: "flex", gap: 8 }}>
         <button type="button" className="ds-btn ds-btn-sm ds-btn-primary" disabled={saving || !v.trim() || v.trim() === a.answer} onClick={() => onSave(a, v.trim())}>{saving ? "Salvo…" : "Salva"}</button>

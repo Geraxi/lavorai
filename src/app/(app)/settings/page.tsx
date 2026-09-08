@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AppTopbar } from "@/components/design/topbar";
+import { ThemeToggle } from "@/components/design/theme-toggle";
 import { Icon } from "@/components/design/icon";
 import {
   SectionBody,
@@ -68,6 +69,7 @@ export default async function SettingsPage() {
             <SectionHead
               icon={<Icon name="user" size={14} />}
               title="Account"
+              actions={<ThemeToggle compact={false} />}
             />
             <SectionBody>
               <div

@@ -398,10 +398,12 @@ export async function processApplication(
         userYearsExperience: app.user.yearsExperience,
         userEnglishLevel: app.user.englishLevel,
         userNoticePeriod: app.user.noticePeriod,
-        // In "auto" l'utente non vuole essere interpellato: l'AI risponde
-        // da sola a tutto ciò che è onestamente rispondibile (vedi ai-answer).
-        autonomous: (app.user.preferences?.autoApplyMode ?? "manual") === "auto",
+        // Nessuna candidatura si ferma ad aspettare l'utente: in ogni
+        // modalità l'AI risponde a ciò che è onestamente rispondibile e per
+        // il resto usa default conservativi marcati "assumed" (vedi ai-answer).
+        autonomous: true,
         preferredCity: firstPreferredCity(app.user.preferences?.locationsJson),
+        jobLocation: app.job.location,
         jobTitle: app.job.title,
         company: app.job.company,
         jobDescription: app.job.description,
@@ -1746,6 +1748,7 @@ interface AdapterSubmitInput {
   /** Auto-apply "auto": l'AI risponde da sola alle domande del form. */
   autonomous?: boolean;
   preferredCity?: string | null;
+  jobLocation?: string | null;
   jobTitle?: string | null;
   company?: string | null;
   jobDescription?: string | null;
@@ -1812,6 +1815,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       applicationId: input.applicationId, // per naming canary assets
       autonomous: input.autonomous === true,
       preferredCity: input.preferredCity,
+      jobLocation: input.jobLocation,
       jobTitle: input.jobTitle,
       company: input.company,
       jobDescription: input.jobDescription,
@@ -1849,7 +1853,7 @@ function firstPreferredCity(locationsJson: string | null | undefined): string | 
 async function persistAiAnswers(
   userId: string,
   applicationId: string,
-  given: Array<{ label: string; kind: string; answer: string; source: "user" | "profile" | "ai" | "rule" }>,
+  given: Array<{ label: string; kind: string; answer: string; source: "user" | "profile" | "ai" | "rule" | "assumed" }>,
 ): Promise<void> {
   const { normalizeLabel } = await import("@/lib/portal-adapters/ai-answer");
   // Tutte le risposte usate in QUESTA candidatura → visibili in /inbox.
@@ -1860,7 +1864,7 @@ async function persistAiAnswers(
     })
     .catch(() => void 0);
   for (const g of given) {
-    if (g.source !== "ai" && g.source !== "rule") continue;
+    if (g.source !== "ai" && g.source !== "rule" && g.source !== "assumed") continue;
     const labelKey = normalizeLabel(g.label);
     if (!labelKey || !g.answer.trim()) continue;
     const existing = await prisma.userAnswer.findUnique({

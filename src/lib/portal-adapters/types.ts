@@ -58,9 +58,10 @@ export interface ApplyInput {
   jobTitle?: string | null;
   company?: string | null;
   jobDescription?: string | null;
+  jobLocation?: string | null;
   /** Callback: risposte usate nel form (utente/profilo/regole/AI), per
    *  mostrarle all'utente e persistere quelle AI come UserAnswer. */
-  onAiAnswers?: (answers: Array<{ label: string; kind: string; answer: string; source: "user" | "profile" | "ai" | "rule" }>) => void;
+  onAiAnswers?: (answers: Array<{ label: string; kind: string; answer: string; source: "user" | "profile" | "ai" | "rule" | "assumed" }>) => void;
 }
 
 /**

@@ -55,7 +55,7 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
           />
         </div>
         {actions}
-        <ThemeToggle />
+        <ThemeToggle compact={false} />
       </div>
     </div>
   );
