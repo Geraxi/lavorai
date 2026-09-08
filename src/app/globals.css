@@ -1622,3 +1622,28 @@
 [data-theme="light"] aside .ds-btn:not(.ds-btn-primary):not(.ds-btn-accent):not(.ds-btn-ghost) {
   background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.22); color: var(--fg);
 }
+/* Dashboard, colonna destra in tema chiaro: le regole .dg-* sono scritte
+   per la scena scura del globo (testo #F7F8FA / #8E96A6). Fuori dal globo
+   tornano ai token del tema. */
+[data-theme="light"] .dg-side,
+[data-theme="light"] .dg-side .fit-card,
+[data-theme="light"] .dg-side .fit-card-title,
+[data-theme="light"] .dg-side .dg-region-counts b,
+[data-theme="light"] .dg-side .dg-sheet-txt b,
+[data-theme="light"] .dg-side .dg-sum span { color: var(--fg); }
+[data-theme="light"] .dg-side .dg-sum small,
+[data-theme="light"] .dg-side .dg-region-counts,
+[data-theme="light"] .dg-side .dg-sheet-sub,
+[data-theme="light"] .dg-side .dg-card-loc,
+[data-theme="light"] .dg-side .fit-card-sub,
+[data-theme="light"] .dg-side .dg-sheet-row,
+[data-theme="light"] .dg-side .dg-sheet-row span { color: var(--fg-muted); }
+[data-theme="light"] .dg-side .dg-sum { background: var(--bg-elev); border-color: var(--border-ds); }
+[data-theme="light"] .dg-side .dg-sum:hover { background: var(--bg-sunken); }
+[data-theme="light"] .dg-side .dg-pill { color: var(--fg-muted); background: var(--bg-sunken); }
+[data-theme="light"] .dg-side .dg-pill:hover { color: var(--fg); background: rgba(5,150,105,0.16); }
+[data-theme="light"] .dg-side .dg-pill.is-active { color: #0F3D2A; background: rgba(5,150,105,0.24); }
+[data-theme="light"] .dg-side .dg-sheet-row { border-color: var(--border-ds); }
+[data-theme="light"] .dg-side .dg-sheet-row:hover { color: var(--fg); }
+[data-theme="light"] .dg-side select, [data-theme="light"] .dg-side input { background: #FFFFFF; color: var(--fg); border-color: var(--border-strong); }
+[data-theme="light"] .dg-side .fit-link { color: #0F6B47; }
