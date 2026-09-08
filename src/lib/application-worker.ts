@@ -1816,7 +1816,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       // riusate identiche nelle candidature successive e visibili all'utente
       // in /questions per correggerle. Non sovrascrive risposte dell'utente.
       onAiAnswers: (given) => {
-        void persistAiAnswers(userId, given).catch((err) =>
+        void persistAiAnswers(userId, applicationId, given).catch((err) =>
           console.error(`[worker] ${applicationId} persist AI answers failed`, err),
         );
       },
@@ -1833,10 +1833,19 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
  */
 async function persistAiAnswers(
   userId: string,
-  given: Array<{ label: string; kind: string; answer: string; source: "ai" | "rule" }>,
+  applicationId: string,
+  given: Array<{ label: string; kind: string; answer: string; source: "user" | "profile" | "ai" | "rule" }>,
 ): Promise<void> {
   const { normalizeLabel } = await import("@/lib/portal-adapters/ai-answer");
+  // Tutte le risposte usate in QUESTA candidatura → visibili in /inbox.
+  await prisma.application
+    .update({
+      where: { id: applicationId },
+      data: { answersUsedJson: JSON.stringify(given.map((g) => ({ label: g.label, answer: g.answer, source: g.source }))) },
+    })
+    .catch(() => void 0);
   for (const g of given) {
+    if (g.source !== "ai" && g.source !== "rule") continue;
     const labelKey = normalizeLabel(g.label);
     if (!labelKey || !g.answer.trim()) continue;
     const existing = await prisma.userAnswer.findUnique({

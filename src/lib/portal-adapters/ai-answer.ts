@@ -65,7 +65,9 @@ export interface GivenAnswer {
   label: string;
   kind: string;
   answer: string;
-  source: "ai" | "rule";
+  /** "user" = risposta data dall'utente in /questions, "profile" = dal profilo,
+   *  "rule" = regola deterministica, "ai" = Claude. */
+  source: "user" | "profile" | "ai" | "rule";
 }
 
 /** Normalizza una label di domanda per il match cross-job (UserAnswer.labelKey). */
@@ -150,6 +152,7 @@ export async function answerRequiredFields(
         answered++;
         filledIdx.add(f.idx);
         details.push(`stored:"${f.label.slice(0, 36)}"`);
+        given.push({ label: f.label, kind: f.kind, answer: v, source: "user" });
       }
     }
   }
@@ -165,6 +168,7 @@ export async function answerRequiredFields(
       answered++;
       filledIdx.add(f.idx);
       details.push(`profile:"${f.label.slice(0, 32)}"`);
+      given.push({ label: f.label, kind: f.kind, answer: pv, source: "profile" });
     }
   }
 
@@ -206,9 +210,9 @@ export async function answerRequiredFields(
       answered++;
       filledIdx.add(f.idx);
       details.push(`ai:"${f.label.slice(0, 36)}"=${String(val).slice(0, 24)}`);
-      // Le risposte AI in modalità autonoma vengono salvate per coerenza
-      // tra candidature e per la revisione dell'utente in /questions.
-      if (ctx.autonomous) given.push({ label: f.label, kind: f.kind, answer: String(val), source: "ai" });
+      // Riportata al chiamante: mostrata all'utente in /inbox e, in modalità
+      // autonoma, salvata come UserAnswer per coerenza tra candidature.
+      given.push({ label: f.label, kind: f.kind, answer: String(val), source: "ai" });
     }
   }
 

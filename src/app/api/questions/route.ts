@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
     await prisma.userAnswer
       .update({
         where: { userId_labelKey: { userId: user.id, labelKey } },
-        data: { answer: answer.slice(0, 2000), answeredAt: new Date() },
+        // Una modifica dell'utente vince sempre sulla risposta AI/regola.
+        data: { answer: answer.slice(0, 2000), answeredAt: new Date(), source: "user" },
       })
       .catch(() => void 0);
   }

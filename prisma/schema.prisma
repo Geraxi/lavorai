@@ -498,6 +498,10 @@ model Application {
   // le risponde in /questions, le salviamo in UserAnswer (riutilizzabili) e
   // ri-accodiamo la candidatura. Niente più invii bloccati in silenzio.
   pendingQuestionsJson String? @db.Text
+  /// Risposte usate nel form per QUESTA candidatura (JSON array di
+  /// { label, answer, source: "user"|"profile"|"rule"|"ai" }). Mostrate
+  /// all'utente in /inbox così vede cosa è stato inviato a suo nome.
+  answersUsedJson String? @db.Text
   createdAt       DateTime  @default(now())
   startedAt       DateTime?
   completedAt     DateTime?
