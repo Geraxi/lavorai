@@ -79,18 +79,23 @@ export async function optimizeCV(
   let lastPreview = "";
   let lastTruncated = false;
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const response = await client.messages.create({
-      model: CV_OPTIMIZATION_MODEL,
-      max_tokens: 32000, // alzato da 16000: in produzione ~1 CV su 20 superava ancora il limite
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [{ role: "user", content: userContent }],
-    });
+    // Streaming obbligatorio: con max_tokens ≥ ~21k l'SDK rifiuta le
+    // chiamate non-stream ("Streaming is required for operations that may
+    // take longer than 10 minutes"). finalMessage() ricompone la risposta.
+    const response = await client.messages
+      .stream({
+        model: CV_OPTIMIZATION_MODEL,
+        max_tokens: 32000, // alzato da 16000: in produzione ~1 CV su 20 superava ancora il limite
+        system: [
+          {
+            type: "text",
+            text: SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" },
+          },
+        ],
+        messages: [{ role: "user", content: userContent }],
+      })
+      .finalMessage();
 
     const truncated = response.stop_reason === "max_tokens";
     const rawText = response.content
