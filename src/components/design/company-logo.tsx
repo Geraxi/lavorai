@@ -38,14 +38,42 @@ export function companyDomainGuess(name: string | null | undefined): string | nu
   if (!name) return null;
   const cleaned = name
     .toLowerCase()
-    .replace(
-      /\b(inc|ltd|llc|gmbh|s\.?r\.?l\.?|s\.?p\.?a\.?|sa|ag|bv|co|corp|corporation|company|group|holdings?)\b\.?/gi,
-      "",
-    )
+    .replace(/\(.*?\)/g, " ")
+    .replace(/\b(inc|ltd|llc|gmbh|s\.?r\.?l\.?|s\.?p\.?a\.?|s\.?a\.?s\.?|sa|ag|bv|nv|plc|co|corp|corporation|company|group|holdings?|italia|italy|international)\b\.?/gi, "")
     .replace(/[^a-z0-9]+/g, "")
     .trim();
   if (!cleaned) return null;
   return `${cleaned}.com`;
+}
+
+/** Host di ATS/aggregatori: NON sono il dominio dell'azienda. */
+const NOT_COMPANY_HOST =
+  /greenhouse\.io|lever\.co|workable\.com|ashbyhq\.com|smartrecruiters\.com|recruitee\.com|personio\.|teamtailor\.com|bamboohr\.com|adzuna\.|linkedin\.com|indeed\.|eures\.europa\.eu|europa\.eu|infojobs\.|glassdoor\.|jooble\.|randstad\.|adecco\.|gigroup\.|manpower\.|example\.com/i;
+
+/**
+ * Domini candidati per il logo, in ordine: dominio reale dell'annuncio
+ * (se è il sito dell'azienda e non un ATS), poi le ipotesi <nome>.com e <nome>.it.
+ */
+export function companyLogoDomains(name: string, url?: string | null): string[] {
+  const out: string[] = [];
+  if (url) {
+    try {
+      const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+      if (host && !NOT_COMPANY_HOST.test(host)) {
+        // careers.acme.com → acme.com (il favicon vive sul dominio principale)
+        const parts = host.split(".");
+        const root = parts.length > 2 && !/\.(co|com|org)\.[a-z]{2}$/.test(host) ? parts.slice(-2).join(".") : host;
+        out.push(root);
+        if (root !== host) out.push(host);
+      }
+    } catch { /* url non valida */ }
+  }
+  const guess = companyDomainGuess(name);
+  if (guess) {
+    out.push(guess);
+    out.push(guess.replace(/\.com$/, ".it"));
+  }
+  return [...new Set(out)];
 }
 
 export function CompanyLogo({
@@ -53,28 +81,21 @@ export function CompanyLogo({
   color,
   size = 28,
   rounded = 6,
+  url,
 }: {
   company: string;
   color?: string;
   size?: number;
   rounded?: number;
+  /** URL dell'annuncio o sito azienda: se non è un ATS, il suo dominio è il primo candidato. */
+  url?: string | null;
 }) {
   const c = color ?? companyColor(company);
-  const domain = companyDomainGuess(company);
+  const domains = companyLogoDomains(company, url);
   const initials = companyInitials(company);
 
-  // Se abbiamo un domain plausibile, deleghiamo a un client component
-  // che prova l'immagine via Clearbit e fallback'a alle iniziali on-error.
-  if (domain) {
-    return (
-      <CompanyLogoImage
-        domain={domain}
-        initials={initials}
-        color={c}
-        size={size}
-        rounded={rounded}
-      />
-    );
+  if (domains.length > 0) {
+    return <CompanyLogoImage domains={domains} initials={initials} color={c} size={size} rounded={rounded} />;
   }
 
   // Fallback puro: bubble colorato con iniziali (RSC-compatible).

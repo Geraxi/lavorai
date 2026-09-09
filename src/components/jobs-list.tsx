@@ -266,7 +266,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
                       company={j.company ?? j.title}
                       color={color}
                       size={34}
-                    />
+                     url={j.url} />
                     <div className="min-w-0 flex-1">
                       <div
                         style={{

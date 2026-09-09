@@ -71,7 +71,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
           <SectionCard>
             <SectionBody>
               <div className="flex items-start gap-3">
-                <CompanyLogo company={job.company ?? job.title} color={color} size={44} />
+                <CompanyLogo company={job.company ?? job.title} color={color} size={44} url={job.url} />
                 <div className="min-w-0 flex-1">
                   <h1
                     style={{

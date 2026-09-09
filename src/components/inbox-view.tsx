@@ -219,7 +219,7 @@ export function InboxView({ sent, answers, replies, waiting }: { sent: InboxSent
               const preview = s.replyCount > 0 ? (repliesByApp.get(s.id)?.[0]?.body ?? "Risposta del recruiter") : s.status === "needs_answers" ? `${s.pending.length} ${s.pending.length === 1 ? "domanda richiede" : "domande richiedono"} una tua risposta` : s.coverLetter ? s.coverLetter.split(/\n/).find((l) => l.trim().length > 20) ?? "Candidatura inviata" : "Candidatura inviata";
               return (
                 <button key={s.id} type="button" onClick={() => setSelected(s.id)} style={{ ...rowStyle(active), display: "grid", gridTemplateColumns: "32px minmax(0,1fr)", gap: 10, width: "100%", textAlign: "left" }}>
-                  <CompanyLogo company={s.company} color={companyColor(s.company)} size={32} />
+                  <CompanyLogo company={s.company} color={companyColor(s.company)} size={32} url={s.url} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
                       <span style={{ fontSize: 13, fontWeight: unread ? 700 : 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.company}</span>
@@ -250,7 +250,7 @@ export function InboxView({ sent, answers, replies, waiting }: { sent: InboxSent
         ) : (
           <>
             <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border-ds)", display: "flex", alignItems: "center", gap: 12 }}>
-              <CompanyLogo company={cur.company} color={companyColor(cur.company)} size={38} />
+              <CompanyLogo company={cur.company} color={companyColor(cur.company)} size={38} url={cur.url} />
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cur.title}</div>
                 <div style={{ fontSize: 12.5, color: "var(--fg-muted)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 2 }}>
