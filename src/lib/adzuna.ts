@@ -92,7 +92,7 @@ export async function searchJobs(
 function toJobListItem(a: AdzunaJob): JobListItem {
   return {
     id: "", // filled al write in DB
-    externalId: a.id,
+    externalId: String(a.id),
     source: "adzuna",
     title: a.title,
     company: a.company?.display_name ?? null,
