@@ -81,6 +81,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user.emailVerified) {
           throw new Error("EmailNotVerified");
         }
+        // Account sospeso dall'admin: niente login.
+        if (user.suspendedAt) {
+          throw new Error("AccountSuspended");
+        }
 
         return {
           id: user.id,

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { enqueueApplication } from "@/lib/application-queue";
@@ -199,6 +200,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   //             questo, hybrid era di fatto morto (zero candidature mai).
   const eligibleUsers = await prisma.user.findMany({
     where: {
+      suspendedAt: null,
       preferences: { autoApplyMode: { in: ["auto", "hybrid"] } },
       cvDocuments: { some: {} },
       cvProfile: { isNot: null },
@@ -208,6 +210,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
       email: true,
       tier: true,
       avoidCompanies: true,
+      quotaResetAt: true,
       preferences: {
         select: {
           autoApplyMode: true,
@@ -287,6 +290,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       email: true,
       tier: true,
       avoidCompanies: true,
+      quotaResetAt: true,
       preferences: {
         select: {
           autoApplyMode: true,
@@ -444,7 +448,7 @@ async function processUser(
   const limits = getLimits(tier);
   if (limits.monthlyApplications !== Infinity) {
     const monthCount = await prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: monthStart }, status: { not: "failed" } },
+      where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { not: "failed" } },
     });
     const remainingMonth = Math.max(
       0,

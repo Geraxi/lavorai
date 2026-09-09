@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
+import { UserActions } from "./_user-actions";
 import { PageTitle, KpiTrendCard, TierChip, compactNumber } from "../_ui";
 import { Users, CheckCircle2, Activity, UserPlus, Search, MoreVertical, Copy, Mail, RotateCcw, Ban, Trash2, Download, X } from "lucide-react";
 
@@ -34,7 +35,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
     take: 500,
     select: {
       id: true, email: true, name: true, tier: true, emailVerified: true, createdAt: true, lastLoginAt: true,
-      subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true, stripePriceId: true,
+      subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true, stripePriceId: true, suspendedAt: true,
       referralCode: true, referredById: true, signupReferrer: true, signupUtmSource: true,
       preferences: { select: { autoApplyMode: true, autoApplyOn: true, dailyCap: true, matchMin: true, rolesJson: true, locationsJson: true } },
       _count: { select: { applications: true, cvDocuments: true } },
@@ -216,12 +217,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               </PSection>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6, paddingTop: 10, flexShrink: 0 }}>
-              <button type="button" className="adm-btn sm" style={{ justifyContent: "center" }}><Mail size={11} />Invia email</button>
-              <button type="button" className="adm-btn sm" style={{ justifyContent: "center" }}><RotateCcw size={11} />Reset crediti</button>
-              <button type="button" className="adm-btn sm" style={{ justifyContent: "center", color: "#fbbf24" }}><Ban size={11} />Sospendi</button>
-              <button type="button" className="adm-btn sm" style={{ justifyContent: "center", color: "#f87171" }}><Trash2 size={11} />Elimina</button>
-            </div>
+            <UserActions id={selected.id} email={selected.email} suspended={!!selected.suspendedAt} />
           </div>
         )}
       </div>

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
 import { getLimits, effectiveTier } from "@/lib/billing";
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     const [usedThisMonth, cv, job, portalSession, prefs, profileRow] =
       await Promise.all([
         prisma.application.count({
-          where: { userId: user.id, createdAt: { gte: monthStart } },
+          where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) } },
         }),
         prisma.cVDocument.findFirst({
           where: { userId: user.id },

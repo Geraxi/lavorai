@@ -118,6 +118,11 @@ model User {
   pausedUntil            DateTime?
   subscriptionEvents     SubscriptionEvent[]
 
+  /// Sospeso dall'admin: login bloccato, escluso dall'auto-apply.
+  suspendedAt      DateTime?
+  /// "Reset crediti" admin: il contatore mensile riparte da questa data.
+  quotaResetAt     DateTime?
+
   // Onboarding / lifecycle
   welcomeSeenAt    DateTime?
   onboardedAt      DateTime?
