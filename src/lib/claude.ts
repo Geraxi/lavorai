@@ -81,7 +81,7 @@ export async function optimizeCV(
   for (let attempt = 1; attempt <= 2; attempt++) {
     const response = await client.messages.create({
       model: CV_OPTIMIZATION_MODEL,
-      max_tokens: 16000, // alzato da 8000: CV+cover letter lunghi venivano troncati
+      max_tokens: 32000, // alzato da 16000: in produzione ~1 CV su 20 superava ancora il limite
       system: [
         {
           type: "text",

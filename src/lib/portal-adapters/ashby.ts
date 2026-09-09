@@ -1,3 +1,4 @@
+import { findSubmitButton } from "./submit-button";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 import { detectBlockingCaptcha, challengeAppearedAfterSubmit } from "./captcha";
 
@@ -247,10 +248,8 @@ export const ashbyAdapter: PortalAdapter = {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
 
-      const submit = page.locator(
-        'button[type="submit"]:visible, button:visible:has-text("Submit Application"), button:visible:has-text("Submit"), button:visible:has-text("Apply")',
-      );
-      if ((await submit.count()) === 0) {
+      const submit = await findSubmitButton(page);
+      if (!submit) {
         return {
           ok: false,
           status: "missing_field",
@@ -284,7 +283,7 @@ export const ashbyAdapter: PortalAdapter = {
         )
         .catch(() => null);
 
-      await submit.first().click({ timeout: 5_000 });
+      await submit.click({ timeout: 5_000 });
 
       const submissionResponse = await submissionResponsePromise;
       await page

@@ -1,3 +1,4 @@
+import { findSubmitButton } from "./submit-button";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 
 /**
@@ -172,17 +173,15 @@ export const leverAdapter: PortalAdapter = {
       }
 
       // Submit "vero" — escludi i bottoni hidden (hcaptchaSubmitBtn)
-      const submit = page.locator(
-        'button[type="submit"]:visible, button:visible:has-text("Submit"), button:visible:has-text("Apply"), button:visible:has-text("Invia"), input[type="submit"]:visible',
-      );
-      if ((await submit.count()) === 0) {
+      const submit = await findSubmitButton(page);
+      if (!submit) {
         return {
           ok: false,
           status: "missing_field",
           error: "Bottone submit visibile non trovato (Lever).",
         };
       }
-      await submit.first().click({ timeout: 5_000 });
+      await submit.click({ timeout: 5_000 });
       await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
       const bodyText = await page.locator("body").innerText().catch(() => "");
       const confirmed =

@@ -1,3 +1,4 @@
+import { findSubmitButton } from "./submit-button";
 import type {
   PortalAdapter,
   ApplyInput,
@@ -504,10 +505,8 @@ export const greenhouseAdapter: PortalAdapter = {
         }
       }
 
-      const submit = page.locator(
-        'button[type="submit"], input[type="submit"], button:has-text("Submit"), button:has-text("Apply"), button:has-text("Invia")',
-      );
-      if ((await submit.count()) === 0) {
+      const submit = await findSubmitButton(page);
+      if (!submit) {
         return {
           ok: false,
           status: "missing_field",
@@ -540,19 +539,22 @@ export const greenhouseAdapter: PortalAdapter = {
             //   - boards.greenhouse.io/embed/job_app/submit
             //   - job-boards.greenhouse.io/api/.../job_applications
             //   - boards.greenhouse.io/<co>/jobs/<id>/applications
+            // job-boards moderno: POST https://boards.greenhouse.io/embed/<co>/jobs/<id>
             return (
               u.includes("greenhouse.io") &&
               (u.includes("/applications") ||
                 u.includes("/job_app") ||
                 u.includes("/submit") ||
-                u.includes("/job_application"))
+                u.includes("/job_application") ||
+                /\/jobs\/\d+/.test(u))
             );
           },
           { timeout: 25_000 },
         )
         .catch(() => null);
 
-      await submit.first().click();
+      await submit.scrollIntoViewIfNeeded().catch(() => void 0);
+      await submit.click();
 
       const submissionResponse = await submissionResponsePromise;
 
