@@ -121,15 +121,24 @@ export async function POST(request: NextRequest) {
         // subscription_data.metadata.userId) — se nessun user matcha
         // per stripeCustomerId, promuove per metadata.
         const metaUserId = (sub.metadata?.userId as string | undefined) ?? undefined;
+        // Pausa (pause_collection) e cancellazione programmata gestite dalle
+        // Impostazioni: in pausa niente piano Pro; con cancel_at_period_end il
+        // piano resta fino a fine periodo (status ancora "active").
+        const paused = !!sub.pause_collection;
+        const pausedUntil = sub.pause_collection?.resumes_at ? new Date(sub.pause_collection.resumes_at * 1000) : null;
+        const liveStatus = paused ? "paused" : sub.status;
+        const liveTier = !paused && (sub.status === "active" || sub.status === "trialing") ? tier : "free";
 
         const matched = await prisma.user.updateMany({
           where: { stripeCustomerId: customerId },
           data: {
             stripeSubscriptionId: sub.id,
             stripePriceId: priceId ?? null,
-            subscriptionStatus: sub.status,
-            tier: sub.status === "active" || sub.status === "trialing" ? tier : "free",
+            subscriptionStatus: liveStatus,
+            tier: liveTier,
             currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
+            cancelAtPeriodEnd: sub.cancel_at_period_end,
+            pausedUntil,
           },
         });
         if (matched.count === 0 && metaUserId) {

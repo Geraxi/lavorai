@@ -9,6 +9,7 @@ import {
 } from "@/components/design/section-card";
 import { getCurrentUser } from "@/lib/session";
 import { TIERS, effectiveTier } from "@/lib/billing";
+import { SubscriptionManager } from "@/components/subscription-manager";
 import {
   SubscriptionActions,
   GdprExportButton,
@@ -143,10 +144,11 @@ export default async function SettingsPage() {
                       </p>
                     )}
                 </div>
-                <SubscriptionActions
-                  tier={tier}
-                  hasStripe={!!user.stripeSubscriptionId}
-                />
+                {user.stripeSubscriptionId ? (
+                  <SubscriptionManager planName={cfg.name} />
+                ) : (
+                  <SubscriptionActions tier={tier} hasStripe={false} />
+                )}
               </div>
             </SectionBody>
           </SectionCard>

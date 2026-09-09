@@ -110,8 +110,13 @@ model User {
   stripeCustomerId       String?   @unique
   stripeSubscriptionId   String?   @unique
   stripePriceId          String?
-  subscriptionStatus     String?   // "active" | "canceled" | "past_due" | null
+  subscriptionStatus     String?   // "active" | "canceled" | "past_due" | "paused" | null
   currentPeriodEnd       DateTime?
+  /// Cancellazione richiesta dall'utente: il piano resta attivo fino a currentPeriodEnd.
+  cancelAtPeriodEnd      Boolean   @default(false)
+  /// Abbonamento in pausa (Stripe pause_collection) fino a questa data.
+  pausedUntil            DateTime?
+  subscriptionEvents     SubscriptionEvent[]
 
   // Onboarding / lifecycle
   welcomeSeenAt    DateTime?
@@ -615,4 +620,24 @@ model CVDocument {
   createdAt         DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Azioni dell'utente sull'abbonamento dalle Impostazioni (pausa, cancellazione,
+/// sconto accettato) con il motivo dichiarato: serve per capire il churn.
+model SubscriptionEvent {
+  id          String   @id @default(cuid())
+  userId      String
+  /// "cancel" | "pause" | "resume" | "undo_cancel" | "discount_accepted" | "review_clicked"
+  action      String
+  /// "too_expensive" | "found_job" | "not_useful" | "technical" | "other" | null
+  reason      String?
+  /// Per found_job: l'utente dichiara di aver trovato lavoro grazie a LavorAI.
+  foundViaUs  Boolean?
+  comment     String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
 }
