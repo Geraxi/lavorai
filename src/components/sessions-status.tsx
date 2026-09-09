@@ -136,7 +136,7 @@ export function SessionsStatus() {
             >
               <div>
                 <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-                  🎯 Round completato — &quot;{s.title}&quot;
+                  <Icon name="target" size={13} style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Round completato — &quot;{s.title}&quot;
                 </div>
                 <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 2 }}>
                   {s.sentCount}/{s.targetCount} candidature inviate. Vuoi avviarne

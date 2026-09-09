@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { Heart, Sparkles, Target } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from "motion/react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -232,7 +233,7 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
           borderRadius: 20,
         }}
       >
-        <div style={{ fontSize: 48, marginBottom: 14 }}>🎯</div>
+        <div style={{ marginBottom: 14, display: "flex", justifyContent: "center", color: "hsl(var(--primary))" }}><Target size={46} strokeWidth={1.4} aria-hidden /></div>
         <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, letterSpacing: "-0.01em" }}>
           {totalJobs === 0 ? "Nessuna offerta trovata" : "Hai visto tutte le offerte"}
         </div>
@@ -575,7 +576,7 @@ function SwipeCard({
             pointerEvents: "none",
           }}
         >
-          APPLY ✨
+          APPLY <Sparkles size={16} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginLeft: 4 }} />
         </motion.div>
         {/* Overlay "SKIP" rosso/grigio quando draghi a sinistra */}
         <motion.div
@@ -849,7 +850,7 @@ function JobCardSurface({
           onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
           onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
         >
-          {isSaved ? "♥" : "♡"}
+          <Heart size={18} aria-hidden fill={isSaved ? "currentColor" : "none"} />
         </button>
       )}
 

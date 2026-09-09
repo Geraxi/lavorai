@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Eye } from "lucide-react";
 
 /**
  * Modal-preview PDF per card /materiali. L'utente clicca "Anteprima"
@@ -179,7 +180,7 @@ export function CvPreviewButton({
       }}
       title="Anteprima CV nel browser"
     >
-      👁 Anteprima
+      <Eye size={13} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Anteprima
     </button>
   );
 }

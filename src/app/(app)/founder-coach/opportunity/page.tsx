@@ -336,8 +336,8 @@ function AnalysisDisplay({ analysis }: { analysis: OpportunityAnalysis }) {
 
       {/* RED / GREEN FLAGS */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }} className="flags-grid">
-        <FlagColumn title="🚩 Red flags" flags={analysis.redFlags} tone="red" />
-        <FlagColumn title="✅ Green flags" flags={analysis.greenFlags} tone="green" />
+        <FlagColumn title="Red flags" flags={analysis.redFlags} tone="red" />
+        <FlagColumn title="Green flags" flags={analysis.greenFlags} tone="green" />
       </div>
 
       {/* QUESTIONS + NEGOTIATE */}

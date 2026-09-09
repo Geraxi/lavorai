@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
@@ -248,7 +249,7 @@ export function Hero() {
                 aria-hidden
                 style={{ color: "hsl(var(--primary))", fontWeight: 700, fontSize: 15, lineHeight: 1 }}
               >
-                🛡
+                <ShieldCheck size={15} aria-hidden />
               </span>
               <span>
                 <strong style={{ color: "#fff" }}>{t("guaranteeLabel")}</strong>{" "}

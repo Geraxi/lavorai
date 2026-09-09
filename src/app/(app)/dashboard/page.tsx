@@ -64,7 +64,7 @@ export default async function DashboardPage() {
 
   const greeting = (
     <>
-      <h1 className="fit-h1">{t("greeting", { name: greetingName })} 👋</h1>
+      <h1 className="fit-h1">{t("greeting", { name: greetingName })}</h1>
       <p className="dg-head-lead">LavorAI sta cercando opportunità per te in tutto il mondo.</p>
       <p className="dg-head-sub">Esplora dove stiamo trovando le migliori opportunità per il tuo profilo.</p>
     </>

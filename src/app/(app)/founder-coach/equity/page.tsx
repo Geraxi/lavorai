@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Flag } from "lucide-react";
 import type { Metadata } from "next";
 import { Icon } from "@/components/design/icon";
 import { FOUNDER_VOCABULARY } from "@/lib/founder-coach/data/vocabulary";
@@ -127,7 +128,7 @@ export default function EquityCoachPage() {
                 lineHeight: 1.5,
               }}
             >
-              <strong style={{ color: "#fca5a5" }}>🚩 Warning:</strong> {t.redFlagIfVague}
+              <strong style={{ color: "#fca5a5" }}><Flag size={12} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 5 }} />Warning:</strong> {t.redFlagIfVague}
             </div>
             <div
               style={{

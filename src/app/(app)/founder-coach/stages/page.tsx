@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Flag } from "lucide-react";
 import type { Metadata } from "next";
 import { COMPANY_STAGES } from "@/lib/founder-coach/data/stages";
 import { Icon } from "@/components/design/icon";
@@ -102,7 +103,7 @@ export default function StageExplainerPage() {
                       marginBottom: 6,
                     }}
                   >
-                    🚩 Pattern di red flag
+                    <Flag size={13} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Pattern di red flag
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                     {stage.redFlagPatterns.map((p, i) => (

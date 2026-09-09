@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Ban, Rocket, Zap } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier, getLimits, trialState } from "@/lib/billing";
@@ -122,7 +123,7 @@ export async function UpgradePrompt({
           fontSize: isCompact ? 16 : 20,
         }}
       >
-        {state === "blocked" ? "⛔" : state === "warning" ? "⚡" : "🚀"}
+        {state === "blocked" ? <Ban size={isCompact ? 16 : 20} aria-hidden /> : state === "warning" ? <Zap size={isCompact ? 16 : 20} aria-hidden /> : <Rocket size={isCompact ? 16 : 20} aria-hidden />}
       </div>
 
       <div style={{ flex: "1 1 260px", minWidth: 0 }}>

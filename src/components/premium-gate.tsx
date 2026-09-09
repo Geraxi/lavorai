@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Lock } from "lucide-react";
 import { FEATURE_LABELS, TIERS, type PremiumFeature } from "@/lib/billing";
 
 /**
@@ -40,7 +41,7 @@ export function PremiumGate({
           marginBottom: 18,
         }}
       >
-        🔒 Pro+ · {tier.priceDisplay}
+        <Lock size={12} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Pro+ · {tier.priceDisplay}
         {tier.priceSuffix}
       </div>
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Icon } from "@/components/design/icon";
@@ -131,7 +132,7 @@ export default function NegotiatePage() {
                         marginBottom: 6,
                       }}
                     >
-                      🛡 Se ti dicono di no
+                      <ShieldCheck size={13} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Se ti dicono di no
                     </div>
                     <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--fg)" }}>
                       {s.bridgeIfPushback}

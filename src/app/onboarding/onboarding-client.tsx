@@ -618,7 +618,7 @@ function RealCvPreview({
           textAlign: "center",
         }}
       >
-        <div style={{ fontSize: 32, marginBottom: 10, opacity: 0.4 }}>📄</div>
+        <div style={{ marginBottom: 10, opacity: 0.4, display: "flex", justifyContent: "center" }}><Icon name="file" size={32} /></div>
         <div>Carica il CV per vedere l&apos;anteprima</div>
       </div>
     );

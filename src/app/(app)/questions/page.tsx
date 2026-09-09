@@ -171,7 +171,7 @@ export default function QuestionsPage() {
 
               {done && (
                 <div style={{ padding: "10px 12px", borderRadius: 10, background: "hsl(var(--primary)/0.1)", border: "1px solid hsl(var(--primary)/0.35)", marginBottom: 12, fontSize: 13, flexShrink: 0 }}>
-                  ✅ Risposte salvate. {done.requeued > 0 ? `${done.requeued} candidature ricandidate automaticamente.` : "Nessuna candidatura ancora completa."}
+                  <Icon name="check" size={13} style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6, color: "hsl(var(--primary))" }} />Risposte salvate. {done.requeued > 0 ? `${done.requeued} candidature ricandidate automaticamente.` : "Nessuna candidatura ancora completa."}
                   {done.stillPending > 0 && ` ${done.stillPending} domande ancora da rispondere.`}
                 </div>
               )}

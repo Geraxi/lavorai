@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Headphones, Lightbulb, Mic, Target } from "lucide-react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -77,7 +78,7 @@ export default function InterviewLiveComingSoon() {
             marginBottom: 20,
           }}
         >
-          🎤 Coming soon
+          <Mic size={12} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Coming soon
         </div>
         <h1
           style={{
@@ -423,7 +424,7 @@ function InterviewLiveTeleprompter() {
                 Live listening
               </>
             ) : (
-              <>🎧 Auto-listen OFF</>
+              <><Headphones size={13} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Auto-listen OFF</>
             )}
           </button>
           {pairingCode && <PairingBadge code={pairingCode} />}
@@ -528,7 +529,7 @@ function InterviewLiveTeleprompter() {
             whiteSpace: "nowrap",
           }}
         >
-          {dictating ? "🎙 Recording" : "🎙 Detta"}
+          <Mic size={13} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />{dictating ? "Recording" : "Detta"}
         </button>
         <button
           type="button"
@@ -662,7 +663,7 @@ function Teleprompter({ turn }: { turn: SuggestionTurn }) {
                 fontStyle: "italic",
               }}
             >
-              💡 {turn.headline}
+              <Lightbulb size={13} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />{turn.headline}
             </div>
           )}
 
@@ -740,7 +741,7 @@ function EmptyState({ autoListen }: { autoListen: boolean }) {
         color: "var(--fg-muted)",
       }}
     >
-      <div style={{ fontSize: 56, marginBottom: 16 }}>🎯</div>
+      <div style={{ marginBottom: 16, display: "flex", justifyContent: "center", color: "hsl(var(--primary))" }}><Target size={52} strokeWidth={1.4} aria-hidden /></div>
       <div
         style={{
           fontSize: 22,

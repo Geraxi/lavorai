@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { FileText } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
@@ -79,7 +80,7 @@ export default async function MaterialiPage() {
               fontSize: 14,
             }}
           >
-            <div style={{ fontSize: 34, marginBottom: 10 }}>📄</div>
+            <div style={{ marginBottom: 10, opacity: 0.5, display: "flex", justifyContent: "center" }}><FileText size={34} strokeWidth={1.4} aria-hidden /></div>
             Non ci sono ancora CV tailored. Quando LavorAI processa una
             candidatura, il CV riscritto per quella posizione appare qui.
             <div style={{ marginTop: 16 }}>

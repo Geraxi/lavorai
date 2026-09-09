@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface Coverage {
@@ -67,8 +68,8 @@ export function CoverageWarning() {
         flexWrap: "wrap",
       }}
     >
-      <span aria-hidden style={{ fontSize: 20, lineHeight: 1 }}>
-        ⚠️
+      <span aria-hidden style={{ lineHeight: 1, color: "var(--amber)", display: "inline-flex" }}>
+        <AlertTriangle size={20} />
       </span>
       <div style={{ flex: "1 1 260px", minWidth: 0 }}>
         <div

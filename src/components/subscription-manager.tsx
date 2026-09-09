@@ -152,7 +152,7 @@ export function SubscriptionManager({ planName }: { planName: string }) {
 
             {step === "found_job" && (
               <>
-                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Congratulazioni! 🎉</h2>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Congratulazioni!</h2>
                 <p style={{ fontSize: 13.5, color: "var(--fg-muted)", margin: "6px 0 14px" }}>È la notizia migliore che potessimo ricevere. Una domanda sola: l&apos;hai trovato grazie a LavorAI?</p>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button type="button" className={`ds-btn ${foundViaUs === true ? "ds-btn-primary" : ""}`} onClick={() => setFoundViaUs(true)}>Sì, grazie a LavorAI</button>

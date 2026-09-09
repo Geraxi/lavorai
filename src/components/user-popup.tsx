@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Heart, Star } from "lucide-react";
 import useSWR from "swr";
 
 interface ActivePopup {
@@ -113,7 +114,7 @@ export function UserPopup() {
       >
         {done ? (
           <div style={{ textAlign: "center", padding: "16px 0" }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🙏</div>
+            <div style={{ marginBottom: 8, display: "flex", justifyContent: "center", color: "hsl(var(--primary))" }}><Heart size={30} strokeWidth={1.6} aria-hidden /></div>
             <div style={{ fontSize: 16, fontWeight: 700 }}>Grazie!</div>
             <div
               style={{ fontSize: 13, color: "var(--fg-muted)", marginTop: 4 }}
@@ -182,7 +183,7 @@ export function UserPopup() {
                       transition: "transform 0.1s, opacity 0.1s",
                     }}
                   >
-                    ⭐
+                    <Star size={22} aria-hidden fill="currentColor" />
                   </button>
                 ))}
               </div>

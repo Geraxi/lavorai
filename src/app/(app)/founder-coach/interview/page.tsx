@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Lightbulb, XCircle } from "lucide-react";
 import Link from "next/link";
 import { Icon } from "@/components/design/icon";
 import { FOUNDER_INTERVIEW_QUESTIONS } from "@/lib/founder-coach/data/interview-questions";
@@ -64,7 +65,7 @@ export default function InterviewDominationPage() {
           color: "var(--fg-muted)",
         }}
       >
-        💡 Allenati con queste risposte modello, poi mettile in pratica nel{" "}
+        <Lightbulb size={14} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Allenati con queste risposte modello, poi mettile in pratica nel{" "}
         <Link
           href="/interview-buddy"
           style={{ color: "hsl(var(--primary))", textDecoration: "underline" }}
@@ -173,7 +174,7 @@ export default function InterviewDominationPage() {
                         marginBottom: 6,
                       }}
                     >
-                      ❌ Anti-pattern
+                      <XCircle size={13} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Anti-pattern
                     </div>
                     <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 4 }}>
                       {q.pitfalls.map((p, i) => (
