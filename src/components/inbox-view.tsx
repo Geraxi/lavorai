@@ -93,7 +93,7 @@ function statusChip(s: InboxSent) {
  * candidatura inviata (lettera, risposte usate, CV), domande in sospeso
  * (rispondibili qui), risposte reali del recruiter.
  */
-export function InboxView({ sent, answers, replies, waiting }: { sent: InboxSent[]; answers: InboxAnswer[]; replies: InboxReply[]; waiting: number }) {
+export function InboxView({ sent, answers, replies, waiting, forwardAddress }: { sent: InboxSent[]; answers: InboxAnswer[]; replies: InboxReply[]; waiting: number; forwardAddress?: string | null }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
@@ -172,6 +172,16 @@ export function InboxView({ sent, answers, replies, waiting }: { sent: InboxSent
           <h1 className="fit-h1">Inbox</h1>
           <p className="fit-hero-sub">Ogni candidatura è una conversazione: cosa abbiamo inviato a tuo nome, cosa ha risposto l&apos;azienda, cosa manca.</p>
         </div>
+        {forwardAddress && (
+          <div style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <Icon name="send" size={12} />
+            Ricevuto una risposta sulla tua email? Inoltrala a
+            <button type="button" className="ds-btn ds-btn-sm" style={{ padding: "2px 8px", fontFamily: "monospace", fontSize: 12 }} onClick={() => { try { navigator.clipboard.writeText(forwardAddress); setNotice("Indirizzo copiato."); } catch { /* ignore */ } }} title="Copia">
+              {forwardAddress}
+            </button>
+            e la troverai qui.
+          </div>
+        )}
         {waiting > 0 && (
           <button type="button" className="ds-btn ds-btn-sm" onClick={() => setFilter("waiting")}>
             <Icon name="clock" size={12} /> {waiting} {waiting === 1 ? "candidatura aspetta" : "candidature aspettano"} una risposta

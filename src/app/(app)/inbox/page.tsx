@@ -79,7 +79,7 @@ export default async function InboxPage() {
   return (
     <>
       <AppTopbar title="Inbox" breadcrumb="Lavoro" />
-      <InboxView sent={sent} answers={answers} replies={replies} waiting={waiting} />
+      <InboxView sent={sent} answers={answers} replies={replies} waiting={waiting} forwardAddress={process.env.INBOUND_EMAIL_DOMAIN ? `inbox@${process.env.INBOUND_EMAIL_DOMAIN}` : null} />
     </>
   );
 }

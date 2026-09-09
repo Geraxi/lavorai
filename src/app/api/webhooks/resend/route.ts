@@ -69,10 +69,20 @@ const MAX_BODY = 8000;
 async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
   let data = dataIn;
   const toAddr = firstAddress(data.to);
-  const appId = applicationIdFromInboundAddress(toAddr);
+  let appId = applicationIdFromInboundAddress(toAddr);
+  let forwardedFrom: string | null = null;
   if (!appId) {
-    console.warn(`[webhook/resend] inbound a indirizzo non mappabile: ${toAddr ?? "?"}`);
-    return;
+    // Inoltro manuale: l'utente gira a inbox@<dominio> una risposta ricevuta
+    // sulla sua email personale (candidature vecchie, o recruiter che scrive
+    // all'indirizzo del CV). Riconosciamo l'utente dal mittente e la
+    // candidatura dal contenuto (azienda / ruolo / dominio del recruiter).
+    const matched = await matchForwardedReply(data);
+    if (!matched) {
+      console.warn(`[webhook/resend] inbound non mappabile: to=${toAddr ?? "?"} from=${data.from ?? "?"}`);
+      return;
+    }
+    appId = matched.appId;
+    forwardedFrom = matched.recruiterFrom;
   }
 
   const app = await prisma.application.findUnique({
@@ -107,8 +117,8 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
     }
   }
 
-  const from = data.from ?? "sconosciuto";
-  const subject = data.subject ?? null;
+  const from = forwardedFrom ?? data.from ?? "sconosciuto";
+  const subject = (data.subject ?? "").replace(/^\s*(fwd?|i|tr|wg)\s*:\s*/i, "") || null;
   const bodyRaw =
     data.text && data.text.trim()
       ? data.text
@@ -182,6 +192,57 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
  * chiave base64 dopo il prefisso "whsec_" su "<id>.<timestamp>.<body>".
  * Manteniamo anche il vecchio formato hex sul solo body per compatibilità.
  */
+/**
+ * Mappa una email inoltrata dall'utente a una sua candidatura.
+ * 1. utente = mittente (deve essere registrato)
+ * 2. recruiter = prima riga "From:/Da:" nel corpo inoltrato (se presente)
+ * 3. candidatura = quella (inviata) la cui azienda compare in subject/body
+ *    o il cui dominio del job coincide col dominio del recruiter; a parità
+ *    la più recente.
+ */
+async function matchForwardedReply(
+  data: ResendEvent["data"],
+): Promise<{ appId: string; recruiterFrom: string | null } | null> {
+  const senderEmail = (data.from ?? "").match(/[\w.+-]+@[\w.-]+\.\w+/)?.[0]?.toLowerCase();
+  if (!senderEmail) return null;
+  const user = await prisma.user.findFirst({ where: { email: { equals: senderEmail, mode: "insensitive" } }, select: { id: true } });
+  if (!user) return null;
+
+  const raw = data.text && data.text.trim() ? data.text : data.html ? htmlToText(data.html) : "";
+  const text = `${data.subject ?? ""}\n${raw}`.toLowerCase();
+  const fromLine = raw.match(/^\s*(?:from|da|de|von)\s*:\s*(.+)$/im)?.[1]?.trim() ?? null;
+  const recruiterFrom = fromLine && /@/.test(fromLine) ? fromLine.slice(0, 320) : null;
+  const recruiterDomain = recruiterFrom?.match(/@([\w.-]+)/)?.[1]?.toLowerCase().replace(/^(mail|email|jobs|careers|hr|recruiting)\./, "") ?? null;
+
+  const apps = await prisma.application.findMany({
+    where: { userId: user.id, status: { in: ["success", "ready_to_apply", "needs_answers", "applying"] } },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: { id: true, createdAt: true, job: { select: { company: true, title: true, url: true } } },
+  });
+  let best: { id: string; score: number } | null = null;
+  for (const a of apps) {
+    let score = 0;
+    const company = (a.job.company ?? "").toLowerCase().trim();
+    if (company.length >= 3 && text.includes(company)) score += 3;
+    const title = (a.job.title ?? "").toLowerCase().trim();
+    if (title.length >= 6 && text.includes(title)) score += 2;
+    if (recruiterDomain) {
+      try {
+        const host = new URL(a.job.url).hostname.toLowerCase();
+        const root = recruiterDomain.split(".").slice(-2).join(".");
+        if (host.endsWith(root)) score += 2;
+        const brand = root.split(".")[0];
+        if (brand.length >= 4 && company.includes(brand)) score += 2;
+      } catch { /* url non valida */ }
+    }
+    if (score > 0 && (!best || score > best.score)) best = { id: a.id, score };
+  }
+  if (!best) return null;
+  console.log(`[webhook/resend] inoltro mappato → app ${best.id} (score ${best.score}) da ${senderEmail}`);
+  return { appId: best.id, recruiterFrom };
+}
+
 function verify(req: NextRequest, rawBody: string): boolean {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
   if (!secret) return true; // in dev se non settato, accetta
