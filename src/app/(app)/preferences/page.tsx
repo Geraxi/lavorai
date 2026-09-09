@@ -42,7 +42,7 @@ export default async function PreferencesPage() {
         | "hybrid"
         | "auto"
         | undefined) ??
-      (prefs?.autoApplyOn ? "auto" : "manual"),
+      (prefs?.autoApplyOn === false ? "manual" : "auto"),
     dailyCap: prefs?.dailyCap ?? 25,
     matchMin: prefs?.matchMin ?? 50,
     protectedCategory: (prefs as { protectedCategory?: boolean } | null | undefined)?.protectedCategory ?? false,

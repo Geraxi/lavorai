@@ -13,6 +13,8 @@ export function SiteFooter() {
     {
       title: t("product"),
       links: [
+        { href: "/lavoro", label: "Offerte di lavoro" },
+        { href: "/categorie-protette", label: "Categorie protette" },
         { href: "/optimize", label: t("optimizeCv") },
         { href: "/#prezzi", label: tNav("pricing") },
         { href: "/#come-funziona", label: tNav("howItWorks") },

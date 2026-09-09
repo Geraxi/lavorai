@@ -16,6 +16,7 @@ export function SiteNav() {
   const marketingLinks = [
     { href: "/#come-funziona", label: t("howItWorks") },
     { href: "/proof", label: "Numeri veri" },
+    { href: "/lavoro", label: "Offerte" },
     { href: "/guide", label: "Guide" },
     { href: "/interview-buddy", label: t("interviewBuddyNav") },
     { href: "/#prezzi", label: t("pricing") },

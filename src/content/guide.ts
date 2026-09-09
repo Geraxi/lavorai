@@ -674,6 +674,71 @@ export const GUIDES: Guide[] = [
     related: ["quante-candidature-per-trovare-lavoro", "come-candidarsi-su-linkedin", "cv-ats-friendly"],
     cta: CTA_AUTO,
   },
+  {
+    slug: "lavoro-categorie-protette",
+    title: "Lavoro categorie protette: come trovare le offerte riservate (L. 68/99)",
+    metaTitle: "Lavoro categorie protette: guida alle offerte L. 68/99",
+    description:
+      "Chi rientra nelle categorie protette, quali aziende devono assumere, dove si trovano le offerte riservate e come candidarsi senza perdere tempo. Guida 2026.",
+    keywords: ["lavoro categorie protette", "offerte lavoro categorie protette", "legge 68/99", "collocamento mirato", "art. 1 legge 68", "invalidità civile lavoro"],
+    published: "2026-09-10",
+    updated: "2026-09-10",
+    category: "Candidature",
+    intro: [
+      "In Italia le aziende con più di 15 dipendenti hanno l'obbligo di assumere una quota di lavoratori appartenenti alle categorie protette. È una delle poche aree del mercato del lavoro in cui la domanda supera stabilmente l'offerta: molte imprese faticano a coprire la quota e pagano sanzioni. Eppure trovare le offerte riservate resta difficile, perché sono sparse su decine di portali e spesso segnalate solo con una riga nel testo dell'annuncio.",
+      "Questa guida spiega chi ha diritto, come funziona il collocamento mirato, dove cercare gli annunci con quota riservata e come organizzare le candidature in modo da rispondere a tutte le offerte compatibili, non solo a quelle che trovi per caso.",
+    ],
+    sections: [
+      {
+        h2: "Chi rientra nelle categorie protette",
+        paragraphs: [
+          "La Legge 68 del 1999 distingue due gruppi. L'articolo 1 comprende le persone con invalidità civile superiore al 45%, gli invalidi del lavoro con invalidità superiore al 33%, le persone non vedenti o sorde, gli invalidi di guerra, di servizio e civili di guerra. L'articolo 18 comprende orfani e coniugi superstiti di caduti sul lavoro, per guerra o per servizio, profughi italiani rimpatriati e vittime del terrorismo e della criminalità organizzata.",
+          "Per accedere alla quota riservata serve l'iscrizione nelle liste del collocamento mirato presso il Centro per l'Impiego della propria provincia, con la certificazione della commissione medica ASL (per l'art. 1) o la documentazione dello stato (per l'art. 18).",
+        ],
+      },
+      {
+        h2: "Quali aziende devono assumere e quante persone",
+        list: [
+          "Da 15 a 35 dipendenti: 1 lavoratore appartenente alle categorie protette.",
+          "Da 36 a 50 dipendenti: 2 lavoratori.",
+          "Oltre 50 dipendenti: il 7% dell'organico, più l'1% riservato alle categorie dell'art. 18.",
+          "Le assunzioni avvengono con richiesta nominativa (l'azienda sceglie il candidato) o tramite convenzione con il Centro per l'Impiego.",
+          "Le aziende inadempienti pagano una sanzione giornaliera per ogni posto scoperto: per questo molte pubblicano annunci dedicati.",
+        ],
+      },
+      {
+        h2: "Dove si trovano le offerte riservate",
+        paragraphs: [
+          "Gli annunci con quota riservata compaiono sui portali di recruiting delle aziende (Greenhouse, Workable, SmartRecruiters, Personio e simili), sui grandi job board e sulle pagine delle agenzie per il lavoro. Il problema è che quasi mai esiste un filtro: l'indicazione è nel titolo (\"riservato alle categorie protette\") oppure in una riga del testo (\"la ricerca è rivolta a persone appartenenti alle categorie protette ai sensi della L. 68/99\").",
+          "Le ricerche efficaci usano le formulazioni che le aziende scrivono davvero: \"categorie protette\", \"L. 68/99\", \"legge 68\", \"art. 1\", \"art. 18\", \"collocamento mirato\", \"quota riservata\", e in inglese \"protected categories\" e \"Law 68/99\". Vale la pena impostare avvisi per ciascuna variante, oppure usare uno strumento che le riconosca automaticamente.",
+        ],
+      },
+      {
+        h2: "Come candidarsi senza sprecare settimane",
+        list: [
+          "Prepara un CV in formato ATS friendly, una colonna, con le competenze espresse con le parole degli annunci. Non è necessario indicare l'invalidità nel CV.",
+          "Rispondi alla domanda sull'appartenenza alle categorie protette solo negli annunci riservati o quando è richiesta esplicitamente: è un requisito dell'offerta, non un'informazione da inserire ovunque.",
+          "Candidati a tutti gli annunci compatibili, anche a quelli con titolo più generico del ruolo che cerchi: nelle offerte riservate le aziende sono spesso flessibili sul profilo.",
+          "Tieni traccia delle candidature e delle risposte in un unico posto: le offerte riservate hanno tempi di risposta più rapidi della media perché l'azienda ha una scadenza di legge.",
+          "Iscriviti al collocamento mirato prima di iniziare: l'assunzione in quota richiede l'iscrizione, e alcune aziende la chiedono già in fase di colloquio.",
+        ],
+      },
+      {
+        h2: "Automatizzare la ricerca",
+        paragraphs: [
+          "LavorAI scansiona ogni giorno i portali delle aziende e riconosce automaticamente gli annunci con quota riservata. Attivando l'opzione \"Categorie protette\" nelle preferenze, questi annunci hanno la priorità nel matching, la candidatura viene preparata e inviata con CV e lettera su misura, e la domanda sull'appartenenza nel form viene compilata correttamente solo dove serve. Le risposte dei recruiter arrivano nella tua Inbox.",
+        ],
+      },
+    ],
+    faq: [
+      { q: "Devo scrivere nel CV che appartengo alle categorie protette?", a: "No, non è obbligatorio. Nelle offerte riservate lo dichiari nel form di candidatura o nella lettera; negli annunci ordinari non è necessario menzionarlo." },
+      { q: "Posso candidarmi a offerte riservate se non sono ancora iscritto al collocamento mirato?", a: "Puoi candidarti, ma l'assunzione in quota richiede l'iscrizione nelle liste. Conviene avviare subito la pratica al Centro per l'Impiego." },
+      { q: "Le offerte riservate sono solo per mansioni semplici?", a: "No. Le aziende oltre i 50 dipendenti devono coprire il 7% dell'organico e cercano profili di ogni livello: amministrazione, IT, marketing, ingegneria, customer care, ruoli manageriali." },
+      { q: "Il lavoro da remoto è compatibile con le categorie protette?", a: "Sì. Molte offerte riservate prevedono smart working o remoto, e la Legge 68/99 favorisce esplicitamente le soluzioni che rendono compatibile il lavoro con la condizione della persona." },
+    ],
+    related: ["cv-ats-friendly", "software-candidature-automatiche", "quante-candidature-per-trovare-lavoro"],
+    cta: { title: "Trova le offerte riservate ogni giorno", body: "Attiva l'opzione Categorie protette: LavorAI riconosce gli annunci L. 68/99, li mette in cima e si candida per te con CV e lettera su misura.", label: "Inizia gratis", href: "/signup?protected=1" },
+  },
 ];
 
 export function getGuide(slug: string): Guide | undefined {

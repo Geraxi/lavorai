@@ -16,6 +16,8 @@ const SignupSchema = z.object({
   privacyConsent: z.literal(true),
   /** "Come ci hai conosciuto" (facoltativo). */
   source: z.enum(["google", "chatgpt", "linkedin", "instagram_tiktok", "amico", "universita", "categorie_protette", "altro"]).optional(),
+  /** Arrivato dalla landing categorie protette: preferenza attiva da subito. */
+  protectedCategory: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -125,7 +127,8 @@ export async function POST(request: NextRequest) {
         signupUtmMedium: attrib.m ?? null,
         signupUtmCampaign: attrib.c ?? null,
         signupLandingPath: attrib.p ?? null,
-        signupSource: parsed.data.source ?? null,
+        signupSource: parsed.data.source ?? (parsed.data.protectedCategory ? "categorie_protette" : null),
+        ...(parsed.data.protectedCategory ? { preferences: { create: { protectedCategory: true, autoApplyMode: "auto" } } } : {}),
       },
       select: { id: true, email: true, locale: true },
     });

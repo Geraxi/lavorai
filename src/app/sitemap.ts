@@ -14,6 +14,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/`, lastModified: now, priority: 1 },
     // SEO landing per keyword ad alta intent commerciale
     { url: `${base}/auto-candidatura`, lastModified: now, priority: 0.95 },
+    { url: `${base}/lavoro`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
+    { url: `${base}/categorie-protette`, lastModified: new Date("2026-09-10"), changeFrequency: "weekly", priority: 0.9 },
     { url: `${base}/pricing`, lastModified: now, priority: 0.9 },
     { url: `${base}/proof`, lastModified: now, priority: 0.85 },
     { url: `${base}/optimize`, lastModified: now, priority: 0.8 },

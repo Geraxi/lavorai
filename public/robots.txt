@@ -13,3 +13,4 @@ Disallow: /onboarding
 Disallow: /r/
 
 Sitemap: https://lavorai.it/sitemap.xml
+Sitemap: https://lavorai.it/sitemap-jobs.xml

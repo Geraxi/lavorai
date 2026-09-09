@@ -21,6 +21,7 @@ function SignupContent() {
   const t = useTranslations("auth");
   const params = useSearchParams();
   const plan = params.get("plan");
+  const protectedCategory = params.get("protected") === "1";
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -59,6 +60,7 @@ function SignupContent() {
           name: name || undefined,
           privacyConsent: true,
           source: source || undefined,
+          protectedCategory: protectedCategory || undefined,
         }),
       });
       const body = await signupRes.json().catch(() => ({}));

@@ -297,7 +297,7 @@ model UserPreferences {
   // Deprecated legacy flag — autoApplyMode è l'autorità
   autoApplyOn Boolean @default(false)
   // "off" (nessuna candidatura), "hybrid" (richiede conferma utente per singola), "auto" (candida direttamente)
-  autoApplyMode String @default("hybrid")
+  autoApplyMode String @default("auto")
   dailyCap    Int    @default(25)
   matchMin    Int    @default(50)
   salaryMin   Int    @default(30)

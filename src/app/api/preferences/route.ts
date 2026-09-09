@@ -117,7 +117,9 @@ export async function PUT(request: NextRequest) {
     create: {
       userId: user.id,
       autoApplyOn: autoApplyOn ?? autoApplyMode !== "off",
-      autoApplyMode: autoApplyMode ?? "hybrid",
+      // Default full-auto: chi vede 20 candidature inviate nella prima
+      // settimana converte; chi deve tornare a cliccare "Consenti" no.
+      autoApplyMode: autoApplyMode ?? "auto",
       dailyCap: dailyCap ?? 25,
       matchMin: matchMin ?? 50,
       employmentType: employmentType ?? "employee",
