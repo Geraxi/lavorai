@@ -34,3 +34,15 @@ export function tierToPriceId(tier: Tier): string | null {
   if (!cfg.stripePriceIdEnv) return null;
   return process.env[cfg.stripePriceIdEnv] ?? null;
 }
+
+
+/** Coupon referral: 1 mese gratis (100%, una volta). Creato al volo se manca. */
+export const REFERRAL_COUPON_ID = "LAVORAI-REFERRAL-1M";
+export async function ensureReferralCoupon(s: Stripe): Promise<string> {
+  try {
+    await s.coupons.retrieve(REFERRAL_COUPON_ID);
+  } catch {
+    await s.coupons.create({ id: REFERRAL_COUPON_ID, percent_off: 100, duration: "once", name: "Referral · 1 mese gratis" });
+  }
+  return REFERRAL_COUPON_ID;
+}

@@ -88,7 +88,13 @@ export default async function AdminOverviewPage() {
     recentPopups,
     recentEmails,
   ] = await Promise.all([
-    prisma.user.findMany({ select: { email: true, tier: true, createdAt: true, subscriptionStatus: true } }),
+    prisma.user.findMany({
+      select: {
+        email: true, tier: true, createdAt: true, subscriptionStatus: true, signupSource: true,
+        preferences: { select: { rolesJson: true } },
+        _count: { select: { cvDocuments: true, applications: { where: { status: "success" } } } },
+      },
+    }),
     prisma.application.findMany({
       where: { createdAt: { gte: since(24 * DAYS) } },
       select: { createdAt: true, status: true, replyCount: true, lastReplyKind: true, userStatus: true, atsScore: true, job: { select: { company: true } } },
@@ -171,6 +177,17 @@ export default async function AdminOverviewPage() {
   const aiUsed = appsMonth;
   const aiPct = Math.min(100, Math.round((aiUsed / aiCapacity) * 100));
 
+  // ── Funnel utenti (all-time, account reali) ────────────────────────────
+  const uCv = realUsers.filter((u) => u._count.cvDocuments > 0).length;
+  const uPrefs = realUsers.filter((u) => { try { return (JSON.parse(u.preferences?.rolesJson ?? "[]") as unknown[]).length > 0; } catch { return false; } }).length;
+  const uFirstApp = realUsers.filter((u) => u._count.applications > 0).length;
+  const uPaying = realUsers.filter(isPaying).length;
+  const uMax = Math.max(realTotal, 1);
+  const SOURCE_LABEL: Record<string, string> = { google: "Google", chatgpt: "ChatGPT", linkedin: "LinkedIn", instagram_tiktok: "IG/TikTok", amico: "Amico", universita: "Università", categorie_protette: "Cat. protette", altro: "Altro" };
+  const sourceCounts = new Map<string, number>();
+  for (const u of realUsers) if (u.signupSource) sourceCounts.set(u.signupSource, (sourceCounts.get(u.signupSource) ?? 0) + 1);
+  const topSources = [...sourceCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+
   // ── Funnel (14gg) ─────────────────────────────────────────────────────
   const jobViews = pageViews14d.filter((p) => p.path.startsWith("/jobs") || p.path.startsWith("/discover")).length;
   const fInviate = apps14dRows.length;
@@ -178,7 +195,7 @@ export default async function AdminOverviewPage() {
   const fColloqui = apps14dRows.filter((a) => a.lastReplyKind === "colloquio" || a.userStatus === "colloquio").length;
   const fOfferte = apps14dRows.filter((a) => a.userStatus === "offerta").length;
   const fMax = Math.max(jobViews, fInviate, 1);
-  const pctOf = (v: number) => (fMax > 0 ? `${((v / fMax) * 100).toFixed(v / fMax < 0.1 ? 1 : 0)}%` : "—");
+  const pctOf = (v: number, base = fMax) => (base > 0 ? `${((v / base) * 100).toFixed(v / base < 0.1 ? 1 : 0)}%` : "—");
 
   // ── Donut per stato ───────────────────────────────────────────────────
   const stInviate = apps14dRows.filter((a) => a.status === "success").length;
@@ -306,7 +323,22 @@ export default async function AdminOverviewPage() {
       </div>
 
       {/* Row 3 · Funnel + Per stato + Crediti AI */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.25fr) minmax(0,1.35fr) minmax(0,1.2fr)", gap: 12, minHeight: 0 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.15fr) minmax(0,1.15fr) minmax(0,1.35fr) minmax(0,1.1fr)", gap: 12, minHeight: 0 }}>
+        <div className="adm-card">
+          <div className="adm-card-head">
+            <div>
+              <div className="adm-card-title">Funnel utenti</div>
+              <div className="adm-card-sub">Da iscritto a pagante · {topSources.length ? topSources.map(([k, n]) => `${SOURCE_LABEL[k] ?? k} ${n}`).join(" · ") : "fonte signup: nessun dato"}</div>
+            </div>
+          </div>
+          <div className="adm-card-body" style={{ justifyContent: "center" }}>
+            <FunnelBar label="Iscritti" value={realTotal} max={uMax} pct={pctOf(realTotal, uMax)} color="hsl(var(--primary))" />
+            <FunnelBar label="CV caricato" value={uCv} max={uMax} pct={pctOf(uCv, uMax)} color="#60a5fa" />
+            <FunnelBar label="Preferenze" value={uPrefs} max={uMax} pct={pctOf(uPrefs, uMax)} color="#a78bfa" />
+            <FunnelBar label="1ª candidatura" value={uFirstApp} max={uMax} pct={pctOf(uFirstApp, uMax)} color="#f472b6" />
+            <FunnelBar label="Paganti" value={uPaying} max={uMax} pct={pctOf(uPaying, uMax)} color="#fbbf24" />
+          </div>
+        </div>
         <div className="adm-card">
           <div className="adm-card-head">
             <div>

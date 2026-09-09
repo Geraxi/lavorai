@@ -165,7 +165,7 @@ export function PaywallDialog({
             }}
           >
             <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
-              Nessuna carta richiesta per il piano Free · Cancella quando vuoi
+              Pro e Pro+: 7 giorni gratis, poi si rinnova · Disdici in un clic dalle Impostazioni
             </div>
             <button
               type="button"

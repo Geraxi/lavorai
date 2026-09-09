@@ -139,8 +139,23 @@ export async function POST(request: NextRequest) {
             currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             pausedUntil,
+            // Prova gratuita: una sola per utente (vedi checkout).
+            ...(sub.status === "trialing" ? { proTrialUsedAt: new Date() } : {}),
           },
         });
+        // Credito referral consumato al checkout → scala il contatore una volta.
+        if (sub.metadata?.referralCredit === "1" && (sub.status === "active" || sub.status === "trialing")) {
+          await prisma.user.updateMany({ where: { stripeCustomerId: customerId, referralCredits: { gt: 0 } }, data: { referralCredits: { decrement: 1 } } });
+          await stripe().subscriptions.update(sub.id, { metadata: { ...sub.metadata, referralCredit: "used" } }).catch(() => void 0);
+        }
+        // L'invitato è diventato pagante (post-trial) → premia chi l'ha invitato.
+        if (sub.status === "active" && !paused) {
+          const payer = await prisma.user.findFirst({ where: { stripeCustomerId: customerId, referredById: { not: null }, referralRewardedAt: null }, select: { id: true } });
+          if (payer) {
+            const { rewardReferralIfDue } = await import("@/lib/referral");
+            await rewardReferralIfDue(payer.id).catch((err) => console.error("[stripe/webhook] referral reward failed", err));
+          }
+        }
         if (matched.count === 0 && metaUserId) {
           await prisma.user.update({
             where: { id: metaUserId },

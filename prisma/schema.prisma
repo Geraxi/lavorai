@@ -120,6 +120,14 @@ model User {
 
   /// Sospeso dall'admin: login bloccato, escluso dall'auto-apply.
   suspendedAt      DateTime?
+  /// Prova Pro 7 giorni già usata (una sola per utente).
+  proTrialUsedAt   DateTime?
+  /// Mesi gratis maturati dal referral, da applicare al prossimo checkout.
+  referralCredits  Int       @default(0)
+  /// Il referral è già stato premiato (per questo utente "invitato").
+  referralRewardedAt DateTime?
+  /// "Come ci hai conosciuto" dichiarato al signup.
+  signupSource     String?
   /// "Reset crediti" admin: il contatore mensile riparte da questa data.
   quotaResetAt     DateTime?
 

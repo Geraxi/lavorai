@@ -14,6 +14,8 @@ const SignupSchema = z.object({
   password: z.string().min(1).max(100),
   name: z.string().trim().max(80).optional(),
   privacyConsent: z.literal(true),
+  /** "Come ci hai conosciuto" (facoltativo). */
+  source: z.enum(["google", "chatgpt", "linkedin", "instagram_tiktok", "amico", "universita", "categorie_protette", "altro"]).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -123,6 +125,7 @@ export async function POST(request: NextRequest) {
         signupUtmMedium: attrib.m ?? null,
         signupUtmCampaign: attrib.c ?? null,
         signupLandingPath: attrib.p ?? null,
+        signupSource: parsed.data.source ?? null,
       },
       select: { id: true, email: true, locale: true },
     });

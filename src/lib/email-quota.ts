@@ -86,6 +86,7 @@ export type EmailKind =
   | "magic_link"
   | "onboarding_nudge"
   | "upgrade_nudge"
+  | "weekly_digest"
   | "founder_alert"
   | "other";
 

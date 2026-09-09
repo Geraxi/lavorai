@@ -47,7 +47,9 @@ export async function getReferralStats(userId: string) {
   });
   const total = referrals.length;
   const paying = referrals.filter((r) => r.tier === "pro" || r.tier === "pro_plus").length;
-  return { total, paying };
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { referralCredits: true } });
+  const rewards = await prisma.subscriptionEvent.count({ where: { userId, action: "referral_reward" } }).catch(() => 0);
+  return { total, paying, credits: me?.referralCredits ?? 0, rewards };
 }
 
 /** Risolve un codice → userId. Null se inesistente o suo (no self-referral). */
@@ -61,3 +63,50 @@ export async function resolveReferralCode(code: string, selfUserId?: string): Pr
 }
 
 export const REFERRAL_COOKIE = COOKIE;
+
+/**
+ * Premio referral: quando un utente invitato diventa pagante (status
+ * "active", cioè dopo la prova), l'invitante riceve 1 mese gratis.
+ * Se l'invitante ha un abbonamento vivo, il coupon 100%×1 viene applicato
+ * subito su Stripe; altrimenti resta in `referralCredits` e viene usato al
+ * suo prossimo checkout. Idempotente via `referralRewardedAt` sull'invitato.
+ */
+export async function rewardReferralIfDue(referredUserId: string): Promise<"rewarded" | "already" | "no_referrer"> {
+  const referred = await prisma.user.findUnique({
+    where: { id: referredUserId },
+    select: { referredById: true, referralRewardedAt: true, email: true },
+  });
+  if (!referred?.referredById) return "no_referrer";
+  if (referred.referralRewardedAt) return "already";
+  const claimed = await prisma.user.updateMany({
+    where: { id: referredUserId, referralRewardedAt: null },
+    data: { referralRewardedAt: new Date() },
+  });
+  if (claimed.count === 0) return "already";
+
+  const referrer = await prisma.user.findUnique({
+    where: { id: referred.referredById },
+    select: { id: true, email: true, stripeSubscriptionId: true, subscriptionStatus: true },
+  });
+  if (!referrer) return "no_referrer";
+
+  let appliedNow = false;
+  if (referrer.stripeSubscriptionId && (referrer.subscriptionStatus === "active" || referrer.subscriptionStatus === "trialing")) {
+    try {
+      const { stripe, ensureReferralCoupon } = await import("@/lib/stripe");
+      const coupon = await ensureReferralCoupon(stripe());
+      await stripe().subscriptions.update(referrer.stripeSubscriptionId, { discounts: [{ coupon }] });
+      appliedNow = true;
+    } catch (err) {
+      console.error("[referral] coupon apply failed, keeping credit", err);
+    }
+  }
+  if (!appliedNow) {
+    await prisma.user.update({ where: { id: referrer.id }, data: { referralCredits: { increment: 1 } } });
+  }
+  await prisma.subscriptionEvent.create({
+    data: { userId: referrer.id, action: "referral_reward", reason: appliedNow ? "stripe" : "credit" },
+  }).catch(() => void 0);
+  console.log(`[referral] reward → ${referrer.email} (${appliedNow ? "coupon on sub" : "credit"}) for ${referred.email}`);
+  return "rewarded";
+}

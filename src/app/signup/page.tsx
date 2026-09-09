@@ -27,6 +27,7 @@ function SignupContent() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [consent, setConsent] = useState(false);
+  const [source, setSource] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
@@ -57,6 +58,7 @@ function SignupContent() {
           password,
           name: name || undefined,
           privacyConsent: true,
+          source: source || undefined,
         }),
       });
       const body = await signupRes.json().catch(() => ({}));
@@ -247,6 +249,23 @@ function SignupContent() {
                 confirmPassword.length > 0 && confirmPassword !== password
               }
             />
+
+            <select
+              value={source}
+              onChange={(e) => setSource(e.target.value)}
+              aria-label="Come ci hai conosciuto?"
+              style={{ width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elev)", color: source ? "var(--fg)" : "var(--fg-muted)", fontSize: 13.5 }}
+            >
+              <option value="">Come ci hai conosciuto? (facoltativo)</option>
+              <option value="google">Google</option>
+              <option value="chatgpt">ChatGPT / AI</option>
+              <option value="linkedin">LinkedIn</option>
+              <option value="instagram_tiktok">Instagram / TikTok</option>
+              <option value="amico">Un amico / passaparola</option>
+              <option value="universita">Università / career day</option>
+              <option value="categorie_protette">Ricerca categorie protette</option>
+              <option value="altro">Altro</option>
+            </select>
 
             <label
               style={{

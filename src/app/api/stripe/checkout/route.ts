@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { stripe, tierToPriceId } from "@/lib/stripe";
+import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { TIERS, type Tier } from "@/lib/billing";
 
 export const runtime = "nodejs";
+
 
 const schema = z.object({
   tier: z.enum(["pro", "pro_plus"]),
@@ -83,17 +84,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Prova gratuita di 7 giorni (carta richiesta, poi €/mese): una sola
+    // volta per utente. Chi ha già avuto un abbonamento non la rivede.
+    const fresh = await prisma.user.findUnique({ where: { id: user.id }, select: { proTrialUsedAt: true, stripeSubscriptionId: true, referralCredits: true } });
+    const trialEligible = !fresh?.proTrialUsedAt && !fresh?.stripeSubscriptionId;
+    const referralCoupon = (fresh?.referralCredits ?? 0) > 0 ? await ensureReferralCoupon(s) : null;
+
     const session = await s.checkout.sessions.create({
       customer: customerId,
       mode: "subscription",
       payment_method_types: ["card"],
+      payment_method_collection: "always",
       line_items: [{ price: priceId, quantity: 1 }],
+      ...(referralCoupon ? { discounts: [{ coupon: referralCoupon }] } : {}),
       success_url: `${siteUrl}/settings?subscribed=1`,
       cancel_url: `${siteUrl}/#prezzi?canceled=1`,
-      allow_promotion_codes: true,
+      ...(referralCoupon ? {} : { allow_promotion_codes: true }),
       client_reference_id: user.id, // fallback per webhook checkout.session.completed
       subscription_data: {
-        metadata: { userId: user.id, tier },
+        metadata: { userId: user.id, tier, trial: trialEligible ? "7d" : "none", referralCredit: referralCoupon ? "1" : "0" },
+        ...(trialEligible
+          ? { trial_period_days: 7, trial_settings: { end_behavior: { missing_payment_method: "cancel" as const } } }
+          : {}),
       },
       locale: "it",
     });

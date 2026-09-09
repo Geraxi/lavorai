@@ -12,7 +12,7 @@ import { Icon } from "@/components/design/icon";
 interface MyReferral {
   code: string;
   link: string;
-  stats: { total: number; paying: number };
+  stats: { total: number; paying: number; credits?: number; rewards?: number };
 }
 
 /**
@@ -50,8 +50,13 @@ export function ReferralCard() {
       />
       <SectionBody>
         <p style={{ fontSize: 12.5, color: "var(--fg-muted)", margin: "0 0 14px", lineHeight: 1.55 }}>
-          Quando un amico si iscrive col tuo link e passa a Pro, ricevete{" "}
-          <strong style={{ color: "var(--fg)" }}>1 mese gratis</strong> entrambi.
+          Quando un amico si iscrive col tuo link e diventa Pro, ricevi{" "}
+          <strong style={{ color: "var(--fg)" }}>1 mese gratis</strong>: applicato subito se sei abbonato, altrimenti al tuo prossimo upgrade.
+          {data && (data.stats.credits ?? 0) > 0 && (
+            <span style={{ display: "block", marginTop: 6, color: "hsl(var(--primary))", fontWeight: 600 }}>
+              Hai {data.stats.credits} {data.stats.credits === 1 ? "mese gratis" : "mesi gratis"} da usare al prossimo checkout.
+            </span>
+          )}
         </p>
 
         {loading ? (

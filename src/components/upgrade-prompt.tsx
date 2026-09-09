@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier, getLimits } from "@/lib/billing";
+import { CompanyLogo } from "@/components/design/company-logo";
+import { pickMatches } from "@/lib/weekly-digest";
 
 /**
  * Prompt persistente che spinge gli utenti Free all'upgrade "per trovare
@@ -48,6 +50,30 @@ export async function UpgradePrompt({
 
   const copy = COPY[state];
   const isCompact = variant === "compact";
+
+  // Upgrade "al momento del valore": quando è bloccato o quasi, mostra le
+  // offerte compatibili entrate questa settimana che NON può inviare, coi
+  // loghi reali. Un limite astratto convince poco; 4 aziende con nome sì.
+  let locked: { id: string; title: string; company: string | null; url: string }[] = [];
+  let lockedTotal = 0;
+  if (state !== "cold") {
+    try {
+      const prefs = await prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { rolesJson: true, locationsJson: true } });
+      const parse = (j: string | null | undefined) => { try { const v = JSON.parse(j ?? "[]"); return Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : []; } catch { return []; } };
+      const roles = parse(prefs?.rolesJson);
+      if (roles.length) {
+        const pool = await prisma.job.findMany({
+          where: { cachedAt: { gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) } },
+          orderBy: { cachedAt: "desc" },
+          select: { id: true, title: true, company: true, location: true, url: true, remote: true },
+          take: 2500,
+        });
+        const all = pickMatches(pool, roles, parse(prefs?.locationsJson));
+        lockedTotal = all.length;
+        locked = all.slice(0, 4);
+      }
+    } catch { /* prompt resta in versione base */ }
+  }
 
   return (
     <div
@@ -119,6 +145,23 @@ export async function UpgradePrompt({
         >
           {copy.body}
         </div>
+        {locked.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex" }}>
+              {locked.map((j, i) => (
+                <div key={j.id} style={{ marginLeft: i ? -6 : 0, borderRadius: 8, boxShadow: "0 0 0 2px var(--bg-elev, #0b1a12)" }} title={`${j.title} · ${j.company ?? ""}`}>
+                  <CompanyLogo company={j.company ?? "?"} url={j.url} size={isCompact ? 22 : 26} rounded={8} />
+                </div>
+              ))}
+            </div>
+            <span style={{ fontSize: isCompact ? 11.5 : 12, color: "var(--fg)", fontWeight: 600 }}>
+              {locked.map((j) => j.company).filter(Boolean).slice(0, 3).join(", ")}
+              {lockedTotal > 3 ? ` e altre ${lockedTotal - 3}` : ""}
+              {" "}
+              <span style={{ color: "var(--fg-muted)", fontWeight: 500 }}>cercano il tuo profilo questa settimana. Con Pro ci candidiamo noi.</span>
+            </span>
+          </div>
+        )}
       </div>
 
       <Link
@@ -145,19 +188,19 @@ const COPY = {
   cold: {
     title: (_used: number, _cap: number) =>
       "Trova lavoro fino a 17× più veloce con Pro",
-    body: "Piano Free: 3 candidature/mese. Piano Pro: 50 candidature/mese, priorità sui portali diretti, cover letter personalizzata. €19/mese, disdici quando vuoi.",
-    cta: "Passa a Pro",
+    body: "Piano Free: 3 candidature. Piano Pro: 50 candidature/mese, priorità sui portali diretti, cover letter personalizzata. 7 giorni gratis, poi €19,99/mese, disdici quando vuoi.",
+    cta: "Prova Pro gratis",
   },
   warning: {
     title: (used: number, cap: number) =>
       `Hai usato ${used}/${cap} candidature del mese — stai per finire`,
     body: "Ogni candidatura in più conta: più profili raggiunti = più colloqui. Con Pro passi a 50/mese e nessuna interruzione fino alla firma.",
-    cta: "Sblocca Pro",
+    cta: "Prova Pro 7 giorni gratis",
   },
   blocked: {
     title: (_used: number, cap: number) =>
       `Limite Free raggiunto (${cap}/mese) — pipeline in pausa`,
-    body: "Il motore ha trovato nuovi annunci ma non può più candidarti finché il piano non riparte a inizio mese. Con Pro riparti ora: 50 candidature/mese, colloqui più vicini.",
-    cta: "Sblocca ora",
+    body: "Il motore trova nuovi annunci ma non può più candidarti. Con Pro riparti subito: 7 giorni gratis, poi 50 candidature/mese.",
+    cta: "Sblocca ora, 7 giorni gratis",
   },
 } as const;
