@@ -6,6 +6,8 @@ import { ashbyAdapter } from "./ashby";
 import { smartrecruitersAdapter } from "./smartrecruiters";
 import { recruiteeAdapter } from "./recruitee";
 import { personioAdapter } from "./personio";
+import { breezyAdapter } from "./breezy";
+import { pinpointAdapter } from "./pinpoint";
 import { teamtailorAdapter } from "./teamtailor";
 import { bamboohrAdapter } from "./bamboohr";
 
@@ -27,6 +29,8 @@ export const PORTAL_ADAPTERS: PortalAdapter[] = [
   personioAdapter,
   teamtailorAdapter,
   bamboohrAdapter,
+  breezyAdapter,
+  pinpointAdapter,
 ];
 
 export function findPortalAdapter(url: string): PortalAdapter | null {

@@ -494,6 +494,8 @@ async function processUser(
           "personio",
           "teamtailor",
           "bamboohr",
+          "breezy",
+          "pinpoint",
         ],
       },
       // URL canoniche vanilla: gli adapter Playwright funzionano solo
@@ -515,6 +517,8 @@ async function processUser(
         { url: { contains: ".teamtailor.com" } },
         { url: { contains: "/jobs/" } },
         { url: { contains: ".bamboohr.com/careers/" } },
+        { url: { contains: ".breezy.hr/p/" } },
+        { url: { contains: ".pinpointhq.com/postings/" } },
       ],
       // Match title largo: per ogni ruolo, title deve contenere TUTTI
       // i token significativi (≥3 char). Es: "Product Designer" matcha
@@ -998,6 +1002,8 @@ function portalOf(url: string): string {
   if (u.includes("ashbyhq.com")) return "ashby";
   if (u.includes("smartrecruiters.com")) return "smartrecruiters";
   if (u.includes("recruitee.com") || /\/o\/[^/]+/.test(u)) return "recruitee";
+  if (u.includes("breezy.hr")) return "breezy";
+  if (u.includes("pinpointhq.com")) return "pinpoint";
   if (u.includes("personio.")) return "personio";
   if (u.includes("teamtailor.com")) return "teamtailor";
   if (u.includes("bamboohr.com")) return "bamboohr";

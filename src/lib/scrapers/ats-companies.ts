@@ -481,3 +481,9 @@ export const BAMBOOHR_COMPANIES: AtsCompany[] = [
   { slug: "doctolib", name: "Doctolib", country: "FR" },
   { slug: "spendesk", name: "Spendesk", country: "FR" },
 ];
+
+/** Breezy HR / Pinpoint / JOIN: nessun seed curato, i tenant arrivano
+ *  dalla discovery sugli URL già in pool (tenant-discovery.ts). */
+export const BREEZY_COMPANIES: AtsCompany[] = [];
+export const PINPOINT_COMPANIES: AtsCompany[] = [];
+export const JOIN_COMPANIES: AtsCompany[] = [];

@@ -637,7 +637,7 @@ export async function processApplication(
   // job (diversa dall'aggregatore Adzuna), puntiamo l'utente lì in manuale;
   // al prossimo ciclo l'auto-apply userà direttamente quella copia.
   if (!app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
-    const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr"];
+    const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr", "breezy", "pinpoint"];
     const isAtsSourceJob = ATS_SOURCES.includes(app.job.source);
 
     if (isAtsSourceJob) {

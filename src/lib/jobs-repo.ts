@@ -161,9 +161,15 @@ function sourceRank(source: string): number {
     case "personio":
     case "teamtailor":
     case "bamboohr":
+    case "breezy":
+    case "pinpoint":
       return 3; // submit diretto via adapter
     case "eures":
-      return 2; // fonte ufficiale, link-out
+    case "join":
+    case "remotive":
+    case "jobicy":
+    case "remoteok":
+      return 2; // fonte ufficiale / board, link-out
     case "linkedin":
       return 2;
     case "adzuna":

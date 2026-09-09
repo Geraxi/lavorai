@@ -87,6 +87,7 @@ export type EmailKind =
   | "onboarding_nudge"
   | "upgrade_nudge"
   | "weekly_digest"
+  | "auto_apply_invite"
   | "founder_alert"
   | "other";
 

@@ -6,6 +6,10 @@ import { fetchSmartRecruitersMulti } from "./smartrecruiters";
 import { fetchWorkableMulti } from "./workable";
 import { fetchRecruiteeMulti } from "./recruitee";
 import { fetchPersonioMulti } from "./personio";
+import { fetchBreezyMulti } from "./breezy";
+import { fetchPinpointMulti } from "./pinpoint";
+import { fetchJoinMulti } from "./join";
+import { fetchRemoteBoards } from "./remote-boards";
 import { fetchTeamtailorMulti } from "./teamtailor";
 import { fetchBambooMulti } from "./bamboohr";
 import { fetchEuresMulti } from "./eures";
@@ -23,6 +27,9 @@ import {
   WORKABLE_COMPANIES,
   RECRUITEE_COMPANIES,
   PERSONIO_COMPANIES,
+  BREEZY_COMPANIES,
+  PINPOINT_COMPANIES,
+  JOIN_COMPANIES,
   TEAMTAILOR_COMPANIES,
   BAMBOOHR_COMPANIES,
 } from "./ats-companies";
@@ -49,6 +56,10 @@ export async function syncAtsJobs(): Promise<{
   teamtailor: number;
   bamboohr: number;
   eures: number;
+  breezy: number;
+  pinpoint: number;
+  join: number;
+  remote: number;
   total: number;
 }> {
   console.log(
@@ -60,7 +71,7 @@ export async function syncAtsJobs(): Promise<{
     const seen = new Set(seed.map((c) => c.slug.toLowerCase()));
     return [...seed, ...found.filter((s) => !seen.has(s.toLowerCase())).map((slug) => ({ slug }))];
   };
-  const [gh, lv, ash, sr, wk, li, demand, rc, pe, tt, bh, eu] = await Promise.all([
+  const [gh, lv, ash, sr, wk, li, demand, rc, pe, tt, bh, eu, bz, pp, jn, rb] = await Promise.all([
     fetchGreenhouseMulti(GREENHOUSE_COMPANIES, 4),
     fetchLeverMulti(LEVER_COMPANIES, 4),
     fetchAshbyMulti(ASHBY_COMPANIES, 4),
@@ -76,13 +87,17 @@ export async function syncAtsJobs(): Promise<{
     fetchTeamtailorMulti(merge(TEAMTAILOR_COMPANIES, disc.teamtailor), 4),
     fetchBambooMulti(merge(BAMBOOHR_COMPANIES, disc.bamboohr), 3),
     fetchEuresMulti(),
+    fetchBreezyMulti(merge(BREEZY_COMPANIES, disc.breezy), 3),
+    fetchPinpointMulti(merge(PINPOINT_COMPANIES, disc.pinpoint), 3),
+    fetchJoinMulti(merge(JOIN_COMPANIES, disc.join), 2),
+    fetchRemoteBoards(),
   ]);
-  console.log(`[sync-jobs] recruitee=${rc.length} personio=${pe.length} teamtailor=${tt.length} bamboohr=${bh.length} eures=${eu.length} (tenant scoperti: ${Object.values(disc).flat().length})`);
+  console.log(`[sync-jobs] recruitee=${rc.length} personio=${pe.length} teamtailor=${tt.length} bamboohr=${bh.length} eures=${eu.length} breezy=${bz.length} pinpoint=${pp.length} join=${jn.length} remote-boards=${rb.length} (tenant scoperti: ${Object.values(disc).flat().length})`);
   console.log(
     `[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}  ashby=${ash.length}  smartrec=${sr.length}  workable=${wk.length}  linkedin=${li.length}  demand=${demand.items.length} (${demand.queries} queries)`,
   );
 
-  const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...li, ...demand.items, ...rc, ...pe, ...tt, ...bh, ...eu];
+  const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...li, ...demand.items, ...rc, ...pe, ...tt, ...bh, ...eu, ...bz, ...pp, ...jn, ...rb];
   const upserted = await upsertJobs(all);
   await closeMissingJobs(all);
   return {
@@ -99,6 +114,10 @@ export async function syncAtsJobs(): Promise<{
     teamtailor: tt.length,
     bamboohr: bh.length,
     eures: eu.length,
+    breezy: bz.length,
+    pinpoint: pp.length,
+    join: jn.length,
+    remote: rb.length,
     total: upserted,
   };
 }
@@ -109,7 +128,7 @@ export async function syncAtsJobs(): Promise<{
  * Chiudiamo solo board per cui abbiamo ricevuto almeno 1 job (evita di
  * chiudere tutto quando l'API risponde vuoto/404 per un glitch).
  */
-const FULL_BOARD_SOURCES = new Set(["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "recruitee", "personio", "teamtailor", "bamboohr"]);
+const FULL_BOARD_SOURCES = new Set(["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "recruitee", "personio", "teamtailor", "bamboohr", "breezy", "pinpoint", "join"]);
 async function closeMissingJobs(items: JobListItem[]): Promise<number> {
   const seen = new Map<string, Set<string>>();
   for (const j of items) {

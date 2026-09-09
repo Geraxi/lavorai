@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 
-const ATS_RE = /greenhouse\.io|ashbyhq\.com|lever\.co|workable\.com|smartrecruiters\.com|recruitee\.com|jobs\.personio\.|teamtailor\.com|bamboohr\.com/i;
+const ATS_RE = /greenhouse\.io|ashbyhq\.com|lever\.co|workable\.com|smartrecruiters\.com|recruitee\.com|jobs\.personio\.|teamtailor\.com|bamboohr\.com|breezy\.hr|pinpointhq\.com/i;
 
 /**
  * Verifica leggera che l'annuncio sia ancora online: segue i redirect e
