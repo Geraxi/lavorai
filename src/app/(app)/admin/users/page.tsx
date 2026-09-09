@@ -80,6 +80,23 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE));
   const pageUsers = users.slice((page - 1) * PAGE, page * PAGE);
   const selected = users.find((u) => u.id === sp.sel) ?? pageUsers[0] ?? null;
+  // Ultime candidature dell'utente selezionato, con il motivo reale di
+  // fallimento (adapterFailure in canaryLog vince sul messaggio generico).
+  const selectedApps = selected
+    ? await prisma.application.findMany({
+        where: { userId: selected.id },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+        select: { id: true, createdAt: true, status: true, submittedVia: true, submitConfirmation: true, errorMessage: true, canaryLog: true, job: { select: { title: true, company: true, source: true, url: true } } },
+      })
+    : [];
+  const failReason = (a: { errorMessage: string | null; canaryLog: string | null }): string | null => {
+    try {
+      const j = a.canaryLog ? (JSON.parse(a.canaryLog) as { adapterFailure?: string; error?: string }) : null;
+      if (j?.adapterFailure) return `${j.adapterFailure}: ${j.error ?? ""}`.trim();
+    } catch { /* non json */ }
+    return a.errorMessage;
+  };
   const qs = (extra: Record<string, string | undefined>) => {
     const p = new URLSearchParams();
     if (includeTest) p.set("includeTest", "1");
@@ -206,6 +223,29 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                 <KV k="Sorgente" v={source(selected.signupReferrer, selected.signupUtmSource)} />
                 <KV k="Codice referral" v={selected.referralCode ?? "—"} />
                 <KV k="Arrivato da" v={selected.referredById ?? "—"} />
+              </PSection>
+              <PSection title={`Ultime candidature (${selected._count.applications})`}>
+                {selectedApps.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: "var(--fg-subtle)" }}>Nessuna candidatura.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 6 }}>
+                    {selectedApps.map((a) => {
+                      const ok = a.status === "success";
+                      const bad = a.status === "failed";
+                      const reason = bad ? failReason(a) : null;
+                      return (
+                        <div key={a.id} style={{ display: "grid", gridTemplateColumns: "auto minmax(0,1fr) auto", gap: 8, alignItems: "start", fontSize: 11.5, padding: "6px 8px", borderRadius: 8, background: "var(--bg-sunken)" }}>
+                          <span className={`adm-pill ${ok ? "good" : bad ? "bad" : "warn"}`} style={{ padding: "2px 7px", fontSize: 10, marginTop: 1 }}><span className="dot" />{ok ? (a.submitConfirmation?.startsWith("DETECTED") ? "confermata" : "inviata") : a.status.replace(/_/g, " ")}</span>
+                          <div style={{ minWidth: 0 }}>
+                            <div className="adm-ellipsis" style={{ color: "var(--fg)", fontWeight: 600 }}>{a.job.title} <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· {a.job.company ?? "—"} · {a.job.source}{a.submittedVia ? ` · ${a.submittedVia}` : ""}</span></div>
+                            {reason && <div style={{ color: "#f87171", fontSize: 11, lineHeight: 1.4, marginTop: 2, whiteSpace: "normal" }}>{reason.slice(0, 220)}</div>}
+                          </div>
+                          <span style={{ color: "var(--fg-subtle)", whiteSpace: "nowrap" }}>{fmt2(a.createdAt)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </PSection>
               <PSection title="Stato e attività">
                 <KV k="Onboarding" v={<Onboarding step={onboarding(selected)} wide />} />
