@@ -9,6 +9,7 @@ import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/design/icon";
 import { cn } from "@/lib/utils";
+import { ThemeToggle } from "@/components/design/theme-toggle";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -154,6 +155,10 @@ export function AppSidebar({
 
       {/* Auto-apply status + user card — liquid glass */}
       <div className="mt-auto pt-3">
+        {/* Tema chiaro/scuro: sempre raggiungibile, su ogni pagina dell'app */}
+        <div style={{ display: "flex", justifyContent: "stretch", marginBottom: 8 }}>
+          <ThemeToggle compact={false} fullWidth />
+        </div>
         <div
           className="ds-glass"
           style={{

@@ -12,10 +12,13 @@
  */
 
 import type { Job } from "@prisma/client";
+import { isProtectedCategoryJob } from "@/lib/protected-category";
 
 const BASE_URL = "https://api.adzuna.com/v1/api/jobs/it/search";
 
 export interface AdzunaSearchParams {
+  /** Frase esatta (Adzuna `what_phrase`), es. "categorie protette". */
+  whatPhrase?: string;
   what?: string;
   where?: string;
   page?: number;
@@ -41,7 +44,7 @@ export interface AdzunaJob {
   created: string;
 }
 
-export type JobListItem = Omit<Job, "cachedAt" | "closedAt"> & { closedAt?: Date | null };
+export type JobListItem = Omit<Job, "cachedAt" | "closedAt" | "protectedCategory"> & { closedAt?: Date | null; protectedCategory?: boolean };
 
 interface AdzunaSearchResponse {
   count: number;
@@ -69,6 +72,7 @@ export async function searchJobs(
   url.searchParams.set("content-type", "application/json");
 
   if (params.what) url.searchParams.set("what", params.what);
+  if (params.whatPhrase) url.searchParams.set("what_phrase", params.whatPhrase);
   if (params.where) url.searchParams.set("where", params.where);
   if (params.fullTime) url.searchParams.set("full_time", "1");
   if (params.partTime) url.searchParams.set("part_time", "1");
@@ -102,6 +106,7 @@ function toJobListItem(a: AdzunaJob): JobListItem {
     salaryMin: a.salary_min ? Math.round(a.salary_min) : null,
     salaryMax: a.salary_max ? Math.round(a.salary_max) : null,
     category: a.category?.label ?? null,
+    protectedCategory: isProtectedCategoryJob(a.title, a.description),
     postedAt: a.created ? new Date(a.created) : null,
     sourceSlug: null,
     recruiterEmail: null,

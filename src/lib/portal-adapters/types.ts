@@ -59,6 +59,8 @@ export interface ApplyInput {
   company?: string | null;
   jobDescription?: string | null;
   jobLocation?: string | null;
+  /** L'utente è iscritto alle categorie protette (L. 68/99). */
+  protectedCategory?: boolean | null;
   /** Callback: risposte usate nel form (utente/profilo/regole/AI), per
    *  mostrarle all'utente e persistere quelle AI come UserAnswer. */
   onAiAnswers?: (answers: Array<{ label: string; kind: string; answer: string; source: "user" | "profile" | "ai" | "rule" | "assumed" }>) => void;

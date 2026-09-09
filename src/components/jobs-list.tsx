@@ -27,6 +27,8 @@ export interface JobRow {
   salaryMax: number | null;
   /** Solo letto dal JobSwiper per la pill "Today / 3d ago / 2w ago". */
   postedAt?: Date | null;
+  /** Annuncio per categorie protette (L. 68/99). */
+  protectedCategory?: boolean;
 }
 
 function portalOf(url: string): string {
@@ -285,6 +287,9 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
                         {j.company ?? "—"}
                       </div>
                     </div>
+                    {j.protectedCategory && (
+                      <span className="ds-chip ds-chip-blue" title="Riservato/prioritario categorie protette, L. 68/99">L. 68/99</span>
+                    )}
                     {j.remote && (
                       <span className="ds-chip ds-chip-green">{t("remote")}</span>
                     )}

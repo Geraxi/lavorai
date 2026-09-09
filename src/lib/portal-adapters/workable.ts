@@ -138,6 +138,7 @@ export const workableAdapter: PortalAdapter = {
           company: input.company ?? null,
           jobDescription: input.jobDescription,
           jobLocation: input.jobLocation,
+          protectedCategory: input.protectedCategory,
           autonomous: input.autonomous === true,
           storedAnswers: input.storedAnswers,
         });

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { searchJobs, type AdzunaSearchParams, type JobListItem } from "@/lib/adzuna";
 import type { Job } from "@prisma/client";
+import { isProtectedCategoryJob } from "@/lib/protected-category";
 
 /**
  * Job repository: layer sopra Adzuna che cache-a in DB.
@@ -10,6 +11,8 @@ import type { Job } from "@prisma/client";
 export interface JobsFilter extends AdzunaSearchParams {
   /** filtra solo job remoti */
   remoteOnly?: boolean;
+  /** solo annunci per categorie protette (L. 68/99) */
+  protectedOnly?: boolean;
 }
 
 /**
@@ -55,6 +58,7 @@ export async function searchAndCacheJobs(
             salaryMin: j.salaryMin,
             salaryMax: j.salaryMax,
             category: j.category,
+            protectedCategory: j.protectedCategory ?? isProtectedCategoryJob(j.title, j.description),
             postedAt: j.postedAt,
             cachedAt: new Date(),
           },
@@ -71,6 +75,7 @@ export async function searchAndCacheJobs(
             salaryMin: j.salaryMin,
             salaryMax: j.salaryMax,
             category: j.category,
+            protectedCategory: j.protectedCategory ?? isProtectedCategoryJob(j.title, j.description),
             postedAt: j.postedAt,
           },
         }),
@@ -114,6 +119,9 @@ export async function searchAndCacheJobs(
   }
   if (filter.remoteOnly) {
     and.push({ remote: true });
+  }
+  if (filter.protectedOnly) {
+    and.push({ protectedCategory: true });
   }
   if (filter.salaryMin) {
     and.push({

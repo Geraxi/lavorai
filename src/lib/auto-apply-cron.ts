@@ -217,6 +217,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
           locationsJson: true,
           salaryMin: true,
           employmentType: true,
+          protectedCategory: true,
         },
       },
       cvProfile: true,
@@ -295,6 +296,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
           locationsJson: true,
           salaryMin: true,
           employmentType: true,
+          protectedCategory: true,
         },
       },
       cvProfile: true,
@@ -328,6 +330,7 @@ async function processUser(
       locationsJson: string;
       salaryMin: number;
       employmentType: string;
+      protectedCategory?: boolean;
     } | null;
     cvProfile: Parameters<typeof rowToProfile>[0] | null;
   },
@@ -587,6 +590,13 @@ async function processUser(
   };
 
   jobs.sort((a, b) => {
+    // 0. Categorie protette: se l'utente è iscritto (L. 68/99), gli annunci
+    //    riservati vengono prima di tutto (sono pochi e a bassa concorrenza).
+    if (prefs.protectedCategory) {
+      const pa = a.protectedCategory ? 1 : 0;
+      const pb = b.protectedCategory ? 1 : 0;
+      if (pa !== pb) return pb - pa;
+    }
     // 1. Match score DESC (più congruo prima)
     const sb = scoreOf(b);
     const sa = scoreOf(a);

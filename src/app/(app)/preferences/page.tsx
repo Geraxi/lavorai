@@ -45,6 +45,7 @@ export default async function PreferencesPage() {
       (prefs?.autoApplyOn ? "auto" : "manual"),
     dailyCap: prefs?.dailyCap ?? 25,
     matchMin: prefs?.matchMin ?? 50,
+    protectedCategory: (prefs as { protectedCategory?: boolean } | null | undefined)?.protectedCategory ?? false,
     employmentType:
       ((prefs as { employmentType?: string } | null | undefined)
         ?.employmentType as "employee" | "piva" | "both" | undefined) ??

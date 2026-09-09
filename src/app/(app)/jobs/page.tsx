@@ -13,11 +13,12 @@ import { prisma } from "@/lib/db";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { titleMatchesAnyRole } from "@/lib/role-match";
+import { PROTECTED_SEARCH_PHRASES } from "@/lib/protected-category";
 
 export const metadata: Metadata = { title: "Job board" };
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ what?: string; where?: string; remote?: string }>;
+type SearchParams = Promise<{ what?: string; where?: string; remote?: string; protected?: string }>;
 
 function safeParseArray(json: string): string[] {
   try {
@@ -43,6 +44,7 @@ export default async function JobsPage({
   let userSalaryMin: number | undefined;
   let avoidSet = new Set<string>();
   let matchMin = 0;
+  let prefProtected = false;
   let userProfile: ReturnType<typeof rowToProfile> | null = null;
 
   if (user) {
@@ -63,6 +65,7 @@ export default async function JobsPage({
         "";
       userSalaryMin = prefs.salaryMin ? prefs.salaryMin * 1000 : undefined;
       matchMin = prefs.matchMin ?? 0;
+      prefProtected = prefs.protectedCategory;
     }
     avoidSet = new Set(
       (full?.avoidCompanies ?? "")
@@ -76,6 +79,9 @@ export default async function JobsPage({
   const what = sp.what ?? "";
   const where = sp.where ?? defaultWhere;
   const remoteOnly = sp.remote === "1";
+  // Categorie protette (L. 68/99): esplicito via ?protected=1|0, altrimenti
+  // dalla preferenza dell'utente.
+  const protectedOnly = sp.protected != null ? sp.protected === "1" : prefProtected;
 
   // Se l'utente ha esplicitamente cercato (sp.what), usa solo quello.
   // Altrimenti, se ha preferenze multi-ruolo, query una volta per ciascun
@@ -95,12 +101,22 @@ export default async function JobsPage({
     }
   }
 
+  // Annunci per categorie protette: ricerca dedicata per frase esatta su
+  // Adzuna (in aggiunta ai ruoli), poi filtro in DB su protectedCategory.
+  if (protectedOnly) {
+    const extra = await Promise.all(
+      PROTECTED_SEARCH_PHRASES.map((p) => safeSearch({ whatPhrase: p, what: what || undefined, where: where || undefined, remoteOnly, protectedOnly: true, resultsPerPage: 50 })),
+    );
+    for (const list of extra) for (const j of list) jobsRaw.push(j);
+  }
+
   if (what) {
-    jobsRaw = await safeSearch({
+    jobsRaw = [...jobsRaw, ...(await safeSearch({
       what,
       where: where || undefined,
       remoteOnly,
-    });
+      protectedOnly,
+    }))];
   } else if (prefRoles.length > 0) {
     // Cap a 5 ruoli per contenere il consumo dell'API (Adzuna free: 1000/mese)
     const rolesToQuery = prefRoles.slice(0, 5);
@@ -110,6 +126,7 @@ export default async function JobsPage({
           what: r,
           where: where || undefined,
           remoteOnly,
+          protectedOnly,
         }),
       ),
     );
@@ -129,15 +146,24 @@ export default async function JobsPage({
     });
   } else {
     // Nessuna preferenza e nessuna ricerca → mostra una generica
-    jobsRaw = await safeSearch({
+    jobsRaw = [...jobsRaw, ...(await safeSearch({
       where: where || undefined,
       remoteOnly,
-    });
+      protectedOnly,
+    }))];
+  }
+  // Dedup (le ricerche dedicate possono sovrapporsi) + ordine per data.
+  {
+    const seen = new Set<string>();
+    jobsRaw = jobsRaw.filter((j) => (seen.has(j.id) ? false : (seen.add(j.id), true)));
+    jobsRaw.sort((a, b) => (b.postedAt?.getTime() ?? 0) - (a.postedAt?.getTime() ?? 0));
   }
 
   let belowMatchCount = 0;
   let roleMismatchCount = 0;
-  const enforceRoles = !sp.what && prefRoles.length > 0;
+  // Con il filtro categorie protette non imponiamo il match sul titolo:
+  // gli annunci riservati sono pochi e spesso trasversali ai ruoli.
+  const enforceRoles = !sp.what && prefRoles.length > 0 && !protectedOnly;
   const jobs: JobRow[] = jobsRaw
     .filter((j) => {
       // 0. titolo deve matchare uno dei ruoli dichiarati (solo quando
@@ -177,6 +203,7 @@ export default async function JobsPage({
       remote: j.remote,
       salaryMin: j.salaryMin,
       salaryMax: j.salaryMax,
+      protectedCategory: j.protectedCategory,
     }));
 
   return (
@@ -266,6 +293,19 @@ export default async function JobsPage({
               defaultChecked={remoteOnly}
             />{" "}
             {t("remoteOnly")}
+          </label>
+          <label
+            className="flex items-center gap-1.5 px-2"
+            style={{ fontSize: 12, color: "var(--fg-muted)" }}
+            title="Solo annunci riservati o prioritari per le categorie protette (L. 68/99)"
+          >
+            <input
+              type="checkbox"
+              name="protected"
+              value="1"
+              defaultChecked={protectedOnly}
+            />{" "}
+            Categorie protette (L. 68/99)
           </label>
           <button type="submit" className="ds-btn ds-btn-primary">
             {t("search")}

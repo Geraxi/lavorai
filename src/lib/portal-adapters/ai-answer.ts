@@ -1,6 +1,7 @@
 import type { Page } from "playwright";
 import Anthropic from "@anthropic-ai/sdk";
 import { matchCity } from "@/lib/city-centroids";
+import { isProtectedCategoryQuestion } from "@/lib/protected-category";
 
 /**
  * AI answerer per i campi OBBLIGATORI di un form ATS che il fill
@@ -63,6 +64,8 @@ export interface CandidateContext {
   autonomous?: boolean;
   /** Descrizione dell'annuncio, per le domande aperte ("perché noi?"). */
   jobDescription?: string | null;
+  /** Iscrizione alle categorie protette (L. 68/99): risposta alla domanda nei form. */
+  protectedCategory?: boolean | null;
   /** Località dell'annuncio (es. "Berlin, Germany", "Remote - US"): serve
    *  per dedurre il paese e rispondere onestamente a diritto al lavoro /
    *  sponsorship quando la domanda non nomina il paese. */
@@ -327,6 +330,11 @@ function lastResortAnswer(f: FieldDescriptor, ctx: CandidateContext): string | n
   const l = f.label.toLowerCase();
   const target = countryCodeOf(f.label) ?? countryCodeOf(ctx.jobLocation) ?? candidateCountry(ctx);
 
+  // Categorie protette (L. 68/99): dalla preferenza dell'utente, mai inventato.
+  if (isProtectedCategoryQuestion(f.label)) {
+    if (ctx.protectedCategory == null) return null;
+    return yesNo(f, ctx.protectedCategory);
+  }
   // Sponsorship / visto: "will you require sponsorship?" → inverso dell'autorizzazione.
   if (/sponsor|visa|visto|permit|permesso/.test(l)) {
     const auth = workAuthorizedIn(target, ctx);

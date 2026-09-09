@@ -404,6 +404,7 @@ export async function processApplication(
         autonomous: true,
         preferredCity: firstPreferredCity(app.user.preferences?.locationsJson),
         jobLocation: app.job.location,
+        protectedCategory: app.user.preferences?.protectedCategory ?? null,
         jobTitle: app.job.title,
         company: app.job.company,
         jobDescription: app.job.description,
@@ -1749,6 +1750,7 @@ interface AdapterSubmitInput {
   autonomous?: boolean;
   preferredCity?: string | null;
   jobLocation?: string | null;
+  protectedCategory?: boolean | null;
   jobTitle?: string | null;
   company?: string | null;
   jobDescription?: string | null;
@@ -1816,6 +1818,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       autonomous: input.autonomous === true,
       preferredCity: input.preferredCity,
       jobLocation: input.jobLocation,
+      protectedCategory: input.protectedCategory,
       jobTitle: input.jobTitle,
       company: input.company,
       jobDescription: input.jobDescription,

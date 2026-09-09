@@ -27,7 +27,7 @@ export function applyTheme(t: Theme) {
  * <html> (impostato prima del paint da ThemeScript); qui lo leggiamo
  * dopo il mount per evitare mismatch di idratazione.
  */
-export function ThemeToggle({ compact = true }: { compact?: boolean }) {
+export function ThemeToggle({ compact = true, fullWidth = false }: { compact?: boolean; fullWidth?: boolean }) {
   const [theme, setTheme] = useState<Theme>("dark");
   const [ready, setReady] = useState(false);
 
@@ -52,7 +52,7 @@ export function ThemeToggle({ compact = true }: { compact?: boolean }) {
       }}
       aria-label={label}
       title={label}
-      style={{ opacity: ready ? 1 : 0.6, gap: 6 }}
+      style={{ opacity: ready ? 1 : 0.6, gap: 6, ...(fullWidth ? { width: "100%", justifyContent: "center" } : {}) }}
     >
       <Icon name={theme === "light" ? "sun" : "sparkles"} size={13} />
       {!compact && label}

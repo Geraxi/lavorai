@@ -22,6 +22,7 @@ interface Initial {
   dailyCap: number;
   matchMin: number;
   employmentType: "employee" | "piva" | "both";
+  protectedCategory: boolean;
   dailyRate: number | null;
   availableFrom: string | null;
   vatNumber: string | null;
@@ -46,6 +47,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
   const [employmentType, setEmploymentType] = useState<
     "employee" | "piva" | "both"
   >(initial.employmentType);
+  const [protectedCategory, setProtectedCategory] = useState<boolean>(initial.protectedCategory);
   const [dailyRate, setDailyRate] = useState<string>(
     initial.dailyRate != null ? String(initial.dailyRate) : "",
   );
@@ -116,6 +118,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
             dailyCap,
             matchMin,
             employmentType,
+            protectedCategory,
             dailyRate: dailyRate.trim()
               ? Math.max(0, Math.min(5000, parseInt(dailyRate, 10) || 0))
               : null,
@@ -420,6 +423,16 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                     </button>
                   ))}
                 </div>
+
+                {/* Categorie protette (L. 68/99) */}
+                <label className="ds-label" style={{ marginTop: 18 }}>Categorie protette</label>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+                  <input type="checkbox" checked={protectedCategory} onChange={(e) => { setProtectedCategory(e.target.checked); mark(); }} style={{ marginTop: 3 }} />
+                  <span style={{ fontSize: 13.5, lineHeight: 1.45 }}>
+                    Sono iscritto/a alle categorie protette (L. 68/99, art. 1)
+                    <span style={{ display: "block", fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>Ti mostriamo e ti candidiamo in priorità agli annunci riservati al collocamento mirato, e rispondiamo per te alla domanda nei form. Il dato resta privato.</span>
+                  </span>
+                </label>
 
                 {(employmentType === "piva" || employmentType === "both") && (
                   <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

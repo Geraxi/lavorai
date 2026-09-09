@@ -293,6 +293,9 @@ model UserPreferences {
   // contract / partnership (P.IVA italiana). "both" = sia dipendente
   // sia freelance.
   employmentType String @default("employee")
+  /// L'utente appartiene alle categorie protette (L. 68/99, art. 1):
+  /// il job board mostra e l'auto-apply privilegia gli annunci riservati.
+  protectedCategory Boolean @default(false)
   // Campi P.IVA — usati per generare un pitch B2B quando si candida
   // a progetti freelance/contract. Tutti opzionali: se mancano, Claude
   // genera comunque un pitch onesto ma meno puntuale.
@@ -394,11 +397,15 @@ model Job {
   // Settato dal worker (liveness check) o da sync-jobs quando il board non lo
   // restituisce più. Il cron auto-apply lo esclude; riaperto se ricompare.
   closedAt DateTime?
+  /// Annuncio riservato/prioritario per le categorie protette (L. 68/99):
+  /// riconosciuto da titolo/descrizione (src/lib/protected-category.ts).
+  protectedCategory Boolean @default(false)
 
   applications Application[]
 
   @@unique([externalId, source])
   @@index([closedAt])
+  @@index([protectedCategory, postedAt])
 }
 
 /// Application Session: raggruppa candidature simili (stesso ruolo + settore)

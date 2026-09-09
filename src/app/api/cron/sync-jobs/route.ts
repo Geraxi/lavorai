@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { syncAtsJobs } from "@/lib/scrapers/sync-jobs";
+import { syncProtectedCategoryJobs } from "@/lib/protected-category-sync";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // 5 min max per Vercel hobby
@@ -25,9 +26,15 @@ export async function GET(request: NextRequest) {
   const t0 = Date.now();
   try {
     const result = await syncAtsJobs();
+    // Categorie protette (L. 68/99): ricerca dedicata su Adzuna (Italia) e
+    // marcatura di tutti gli annunci in pool che lo dichiarano nel testo.
+    const protectedStats = await syncProtectedCategoryJobs().catch((err) => {
+      console.warn("[cron/sync-jobs] protected-category sweep failed", err);
+      return null;
+    });
     const ms = Date.now() - t0;
     console.log(`[cron/sync-jobs] ${ms}ms`, result);
-    return NextResponse.json({ ok: true, ms, ...result });
+    return NextResponse.json({ ok: true, ms, ...result, protectedCategory: protectedStats });
   } catch (err) {
     console.error("[cron/sync-jobs]", err);
     return NextResponse.json(
