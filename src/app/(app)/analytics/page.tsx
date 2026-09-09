@@ -15,14 +15,16 @@ const C = { sent: "hsl(var(--primary))", eval: "#1F6BFF", int: "#7E3FF2", off: "
  * Analisi fit-to-viewport: 4 KPI · [andamento 30g stacked | totali periodo]
  * · [top aziende | canali | round attivi] · per portale ATS.
  */
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({ searchParams }: { searchParams?: Promise<{ days?: string }> }) {
   const user = await getCurrentUser();
   if (!user) return null;
 
+  const sp = (await searchParams) ?? {};
+  const DAYS = [7, 30, 90].includes(Number(sp.days)) ? Number(sp.days) : 30;
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const thirtyStart = new Date(todayStart.getTime() - 29 * 86400_000);
-  const prevStart = new Date(thirtyStart.getTime() - 30 * 86400_000);
+  const thirtyStart = new Date(todayStart.getTime() - (DAYS - 1) * 86400_000);
+  const prevStart = new Date(thirtyStart.getTime() - DAYS * 86400_000);
 
   const deliveredWhere = { userId: user.id, status: "success", submittedVia: { not: null } } as const;
 
@@ -98,12 +100,18 @@ export default async function AnalyticsPage() {
             <h1 className="fit-h1">Analisi</h1>
             <p className="fit-hero-sub">{isEmpty ? "Le tue metriche appariranno qui appena invii la prima candidatura." : "Una panoramica completa delle tue candidature e delle performance dell'AI."}</p>
           </div>
-          <span className="ds-btn ds-btn-sm" style={{ cursor: "default" }}><Icon name="calendar" size={13} /> Ultimi 30 giorni <Icon name="chevron-down" size={12} /></span>
+          <div style={{ display: "flex", gap: 4 }} role="group" aria-label="Periodo">
+            {[7, 30, 90].map((d) => (
+              <Link key={d} href={`/analytics?days=${d}`} className={`ds-btn ds-btn-sm ${d === DAYS ? "ds-btn-primary" : ""}`} style={{ textDecoration: "none" }}>
+                {d === DAYS && <Icon name="calendar" size={12} />} {d} giorni
+              </Link>
+            ))}
+          </div>
         </div>
 
         {/* KPI */}
         <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
-          <Kpi icon="send" color={C.sent} label="Candidature inviate" value={String(sent30)} delta={isEmpty ? undefined : `${delta >= 0 ? "↗ +" : "↘ "}${delta}%`} up={delta >= 0} sub="rispetto ai 30 giorni precedenti" />
+          <Kpi icon="send" color={C.sent} label="Candidature inviate" value={String(sent30)} delta={isEmpty ? undefined : `${delta >= 0 ? "↗ +" : "↘ "}${delta}%`} up={delta >= 0} sub={`rispetto ai ${DAYS} giorni precedenti`} />
           <Kpi icon="eye" color={C.eval} label="Tasso di risposta" value={`${responseRate}%`} sub={`${viewed30} su ${sent30} aperte`} />
           <Kpi icon="clock" color={C.int} label="Tempo medio risposta" value={avgLabel} sub="per chi risponde" />
           <Kpi icon="zap" color={C.sent} label="Tempo risparmiato" value={isEmpty ? "0m" : savedLabel} sub="stima 15 min/candidatura" />

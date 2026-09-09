@@ -100,7 +100,7 @@ export function SiteNav() {
               variant="outline"
               style={{ height: 44, paddingLeft: 18, paddingRight: 18, fontSize: 15 }}
             >
-              <Link href="/onboarding/cv">Aggiorna CV</Link>
+              <Link href="/cv">Aggiorna CV</Link>
             </Button>
           ) : (
             <>

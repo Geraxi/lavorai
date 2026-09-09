@@ -26,8 +26,11 @@ export function CommandPalette() {
       }
       if (e.key === "Escape") setOpen(false);
     };
+    // Apertura da UI (es. campo ricerca nella topbar).
+    const onOpen = () => { setOpen(true); setQuery(""); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("lavorai:palette", onOpen);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("lavorai:palette", onOpen); };
   }, []);
 
   const commands: Command[] = [

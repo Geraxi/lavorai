@@ -15,7 +15,7 @@ const STEP_CONFIG: Record<NudgeStep, StepConfig> = {
     label: "Verifica la tua email",
     body: "Conferma l'indirizzo per attivare l'account e iniziare a candidarti.",
     cta: "Reinvia email di verifica",
-    href: "/account?focus=verify",
+    href: "/settings#account",
   },
   cv: {
     label: "Carica il tuo CV",

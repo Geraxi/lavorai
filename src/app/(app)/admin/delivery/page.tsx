@@ -185,7 +185,6 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
             <AdminRangeSelect value={DAYS} />
             <span className="adm-pill good"><span className="dot" />Sistema operativo</span>
             <RetryCaptchaButton />
-            <button type="button" className="adm-btn"><Download size={13} />Esporta report</button>
           </>
         }
       />
@@ -290,7 +289,6 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
         <div className="adm-card">
           <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 6 }}>
             <div className="adm-card-title">Errori recenti</div>
-            <span className="adm-link">Vedi tutti →</span>
           </div>
           <div className="adm-th" style={{ gridTemplateColumns: "12px 52px 90px 120px 1fr" }}>
             <div /><div>Orario</div><div>Portale</div><div>Tipo</div><div>Messaggio</div>

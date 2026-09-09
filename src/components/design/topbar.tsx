@@ -31,9 +31,14 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
         <span>{title}</span>
       </div>
       <div className="flex items-center gap-1.5">
-        <div
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("lavorai:palette"))}
+          aria-label="Cerca (⌘K)"
           className="flex items-center gap-2 rounded border px-2.5 py-1.5 hidden md:flex"
           style={{
+            cursor: "text",
+            textAlign: "left",
             minWidth: 260,
             background: "var(--bg-elev)",
             borderColor: "var(--border-ds)",
@@ -42,18 +47,9 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
           }}
         >
           <Icon name="search" size={15} />
-          <input
-            placeholder="Cerca candidature, aziende..."
-            style={{
-              border: "none",
-              outline: "none",
-              background: "transparent",
-              flex: 1,
-              color: "var(--fg)",
-              fontSize: 14.5,
-            }}
-          />
-        </div>
+          <span style={{ flex: 1, fontSize: 14.5, color: "var(--fg-subtle)" }}>Cerca candidature, aziende...</span>
+          <kbd style={{ fontSize: 11, color: "var(--fg-subtle)", border: "1px solid var(--border-ds)", borderRadius: 5, padding: "1px 5px" }}>⌘K</kbd>
+        </button>
         {actions}
         <ThemeToggle compact={false} />
       </div>

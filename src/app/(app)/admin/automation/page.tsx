@@ -124,7 +124,7 @@ export default async function AdminAutomationPage() {
       {/* 2 · Nudge */}
       <Section n={2} icon={<BellRing size={16} />} title="Nudge onboarding" sub="Email a utenti bloccati per completare lo step mancante (verifica → CV → preferenze → 1ª candidatura)." cols="minmax(0,1.3fr) minmax(0,1fr)">
         <div><AdminNudges embedded /></div>
-        <Side title="Statistiche nudges" when="ultimi 7 giorni" right={<span className="adm-btn sm" style={{ marginLeft: "auto" }}><History size={11} />Vedi storico</span>}>
+        <Side title="Statistiche nudges" when="ultimi 7 giorni">
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch" }}>
             <div style={{ display: "grid", gap: 8, alignContent: "start" }}>
               <KV k="Email inviate" v={<b>{nudges7d.length}</b>} />
@@ -153,7 +153,6 @@ export default async function AdminAutomationPage() {
         <div className="adm-card">
           <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 6 }}>
             <div className="adm-card-title" style={{ fontSize: 14 }}>Esempi di prompt</div>
-            <span className="adm-link">Vedi tutti →</span>
           </div>
           <div className="adm-card-body scroll">
             {PROMPTS.map((p) => (

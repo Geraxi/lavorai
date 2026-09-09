@@ -166,7 +166,6 @@ export default async function AdminJobsPage({ searchParams }: { searchParams?: P
           <div className="adm-card">
             <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 6 }}>
               <div className="adm-card-title">Annunci più recenti</div>
-              <span className="adm-link">Vedi tutti →</span>
             </div>
             <div className="adm-th" style={{ gridTemplateColumns: "1.4fr 1fr 100px 110px 90px" }}>
               <div>Titolo</div><div>Azienda</div><div>Fonte</div><div>Sede</div><div style={{ textAlign: "right" }}>Pubblicato</div>
@@ -228,7 +227,6 @@ export default async function AdminJobsPage({ searchParams }: { searchParams?: P
           <div className="adm-card">
             <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 4 }}>
               <div className="adm-card-title">Attività motore (ultime 24h)</div>
-              <span className="adm-link">Vedi tutte →</span>
             </div>
             <div className="adm-card-body scroll">
               <MotorRow c="hsl(var(--primary))" title="Sync completato" meta={newestJob?.source ?? "—"} when={fmtDT(newestJob?.cachedAt ?? null)} />

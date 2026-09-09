@@ -200,7 +200,6 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                 <div style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{selected.name ?? "—"}</div>
                 <span className={`adm-pill ${selected.emailVerified ? "good" : "warn"}`} style={{ marginTop: 5, padding: "3px 9px", fontSize: 10.5 }}><span className="dot" />{selected.emailVerified ? "Verificata" : "In attesa"}</span>
               </div>
-              <button type="button" className="adm-btn sm"><Download size={11} />Esporta</button>
               <X size={14} style={{ color: "var(--fg-subtle)" }} />
             </div>
 
@@ -217,7 +216,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                 <KV k="Registrato" v={fmt2(selected.createdAt)} />
                 <KV k="Verificato" v={fmt2(selected.emailVerified)} />
                 <KV k="Ultimo accesso" v={fmt2(selected.lastLoginAt)} />
-                <KV k="Piano" v={<span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><TierChip tier={selected.tier} /><span className="adm-btn sm">Cambia</span></span>} />
+                <KV k="Piano" v={<span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><TierChip tier={selected.tier} /></span>} />
                 <KV k="Abbonamento" v={<span className={`adm-pill ${live(selected) ? "good" : selected.subscriptionStatus ? "warn" : "neutral"}`} style={{ padding: "2px 8px", fontSize: 10.5 }}><span className="dot" />{selected.subscriptionStatus ?? "nessuno"}</span>} />
                 <KV k="Stripe" v={selected.stripeCustomerId ? <a href={`https://dashboard.stripe.com/customers/${selected.stripeCustomerId}`} target="_blank" rel="noreferrer" className="adm-link" style={{ fontSize: 11.5 }}>{selected.stripeCustomerId} ↗</a> : "—"} />
                 <KV k="Sorgente" v={source(selected.signupReferrer, selected.signupUtmSource)} />
@@ -293,7 +292,6 @@ function PSection({ title, children }: { title: string; children: React.ReactNod
     <div style={{ paddingTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--fg)" }}>{title}</div>
-        <span className="adm-btn sm">Modifica</span>
       </div>
       <div style={{ display: "grid", gap: 6 }}>{children}</div>
     </div>

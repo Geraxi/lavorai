@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -112,6 +112,17 @@ export default function ApplicationsPage() {
     })) ?? [];
 
   // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).
+
+  // Deep-link dall'Inbox / email: /applications?id=<applicationId> apre il dettaglio.
+  useEffect(() => {
+    if (selected || typeof window === "undefined") return;
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) return;
+    const row = realRows.find((r) => r.id === id);
+    if (row) setSelected(row);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realRows.length]);
+
   const allRows: Row[] = realRows;
   const filtered = allRows;
 
