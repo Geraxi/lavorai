@@ -87,7 +87,6 @@ export const metadata: Metadata = {
       "50 candidature/mese automatiche. CV riscritto per ogni annuncio. 3 gratis.",
   },
   robots: { index: true, follow: true },
-  icons: { icon: "/favicon.ico" },
 };
 
 export const viewport: Viewport = {
