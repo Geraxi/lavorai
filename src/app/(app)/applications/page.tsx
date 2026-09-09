@@ -83,8 +83,7 @@ export default function ApplicationsPage() {
   );
   const [selected, setSelected] = useState<Row | null>(null);
 
-  const realRows: Row[] =
-    data?.applications.map((a) => ({
+  const toRow = (a: ApiApplication): Row => ({
       id: a.id,
       company: a.job.company ?? "—",
       color: companyColor(a.job.company ?? a.job.title),
@@ -109,7 +108,8 @@ export default function ApplicationsPage() {
       backendStatus: a.status,
       viewedAt: a.viewedAt,
       submittedVia: a.submittedVia,
-    })) ?? [];
+    });
+  const realRows: Row[] = data?.applications.map(toRow) ?? [];
 
   // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).
 
@@ -118,10 +118,10 @@ export default function ApplicationsPage() {
     if (selected || typeof window === "undefined") return;
     const id = new URLSearchParams(window.location.search).get("id");
     if (!id) return;
-    const row = realRows.find((r) => r.id === id);
-    if (row) setSelected(row);
+    const hit = [...(data?.applications ?? []), ...(awaitingData?.applications ?? [])].find((a) => a.id === id);
+    if (hit) setSelected(toRow(hit));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [realRows.length]);
+  }, [data, awaitingData]);
 
   const allRows: Row[] = realRows;
   const filtered = allRows;
