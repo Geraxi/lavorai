@@ -118,7 +118,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 360px", gap: 12, minHeight: 0 }}>
         {/* Tabella */}
         <div className="adm-card" style={{ padding: "14px 16px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr repeat(4, 150px)", gap: 8, marginBottom: 12, flexShrink: 0 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(160px,1fr) repeat(4, auto)", gap: 8, marginBottom: 12, flexShrink: 0, alignItems: "center" }}>
             <div style={{ position: "relative" }}>
               <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--fg-subtle)" }} />
               <input type="search" placeholder="Cerca utenti, email o codice…" style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: 8, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", color: "var(--fg)", fontSize: 12.5, outline: "none" }} />
@@ -128,8 +128,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
             ))}
           </div>
 
-          <div className="adm-th" style={{ gridTemplateColumns: "20px minmax(240px,2.6fr) 100px 58px 84px 70px 74px 96px 80px 20px" }}>
-            <Box /><div>Utente</div><div>Stato</div><div>Piano</div><div>Onboarding</div><div>Auto-apply</div><div>Candidature</div><div>Ultimo accesso</div><div>Sorgente</div><div />
+          <div className="adm-th" style={{ gridTemplateColumns: "20px minmax(200px,2.4fr) minmax(88px,0.9fr) 60px minmax(80px,0.8fr) 64px 60px minmax(92px,1fr) minmax(64px,0.7fr) 20px" }}>
+            <Box /><div>Utente</div><div>Stato</div><div>Piano</div><div>Onboarding</div><div title="Auto-apply">Auto</div><div title="Candidature">Cand.</div><div title="Ultimo accesso">Accesso</div><div title="Sorgente">Fonte</div><div />
           </div>
 
           <div className="adm-card-body scroll">
@@ -138,7 +138,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               const sel = u.id === selected?.id;
               const step = onboarding(u);
               return (
-                <Link key={u.id} href={qs({ sel: u.id })} className="adm-tr" style={{ gridTemplateColumns: "20px minmax(240px,2.6fr) 100px 58px 84px 70px 74px 96px 80px 20px", padding: "9px 6px", textDecoration: "none", color: "inherit", background: sel ? "hsl(var(--primary)/0.07)" : "transparent", borderRadius: 8, margin: "0 -6px" }}>
+                <Link key={u.id} href={qs({ sel: u.id })} className="adm-tr" style={{ gridTemplateColumns: "20px minmax(200px,2.4fr) minmax(88px,0.9fr) 60px minmax(80px,0.8fr) 64px 60px minmax(92px,1fr) minmax(64px,0.7fr) 20px", padding: "9px 6px", textDecoration: "none", color: "inherit", background: sel ? "hsl(var(--primary)/0.07)" : "transparent", borderRadius: 8, margin: "0 -6px" }}>
                   <Box />
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                     <Avatar email={u.email} name={u.name} />
