@@ -17,8 +17,8 @@ export default function Icon() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0F1012",
-          borderRadius: 6,
+          background: "#34D399",
+          borderRadius: 7,
         }}
       >
         <svg
@@ -28,10 +28,10 @@ export default function Icon() {
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
-          <rect x="3" y="2" width="6" height="3" rx="0.4" fill="#FAFAF7" />
-          <rect x="3" y="6" width="6" height="4" rx="0.4" fill="#34D399" />
-          <rect x="3" y="11" width="6" height="3" rx="0.4" fill="#FAFAF7" />
-          <rect x="3" y="18" width="18" height="4" rx="0.4" fill="#FAFAF7" />
+          <rect x="3" y="2" width="6" height="3" rx="0.4" fill="#0F1012" />
+          <rect x="3" y="6" width="6" height="4" rx="0.4" fill="#FAFAF7" />
+          <rect x="3" y="11" width="6" height="3" rx="0.4" fill="#0F1012" />
+          <rect x="3" y="18" width="18" height="4" rx="0.4" fill="#0F1012" />
         </svg>
       </div>
     ),
