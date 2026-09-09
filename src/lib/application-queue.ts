@@ -22,6 +22,16 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
   const { resetClaim } = await import("@/lib/application-claim");
   await resetClaim(applicationId);
 
+  // Modalità consigliata in produzione: QUEUE_MODE=db. Il worker Railway
+  // fa polling su Postgres (status=queued, claim atomico) ogni 15s: non
+  // serve Redis, e soprattutto NON si passa dal fallback self-invoke su
+  // Vercel, dove Playwright non c'è e le candidature ATS finiscono in
+  // ready_to_apply senza invio.
+  if (process.env.QUEUE_MODE === "db") {
+    console.log(`[queue] queued for db-polling worker app=${applicationId}`);
+    return;
+  }
+
   if (process.env.REDIS_URL) {
     try {
       const { getApplicationsQueue } = await import("@/lib/bullmq-queue");
@@ -35,7 +45,11 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
       console.log(`[queue] enqueued via bullmq app=${applicationId}`);
       return;
     } catch (err) {
-      console.error("[queue] BullMQ enqueue failed, fallback in-process", err);
+      // Redis giù o rate-limited (Upstash free): il worker Railway fa
+      // comunque polling DB, quindi la candidatura resta "queued" e viene
+      // presa entro pochi secondi. Niente self-invoke su Vercel.
+      console.error("[queue] BullMQ enqueue failed, la candidatura resta in coda per il polling DB del worker", err instanceof Error ? err.message.split("\n")[0] : err);
+      return;
     }
   }
 
