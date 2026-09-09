@@ -5,6 +5,8 @@ import { ThemeScript } from "@/components/design/theme-script";
 import { UserPopup } from "@/components/user-popup";
 import { OnboardingBanner } from "@/components/onboarding-banner";
 import { UpgradePrompt } from "@/components/upgrade-prompt";
+import { TrialBanner } from "@/components/trial-banner";
+import { trialState } from "@/lib/billing";
 import { CoverageWarning } from "@/components/coverage-warning";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
@@ -34,6 +36,7 @@ export default async function AppLayout({
   }
 
   const tier = effectiveTier(user);
+  const trial = trialState(user);
 
   return (
     <>
@@ -52,9 +55,11 @@ export default async function AppLayout({
           userPlan:
             tier === "pro_plus"
               ? "Piano Pro+"
-              : tier === "pro"
-                ? "Piano Pro"
-                : "Piano Free",
+              : trial.status === "active"
+                ? `Prova Pro · ${trial.daysLeft} ${trial.daysLeft === 1 ? "giorno" : "giorni"}`
+                : tier === "pro"
+                  ? "Piano Pro"
+                  : "Solo visualizzazione",
           isAdmin: isAdmin(user.email),
         }}
       >
@@ -66,6 +71,7 @@ export default async function AppLayout({
         <CoverageWarning />
         {/* Prompt persistente upgrade Pro (solo Free tier, self-hides
             per Pro/Pro+/admin). Adatta il tono in base all'uso mensile. */}
+        <TrialBanner />
         <UpgradePrompt />
         {children}
       </AppShell>

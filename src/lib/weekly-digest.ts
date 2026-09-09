@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { isTestAccount } from "@/lib/admin";
+import { esc, renderBrandEmail } from "@/lib/email-brand";
 
 /**
  * Digest settimanale "le offerte che ti stai perdendo" per gli utenti Free.
@@ -131,10 +132,6 @@ export function pickMatches(pool: DigestJob[], roles: string[], locations: strin
   return scored.sort((a, b) => b.s - a.s).slice(0, 5).map((x) => x.j);
 }
 
-function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
 function renderDigest(
   u: { name: string | null; locale: string | null },
   roles: string[],
@@ -143,43 +140,42 @@ function renderDigest(
   const en = u.locale === "en";
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
   const first = u.name?.trim().split(/\s+/)[0];
-  const greet = first ? (en ? `Hi ${first},` : `Ciao ${first},`) : en ? "Hi," : "Ciao,";
+  const greeting = first ? (en ? `Hi ${first},` : `Ciao ${first},`) : undefined;
   const noRoles = roles.length === 0;
-
   const subject = noRoles
     ? en ? "Tell us what you're looking for and LavorAI applies for you" : "Dicci cosa cerchi e LavorAI si candida per te"
     : en
       ? `${jobs.length} new ${roles[0]} openings this week you haven't applied to`
       : `${jobs.length} nuove offerte "${roles[0]}" questa settimana a cui non ti sei candidato`;
-
-  const cta = `${site}/settings#billing`;
-  const items = jobs
+  const rows = jobs
     .map(
-      (j) => `<tr><td style="padding:10px 0;border-bottom:1px solid #E2E8F0;">
-  <a href="${esc(j.url)}" style="color:#0F172A;text-decoration:none;font-weight:600;font-size:14px;">${esc(j.title)}</a>
-  <div style="color:#64748B;font-size:12.5px;margin-top:2px;">${esc(j.company ?? "")}${j.location ? ` · ${esc(j.location)}` : ""}${j.remote ? (en ? " · Remote" : " · Remoto") : ""}</div>
+      (j) => `<tr><td style="padding:11px 0;border-top:1px solid #EEECE6;">
+  <a href="${esc(j.url)}" style="color:#0F1012;text-decoration:none;font-weight:600;font-size:14.5px;">${esc(j.title)}</a>
+  <div style="color:#8A8C90;font-size:12.5px;margin-top:2px;">${esc(j.company ?? "")}${j.location ? ` · ${esc(j.location)}` : ""}${j.remote ? (en ? " · Remote" : " · Remoto") : ""}</div>
 </td></tr>`,
     )
     .join("");
-
-  const body = noRoles
-    ? en
-      ? `<p>You signed up to LavorAI but haven't told us which roles you want. Add 1-3 roles and a city: from then on we find matching openings every day and prepare the application for you.</p><p><a href="${site}/preferences" style="display:inline-block;padding:11px 18px;background:#16A34A;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">Set my preferences</a></p>`
-      : `<p>Ti sei iscritto a LavorAI ma non ci hai ancora detto quali ruoli cerchi. Aggiungi 1-3 ruoli e una città: da lì in poi troviamo ogni giorno le offerte compatibili e prepariamo la candidatura al posto tuo.</p><p><a href="${site}/preferences" style="display:inline-block;padding:11px 18px;background:#16A34A;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">Imposta le preferenze</a></p>`
-    : en
-      ? `<p>This week ${jobs.length} openings matching <strong>${esc(roles.slice(0, 3).join(", "))}</strong> entered the pool. On the Free plan they sit there; with Pro, LavorAI applies to them for you, CV and cover letter included.</p>
-<table style="width:100%;border-collapse:collapse;margin:8px 0 18px;">${items}</table>
-<p><a href="${cta}" style="display:inline-block;padding:11px 18px;background:#16A34A;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">Try Pro free for 7 days</a></p>
-<p style="color:#64748B;font-size:12.5px;">Then €19.99/month, cancel anytime from Settings. Or apply to them one by one from <a href="${site}/jobs" style="color:#0F172A;">Jobs</a>.</p>`
-      : `<p>Questa settimana sono entrate nel pool ${jobs.length} offerte compatibili con <strong>${esc(roles.slice(0, 3).join(", "))}</strong>. Con il piano Free restano lì; con Pro, LavorAI si candida per te, CV e lettera inclusi.</p>
-<table style="width:100%;border-collapse:collapse;margin:8px 0 18px;">${items}</table>
-<p><a href="${cta}" style="display:inline-block;padding:11px 18px;background:#16A34A;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">Prova Pro gratis per 7 giorni</a></p>
-<p style="color:#64748B;font-size:12.5px;">Poi €19,99/mese, disdici quando vuoi dalle Impostazioni. Oppure candidati una per una da <a href="${site}/jobs" style="color:#0F172A;">Offerte</a>.</p>`;
-
-  const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0F172A;font-size:14.5px;line-height:1.6;">
-<p style="margin:0 0 12px;">${greet}</p>${body}
-<p style="color:#94A3B8;font-size:11.5px;margin-top:28px;">LavorAI · ${en ? "You receive this weekly digest because you have a Free account. Manage it from" : "Ricevi questo riepilogo settimanale perché hai un account Free. Gestiscilo da"} <a href="${site}/settings" style="color:#94A3B8;">${en ? "Settings" : "Impostazioni"}</a>.</p>
-</div>`;
-  const text = `${greet}\n\n${noRoles ? (en ? `Set your preferences: ${site}/preferences` : `Imposta le preferenze: ${site}/preferences`) : jobs.map((j) => `- ${j.title} · ${j.company ?? ""} ${j.url}`).join("\n") + `\n\n${en ? "Try Pro free for 7 days" : "Prova Pro gratis per 7 giorni"}: ${cta}`}`;
+  const { html, text } = renderBrandEmail({
+    locale: u.locale,
+    eyebrow: en ? "Weekly matches" : "Offerte della settimana",
+    preheader: noRoles ? undefined : en ? `${jobs.length} matches for ${roles[0]} entered the pool this week.` : `${jobs.length} offerte per ${roles[0]} entrate nel pool questa settimana.`,
+    title: noRoles
+      ? en ? "Tell us what you're looking for" : "Dicci cosa stai cercando"
+      : en ? `${jobs.length} openings match your profile this week` : `${jobs.length} offerte compatibili con il tuo profilo questa settimana`,
+    greeting,
+    paragraphs: noRoles
+      ? en
+        ? ["You signed up to LavorAI but haven't told us which roles you want. Add 1 to 3 roles and a city: from then on we find matching openings every day and prepare the application for you."]
+        : ["Ti sei iscritto a LavorAI ma non ci hai ancora detto quali ruoli cerchi. Aggiungi 1-3 ruoli e una città: da lì in poi troviamo ogni giorno le offerte compatibili e prepariamo la candidatura al posto tuo."]
+      : en
+        ? [`These entered the pool this week for <strong>${esc(roles.slice(0, 3).join(", "))}</strong>. In view-only mode they sit here; with Pro, LavorAI applies to them for you, CV and cover letter included.`]
+        : [`Sono entrate nel pool questa settimana per <strong>${esc(roles.slice(0, 3).join(", "))}</strong>. In sola visualizzazione restano qui; con Pro, LavorAI si candida per te, CV e lettera inclusi.`],
+    rawBlock: noRoles ? undefined : `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 22px;border-bottom:1px solid #EEECE6;">${rows}</table>`,
+    cta: noRoles
+      ? { label: en ? "Set my preferences" : "Imposta le preferenze", url: `${site}/preferences` }
+      : { label: en ? "Try Pro free for 7 days" : "Prova Pro gratis per 7 giorni", url: `${site}/settings#billing` },
+    secondary: noRoles ? undefined : { label: en ? "Or apply one by one from Jobs" : "Oppure candidati una per una da Offerte", url: `${site}/jobs` },
+    footnote: en ? "You receive this weekly digest because you have a view-only account. Manage it from Preferences." : "Ricevi questo riepilogo settimanale perché hai un account in sola visualizzazione. Gestiscilo dalle Preferenze.",
+  });
   return { subject, html, text };
 }

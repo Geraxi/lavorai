@@ -209,6 +209,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
       id: true,
       email: true,
       tier: true,
+      trialEndsAt: true,
       avoidCompanies: true,
       quotaResetAt: true,
       preferences: {
@@ -444,7 +445,7 @@ async function processUser(
   }
 
   // Paywall mensile (free = 3/mese; pro/pro+ = più alto)
-  const tier = effectiveTier({ tier: user.tier, email: user.email });
+  const tier = effectiveTier({ tier: user.tier, email: user.email, trialEndsAt: (user as { trialEndsAt?: Date | null }).trialEndsAt ?? null });
   const limits = getLimits(tier);
   if (limits.monthlyApplications !== Infinity) {
     const monthCount = await prisma.application.count({

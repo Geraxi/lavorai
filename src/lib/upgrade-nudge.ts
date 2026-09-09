@@ -44,7 +44,7 @@ export interface UpgradeCandidate {
  * in lib/billing.ts. Duplicato qui per evitare ciclo di dipendenza sulle
  * env di stripe che billing.ts richiede.
  */
-const FREE_MONTHLY_CAP = 3;
+const FREE_MONTHLY_CAP = 3; // storico: usato solo nei testi; i candidati in prova attiva vengono esclusi (vedi sotto)
 
 export async function findUpgradeCandidates(opts?: {
   onlyEmail?: string;
@@ -65,6 +65,8 @@ export async function findUpgradeCandidates(opts?: {
       : {
           tier: "free",
           createdAt: { lte: minAge }, // rimosso il floor 90gg: limit-hit vince
+          // In prova Pro attiva parlano le email di prova, non il nudge upgrade.
+          OR: [{ trialEndsAt: null }, { trialEndsAt: { lt: new Date() } }],
         },
     select: {
       id: true,

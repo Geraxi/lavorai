@@ -6,6 +6,7 @@ import { authLimiter } from "@/lib/rate-limit";
 import { validatePassword } from "@/lib/password-policy";
 import { checkOrigin } from "@/lib/csrf";
 import { sendVerificationEmail } from "@/lib/email-verification";
+import { sendTrialStartedEmail } from "@/lib/trial";
 
 export const runtime = "nodejs";
 
@@ -128,13 +129,17 @@ export async function POST(request: NextRequest) {
         signupUtmCampaign: attrib.c ?? null,
         signupLandingPath: attrib.p ?? null,
         signupSource: parsed.data.source ?? (parsed.data.protectedCategory ? "categorie_protette" : null),
+        // Prova Pro senza carta: 7 giorni dalla registrazione.
+        trialEndsAt: new Date(Date.now() + 7 * 86400_000),
         ...(parsed.data.protectedCategory ? { preferences: { create: { protectedCategory: true, autoApplyMode: "auto" } } } : {}),
       },
-      select: { id: true, email: true, locale: true },
+      select: { id: true, email: true, locale: true, name: true, trialEndsAt: true },
     });
 
     // Invia email di verifica (best-effort; non blocca signup se fallisce)
     await sendVerificationEmail(user.id, user.email, user.locale);
+    // Email "i tuoi 7 giorni di Pro iniziano adesso" (non blocca il signup).
+    sendTrialStartedEmail(user).catch((err) => console.error("[signup] trial email failed", err));
 
     return NextResponse.json({ ok: true, verifyRequired: true });
   } catch (err) {

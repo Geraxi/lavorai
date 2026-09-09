@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { effectiveTier, getLimits } from "@/lib/billing";
+import { effectiveTier, getLimits, trialState } from "@/lib/billing";
 import { CompanyLogo } from "@/components/design/company-logo";
 import { pickMatches } from "@/lib/weekly-digest";
 
@@ -48,7 +48,8 @@ export async function UpgradePrompt({
   const state: "cold" | "warning" | "blocked" =
     remaining === 0 ? "blocked" : ratio >= 0.5 ? "warning" : "cold";
 
-  const copy = COPY[state];
+  const trial = trialState(user);
+  const copy = trial.status === "ended" ? COPY.trialEnded : cap === 0 ? COPY.viewOnly : COPY[state];
   const isCompact = variant === "compact";
 
   // Upgrade "al momento del valore": quando è bloccato o quasi, mostra le
@@ -196,6 +197,16 @@ const COPY = {
       `Hai usato ${used}/${cap} candidature del mese — stai per finire`,
     body: "Ogni candidatura in più conta: più profili raggiunti = più colloqui. Con Pro passi a 50/mese e nessuna interruzione fino alla firma.",
     cta: "Prova Pro 7 giorni gratis",
+  },
+  viewOnly: {
+    title: (_used: number, _cap: number) => "Il tuo account è in sola visualizzazione",
+    body: "Vedi le offerte compatibili e le risposte, ma nessuna candidatura parte. Con Pro LavorAI si candida per te ogni giorno: 7 giorni gratis, poi €19,99/mese.",
+    cta: "Attiva Pro, 7 giorni gratis",
+  },
+  trialEnded: {
+    title: (_used: number, _cap: number) => "La prova Pro è finita: le candidature sono in pausa",
+    body: "Le offerte compatibili continuano ad arrivare e ricevi le risposte a ciò che è già stato inviato. Con Pro riparti esattamente da dove ti eri fermato: €19,99/mese, disdici quando vuoi.",
+    cta: "Riparti con Pro",
   },
   blocked: {
     title: (_used: number, cap: number) =>

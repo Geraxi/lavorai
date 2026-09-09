@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { isAdmin, isTestAccount } from "@/lib/admin";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { signOneClick } from "@/lib/one-click-token";
+import { renderBrandEmail } from "@/lib/email-brand";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -55,22 +56,21 @@ export async function POST(req: NextRequest) {
 function render(u: { name: string | null; locale: string | null }, waiting: number, link: string, site: string) {
   const en = u.locale === "en";
   const first = u.name?.trim().split(/\s+/)[0];
-  const greet = first ? (en ? `Hi ${first},` : `Ciao ${first},`) : en ? "Hi," : "Ciao,";
   const subject = waiting > 0
     ? en ? `${waiting} applications are ready and waiting for you` : `${waiting} candidature pronte ti stanno aspettando`
     : en ? "Let LavorAI apply for you every day" : "Lascia che LavorAI si candidi per te ogni giorno";
-  const btn = `<a href="${link}" style="display:inline-block;padding:12px 20px;background:#16A34A;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">${en ? "Turn on auto-apply" : "Attiva l'auto-apply"}</a>`;
-  const bodyIt = `<p>${greet}</p>
-<p>Il tuo account è in modalità <strong>con conferma</strong>: LavorAI trova le offerte e prepara la candidatura, ma non parte finché non torni a cliccare "Consenti". ${waiting > 0 ? `In questo momento hai <strong>${waiting} candidature pronte</strong> ferme in attesa.` : "Risultato: molte candidature restano ferme."}</p>
-<p>Con la modalità <strong>automatica</strong> LavorAI invia ogni giorno le candidature compatibili con il tuo profilo, con CV e lettera su misura, e ti avvisa via email di quello che ha fatto. Puoi tornare indietro in qualsiasi momento dalle Preferenze.</p>
-<p>${btn}</p>
-<p style="color:#64748B;font-size:12.5px;">Il link attiva la modalità automatica e fa ripartire subito le candidature in attesa. Se preferisci decidere una per una, non fare nulla: tutto resta com'è. Preferenze: <a href="${site}/preferences" style="color:#64748B;">${site}/preferences</a></p>`;
-  const bodyEn = `<p>${greet}</p>
-<p>Your account is in <strong>confirm mode</strong>: LavorAI finds the jobs and prepares the application, but nothing is sent until you come back and click "Allow". ${waiting > 0 ? `Right now <strong>${waiting} applications</strong> are ready and waiting.` : "Result: many applications never leave."}</p>
-<p>In <strong>automatic mode</strong> LavorAI applies every day to the jobs matching your profile, with a tailored CV and cover letter, and emails you a summary. You can switch back any time from Preferences.</p>
-<p>${btn}</p>
-<p style="color:#64748B;font-size:12.5px;">The link turns automatic mode on and releases the waiting applications. If you prefer to approve one by one, do nothing. Preferences: <a href="${site}/preferences" style="color:#64748B;">${site}/preferences</a></p>`;
-  const html = `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#0F172A;font-size:14.5px;line-height:1.6;">${en ? bodyEn : bodyIt}</div>`;
-  const text = `${greet}\n\n${en ? "Turn on auto-apply" : "Attiva l'auto-apply"}: ${link}`;
+  const { html, text } = renderBrandEmail({
+    locale: u.locale,
+    eyebrow: en ? "Auto-apply" : "Auto-apply",
+    preheader: en ? "One click: automatic mode on, waiting applications released." : "Un clic: modalità automatica attiva, candidature in attesa rilasciate.",
+    title: waiting > 0 ? (en ? `${waiting} applications are waiting for your click` : `${waiting} candidature aspettano solo un tuo clic`) : en ? "Let LavorAI apply for you every day" : "Lascia che LavorAI si candidi per te ogni giorno",
+    greeting: first ? (en ? `Hi ${first},` : `Ciao ${first},`) : undefined,
+    paragraphs: en
+      ? [`Your account is in <strong>confirm mode</strong>: LavorAI finds the jobs and prepares the application, but nothing is sent until you come back and click "Allow".${waiting > 0 ? ` Right now <strong>${waiting} ${waiting === 1 ? "application is" : "applications are"}</strong> ready and waiting.` : ""}`, "In <strong>automatic mode</strong> LavorAI applies every day to the jobs matching your profile, with a tailored CV and cover letter, and emails you a summary. You can switch back any time from Preferences."]
+      : [`Il tuo account è in modalità <strong>con conferma</strong>: LavorAI trova le offerte e prepara la candidatura, ma non parte finché non torni a cliccare "Consenti".${waiting > 0 ? ` In questo momento hai <strong>${waiting} ${waiting === 1 ? "candidatura pronta" : "candidature pronte"}</strong> ferme in attesa.` : ""}`, "Con la modalità <strong>automatica</strong> LavorAI invia ogni giorno le candidature compatibili con il tuo profilo, con CV e lettera su misura, e ti avvisa via email di quello che ha fatto. Puoi tornare indietro in qualsiasi momento dalle Preferenze."],
+    cta: { label: en ? "Turn on auto-apply" : "Attiva l'auto-apply", url: link },
+    secondary: { label: en ? "Review preferences first" : "Rivedi prima le preferenze", url: `${site}/preferences` },
+    footnote: en ? "The link turns automatic mode on and releases the waiting applications. If you prefer to approve one by one, do nothing: everything stays as it is." : "Il link attiva la modalità automatica e fa ripartire subito le candidature in attesa. Se preferisci decidere una per una, non fare nulla: tutto resta com'è.",
+  });
   return { subject, html, text };
 }

@@ -88,6 +88,10 @@ export type EmailKind =
   | "upgrade_nudge"
   | "weekly_digest"
   | "auto_apply_invite"
+  | "trial_started"
+  | "trial_granted"
+  | "trial_ending"
+  | "trial_ended"
   | "founder_alert"
   | "other";
 

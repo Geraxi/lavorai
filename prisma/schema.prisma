@@ -122,6 +122,8 @@ model User {
   suspendedAt      DateTime?
   /// Prova Pro 7 giorni già usata (una sola per utente).
   proTrialUsedAt   DateTime?
+  /// Prova Pro senza carta: fino a questa data l'utente Free è trattato come Pro.
+  trialEndsAt      DateTime?
   /// Mesi gratis maturati dal referral, da applicare al prossimo checkout.
   referralCredits  Int       @default(0)
   /// Il referral è già stato premiato (per questo utente "invitato").

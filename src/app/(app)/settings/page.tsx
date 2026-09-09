@@ -8,7 +8,7 @@ import {
   SectionHead,
 } from "@/components/design/section-card";
 import { getCurrentUser } from "@/lib/session";
-import { TIERS, effectiveTier } from "@/lib/billing";
+import { TIERS, effectiveTier, trialState } from "@/lib/billing";
 import { SubscriptionManager } from "@/components/subscription-manager";
 import {
   SubscriptionActions,
@@ -29,6 +29,7 @@ export default async function SettingsPage() {
 
   const tier = effectiveTier(user);
   const cfg = TIERS[tier];
+  const trial = trialState(user);
   const me = await prisma.user.findUnique({
     where: { id: user.id },
     select: { passwordHash: true },
@@ -105,7 +106,7 @@ export default async function SettingsPage() {
             <SectionHead
               icon={<Icon name="zap" size={14} />}
               title="Piano"
-              actions={<span className="ds-chip ds-chip-green">{cfg.name}</span>}
+              actions={<span className="ds-chip ds-chip-green">{trial.status === "active" ? "Pro · prova" : cfg.name}</span>}
             />
             <SectionBody>
               <div className="flex items-start justify-between gap-4">
@@ -127,7 +128,11 @@ export default async function SettingsPage() {
                       marginTop: 4,
                     }}
                   >
-                    {cfg.tagline}
+                    {trial.status === "active" && trial.endsAt
+                      ? `Prova gratuita attiva fino al ${trial.endsAt.toLocaleDateString("it-IT", { day: "numeric", month: "long" })}: candidature automatiche, CV e lettera su misura. Nessuna carta registrata. Alla scadenza l'account passa in sola visualizzazione.`
+                      : trial.status === "ended"
+                        ? "La prova Pro è terminata: vedi offerte e risposte, ma nessuna candidatura viene inviata. Con Pro riparti da dove ti eri fermato."
+                        : cfg.tagline}
                   </p>
                   {user.subscriptionStatus &&
                     user.subscriptionStatus !== "active" && (
@@ -147,7 +152,7 @@ export default async function SettingsPage() {
                 {user.stripeSubscriptionId ? (
                   <SubscriptionManager planName={cfg.name} />
                 ) : (
-                  <SubscriptionActions tier={tier} hasStripe={false} />
+                  <SubscriptionActions tier={trial.status === "active" ? "free" : tier} hasStripe={false} />
                 )}
               </div>
             </SectionBody>

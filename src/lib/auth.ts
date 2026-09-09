@@ -189,12 +189,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             subscriptionStatus: true,
             email: true,
             name: true,
+            trialEndsAt: true,
           },
         });
         if (dbUser) {
           token.tier = effectiveTier({
             tier: dbUser.tier,
             email: dbUser.email,
+            trialEndsAt: dbUser.trialEndsAt,
           });
           token.subscriptionStatus = dbUser.subscriptionStatus ?? null;
           if (dbUser.email) token.email = dbUser.email;

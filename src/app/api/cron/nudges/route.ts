@@ -7,6 +7,7 @@ import { runCronSelfHeal } from "@/lib/cron-self-heal";
 import { runNoReplyFollowups } from "@/lib/no-reply-followup";
 import { runDailySummary } from "@/lib/daily-summary";
 import { runWeeklyDigest } from "@/lib/weekly-digest";
+import { runTrialNudges } from "@/lib/trial";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -42,12 +43,13 @@ export async function GET(request: NextRequest) {
   // 4. Nudges + follow-up "no reply yet" per candidature silenti da >3gg
   //    + daily summary a ogni utente attivo nelle 24h (copre il gap
   //    "auto mode + 0 success" dove l'utente prima non riceveva nulla).
-  const [onboarding, upgrade, noReply, dailySummary, weeklyDigest] = await Promise.all([
+  const [onboarding, upgrade, noReply, dailySummary, weeklyDigest, trial] = await Promise.all([
     runOnboardingNudges({}).catch((err) => ({ error: String(err) })),
     runUpgradeNudges({}).catch((err) => ({ error: String(err) })),
     runNoReplyFollowups({}).catch((err) => ({ error: String(err) })),
     runDailySummary({}).catch((err) => ({ error: String(err) })),
     runWeeklyDigest({}).catch((err) => ({ error: String(err) })),
+    runTrialNudges({}).catch((err) => ({ error: String(err) })),
   ]);
   return NextResponse.json({
     ok: true,
@@ -60,5 +62,6 @@ export async function GET(request: NextRequest) {
     noReply,
     dailySummary,
     weeklyDigest,
+    trial,
   });
 }

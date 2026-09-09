@@ -31,7 +31,7 @@ export async function GET() {
     return NextResponse.json({ error: "auth_required" }, { status: 401 });
   }
 
-  const tier = effectiveTier({ tier: user.tier, email: user.email });
+  const tier = effectiveTier({ tier: user.tier, email: user.email, trialEndsAt: (user as { trialEndsAt?: Date | null }).trialEndsAt ?? null });
 
   // Prefs
   const prefs = await prisma.userPreferences.findUnique({

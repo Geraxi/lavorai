@@ -46,8 +46,8 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 0,
     priceDisplay: "€0",
     priceSuffix: "",
-    tagline: "Prova il sistema. Vedi le candidature partire da sole.",
-    monthlyApplications: 3,
+    tagline: "7 giorni di Pro completo, senza carta. Poi resti in sola visualizzazione: offerte e risposte sì, invii no.",
+    monthlyApplications: 0,
     portals: 0,
     coverLetter: "basic",
     analytics: "none",
@@ -55,14 +55,14 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasFounderCoach: false,
     hasInterviewCopilot: false,
     features: [
-      "3 candidature totali",
-      "CV optimization AI",
-      "Cover letter generata",
-      "Formato DOCX",
-      "Supporto via community",
+      "7 giorni di Pro completo, nessuna carta",
+      "Poi: offerte compatibili ogni giorno",
+      "Risposte dei recruiter nella Inbox",
+      "Analisi ATS del CV",
+      "Nessun invio automatico dopo la prova",
     ],
     stripePriceIdEnv: null,
-    cta: "Inizia gratis",
+    cta: "Prova Pro 7 giorni gratis",
   },
   pro: {
     id: "pro",
@@ -205,9 +205,25 @@ export function isLifetimeProPlus(email: string | null | undefined): boolean {
 export function effectiveTier(user: {
   tier?: string | null;
   email?: string | null;
+  trialEndsAt?: Date | string | null;
 }): Tier {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
-  return normalizeTier(user.tier);
+  const base = normalizeTier(user.tier);
+  // Prova Pro senza carta (7 giorni dal signup): Free → Pro fino a scadenza.
+  if (base === "free" && user.trialEndsAt && new Date(user.trialEndsAt).getTime() > Date.now()) return "pro";
+  return base;
+}
+
+/** Stato della prova gratuita per UI/email. */
+export function trialState(user: { tier?: string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null }): {
+  status: "none" | "active" | "ended";
+  endsAt: Date | null;
+  daysLeft: number;
+} {
+  if (!user.trialEndsAt || normalizeTier(user.tier) !== "free" || user.stripeSubscriptionId) return { status: "none", endsAt: null, daysLeft: 0 };
+  const endsAt = new Date(user.trialEndsAt);
+  const msLeft = endsAt.getTime() - Date.now();
+  return { status: msLeft > 0 ? "active" : "ended", endsAt, daysLeft: Math.max(0, Math.ceil(msLeft / 86400_000)) };
 }
 
 /**
