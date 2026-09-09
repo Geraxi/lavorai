@@ -1788,6 +1788,15 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   }
   const profile = rowToProfile(profileRow);
 
+  // Email candidato nei form ATS: se l'inbound è configurato
+  // (INBOUND_EMAIL_DOMAIN), usiamo l'alias reply+<appId>@inbound così le
+  // conferme ATS e le risposte dei recruiter passano da LavorAI (Inbox,
+  // stato "risposta/colloquio") e vengono inoltrate all'utente. Senza
+  // inbound, tutto va direttamente all'utente e non possiamo misurare nulla.
+  const inboundAlias = process.env.INBOUND_ROUTE_ATS_EMAIL === "false" ? null : inboundReplyAddress(applicationId);
+  const formEmail = inboundAlias ?? input.userEmail;
+  if (inboundAlias) profile.email = inboundAlias;
+
   // Scarica i file localmente se storage remoto (Blob/Supabase)
   const [cvLocalPath, clLocalPath] = await Promise.all([
     ensureLocalPath(cvPath, "cv.docx"),
@@ -1806,7 +1815,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     const page = await context.newPage();
     const outcome = await adapter.apply(page, {
       profile,
-      userEmail: input.userEmail,
+      userEmail: formEmail,
       cvLocalPath,
       clLocalPath,
       coverLetterText: input.coverLetterText,

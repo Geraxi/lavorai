@@ -66,10 +66,14 @@ const MAX_BODY = 8000;
  * Mappa l'email all'application via l'indirizzo reply+<appId>@inbound,
  * la classifica, la salva, aggiorna lo status e la inoltra all'utente.
  */
-async function handleInboundReply(data: ResendEvent["data"]): Promise<void> {
+async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
+  let data = dataIn;
   const toAddr = firstAddress(data.to);
   const appId = applicationIdFromInboundAddress(toAddr);
-  if (!appId) return; // non è una reply mappabile — ignora
+  if (!appId) {
+    console.warn(`[webhook/resend] inbound a indirizzo non mappabile: ${toAddr ?? "?"}`);
+    return;
+  }
 
   const app = await prisma.application.findUnique({
     where: { id: appId },
@@ -83,6 +87,24 @@ async function handleInboundReply(data: ResendEvent["data"]): Promise<void> {
   if (!app) {
     console.warn(`[webhook/resend] inbound reply per app inesistente: ${appId}`);
     return;
+  }
+
+  // Il webhook `email.received` di Resend porta solo i metadati (from, to,
+  // subject, email_id): il corpo va letto dall'API Receiving.
+  if (!data.text && !data.html && data.email_id && process.env.RESEND_API_KEY) {
+    try {
+      const r = await fetch(`https://api.resend.com/emails/receiving/${data.email_id}`, {
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+      });
+      if (r.ok) {
+        const full = (await r.json()) as { text?: string; html?: string; subject?: string; from?: string };
+        data = { ...data, text: full.text, html: full.html, subject: data.subject ?? full.subject, from: data.from ?? full.from };
+      } else {
+        console.warn(`[webhook/resend] receiving fetch ${r.status} for ${data.email_id}`);
+      }
+    } catch (err) {
+      console.warn("[webhook/resend] receiving fetch failed", err);
+    }
   }
 
   const from = data.from ?? "sconosciuto";
@@ -154,12 +176,36 @@ async function handleInboundReply(data: ResendEvent["data"]): Promise<void> {
   }
 }
 
-function verify(signature: string | null, rawBody: string): boolean {
+/**
+ * Verifica firma Resend. Resend usa il formato Svix: header `svix-id`,
+ * `svix-timestamp`, `svix-signature` ("v1,<base64>"), HMAC-SHA256 con la
+ * chiave base64 dopo il prefisso "whsec_" su "<id>.<timestamp>.<body>".
+ * Manteniamo anche il vecchio formato hex sul solo body per compatibilità.
+ */
+function verify(req: NextRequest, rawBody: string): boolean {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
   if (!secret) return true; // in dev se non settato, accetta
+  const svixId = req.headers.get("svix-id");
+  const svixTs = req.headers.get("svix-timestamp");
+  const svixSig = req.headers.get("svix-signature");
+  if (svixId && svixTs && svixSig) {
+    const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+    const expected = createHmac("sha256", key).update(`${svixId}.${svixTs}.${rawBody}`).digest("base64");
+    const ok = svixSig.split(/\s+/).some((part) => {
+      const [, sig] = part.split(",");
+      if (!sig || sig.length !== expected.length) return false;
+      try { return timingSafeEqual(Buffer.from(sig), Buffer.from(expected)); } catch { return false; }
+    });
+    if (ok) {
+      // anti-replay: 5 minuti
+      const age = Math.abs(Date.now() / 1000 - Number(svixTs));
+      return Number.isFinite(age) && age < 300;
+    }
+    return false;
+  }
+  const signature = req.headers.get("resend-signature") ?? req.headers.get("x-resend-signature");
   if (!signature) return false;
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  // signature format "sha256=<hex>" o diretto — gestiamo entrambi
   const got = signature.replace(/^sha256=/, "");
   if (got.length !== expected.length) return false;
   try {
@@ -189,12 +235,8 @@ function appIdFromEvent(data: ResendEvent["data"]): string | null {
 
 export async function POST(request: NextRequest) {
   const raw = await request.text();
-  const signature =
-    request.headers.get("resend-signature") ??
-    request.headers.get("x-resend-signature") ??
-    request.headers.get("svix-signature");
-
-  if (!verify(signature, raw)) {
+  if (!verify(request, raw)) {
+    console.warn("[webhook/resend] bad signature");
     return NextResponse.json({ error: "bad_signature" }, { status: 401 });
   }
 
