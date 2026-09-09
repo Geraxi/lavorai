@@ -405,3 +405,79 @@ export const SMARTRECRUITERS_COMPANIES: AtsCompany[] = [
   { slug: "UniCredit", name: "UniCredit", country: "IT" },
   { slug: "IntesaSanpaolo", name: "Intesa Sanpaolo", country: "IT" },
 ];
+
+/**
+ * Tenant seed per i nuovi feed pubblici. Uno slug sbagliato costa una 404
+ * silenziosa: la lista viene integrata a ogni sync dalla discovery
+ * automatica (tenant-discovery.ts) sugli URL già in pool.
+ */
+export const RECRUITEE_COMPANIES: AtsCompany[] = [
+  { slug: "bunq", name: "bunq", country: "NL" },
+  { slug: "jobandtalent", name: "Job&Talent", country: "ES" },
+  { slug: "docplanner", name: "Docplanner", country: "PL" },
+  { slug: "mollie", name: "Mollie", country: "NL" },
+  { slug: "sendcloud", name: "Sendcloud", country: "NL" },
+  { slug: "growens", name: "Growens", country: "IT" },
+  { slug: "italiaonline", name: "Italiaonline", country: "IT" },
+  { slug: "subito", name: "Subito", country: "IT" },
+  { slug: "musement", name: "Musement", country: "IT" },
+  { slug: "casavo", name: "Casavo", country: "IT" },
+  { slug: "tiledesk", name: "Tiledesk", country: "IT" },
+];
+
+export const PERSONIO_COMPANIES: AtsCompany[] = [
+  { slug: "cycle", name: "CYCLE", country: "DE" },
+  { slug: "pitch", name: "Pitch", country: "DE" },
+  { slug: "scalapay", name: "Scalapay", country: "IT" },
+  { slug: "freeda", name: "Freeda", country: "IT" },
+  { slug: "genenta", name: "Genenta", country: "IT" },
+  { slug: "cortilia", name: "Cortilia", country: "IT" },
+  { slug: "everli", name: "Everli", country: "IT" },
+  { slug: "milkman", name: "Milkman", country: "IT" },
+  { slug: "wallife", name: "Wallife", country: "IT" },
+  { slug: "conio", name: "Conio", country: "IT" },
+  { slug: "fiscozen", name: "Fiscozen", country: "IT" },
+  { slug: "jointly", name: "Jointly", country: "IT" },
+  { slug: "translated", name: "Translated", country: "IT" },
+  { slug: "planet-farms", name: "Planet Farms", country: "IT" },
+  { slug: "trustpilot", name: "Trustpilot", country: "DK" },
+  { slug: "gorillas", name: "Gorillas", country: "DE" },
+  { slug: "tier", name: "TIER Mobility", country: "DE" },
+  { slug: "flixbus", name: "FlixBus", country: "DE" },
+  { slug: "contentful", name: "Contentful", country: "DE" },
+  { slug: "forto", name: "Forto", country: "DE" },
+  { slug: "sennder", name: "sennder", country: "DE" },
+];
+
+export const TEAMTAILOR_COMPANIES: AtsCompany[] = [
+  { slug: "career.teamtailor.com", name: "Teamtailor", country: "SE" },
+  { slug: "qonto", name: "Qonto", country: "FR" },
+  { slug: "bolt", name: "Bolt", country: "EE" },
+  { slug: "einride", name: "Einride", country: "SE" },
+  { slug: "mentimeter", name: "Mentimeter", country: "SE" },
+  { slug: "tink", name: "Tink", country: "SE" },
+  { slug: "voi", name: "Voi", country: "SE" },
+  { slug: "epidemicsound", name: "Epidemic Sound", country: "SE" },
+  { slug: "trustly", name: "Trustly", country: "SE" },
+  { slug: "wolt", name: "Wolt", country: "FI" },
+  { slug: "toogoodtogo", name: "Too Good To Go", country: "DK" },
+  { slug: "pleo", name: "Pleo", country: "DK" },
+  { slug: "italiantech", name: "Italian Tech", country: "IT" },
+  { slug: "lastminute", name: "lastminute.com", country: "IT" },
+  { slug: "nozomi-networks", name: "Nozomi Networks", country: "IT" },
+  { slug: "esselunga", name: "Esselunga", country: "IT" },
+  { slug: "nexi", name: "Nexi", country: "IT" },
+];
+
+export const BAMBOOHR_COMPANIES: AtsCompany[] = [
+  { slug: "zapier", name: "Zapier", country: "US" },
+  { slug: "buffer", name: "Buffer", country: "US" },
+  { slug: "hotjar", name: "Hotjar", country: "MT" },
+  { slug: "typeform", name: "Typeform", country: "ES" },
+  { slug: "prezly", name: "Prezly", country: "BE" },
+  { slug: "userlane", name: "Userlane", country: "DE" },
+  { slug: "italist", name: "Italist", country: "IT" },
+  { slug: "yoox", name: "YOOX", country: "IT" },
+  { slug: "doctolib", name: "Doctolib", country: "FR" },
+  { slug: "spendesk", name: "Spendesk", country: "FR" },
+];

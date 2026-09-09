@@ -486,6 +486,10 @@ async function processUser(
           "ashby",
           "smartrecruiters",
           "linkedin",
+          "recruitee",
+          "personio",
+          "teamtailor",
+          "bamboohr",
         ],
       },
       // URL canoniche vanilla: gli adapter Playwright funzionano solo
@@ -501,6 +505,12 @@ async function processUser(
         { url: { contains: "ashbyhq.com" } },
         { url: { contains: "jobs.smartrecruiters.com" } },
         { url: { contains: "careers.smartrecruiters.com" } },
+        { url: { contains: ".recruitee.com" } },
+        { url: { contains: "/o/" } },
+        { url: { contains: "jobs.personio." } },
+        { url: { contains: ".teamtailor.com" } },
+        { url: { contains: "/jobs/" } },
+        { url: { contains: ".bamboohr.com/careers/" } },
       ],
       // Match title largo: per ogni ruolo, title deve contenere TUTTI
       // i token significativi (≥3 char). Es: "Product Designer" matcha
@@ -983,6 +993,10 @@ function portalOf(url: string): string {
   if (u.includes("workable.com")) return "workable";
   if (u.includes("ashbyhq.com")) return "ashby";
   if (u.includes("smartrecruiters.com")) return "smartrecruiters";
+  if (u.includes("recruitee.com") || /\/o\/[^/]+/.test(u)) return "recruitee";
+  if (u.includes("personio.")) return "personio";
+  if (u.includes("teamtailor.com")) return "teamtailor";
+  if (u.includes("bamboohr.com")) return "bamboohr";
   if (u.includes("linkedin")) return "linkedin";
   if (u.includes("indeed")) return "indeed";
   if (u.includes("infojobs")) return "infojobs";

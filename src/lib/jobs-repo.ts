@@ -157,7 +157,13 @@ function sourceRank(source: string): number {
     case "workable":
     case "ashby":
     case "smartrecruiters":
+    case "recruitee":
+    case "personio":
+    case "teamtailor":
+    case "bamboohr":
       return 3; // submit diretto via adapter
+    case "eures":
+      return 2; // fonte ufficiale, link-out
     case "linkedin":
       return 2;
     case "adzuna":

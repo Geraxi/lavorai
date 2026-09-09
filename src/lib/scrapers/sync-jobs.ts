@@ -4,6 +4,12 @@ import { fetchLeverMulti } from "./lever";
 import { fetchAshbyMulti } from "./ashby";
 import { fetchSmartRecruitersMulti } from "./smartrecruiters";
 import { fetchWorkableMulti } from "./workable";
+import { fetchRecruiteeMulti } from "./recruitee";
+import { fetchPersonioMulti } from "./personio";
+import { fetchTeamtailorMulti } from "./teamtailor";
+import { fetchBambooMulti } from "./bamboohr";
+import { fetchEuresMulti } from "./eures";
+import { discoverTenantsFromPool } from "./tenant-discovery";
 import { fetchDemandJobs } from "./demand-queries";
 import {
   fetchLinkedinViaApify,
@@ -15,6 +21,10 @@ import {
   ASHBY_COMPANIES,
   SMARTRECRUITERS_COMPANIES,
   WORKABLE_COMPANIES,
+  RECRUITEE_COMPANIES,
+  PERSONIO_COMPANIES,
+  TEAMTAILOR_COMPANIES,
+  BAMBOOHR_COMPANIES,
 } from "./ats-companies";
 import type { JobListItem } from "@/lib/adzuna";
 
@@ -34,12 +44,23 @@ export async function syncAtsJobs(): Promise<{
   linkedin: number;
   demand: number;
   demandQueries: number;
+  recruitee: number;
+  personio: number;
+  teamtailor: number;
+  bamboohr: number;
+  eures: number;
   total: number;
 }> {
   console.log(
     "[sync-jobs] starting Greenhouse + Lever + Ashby + SmartRecruiters + Workable + LinkedIn(Apify) + Demand(Adzuna) fetch...",
   );
-  const [gh, lv, ash, sr, wk, li, demand] = await Promise.all([
+  // Tenant scoperti dagli URL già in pool + seed curati (dedup).
+  const disc = await discoverTenantsFromPool();
+  const merge = (seed: Array<{ slug: string; name?: string }>, found: string[]) => {
+    const seen = new Set(seed.map((c) => c.slug.toLowerCase()));
+    return [...seed, ...found.filter((s) => !seen.has(s.toLowerCase())).map((slug) => ({ slug }))];
+  };
+  const [gh, lv, ash, sr, wk, li, demand, rc, pe, tt, bh, eu] = await Promise.all([
     fetchGreenhouseMulti(GREENHOUSE_COMPANIES, 4),
     fetchLeverMulti(LEVER_COMPANIES, 4),
     fetchAshbyMulti(ASHBY_COMPANIES, 4),
@@ -50,12 +71,18 @@ export async function syncAtsJobs(): Promise<{
     // hanno selezionato (es. "Meteorologo", "Analista Climatico"), non
     // solo i verticali design/dev hard-coded.
     fetchDemandJobs(),
+    fetchRecruiteeMulti(merge(RECRUITEE_COMPANIES, disc.recruitee), 4),
+    fetchPersonioMulti(merge(PERSONIO_COMPANIES, disc.personio), 4),
+    fetchTeamtailorMulti(merge(TEAMTAILOR_COMPANIES, disc.teamtailor), 4),
+    fetchBambooMulti(merge(BAMBOOHR_COMPANIES, disc.bamboohr), 3),
+    fetchEuresMulti(),
   ]);
+  console.log(`[sync-jobs] recruitee=${rc.length} personio=${pe.length} teamtailor=${tt.length} bamboohr=${bh.length} eures=${eu.length} (tenant scoperti: ${Object.values(disc).flat().length})`);
   console.log(
     `[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}  ashby=${ash.length}  smartrec=${sr.length}  workable=${wk.length}  linkedin=${li.length}  demand=${demand.items.length} (${demand.queries} queries)`,
   );
 
-  const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...li, ...demand.items];
+  const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...li, ...demand.items, ...rc, ...pe, ...tt, ...bh, ...eu];
   const upserted = await upsertJobs(all);
   await closeMissingJobs(all);
   return {
@@ -67,6 +94,11 @@ export async function syncAtsJobs(): Promise<{
     linkedin: li.length,
     demand: demand.items.length,
     demandQueries: demand.queries,
+    recruitee: rc.length,
+    personio: pe.length,
+    teamtailor: tt.length,
+    bamboohr: bh.length,
+    eures: eu.length,
     total: upserted,
   };
 }
@@ -77,7 +109,7 @@ export async function syncAtsJobs(): Promise<{
  * Chiudiamo solo board per cui abbiamo ricevuto almeno 1 job (evita di
  * chiudere tutto quando l'API risponde vuoto/404 per un glitch).
  */
-const FULL_BOARD_SOURCES = new Set(["greenhouse", "lever", "ashby", "smartrecruiters", "workable"]);
+const FULL_BOARD_SOURCES = new Set(["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "recruitee", "personio", "teamtailor", "bamboohr"]);
 async function closeMissingJobs(items: JobListItem[]): Promise<number> {
   const seen = new Map<string, Set<string>>();
   for (const j of items) {

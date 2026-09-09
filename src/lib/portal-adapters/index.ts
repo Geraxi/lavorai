@@ -4,6 +4,10 @@ import { leverAdapter } from "./lever";
 import { workableAdapter } from "./workable";
 import { ashbyAdapter } from "./ashby";
 import { smartrecruitersAdapter } from "./smartrecruiters";
+import { recruiteeAdapter } from "./recruitee";
+import { personioAdapter } from "./personio";
+import { teamtailorAdapter } from "./teamtailor";
+import { bamboohrAdapter } from "./bamboohr";
 
 /**
  * Registry di tutti i portali supportati. Aggiungere un nuovo ATS =
@@ -19,6 +23,10 @@ export const PORTAL_ADAPTERS: PortalAdapter[] = [
   workableAdapter,
   ashbyAdapter,
   smartrecruitersAdapter,
+  recruiteeAdapter,
+  personioAdapter,
+  teamtailorAdapter,
+  bamboohrAdapter,
 ];
 
 export function findPortalAdapter(url: string): PortalAdapter | null {

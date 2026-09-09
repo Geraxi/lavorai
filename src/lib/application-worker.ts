@@ -363,6 +363,11 @@ export async function processApplication(
       (app.user.preferences as { applicationAnswersJson?: string } | null)
         ?.applicationAnswersJson ?? null,
     );
+    // Aspettativa salariale: se l'utente non l'ha scritta nelle risposte ATS,
+    // usiamo la RAL minima delle preferenze (in k€) → i campi numerici
+    // "salary expectation" non restano bloccanti.
+    const prefSalaryK = (app.user.preferences as { salaryMin?: number } | null)?.salaryMin ?? 0;
+    if (!userAnswers.salaryExpectationEur && prefSalaryK > 0) userAnswers.salaryExpectationEur = prefSalaryK * 1000;
     // Risposte riutilizzabili già date dall'utente a domande di form
     // precedenti — riempiono i campi custom senza ridisturbarlo.
     const storedRows = await prisma.userAnswer.findMany({
@@ -632,7 +637,7 @@ export async function processApplication(
   // job (diversa dall'aggregatore Adzuna), puntiamo l'utente lì in manuale;
   // al prossimo ciclo l'auto-apply userà direttamente quella copia.
   if (!app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
-    const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters"];
+    const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr"];
     const isAtsSourceJob = ATS_SOURCES.includes(app.job.source);
 
     if (isAtsSourceJob) {

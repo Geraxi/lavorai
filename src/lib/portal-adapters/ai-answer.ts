@@ -100,6 +100,8 @@ interface FieldDescriptor {
   label: string;
   kind: "text" | "textarea" | "select" | "react-select" | "checkbox" | "radio";
   options?: string[];
+  /** type HTML dell'input (number, url, tel…): guida il formato della risposta. */
+  inputType?: string;
 }
 
 interface AiAnswer {
@@ -359,7 +361,7 @@ function lastResortAnswer(f: FieldDescriptor, ctx: CandidateContext): string | n
     return pickOption(f.options, [/prefer not|decline|rather not|preferisco non/i, /^(no|n)\b/i, /none|nessun|n\/a|not applicable/i, /other|altro/i, /^(?!select|scegli|choose|--|—)/i]);
   }
   if (f.kind === "checkbox") return "Yes";
-  if (f.kind === "text") return "N/A";
+  if (f.kind === "text") return f.inputType === "number" ? null : "N/A";
   if (f.kind === "textarea") return "Happy to discuss in an interview.";
   return null;
 }
@@ -403,6 +405,7 @@ function ruleAnswerForField(f: FieldDescriptor, ctx: CandidateContext, autonomou
   // Stipendio: numerico solo se lo abbiamo, altrimenti "da concordare" nei campi testo.
   if (/salary|compensation|stipendio|retribuzione|\bral\b/.test(l)) {
     if (ctx.salaryExpectationEur) return String(ctx.salaryExpectationEur);
+    if (f.inputType === "number") return null;
     if (f.kind === "text" || f.kind === "textarea") return "Negotiable / da concordare in base al ruolo";
     return null;
   }
@@ -425,6 +428,55 @@ function ruleAnswerForField(f: FieldDescriptor, ctx: CandidateContext, autonomou
     return name || null;
   }
   return null;
+}
+
+/**
+ * Variante SENZA browser: risponde a un elenco di domande (API JSON come
+ * Recruitee) con la stessa catena profilo → regole → Claude → ultima
+ * risorsa. Ritorna la risposta per idx (null = da chiedere all'utente).
+ */
+export async function answerOffline(
+  ctx: CandidateContext,
+  fields: Array<{ idx: number; label: string; kind: FieldDescriptor["kind"]; options?: string[] }>,
+): Promise<{ answers: Map<number, string>; given: GivenAnswer[] }> {
+  const answers = new Map<number, string>();
+  const given: GivenAnswer[] = [];
+  const stored = new Map((ctx.storedAnswers ?? []).filter((s) => s.answer?.trim()).map((s) => [normalizeLabel(s.label), s.answer]));
+  const pick = (f: (typeof fields)[number], v: string | null | undefined): string | null => {
+    if (!v) return null;
+    if (f.options?.length) {
+      const lv = v.toLowerCase().trim();
+      return f.options.find((o) => o.toLowerCase().trim() === lv) ?? f.options.find((o) => o.toLowerCase().includes(lv) || lv.includes(o.toLowerCase())) ?? null;
+    }
+    return v;
+  };
+  const remaining: typeof fields = [];
+  for (const f of fields) {
+    const s = pick(f, stored.get(normalizeLabel(f.label)));
+    if (s) { answers.set(f.idx, s); given.push({ label: f.label, kind: f.kind, answer: s, source: "user" }); continue; }
+    const pv = pick(f, profileValueForLabel(f.label, ctx));
+    if (pv) { answers.set(f.idx, pv); given.push({ label: f.label, kind: f.kind, answer: pv, source: "profile" }); continue; }
+    const rv = pick(f, ruleAnswerForField(f as FieldDescriptor, ctx, ctx.autonomous === true));
+    if (rv) { answers.set(f.idx, rv); given.push({ label: f.label, kind: f.kind, answer: rv, source: "rule" }); continue; }
+    remaining.push(f);
+  }
+  if (remaining.length > 0) {
+    let ai: AiAnswer[] = [];
+    try { ai = await askClaude(ctx, remaining as FieldDescriptor[]); } catch (err) { console.warn("[ai-answer] offline claude failed", err); }
+    for (const a of ai) {
+      const f = remaining.find((x) => x.idx === a.idx);
+      const v = f ? pick(f, a.value ?? null) : null;
+      if (f && v) { answers.set(f.idx, v); given.push({ label: f.label, kind: f.kind, answer: v, source: "ai" }); }
+    }
+  }
+  if (ctx.autonomous) {
+    for (const f of remaining) {
+      if (answers.has(f.idx)) continue;
+      const lv = pick(f, lastResortAnswer(f as FieldDescriptor, ctx));
+      if (lv) { answers.set(f.idx, lv); given.push({ label: f.label, kind: f.kind, answer: lv, source: "assumed" }); }
+    }
+  }
+  return { answers, given };
 }
 
 /** Mappa una label a un valore noto del profilo (per i campi standard). */
@@ -482,7 +534,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
     // avvolgono con un helper __name che NON esiste nel browser quando
     // Playwright serializza la funzione → "ReferenceError: __name". Tutto
     // inline per essere bulletproof su qualsiasi bundler.
-    const out: Array<{ idx: number; label: string; kind: string; options?: string[] }> = [];
+    const out: Array<{ idx: number; label: string; kind: string; options?: string[]; inputType?: string }> = [];
     let idx = 0;
     const seen = new Set<string>();
 
@@ -493,7 +545,8 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
 
     for (const el of all) {
       const type = ((el as HTMLInputElement).type || el.tagName).toLowerCase();
-      if (["hidden", "submit", "button", "reset", "image"].includes(type)) continue;
+      // I file (CV) sono gestiti dall'adapter, non sono "domande".
+      if (["hidden", "submit", "button", "reset", "image", "file"].includes(type)) continue;
       const style = window.getComputedStyle(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
 
@@ -676,7 +729,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
       if (label.replace(/[^a-z0-9]/gi, "").length < 3) continue; // senza label utile
       if (!required) continue;
       el.setAttribute(tag, String(idx));
-      out.push({ idx, label, kind: el.tagName === "TEXTAREA" ? "textarea" : "text" });
+      out.push({ idx, label, kind: el.tagName === "TEXTAREA" ? "textarea" : "text", inputType: type });
       idx++;
     }
 
@@ -708,7 +761,14 @@ async function readReactSelectOptions(page: Page, idx: number): Promise<string[]
 async function fillField(page: Page, f: FieldDescriptor, value: string): Promise<boolean> {
   const loc = page.locator(`[${TAG}="${f.idx}"]`).first();
   if (f.kind === "text" || f.kind === "textarea") {
-    await loc.fill(value, { timeout: 3000 });
+    let v = value;
+    if (f.inputType === "number") {
+      // Input numerico: accetta solo cifre (es. "45000" da "45.000 €"), mai testo.
+      const digits = value.replace(/[^\d]/g, "");
+      if (!digits) return false;
+      v = digits;
+    }
+    await loc.fill(v, { timeout: 3000 });
     return true;
   }
   if (f.kind === "checkbox") {
