@@ -216,7 +216,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               </PSection>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 6, paddingTop: 10, flexShrink: 0 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6, paddingTop: 10, flexShrink: 0 }}>
               <button type="button" className="adm-btn sm" style={{ justifyContent: "center" }}><Mail size={11} />Invia email</button>
               <button type="button" className="adm-btn sm" style={{ justifyContent: "center" }}><RotateCcw size={11} />Reset crediti</button>
               <button type="button" className="adm-btn sm" style={{ justifyContent: "center", color: "#fbbf24" }}><Ban size={11} />Sospendi</button>
