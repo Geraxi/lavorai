@@ -12,7 +12,7 @@
  * Mai gonfiare le metriche — l'onestà è il punto di tutta questa feature.
  */
 
-export type ReplyKind = "colloquio" | "rifiutata" | "risposta" | "auto" | "bounce";
+export type ReplyKind = "colloquio" | "rifiutata" | "risposta" | "ricevuta" | "auto" | "bounce";
 
 export interface ClassifiedReply {
   kind: ReplyKind;
@@ -38,6 +38,36 @@ const BOUNCE_SUBJECT = [
   "mancata consegna",
   "messaggio non recapitato",
   "notifica di stato della consegna",
+];
+
+/**
+ * Conferma di ricezione ("abbiamo ricevuto la tua candidatura"): non è una
+ * risposta umana, ma è la prova che la candidatura è arrivata. Va in Inbox
+ * e conta come risposta ricevuta. Controllata PRIMA degli auto-reply perché
+ * spesso contiene "do not reply".
+ */
+const ACKNOWLEDGEMENT = [
+  "we have received your application",
+  "we've received your application",
+  "we received your application",
+  "your application has been received",
+  "application received",
+  "thank you for applying",
+  "thanks for applying",
+  "thank you for your application",
+  "thanks for your application",
+  "thank you for your interest in",
+  "successfully submitted",
+  "application was submitted",
+  "abbiamo ricevuto la tua candidatura",
+  "abbiamo ricevuto la sua candidatura",
+  "candidatura ricevuta",
+  "grazie per la candidatura",
+  "grazie per la tua candidatura",
+  "grazie per esserti candidato",
+  "grazie per aver inviato",
+  "conferma di ricezione",
+  "candidatura inviata con successo",
 ];
 
 const AUTO_REPLY = [
@@ -150,7 +180,27 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     return { kind: "bounce", isHuman: false };
   }
 
-  // 2. Auto-reply (out of office, ecc.) → non conta come risposta reale.
+  // 2. Conferma di ricezione → in Inbox, conta come risposta ricevuta,
+  //    ma non cambia lo stato (non è un umano che ha letto il CV).
+  //    Un umano che scrive "grazie per la candidatura, ci sentiamo domani?"
+  //    non è una conferma automatica: se c'è una domanda, o manca ogni
+  //    segnale di sistema (no-reply, "non rispondere") e il testo è breve,
+  //    resta una risposta umana.
+  const asksSomething = /\?/.test(body);
+  const systemSignal =
+    containsAny(from, ["no-reply", "noreply", "donotreply", "do-not-reply", "notification", "careers@", "jobs@", "recruiting@", "talent@", "greenhouse", "lever.co", "workable", "ashbyhq", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr"]) ||
+    containsAny(subjectBody, ["do not reply", "don't reply", "non rispondere", "automat", "this email was sent", "questa email è stata inviata", "unsubscribe"]);
+  if (
+    containsAny(subjectBody, ACKNOWLEDGEMENT) &&
+    !containsAny(subjectBody, REJECTION) &&
+    !containsAny(subjectBody, INTERVIEW) &&
+    !asksSomething &&
+    (systemSignal || body.length > 250)
+  ) {
+    return { kind: "ricevuta", isHuman: false };
+  }
+
+  // 3. Auto-reply (out of office, ecc.) → non conta come risposta reale.
   if (containsAny(subjectBody, AUTO_REPLY)) {
     return { kind: "auto", isHuman: false };
   }

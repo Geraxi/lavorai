@@ -35,7 +35,7 @@ export default async function InboxPage() {
       select: { id: true, labelKey: true, label: true, kind: true, optionsJson: true, answer: true, source: true, answeredAt: true },
     }),
     prisma.applicationReply.findMany({
-      where: { application: { userId: user.id }, isHuman: true },
+      where: { application: { userId: user.id }, OR: [{ isHuman: true }, { kind: "ricevuta" }] },
       orderBy: { receivedAt: "desc" },
       take: 50,
       select: { id: true, fromAddress: true, subject: true, bodyText: true, kind: true, receivedAt: true, application: { select: { id: true, job: { select: { title: true, company: true } } } } },

@@ -338,7 +338,7 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
 
               {/* 3. Risposte reali del recruiter */}
               {(repliesByApp.get(cur.id) ?? []).slice().reverse().map((r) => (
-                <Bubble key={r.id} from={r.from} time={fmtFull(r.date)} tone="them" chip={r.kind === "colloquio" ? { label: "Colloquio", cls: "ds-chip-green" } : r.kind === "rifiutata" ? { label: "Rifiutata", cls: "ds-chip-red" } : undefined}>
+                <Bubble key={r.id} from={r.from} time={fmtFull(r.date)} tone="them" chip={r.kind === "colloquio" ? { label: "Colloquio", cls: "ds-chip-green" } : r.kind === "rifiutata" ? { label: "Rifiutata", cls: "ds-chip-red" } : r.kind === "ricevuta" ? { label: "Candidatura ricevuta", cls: "ds-chip-blue" } : undefined}>
                   {r.subject && <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>{r.subject}</div>}
                   <p style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55, margin: 0 }}>{r.body}</p>
                 </Bubble>

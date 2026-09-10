@@ -162,6 +162,19 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
         ...(nextStatus && !keepExisting ? { userStatus: nextStatus } : {}),
       },
     });
+  } else if (kind === "ricevuta") {
+    // Conferma di ricezione: prova di consegna. Conta come risposta,
+    // segna "vista" se non c'è già uno stato, non sovrascrive nulla.
+    await prisma.application.update({
+      where: { id: app.id },
+      data: {
+        lastReplyAt: new Date(),
+        lastReplyKind: kind,
+        replyCount: { increment: 1 },
+        viewedAt: new Date(),
+        ...(app.userStatus ? {} : { userStatus: "vista" }),
+      },
+    });
   } else {
     // auto/bounce: traccia il conteggio ma non tocca lo status.
     await prisma.application.update({
