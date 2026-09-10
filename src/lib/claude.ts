@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { isFailoverError, openai, providerOrder } from "@/lib/ai-router";
 import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json";
 import type { OptimizationResult } from "@/types/cv";
 import {
@@ -78,6 +79,20 @@ export async function optimizeCV(
   let lastErr: unknown = null;
   let lastPreview = "";
   let lastTruncated = false;
+  // Provider: Anthropic (cache del CV) per default; OpenAI come fallback su
+  // crediti/rate-limit, o come primario per la quota AI_SPLIT_CV_OPTIMIZATION.
+  const order = providerOrder("cv_optimization");
+  for (const provider of order) {
+    try {
+      if (provider === "openai") return await optimizeWithOpenAI(input, userContent);
+      break; // anthropic → loop sotto
+    } catch (err) {
+      if (!isFailoverError(err) || provider === order[order.length - 1]) throw err;
+      console.warn(`[optimizeCV] OpenAI fallito (${err instanceof Error ? err.message.slice(0, 80) : "?"}), passo ad Anthropic`);
+    }
+  }
+  if (!order.includes("anthropic")) throw new Error("Nessun provider AI disponibile per l'ottimizzazione CV");
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     // Streaming obbligatorio: con max_tokens ≥ ~21k l'SDK rifiuta le
     // chiamate non-stream ("Streaming is required for operations that may
@@ -240,4 +255,24 @@ function validateShape(data: unknown): asserts data is OptimizationResult {
   if (!Array.isArray(obj.suggestions)) {
     throw new Error("Manca suggestions array");
   }
+}
+
+/** Stessa pipeline (system prompt + CV + annuncio → JSON) su OpenAI. */
+async function optimizeWithOpenAI(input: OptimizeCVInput, userContent: string): Promise<OptimizationResult> {
+  const model = process.env.OPENAI_MODEL_STRONG ?? "gpt-4.1";
+  const res = await openai().chat.completions.create({
+    model,
+    max_completion_tokens: 16000,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT + "\nRispondi esclusivamente con l'oggetto JSON richiesto." },
+      { role: "system", content: `Ecco il CV originale del candidato. Questo è l'UNICO contenuto verificato di cui dispone il candidato — qualsiasi cosa fuori da qui va considerata assente.\n\n<CV>\n${input.cvText}\n</CV>` },
+      { role: "user", content: userContent },
+    ],
+  });
+  const raw = (res.choices[0]?.message?.content ?? "").trim();
+  const parsed = parseModelJson(stripCodeFence(raw)) as OptimizationResult;
+  validateShape(parsed);
+  console.log(`[optimizeCV] generato via openai/${model}`);
+  return parsed;
 }

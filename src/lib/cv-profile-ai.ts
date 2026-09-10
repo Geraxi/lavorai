@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { complete } from "@/lib/ai-router";
 import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json";
 import type { ExtractedProfile } from "@/lib/cv-profile";
 import { extractProfile as extractProfileRegex } from "@/lib/cv-profile";
@@ -53,42 +53,18 @@ function userPrompt(cvText: string): string {
   return `CV TEXT:\n\n${clipped}\n\n---\nEstrai il profilo in JSON.`;
 }
 
-let cachedClient: Anthropic | null = null;
-function getClient(): Anthropic | null {
-  if (cachedClient) return cachedClient;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-  cachedClient = new Anthropic({ apiKey });
-  return cachedClient;
-}
 
 export async function extractProfileAI(
   cvText: string,
   sessionEmail: string | null,
 ): Promise<ExtractedProfile> {
-  const client = getClient();
-  if (!client) {
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
     return extractProfileRegex(cvText, sessionEmail);
   }
 
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: 600,
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [{ role: "user", content: userPrompt(cvText) }],
-    });
-
-    const raw = response.content
-      .map((b) => (b.type === "text" ? b.text : ""))
-      .join("")
-      .trim();
+    const ai = await complete({ task: "cv_profile_quick", system: SYSTEM_PROMPT, user: userPrompt(cvText), maxTokens: 600, json: true });
+    const raw = ai.text.trim();
     console.log("[cv-profile-ai] RAW RESPONSE:", raw);
     const cleaned = stripCodeFence(raw);
     const parsed = parseModelJson(cleaned) as Partial<ExtractedProfile>;

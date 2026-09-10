@@ -1,5 +1,5 @@
 import type { Page } from "playwright";
-import Anthropic from "@anthropic-ai/sdk";
+import { complete } from "@/lib/ai-router";
 import { matchCity } from "@/lib/city-centroids";
 import { isProtectedCategoryQuestion } from "@/lib/protected-category";
 
@@ -858,8 +858,7 @@ async function askClaude(
   ctx: CandidateContext,
   fields: FieldDescriptor[],
 ): Promise<AiAnswer[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return [];
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) return [];
 
   const profile = {
     name: [ctx.firstName, ctx.lastName].filter(Boolean).join(" ") || null,
@@ -925,18 +924,9 @@ async function askClaude(
       : "") +
     `CAMPI DA COMPILARE (rispondi a ciascuno per idx):\n${JSON.stringify(fieldList, null, 2)}`;
 
-  const client = new Anthropic({ apiKey });
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: ctx.autonomous ? 3500 : 1500,
-    system,
-    messages: [{ role: "user", content: userMsg }],
-  });
-  // Il blocco di testo non è necessariamente il primo (es. blocchi thinking).
-  const text = (res.content ?? [])
-    .filter((c): c is Extract<typeof c, { type: "text" }> => c.type === "text")
-    .map((c) => c.text)
-    .join("\n");
+  const ai = await complete({ task: "form_answers", system, user: userMsg, maxTokens: ctx.autonomous ? 3500 : 1500, json: true });
+  const text = ai.text;
+  const res = { stop_reason: ai.provider, content: [{ type: "text" }] } as { stop_reason: string; content: Array<{ type: string }> };
   const json = extractJson(text);
   if (!json || !Array.isArray(json.answers)) {
     console.warn(

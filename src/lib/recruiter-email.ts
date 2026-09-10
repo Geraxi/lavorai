@@ -338,8 +338,7 @@ async function extractEmailWithClaude(
   html: string,
   company: string | null,
 ): Promise<string | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) return null;
 
   // Pulizia HTML → testo, cap 15k char per non esplodere sui token
   const text = html
@@ -371,29 +370,8 @@ ${text}
 Solo l'email o "NONE". Nient'altro.`;
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001", // estrazione meccanica: Haiku basta e costa 1/3
-        max_tokens: 60,
-        messages: [{ role: "user", content: prompt }],
-      }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      content?: Array<{ type: string; text?: string }>;
-    };
-    const raw = (data.content ?? [])
-      .map((b) => (b.type === "text" ? (b.text ?? "") : ""))
-      .join("")
-      .trim()
-      .toLowerCase();
+    const ai = await complete({ task: "email_extract", system: "Estrai l'email del recruiter dal testo. Rispondi solo con l'email o NONE.", user: prompt, maxTokens: 60, temperature: 0 });
+    const raw = ai.text.trim().toLowerCase();
     if (!raw || raw === "none") return null;
     // Estrai la prima email dalla risposta (Claude potrebbe aggiungere
     // rumore nonostante l'istruzione)
