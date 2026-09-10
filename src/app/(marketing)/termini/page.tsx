@@ -24,8 +24,7 @@ export default function TerminiPage() {
       <main className="container max-w-3xl py-12">
         <h1 className="text-4xl font-bold tracking-tight">Termini di servizio</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Versione draft Sprint 4 — non è una versione definitiva. Prima del
-          launch pubblico verrà revisionata da un legale.
+          Condizioni generali di utilizzo della piattaforma LavorAI.
         </p>
 
         <div className="prose prose-invert mt-8 max-w-none space-y-6 text-sm leading-relaxed text-foreground/90">
@@ -36,8 +35,9 @@ export default function TerminiPage() {
               che ottimizza CV e lettere motivazionali per specifici annunci di
               lavoro tramite intelligenza artificiale, e offre una funzionalità
               opzionale di invio automatico delle candidature ({`"`}auto-apply{`"`}) sui
-              portali di ricerca lavoro supportati (InfoJobs, LinkedIn, Indeed,
-              Subito Lavoro).
+              portali carriera delle aziende basati su ATS supportati
+              (Greenhouse, Lever, Ashby, Workable, Breezy, Pinpoint, Personio e
+              altri) e via email al recruiter, quando l&apos;annuncio lo prevede.
             </p>
           </section>
 
@@ -72,9 +72,9 @@ export default function TerminiPage() {
               3. Rischi e limiti che accetti
             </h2>
             <p>
-              Le politiche dei portali di lavoro terzi (LinkedIn, InfoJobs,
-              Indeed, Subito) possono vietare l&apos;uso di strumenti automatizzati
-              per inviare candidature. Riconosci e accetti che:
+              Le politiche di alcuni portali e aziende possono limitare l&apos;uso
+              di strumenti automatizzati per inviare candidature. Riconosci e
+              accetti che:
             </p>
             <ul className="ml-5 list-disc space-y-2">
               <li>
@@ -159,7 +159,7 @@ export default function TerminiPage() {
           </section>
 
           <p className="text-xs text-muted-foreground">
-            Ultimo aggiornamento: 18 aprile 2026 — draft interno.
+            Ultimo aggiornamento: 10 settembre 2026.
           </p>
         </div>
       </main>

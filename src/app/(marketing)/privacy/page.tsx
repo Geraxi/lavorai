@@ -24,8 +24,7 @@ export default function PrivacyPage() {
       <main className="container max-w-3xl py-12">
         <h1 className="text-4xl font-bold tracking-tight">Informativa privacy</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Versione draft Sprint 4 — non è definitiva. Revisione legale prima del
-          launch pubblico.
+          Informativa ai sensi degli artt. 13 e 14 del Regolamento (UE) 2016/679.
         </p>
 
         <div className="prose prose-invert mt-8 max-w-none space-y-6 text-sm leading-relaxed text-foreground/90">
@@ -46,21 +45,26 @@ export default function PrivacyPage() {
                 generare CV ottimizzati.
               </li>
               <li>
-                <strong>Annunci di lavoro</strong>: testi degli annunci ricevuti
-                dalle fonti pubbliche (Adzuna) o incollati dall&apos;utente.
+                <strong>Annunci di lavoro</strong>: testi degli annunci raccolti
+                da fonti pubbliche (pagine carriera delle aziende su Greenhouse,
+                Lever, Ashby, Workable e altri ATS; board come Adzuna, EURES,
+                Remotive) o incollati dall&apos;utente.
               </li>
               <li>
-                <strong>Cookie di sessione dei portali terzi</strong>: quando
-                attivi l&apos;auto-apply, memorizziamo cifrati AES-256-GCM i cookie
-                della tua sessione su InfoJobs, LinkedIn, Indeed o Subito. Non
-                vediamo mai la tua password.
+                <strong>Dati di candidatura</strong>: le informazioni che
+                inseriamo nei form delle aziende al posto tuo (contatti, CV,
+                lettera, risposte standard come disponibilità e autorizzazione
+                al lavoro). Non chiediamo né conserviamo credenziali di portali
+                terzi: l&apos;auto-apply avviene sui form pubblici degli ATS.
               </li>
               <li>
                 <strong>Metadati candidature</strong>: job a cui ti candidi,
                 stato invio, timestamp, eventuali errori.
               </li>
               <li>
-                <strong>Email</strong> per notifiche di stato candidatura.
+                <strong>Email</strong> per notifiche di stato candidatura e, se
+                attivi la Inbox, le risposte dei recruiter ricevute
+                all&apos;indirizzo di inoltro dedicato alla tua candidatura.
               </li>
             </ul>
           </section>
@@ -74,7 +78,7 @@ export default function PrivacyPage() {
               </li>
               <li>
                 <strong>Consenso esplicito (art. 6.1.a GDPR)</strong>: richiesto
-                prima di attivare l&apos;auto-apply su ogni portale terzo.
+                prima di attivare l&apos;invio automatico delle candidature.
               </li>
               <li>
                 <strong>Legittimo interesse (art. 6.1.f GDPR)</strong>: logging
@@ -87,23 +91,32 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold">4. Sotto-responsabili del trattamento</h2>
             <ul className="ml-5 list-disc space-y-2">
               <li>
-                <strong>Vercel Inc.</strong> — hosting applicazione, region
-                Frankfurt (UE)
+                <strong>Vercel Inc.</strong> — hosting dell&apos;applicazione web,
+                funzioni in region Francoforte (UE)
               </li>
               <li>
-                <strong>Anthropic PBC</strong> — elaborazione AI del CV, con
-                politica di zero-retention (i dati inviati non sono usati per
-                training)
+                <strong>Neon Inc.</strong> — database Postgres, region
+                Francoforte (UE)
               </li>
               <li>
-                <strong>Resend</strong> — invio email transazionali, region UE
+                <strong>Railway Corp.</strong> — esecuzione del worker che
+                compila e invia le candidature
               </li>
               <li>
-                <strong>Stripe</strong> — pagamenti, region UE/USA con SCC
+                <strong>Anthropic PBC</strong> e <strong>OpenAI</strong> —
+                elaborazione AI di CV, lettere e risposte ai form tramite API;
+                i dati inviati non sono usati per l&apos;addestramento dei modelli
               </li>
               <li>
-                <strong>Supabase</strong> (prossimo Sprint) — database, region
-                Frankfurt (UE)
+                <strong>Resend</strong> — invio e ricezione delle email
+                transazionali e delle risposte dei recruiter
+              </li>
+              <li>
+                <strong>Stripe</strong> — pagamenti; LavorAI non conserva i dati
+                della carta
+              </li>
+              <li>
+                <strong>Upstash</strong> — code di lavoro e rate limiting
               </li>
             </ul>
           </section>
@@ -112,10 +125,6 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold">5. Periodo di conservazione</h2>
             <ul className="ml-5 list-disc space-y-2">
               <li>CV e testi generati: 90 giorni dall&apos;ultima candidatura</li>
-              <li>
-                Cookie di sessione portali: fino a 30 giorni di inattività o
-                revoca esplicita
-              </li>
               <li>
                 Metadati candidature (job, stato, timestamp): 12 mesi per
                 permettere analisi del tuo percorso
@@ -134,8 +143,9 @@ export default function PrivacyPage() {
               <li>Accedere ai tuoi dati (art. 15)</li>
               <li>Rettificarli (art. 16)</li>
               <li>
-                Cancellarli — diritto all&apos;oblio (art. 17), anche via
-                auto-cancellazione delle sessioni portale
+                Cancellarli — diritto all&apos;oblio (art. 17), anche in
+                autonomia dalle Impostazioni: la cancellazione dell&apos;account
+                elimina profilo, CV, file e candidature
               </li>
               <li>Limitarne il trattamento (art. 18)</li>
               <li>Esportarli in formato strutturato (art. 20)</li>
@@ -160,11 +170,11 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-xl font-semibold">7. Sicurezza</h2>
             <p>
-              Tutti i dati sono crittografati in transito (TLS 1.3) e at-rest.
-              I cookie di sessione dei portali sono cifrati con AES-256-GCM
-              prima del salvataggio in database. La chiave di cifratura è
-              ruotata annualmente. Accesso ai dati limitato al fondatore tramite
-              autenticazione multi-fattore.
+              Tutti i dati sono cifrati in transito (TLS) e a riposo presso i
+              fornitori indicati. Le password sono salvate solo come hash. I
+              dati sensibili eventualmente memorizzati sono cifrati con
+              AES-256-GCM prima del salvataggio. L&apos;accesso al database è
+              limitato al titolare.
             </p>
           </section>
 
@@ -178,7 +188,7 @@ export default function PrivacyPage() {
           </section>
 
           <p className="text-xs text-muted-foreground">
-            Ultimo aggiornamento: 18 aprile 2026 — draft interno.
+            Ultimo aggiornamento: 10 settembre 2026.
           </p>
         </div>
       </main>
