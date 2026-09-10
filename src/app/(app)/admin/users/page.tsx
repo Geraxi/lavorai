@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const DAYS = 14;
 const H = 3600_000;
-const PAGE = 10;
+const PAGE = 50;
 
 interface PageProps {
   searchParams?: Promise<{ includeTest?: string; sel?: string; p?: string; plan?: string }>;
