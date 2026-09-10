@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "LavorAI · The AI copilot for your job search",
-    "description": "Auto-apply on LinkedIn, Indeed and EU job boards. ATS-friendly CV and AI cover letter, in native English or Italian. From €19.99/month."
+    "description": "Auto-apply on company career portals (Greenhouse, Lever, Ashby, Workable and other ATS). ATS-friendly CV and AI cover letter, in native English or Italian. From €19.99/month."
   },
   "nav": {
     "howItWorks": "How it works",
@@ -27,7 +27,7 @@
     "subtitle": "LavorAI is the copilot that takes the repetitive weight off you: it finds the right openings, rewrites your CV for each one, fills in the forms. You go back to doing interviews, not filling fields.",
     "cta": "Try it, see if it gets you",
     "ctaSecondary": "First, let me show my CV",
-    "ctaCaption": "3 free applications · no card · pause anytime",
+    "ctaCaption": "7-day Pro trial · no card · pause anytime",
     "check1": "<strong>Real submit</strong> on ATS forms (Greenhouse, Lever, Ashby), no login to your accounts",
     "check2": "CV and cover letter <strong>specific to each posting</strong>, in native English or Italian",
     "check3": "<strong>You decide</strong>: auto, hybrid (consent before sending) or off, in 1 click",
@@ -47,7 +47,7 @@
     "guaranteeText": "if within 24h of upgrading to Pro you don't receive at least 1 delivered application, full refund — no questions asked.",
     "ctaPrimaryV2": "Activate auto-apply — free",
     "ctaSecondaryV2": "First, show me my CV →",
-    "checkA": "3 free applications",
+    "checkA": "7 days free, no card",
     "checkB": "No card required",
     "checkC": "Pause anytime",
     "trustA1": "GDPR-first",
@@ -227,7 +227,7 @@
     "title2": "no surprises.",
     "subtitle": "No credits. No add-ons. Pick a plan, change anytime.",
     "footnote": "VAT included. Cancel in 1 click from Stripe, no emails, no waiting. No commitment.",
-    "riskReducer1": "3 free applications to test before you pay",
+    "riskReducer1": "7 days of full Pro to test before you pay",
     "riskReducer2": "Self-service cancellation, always",
     "riskReducer3": "Zero setup fee, no hidden costs"
   },
@@ -236,7 +236,7 @@
     "notFound": "If you can't find the answer,",
     "contactUs": "write to us",
     "q1Question": "Does it really apply for me, automatically?",
-    "q1Answer": "Yes. You set roles, cities, match threshold. Every 30 minutes LavorAI scans fresh postings: when it finds a compatible one, it rewrites your CV and cover letter for that position and submits directly on the company's ATS form. You only see the status and receive the interview invites.",
+    "q1Answer": "Yes. You set roles, cities, match threshold. Every 2 hours LavorAI scans fresh postings: when it finds a compatible one, it rewrites your CV and cover letter for that position and submits directly on the company's ATS form. You only see the status and receive the interview invites.",
     "q2Question": "Do I need to log in to LinkedIn / Indeed / other profiles?",
     "q2Answer": "No, never. We don't ask for or store portal credentials. We only fill public Greenhouse, Lever and Workable forms, the same ones you'd fill clicking \"Apply\". No risk of bans on your accounts.",
     "q3Question": "Do I have to write the cover letters?",
@@ -396,8 +396,8 @@
     "step2Title": "Pick the role",
     "step2Text": "Write the role you want and the city. You can add filters: remote only, startups only, big tech only.",
     "step3Title": "From here you touch nothing",
-    "step3Text": "From here LavorAI runs on its own. Every 30 minutes it searches new openings, rewrites your CV to fit, fills the ATS form and submits. You only receive the interview invites.",
-    "cta": "Start free. 3 applications right away"
+    "step3Text": "From here LavorAI runs on its own. Every 2 hours it searches new openings, rewrites your CV to fit, fills the ATS form and submits. You only receive the interview invites.",
+    "cta": "Start free. 7 days of Pro"
   },
   "invisibleWork": {
     "_locale": "en",
@@ -486,7 +486,7 @@
     "noAccountQuestion": "Don't have an account?",
     "signupFree": "Sign up free",
     "signupHeading": "Let's get started.",
-    "signupSubheading": "3 free applications to see if it gets you. No card, no commitment.",
+    "signupSubheading": "7 days of Pro, free, to see if it gets you. No card, no commitment.",
     "name": "Name",
     "namePlaceholder": "John Doe",
     "passwordPlaceholderSignup": "Min 8 chars · 1 uppercase · 1 number",
@@ -504,7 +504,7 @@
     "signupStep2": "Upload your CV — nothing starts until you confirm",
     "signupStep3": "Pick roles and cities. Auto-apply is OFF by default",
     "signupStep4": "Turn it on only when you feel ready — pause in 1 click",
-    "signupTrustFree": "3 free applications",
+    "signupTrustFree": "7 days free",
     "signupTrustNoCard": "No card required",
     "signupTrustCancel": "Cancel in 1 click",
     "haveAccountQuestion": "Already have an account?",
@@ -521,7 +521,7 @@
     "googleLogin": "Continue with Google",
     "loginBenefit1": "Apply automatically to italian and international portals",
     "loginBenefit2": "CV and cover letter tailored to each posting",
-    "loginBenefit3": "3 free applications to try — no card",
+    "loginBenefit3": "7 days of Pro free to try — no card",
     "loginFooterPre": "By continuing you accept our ",
     "loginFooterTerms": "terms",
     "loginFooterMid": " and ",

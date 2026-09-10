@@ -21,8 +21,8 @@ interface Feature {
 const features: Feature[] = [
   {
     icon: Zap,
-    title: "Auto-Apply ogni 30 minuti",
-    body: "Un cron su GitHub Actions scansiona Greenhouse e Lever ogni 30 minuti, seleziona gli annunci col tuo match più alto e li accoda · anche se sei offline. Rispetta daily cap, soglia di match e aziende bloccate.",
+    title: "Auto-Apply ogni 2 ore",
+    body: "Ogni 2 ore LavorAI scansiona Greenhouse, Lever, Ashby, Workable e gli altri ATS supportati, seleziona gli annunci col tuo match più alto e li accoda · anche se sei offline. Rispetta daily cap, soglia di match e aziende bloccate.",
   },
   {
     icon: FileText,
@@ -32,7 +32,7 @@ const features: Feature[] = [
   {
     icon: Send,
     title: "Invio diretto sui portali ATS",
-    body: "Playwright compila e invia il modulo direttamente su Greenhouse, Lever, Workable e BambooHR. Niente reindirizzamenti, niente login: la candidatura arriva come l'hai mandata tu.",
+    body: "Playwright compila e invia il modulo direttamente su Greenhouse, Lever, Ashby, Workable, Breezy, Pinpoint e Personio. Niente reindirizzamenti, niente login: la candidatura arriva come l'hai mandata tu.",
   },
   {
     icon: Eye,

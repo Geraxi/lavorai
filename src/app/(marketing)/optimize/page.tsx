@@ -248,7 +248,7 @@ function FormCard({
         </form>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          3 candidature gratis, poi €19/mese. Nessuna carta richiesta per
+          7 giorni di Pro gratis, poi €19.99/mese. Nessuna carta richiesta per
           iniziare.
         </p>
       </CardContent>

@@ -17,12 +17,12 @@ export const metadata: Metadata = {
   title:
     "Auto candidatura lavoro: invia CV automaticamente",
   description:
-    "Cerchi un software per candidarti automaticamente ai lavori? LavorAI invia CV + lettera motivazionale AI a 50 offerte/mese al posto tuo. 3 candidature gratis, no carta. Provalo in 2 minuti.",
+    "Cerchi un software per candidarti automaticamente ai lavori? LavorAI invia CV + lettera motivazionale AI a 50 offerte/mese al posto tuo. 7 giorni di Pro gratis, senza carta. Provalo in 2 minuti.",
   alternates: { canonical: "/auto-candidatura" },
   openGraph: {
     title: "Auto candidatura lavoro — LavorAI",
     description:
-      "Il primo software italiano che invia CV in automatico a 50 lavori al mese. 3 candidature gratis, senza carta.",
+      "Il primo software italiano che invia CV in automatico a 50 lavori al mese. 7 giorni di Pro gratis, senza carta.",
     url: "/auto-candidatura",
   },
 };

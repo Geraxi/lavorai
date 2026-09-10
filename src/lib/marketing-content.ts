@@ -49,42 +49,21 @@ export const TESTIMONIALS: Testimonial[] = [
 ];
 
 /**
- * PLACEHOLDER — sostituire con metriche reali quando avrai cohort
- * dimostrabili. Per ora usiamo numeri prudenti che possiamo difendere
- * (es. "2.000+ candidati italiani" è plausibile dal traffico reale).
+ * Metriche della landing. I valori di default sono statici e difendibili;
+ * la homepage li sovrascrive con i conteggi live dal DB (vedi
+ * app/(marketing)/page.tsx → SectionStats metrics). Niente stime inventate:
+ * ogni numero è verificabile su /proof.
  */
-export const SUCCESS_METRICS: Array<{
+export interface SuccessMetric {
   value: string;
   label: string;
   caveat?: string;
-  /** Se `true`, il numero è ancora un placeholder editoriale (non da
-   *  metrica reale). Mostriamo un asterisco discreto in UI per onestà. */
-  placeholder?: boolean;
-}> = [
-  {
-    value: "2.000+",
-    label: "candidati italiani attivi",
-    caveat: "negli ultimi 6 mesi",
-    placeholder: true,
-  },
-  {
-    value: "45.000+",
-    label: "candidature inviate",
-    caveat: "tramite il motore auto-apply",
-    placeholder: true,
-  },
-  {
-    value: "8 ore",
-    label: "risparmiate ogni settimana",
-    caveat: "vs ricerca manuale",
-    placeholder: true,
-  },
-  {
-    value: "1 su 9",
-    label: "candidature → colloquio",
-    caveat: "media interna con CV ottimizzato",
-    placeholder: true,
-  },
+}
+export const SUCCESS_METRICS: SuccessMetric[] = [
+  { value: "24h", label: "prima candidatura consegnata", caveat: "o rimborso, garantito" },
+  { value: "7", label: "ATS supportati", caveat: "Greenhouse, Lever, Ashby, Workable, Breezy, Pinpoint, Personio" },
+  { value: "2h", label: "frequenza di scansione", caveat: "nuovi annunci ogni 2 ore" },
+  { value: "100%", label: "consegne con prova", caveat: "conferma HTTP/DOM su ogni invio" },
 ];
 
 /**
@@ -150,7 +129,7 @@ export const CASE_STUDIES: CaseStudy[] = [
  * sono dove avviene il submit. Mostriamo entrambi.
  */
 export const SUPPORTED_PORTALS = {
-  discovery: ["LinkedIn", "Indeed", "InfoJobs", "Subito"],
+  discovery: ["Adzuna", "EURES", "Remotive", "Jobicy", "RemoteOK"],
   apply: [
     "Greenhouse",
     "Lever",
@@ -283,7 +262,7 @@ export const WHY_NOT_CHATGPT: Array<{
   },
   {
     title: "Non scopre i lavori per te.",
-    body: "ChatGPT non legge LinkedIn, Greenhouse, Lever o le job board EU. LavorAI scrape attiva ~5.000 aziende ATS ogni 2 ore, filtra per i tuoi ruoli, e ti mostra solo i match.",
+    body: "ChatGPT non legge Greenhouse, Lever, Ashby o le job board EU. LavorAI scansiona ogni 2 ore le pagine carriera di centinaia di aziende e le principali board europee, filtra per i tuoi ruoli, e ti mostra solo i match.",
   },
   {
     title: "Niente memoria del tuo profilo.",

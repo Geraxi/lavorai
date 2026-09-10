@@ -15,8 +15,8 @@ import { SectionAutomationBoundaries } from "@/components/sections/automation-bo
 import { SectionTrustBlock } from "@/components/sections/trust-block";
 import { SectionProblema } from "@/components/sections/problema";
 import { SectionStats } from "@/components/sections/stats";
-import { SectionTestimonialsV2 } from "@/components/sections/testimonials-v2";
-import { SectionCaseStudies } from "@/components/sections/case-studies";
+import { prisma } from "@/lib/db";
+import type { SuccessMetric } from "@/lib/marketing-content";
 import { SectionInvisibleWork } from "@/components/sections/invisible-work";
 import { SectionManifesto } from "@/components/sections/manifesto";
 import { SectionPricing } from "@/components/sections/pricing";
@@ -48,7 +48,28 @@ import { StickyCta } from "@/components/sticky-cta";
  * 14. Referral placeholder (lifecycle hook futuro)
  * 15. CTA finale
  */
-export default function Home() {
+// Numeri live dal DB, rigenerati ogni ora: consegne confermate (prova
+// HTTP/DOM), offerte attive nel pool, aziende monitorate. Stesse query di /proof.
+export const revalidate = 3600;
+
+async function liveMetrics(): Promise<SuccessMetric[]> {
+  const fresh = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  const [delivered, jobs, companies] = await Promise.all([
+    prisma.application.count({ where: { submitConfirmation: { startsWith: "DETECTED" } } }),
+    prisma.job.count({ where: { closedAt: null, cachedAt: { gte: fresh } } }),
+    prisma.job.findMany({ where: { closedAt: null, cachedAt: { gte: fresh }, company: { not: null } }, distinct: ["company"], select: { company: true } }).then((r) => r.length),
+  ]).catch(() => [0, 0, 0] as const);
+  const n = (v: number) => v.toLocaleString("it-IT");
+  return [
+    { value: n(delivered), label: "candidature consegnate", caveat: "con prova di consegna, elenco su /proof" },
+    { value: `${n(jobs)}+`, label: "offerte attive nel pool", caveat: "aggiornate ogni 2 ore" },
+    { value: `${n(companies)}+`, label: "aziende monitorate", caveat: "pagine carriera e board europee" },
+    { value: "24h", label: "prima candidatura", caveat: "consegnata entro 24 ore o rimborso" },
+  ];
+}
+
+export default async function Home() {
+  const metrics = await liveMetrics();
   return (
     <div className="flex min-h-screen flex-col">
       <SiteNav />
@@ -63,9 +84,7 @@ export default function Home() {
         <SectionManifesto />
         <SectionPersonas />
         <SectionProblema />
-        <SectionStats />
-        <SectionTestimonialsV2 />
-        <SectionCaseStudies />
+        <SectionStats metrics={metrics} />
         <SectionWhyNotChatGpt />
         <SectionTrustBlock />
         <SectionPricing />

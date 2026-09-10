@@ -1,7 +1,7 @@
 {
   "metadata": {
     "title": "LavorAI · Il copilota italiano per la ricerca del lavoro",
-    "description": "Candidati in automatico su LinkedIn, InfoJobs, Indeed e Subito. CV ATS-friendly e lettera motivazionale AI, in italiano nativo. Da €19.99/mese."
+    "description": "Candidati in automatico sui portali carriera delle aziende (Greenhouse, Lever, Ashby, Workable e altri ATS). CV ATS-friendly e lettera motivazionale AI, in italiano nativo. Da €19.99/mese."
   },
   "nav": {
     "howItWorks": "Come funziona",
@@ -27,7 +27,7 @@
     "subtitle": "LavorAI è il copilota che si carica il peso ripetitivo: trova le offerte giuste, riscrive il CV per ognuna, compila i form. Tu torni a fare colloqui, non a riempire campi.",
     "cta": "Provalo, vedi se ti capisce",
     "ctaSecondary": "Prima fai vedere il mio CV",
-    "ctaCaption": "3 candidature gratis · niente carta · pausa quando vuoi",
+    "ctaCaption": "7 giorni di Pro gratis · niente carta · pausa quando vuoi",
     "check1": "<strong>Submit reale</strong> sui form ATS (Greenhouse, Lever, Ashby), niente login ai tuoi account",
     "check2": "CV e cover letter <strong>specifici per ogni annuncio</strong>, in italiano o inglese nativo",
     "check3": "<strong>Tu decidi</strong>: auto, ibrido (consenso prima dell'invio) o off, in 1 click",
@@ -47,7 +47,7 @@
     "guaranteeText": "se in 24h dall'upgrade Pro non ricevi almeno 1 candidatura consegnata, rimborso integrale — senza domande.",
     "ctaPrimaryV2": "Attiva auto-apply — gratis",
     "ctaSecondaryV2": "Prima fai vedere il mio CV →",
-    "checkA": "3 candidature gratis",
+    "checkA": "7 giorni gratis, senza carta",
     "checkB": "Niente carta",
     "checkC": "Pausa quando vuoi",
     "trustA1": "GDPR-first",
@@ -227,7 +227,7 @@
     "title2": "senza sorprese.",
     "subtitle": "Niente crediti. Niente add-on. Scegli il piano, cambia quando vuoi.",
     "footnote": "IVA inclusa. Cancelli in 1 click da Stripe, senza email, senza attese. Nessun vincolo.",
-    "riskReducer1": "3 candidature gratuite per testare prima di pagare",
+    "riskReducer1": "7 giorni di Pro completo per testare prima di pagare",
     "riskReducer2": "Cancellazione self-service, sempre",
     "riskReducer3": "Setup fee zero, no costi nascosti"
   },
@@ -236,7 +236,7 @@
     "notFound": "Se non trovi la risposta,",
     "contactUs": "scrivici",
     "q1Question": "Si candida davvero per me, in automatico?",
-    "q1Answer": "Sì. Imposti ruoli, città, soglia di match. Ogni 30 minuti LavorAI scansiona gli annunci freschi: quando ne trova uno compatibile, riscrive CV e cover letter per quella posizione e invia direttamente sul form ATS dell'azienda. Tu vedi solo lo stato e ricevi gli inviti ai colloqui.",
+    "q1Answer": "Sì. Imposti ruoli, città, soglia di match. Ogni 2 ore LavorAI scansiona gli annunci freschi: quando ne trova uno compatibile, riscrive CV e cover letter per quella posizione e invia direttamente sul form ATS dell'azienda. Tu vedi solo lo stato e ricevi gli inviti ai colloqui.",
     "q2Question": "Mi serve il login a LinkedIn / Indeed / altri profili?",
     "q2Answer": "No, mai. Non chiediamo né conserviamo credenziali di portali. Compiliamo solo form pubblici di Greenhouse, Lever e Workable, gli stessi che riempiresti tu cliccando \"Apply\". Nessun rischio di ban sui tuoi account.",
     "q3Question": "Devo scrivere io le cover letter?",
@@ -396,8 +396,8 @@
     "step2Title": "Scegli il ruolo",
     "step2Text": "Scrivi il ruolo che cerchi e la città. Puoi aggiungere filtri: solo remote, solo startup, solo big tech.",
     "step3Title": "Da qui non tocchi più nulla",
-    "step3Text": "Da qui LavorAI gira da solo. Ogni 30 minuti cerca nuovi annunci, riscrive il CV su misura, compila il form ATS e invia. Tu ricevi solo gli inviti ai colloqui.",
-    "cta": "Inizia gratis. 3 candidature subito"
+    "step3Text": "Da qui LavorAI gira da solo. Ogni 2 ore cerca nuovi annunci, riscrive il CV su misura, compila il form ATS e invia. Tu ricevi solo gli inviti ai colloqui.",
+    "cta": "Inizia gratis. 7 giorni di Pro"
   },
   "invisibleWork": {
     "_locale": "it",
@@ -486,7 +486,7 @@
     "noAccountQuestion": "Non hai un account?",
     "signupFree": "Registrati gratis",
     "signupHeading": "Iniziamo.",
-    "signupSubheading": "3 candidature gratis per vedere se ti capisce. Niente carta, niente impegno.",
+    "signupSubheading": "7 giorni di Pro gratis per vedere se ti capisce. Niente carta, niente impegno.",
     "name": "Nome",
     "namePlaceholder": "Mario Rossi",
     "passwordPlaceholderSignup": "Min 8 char · 1 maiuscola · 1 numero",
@@ -504,7 +504,7 @@
     "signupStep2": "Carichi il CV — niente parte finché non confermi",
     "signupStep3": "Scegli ruoli e città. L'auto-apply è OFF di default",
     "signupStep4": "Attivi solo quando ti senti pronto — pausa in 1 click",
-    "signupTrustFree": "3 candidature gratuite",
+    "signupTrustFree": "7 giorni gratis",
     "signupTrustNoCard": "No carta",
     "signupTrustCancel": "Cancelli in 1 click",
     "haveAccountQuestion": "Hai già un account?",
@@ -521,7 +521,7 @@
     "googleLogin": "Continua con Google",
     "loginBenefit1": "Candidati in automatico su portali italiani e internazionali",
     "loginBenefit2": "CV e cover letter adattati ad ogni annuncio",
-    "loginBenefit3": "3 candidature gratis per provare — no carta",
+    "loginBenefit3": "7 giorni di Pro gratis per provare — no carta",
     "loginFooterPre": "Continuando accetti i nostri ",
     "loginFooterTerms": "termini",
     "loginFooterMid": " e la ",

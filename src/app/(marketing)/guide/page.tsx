@@ -76,7 +76,7 @@ export default function GuideIndexPage() {
           <div className="gd-cta">
             <div>
               <strong>Vuoi che le candidature le faccia LavorAI?</strong>
-              <p>CV riscritto per ogni annuncio, form compilati su Greenhouse, Lever, Ashby e Workable, prova di consegna. 3 candidature gratis.</p>
+              <p>CV riscritto per ogni annuncio, form compilati su Greenhouse, Lever, Ashby e Workable, prova di consegna. 7 giorni di Pro gratis.</p>
             </div>
             <Link href="/signup" className="ds-btn">Prova gratis</Link>
           </div>

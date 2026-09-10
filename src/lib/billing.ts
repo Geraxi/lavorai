@@ -80,7 +80,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasInterviewCopilot: false,
     features: [
       "50 candidature al mese",
-      "Auto-apply su 1 portale a scelta",
+      "Auto-apply su 1 ATS a scelta",
       "CV optimization AI",
       "Cover letter AI",
       "Formato DOCX",
@@ -110,7 +110,7 @@ export const TIERS: Record<Tier, TierConfig> = {
       "[target] Founder Interview Coach (Opportunity Analyzer + Equity + Vocab)",
       "[sparkles] Interview Copilot live con teleprompter + audio capture {soon}",
       "Candidature illimitate",
-      "Auto-apply su tutti i portali (LinkedIn, InfoJobs, Indeed, Subito)",
+      "Auto-apply su tutti gli ATS supportati (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee e altri)",
       "CV optimization AI multi-variante",
       "Cover letter AI personalizzata",
       "Formato DOCX, PDF e Europass",
@@ -122,7 +122,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     stripePriceIdEnv: "STRIPE_PRICE_ID_PRO_PLUS",
     cta: "Prova 7 giorni gratis",
     highlight: true,
-    badge: "Scelto dall'83% di chi trova lavoro con LavorAI",
+    badge: "Consigliato",
   },
 };
 

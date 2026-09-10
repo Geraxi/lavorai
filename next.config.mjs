@@ -55,6 +55,7 @@ const nextConfig = {
     return [
       // Alias storico: /onboarding/cv → /onboarding step 1
       { source: "/onboarding/cv", destination: "/onboarding", permanent: true },
+      { source: "/trasparenza", destination: "/proof", permanent: true },
     ];
   },
 };

@@ -2,25 +2,18 @@
 
 import { motion } from "motion/react";
 import { Reveal } from "@/components/reveal";
-import { SUCCESS_METRICS } from "@/lib/marketing-content";
+import { SUCCESS_METRICS, type SuccessMetric } from "@/lib/marketing-content";
 
-// I numeri vivono in `src/lib/marketing-content.ts → SUCCESS_METRICS`
-// per editing centralizzato. Mostriamo un asterisco discreto se sono
-// placeholder, e una nota a fondo sezione per onestà editoriale.
-const hasPlaceholders = SUCCESS_METRICS.some((s) => s.placeholder);
-const stats = SUCCESS_METRICS.map((s) => {
+// I numeri vivono in `src/lib/marketing-content.ts → SUCCESS_METRICS`;
+// la homepage passa `metrics` con i conteggi live dal DB.
+function toStat(s: SuccessMetric) {
   // Split "2.000+" → value "2.000" + suffix "+", "30s" → "30" + "s"
   const m = s.value.match(/^([\d.,]+)([^\d.,]*)$/);
-  return {
-    value: m ? m[1] : s.value,
-    suffix: m ? m[2] : "",
-    label: s.label,
-    sub: s.caveat ?? "",
-    placeholder: !!s.placeholder,
-  };
-});
+  return { value: m ? m[1] : s.value, suffix: m ? m[2] : "", label: s.label, sub: s.caveat ?? "" };
+}
 
-export function SectionStats() {
+export function SectionStats({ metrics }: { metrics?: SuccessMetric[] }) {
+  const stats = (metrics ?? SUCCESS_METRICS).map(toStat);
   return (
     <section className="relative overflow-hidden border-t border-border/60 py-24 md:py-28">
       {/* Subtle radial wash · solo accenno, niente gradient pesante */}
@@ -118,15 +111,6 @@ export function SectionStats() {
                     }}
                   >
                     {s.label}
-                    {s.placeholder && (
-                      <span
-                        title="Stima editoriale — sostituiremo con metrica reale dopo la prima cohort di utenti paganti"
-                        aria-label="stima editoriale"
-                        style={{ color: "var(--fg-subtle)", marginLeft: 3 }}
-                      >
-                        *
-                      </span>
-                    )}
                   </div>
                   <div
                     className="mt-1 text-muted-foreground"
@@ -144,28 +128,13 @@ export function SectionStats() {
           </div>
         </Reveal>
 
-        {hasPlaceholders && (
-          <Reveal delay={0.2} className="mx-auto mt-8 max-w-2xl text-center">
-            <p
-              style={{
-                fontSize: 11.5,
-                color: "var(--fg-subtle)",
-                lineHeight: 1.6,
-              }}
-            >
-              * Numeri segnati con asterisco sono stime editoriali in fase di
-              lancio. Aggiornati con metriche reali ad ogni cohort di utenti
-              paganti — vedi{" "}
-              <a
-                href="/privacy"
-                className="underline-offset-4 hover:text-foreground hover:underline"
-              >
-                trasparenza
-              </a>
-              .
-            </p>
-          </Reveal>
-        )}
+        <Reveal delay={0.2} className="mx-auto mt-8 max-w-2xl text-center">
+          <p style={{ fontSize: 11.5, color: "var(--fg-subtle)", lineHeight: 1.6 }}>
+            Numeri letti dal database di LavorAI, aggiornati ogni ora. Il dettaglio
+            di ogni consegna confermata è pubblico su{" "}
+            <a href="/proof" className="underline-offset-4 hover:text-foreground hover:underline">/proof</a>.
+          </p>
+        </Reveal>
       </div>
     </section>
   );

@@ -359,7 +359,7 @@ function renderWelcomeEmail(siteUrl: string): string {
         Vai alla dashboard →
       </a>
       <p style="font-size:12.5px;color:#8A8C90;margin:32px 0 0;line-height:1.5;">
-        Hai 3 candidature gratis per provare. Il piano Pro parte da €19.99/mese e lo puoi cancellare con un click.
+        Hai 7 giorni di Pro gratis per provare, senza carta. Il piano Pro parte da €19.99/mese e lo puoi cancellare con un click.
       </p>
       <hr style="border:none;border-top:1px solid #E6E4DD;margin:32px 0 16px;"/>
       <p style="font-size:11px;color:#8A8C90;line-height:1.5;margin:0;">

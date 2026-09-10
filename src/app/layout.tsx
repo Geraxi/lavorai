@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     template: "%s · LavorAI",
   },
   description:
-    "Invia CV in automatico a 50 lavori al mese. LavorAI riscrive il CV per ogni annuncio, compila i form al posto tuo su Greenhouse, Lever, LinkedIn. 3 candidature gratis, no carta. Da €19.99/mese.",
+    "Invia CV in automatico a 50 lavori al mese. LavorAI riscrive il CV per ogni annuncio, compila i form al posto tuo su Greenhouse, Lever, Ashby, Workable e altri ATS. 7 giorni di Pro gratis, senza carta. Da €19.99/mese.",
   keywords: [
     // KEYWORD AD ALTA INTENT COMMERCIALE (chi cerca soluzione, non info)
     "auto candidatura lavoro",
