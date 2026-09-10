@@ -109,8 +109,8 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
         <AdminTrafficMap rows={byCountry.map((c) => ({ country: c.country, count: c._count._all }))} regions={regions} regionsUnresolved={itUnresolved} days={P} />
       </div>
 
-      {/* Riga compatta: altezza fissa (~5 righe visibili, scroll per il resto) così il globo prende lo spazio. */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, height: 172, minHeight: 0 }}>
+      {/* Riga compatta: altezza fissa (~3 righe visibili, scroll per il resto) così il globo prende lo spazio. */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, height: 118, minHeight: 0 }}>
         <div className="adm-card" style={{ padding: "10px 14px", minHeight: 0 }}>
           <div className="adm-card-head" style={{ marginBottom: 4 }}>
             <div className="adm-card-title" style={{ fontSize: 13 }}>Top pagine <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 11 }}>· {P}gg</span></div>
