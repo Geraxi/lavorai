@@ -93,7 +93,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   ] = await Promise.all([
     prisma.user.findMany({
       select: {
-        email: true, tier: true, createdAt: true, subscriptionStatus: true, signupSource: true,
+        email: true, tier: true, createdAt: true, subscriptionStatus: true, signupSource: true, signupUtmSource: true,
         preferences: { select: { rolesJson: true } },
         _count: { select: { cvDocuments: true, applications: { where: { status: "success" } } } },
       },
@@ -188,7 +188,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   const uMax = Math.max(realTotal, 1);
   const SOURCE_LABEL: Record<string, string> = { google: "Google", chatgpt: "ChatGPT", linkedin: "LinkedIn", instagram_tiktok: "IG/TikTok", amico: "Amico", universita: "Università", categorie_protette: "Cat. protette", altro: "Altro" };
   const sourceCounts = new Map<string, number>();
-  for (const u of realUsers) if (u.signupSource) sourceCounts.set(u.signupSource, (sourceCounts.get(u.signupSource) ?? 0) + 1);
+  for (const u of realUsers) { const k = u.signupSource ?? (u.signupUtmSource ? `utm:${u.signupUtmSource}` : null); if (k) sourceCounts.set(k, (sourceCounts.get(k) ?? 0) + 1); }
   const topSources = [...sourceCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
 
   // ── Funnel (14gg) ─────────────────────────────────────────────────────

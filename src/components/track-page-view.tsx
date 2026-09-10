@@ -22,7 +22,14 @@ export function TrackPageView() {
     try {
       const body = JSON.stringify({
         path: pathname,
-        referrer: document.referrer || null,
+        // Reddit/Telegram/app in-app browser spesso non passano il referrer:
+        // gli utm nel link sono l'attribuzione affidabile.
+        referrer: (() => {
+          const q = new URLSearchParams(window.location.search);
+          const src = q.get("utm_source");
+          if (src) return `utm:${src.slice(0, 40)}${q.get("utm_medium") ? `/${q.get("utm_medium")!.slice(0, 30)}` : ""}`;
+          return document.referrer || null;
+        })(),
       });
       if (navigator.sendBeacon) {
         const blob = new Blob([body], { type: "application/json" });
