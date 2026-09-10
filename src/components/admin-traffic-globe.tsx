@@ -123,7 +123,7 @@ export function AdminTrafficGlobe({ rows, regions = [] }: { rows: CountryRow[]; 
     };
     controls.addEventListener("start", stopAuto);
     // Punta verso l'Europa all'apertura
-    g.pointOfView({ lat: 32, lng: 12, altitude: 1.55 }, 0);
+    g.pointOfView({ lat: 32, lng: 12, altitude: 1.05 }, 0); // più vicino: il globo riempie la card
     return () => controls.removeEventListener("start", stopAuto);
   }, [width, height]);
 
