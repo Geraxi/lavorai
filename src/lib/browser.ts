@@ -57,10 +57,47 @@ export async function launchBrowser(extraArgs: string[] = []): Promise<Browser> 
     throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
   }
 
-  // Dev locale: playwright completo (browser bundlati).
+  // Worker Railway / dev locale: playwright completo (browser bundlati).
+  // Anti-fingerprint: niente flag "AutomationControlled" (navigator.webdriver)
+  // e, se configurato, proxy residenziale: reCAPTCHA Enterprise assegna
+  // score bassissimi agli IP datacenter e fa scattare il "security code".
   const { chromium } = await import("playwright");
+  const proxy = process.env.PROXY_SERVER
+    ? { server: process.env.PROXY_SERVER, username: process.env.PROXY_USERNAME, password: process.env.PROXY_PASSWORD }
+    : undefined;
   return chromium.launch({
     headless: true,
-    args: [...BASE_ARGS, ...extraArgs],
+    args: [...BASE_ARGS, "--disable-blink-features=AutomationControlled", ...extraArgs],
+    proxy,
   });
+}
+
+/** UA Chrome recente e coerente col Chromium in uso (versione da env se serve aggiornarla senza deploy). */
+export const HUMAN_UA = `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.env.BROWSER_UA_CHROME ?? "140.0.0.0"} Safari/537.36`;
+
+/**
+ * Contesto "umano": UA aggiornato, viewport reale, lingua/fuso italiani e
+ * init script che nasconde i tratti tipici dell'automazione (webdriver,
+ * plugins vuoti, languages). Usato per tutti i submit sui portali ATS.
+ */
+export async function humanContext(browser: Browser) {
+  const context = await browser.newContext({
+    userAgent: HUMAN_UA,
+    locale: "it-IT",
+    timezoneId: "Europe/Rome",
+    viewport: { width: 1366, height: 820 },
+    deviceScaleFactor: 1,
+    colorScheme: "light",
+    extraHTTPHeaders: { "Accept-Language": "it-IT,it;q=0.9,en;q=0.7" },
+  });
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+    Object.defineProperty(navigator, "languages", { get: () => ["it-IT", "it", "en"] });
+    Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
+    const w = window as unknown as { chrome?: unknown };
+    if (!w.chrome) w.chrome = { runtime: {}, loadTimes: () => ({}), csi: () => ({}) };
+    const q = window.navigator.permissions?.query?.bind(window.navigator.permissions);
+    if (q) window.navigator.permissions.query = (p: PermissionDescriptor) => (p.name === "notifications" ? Promise.resolve({ state: Notification.permission } as PermissionStatus) : q(p));
+  });
+  return context;
 }

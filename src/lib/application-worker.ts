@@ -20,7 +20,7 @@ import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { inboundReplyAddress } from "@/lib/email";
 import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
-import { launchBrowser } from "@/lib/browser";
+import { humanContext, launchBrowser } from "@/lib/browser";
 import { scrapeRecruiterEmail, isUsableRecruiterEmail } from "@/lib/recruiter-email";
 import { findPortalAdapter } from "@/lib/portal-adapters";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
@@ -1818,12 +1818,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   let browser: import("playwright").Browser | undefined;
   try {
     browser = await launchBrowser();
-    const context = await browser.newContext({
-      locale: "it-IT",
-      timezoneId: "Europe/Rome",
-      userAgent:
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    });
+    const context = await humanContext(browser);
     const page = await context.newPage();
     const outcome = await adapter.apply(page, {
       profile,
