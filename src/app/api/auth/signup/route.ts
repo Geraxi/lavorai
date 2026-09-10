@@ -19,6 +19,8 @@ const SignupSchema = z.object({
   source: z.enum(["google", "chatgpt", "linkedin", "instagram_tiktok", "amico", "universita", "categorie_protette", "altro"]).optional(),
   /** Arrivato dalla landing categorie protette: preferenza attiva da subito. */
   protectedCategory: z.boolean().optional(),
+  /** Codice promo dal link (es. STUDENTI → 30 giorni di Pro, fonte università). */
+  promo: z.string().max(40).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -128,9 +130,9 @@ export async function POST(request: NextRequest) {
         signupUtmMedium: attrib.m ?? null,
         signupUtmCampaign: attrib.c ?? null,
         signupLandingPath: attrib.p ?? null,
-        signupSource: parsed.data.source ?? (parsed.data.protectedCategory ? "categorie_protette" : null),
+        signupSource: parsed.data.source ?? (parsed.data.promo?.toUpperCase() === "STUDENTI" ? "universita" : parsed.data.protectedCategory ? "categorie_protette" : null),
         // Prova Pro senza carta: 7 giorni dalla registrazione.
-        trialEndsAt: new Date(Date.now() + 7 * 86400_000),
+        trialEndsAt: new Date(Date.now() + (parsed.data.promo?.toUpperCase() === "STUDENTI" ? 30 : 7) * 86400_000),
         ...(parsed.data.protectedCategory ? { preferences: { create: { protectedCategory: true, autoApplyMode: "auto" } } } : {}),
       },
       select: { id: true, email: true, locale: true, name: true, trialEndsAt: true },

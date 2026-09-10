@@ -22,6 +22,7 @@ function SignupContent() {
   const params = useSearchParams();
   const plan = params.get("plan");
   const protectedCategory = params.get("protected") === "1";
+  const promo = params.get("promo")?.toUpperCase() ?? null;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -61,6 +62,7 @@ function SignupContent() {
           privacyConsent: true,
           source: source || undefined,
           protectedCategory: protectedCategory || undefined,
+          promo: promo || undefined,
         }),
       });
       const body = await signupRes.json().catch(() => ({}));
