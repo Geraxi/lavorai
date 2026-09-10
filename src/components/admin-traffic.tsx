@@ -87,7 +87,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
   const refMax = refs[0]?.[1] ?? 1;
 
   return (
-    <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(0,1fr) auto" }}>
+    <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(520px,1fr) auto" }}>
       <PageTitle
         title="Traffico sito"
         sub="Scopri da dove arrivano i tuoi visitatori e come interagiscono con la piattaforma."
@@ -106,7 +106,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
         <KpiTrendCard label="Pagine per sessione" value={perSession.toFixed(1)} delta={dPct(perSession, perSessionPrev)} series={viewsSeries.map((v, i) => (uniqSeries[i] > 0 ? v / uniqSeries[i] : 0))} color="hsl(var(--primary))" icon={<Layers size={15} />} />
       </div>
 
-      <div className="adm-card" style={{ padding: 0, position: "relative" }}>
+      <div className="adm-card" style={{ padding: 0, position: "relative", minHeight: 520 }}>
         <AdminTrafficMap rows={byCountry.map((c) => ({ country: c.country, count: c._count._all }))} regions={regions} regionsUnresolved={itUnresolved} days={P} />
       </div>
 

@@ -6,6 +6,7 @@
  * estesa. Wrapper client perché react-globe.gl richiede window (ssr:false).
  */
 
+import { rangeLabelLong } from "@/components/admin-range";
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { Globe as GlobeIcon, List as ListIcon, MapPin } from "lucide-react";
@@ -47,7 +48,7 @@ export function AdminTrafficMap({ rows, regions = [], regionsUnresolved = 0, day
       <div style={{ position: "absolute", top: 14, left: 18, right: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 2, pointerEvents: "none" }}>
         <div>
           <div className="adm-card-title" style={{ fontSize: 15 }}>Traffico globale</div>
-          <div className="adm-card-sub" style={{ color: "var(--fg-muted)" }}>{mode === "regions" ? `Visite dall'Italia per regione (ultimi ${days} giorni)` : `Utenti per paese (ultimi ${days} giorni)`}</div>
+          <div className="adm-card-sub" style={{ color: "var(--fg-muted)" }}>{mode === "regions" ? `Visite dall'Italia per regione (${rangeLabelLong(days).toLowerCase()})` : `Utenti per paese (${rangeLabelLong(days).toLowerCase()})`}</div>
         </div>
         <div role="tablist" style={{ display: "inline-flex", padding: 3, borderRadius: 999, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", pointerEvents: "auto" }}>
           <Tab active={mode === "map"} onClick={() => setMode("map")} icon={<GlobeIcon size={12} />}>Mappa</Tab>
