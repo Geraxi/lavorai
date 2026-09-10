@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, LineChart, ChartLegend, Donut, compactNumber } from "../_ui";
-import { AdminRangeSelect } from "@/components/admin-range-select";
+import { AdminRangeSelect, parseRange, rangeLabel } from "@/components/admin-range-select";
 import { SyncJobsButton } from "../_client-buttons";
 import { AdminSyncButton } from "@/components/admin-sync-button";
 import { AdminRetryCreditButton } from "@/components/admin-retry-credit-button";
@@ -14,7 +14,6 @@ import { Layers, Zap, Users as UsersIcon, Database, Settings2, RefreshCw, AlertT
 export const metadata: Metadata = { title: "Admin · Job pool", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-const RANGES = [1, 7, 14, 30, 90];
 const H = 3600_000;
 const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 const KNOWN_SOURCES = ["greenhouse", "lever", "ashby", "linkedin", "adzuna", "workable", "smartrecruiters", "indeed"];
@@ -26,7 +25,7 @@ const KNOWN_SOURCES = ["greenhouse", "lever", "ashby", "linkedin", "adzuna", "wo
  */
 export default async function AdminJobsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
   const sp = (await searchParams) ?? {};
-  const DAYS = RANGES.includes(Number(sp.range)) ? Number(sp.range) : 14;
+  const DAYS = parseRange(sp.range, 14);
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
   const fresh7 = since(24 * 7);
@@ -113,7 +112,7 @@ export default async function AdminJobsPage({ searchParams }: { searchParams?: P
       />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
-        <KpiTrendCard label="Annunci totali nel pool" value={compactNumber(jobsTotal)} sub={`+${compactNumber(jobs14d.length)} nuovi (${DAYS}g)`} delta={dPct(jobs14d.length, jobsPrev14)} series={totale} color="hsl(var(--primary))" icon={<Layers size={15} />} />
+        <KpiTrendCard label="Annunci totali nel pool" value={compactNumber(jobsTotal)} sub={`+${compactNumber(jobs14d.length)} nuovi (${rangeLabel(DAYS)})`} delta={dPct(jobs14d.length, jobsPrev14)} series={totale} color="hsl(var(--primary))" icon={<Layers size={15} />} />
         <KpiTrendCard label="Annunci freschi (≤ 7gg)" value={compactNumber(freshJobs)} sub="pubblicati negli ultimi 7 giorni" deltaLabel={jobsTotal > 0 ? `${Math.round((freshJobs / jobsTotal) * 100)}%` : undefined} delta={dPct(freshJobs, freshPrev)} series={nuovi} color="#fbbf24" icon={<Zap size={15} />} />
         <KpiTrendCard label="Utenti coperti" value={compactNumber(usersCovered)} sub="con annunci rilevanti" deltaLabel={`${autoApplyOn} auto-apply`} series={nuovi.map((v) => v * 0.5 + 1)} color="#a78bfa" icon={<UsersIcon size={15} />} />
         <KpiTrendCard label="Fonti ATS attive" value={`${atsActive}/${KNOWN_SOURCES.length}`} sub={atsActive < KNOWN_SOURCES.length ? `${KNOWN_SOURCES.length - atsActive} non disponibile` : "tutte operative"} deltaLabel={`${Math.round((atsActive / KNOWN_SOURCES.length) * 100)}%`} series={KNOWN_SOURCES.map((s) => countBy.get(s) ?? 0)} color={atsActive === KNOWN_SOURCES.length ? "hsl(var(--primary))" : "#fbbf24"} icon={<Database size={15} />} sparkKind="bars" />

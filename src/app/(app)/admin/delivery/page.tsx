@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, LineChart, ChartLegend, Donut, compactNumber, DeliveryFunnel } from "../_ui";
-import { AdminRangeSelect } from "@/components/admin-range-select";
+import { AdminRangeSelect, parseRange, rangeLabel, rangeLabelLong } from "@/components/admin-range-select";
 import { Send, FileCheck, CheckCircle2, AlertTriangle } from "lucide-react";
 import { RetryCaptchaButton } from "../_retry-captcha-button";
 import { CopyTargetButton } from "../_client-buttons";
@@ -9,7 +9,6 @@ import { CopyTargetButton } from "../_client-buttons";
 export const metadata: Metadata = { title: "Admin · Consegna", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-const RANGES = [1, 7, 14, 30, 90];
 const H = 3600_000;
 const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 
@@ -20,7 +19,7 @@ const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "
  */
 export default async function AdminDeliveryPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
   const sp = (await searchParams) ?? {};
-  const DAYS = RANGES.includes(Number(sp.range)) ? Number(sp.range) : 14;
+  const DAYS = parseRange(sp.range, 14);
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
 
@@ -191,7 +190,7 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
       />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
-        <KpiTrendCard label="Tasso di consegna verificata" value={`${rate.toFixed(1)}%`} sub={`Ultimi ${DAYS} giorni`} delta={rate - pRate} series={sRate} color="hsl(var(--primary))" icon={<Send size={15} />} />
+        <KpiTrendCard label="Tasso di consegna verificata" value={`${rate.toFixed(1)}%`} sub={rangeLabelLong(DAYS)} delta={rate - pRate} series={sRate} color="hsl(var(--primary))" icon={<Send size={15} />} />
         <KpiTrendCard label="Candidature tentate" value={tentate.toLocaleString("it-IT")} sub="Tutti i portali" delta={dPct(tentate, pTentate)} series={sTentate} color="#60a5fa" icon={<FileCheck size={15} />} />
         <KpiTrendCard label="Confermate" value={confermate.toLocaleString("it-IT")} sub={`ATS ${confAts} · email ${confEmail}`} delta={dPct(confermate, pConf)} series={sConf} color="hsl(var(--primary))" icon={<CheckCircle2 size={15} />} />
         <KpiTrendCard label="Non confermate" value={nonConf.toLocaleString("it-IT")} sub="success senza prova hard" delta={dPct(nonConf, pNon)} series={sNon} color="#f87171" icon={<AlertTriangle size={15} />} />

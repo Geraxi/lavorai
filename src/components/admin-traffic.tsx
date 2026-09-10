@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, compactNumber } from "@/app/(app)/admin/_ui";
 import { AdminTrafficMap } from "@/components/admin-traffic-map";
-import { AdminRangeSelect } from "@/components/admin-range-select";
+import { AdminRangeSelect, rangeLabel } from "@/components/admin-range-select";
 import { itRegionOf } from "@/lib/it-regions";
 import { Eye, Users, UserPlus, Layers, Download } from "lucide-react";
 
@@ -113,7 +113,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, height: 118, minHeight: 0 }}>
         <div className="adm-card" style={{ padding: "10px 14px", minHeight: 0 }}>
           <div className="adm-card-head" style={{ marginBottom: 4 }}>
-            <div className="adm-card-title" style={{ fontSize: 13 }}>Top pagine <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 11 }}>· {P}gg</span></div>
+            <div className="adm-card-title" style={{ fontSize: 13 }}>Top pagine <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 11 }}>· {rangeLabel(P)}</span></div>
             <span style={{ fontSize: 10.5, color: "var(--fg-subtle)", letterSpacing: 0.3, textTransform: "uppercase" }}>Viste · %</span>
           </div>
           <div className="adm-card-body scroll" style={{ minHeight: 0 }}>
@@ -125,7 +125,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
         </div>
         <div className="adm-card" style={{ padding: "10px 14px", minHeight: 0 }}>
           <div className="adm-card-head" style={{ marginBottom: 4 }}>
-            <div className="adm-card-title" style={{ fontSize: 13 }}>Top referrer <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 11 }}>· {P}gg</span></div>
+            <div className="adm-card-title" style={{ fontSize: 13 }}>Top referrer <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 11 }}>· {rangeLabel(P)}</span></div>
             <span style={{ fontSize: 10.5, color: "var(--fg-subtle)", letterSpacing: 0.3, textTransform: "uppercase" }}>Visite · %</span>
           </div>
           <div className="adm-card-body scroll" style={{ minHeight: 0 }}>
