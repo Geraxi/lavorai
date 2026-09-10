@@ -1,3 +1,4 @@
+import { complete } from "@/lib/ai-router";
 /**
  * Scraping opportunistico dell'email del recruiter dall'HTML del job posting.
  *
