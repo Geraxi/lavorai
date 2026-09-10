@@ -14,7 +14,7 @@ const H = 3600_000;
 const PAGE = 50;
 
 interface PageProps {
-  searchParams?: Promise<{ includeTest?: string; sel?: string; p?: string; plan?: string }>;
+  searchParams?: Promise<{ includeTest?: string; sel?: string; p?: string; plan?: string; tab?: string }>;
 }
 
 /**
@@ -82,13 +82,25 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   const selected = users.find((u) => u.id === sp.sel) ?? pageUsers[0] ?? null;
   // Ultime candidature dell'utente selezionato, con il motivo reale di
   // fallimento (adapterFailure in canaryLog vince sul messaggio generico).
+  const tab = sp.tab === "apps" || sp.tab === "log" ? sp.tab : "overview";
   const selectedApps = selected
     ? await prisma.application.findMany({
         where: { userId: selected.id },
         orderBy: { createdAt: "desc" },
-        take: 12,
+        take: tab === "apps" ? 100 : 8,
         select: { id: true, createdAt: true, status: true, submittedVia: true, submitConfirmation: true, errorMessage: true, canaryLog: true, job: { select: { title: true, company: true, source: true, url: true } } },
       })
+    : [];
+  const selectedLog = selected && tab === "log"
+    ? await Promise.all([
+        prisma.emailLog.findMany({ where: { to: { equals: selected.email, mode: "insensitive" } }, orderBy: { createdAt: "desc" }, take: 40, select: { kind: true, createdAt: true } }),
+        prisma.subscriptionEvent.findMany({ where: { userId: selected.id }, orderBy: { createdAt: "desc" }, take: 20, select: { action: true, reason: true, createdAt: true } }).catch(() => []),
+      ]).then(([emails, events]) =>
+        [
+          ...emails.map((e) => ({ at: e.createdAt, what: `Email · ${e.kind}` })),
+          ...events.map((e) => ({ at: e.createdAt, what: `Abbonamento · ${e.action}${e.reason ? ` (${e.reason})` : ""}` })),
+        ].sort((a, b) => b.at.getTime() - a.at.getTime()),
+      )
     : [];
   const failReason = (a: { errorMessage: string | null; canaryLog: string | null }): string | null => {
     try {
@@ -204,12 +216,13 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
             </div>
 
             <div style={{ display: "flex", gap: 2, marginTop: 12, borderBottom: "1px solid var(--border-ds)", flexShrink: 0 }}>
-              {["Panoramica", `Candidature (${selected._count.applications})`, "Log", "Note"].map((t, i) => (
-                <span key={t} style={{ padding: "7px 10px", fontSize: 12, fontWeight: 600, color: i === 0 ? "var(--fg)" : "var(--fg-muted)", borderBottom: i === 0 ? "2px solid hsl(var(--primary))" : "2px solid transparent", marginBottom: -1 }}>{t}</span>
+              {([["overview", "Panoramica"], ["apps", `Candidature (${selected._count.applications})`], ["log", "Log"]] as const).map(([key, label]) => (
+                <Link key={key} href={`/admin/users?sel=${selected.id}&tab=${key}${includeTest ? "&includeTest=1" : ""}${plan ? `&plan=${plan}` : ""}${page > 1 ? `&p=${page}` : ""}`} style={{ padding: "7px 10px", fontSize: 12, fontWeight: 600, color: tab === key ? "var(--fg)" : "var(--fg-muted)", borderBottom: tab === key ? "2px solid hsl(var(--primary))" : "2px solid transparent", marginBottom: -1, textDecoration: "none" }}>{label}</Link>
               ))}
             </div>
 
             <div className="adm-card-body scroll" style={{ gap: 0 }}>
+              {tab === "overview" && (<>
               <PSection title="Informazioni account">
                 <KV k="ID" v={<span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}><code style={{ fontSize: 10.5, color: "var(--fg-muted)" }}>{selected.id}</code><Copy size={10} style={{ color: "var(--fg-subtle)" }} /></span>} />
                 <KV k="Email" v={<span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>{selected.email}<Copy size={10} style={{ color: "var(--fg-subtle)" }} /></span>} />
@@ -223,7 +236,16 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                 <KV k="Codice referral" v={selected.referralCode ?? "—"} />
                 <KV k="Arrivato da" v={selected.referredById ?? "—"} />
               </PSection>
-              <PSection title={`Ultime candidature (${selected._count.applications})`}>
+              </>)}
+              {tab === "log" && (
+                <PSection title="Log attività">
+                  {selectedLog.length === 0 ? <div style={{ fontSize: 11.5, color: "var(--fg-subtle)" }}>Nessun evento registrato.</div> : (
+                    <div style={{ display: "grid", gap: 4 }}>{selectedLog.map((l, i) => (<div key={i} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8, fontSize: 11.5, padding: "5px 8px", borderRadius: 8, background: "var(--bg-sunken)" }}><span className="adm-ellipsis" style={{ color: "var(--fg)" }}>{l.what}</span><span style={{ color: "var(--fg-subtle)", whiteSpace: "nowrap" }}>{fmt2(l.at)}</span></div>))}</div>
+                  )}
+                </PSection>
+              )}
+              {tab !== "log" && (
+              <PSection title={tab === "apps" ? `Candidature (${selected._count.applications})` : `Ultime candidature (${selected._count.applications})`}>
                 {selectedApps.length === 0 ? (
                   <div style={{ fontSize: 11.5, color: "var(--fg-subtle)" }}>Nessuna candidatura.</div>
                 ) : (
@@ -246,6 +268,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   </div>
                 )}
               </PSection>
+              )}
+              {tab === "overview" && (
               <PSection title="Stato e attività">
                 <KV k="Onboarding" v={<Onboarding step={onboarding(selected)} wide />} />
                 <KV k="Preferenze CV" v={selected.preferences ? "Sì" : "No"} />
@@ -254,6 +278,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                 <KV k="Ruoli" v={selected.preferences ? arr(selected.preferences.rolesJson).slice(0, 3).join(", ") || "—" : "—"} />
                 <KV k="Località" v={selected.preferences ? arr(selected.preferences.locationsJson).slice(0, 3).join(", ") || "—" : "—"} />
               </PSection>
+              )}
             </div>
 
             <UserActions id={selected.id} email={selected.email} suspended={!!selected.suspendedAt} />
