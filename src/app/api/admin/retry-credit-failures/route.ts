@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
         { errorMessage: { contains: "Streaming is required", mode: "insensitive" } },
         { errorMessage: { contains: "troncata", mode: "insensitive" } },
         { errorMessage: { contains: "captcha-failed", mode: "insensitive" } },
+        { canaryLog: { contains: "captcha-failed" } },
       ],
       createdAt: { gte: since },
     },
