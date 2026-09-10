@@ -193,23 +193,29 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
 
   // ── Funnel (14gg) ─────────────────────────────────────────────────────
   const jobViews = pageViews14d.filter((p) => p.path.startsWith("/jobs") || p.path.startsWith("/discover")).length;
-  const fInviate = apps14dRows.length;
+  // "Inviate" = consegnate davvero (status success). Le create ma fallite o in coda
+  // non sono candidature inviate: contarle gonfiava il funnel (584 vs 41).
+  const fCreate = apps14dRows.length;
+  const fInviate = apps14dRows.filter((a) => a.status === "success").length;
   const fRisposte = apps14dRows.filter((a) => a.replyCount > 0).length;
   const fColloqui = apps14dRows.filter((a) => a.lastReplyKind === "colloquio" || a.userStatus === "colloquio").length;
   const fOfferte = apps14dRows.filter((a) => a.userStatus === "offerta").length;
-  const fMax = Math.max(jobViews, fInviate, 1);
+  const fMax = Math.max(jobViews, fCreate, 1);
   const pctOf = (v: number, base = fMax) => (base > 0 ? `${((v / base) * 100).toFixed(v / base < 0.1 ? 1 : 0)}%` : "—");
 
   // ── Donut per stato ───────────────────────────────────────────────────
   const stInviate = apps14dRows.filter((a) => a.status === "success").length;
-  const stAttesa = apps14dRows.filter((a) => ["awaiting_consent", "ready_to_apply", "queued", "in_progress", "needs_answers"].includes(a.status)).length;
-  const stRifiutate = apps14dRows.filter((a) => a.status === "failed" || a.lastReplyKind === "rifiutata" || a.userStatus === "rifiutata").length;
+  const stAttesa = apps14dRows.filter((a) => ["awaiting_consent", "ready_to_apply", "queued", "in_progress", "optimizing", "applying", "needs_answers"].includes(a.status)).length;
+  // Fallite (errore tecnico nostro) e Rifiutate (risposta negativa del recruiter) sono due cose diverse.
+  const stFallite = apps14dRows.filter((a) => a.status === "failed").length;
+  const stRifiutate = apps14dRows.filter((a) => a.status !== "failed" && (a.lastReplyKind === "rifiutata" || a.userStatus === "rifiutata")).length;
   const donutSegments = [
     { label: "Inviate", value: stInviate, color: "hsl(var(--primary))" },
     { label: "In attesa", value: stAttesa, color: "#60a5fa" },
     { label: "Colloqui", value: fColloqui, color: "#a78bfa" },
     { label: "Offerte", value: fOfferte, color: "#fbbf24" },
     { label: "Rifiutate", value: stRifiutate, color: "#f87171" },
+    { label: "Fallite", value: stFallite, color: "#6b7280" },
   ];
   const donutTotal = sum(donutSegments.map((s) => s.value));
 
@@ -351,7 +357,8 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
           </div>
           <div className="adm-card-body" style={{ justifyContent: "center" }}>
             <FunnelBar label="Job visualizzati" value={jobViews} max={fMax} pct={pctOf(jobViews)} color="hsl(var(--primary))" />
-            <FunnelBar label="Candidature inviate" value={fInviate} max={fMax} pct={pctOf(fInviate)} color="#60a5fa" />
+            <FunnelBar label="Candidature create" value={fCreate} max={fMax} pct={pctOf(fCreate)} color="#93c5fd" />
+            <FunnelBar label="Candidature consegnate" value={fInviate} max={fMax} pct={pctOf(fInviate)} color="#60a5fa" />
             <FunnelBar label="Risposte ricevute" value={fRisposte} max={fMax} pct={pctOf(fRisposte)} color="#a78bfa" />
             <FunnelBar label="Colloqui" value={fColloqui} max={fMax} pct={pctOf(fColloqui)} color="#f472b6" />
             <FunnelBar label="Offerte" value={fOfferte} max={fMax} pct={pctOf(fOfferte)} color="#fbbf24" />
