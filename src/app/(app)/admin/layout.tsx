@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { AdminTopbar } from "@/components/admin-topbar";
+import { getAdminAlerts } from "@/lib/admin-alerts";
 
 /**
  * Layout /admin — fit-to-viewport.
@@ -13,11 +14,12 @@ import { AdminTopbar } from "@/components/admin-topbar";
  */
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
+  const alerts = isAdmin(user?.email) ? await getAdminAlerts() : [];
   if (!isAdmin(user?.email)) notFound();
 
   return (
     <div className="adm-root">
-      <AdminTopbar userName={user?.name ?? "Umberto"} email={user?.email ?? ""} />
+      <AdminTopbar userName={user?.name ?? "Umberto"} email={user?.email ?? ""} alerts={alerts} />
       <div className="adm-content">{children}</div>
 
       <style>{`

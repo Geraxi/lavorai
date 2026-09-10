@@ -3,7 +3,9 @@
 import Link from "next/link";
 
 import { usePathname } from "next/navigation";
-import { Search, Bell } from "lucide-react";
+import { Search } from "lucide-react";
+import { AdminBell } from "@/components/admin-bell";
+import type { AdminAlert } from "@/lib/admin-alerts";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { AdminRangeSelect } from "@/components/admin-range-select";
@@ -32,7 +34,7 @@ const TITLES: Record<string, string> = {
  * Topbar admin: search ⌘K · range · Live · campanella · avatar.
  * Il search apre la CommandPalette globale (⌘K già gestita dall'app).
  */
-export function AdminTopbar({ userName, email }: { userName: string; email?: string; rangeLabel?: string }) {
+export function AdminTopbar({ userName, email, alerts = [] }: { userName: string; email?: string; rangeLabel?: string; alerts?: AdminAlert[] }) {
   const pathname = usePathname() ?? "/admin";
   const initials = getInitials(userName);
 
@@ -99,36 +101,7 @@ export function AdminTopbar({ userName, email }: { userName: string; email?: str
         Live
       </span>
 
-      <Link
-        href="/admin#alerts"
-        aria-label="Notifiche"
-        style={{
-          position: "relative",
-          width: 34,
-          height: 34,
-          borderRadius: 10,
-          background: "transparent",
-          border: "none",
-          color: "var(--fg-muted)",
-          display: "grid",
-          placeItems: "center",
-          cursor: "pointer",
-        }}
-      >
-        <Bell size={16} />
-        <span
-          style={{
-            position: "absolute",
-            top: 5,
-            right: 5,
-            width: 7,
-            height: 7,
-            borderRadius: 999,
-            background: "#f87171",
-            boxShadow: "0 0 0 2px var(--bg)",
-          }}
-        />
-      </Link>
+      <AdminBell alerts={alerts} />
 
       <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 6 }}>
         <div
