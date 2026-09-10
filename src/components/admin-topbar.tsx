@@ -1,5 +1,6 @@
-import Link from "next/link";
 "use client";
+
+import Link from "next/link";
 
 import { usePathname } from "next/navigation";
 import { Search, Calendar, ChevronDown, Bell } from "lucide-react";
