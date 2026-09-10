@@ -12,7 +12,7 @@ import { Layers, Zap, Users as UsersIcon, Database, Settings2, RefreshCw, AlertT
 export const metadata: Metadata = { title: "Admin · Job pool", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-const RANGES = [7, 14, 30, 90];
+const RANGES = [1, 7, 14, 30, 90];
 const H = 3600_000;
 const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 const KNOWN_SOURCES = ["greenhouse", "lever", "ashby", "linkedin", "adzuna", "workable", "smartrecruiters", "indeed"];

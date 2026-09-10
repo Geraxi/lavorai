@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AdminRangeSelect } from "@/components/admin-range-select";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { TIERS } from "@/lib/billing";
@@ -38,7 +39,7 @@ import {
 export const metadata: Metadata = { title: "Admin · Panoramica", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-const DAYS = 14;
+const RANGES = [1, 7, 14, 30, 90];
 const H = 3600_000;
 
 /**
@@ -48,7 +49,9 @@ const H = 3600_000;
  * Tutti i numeri da Prisma; MRR = paganti × prezzo tier; capacità AI =
  * somma cap mensili dei tier attivi.
  */
-export default async function AdminOverviewPage() {
+export default async function AdminOverviewPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  const sp = (await searchParams) ?? {};
+  const DAYS = RANGES.includes(Number(sp.range)) ? Number(sp.range) : 14;
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -266,7 +269,7 @@ export default async function AdminOverviewPage() {
       <PageTitle
         title="Panoramica"
         sub="Controlla lo stato della piattaforma, monitora le performance e gestisci le operazioni."
-        actions={<span className="adm-quote">"Build opportunities at scale."</span>}
+        actions={<AdminRangeSelect value={DAYS} />}
       />
 
       {/* Row 1 · 5 KPI */}

@@ -8,7 +8,7 @@ import { RetryCaptchaButton } from "../_retry-captcha-button";
 export const metadata: Metadata = { title: "Admin · Consegna", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-const RANGES = [7, 14, 30, 90];
+const RANGES = [1, 7, 14, 30, 90];
 const H = 3600_000;
 const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "Ott", "Nov", "Dic"];
 

@@ -4,7 +4,7 @@ import { AdminTraffic } from "@/components/admin-traffic";
 export const metadata: Metadata = { title: "Admin · Traffico", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
-const RANGES = [7, 14, 30, 90];
+const RANGES = [1, 7, 14, 30, 90];
 
 export default async function AdminTrafficPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
   const sp = (await searchParams) ?? {};
