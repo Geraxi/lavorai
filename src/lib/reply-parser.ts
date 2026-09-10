@@ -195,7 +195,7 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     !containsAny(subjectBody, REJECTION) &&
     !containsAny(subjectBody, INTERVIEW) &&
     !asksSomething &&
-    (systemSignal || body.length > 250)
+    (systemSignal || body.length > 250 || containsAny(subject, ACKNOWLEDGEMENT))
   ) {
     return { kind: "ricevuta", isHuman: false };
   }
