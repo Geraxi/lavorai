@@ -106,7 +106,9 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
         <KpiTrendCard label="Pagine per sessione" value={perSession.toFixed(1)} delta={dPct(perSession, perSessionPrev)} series={viewsSeries.map((v, i) => (uniqSeries[i] > 0 ? v / uniqSeries[i] : 0))} color="hsl(var(--primary))" icon={<Layers size={15} />} />
       </div>
 
-      <div className="adm-card" style={{ padding: 0, position: "relative", minHeight: 520 }}>
+      {/* Altezza fissa (non minHeight: il layout admin la azzera con !important), così il globo
+          resta grande anche quando la lista paesi ha una sola riga (es. "Ultima ora"). */}
+      <div className="adm-card adm-globe-card" style={{ padding: 0, position: "relative", height: 560, overflow: "hidden" }}>
         <AdminTrafficMap rows={byCountry.map((c) => ({ country: c.country, count: c._count._all }))} regions={regions} regionsUnresolved={itUnresolved} days={P} />
       </div>
 
