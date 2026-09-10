@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
         { errorMessage: { contains: "insufficient", mode: "insensitive" } },
         { errorMessage: { contains: "Streaming is required", mode: "insensitive" } },
         { errorMessage: { contains: "troncata", mode: "insensitive" } },
+        { errorMessage: { contains: "captcha-failed", mode: "insensitive" } },
       ],
       createdAt: { gte: since },
     },
