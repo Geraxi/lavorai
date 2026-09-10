@@ -1,6 +1,7 @@
 // Componenti UI condivisi tra le sub-route di /admin.
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ChartHover } from "./_chart-hover";
 
 const TONE = {
   good: { fg: "hsl(var(--primary))", bg: "hsl(var(--primary)/0.12)", ring: "hsl(var(--primary)/0.35)" },
@@ -187,6 +188,7 @@ export function BarChart({
   const W = n * slot;
   const gradId = `bar-grad-${color.replace(/[^a-z0-9]/gi, "")}`;
   return (
+    <div style={{ position: "relative" }}>
     <svg width="100%" height={height} viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" style={{ display: "block" }}>
       <defs>
         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
@@ -206,12 +208,12 @@ export function BarChart({
             rx={1.5}
             fill={v === 0 ? "var(--border-ds)" : `url(#${gradId})`}
             opacity={v === 0 ? 0.5 : 1}
-          >
-            <title>{labels?.[i] ? `${labels[i]}: ${v}` : String(v)}</title>
-          </rect>
+          />
         );
       })}
     </svg>
+    <ChartHover items={data.map((v, i) => ({ label: labels?.[i] ?? `#${i + 1}`, rows: [{ name: "Valore", value: v, color }] }))} padLeftFrac={(slot - barW) / 2 / W} padRightFrac={(slot - barW) / 2 / W} />
+    </div>
   );
 }
 
@@ -382,6 +384,7 @@ export function KpiTrendCard({
   color = "hsl(var(--primary))",
   icon,
   sparkKind = "area",
+  seriesLabels,
   href,
 }: {
   label: string;
@@ -393,9 +396,12 @@ export function KpiTrendCard({
   color?: string;
   icon?: ReactNode;
   sparkKind?: "area" | "bars";
+  /** Etichette per punto della sparkline (tooltip). Default: "oggi", "ieri", "N giorni fa". */
+  seriesLabels?: string[];
   /** Se presente la card è cliccabile e porta al dettaglio. */
   href?: string;
 }) {
+  const sparkLabels = seriesLabels ?? series.map((_, i) => { const back = series.length - 1 - i; return back === 0 ? "Oggi" : back === 1 ? "Ieri" : `${back} giorni fa`; });
   const trendUp = delta != null && delta >= 0;
   const trendColor = delta == null ? "hsl(var(--primary))" : trendUp ? "hsl(var(--primary))" : "#f87171";
   const Tag = (href ? Link : "div") as React.ElementType;
@@ -453,8 +459,9 @@ export function KpiTrendCard({
           </div>
           {sub && <div className="adm-ellipsis" style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 5 }}>{sub}</div>}
         </div>
-        <div style={{ height: 44, minWidth: 0 }}>
+        <div style={{ height: 44, minWidth: 0, position: "relative" }}>
           {sparkKind === "bars" ? <SparkBars data={series} color={color} /> : <Sparkline data={series} color={color} height={44} />}
+          <ChartHover items={series.map((v, i) => ({ label: sparkLabels[i] ?? "", rows: [{ name: label, value: v, color }] }))} guide={false} />
         </div>
       </div>
     </Tag>
@@ -561,6 +568,7 @@ export function LineChart({
           ))}
         </div>
       )}
+      <div style={fill ? { position: "relative", flex: 1, minHeight: 0, display: "flex" } : { position: "relative" }}>
       <svg
         width="100%"
         height={fill ? "100%" : H}
@@ -605,14 +613,18 @@ export function LineChart({
               <path d={area} fill={`url(#${gradId})`} />
               <path d={line} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
               {pts.map(([x, y], i) => (
-                <circle key={i} cx={x} cy={y} r={2.5} fill={s.color}>
-                  <title>{`${labels[i]}: ${s.data[i]}`}</title>
-                </circle>
+                <circle key={i} cx={x} cy={y} r={2.5} fill={s.color} />
               ))}
             </g>
           );
         })}
       </svg>
+      <ChartHover
+        items={labels.map((l, i) => ({ label: l, rows: series.map((s) => ({ name: s.label, value: s.data[i] ?? 0, color: s.color })) }))}
+        padLeftFrac={padL / W}
+        padRightFrac={padR / W}
+      />
+      </div>
     </div>
   );
 }
@@ -659,12 +671,17 @@ export function Donut({
                 strokeDashoffset={offset}
                 strokeLinecap="butt"
                 transform={`rotate(-90 ${cx} ${cy})`}
-              >
-                <title>{`${s.label}: ${s.value}`}</title>
-              </circle>
+              />
             );
           })}
       </svg>
+      {total > 0 && (
+        <ChartHover
+          mode="donut"
+          items={segments.map((s) => ({ label: s.label, rows: [{ name: "Totale", value: s.value, color: s.color }, { name: "Quota", value: `${Math.round((s.value / total) * 100)}%` }] }))}
+          donut={{ fractions: segments.map((s) => s.value / total), innerFrac: (r - thickness / 2) / size, outerFrac: (r + thickness / 2) / size }}
+        />
+      )}
       {center && (
         <div
           style={{
