@@ -757,7 +757,9 @@ async function submitWithSecurityCode(page: Page, applicationId: string, urlBefo
     for (const r of replies) {
       const txt = `${r.subject ?? ""}\n${r.bodyText ?? ""}`;
       if (!/security|verification|codice|code/i.test(txt) && !/greenhouse/i.test(r.fromAddress)) continue;
-      const m = txt.match(/\b(\d{6})\b/);
+      // Greenhouse manda un codice alfanumerico di 8 caratteri
+      // ("Copy and paste this code … : YqOsq2bB"), non 6 cifre.
+      const m = txt.match(/code[^:\n]{0,60}:\s*([A-Za-z0-9]{6,12})\b/i) ?? txt.match(/\b([A-Za-z0-9]{8})\b(?=\s*(?:After you enter|Dopo))/i) ?? txt.match(/\b(\d{6})\b/);
       if (m) { code = m[1]; break; }
     }
   }
