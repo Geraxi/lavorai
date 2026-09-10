@@ -43,7 +43,7 @@ export default async function PreferencesPage() {
         | "auto"
         | undefined) ??
       (prefs?.autoApplyOn === false ? "manual" : "auto"),
-    dailyCap: prefs?.dailyCap ?? 25,
+    dailyCap: prefs?.dailyCap ?? 10,
     matchMin: prefs?.matchMin ?? 50,
     protectedCategory: (prefs as { protectedCategory?: boolean } | null | undefined)?.protectedCategory ?? false,
     employmentType:

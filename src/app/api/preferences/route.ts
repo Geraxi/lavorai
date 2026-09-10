@@ -120,7 +120,7 @@ export async function PUT(request: NextRequest) {
       // Default full-auto: chi vede 20 candidature inviate nella prima
       // settimana converte; chi deve tornare a cliccare "Consenti" no.
       autoApplyMode: autoApplyMode ?? "auto",
-      dailyCap: dailyCap ?? 25,
+      dailyCap: dailyCap ?? 10,
       matchMin: matchMin ?? 50,
       employmentType: employmentType ?? "employee",
       protectedCategory: protectedCategory ?? false,

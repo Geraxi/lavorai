@@ -98,6 +98,18 @@ export async function processApplication(
     return;
   }
 
+  // Budget AI giornaliero globale: oltre AI_DAILY_APP_BUDGET candidature
+  // avviate oggi, le altre restano in coda e vengono riprese tra 20 minuti
+  // (o domani). Evita di bruciare crediti Anthropic in una notte.
+  const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+  const startedToday = await prisma.application.count({ where: { startedAt: { gte: dayStart }, id: { not: applicationId } } });
+  const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 150);
+  if (startedToday >= budget) {
+    await prisma.application.update({ where: { id: applicationId }, data: { status: "queued", startedAt: new Date() } });
+    console.warn(`[worker] budget AI giornaliero raggiunto (${startedToday}/${budget}): ${applicationId} rimandata`);
+    return;
+  }
+
   await prisma.application.update({
     where: { id: applicationId },
     data: { status: "optimizing", startedAt: new Date() },

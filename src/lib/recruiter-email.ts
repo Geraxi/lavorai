@@ -379,7 +379,7 @@ Solo l'email o "NONE". Nient'altro.`;
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-5",
+        model: "claude-haiku-4-5-20251001", // estrazione meccanica: Haiku basta e costa 1/3
         max_tokens: 60,
         messages: [{ role: "user", content: prompt }],
       }),

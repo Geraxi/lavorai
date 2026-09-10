@@ -18,7 +18,7 @@ import { isProtectedCategoryQuestion } from "@/lib/protected-category";
  * consenso. Tutto best-effort: ogni step in try/catch, non lancia mai.
  */
 
-const MODEL = "claude-sonnet-5";
+const MODEL = "claude-haiku-4-5-20251001"; // risposte brevi ai form: Haiku 4.5, ~1/3 del costo
 
 export interface CandidateContext {
   firstName?: string | null;

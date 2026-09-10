@@ -67,7 +67,7 @@ export async function optimizeCV(
 ): Promise<OptimizationResult> {
   const client = getClient();
   const userContent =
-    USER_PROMPT_TEMPLATE(input.cvText, input.jobPosting) +
+    USER_PROMPT_TEMPLATE("", input.jobPosting).replace(/Ecco il CV originale[\s\S]*?<\/CV>\n\n/, "") +
     buildSessionContextBlock(input.sessionContext) +
     buildPivaBlock(input.pivaContext) +
     buildCoverLetterHintsBlock(input.coverLetterHints);
@@ -85,11 +85,20 @@ export async function optimizeCV(
     const response = await client.messages
       .stream({
         model: CV_OPTIMIZATION_MODEL,
-        max_tokens: 32000, // alzato da 16000: in produzione ~1 CV su 20 superava ancora il limite
+        // 20k basta per CV + lettera; oltre è quasi sempre output degenerato.
+        max_tokens: 20000,
+        // Costo: il CV dell'utente va in un blocco di sistema CACHED. Il
+        // worker elabora le candidature di uno stesso utente in sequenza,
+        // quindi dalla seconda in poi i ~4-8k token del CV costano il 10%.
         system: [
           {
             type: "text",
             text: SYSTEM_PROMPT,
+            cache_control: { type: "ephemeral" },
+          },
+          {
+            type: "text",
+            text: `Ecco il CV originale del candidato. Questo è l'UNICO contenuto verificato di cui dispone il candidato — qualsiasi cosa fuori da qui va considerata assente.\n\n<CV>\n${input.cvText}\n</CV>`,
             cache_control: { type: "ephemeral" },
           },
         ],
