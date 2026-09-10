@@ -41,6 +41,17 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+  // URL stabile (public/, senza hash per deploy): Chrome tiene in cache la
+  // favicon per URL, e con l'hash che cambia a ogni deploy la tab restava
+  // vuota finché non ricaricava. Il file generato /icon resta come fallback.
+  icons: {
+    icon: [
+      { url: "/icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/favicon.ico", sizes: "32x32" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/icon-192.png",
+  },
   // Google Search Console: NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION su Vercel.
   verification: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION ? { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } : undefined,
   title: {
