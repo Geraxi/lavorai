@@ -3,7 +3,21 @@
 import Link from "next/link";
 
 import { usePathname } from "next/navigation";
-import { Search, Calendar, ChevronDown, Bell } from "lucide-react";
+import { Search, Bell } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+import { AdminRangeSelect } from "@/components/admin-range-select";
+import { parseRange } from "@/components/admin-range";
+
+const RANGE_PAGES = ["/admin", "/admin/delivery", "/admin/jobs", "/admin/traffic"];
+
+function RangeControlInner({ defaultDays }: { defaultDays: number }) {
+  const sp = useSearchParams();
+  return <AdminRangeSelect value={parseRange(sp.get("range") ?? undefined, defaultDays)} />;
+}
+function RangeControl({ defaultDays }: { defaultDays: number }) {
+  return <Suspense fallback={null}><RangeControlInner defaultDays={defaultDays} /></Suspense>;
+}
 
 const TITLES: Record<string, string> = {
   "/admin": "Panoramica",
@@ -18,7 +32,7 @@ const TITLES: Record<string, string> = {
  * Topbar admin: search ⌘K · range · Live · campanella · avatar.
  * Il search apre la CommandPalette globale (⌘K già gestita dall'app).
  */
-export function AdminTopbar({ userName, email, rangeLabel = "Ultimi 14 giorni" }: { userName: string; email?: string; rangeLabel?: string }) {
+export function AdminTopbar({ userName, email }: { userName: string; email?: string; rangeLabel?: string }) {
   const pathname = usePathname() ?? "/admin";
   const initials = getInitials(userName);
 
@@ -75,23 +89,10 @@ export function AdminTopbar({ userName, email, rangeLabel = "Ultimi 14 giorni" }
 
       <div style={{ flex: 1 }} />
 
-      <div
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "7px 12px",
-          borderRadius: 10,
-          background: "var(--bg-sunken)",
-          border: "1px solid var(--border-ds)",
-          fontSize: 12.5,
-          color: "var(--fg)",
-        }}
-      >
-        <Calendar size={13} style={{ color: "var(--fg-subtle)" }} />
-        {rangeLabel}
-        <ChevronDown size={13} style={{ color: "var(--fg-subtle)" }} />
-      </div>
+      {/* Periodo: controllo reale sulle pagine che lo supportano (Panoramica, Consegna, Annunci, Traffico). */}
+      {RANGE_PAGES.some((p) => pathname === p) && (
+        <RangeControl defaultDays={pathname.startsWith("/admin/traffic") ? 7 : 14} />
+      )}
 
       <span className="adm-pill good">
         <span className="dot" />
