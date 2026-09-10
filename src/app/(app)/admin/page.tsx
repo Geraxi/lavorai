@@ -439,7 +439,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
 
         <div className="adm-card">
           <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 6 }}>
-            <div className="adm-card-title">Alert e notifiche</div>
+            <div id="alerts" className="adm-card-title">Alert e notifiche</div>
             <div style={{ display: "inline-flex", gap: 6 }}>
               <TabChip label="Tutti" n={alerts.length} active />
               <TabChip label="Errori" n={nErr} tone="bad" />

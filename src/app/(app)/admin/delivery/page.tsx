@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
-import { PageTitle, KpiTrendCard, LineChart, ChartLegend, FakeSelect, Donut, compactNumber, DeliveryFunnel } from "../_ui";
+import { PageTitle, KpiTrendCard, LineChart, ChartLegend, Donut, compactNumber, DeliveryFunnel } from "../_ui";
 import { AdminRangeSelect } from "@/components/admin-range-select";
-import { Send, FileCheck, CheckCircle2, AlertTriangle, Download, Copy } from "lucide-react";
+import { Send, FileCheck, CheckCircle2, AlertTriangle } from "lucide-react";
 import { RetryCaptchaButton } from "../_retry-captcha-button";
+import { CopyTargetButton } from "../_client-buttons";
 
 export const metadata: Metadata = { title: "Admin · Consegna", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -332,11 +333,10 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
           <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 6 }}>
             <div className="adm-card-title">Log tecnici (submitConfirmation)</div>
             <div style={{ display: "flex", gap: 6 }}>
-              <FakeSelect label="Ultimi 50" />
-              <button type="button" className="adm-btn sm"><Copy size={11} />Copia</button>
+              <CopyTargetButton targetId="submit-log" />
             </div>
           </div>
-          <div className="adm-card-body scroll" style={{ background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", borderRadius: 10, padding: 10, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 10.5, lineHeight: 1.7, color: "var(--fg-muted)" }}>
+          <div id="submit-log" className="adm-card-body scroll" style={{ background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", borderRadius: 10, padding: 10, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 10.5, lineHeight: 1.7, color: "var(--fg-muted)" }}>
             {apps14d
               .filter((a) => a.submitConfirmation || a.errorMessage)
               .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())

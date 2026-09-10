@@ -1,7 +1,9 @@
+import Link from "next/link";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, LineChart, ChartLegend, Donut, compactNumber } from "../_ui";
 import { AdminRangeSelect } from "@/components/admin-range-select";
+import { SyncJobsButton } from "../_client-buttons";
 import { AdminSyncButton } from "@/components/admin-sync-button";
 import { AdminRetryCreditButton } from "@/components/admin-retry-credit-button";
 import { AdminAutoApplyButton } from "@/components/admin-autoapply-button";
@@ -141,7 +143,6 @@ export default async function AdminJobsPage({ searchParams }: { searchParams?: P
           <div className="adm-card">
             <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 6 }}>
               <div className="adm-card-title">Stato fonti ATS</div>
-              <span className="adm-link">Vedi log fonti →</span>
             </div>
             <div className="adm-th" style={{ gridTemplateColumns: "1.2fr 100px 130px 80px 90px 24px" }}>
               <div>Fonte</div><div>Stato</div><div>Ultimo sync</div><div style={{ textAlign: "right" }}>Annunci</div><div>Azione</div><div />
@@ -156,7 +157,7 @@ export default async function AdminJobsPage({ searchParams }: { searchParams?: P
                   <span className={`adm-pill ${r.ok ? "good" : "bad"}`} style={{ padding: "3px 9px", fontSize: 10.5 }}><span className="dot" />{r.ok ? "Operativo" : "Errore"}</span>
                   <div className="adm-num" style={{ color: "var(--fg-muted)", fontSize: 12 }}>{fmtDT(r.last)}</div>
                   <div className="adm-num" style={{ textAlign: "right", color: "var(--fg)", fontWeight: 600 }}>{r.count.toLocaleString("it-IT")}</div>
-                  <div><span className={`adm-pill ${r.ok ? "neutral" : "bad"}`} style={{ padding: "4px 14px", cursor: "pointer" }}>{r.ok ? "Sync" : "Riprova"}</span></div>
+                  <div><SyncJobsButton label={r.ok ? "Sync" : "Riprova"} /></div>
                   <MoreVertical size={14} style={{ color: "var(--fg-subtle)" }} />
                 </div>
               ))}
@@ -265,7 +266,7 @@ function HealthMini({ icon, title, status, ok, items, cta, primary }: { icon: Re
       {items.map((it) => (
         <div key={it} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--fg-muted)" }}><span style={{ color: c, fontSize: 10 }}>✓</span>{it}</div>
       ))}
-      <button type="button" className={`adm-btn sm ${primary ? "primary" : ""}`} style={{ justifyContent: "center", marginTop: 2 }}>{cta}</button>
+      <Link href="/admin/system" className={`adm-btn sm ${primary ? "primary" : ""}`} style={{ justifyContent: "center", marginTop: 2, textDecoration: "none" }}>{cta}</Link>
     </div>
   );
 }

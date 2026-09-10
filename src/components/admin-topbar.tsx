@@ -1,3 +1,4 @@
+import Link from "next/link";
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -96,8 +97,8 @@ export function AdminTopbar({ userName, email, rangeLabel = "Ultimi 14 giorni" }
         Live
       </span>
 
-      <button
-        type="button"
+      <Link
+        href="/admin#alerts"
         aria-label="Notifiche"
         style={{
           position: "relative",
@@ -125,7 +126,7 @@ export function AdminTopbar({ userName, email, rangeLabel = "Ultimi 14 giorni" }
             boxShadow: "0 0 0 2px var(--bg)",
           }}
         />
-      </button>
+      </Link>
 
       <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 6 }}>
         <div

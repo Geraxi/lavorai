@@ -127,7 +127,6 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
         actions={
           <>
             <Link href={qs({ includeTest: includeTest ? undefined : "1", p: undefined })} className="adm-btn">{includeTest ? "Solo reali" : "Includi test"}</Link>
-            <button type="button" className="adm-btn primary"><UserPlus size={14} strokeWidth={2.5} />Aggiungi utente</button>
           </>
         }
       />
