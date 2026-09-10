@@ -103,10 +103,10 @@ export async function processApplication(
   // (o domani). Evita di bruciare crediti Anthropic in una notte.
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
   const startedToday = await prisma.application.count({ where: { startedAt: { gte: dayStart }, id: { not: applicationId } } });
-  const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 150);
+  const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 300);
   if (startedToday >= budget) {
     await prisma.application.update({ where: { id: applicationId }, data: { status: "queued", startedAt: new Date() } });
-    console.warn(`[worker] budget AI giornaliero raggiunto (${startedToday}/${budget}): ${applicationId} rimandata`);
+    console.warn(`[worker] budget AI giornaliero raggiunto (${startedToday}/${budget}): ${applicationId} rimandata di 20 min (alza AI_DAILY_APP_BUDGET per cambiare)`);
     return;
   }
 
