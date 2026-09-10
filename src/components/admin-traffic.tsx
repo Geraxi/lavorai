@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, compactNumber } from "@/app/(app)/admin/_ui";
 import { AdminTrafficMap } from "@/components/admin-traffic-map";
-import { AdminRangeSelect, rangeLabel } from "@/components/admin-range-select";
+import { AdminRangeSelect } from "@/components/admin-range-select";
+import { rangeLabel } from "@/components/admin-range";
 import { itRegionOf } from "@/lib/it-regions";
 import { Eye, Users, UserPlus, Layers, Download } from "lucide-react";
 

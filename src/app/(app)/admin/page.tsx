@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AdminRangeSelect, parseRange, rangeLabel } from "@/components/admin-range-select";
+import { AdminRangeSelect } from "@/components/admin-range-select";
+import { parseRange, rangeLabel } from "@/components/admin-range";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { TIERS } from "@/lib/billing";

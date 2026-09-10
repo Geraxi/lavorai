@@ -8,22 +8,9 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Suspense, useTransition } from "react";
 
-export const HOUR = 1 / 24;
+import { HOUR, rangeLabelLong } from "./admin-range";
 const DEFAULT_OPTIONS = [HOUR, 1, 7, 14, 30, 90];
 const KEY = (d: number) => (d < 1 ? "h" : String(d));
-/** Etichetta leggibile: "1h", "24h", "7g". */
-export function rangeLabel(days: number): string {
-  return days < 1 ? "1h" : days === 1 ? "24h" : `${days}g`;
-}
-export function rangeLabelLong(days: number): string {
-  return days < 1 ? "Ultima ora" : days === 1 ? "Ultime 24 ore" : `Ultimi ${days} giorni`;
-}
-/** Parsa ?range= ("h", "1", "7", …) in giorni, con default. */
-export function parseRange(raw: string | undefined, def: number, allowed: number[] = DEFAULT_OPTIONS): number {
-  if (raw === "h") return HOUR;
-  const n = Number(raw);
-  return allowed.includes(n) ? n : def;
-}
 
 function RangeSelectInner({ value, options = DEFAULT_OPTIONS, param = "range" }: { value: number; options?: number[]; param?: string }) {
   const router = useRouter();

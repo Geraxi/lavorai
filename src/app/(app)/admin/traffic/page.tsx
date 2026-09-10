@@ -1,4 +1,4 @@
-import { parseRange } from "@/components/admin-range-select";
+import { parseRange } from "@/components/admin-range";
 import type { Metadata } from "next";
 import { AdminTraffic } from "@/components/admin-traffic";
 

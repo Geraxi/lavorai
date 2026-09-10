@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, LineChart, ChartLegend, Donut, compactNumber, DeliveryFunnel } from "../_ui";
-import { AdminRangeSelect, parseRange, rangeLabel, rangeLabelLong } from "@/components/admin-range-select";
+import { AdminRangeSelect } from "@/components/admin-range-select";
+import { parseRange, rangeLabel, rangeLabelLong } from "@/components/admin-range";
 import { Send, FileCheck, CheckCircle2, AlertTriangle } from "lucide-react";
 import { RetryCaptchaButton } from "../_retry-captcha-button";
 import { CopyTargetButton } from "../_client-buttons";
