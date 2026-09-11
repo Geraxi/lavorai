@@ -95,6 +95,45 @@ export function descriptionHtml(text: string): string {
   return paras.map((p) => `<p>${esc(p).replace(/\n/g, "<br/>")}</p>`).join("");
 }
 
+/**
+ * Regione e CAP generico delle principali città italiane. Il CAP "generico"
+ * (es. 20100 Milano) è quello ufficiale per la città intera: niente
+ * indirizzi inventati. Le città non in tabella restano senza regione/CAP.
+ */
+const IT_CITIES: Record<string, { region: string; cap?: string }> = {
+  milano: { region: "Lombardia", cap: "20100" }, roma: { region: "Lazio", cap: "00100" }, torino: { region: "Piemonte", cap: "10100" },
+  napoli: { region: "Campania", cap: "80100" }, bologna: { region: "Emilia-Romagna", cap: "40100" }, firenze: { region: "Toscana", cap: "50100" },
+  genova: { region: "Liguria", cap: "16100" }, palermo: { region: "Sicilia", cap: "90100" }, bari: { region: "Puglia", cap: "70100" },
+  venezia: { region: "Veneto", cap: "30100" }, verona: { region: "Veneto", cap: "37100" }, padova: { region: "Veneto", cap: "35100" },
+  trieste: { region: "Friuli-Venezia Giulia", cap: "34100" }, catania: { region: "Sicilia", cap: "95100" }, cagliari: { region: "Sardegna", cap: "09100" },
+  bergamo: { region: "Lombardia", cap: "24100" }, brescia: { region: "Lombardia", cap: "25100" }, monza: { region: "Lombardia", cap: "20900" },
+  modena: { region: "Emilia-Romagna", cap: "41100" }, parma: { region: "Emilia-Romagna", cap: "43100" }, "reggio emilia": { region: "Emilia-Romagna", cap: "42100" },
+  trento: { region: "Trentino-Alto Adige", cap: "38100" }, bolzano: { region: "Trentino-Alto Adige", cap: "39100" }, treviso: { region: "Veneto", cap: "31100" },
+  vicenza: { region: "Veneto", cap: "36100" }, udine: { region: "Friuli-Venezia Giulia", cap: "33100" }, pisa: { region: "Toscana", cap: "56100" },
+  ancona: { region: "Marche", cap: "60100" }, perugia: { region: "Umbria", cap: "06100" }, pescara: { region: "Abruzzo", cap: "65100" },
+  salerno: { region: "Campania", cap: "84100" }, lecce: { region: "Puglia", cap: "73100" }, messina: { region: "Sicilia", cap: "98100" },
+  "reggio calabria": { region: "Calabria", cap: "89100" }, sassari: { region: "Sardegna", cap: "07100" }, como: { region: "Lombardia", cap: "22100" },
+  varese: { region: "Lombardia", cap: "21100" }, pavia: { region: "Lombardia", cap: "27100" }, rimini: { region: "Emilia-Romagna", cap: "47921" },
+  livorno: { region: "Toscana", cap: "57100" }, prato: { region: "Toscana", cap: "59100" }, novara: { region: "Piemonte", cap: "28100" },
+  taranto: { region: "Puglia", cap: "74100" }, foggia: { region: "Puglia", cap: "71100" }, latina: { region: "Lazio", cap: "04100" },
+  milan: { region: "Lombardia", cap: "20100" }, rome: { region: "Lazio", cap: "00100" }, turin: { region: "Piemonte", cap: "10100" },
+  naples: { region: "Campania", cap: "80100" }, florence: { region: "Toscana", cap: "50100" }, venice: { region: "Veneto", cap: "30100" },
+  genoa: { region: "Liguria", cap: "16100" }, padua: { region: "Veneto", cap: "35100" },
+};
+
+function postalAddress(locality: string | null, country: string | null): Record<string, string> {
+  const addr: Record<string, string> = { "@type": "PostalAddress" };
+  if (locality) addr.addressLocality = locality;
+  if (country) addr.addressCountry = country;
+  const city = locality && (country === "IT" || !country) ? IT_CITIES[locality.toLowerCase()] : undefined;
+  if (city) {
+    addr.addressRegion = city.region;
+    if (city.cap) addr.postalCode = city.cap;
+    if (!country) addr.addressCountry = "IT";
+  }
+  return addr;
+}
+
 export function jobPostingJsonLd(job: Job): Record<string, unknown> {
   const remote = isRemoteJob(job);
   const country = guessCountry(job);
@@ -116,13 +155,10 @@ export function jobPostingJsonLd(job: Job): Record<string, unknown> {
     base.jobLocationType = "TELECOMMUTE";
     base.applicantLocationRequirements = { "@type": "Country", name: country === "IT" || !country ? "Italy" : country };
     if (locality && locality.toLowerCase() !== "remote") {
-      base.jobLocation = { "@type": "Place", address: { "@type": "PostalAddress", addressLocality: locality, ...(country ? { addressCountry: country } : {}) } };
+      base.jobLocation = { "@type": "Place", address: postalAddress(locality, country) };
     }
   } else {
-    base.jobLocation = {
-      "@type": "Place",
-      address: { "@type": "PostalAddress", ...(locality ? { addressLocality: locality } : {}), ...(country ? { addressCountry: country } : {}) },
-    };
+    base.jobLocation = { "@type": "Place", address: postalAddress(locality, country) };
   }
   if (job.salaryMin || job.salaryMax) {
     const min = job.salaryMin ?? job.salaryMax ?? 0;
