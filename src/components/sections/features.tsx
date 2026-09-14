@@ -27,7 +27,7 @@ const features: Feature[] = [
   {
     icon: FileText,
     title: "CV riscritto per ogni annuncio",
-    body: "Claude legge il testo dell'annuncio e riscrive CV e cover letter in italiano nativo, allineati alle keyword ATS. Output DOCX + PDF mono-pagina pronto all'invio.",
+    body: "OpenAI legge il testo dell'annuncio e riscrive CV e cover letter in italiano nativo, allineati alle keyword ATS. Output DOCX + PDF mono-pagina pronto all'invio.",
   },
   {
     icon: Send,

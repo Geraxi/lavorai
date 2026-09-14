@@ -7,7 +7,7 @@ import { isProtectedCategoryQuestion } from "@/lib/protected-category";
  * AI answerer per i campi OBBLIGATORI di un form ATS che il fill
  * deterministico (generic-fill) non è riuscito a compilare.
  *
- * Filosofia (coerente col resto del prodotto): MAI inventare. Claude può
+ * Filosofia (coerente col resto del prodotto): MAI inventare. Il modello può
  * rispondere SOLO usando i dati reali del candidato (profilo + CV). Se una
  * domanda richiede info che non abbiamo, ritorna null → il campo resta
  * vuoto → il submit resterà UNCONFIRMED e l'utente finisce a mano. Meglio
@@ -17,8 +17,6 @@ import { isProtectedCategoryQuestion } from "@/lib/protected-category";
  * widget react-select (Greenhouse nuovo, Lever, Ashby), checkbox di
  * consenso. Tutto best-effort: ogni step in try/catch, non lancia mai.
  */
-
-const MODEL = "claude-haiku-4-5-20251001"; // risposte brevi ai form: Haiku 4.5, ~1/3 del costo
 
 export interface CandidateContext {
   firstName?: string | null;
@@ -78,7 +76,7 @@ export interface GivenAnswer {
   kind: string;
   answer: string;
   /** "user" = risposta data dall'utente in /questions, "profile" = dal profilo,
-   *  "rule" = regola deterministica, "ai" = Claude, "assumed" = default
+   *  "rule" = regola deterministica, "ai" = provider AI, "assumed" = default
    *  conservativo dedotto (ultima risorsa, l'utente può correggerlo in /inbox). */
   source: "user" | "profile" | "ai" | "rule" | "assumed";
 }
@@ -112,7 +110,7 @@ interface AiAnswer {
 const TAG = "data-lavorai-idx";
 
 /**
- * Scansiona i campi required ancora vuoti, chiede a Claude, compila.
+ * Scansiona i campi required ancora vuoti, chiede al provider AI, compila.
  * Ritorna quanti ne ha riempiti e quanti restano obbligatori-vuoti.
  */
 export async function answerRequiredFields(
@@ -208,14 +206,14 @@ export async function answerRequiredFields(
     }
   }
 
-  // 4. Per il resto, chiedi a Claude (solo dai dati reali).
+  // 4. Per il resto, chiedi al provider AI (solo dai dati reali).
   const remaining = pending.filter((f) => !filledIdx.has(f.idx));
   let answers: AiAnswer[] = [];
   if (remaining.length > 0) {
     try {
-      answers = await askClaude(ctx, remaining);
+      answers = await askAi(ctx, remaining);
     } catch (err) {
-      console.warn("[ai-answer] claude failed", err);
+      console.warn("[ai-answer] provider failed", err);
       answers = [];
     }
   }
@@ -432,7 +430,7 @@ function ruleAnswerForField(f: FieldDescriptor, ctx: CandidateContext, autonomou
 
 /**
  * Variante SENZA browser: risponde a un elenco di domande (API JSON come
- * Recruitee) con la stessa catena profilo → regole → Claude → ultima
+ * Recruitee) con la stessa catena profilo → regole → AI → ultima
  * risorsa. Ritorna la risposta per idx (null = da chiedere all'utente).
  */
 export async function answerOffline(
@@ -462,7 +460,7 @@ export async function answerOffline(
   }
   if (remaining.length > 0) {
     let ai: AiAnswer[] = [];
-    try { ai = await askClaude(ctx, remaining as FieldDescriptor[]); } catch (err) { console.warn("[ai-answer] offline claude failed", err); }
+    try { ai = await askAi(ctx, remaining as FieldDescriptor[]); } catch (err) { console.warn("[ai-answer] offline provider failed", err); }
     for (const a of ai) {
       const f = remaining.find((x) => x.idx === a.idx);
       const v = f ? pick(f, a.value ?? null) : null;
@@ -852,9 +850,9 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
   return false;
 }
 
-// ---------- Claude ----------
+// ---------- Provider AI ----------
 
-async function askClaude(
+async function askAi(
   ctx: CandidateContext,
   fields: FieldDescriptor[],
 ): Promise<AiAnswer[]> {
@@ -930,7 +928,7 @@ async function askClaude(
   const json = extractJson(text);
   if (!json || !Array.isArray(json.answers)) {
     console.warn(
-      `[ai-answer] risposta Claude non parsabile (${text.length} char, stop=${res.stop_reason}, blocks=${(res.content ?? []).map((c) => c.type).join(",")}): ${text.slice(0, 200).replace(/\s+/g, " ")}`,
+      `[ai-answer] risposta AI non parsabile (${text.length} char, provider=${res.stop_reason}, blocks=${(res.content ?? []).map((c) => c.type).join(",")}): ${text.slice(0, 200).replace(/\s+/g, " ")}`,
     );
     return [];
   }

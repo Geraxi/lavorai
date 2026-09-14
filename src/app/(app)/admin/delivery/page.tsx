@@ -145,7 +145,7 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
     { label: "Campo mancante (missing_field)", color: "#60a5fa", re: /^missing_field$|required|missing|campo/i },
     { label: "Validazione rifiutata (validation_failed)", color: "#a78bfa", re: /^validation_failed$|invalid|validation|rifiutat/i },
     { label: "Captcha / anti-bot", color: "#94a3b8", re: /^captcha$|captcha|cloudflare|challenge/i },
-    { label: "AI / crediti", color: "#f87171", re: /credit balance|crediti|overload|rate limit|anthropic/i },
+    { label: "AI / crediti", color: "#f87171", re: /credit balance|crediti|quota|insufficient|overload|rate limit|openai|anthropic/i },
     { label: "Sconosciuto (unknown_error)", color: "#fb923c", re: /^unknown_error$|timeout|network|fetch failed|\b5\d\d\b/i },
   ];
   const causeCount = new Map<string, number>(CAUSES.map((c) => [c.label, 0]));

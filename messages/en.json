@@ -259,7 +259,7 @@
     "autoTitle": "LavorAI does on its own",
     "autoItem1": "Discovers new openings every 2 hours on public ATS (Greenhouse, Lever, Ashby, SmartRecruiters, Workable)",
     "autoItem2": "Filters by roles, location, salary range and company blacklist you set",
-    "autoItem3": "Rewrites CV and cover letter for each single posting using Claude (no templates)",
+    "autoItem3": "Rewrites CV and cover letter for each single posting using OpenAI (no templates)",
     "autoItem4": "Fills public ATS forms and submits the application",
     "consentEyebrow": "You confirm",
     "consentTitle": "Hybrid mode: asks for your OK",
@@ -313,7 +313,7 @@
     "caption": "No signup · 3 free audits · GDPR-first",
     "bullet1": "ATS readability score out of 100, you know where you lose points",
     "bullet2": "CV rewritten in English (or Italian) tailored to the role",
-    "bullet3": "Cover letter written by Claude for that specific posting",
+    "bullet3": "Cover letter written by OpenAI for that specific posting",
     "bullet4": "3-5 concrete suggestions, not vague generic advice",
     "getEyebrow": "What you get",
     "getTitle": "Everything in a single call, in 60 seconds.",
@@ -352,7 +352,7 @@
     "bulletsTitle": "What you get",
     "bullet1": "ATS readability score (out of 100)",
     "bullet2": "Optimized CV in DOCX",
-    "bullet3": "Cover letter written by Claude for that posting",
+    "bullet3": "Cover letter written by OpenAI for that posting",
     "bullet4": "3-5 suggestions to improve"
   },
   "trustSection": {
@@ -443,7 +443,7 @@
     "rights": "All rights reserved.",
     "optimizeCv": "Optimize CV",
     "hostedIn": "Hosted in Frankfurt · GDPR compliant",
-    "builtWith": "Built with Next.js, Claude AI."
+    "builtWith": "Built with Next.js, OpenAI."
   },
   "auth": {
     "loginTitle": "Welcome back",

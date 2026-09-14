@@ -13,7 +13,7 @@ Il copilota italiano per la ricerca del lavoro. Candidati in automatico sui port
 - **Auth**: NextAuth v5, email magic link via Resend
 - **Billing**: Stripe (Checkout + Webhook + Customer Portal)
 - **DB**: Prisma + SQLite (dev) → Postgres/Supabase Frankfurt (prod)
-- **AI**: Anthropic Claude (`claude-sonnet-4-20250514`, EOL 15/6/2026 — da migrare)
+- **AI auto-apply**: OpenAI Responses API (`gpt-5.6-terra` qualità, `gpt-5.6-luna` velocità) + fallback Anthropic opzionale
 - **Parsing CV**: pdf-parse v2 + mammoth
 - **DOCX**: `docx` library
 - **Email**: Resend (auth + notifiche)
@@ -78,7 +78,7 @@ src/
 │   ├── db.ts               # Prisma singleton
 │   ├── crypto.ts           # AES-256-GCM per session cookie portali
 │   ├── adzuna.ts           # Job feed client + mock fallback
-│   ├── claude.ts           # Claude optimizeCV (prompt caching)
+│   ├── claude.ts           # optimizeCV multi-provider (OpenAI primario)
 │   ├── cv-parser.ts, docx-generator.ts, email.ts, jobs-repo.ts, ui-applications.ts, application-worker.ts, storage.ts, portals.ts
 ├── proxy.ts                # Route protection (Next 16 middleware → proxy)
 └── types/cv.ts
@@ -108,7 +108,9 @@ Config in `src/lib/billing.ts` — single source of truth per UI e paywall serve
 Vedi `.env.example`. Obbligatorie per produzione:
 
 ```
-ANTHROPIC_API_KEY
+OPENAI_API_KEY
+OPENAI_MODEL_STRONG=gpt-5.6-terra
+OPENAI_MODEL_FAST=gpt-5.6-luna
 RESEND_API_KEY
 EMAIL_FROM=LavorAI <noreply@lavorai.it>        # dominio verificato su Resend
 AUTH_SECRET=<openssl rand -hex 32>
@@ -149,7 +151,7 @@ Cosa **richiede la tua azione** (non posso farlo dal codice):
 - [ ] Stripe account: crea prodotti Pro (€19.99) e Pro+ (€39.99), copia `price_id` nelle env
 - [ ] Stripe webhook: aggiungi endpoint `https://lavorai.it/api/stripe/webhook` nel dashboard → copia `webhook_secret`
 - [ ] Resend account: verifica dominio `lavorai.it` (aggiungi DNS records forniti da Resend) → senza questo, email arrivano solo a te come owner
-- [ ] Anthropic: passa a modello supportato (es. `claude-sonnet-4-5-20250929` o successivo) — attuale `claude-sonnet-4-20250514` EOL 15/6/2026
+- [ ] OpenAI: crea un progetto API separato per LavorAI, configura billing/limiti e copia `OPENAI_API_KEY` in Vercel + Railway
 - [ ] Supabase: crea progetto region Frankfurt, copia `DATABASE_URL`, cambia `provider = "postgresql"` in `schema.prisma` e `npx prisma migrate deploy`
 - [ ] Upstash: crea database Redis region EU, copia URL+TOKEN
 - [ ] Adzuna: registra app gratis, copia APP_ID + APP_KEY
@@ -218,7 +220,7 @@ Fixtures in `fixtures/`:
 
 ```bash
 npx tsx scripts/test-optimize.ts fixtures/fake-cv-dev.pdf
-# → stampa JSON Claude + salva DOCX in /tmp
+# → stampa JSON AI + salva DOCX in /tmp
 ```
 
 ## Status
@@ -226,7 +228,7 @@ npx tsx scripts/test-optimize.ts fixtures/fake-cv-dev.pdf
 **Sprint 5 completato — production-ready scaffolding.**
 
 End-to-end verificato in locale con 1 candidatura reale completa:
-CV upload → parseCV (2906 char) → optimizeCV (Claude Sonnet 4) → DOCX generati → worker success in 34s → /applications shows status "inviata" con ATS score 35/100 + suggerimenti.
+CV upload → parseCV → optimizeCV (OpenAI Responses API) → DOCX generati → worker → /applications mostra stato, ATS score e suggerimenti.
 
 **Prossimi sprint**:
 - Sprint 6: Portal linking UI rebuilt in app shell (LinkedIn/InfoJobs/Indeed/Subito)

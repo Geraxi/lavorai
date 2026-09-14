@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db";
  *
  * Quando ci avviciniamo/superiamo il limite:
  *  - NON inviamo l'email
- *  - MA la candidatura continua il suo processing (Claude, DB, Playwright)
+ *  - MA la candidatura continua il suo processing (AI, DB, Playwright)
  *  - logghiamo il fatto
  */
 

@@ -56,7 +56,12 @@ export default async function AdminJobsPage({ searchParams }: { searchParams?: P
     prisma.application.count({
       where: {
         status: "failed",
-        OR: [{ errorMessage: { contains: "credit balance", mode: "insensitive" } }, { errorMessage: { contains: "crediti esauriti", mode: "insensitive" } }],
+        OR: [
+          { errorMessage: { contains: "credit balance", mode: "insensitive" } },
+          { errorMessage: { contains: "crediti esauriti", mode: "insensitive" } },
+          { errorMessage: { contains: "insufficient_quota", mode: "insensitive" } },
+          { errorMessage: { contains: "quota exceeded", mode: "insensitive" } },
+        ],
         createdAt: { gte: since(6) },
       },
     }),
@@ -211,7 +216,7 @@ export default async function AdminJobsPage({ searchParams }: { searchParams?: P
               <span className={`adm-pill ${creditFailures6h > 0 ? "warn" : "good"}`}><span className="dot" />{creditFailures6h > 0 ? "Degradato" : "Operativo"}</span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-              <HealthMini icon={<Sparkles size={13} />} title="Anthropic (API)" status={creditFailures6h > 0 ? "Crediti bassi" : "Connesso"} ok={creditFailures6h === 0} items={["Chiave valida", creditFailures6h > 0 ? "Crediti in esaurimento" : "Crediti OK"]} cta="Verifica chiave + crediti" primary />
+              <HealthMini icon={<Sparkles size={13} />} title="OpenAI (API)" status={creditFailures6h > 0 ? "Crediti bassi" : "Connesso"} ok={creditFailures6h === 0} items={["Chiave valida", creditFailures6h > 0 ? "Crediti in esaurimento" : "Crediti OK"]} cta="Verifica chiave + crediti" primary />
               <HealthMini icon={<Globe size={13} />} title="Browser (Chromium)" status="Operativo" ok items={["Avvio riuscito", "Sessioni attive", "Nessun errore"]} cta="Verifica browser" />
             </div>
           </div>

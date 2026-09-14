@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
     AUTO_APPLY_ENABLED: process.env.AUTO_APPLY_ENABLED ?? null,
     CRON_SECRET: !!process.env.CRON_SECRET,
     NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL ?? null,
-    ANTHROPIC_API_KEY: !!process.env.ANTHROPIC_API_KEY,
+    OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
+    ANTHROPIC_FALLBACK: !!process.env.ANTHROPIC_API_KEY,
     BLOB_READ_WRITE_TOKEN: !!process.env.BLOB_READ_WRITE_TOKEN,
     VERCEL_ENV: process.env.VERCEL_ENV ?? null,
   };

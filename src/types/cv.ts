@@ -1,5 +1,5 @@
 /**
- * Shape del JSON restituito da Claude dopo l'ottimizzazione CV.
+ * Shape del JSON restituito dal provider AI dopo l'ottimizzazione CV.
  * Deve combaciare esattamente con lo schema descritto in
  * src/lib/prompts/cv-optimization.ts — qualsiasi modifica qui richiede
  * aggiornamento parallelo del prompt.

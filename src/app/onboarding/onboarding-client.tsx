@@ -29,7 +29,7 @@ interface Details {
 }
 
 // 3 step come da specs: CV → Ruolo+Città → Avvia (= dashboard).
-// Profilo/Esperienza rimosse: il profilo viene auto-estratto da Claude
+// Profilo/Esperienza rimosse: il profilo viene auto-estratto dal provider AI
 // dal CV; gli Esperienza/Notice period si possono editare in Preferenze
 // dopo (opzionale, non blocca il valore principale).
 // STEPS labels are localized inside the component via useTranslations

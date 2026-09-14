@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { complete } from "@/lib/ai-router";
 import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json";
 import {
   CVProfileSchema,
@@ -8,26 +8,15 @@ import {
 
 /**
  * Two jobs:
- * 1. `extractFullProfile(cvText)` — one-shot Claude extraction from raw CV text
+ * 1. `extractFullProfile(cvText)` — one-shot AI extraction from raw CV text
  *    into the full structured CVProfile. Never fabricates — leaves fields empty.
  * 2. `tailorProfileForJob(profile, jobPosting, lang)` — reorders / rewrites /
  *    translates the profile for a specific job. NEVER adds skills or bullets
  *    not present in the source profile.
  */
 
-const MODEL = "claude-sonnet-5";
-
-let cached: Anthropic | null = null;
-function client(): Anthropic | null {
-  if (cached) return cached;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
-  cached = new Anthropic({ apiKey });
-  return cached;
-}
-
 /**
- * Claude a volte sfora i limiti dello schema (skill di 70 caratteri, livello
+ * I modelli possono sforare i limiti dello schema (skill di 70 caratteri, livello
  * lingua "C1 (IELTS 7.5, certificato 2022)", endDate discorsiva): prima
  * scartavamo TUTTO il profilo → utente con profilo vuoto → niente auto-apply.
  * Qui tronchiamo le stringhe ai massimi dello schema, ricorsivamente.
@@ -99,32 +88,20 @@ Schema esatto (rispondi SOLO con JSON valido, nessun markdown):
 NOTA su sezioni aggiuntive del CV: certificazioni, corsi, pubblicazioni, volontariato, progetti personali → aggiungi come esperienza separata in "experiences" (role = nome certificazione/corso/progetto, company = ente emittente/contesto) oppure come bullet dell'esperienza/istruzione più rilevante. NON perdere questa informazione.`;
 
 export async function extractFullProfile(cvText: string): Promise<CVProfile> {
-  const c = client();
-  if (!c) return { ...EMPTY_PROFILE };
+  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    return { ...EMPTY_PROFILE };
+  }
 
   const clipped = cvText.slice(0, 24000);
   try {
-    const resp = await c.messages.create({
-      model: MODEL,
-      max_tokens: 6000,
-      system: [
-        {
-          type: "text",
-          text: EXTRACT_SYSTEM,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [
-        {
-          role: "user",
-          content: `CV TEXT:\n\n${clipped}\n\n---\nEstrai il profilo completo in JSON.`,
-        },
-      ],
+    const response = await complete({
+      task: "cv_profile_full",
+      system: EXTRACT_SYSTEM,
+      user: `CV TEXT:\n\n${clipped}\n\n---\nEstrai il profilo completo in JSON.`,
+      maxTokens: 6000,
+      json: true,
     });
-    const raw = resp.content
-      .map((b) => (b.type === "text" ? b.text : ""))
-      .join("")
-      .trim();
+    const raw = response.text.trim();
     const cleaned = stripCodeFence(raw);
     const parsed = parseModelJson(cleaned);
     const r = CVProfileSchema.safeParse(clipProfileStrings(parsed));
@@ -170,8 +147,9 @@ export async function tailorProfileForJob(input: {
   jobPosting: string;
   lang: "it" | "en";
 }): Promise<CVProfile> {
-  const c = client();
-  if (!c) return input.profile;
+  if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    return input.profile;
+  }
 
   const sys = input.lang === "en" ? TAILOR_SYSTEM_EN : TAILOR_SYSTEM_IT;
   const userPrompt = `PROFILO SORGENTE (JSON):
@@ -185,16 +163,14 @@ ${input.jobPosting.slice(0, 8000)}
 Riscrivi il profilo per questo job, rispettando le regole ferree. Output in ${input.lang === "en" ? "inglese" : "italiano"}.`;
 
   try {
-    const resp = await c.messages.create({
-      model: MODEL,
-      max_tokens: 6000, // 3500 troncava il profilo (JSON "Unterminated string") → fallback al CV sorgente
-      system: [{ type: "text", text: sys, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: userPrompt }],
+    const response = await complete({
+      task: "cv_profile_full",
+      system: sys,
+      user: userPrompt,
+      maxTokens: 6000, // 3500 troncava il profilo (JSON "Unterminated string") → fallback al CV sorgente
+      json: true,
     });
-    const raw = resp.content
-      .map((b) => (b.type === "text" ? b.text : ""))
-      .join("")
-      .trim();
+    const raw = response.text.trim();
     const cleaned = stripCodeFence(raw);
     const parsed = parseModelJson(cleaned);
     const r = CVProfileSchema.safeParse(clipProfileStrings(parsed));
@@ -203,7 +179,7 @@ Riscrivi il profilo per questo job, rispettando le regole ferree. Output in ${in
       return input.profile;
     }
     // Guardrail anti-allucinazione: tutte le aziende nel tailored devono
-    // esistere nel source profile. Se Claude ne aggiunge, usa il source.
+    // esistere nel source profile. Se il modello ne aggiunge, usa il source.
     const srcCompanies = new Set(
       input.profile.experiences.map((e) => e.company.toLowerCase().trim()),
     );

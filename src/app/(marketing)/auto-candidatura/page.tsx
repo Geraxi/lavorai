@@ -179,7 +179,7 @@ export default function AutoCandidaturaPage() {
             </li>
             <li>
               <strong>Riscrive CV + cover letter</strong> per ogni annuncio con
-              Claude AI (tone-matched, keyword ATS).
+              OpenAI (tone-matched, keyword ATS).
             </li>
             <li>
               <strong>Compila il form</strong> di candidatura via Playwright su
@@ -272,7 +272,7 @@ export default function AutoCandidaturaPage() {
             },
             {
               q: "Il CV viene modificato per ogni candidatura?",
-              a: "Sì. Claude Sonnet AI riscrive summary + bullet delle esperienze in base ai keyword dell'annuncio (rispettando i tuoi dati reali — nessuna invenzione). Anche la cover letter è unica per ogni azienda.",
+              a: "Sì. OpenAI riscrive summary + bullet delle esperienze in base ai keyword dell'annuncio (rispettando i tuoi dati reali — nessuna invenzione). Anche la cover letter è unica per ogni azienda.",
             },
             {
               q: "Quanto costa?",

@@ -55,7 +55,7 @@ function isKnownAtsCompany(company: string | null | undefined): boolean {
  *
  * STATI:
  *   queued       → appena creata, in attesa di processing
- *   optimizing   → Claude sta ottimizzando CV + cover letter
+ *   optimizing   → OpenAI sta ottimizzando CV + cover letter
  *   ready_to_apply → CV+CL generati, utente può cliccare apply sul portale
  *   applying     → Playwright sta tentando submit automatico (solo prod con worker)
  *   success      → candidatura effettivamente inviata sul portale
@@ -100,7 +100,7 @@ export async function processApplication(
 
   // Budget AI giornaliero globale: oltre AI_DAILY_APP_BUDGET candidature
   // avviate oggi, le altre restano in coda e vengono riprese tra 20 minuti
-  // (o domani). Evita di bruciare crediti Anthropic in una notte.
+  // (o domani). Evita di bruciare crediti AI in una notte.
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
   const startedToday = await prisma.application.count({ where: { startedAt: { gte: dayStart }, id: { not: applicationId } } });
   const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 300);
@@ -125,13 +125,13 @@ export async function processApplication(
   let clBuffer: Buffer;
 
   try {
-    // 1. Claude: ottimizza CV + cover letter per questo job specifico
+    // 1. OpenAI: ottimizza CV + cover letter per questo job specifico
     const coverLetterHints = coverLetterHintsFor(app.user.email, {
       title: app.job.title,
       category: app.job.category,
     });
     // Se l'utente è in modalità P.IVA/both E l'annuncio sembra freelance,
-    // passiamo a Claude il contesto commerciale per generare un pitch B2B
+    // passiamo al modello il contesto commerciale per generare un pitch B2B
     // invece di una classica cover letter motivazionale.
     const prefs = app.user.preferences;
     const empType = prefs?.employmentType ?? "employee";
@@ -209,10 +209,10 @@ export async function processApplication(
         "Servizio AI temporaneamente non disponibile (crediti esauriti). La candidatura verrà ritentata appena ripristinato.",
       );
       await alertFounder(
-        "anthropic_credits",
-        "Crediti Anthropic esauriti — pipeline candidature ferma",
-        `Una candidatura (${applicationId}) è fallita perché i crediti Anthropic sono esauriti.\n` +
-          `Tutte le nuove candidature falliranno finché non ricarichi su console.anthropic.com → Billing.\n\n` +
+        "ai_credits",
+        "Crediti provider AI esauriti — pipeline candidature ferma",
+        `Una candidatura (${applicationId}) è fallita perché i crediti o la quota del provider AI sono esauriti.\n` +
+          `OpenAI è il provider primario: controlla il billing su platform.openai.com e l'eventuale fallback Anthropic.\n\n` +
           `Errore grezzo: ${err instanceof Error ? err.message : String(err)}`,
       ).catch(() => void 0);
       return;

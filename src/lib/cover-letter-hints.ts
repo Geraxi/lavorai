@@ -10,7 +10,7 @@ import { isLifetimeProPlus } from "@/lib/billing";
  *     ignora punti/+tag per Gmail).
  *  2. Controlla match sul ruolo/settore (isTechRole() per IT).
  *  3. Se entrambi matchano → ritorna l'hint in linguaggio naturale;
- *     Claude lo intreccerà nella cover letter.
+ *     Il modello lo intreccerà nella cover letter.
  */
 
 /**

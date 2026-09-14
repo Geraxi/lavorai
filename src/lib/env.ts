@@ -33,9 +33,9 @@ const CHECKS: EnvCheck[] = [
     description: "Connection string Postgres in prod",
   },
   {
-    name: "ANTHROPIC_API_KEY",
+    name: "OPENAI_API_KEY",
     required: true,
-    description: "Claude API key per estrazione profilo CV + ottimizzazione",
+    description: "OpenAI API key per estrazione profilo, ottimizzazione e risposte ATS",
   },
   {
     name: "RESEND_API_KEY",

@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       throw err;
     }
 
-    // 2. Claude → CV ottimizzato + cover letter
+    // 2. OpenAI → CV ottimizzato + cover letter
     const { data: formData2 } = parsedForm;
     const result = await optimizeCV({
       cvText,

@@ -4,15 +4,15 @@ import OpenAI from "openai";
 /**
  * Router AI multi-provider. Ogni feature ("task") ha un provider+modello
  * primario e uno di fallback; se il primario fallisce per crediti, rate
- * limit o errore server, si passa al secondario. Per i task pesanti si può
- * ripartire il traffico tra i due provider (AI_SPLIT_<TASK>=percentuale
- * verso OpenAI) così i crediti si consumano in modo bilanciato.
+ * limit o errore server, si passa al secondario. I task che alimentano
+ * l'auto-apply sono OpenAI-first; Anthropic resta un fallback operativo
+ * opzionale durante la migrazione.
  *
  * Env:
  *   ANTHROPIC_API_KEY, OPENAI_API_KEY
- *   OPENAI_MODEL_STRONG (default gpt-4.1), OPENAI_MODEL_FAST (default gpt-4.1-mini)
+ *   OPENAI_MODEL_STRONG (default gpt-5.6-terra), OPENAI_MODEL_FAST (default gpt-5.6-luna)
  *   ANTHROPIC_MODEL_STRONG (default claude-sonnet-5), ANTHROPIC_MODEL_FAST (default claude-haiku-4-5-20251001)
- *   AI_SPLIT_CV_OPTIMIZATION=0..100  → quota di CV/lettere generati da OpenAI (default 0)
+ *   AI_SPLIT_CV_OPTIMIZATION=0..100  → quota OpenAI per task Anthropic-first (legacy)
  *   AI_TASK_<TASK>=anthropic|openai   → forza il primario di un task
  */
 
@@ -30,8 +30,8 @@ type Provider = "anthropic" | "openai";
 type Tier = "strong" | "fast";
 
 const TASK_DEFAULTS: Record<AiTask, { primary: Provider; tier: Tier }> = {
-  cv_optimization: { primary: "anthropic", tier: "strong" },
-  cv_profile_full: { primary: "anthropic", tier: "strong" },
+  cv_optimization: { primary: "openai", tier: "strong" },
+  cv_profile_full: { primary: "openai", tier: "strong" },
   cv_profile_quick: { primary: "openai", tier: "fast" },
   form_answers: { primary: "openai", tier: "fast" },
   email_extract: { primary: "openai", tier: "fast" },
@@ -41,7 +41,7 @@ const TASK_DEFAULTS: Record<AiTask, { primary: Provider; tier: Tier }> = {
 };
 
 function model(provider: Provider, tier: Tier): string {
-  if (provider === "openai") return tier === "strong" ? process.env.OPENAI_MODEL_STRONG ?? "gpt-4.1" : process.env.OPENAI_MODEL_FAST ?? "gpt-4.1-mini";
+  if (provider === "openai") return tier === "strong" ? process.env.OPENAI_MODEL_STRONG ?? "gpt-5.6-terra" : process.env.OPENAI_MODEL_FAST ?? "gpt-5.6-luna";
   return tier === "strong" ? process.env.ANTHROPIC_MODEL_STRONG ?? "claude-sonnet-5" : process.env.ANTHROPIC_MODEL_FAST ?? "claude-haiku-4-5-20251001";
 }
 
@@ -63,7 +63,17 @@ export function providerOrder(task: AiTask): Provider[] {
 export function isFailoverError(err: unknown): boolean {
   const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
   const status = (err as { status?: number })?.status;
-  return status === 429 || status === 402 || (status != null && status >= 500) || /credit|quota|rate limit|overloaded|insufficient|billing|529/.test(msg);
+  return (
+    status === 401 ||
+    status === 402 ||
+    status === 403 ||
+    status === 404 ||
+    status === 429 ||
+    (status != null && status >= 500) ||
+    /credit|quota|rate limit|overloaded|insufficient|billing|model.*not found|unsupported model|empty response|incomplete|529/.test(
+      msg,
+    )
+  );
 }
 
 let anthropicClient: Anthropic | null = null;
@@ -76,15 +86,16 @@ export interface CompleteInput {
   system: string;
   user: string;
   maxTokens: number;
-  /** Chiedi JSON puro (OpenAI: response_format json_object). */
+  /** Chiedi JSON puro (OpenAI Responses API: text.format json_object). */
   json?: boolean;
   temperature?: number;
 }
 
 /**
  * Completamento testuale con failover. Ritorna il testo e il provider usato.
- * Per l'ottimizzazione CV con cache Anthropic usare direttamente claude.ts;
- * questo helper copre i task "semplici" (system + un messaggio utente).
+ * OpenAI usa la Responses API in modalità stateless (`store: false`) perché
+ * gli input possono contenere CV e altri dati personali. Anthropic resta il
+ * fallback per i task configurati nel router.
  */
 export async function complete(input: CompleteInput): Promise<{ text: string; provider: Provider; model: string }> {
   const order = providerOrder(input.task);
@@ -94,17 +105,27 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
     const m = model(p, TASK_DEFAULTS[input.task].tier);
     try {
       if (p === "openai") {
-        const res = await openai().chat.completions.create({
+        const res = await openai().responses.create({
           model: m,
-          max_completion_tokens: input.maxTokens,
+          max_output_tokens: input.maxTokens,
           temperature: input.temperature,
-          ...(input.json ? { response_format: { type: "json_object" as const } } : {}),
-          messages: [
-            { role: "system", content: input.system + (input.json ? "\nRispondi esclusivamente con un oggetto JSON valido." : "") },
-            { role: "user", content: input.user },
-          ],
+          store: false,
+          instructions:
+            input.system +
+            (input.json
+              ? "\nRispondi esclusivamente con un oggetto JSON valido."
+              : ""),
+          input: input.user,
+          ...(input.json
+            ? { text: { format: { type: "json_object" as const } } }
+            : {}),
         });
-        const text = res.choices[0]?.message?.content ?? "";
+        const text = res.output_text?.trim() ?? "";
+        if (!text) {
+          throw new Error(
+            `OpenAI empty response (${res.status}${res.incomplete_details?.reason ? `: ${res.incomplete_details.reason}` : ""})`,
+          );
+        }
         return { text, provider: p, model: m };
       }
       const res = await anthropic().messages.create({

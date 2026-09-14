@@ -289,23 +289,23 @@ export async function scrapeRecruiterEmail(
 
     // ── Claude AI fallback ─────────────────────────────────────────────
     // Se regex + score non danno un buon candidato (nessun match, o tutti
-    // negativi per blacklist/generic), chiediamo a Claude di estrarre
+    // negativi per blacklist/generic), chiediamo al provider AI di estrarre
     // un'email di recruiting dal testo pulito. Copre annunci italiani SMB
     // dove l'email è dentro un blob "Come candidarsi:" o nel footer non
     // strutturato che sfugge alla regex.
     if (!best || bestScore < 0) {
-      const claudeEmail = await extractEmailWithClaude(html, company).catch(
+      const aiEmail = await extractEmailWithAi(html, company).catch(
         (err) => {
-          console.warn("[recruiter-scrape] Claude fallback failed:", err);
+          console.warn("[recruiter-scrape] AI fallback failed:", err);
           return null;
         },
       );
-      if (claudeEmail) {
-        const sc = score(claudeEmail, s);
-        // Accettiamo anche score 0 (email neutra) — Claude ha filtrato
+      if (aiEmail) {
+        const sc = score(aiEmail, s);
+        // Accettiamo anche score 0 (email neutra) — il modello ha filtrato
         // manualmente rispetto ai fake, ci fidiamo un po' di più.
-        if (sc > -1000 && !BLACKLIST_FULL.has(claudeEmail)) {
-          best = claudeEmail;
+        if (sc > -1000 && !BLACKLIST_FULL.has(aiEmail)) {
+          best = aiEmail;
         }
       }
     }
@@ -327,15 +327,15 @@ export async function scrapeRecruiterEmail(
 }
 
 /**
- * Fallback AI: chiede a Claude Sonnet di estrarre l'email di recruiting
+ * Fallback AI: chiede al provider configurato di estrarre l'email di recruiting
  * dal testo della pagina. Prompt strict: solo email VERE di contatto per
  * candidatura, mai placeholder o generic (info@, noreply@, ecc). Ritorna
- * null se Claude non ne trova una legittima.
+ * null se il modello non ne trova una legittima.
  *
- * Costo: ~1 chiamata Claude per RTA — vale la pena solo per il fallback
+ * Costo: ~1 chiamata AI per RTA — vale la pena solo per il fallback
  * (regex NON trova o trova solo email pessime).
  */
-async function extractEmailWithClaude(
+async function extractEmailWithAi(
   html: string,
   company: string | null,
 ): Promise<string | null> {
@@ -374,16 +374,16 @@ Solo l'email o "NONE". Nient'altro.`;
     const ai = await complete({ task: "email_extract", system: "Estrai l'email del recruiter dal testo. Rispondi solo con l'email o NONE.", user: prompt, maxTokens: 60, temperature: 0 });
     const raw = ai.text.trim().toLowerCase();
     if (!raw || raw === "none") return null;
-    // Estrai la prima email dalla risposta (Claude potrebbe aggiungere
+    // Estrai la prima email dalla risposta (il modello potrebbe aggiungere
     // rumore nonostante l'istruzione)
     const emailMatch = raw.match(
       /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/,
     );
     if (!emailMatch) return null;
-    console.log(`[recruiter-scrape] Claude found: ${emailMatch[0]}`);
+    console.log(`[recruiter-scrape] AI found: ${emailMatch[0]}`);
     return emailMatch[0];
   } catch (err) {
-    console.warn("[recruiter-scrape] Claude call errored:", err);
+    console.warn("[recruiter-scrape] AI call errored:", err);
     return null;
   }
 }

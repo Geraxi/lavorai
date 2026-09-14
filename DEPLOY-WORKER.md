@@ -1,7 +1,7 @@
 # LavorAI Worker — Deploy su Railway (Playwright + BullMQ)
 
 Questo guida setta il worker che gira 24/7 per processare le candidature:
-Claude optimization + DOCX + email delivery + (opzionale) Playwright submit.
+OpenAI optimization + DOCX + email delivery + (opzionale) Playwright submit.
 
 **Tempo totale: ~20 minuti.** Richiede carta di credito per Upstash + Railway
 (entrambi hanno free tier sufficiente per iniziare).
@@ -38,7 +38,9 @@ DATABASE_URL=postgresql://postgres....
 REDIS_URL=rediss://default:...@fra1.upstash.io:6379
 
 # AI
-ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL_STRONG=gpt-5.6-terra
+OPENAI_MODEL_FAST=gpt-5.6-luna
 
 # Email
 RESEND_API_KEY=re_...

@@ -9,7 +9,7 @@ export const maxDuration = 60;
 
 /**
  * POST /api/cv-profile/seed
- * Estrae il profilo strutturato dal CV più recente dell'utente via Claude.
+ * Estrae il profilo strutturato dal CV più recente dell'utente via OpenAI.
  * Non sovrascrive se l'utente ha già salvato qualcosa (idempotente verso l'edit manuale).
  */
 export async function POST() {

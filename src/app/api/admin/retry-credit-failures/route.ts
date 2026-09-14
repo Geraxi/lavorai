@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
         { errorMessage: { contains: "credit balance", mode: "insensitive" } },
         { errorMessage: { contains: "crediti esauriti", mode: "insensitive" } },
         { errorMessage: { contains: "insufficient", mode: "insensitive" } },
+        { errorMessage: { contains: "quota exceeded", mode: "insensitive" } },
         { errorMessage: { contains: "Streaming is required", mode: "insensitive" } },
         { errorMessage: { contains: "troncata", mode: "insensitive" } },
         { errorMessage: { contains: "captcha-failed", mode: "insensitive" } },

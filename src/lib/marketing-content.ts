@@ -166,7 +166,7 @@ export const FAQ_OBJECTIONS: FaqItem[] = [
   },
   {
     q: "Le candidature saranno generiche o standard?",
-    a: "Ogni candidatura ha CV e cover letter riscritti da Claude per quel singolo annuncio: il sistema legge il job description, individua keyword ATS, riformula le esperienze esistenti. Niente di inventato — solo il tuo materiale, riordinato per ogni offerta.",
+    a: "Ogni candidatura ha CV e cover letter riscritti da OpenAI per quel singolo annuncio: il sistema legge il job description, individua keyword ATS, riformula le esperienze esistenti. Niente di inventato — solo il tuo materiale, riordinato per ogni offerta.",
   },
   {
     q: "Posso rivedere prima di inviare?",
@@ -178,7 +178,7 @@ export const FAQ_OBJECTIONS: FaqItem[] = [
   },
   {
     q: "Cosa succede dopo la registrazione?",
-    a: "1) Verifichi l'email (60 secondi). 2) Carichi il CV — Claude estrae profilo, esperienze, ruoli. 3) Confermi 1-2 ruoli e città target. 4) LavorAI inizia a candidare 3 volte al giorno (mattina, pranzo, pomeriggio) sui job che matchano. Ricevi mail solo per recruiter che rispondono.",
+    a: "1) Verifichi l'email (60 secondi). 2) Carichi il CV — OpenAI estrae profilo, esperienze, ruoli. 3) Confermi 1-2 ruoli e città target. 4) LavorAI inizia a candidare 3 volte al giorno (mattina, pranzo, pomeriggio) sui job che matchano. Ricevi mail solo per recruiter che rispondono.",
   },
 ];
 
@@ -292,7 +292,7 @@ export const POST_SIGNUP_STEPS: Array<{
   {
     duration: "2 min",
     title: "Carica il CV",
-    body: "PDF o DOCX. Claude estrae profilo, esperienze, link.",
+    body: "PDF o DOCX. OpenAI estrae profilo, esperienze, link.",
   },
   {
     duration: "1 min",

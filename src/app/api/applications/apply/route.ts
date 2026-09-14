@@ -192,7 +192,7 @@ export async function POST(request: NextRequest) {
         portal,
         status: initialStatus,
         trackingToken: randomToken(),
-        atsScore: score, // pre-stima; il worker la sovrascrive con score Claude
+        atsScore: score, // pre-stima; il worker la sovrascrive con score AI
         sessionId: session.id,
       },
     });

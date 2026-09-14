@@ -20,7 +20,7 @@ export function AdminReparseCvButton() {
     if (running) return;
     if (
       !confirm(
-        "Ri-parsare tutti i CV con profile vuoto? Usa la chiave Anthropic (consumo crediti).",
+        "Ri-parsare tutti i CV con profilo vuoto? Usa la chiave OpenAI (consumo crediti).",
       )
     )
       return;

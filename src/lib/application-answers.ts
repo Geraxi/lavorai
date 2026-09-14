@@ -58,7 +58,7 @@ export interface ApplicationAnswers {
   howHeard?: "linkedin" | "google" | "referral" | "other";
 
   /** 1-2 frasi generiche "perché sono interessato/a alle posizioni di
-   *  questo tipo". Claude può comunque ri-elaborarle nel cover letter. */
+   *  questo tipo". Il modello può comunque ri-elaborarle nel cover letter. */
   whyInterested?: string;
 
   // ---------- EEO (US-style; opzionali, default = decline) ----------

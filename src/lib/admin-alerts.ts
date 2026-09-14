@@ -23,6 +23,8 @@ export async function getAdminAlerts(): Promise<AdminAlert[]> {
         OR: [
           { errorMessage: { contains: "credit balance", mode: "insensitive" } },
           { errorMessage: { contains: "crediti esauriti", mode: "insensitive" } },
+          { errorMessage: { contains: "insufficient_quota", mode: "insensitive" } },
+          { errorMessage: { contains: "quota exceeded", mode: "insensitive" } },
         ],
       },
     }),

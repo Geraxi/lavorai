@@ -10,7 +10,7 @@
  * Env richieste:
  *  - DATABASE_URL                 (stesso del web)
  *  - REDIS_URL                    (BullMQ)
- *  - ANTHROPIC_API_KEY            (Claude CV optimization)
+ *  - OPENAI_API_KEY               (AI CV optimization + ATS answers)
  *  - RESEND_API_KEY + EMAIL_FROM  (email delivery)
  *  - SUPABASE_URL + SERVICE_ROLE_KEY + STORAGE_BUCKET  (storage CV)
  *  - APP_ENCRYPTION_KEY           (decrypt cookie portali)

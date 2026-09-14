@@ -29,7 +29,7 @@ const FAQ_OBJECTIONS_EN = [
   },
   {
     q: "Will applications look generic or templated?",
-    a: "Every application has CV and cover letter rewritten by Claude for that specific posting: the system reads the job description, identifies ATS keywords, reformulates your existing experience. Nothing made up — only your real material, reordered per listing.",
+    a: "Every application has CV and cover letter rewritten by OpenAI for that specific posting: the system reads the job description, identifies ATS keywords, reformulates your existing experience. Nothing made up — only your real material, reordered per listing.",
   },
   {
     q: "Can I review before sending?",
@@ -41,7 +41,7 @@ const FAQ_OBJECTIONS_EN = [
   },
   {
     q: "What happens after signup?",
-    a: "1) Verify your email (60 seconds). 2) Upload your CV — Claude extracts profile, experience, roles. 3) Confirm 1-2 target roles and locations. 4) LavorAI starts applying 3 times a day (morning, lunch, afternoon) on matching jobs. You only get emails for recruiter replies.",
+    a: "1) Verify your email (60 seconds). 2) Upload your CV — OpenAI extracts profile, experience, roles. 3) Confirm 1-2 target roles and locations. 4) LavorAI starts applying 3 times a day (morning, lunch, afternoon) on matching jobs. You only get emails for recruiter replies.",
   },
 ];
 

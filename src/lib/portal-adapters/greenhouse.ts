@@ -192,7 +192,7 @@ export const greenhouseAdapter: PortalAdapter = {
     );
 
     try {
-      // Fallback obbligatorio: se profile.email è vuoto (Claude non
+      // Fallback obbligatorio: se profile.email è vuoto (il parser AI non
       // l'ha estratto dal CV), uso l'email dell'account. Senza email il
       // recruiter non può rispondere.
       const emailToUse = input.profile.email?.trim() || input.userEmail;

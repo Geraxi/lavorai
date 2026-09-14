@@ -218,7 +218,7 @@ export function NewSearchDialog({
               className="ds-input"
               rows={3}
               maxLength={2000}
-              placeholder="Esperienze o progetti specifici da valorizzare nel CV per questo round (es. side project, freelance, certificazioni). Claude lo integra naturalmente nel CV ottimizzato per ogni candidatura."
+              placeholder="Esperienze o progetti specifici da valorizzare nel CV per questo round (es. side project, freelance, certificazioni). L'AI lo integra naturalmente nel CV ottimizzato per ogni candidatura."
               value={customContext}
               onChange={(e) => setCustomContext(e.target.value)}
             />

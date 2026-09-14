@@ -4,13 +4,10 @@ import type { ExtractedProfile } from "@/lib/cv-profile";
 import { extractProfile as extractProfileRegex } from "@/lib/cv-profile";
 
 /**
- * Extract structured profile from CV text using Claude.
- * Falls back to regex-based extraction if ANTHROPIC_API_KEY is missing
+ * Extract structured profile from CV text using the configured AI provider.
+ * Falls back to regex-based extraction if no AI provider is configured
  * or the API call fails.
  */
-
-// Usa lo stesso modello di claude.ts per consistenza (l'estrazione è breve → costo trascurabile)
-const MODEL = "claude-haiku-4-5-20251001"; // parse rapido (600 token): Haiku
 
 const SYSTEM_PROMPT = `Sei un parser di CV italiano/inglese. Estrai campi oggettivi in JSON.
 
@@ -106,7 +103,7 @@ export async function extractProfileAI(
       suggestedCities,
     };
   } catch (err) {
-    console.error("[cv-profile-ai] Claude extraction failed, fallback to regex", err);
+    console.error("[cv-profile-ai] AI extraction failed, fallback to regex", err);
     return extractProfileRegex(cvText, sessionEmail);
   }
 }

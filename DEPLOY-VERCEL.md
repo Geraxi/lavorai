@@ -90,7 +90,9 @@ AUTH_URL=https://lavorai.it       # dopo aver settato custom domain
 NEXT_PUBLIC_SITE_URL=https://lavorai.it
 
 # AI
-ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL_STRONG=gpt-5.6-terra
+OPENAI_MODEL_FAST=gpt-5.6-luna
 
 # Email
 RESEND_API_KEY=re_...

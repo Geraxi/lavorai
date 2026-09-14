@@ -33,7 +33,7 @@ export default async function OnboardingPage() {
       }
     }
     if (!profile) {
-      // Backfill one-time con Claude
+      // Backfill one-time con il provider AI configurato
       try {
         const { extractProfileAI } = await import("@/lib/cv-profile-ai");
         profile = await extractProfileAI(

@@ -15,8 +15,8 @@ import { Resend } from "resend";
  *      → re-enqueuate (worker probabilmente crashato durante deploy)
  *   3. Utente con 0 candidature in 48h MA con sessioni attive e job
  *      pool > 50 → matchMin auto-abbassato a 25 (overshoot in prefs)
- *   4. Application failed in massa per "credit balance is too low"
- *      → admin alert email (richiede ricarica manuale Anthropic)
+ *   4. Application failed in massa per crediti/quota AI esauriti
+ *      → admin alert email (richiede intervento sul billing provider)
  *
  * Ritorna un report strutturato così la cron può loggarlo e (se
  * configurato ADMIN_ALERT_EMAIL) inviare un riepilogo.
@@ -238,6 +238,8 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
         OR: [
           { errorMessage: { contains: "credit balance" } },
           { errorMessage: { contains: "crediti esauriti" } },
+          { errorMessage: { contains: "insufficient_quota" } },
+          { errorMessage: { contains: "quota exceeded" } },
         ],
       },
       select: { userId: true },
@@ -304,7 +306,7 @@ async function sendAdminAlert(r: SelfHealReport): Promise<void> {
   const lines: string[] = [];
   if (r.creditExhaustedUsers.length > 0) {
     lines.push(
-      `🔴 CREDIT EXHAUSTED — Anthropic credit out for ${r.creditExhaustedUsers.length} user(s). Recharge https://console.anthropic.com/settings/billing`,
+      `🔴 CREDIT EXHAUSTED — AI provider quota unavailable for ${r.creditExhaustedUsers.length} user(s). Check https://platform.openai.com/settings/organization/billing`,
     );
   }
   if (r.stuckAppsRequeued > 5) {

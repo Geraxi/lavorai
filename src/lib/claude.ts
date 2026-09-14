@@ -8,9 +8,7 @@ import {
 } from "@/lib/prompts/cv-optimization";
 
 /**
- * Modello Claude usato per l'ottimizzazione CV.
- * Stringa esatta richiesta dallo Sprint 2 — non modificare senza
- * confermare con il team.
+ * Modello Anthropic usato solo come fallback dell'ottimizzazione CV.
  */
 const CV_OPTIMIZATION_MODEL = "claude-sonnet-5";
 
@@ -33,17 +31,17 @@ export interface OptimizeCVInput {
   jobPosting: string;
   /** Frasi/concetti extra da intrecciare nella cover letter (non nel CV).
    *  Esempio: un founder che vuole menzionare che sta candidandosi dalla
-   *  sua stessa piattaforma. Claude le integra in modo naturale, non copia
+   *  sua stessa piattaforma. Il modello le integra in modo naturale, non copia
    *  letterale. Ogni elemento è una istruzione/idea in linguaggio naturale.
    */
   coverLetterHints?: string[];
   /** Contesto/esperienza extra fornito dall'utente alla creazione del
-   *  round (ApplicationSession.customContext). Iniettato in Claude per
+   *  round (ApplicationSession.customContext). Iniettato nel modello per
    *  arricchire il CV con informazioni che il CV originale non contiene
    *  (es. side project, esperienze freelance non menzionate, ecc).
    *  Mai inventare: usa solo se l'utente l'ha scritto esplicitamente. */
   sessionContext?: string | null;
-  /** Contesto P.IVA: se presente, Claude scrive un PITCH B2B invece di
+  /** Contesto P.IVA: se presente, il modello scrive un PITCH B2B invece di
    *  una classica cover letter da dipendente. Include tariffa,
    *  disponibilità, partita IVA, portfolio. */
   pivaContext?: {
@@ -56,42 +54,42 @@ export interface OptimizeCVInput {
 }
 
 /**
- * Ottimizza il CV per un annuncio specifico via Claude.
- *
- * Il SYSTEM_PROMPT è lungo e stabile → viene marcato con
- * `cache_control: ephemeral` per abilitare il prompt caching lato
- * Anthropic (risparmio latenza + costi a partire dalla seconda
- * chiamata entro 5 minuti).
+ * Ottimizza il CV per un annuncio specifico. OpenAI è il provider primario;
+ * Anthropic può essere usato come fallback se configurato.
  */
 export async function optimizeCV(
   input: OptimizeCVInput,
 ): Promise<OptimizationResult> {
-  const client = getClient();
   const userContent =
     USER_PROMPT_TEMPLATE("", input.jobPosting).replace(/Ecco il CV originale[\s\S]*?<\/CV>\n\n/, "") +
     buildSessionContextBlock(input.sessionContext) +
     buildPivaBlock(input.pivaContext) +
     buildCoverLetterHintsBlock(input.coverLetterHints);
 
-  // Due tentativi: il fallimento di parse più comune è l'output troncato
-  // (stop_reason="max_tokens") o un raro glitch di formattazione. Un retry
-  // risolve la maggior parte dei casi transitori prima di buttare il job.
-  let lastErr: unknown = null;
-  let lastPreview = "";
-  let lastTruncated = false;
-  // Provider: Anthropic (cache del CV) per default; OpenAI come fallback su
-  // crediti/rate-limit, o come primario per la quota AI_SPLIT_CV_OPTIMIZATION.
   const order = providerOrder("cv_optimization");
   for (const provider of order) {
     try {
       if (provider === "openai") return await optimizeWithOpenAI(input, userContent);
-      break; // anthropic → loop sotto
+      return await optimizeWithAnthropic(input, userContent);
     } catch (err) {
       if (!isFailoverError(err) || provider === order[order.length - 1]) throw err;
-      console.warn(`[optimizeCV] OpenAI fallito (${err instanceof Error ? err.message.slice(0, 80) : "?"}), passo ad Anthropic`);
+      console.warn(
+        `[optimizeCV] ${provider} fallito (${err instanceof Error ? err.message.slice(0, 80) : "?"}), passo al fallback`,
+      );
     }
   }
-  if (!order.includes("anthropic")) throw new Error("Nessun provider AI disponibile per l'ottimizzazione CV");
+
+  throw new Error("Nessun provider AI disponibile per l'ottimizzazione CV");
+}
+
+async function optimizeWithAnthropic(
+  input: OptimizeCVInput,
+  userContent: string,
+): Promise<OptimizationResult> {
+  const client = getClient();
+  let lastErr: unknown = null;
+  let lastPreview = "";
+  let lastTruncated = false;
 
   for (let attempt = 1; attempt <= 2; attempt++) {
     // Streaming obbligatorio: con max_tokens ≥ ~21k l'SDK rifiuta le
@@ -149,7 +147,7 @@ export async function optimizeCV(
   throw new Error(
     lastTruncated
       ? "Risposta AI troncata (CV troppo lungo). Riprova."
-      : "Claude ha risposto con un formato non valido. Riprova tra qualche secondo.",
+      : "Il servizio AI ha risposto con un formato non valido. Riprova tra qualche secondo.",
   );
 }
 
@@ -259,18 +257,24 @@ function validateShape(data: unknown): asserts data is OptimizationResult {
 
 /** Stessa pipeline (system prompt + CV + annuncio → JSON) su OpenAI. */
 async function optimizeWithOpenAI(input: OptimizeCVInput, userContent: string): Promise<OptimizationResult> {
-  const model = process.env.OPENAI_MODEL_STRONG ?? "gpt-4.1";
-  const res = await openai().chat.completions.create({
+  const model = process.env.OPENAI_MODEL_STRONG ?? "gpt-5.6-terra";
+  const res = await openai().responses.create({
     model,
-    max_completion_tokens: 16000,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT + "\nRispondi esclusivamente con l'oggetto JSON richiesto." },
-      { role: "system", content: `Ecco il CV originale del candidato. Questo è l'UNICO contenuto verificato di cui dispone il candidato — qualsiasi cosa fuori da qui va considerata assente.\n\n<CV>\n${input.cvText}\n</CV>` },
-      { role: "user", content: userContent },
-    ],
+    max_output_tokens: 16000,
+    store: false,
+    instructions:
+      SYSTEM_PROMPT +
+      "\nRispondi esclusivamente con l'oggetto JSON richiesto.\n\n" +
+      `Ecco il CV originale del candidato. Questo è l'UNICO contenuto verificato di cui dispone il candidato — qualsiasi cosa fuori da qui va considerata assente.\n\n<CV>\n${input.cvText}\n</CV>`,
+    input: userContent,
+    text: { format: { type: "json_object" } },
   });
-  const raw = (res.choices[0]?.message?.content ?? "").trim();
+  const raw = (res.output_text ?? "").trim();
+  if (!raw) {
+    throw new Error(
+      `OpenAI empty response (${res.status}${res.incomplete_details?.reason ? `: ${res.incomplete_details.reason}` : ""})`,
+    );
+  }
   const parsed = parseModelJson(stripCodeFence(raw)) as OptimizationResult;
   validateShape(parsed);
   console.log(`[optimizeCV] generato via openai/${model}`);

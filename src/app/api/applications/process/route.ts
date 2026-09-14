@@ -3,7 +3,7 @@ import { z } from "zod";
 import { processApplication } from "@/lib/application-worker";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // 5 min: Claude + DOCX + optional Playwright
+export const maxDuration = 300; // 5 min: OpenAI + DOCX + optional Playwright
 
 const Schema = z.object({ applicationId: z.string().min(1) });
 

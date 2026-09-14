@@ -13,7 +13,7 @@ interface HealthResult {
 }
 
 /**
- * Pulsante admin: verifica IN PRODUZIONE la chiave Anthropic + crediti con
+ * Pulsante admin: verifica IN PRODUZIONE la chiave OpenAI + crediti con
  * una chiamata reale al server prod. Risolve l'incognita "la chiave prod
  * funziona davvero?" che non possiamo testare da locale (chiave Sensitive).
  */
@@ -81,7 +81,7 @@ export function AdminAiHealth() {
         🤖 Health check AI (produzione)
       </h2>
       <p style={{ fontSize: 12, color: "var(--fg-muted)", margin: "0 0 12px" }}>
-        Chiamata reale alla API Anthropic con la chiave del server di produzione.
+        Chiamata reale alla API OpenAI con la chiave del server di produzione.
         Conferma se la pipeline può generare CV (chiave valida + crediti).
       </p>
 

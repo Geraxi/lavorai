@@ -4,7 +4,7 @@ import { FOUNDER_EMAIL } from "@/lib/admin";
 
 /**
  * Alert operativi al founder. Nasce dal post-mortem del 12/05: i crediti
- * Anthropic si sono esauriti e NESSUNO l'ha saputo per 11 giorni — ogni
+ * del provider AI si sono esauriti e NESSUNO l'ha saputo per 11 giorni — ogni
  * candidatura falliva in silenzio. Mai più: quando il pipeline incontra un
  * errore "di sistema" (crediti finiti, API down) mandiamo subito un'email.
  *
@@ -15,6 +15,9 @@ import { FOUNDER_EMAIL } from "@/lib/admin";
 const ALERT_COOLDOWN_HOURS = 6;
 
 export type AlertReason =
+  | "ai_credits"
+  | "openai_credits"
+  | "openai_error"
   | "anthropic_credits"
   | "anthropic_error"
   | "resend_error"
@@ -22,7 +25,7 @@ export type AlertReason =
   | "email_from_sandbox"
   | "other";
 
-/** Riconosce un errore Anthropic di crediti/quota esauriti. */
+/** Riconosce un errore del provider AI dovuto a crediti/quota esauriti. */
 export function isCreditExhaustedError(err: unknown): boolean {
   const msg = (
     err instanceof Error ? err.message : typeof err === "string" ? err : ""
