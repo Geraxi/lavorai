@@ -730,19 +730,17 @@ export function FunnelBar({
   );
 }
 
-// Riga stato servizio (icona + label + pill + micro-bar + %).
+// Riga stato servizio con segnale reale e timestamp/dettaglio.
 export function ServiceRow({
   label,
   icon,
   status,
-  uptime,
-  history,
+  detail,
 }: {
   label: string;
   icon?: ReactNode;
   status: "ok" | "warn" | "down";
-  uptime: number; // 0..100
-  history?: number[]; // 0..1 per micro-bar
+  detail: string;
 }) {
   const map = {
     ok: { c: "hsl(var(--primary))", l: "Operativo" },
@@ -751,19 +749,14 @@ export function ServiceRow({
   } as const;
   const s = map[status];
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "24px 1fr auto 88px 46px", gap: 10, alignItems: "center", padding: "9px 4px", fontSize: 12 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "24px 1fr auto minmax(64px,auto)", gap: 10, alignItems: "center", padding: "9px 4px", fontSize: 12 }}>
       <div style={{ color: "var(--fg-muted)", display: "grid", placeItems: "center" }}>{icon}</div>
       <div style={{ color: "var(--fg)", fontWeight: 500 }}>{label}</div>
       <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, color: s.c, fontWeight: 600 }}>
         <span style={{ width: 6, height: 6, borderRadius: 999, background: s.c, boxShadow: `0 0 6px ${s.c}` }} />
         {s.l}
       </div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 18 }}>
-        {(history ?? new Array(16).fill(1)).map((v, i) => (
-          <div key={i} style={{ flex: 1, height: `${Math.max(15, v * 100)}%`, background: s.c, opacity: 0.35 + v * 0.5, borderRadius: 1 }} />
-        ))}
-      </div>
-      <div style={{ textAlign: "right", color: "var(--fg)", fontFeatureSettings: '"tnum"', fontWeight: 600 }}>{uptime.toFixed(1)}%</div>
+      <div style={{ textAlign: "right", color: "var(--fg-subtle)", fontFeatureSettings: '"tnum"', fontSize: 10.5 }}>{detail}</div>
     </div>
   );
 }
@@ -958,4 +951,3 @@ export function DeliveryFunnel({ steps }: { steps: Array<{ label: string; value:
     </div>
   );
 }
-

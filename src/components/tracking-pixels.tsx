@@ -18,7 +18,7 @@ const CONSENT_KEY = "lavorai-cookie-consent";
  *
  * Cookie consent: rispettato — carica solo dopo `analyticsConsent` accepted.
  * Il consent viene gestito dal <CookieBanner />. Prima del consenso, i pixel
- * non si caricano affatto (server-side gate + client re-check via storage).
+ * non si caricano affatto (controllo client tramite la preferenza salvata).
  *
  * Eventi standard emessi (per creare audiences retargeting):
  *   - PageView (automatico su ogni pagina, Meta+GA+GAds)
@@ -41,8 +41,16 @@ export function TrackingPixels() {
     const onStorage = (e: StorageEvent) => {
       if (e.key === CONSENT_KEY && e.newValue === "accepted") setConsent(true);
     };
+    const onConsent = (e: Event) => {
+      const value = (e as CustomEvent<string>).detail;
+      setConsent(value === "accepted");
+    };
     window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    window.addEventListener("lavorai-consent-changed", onConsent);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("lavorai-consent-changed", onConsent);
+    };
   }, []);
 
   // Niente pixel senza consent OR senza ID configurato.

@@ -93,3 +93,6 @@ export const applyLimiter: Limiter = buildLimiter(10, 60 * 60 * 1000, "lavorai:a
 export const applyBatchLimiter: Limiter = buildLimiter(60, 60 * 60 * 1000, "lavorai:apply-batch");
 export const authLimiter: Limiter = buildLimiter(5, 60 * 60 * 1000, "lavorai:auth");
 export const uploadLimiter: Limiter = buildLimiter(10, 60 * 60 * 1000, "lavorai:upload");
+// Misurazione best-effort: abbastanza capiente per una normale sessione,
+// ma non una superficie aperta per riempire la tabella eventi.
+export const analyticsLimiter: Limiter = buildLimiter(120, 60 * 60 * 1000, "lavorai:analytics");

@@ -6,10 +6,9 @@ import { trialState } from "@/lib/billing";
 import { isTestAccount } from "@/lib/admin";
 
 /**
- * Prova Pro gratuita senza carta: 7 giorni dalla registrazione.
+ * Prova Pro gratuita senza carta: parte al completamento del setup.
  *
- *   - startTrial(userId): imposta trialEndsAt (usato dal signup e dal
- *     grant admin per gli utenti esistenti)
+ *   - startTrial(userId): imposta trialEndsAt (grant admin per utenti esistenti)
  *   - sendTrialStartedEmail: giorno 0
  *   - runTrialNudges (cron giornaliero): "finisce tra 2 giorni" e
  *     "è finita" — una volta sola per utente (EmailLog)

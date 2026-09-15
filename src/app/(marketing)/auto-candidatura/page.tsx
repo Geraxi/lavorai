@@ -124,7 +124,7 @@ export default function AutoCandidaturaPage() {
               marginTop: 14,
             }}
           >
-            ✓ 3 candidature/mese gratis · ✓ Nessuna carta richiesta · ✓ Attivazione in 2 minuti
+            ✓ Pro completo per 7 giorni · ✓ Nessuna carta richiesta · ✓ La prova parte dopo il setup
           </p>
         </section>
 
@@ -276,7 +276,7 @@ export default function AutoCandidaturaPage() {
             },
             {
               q: "Quanto costa?",
-              a: "Free: 3 candidature/mese. Pro €19.99/mese: 50 candidature/mese. Pro+ €39.99/mese: illimitate + priority queue + coaching colloqui. Disdici quando vuoi. Rimborso integrale se in 24h dall'upgrade non ricevi almeno 1 candidatura consegnata.",
+              a: "La prova Pro dura 7 giorni dal completamento del setup, senza carta e senza rinnovo automatico. Poi Pro costa €19,99/mese per 50 candidature e Pro+ €39,99/mese per candidature illimitate, coda prioritaria e Founder Coach. Disdici quando vuoi.",
             },
             {
               q: "Cosa succede se voglio candidarmi solo ad alcuni annunci?",
@@ -343,8 +343,8 @@ export default function AutoCandidaturaPage() {
               marginBottom: 28,
             }}
           >
-            3 candidature vere al mese, senza carta di credito, senza vincoli.
-            Se non ti convince, non paghi nulla.
+            7 giorni di Pro completo dal termine del setup, senza carta di
+            credito e senza rinnovo automatico. Se non ti convince, non paghi nulla.
           </p>
           <Link
             href="/signup"

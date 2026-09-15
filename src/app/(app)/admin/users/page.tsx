@@ -24,7 +24,8 @@ interface PageProps {
 export default async function AdminUsersPage({ searchParams }: PageProps) {
   const sp = (await searchParams) ?? {};
   const includeTest = sp.includeTest === "1";
-  // Filtro piano: paying (abbonamento attivo) | pro | pro_plus | free | unpaid (tier pro senza abbonamento attivo)
+  // Filtro piano: paying (addebito completato) | pro | pro_plus | free |
+  // unpaid (trialing, past_due, cancellato o tier Pro senza pagamento).
   const plan = sp.plan ?? "";
   const page = Math.max(1, Number(sp.p ?? 1) || 1);
   const now = Date.now();
@@ -42,14 +43,15 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
     },
   });
   const base = includeTest ? raw : raw.filter((u) => !isTestAccount(u.email));
-  const live = (u: { subscriptionStatus: string | null }) => u.subscriptionStatus === "active" || u.subscriptionStatus === "trialing";
+  const paid = (u: { subscriptionStatus: string | null }) => u.subscriptionStatus === "active";
+  const hasLiveSubscription = (u: { subscriptionStatus: string | null }) => u.subscriptionStatus === "active" || u.subscriptionStatus === "trialing";
   const isPro = (u: { tier: string }) => u.tier === "pro" || u.tier === "pro_plus";
-  const users = plan === "paying" ? base.filter((u) => isPro(u) && live(u))
-    : plan === "unpaid" ? base.filter((u) => isPro(u) && !live(u))
+  const users = plan === "paying" ? base.filter((u) => isPro(u) && paid(u))
+    : plan === "unpaid" ? base.filter((u) => isPro(u) && !paid(u))
     : plan === "pro" || plan === "pro_plus" || plan === "free" ? base.filter((u) => u.tier === plan)
     : base;
-  const payingCount = base.filter((u) => isPro(u) && live(u)).length;
-  const unpaidProCount = base.filter((u) => isPro(u) && !live(u)).length;
+  const payingCount = base.filter((u) => isPro(u) && paid(u)).length;
+  const unpaidProCount = base.filter((u) => isPro(u) && !paid(u)).length;
 
   const total = users.length;
   const verified = users.filter((u) => !!u.emailVerified).length;
@@ -140,8 +142,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
 
       {plan === "paying" && (
         <div className="adm-card" style={{ padding: "10px 14px", fontSize: 12.5, color: "var(--fg-muted)" }}>
-          <b style={{ color: "var(--fg)" }}>{payingCount}</b> {payingCount === 1 ? "utente con abbonamento Stripe attivo" : "utenti con abbonamento Stripe attivo"} (active/trialing).
-          {unpaidProCount > 0 && <> Altri <b style={{ color: "#fbbf24" }}>{unpaidProCount}</b> hanno il piano Pro nel database ma nessun pagamento attivo (past_due, cancellato o mai pagato): <Link href={qs({ plan: "unpaid", p: undefined, sel: undefined })} className="adm-link">vedili</Link>.</>}
+          <b style={{ color: "var(--fg)" }}>{payingCount}</b> {payingCount === 1 ? "utente pagante" : "utenti paganti"} (Stripe active).
+          {unpaidProCount > 0 && <> Altri <b style={{ color: "#fbbf24" }}>{unpaidProCount}</b> hanno un piano Pro ma nessun addebito completato (trialing, past_due, cancellato o mai pagato): <Link href={qs({ plan: "unpaid", p: undefined, sel: undefined })} className="adm-link">vedili</Link>.</>}
         </div>
       )}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 360px", gap: 12, minHeight: 0 }}>
@@ -229,7 +231,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                 <KV k="Verificato" v={fmt2(selected.emailVerified)} />
                 <KV k="Ultimo accesso" v={fmt2(selected.lastLoginAt)} />
                 <KV k="Piano" v={<span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><TierChip tier={selected.tier} /></span>} />
-                <KV k="Abbonamento" v={<span className={`adm-pill ${live(selected) ? "good" : selected.subscriptionStatus ? "warn" : "neutral"}`} style={{ padding: "2px 8px", fontSize: 10.5 }}><span className="dot" />{selected.subscriptionStatus ?? "nessuno"}</span>} />
+                <KV k="Abbonamento" v={<span className={`adm-pill ${hasLiveSubscription(selected) ? "good" : selected.subscriptionStatus ? "warn" : "neutral"}`} style={{ padding: "2px 8px", fontSize: 10.5 }}><span className="dot" />{selected.subscriptionStatus ?? "nessuno"}</span>} />
                 <KV k="Stripe" v={selected.stripeCustomerId ? <a href={`https://dashboard.stripe.com/customers/${selected.stripeCustomerId}`} target="_blank" rel="noreferrer" className="adm-link" style={{ fontSize: 11.5 }}>{selected.stripeCustomerId} ↗</a> : "—"} />
                 <KV k="Sorgente" v={source(selected.signupReferrer, selected.signupUtmSource)} />
                 <KV k="Codice referral" v={selected.referralCode ?? "—"} />

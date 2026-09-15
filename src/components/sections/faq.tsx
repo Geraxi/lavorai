@@ -17,7 +17,7 @@ import { FAQ_OBJECTIONS } from "@/lib/marketing-content";
 const FAQ_OBJECTIONS_EN = [
   {
     q: "Is my data safe?",
-    a: "Yes. Your CV is encrypted at rest on EU servers (Neon · Frankfurt), GDPR-first. Never sold, never shared. You can export everything to JSON or delete account+CV+applications in 1 click from settings.",
+    a: "The primary database runs in Neon's European Frankfurt region. Your CV is processed only by the providers listed in the privacy policy, including OpenAI with response storage disabled. We do not sell your data; you can export it or delete your account, CV and applications from settings.",
   },
   {
     q: "Do I stay in control of what's sent?",

@@ -19,9 +19,11 @@ import { useTranslations } from "next-intl";
 export function GoogleButton({
   mode,
   position = "above",
+  callbackUrl = "/dashboard",
 }: {
   mode: "signup" | "login";
   position?: "above" | "below";
+  callbackUrl?: string;
 }) {
   const [loading, setLoading] = useState(false);
   const t = useTranslations("auth");
@@ -53,7 +55,7 @@ export function GoogleButton({
       disabled={loading}
       onClick={() => {
         setLoading(true);
-        signIn("google", { callbackUrl: "/dashboard" });
+        signIn("google", { callbackUrl });
       }}
       style={{
         width: "100%",

@@ -1,20 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Logo } from "@/components/logo";
 import { Separator } from "@/components/ui/separator";
 
 export function SiteFooter() {
   const t = useTranslations("footer");
   const tNav = useTranslations("nav");
+  const en = useLocale() === "en";
 
   const linkGroups = [
     {
       title: t("product"),
       links: [
-        { href: "/lavoro", label: "Offerte di lavoro" },
-        { href: "/categorie-protette", label: "Categorie protette" },
+        { href: "/lavoro", label: en ? "Jobs" : "Offerte di lavoro" },
+        { href: "/categorie-protette", label: en ? "Protected-category jobs" : "Categorie protette" },
         { href: "/optimize", label: t("optimizeCv") },
         { href: "/#prezzi", label: tNav("pricing") },
         { href: "/#come-funziona", label: tNav("howItWorks") },
@@ -22,14 +23,14 @@ export function SiteFooter() {
       ],
     },
     {
-      title: "Guide",
+      title: en ? "Guides" : "Guide",
       links: [
         { href: "/guide/cv-ats-friendly", label: "CV ATS friendly" },
-        { href: "/guide/lettera-di-presentazione-esempio", label: "Lettera di presentazione" },
-        { href: "/guide/candidatura-spontanea-email", label: "Candidatura spontanea" },
-        { href: "/guide/quante-candidature-per-trovare-lavoro", label: "Quante candidature servono" },
-        { href: "/guide/software-candidature-automatiche", label: "Software auto-apply" },
-        { href: "/guide", label: "Tutte le guide" },
+        { href: "/guide/lettera-di-presentazione-esempio", label: en ? "Cover letter examples" : "Lettera di presentazione" },
+        { href: "/guide/candidatura-spontanea-email", label: en ? "Speculative applications" : "Candidatura spontanea" },
+        { href: "/guide/quante-candidature-per-trovare-lavoro", label: en ? "How many applications" : "Quante candidature servono" },
+        { href: "/guide/software-candidature-automatiche", label: en ? "Auto-apply software" : "Software auto-apply" },
+        { href: "/guide", label: en ? "All guides" : "Tutte le guide" },
       ],
     },
     {

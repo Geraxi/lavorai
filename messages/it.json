@@ -11,6 +11,11 @@
     "login": "Accedi",
     "signup": "Inizia gratis",
     "dashboard": "Dashboard",
+    "realNumbers": "Numeri veri",
+    "jobs": "Offerte",
+    "guides": "Guide",
+    "jobBoard": "Offerte",
+    "updateCv": "Aggiorna CV",
     "language": "Lingua",
     "italian": "Italiano",
     "english": "English"
@@ -47,8 +52,8 @@
     "guaranteeText": "se in 24h dall'upgrade Pro non ricevi almeno 1 candidatura consegnata, rimborso integrale — senza domande.",
     "ctaPrimaryV2": "Attiva auto-apply — gratis",
     "ctaSecondaryV2": "Prima fai vedere il mio CV →",
-    "checkA": "7 giorni gratis, senza carta",
-    "checkB": "Niente carta",
+    "checkA": "La prova parte dopo il setup",
+    "checkB": "Nessun rinnovo automatico",
     "checkC": "Pausa quando vuoi",
     "trustA1": "GDPR-first",
     "trustA2": "server EU",
@@ -225,11 +230,11 @@
     "eyebrow": "Prezzi",
     "title1": "Trasparenti,",
     "title2": "senza sorprese.",
-    "subtitle": "Niente crediti. Niente add-on. Scegli il piano, cambia quando vuoi.",
+    "subtitle": "Prova il servizio per 7 giorni dal termine del setup. Senza carta, poi scegli tu se continuare.",
     "footnote": "IVA inclusa. Cancelli in 1 click da Stripe, senza email, senza attese. Nessun vincolo.",
-    "riskReducer1": "7 giorni di Pro completo per testare prima di pagare",
-    "riskReducer2": "Cancellazione self-service, sempre",
-    "riskReducer3": "Setup fee zero, no costi nascosti"
+    "riskReducer1": "La prova parte solo dopo CV e preferenze",
+    "riskReducer2": "La prova senza carta non si rinnova",
+    "riskReducer3": "Abbonamento disdettabile in un clic"
   },
   "faq": {
     "heading": "Domande frequenti",
@@ -248,7 +253,7 @@
     "q6Question": "Posso annullare in qualsiasi momento?",
     "q6Answer": "Sì, con un click. Nessun vincolo, nessuna penale, nessuna domanda. Pausa l'auto-apply quando vuoi e riavvialo quando ti serve.",
     "q7Question": "Cosa succede ai miei dati?",
-    "q7Answer": "Stanno su server europei (Neon · Frankfurt), GDPR-first. Export integrale in JSON e cancellazione completa con un click, pulisce profilo, CV, file, code di lavoro. Non vendiamo nulla, non condividiamo con nessuno."
+    "q7Answer": "Il database principale è nella regione europea di Neon (Francoforte). CV e dati vengono trattati solo dai fornitori necessari elencati nella privacy policy, incluso OpenAI. Puoi esportare i dati o cancellare account, CV e candidature; non vendiamo i tuoi dati."
   },
   "boundaries": {
     "eyebrow": "Niente magia AI · ruoli chiari",
@@ -272,7 +277,7 @@
     "controlItem2": "Soglia di match minima: sotto X% non parte una candidatura",
     "controlItem3": "Blacklist aziende, città escluse, salary range, tipo contratto",
     "controlItem4": "Pausa istantanea da dashboard, export integrale, cancellazione totale",
-    "footnote": "Default al primo signup: modalità Hybrid attiva, Auto disattivata. Cambi quando vuoi dalle preferenze, niente è opt-in nascosto."
+    "footnote": "L'auto-apply parte solo quando premi Attiva al termine del setup. Puoi passare a Hybrid o Off in qualsiasi momento."
   },
   "interviewBuddy": {
     "badge": "Mock interview · gratis · senza signup",
@@ -382,10 +387,10 @@
     "subtitle": "Da 0 alla prima candidatura inviata in meno di 4 ore. Ecco gli step."
   },
   "referral": {
-    "eyebrow": "Presto disponibile",
-    "title": "Invita un amico, 2 settimane gratis per entrambi",
-    "body": "Quando un tuo amico si registra dal tuo link e attiva un piano Pro, ricevete entrambi 2 settimane di credito. Programma referral in beta, vai in lista d'attesa.",
-    "cta": "Iscriviti alla beta referral"
+    "eyebrow": "Programma referral attivo",
+    "title": "Invita un amico, guadagna 1 mese di Pro",
+    "body": "Condividi il tuo link personale. Quando un amico si iscrive e diventa pagante, ricevi 1 mese gratis: subito sul tuo abbonamento o come credito per il prossimo upgrade.",
+    "cta": "Trova il tuo link"
   },
   "howItWorks": {
     "eyebrow": "Setup una volta · gira da solo per sempre",
@@ -422,7 +427,7 @@
     "subtitle": "Trenta secondi per il setup. Da lì in poi, il lavoro ripetitivo è nostro. La prima candidatura parte entro 24 ore, con prova di consegna.",
     "caption": "Pausa o annulla quando vuoi · Server UE · Niente login ai tuoi account",
     "cta": "Provalo stasera",
-    "trust1": "Consenso esplicito per ogni invio",
+    "trust1": "Attivazione esplicita prima dell'auto-apply",
     "trust2": "Cancellazione totale in 1 click",
     "trust3": "Export integrale, sempre",
     "trust4": "GDPR-first · server UE"
@@ -442,7 +447,7 @@
     "terms": "Termini",
     "rights": "Tutti i diritti riservati.",
     "optimizeCv": "Ottimizza CV",
-    "hostedIn": "Hosted in Frankfurt · GDPR compliant",
+    "hostedIn": "Database a Francoforte · GDPR compliant",
     "builtWith": "Built with Next.js, OpenAI."
   },
   "auth": {
@@ -486,7 +491,7 @@
     "noAccountQuestion": "Non hai un account?",
     "signupFree": "Registrati gratis",
     "signupHeading": "Iniziamo.",
-    "signupSubheading": "7 giorni di Pro gratis per vedere se ti capisce. Niente carta, niente impegno.",
+    "signupSubheading": "Crea l'account, completa il setup e da quel momento hai 7 giorni di Pro. Niente carta, niente rinnovo automatico.",
     "name": "Nome",
     "namePlaceholder": "Mario Rossi",
     "passwordPlaceholderSignup": "Min 8 char · 1 maiuscola · 1 numero",
@@ -504,14 +509,14 @@
     "signupStep2": "Carichi il CV — niente parte finché non confermi",
     "signupStep3": "Scegli ruoli e città. L'auto-apply è OFF di default",
     "signupStep4": "Attivi solo quando ti senti pronto — pausa in 1 click",
-    "signupTrustFree": "7 giorni gratis",
-    "signupTrustNoCard": "No carta",
+    "signupTrustFree": "Prova dal termine del setup",
+    "signupTrustNoCard": "Nessun rinnovo",
     "signupTrustCancel": "Cancelli in 1 click",
     "haveAccountQuestion": "Hai già un account?",
     "loginLink2": "Accedi",
     "termsFootnoteLink": "termini",
     "termsFootnotePre": "Creando l'account accetti i nostri ",
-    "termsFootnotePost": ". Dati processati in UE · GDPR-compliant.",
+    "termsFootnotePost": ". Trattamento trasparente · GDPR-compliant.",
     "confirmPassword": "Conferma password",
     "confirmPasswordPlaceholder": "Riscrivi la stessa password",
     "errorPasswordMismatch": "Le password non coincidono.",

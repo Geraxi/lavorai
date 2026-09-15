@@ -4,6 +4,8 @@ import { getCurrentUser } from "@/lib/session";
 import { CVParseError, parseCV } from "@/lib/cv-parser";
 import { saveUserFile } from "@/lib/storage";
 import { uploadLimiter } from "@/lib/rate-limit";
+import { AnalyticsEvent } from "@/lib/analytics";
+import { recordConversionEvent } from "@/lib/conversion-events";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -81,6 +83,13 @@ export async function POST(request: NextRequest) {
         extractedText: text,
         parsedProfileJson,
       },
+    });
+
+    await recordConversionEvent(AnalyticsEvent.ONBOARDING_CV_UPLOADED, {
+      userId: user.id,
+      path: "/onboarding",
+      properties: { fileType: file.name.split(".").pop()?.toLowerCase() ?? "unknown" },
+      dedupeKey: `onboarding_cv_uploaded:${user.id}`,
     });
 
     return NextResponse.json({

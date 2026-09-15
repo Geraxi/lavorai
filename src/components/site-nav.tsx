@@ -15,15 +15,15 @@ export function SiteNav() {
   const t = useTranslations("nav");
   const marketingLinks = [
     { href: "/#come-funziona", label: t("howItWorks") },
-    { href: "/proof", label: "Numeri veri" },
-    { href: "/lavoro", label: "Offerte" },
-    { href: "/guide", label: "Guide" },
+    { href: "/proof", label: t("realNumbers") },
+    { href: "/lavoro", label: t("jobs") },
+    { href: "/guide", label: t("guides") },
     { href: "/interview-buddy", label: t("interviewBuddyNav") },
     { href: "/#prezzi", label: t("pricing") },
     { href: "/#faq", label: t("faq") },
   ];
   const appLinks = [
-    { href: "/jobs", label: "Job board" },
+    { href: "/jobs", label: t("jobBoard") },
     { href: "/applications", label: t("dashboard") },
   ];
   const isApp =
@@ -100,7 +100,7 @@ export function SiteNav() {
               variant="outline"
               style={{ height: 44, paddingLeft: 18, paddingRight: 18, fontSize: 15 }}
             >
-              <Link href="/cv">Aggiorna CV</Link>
+              <Link href="/cv">{t("updateCv")}</Link>
             </Button>
           ) : (
             <>

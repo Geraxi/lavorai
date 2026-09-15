@@ -29,6 +29,16 @@ const PROTECTED_PREFIXES = [
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Un solo dominio canonico. Ha effetto non appena www.lavorai.it viene
+  // assegnato a questo progetto Vercel (oggi punta ancora al vecchio sito).
+  const requestHost = request.headers.get("host")?.split(":")[0]?.toLowerCase();
+  if (requestHost === "www.lavorai.it" || request.nextUrl.hostname.toLowerCase() === "www.lavorai.it") {
+    const canonical = request.nextUrl.clone();
+    canonical.hostname = "lavorai.it";
+    canonical.port = "";
+    return NextResponse.redirect(canonical, 308);
+  }
+
   // ── Auth gate ──────────────────────────────────────────────────────
   const needsAuth = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   let response: NextResponse | null = null;
@@ -81,26 +91,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Auth gate paths
-    "/dashboard/:path*",
-    "/applications/:path*",
-    "/cv/:path*",
-    "/preferences/:path*",
-    "/analytics/:path*",
-    "/inbox/:path*",
-    "/settings/:path*",
-    // Pagine pubbliche per geo-detect i18n cookie
-    "/",
-    "/login",
-    "/signup",
-    "/optimize",
-    "/analizza-cv",
-    "/interview-buddy",
-    "/onboarding/:path*",
-    "/forgot-password",
-    "/reset-password",
-    "/privacy",
-    "/termini",
-    "/contatti",
+    "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };

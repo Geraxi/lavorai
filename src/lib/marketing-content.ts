@@ -154,7 +154,7 @@ export interface FaqItem {
 export const FAQ_OBJECTIONS: FaqItem[] = [
   {
     q: "I miei dati sono al sicuro?",
-    a: "Sì. Il CV è cifrato a riposo su server europei (Neon · Frankfurt), GDPR-first. Mai venduto, mai condiviso. Puoi esportare tutto in JSON o cancellare account+CV+candidature in 1 click dalle impostazioni.",
+    a: "Il database principale è nella regione europea di Neon (Francoforte). Il CV viene elaborato solo dai fornitori necessari indicati nella privacy policy, incluso OpenAI con memorizzazione delle risposte disattivata. I dati non vengono venduti; puoi esportarli o cancellare account, CV e candidature dalle impostazioni.",
   },
   {
     q: "Rimango io a controllare cosa viene inviato?",
@@ -194,16 +194,16 @@ export const TRUST_CLAIMS: Array<{
   {
     icon: "shield",
     title: "Server europei, GDPR-first",
-    body: "Il CV vive su Neon · Frankfurt. Niente storage USA, niente trasferimenti opaqui. Conforme al Reg. UE 2016/679.",
+    body: "Il database principale è ospitato da Neon nella regione di Francoforte. Fornitori e finalità del trattamento sono elencati nella privacy policy.",
   },
   {
     icon: "lock",
-    title: "Cifratura in transito e a riposo",
-    body: "TLS 1.3 sul trasporto, AES-256 sui dati sensibili. Solo il worker che genera CV ha accesso al testo in chiaro, e solo per la durata della richiesta.",
+    title: "AI senza memoria della risposta",
+    body: "Le richieste che adattano CV e lettere usano OpenAI con la memorizzazione della risposta disattivata. Il testo viene inviato solo quando serve a produrre il risultato richiesto.",
   },
   {
     icon: "check",
-    title: "Consenso esplicito per ogni portale",
+    title: "Attivazione esplicita",
     body: "L'auto-apply sui portali si attiva solo dopo che lo abiliti dalle preferenze. Niente submit silenti, niente default opt-in.",
   },
   {
@@ -219,7 +219,7 @@ export const TRUST_CLAIMS: Array<{
   {
     icon: "trash",
     title: "Cancellazione completa, 1 click",
-    body: "Rimuove utente, CV, file, code, candidature aperte. Backup ruotano in 30 giorni come da norma GDPR.",
+    body: "Rimuove utente, CV, file, code e candidature aperte direttamente dalle impostazioni.",
   },
 ];
 

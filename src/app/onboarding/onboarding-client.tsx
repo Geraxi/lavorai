@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Icon, type IconName } from "@/components/design/icon";
@@ -82,6 +83,7 @@ export default function OnboardingClient({
 }) {
   const t = useTranslations("onboarding");
   const router = useRouter();
+  const { update: updateSession } = useSession();
   const [step, setStep] = useState(0);
   // Steps localized — usiamo questo array invece di STEPS in render
   const stepsLocalized: StepDef[] = STEPS.map((s, i) => ({
@@ -200,7 +202,7 @@ export default function OnboardingClient({
     const selectedCities = locations
       .filter((l) => l.selected)
       .map((l) => l.city);
-    await fetch("/api/onboarding/preferences", {
+    const result = await fetch("/api/onboarding/preferences", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -217,11 +219,18 @@ export default function OnboardingClient({
       }),
     }).catch(() => null);
 
+    if (!result?.ok) {
+      toast.error(t("retryError"));
+      return;
+    }
+
     // Marca il welcome come già visto
     await fetch("/api/onboarding/welcome-seen", { method: "POST" }).catch(
       () => null,
     );
+    await updateSession().catch(() => null);
     router.push("/dashboard");
+    router.refresh();
   };
 
   const canContinueStep0 = cvInfo !== null;

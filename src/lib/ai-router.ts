@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { recordAiHealth } from "@/lib/ai-health-state";
 
 /**
  * Router AI multi-provider. Ogni feature ("task") ha un provider+modello
@@ -103,6 +104,7 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
   let lastErr: unknown = null;
   for (const p of order) {
     const m = model(p, TASK_DEFAULTS[input.task].tier);
+    const startedAt = Date.now();
     try {
       if (p === "openai") {
         const res = await openai().responses.create({
@@ -126,6 +128,13 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
             `OpenAI empty response (${res.status}${res.incomplete_details?.reason ? `: ${res.incomplete_details.reason}` : ""})`,
           );
         }
+        await recordAiHealth({
+          provider: p,
+          ok: true,
+          model: m,
+          source: input.task,
+          latencyMs: Date.now() - startedAt,
+        });
         return { text, provider: p, model: m };
       }
       const res = await anthropic().messages.create({
@@ -136,9 +145,24 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
         messages: [{ role: "user", content: input.user }],
       });
       const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+      await recordAiHealth({
+        provider: p,
+        ok: true,
+        model: m,
+        source: input.task,
+        latencyMs: Date.now() - startedAt,
+      });
       return { text, provider: p, model: m };
     } catch (err) {
       lastErr = err;
+      await recordAiHealth({
+        provider: p,
+        ok: false,
+        model: m,
+        source: input.task,
+        message: err instanceof Error ? err.message : String(err),
+        latencyMs: Date.now() - startedAt,
+      });
       if (!isFailoverError(err) || p === order[order.length - 1]) throw err;
       console.warn(`[ai-router] ${input.task}: ${p}/${m} fallito (${err instanceof Error ? err.message.slice(0, 80) : "?"}), passo al fallback`);
     }

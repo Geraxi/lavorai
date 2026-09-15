@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "paywall",
-          message: "Hai usato le 3 candidature gratuite.",
+          message: "Hai usato le 3 ottimizzazioni CV gratuite.",
           paymentLink:
             process.env.STRIPE_PAYMENT_LINK ?? "https://buy.stripe.com/test_XXX",
         },

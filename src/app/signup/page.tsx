@@ -6,8 +6,8 @@ import { useTranslations } from "next-intl";
 import { Logo } from "@/components/logo";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/design/icon";
-import { PaywallDialog } from "@/components/paywall-dialog";
 import { GoogleButton } from "@/components/google-signin-button";
+import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 
 export default function SignupPage() {
   return (
@@ -33,11 +33,22 @@ function SignupContent() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
-  const [paywallOpen, setPaywallOpen] = useState(false);
-
   useEffect(() => {
-    if (created) setPaywallOpen(true);
-  }, [created]);
+    trackEvent(AnalyticsEvent.SIGNUP_START, { plan: plan ?? "free" });
+    if (plan === "pro" || plan === "pro_plus") {
+      try {
+        localStorage.setItem("lavorai.selectedPlan", plan);
+      } catch {
+        /* storage unavailable */
+      }
+    } else {
+      try {
+        localStorage.removeItem("lavorai.selectedPlan");
+      } catch {
+        /* storage unavailable */
+      }
+    }
+  }, [plan]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -51,6 +62,10 @@ function SignupContent() {
     }
     setLoading(true);
     setErr(null);
+    trackEvent(AnalyticsEvent.SIGNUP_SUBMIT, {
+      plan: plan ?? "free",
+      source: source || null,
+    });
     try {
       const signupRes = await fetch("/api/auth/signup", {
         method: "POST",
@@ -63,10 +78,15 @@ function SignupContent() {
           source: source || undefined,
           protectedCategory: protectedCategory || undefined,
           promo: promo || undefined,
+          plan: plan === "pro" || plan === "pro_plus" ? plan : "free",
         }),
       });
       const body = await signupRes.json().catch(() => ({}));
       if (!signupRes.ok) {
+        trackEvent(AnalyticsEvent.SIGNUP_FAIL, {
+          plan: plan ?? "free",
+          reason: typeof body?.error === "string" ? body.error : "unknown",
+        });
         setErr(body?.message ?? "Impossibile creare l'account. Riprova.");
         return;
       }
@@ -80,6 +100,10 @@ function SignupContent() {
       }
       setCreated(true);
     } catch {
+      trackEvent(AnalyticsEvent.SIGNUP_FAIL, {
+        plan: plan ?? "free",
+        reason: "network",
+      });
       setErr("Errore di rete. Riprova.");
     } finally {
       setLoading(false);
@@ -154,13 +178,9 @@ function SignupContent() {
                 <Link href="/login" className="ds-btn">
                   {t("backToLogin")}
                 </Link>
-                <button
-                  type="button"
-                  className="ds-btn ds-btn-ghost"
-                  onClick={() => setPaywallOpen(true)}
-                >
+                <Link href="/#prezzi" className="ds-btn ds-btn-ghost">
                   {t("choosePlan")}
-                </button>
+                </Link>
               </div>
             </>
           ) : (
@@ -490,13 +510,6 @@ function SignupContent() {
           .lavorai-login-left { padding: 28px 20px; }
         }
       `}</style>
-      <PaywallDialog
-        open={paywallOpen}
-        onClose={() => setPaywallOpen(false)}
-        variant="signup"
-        headline="Account creato — scegli il piano"
-        sub="Iniziamo gratis? Oppure passa a Pro: dopo il verify email ti porteremo al checkout."
-      />
     </div>
   );
 }
@@ -546,4 +559,3 @@ function Benefit({ icon, text }: { icon: "zap" | "sparkles" | "target"; text: st
     </div>
   );
 }
-

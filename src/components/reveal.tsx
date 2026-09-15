@@ -15,8 +15,9 @@ type RevealProps = {
 };
 
 /**
- * Wrapper per scroll-triggered fade/slide. Entra quando il 20% del
- * contenuto è in viewport. Durata 600ms con easing custom (out-cubic).
+ * Wrapper per scroll-triggered fade/slide. Il contenuto parte già visibile:
+ * così non può restare nascosto se un utente salta rapidamente la sezione
+ * con trackpad, tastiera o un link ad ancora.
  */
 export function Reveal({
   children,
@@ -44,7 +45,7 @@ export function Reveal({
 
   return (
     <MotionTag
-      initial="hidden"
+      initial={false}
       whileInView="visible"
       viewport={{ once, amount: 0.2 }}
       variants={variants}
@@ -69,7 +70,7 @@ export function RevealStagger({
 }) {
   return (
     <motion.div
-      initial="hidden"
+      initial={false}
       whileInView="visible"
       viewport={{ once: true, amount: 0.15 }}
       variants={{

@@ -124,6 +124,8 @@ model User {
   proTrialUsedAt   DateTime?
   /// Prova Pro senza carta: fino a questa data l'utente Free è trattato come Pro.
   trialEndsAt      DateTime?
+  /// Durata promessa al signup; il conto parte solo a onboarding completato.
+  trialDurationDays Int      @default(7)
   /// Mesi gratis maturati dal referral, da applicare al prossimo checkout.
   referralCredits  Int       @default(0)
   /// Il referral è già stato premiato (per questo utente "invitato").
@@ -167,6 +169,7 @@ model User {
   verifyTokens   EmailVerificationToken[]
   popupResponses PopupResponse[]
   answers        UserAnswer[]
+  conversionEvents ConversionEvent[]
 
   // Referral: ogni utente ha un codice univoco da condividere; referredById
   // punta a chi l'ha invitato (se applicabile). Reward gestito a parte
@@ -211,6 +214,41 @@ model PageView {
   @@index([ts])
   @@index([path, ts])
   @@index([sessionId])
+}
+
+/// Eventi first-party del funnel commerciale. Il payload è volutamente
+/// minimale: nessun CV, risposta o dato sensibile viene salvato qui.
+model ConversionEvent {
+  id             String   @id @default(cuid())
+  name           String
+  userId         String?
+  sessionId      String?
+  path           String?
+  plan           String?
+  source         String?
+  valueCents     Int?
+  propertiesJson String?  @db.Text
+  dedupeKey      String?  @unique
+  createdAt      DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([name, createdAt])
+  @@index([userId, createdAt])
+  @@index([sessionId, createdAt])
+}
+
+/// Ultimo segnale reale per ciascun provider AI. Evita di dedurre lo stato
+/// corrente da vecchi errori di candidatura appartenenti ad altri provider.
+model AiHealthState {
+  id        String   @id
+  status    String
+  model     String?
+  source    String?
+  message   String?  @db.Text
+  latencyMs Int?
+  checkedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 /// Risposte RIUTILIZZABILI dell'utente alle domande dei form di candidatura

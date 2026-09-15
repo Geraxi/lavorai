@@ -3,6 +3,7 @@
 import { motion } from "motion/react";
 import { Reveal } from "@/components/reveal";
 import { SUCCESS_METRICS, type SuccessMetric } from "@/lib/marketing-content";
+import { useLocale } from "next-intl";
 
 // I numeri vivono in `src/lib/marketing-content.ts → SUCCESS_METRICS`;
 // la homepage passa `metrics` con i conteggi live dal DB.
@@ -13,6 +14,8 @@ function toStat(s: SuccessMetric) {
 }
 
 export function SectionStats({ metrics }: { metrics?: SuccessMetric[] }) {
+  const locale = useLocale();
+  const en = locale === "en";
   const stats = (metrics ?? SUCCESS_METRICS).map(toStat);
   return (
     <section className="relative overflow-hidden border-t border-border/60 py-24 md:py-28">
@@ -33,13 +36,13 @@ export function SectionStats({ metrics }: { metrics?: SuccessMetric[] }) {
             className="mono text-[10.5px] uppercase tracking-[0.32em] text-primary/80"
             style={{ fontWeight: 500 }}
           >
-            Numeri reali della piattaforma
+            {en ? "Live platform numbers" : "Numeri reali della piattaforma"}
           </p>
           <h2
             className="mt-4 text-balance text-3xl font-semibold tracking-tight sm:text-4xl"
             style={{ letterSpacing: "-0.025em" }}
           >
-            Tu apri l&apos;app una volta. Le candidature partono da sole.
+            {en ? "Open the app once. Applications keep moving." : "Tu apri l'app una volta. Le candidature partono da sole."}
           </h2>
         </Reveal>
 
@@ -54,7 +57,7 @@ export function SectionStats({ metrics }: { metrics?: SuccessMetric[] }) {
             {stats.map((s, i) => (
               <motion.div
                 key={s.label}
-                initial={{ opacity: 0, y: 14 }}
+                initial={false}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, amount: 0.4 }}
                 transition={{
@@ -130,8 +133,7 @@ export function SectionStats({ metrics }: { metrics?: SuccessMetric[] }) {
 
         <Reveal delay={0.2} className="mx-auto mt-8 max-w-2xl text-center">
           <p style={{ fontSize: 11.5, color: "var(--fg-subtle)", lineHeight: 1.6 }}>
-            Numeri letti dal database di LavorAI, aggiornati ogni ora. Il dettaglio
-            di ogni consegna confermata è pubblico su{" "}
+            {en ? "Numbers read from LavorAI's database and refreshed hourly. Every confirmed delivery is public at " : "Numeri letti dal database di LavorAI, aggiornati ogni ora. Il dettaglio di ogni consegna confermata è pubblico su "}
             <a href="/proof" className="underline-offset-4 hover:text-foreground hover:underline">/proof</a>.
           </p>
         </Reveal>

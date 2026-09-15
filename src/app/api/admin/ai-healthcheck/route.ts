@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
+import { recordAiHealth } from "@/lib/ai-health-state";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -23,6 +24,7 @@ export async function GET() {
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
+    await recordAiHealth({ provider: "openai", ok: false, model: MODEL, source: "admin_healthcheck", message: "OPENAI_API_KEY missing" });
     return NextResponse.json({
       ok: false,
       status: "no_key",
@@ -42,6 +44,7 @@ export async function GET() {
       input: "Reply with exactly: OK",
     });
     const text = res.output_text || "(no text)";
+    await recordAiHealth({ provider: "openai", ok: true, model: MODEL, source: "admin_healthcheck", latencyMs: Date.now() - t0 });
     return NextResponse.json({
       ok: true,
       status: "credits_ok",
@@ -58,6 +61,7 @@ export async function GET() {
       status = "no_credits";
     else if (low.includes("authentication") || low.includes("invalid api key") || low.includes("401"))
       status = "invalid_key";
+    await recordAiHealth({ provider: "openai", ok: false, model: MODEL, source: "admin_healthcheck", message: raw, latencyMs: Date.now() - t0 });
     return NextResponse.json({
       ok: false,
       status,

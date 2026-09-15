@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Reveal } from "@/components/reveal";
 import {
@@ -343,7 +344,7 @@ export function SectionAfterSignup() {
   );
 }
 
-/* -------------------- Referral placeholder -------------------- */
+/* -------------------- Referral loop -------------------- */
 export function SectionReferral() {
   const t = useTranslations("referral");
   return (
@@ -399,13 +400,8 @@ export function SectionReferral() {
             >
               {t("body")}
             </p>
-            {/*
-              PLACEHOLDER: il bottone è un mailto. Sostituire con form
-              waitlist (Resend / typeform) quando il flow referral è
-              implementato. Vedi TODO-LAUNCH.md.
-            */}
-            <a
-              href="mailto:hello@lavorai.it?subject=Referral%20beta%20waitlist"
+            <Link
+              href="/settings"
               className="ds-btn ds-btn-primary"
               style={{
                 fontSize: 14,
@@ -414,7 +410,7 @@ export function SectionReferral() {
               }}
             >
               {t("cta")} →
-            </a>
+            </Link>
           </div>
         </Reveal>
       </div>

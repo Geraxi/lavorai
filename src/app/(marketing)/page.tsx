@@ -13,22 +13,17 @@ import { SectionComeFunziona } from "@/components/sections/come-funziona";
 import { SectionLeadMagnet } from "@/components/sections/lead-magnet-banner";
 import { SectionAutomationBoundaries } from "@/components/sections/automation-boundaries";
 import { SectionTrustBlock } from "@/components/sections/trust-block";
-import { SectionProblema } from "@/components/sections/problema";
 import { SectionStats } from "@/components/sections/stats";
 import { prisma } from "@/lib/db";
 import type { SuccessMetric } from "@/lib/marketing-content";
-import { SectionInvisibleWork } from "@/components/sections/invisible-work";
-import { SectionManifesto } from "@/components/sections/manifesto";
 import { SectionPricing } from "@/components/sections/pricing";
 import {
-  SectionPersonas,
-  SectionWhyNotChatGpt,
-  SectionAfterSignup,
   SectionReferral,
 } from "@/components/sections/content-blocks";
 import { SectionFaq } from "@/components/sections/faq";
 import { SectionCtaFinal } from "@/components/sections/cta-final";
 import { StickyCta } from "@/components/sticky-cta";
+import { getLocale } from "next-intl/server";
 
 /**
  * Homepage funnel — ordine ottimizzato per conversion:
@@ -52,43 +47,42 @@ import { StickyCta } from "@/components/sticky-cta";
 // HTTP/DOM), offerte attive nel pool, aziende monitorate. Stesse query di /proof.
 export const revalidate = 3600;
 
-async function liveMetrics(): Promise<SuccessMetric[]> {
+async function liveMetrics(locale: string): Promise<SuccessMetric[]> {
   const fresh = new Date(Date.now() - 30 * 24 * 3600 * 1000);
   const [delivered, jobs, companies] = await Promise.all([
     prisma.application.count({ where: { submitConfirmation: { startsWith: "DETECTED" } } }),
     prisma.job.count({ where: { closedAt: null, cachedAt: { gte: fresh } } }),
     prisma.job.findMany({ where: { closedAt: null, cachedAt: { gte: fresh }, company: { not: null } }, distinct: ["company"], select: { company: true } }).then((r) => r.length),
   ]).catch(() => [0, 0, 0] as const);
-  const n = (v: number) => v.toLocaleString("it-IT");
-  return [
-    { value: n(delivered), label: "candidature consegnate", caveat: "con prova di consegna, elenco su /proof" },
-    { value: `${n(jobs)}+`, label: "offerte attive nel pool", caveat: "aggiornate ogni 2 ore" },
-    { value: `${n(companies)}+`, label: "aziende monitorate", caveat: "pagine carriera e board europee" },
-    { value: "24h", label: "prima candidatura", caveat: "consegnata entro 24 ore o rimborso" },
-  ];
+  const n = (v: number) => v.toLocaleString(locale === "en" ? "en-GB" : "it-IT");
+  return locale === "en"
+    ? [
+        { value: n(delivered), label: "applications delivered", caveat: "with delivery proof, listed on /proof" },
+        { value: `${n(jobs)}+`, label: "active jobs in the pool", caveat: "refreshed every 2 hours" },
+        { value: `${n(companies)}+`, label: "companies monitored", caveat: "career pages and European boards" },
+        { value: "24h", label: "first application", caveat: "delivered within 24 hours or refunded" },
+      ]
+    : [
+        { value: n(delivered), label: "candidature consegnate", caveat: "con prova di consegna, elenco su /proof" },
+        { value: `${n(jobs)}+`, label: "offerte attive nel pool", caveat: "aggiornate ogni 2 ore" },
+        { value: `${n(companies)}+`, label: "aziende monitorate", caveat: "pagine carriera e board europee" },
+        { value: "24h", label: "prima candidatura", caveat: "consegnata entro 24 ore o rimborso" },
+      ];
 }
 
 export default async function Home() {
-  const metrics = await liveMetrics();
+  const metrics = await liveMetrics(await getLocale());
   return (
     <div className="flex min-h-screen flex-col">
       <SiteNav />
       <main className="flex-1">
         <Hero />
-        {/* RHYTHM BREAK 1: editorial — "il lavoro invisibile" */}
-        <SectionInvisibleWork />
-        <SectionComeFunziona />
-        <SectionLeadMagnet />
-        <SectionAutomationBoundaries />
-        {/* RHYTHM BREAK 2: manifesto / founder note in serif type */}
-        <SectionManifesto />
-        <SectionPersonas />
-        <SectionProblema />
         <SectionStats metrics={metrics} />
-        <SectionWhyNotChatGpt />
-        <SectionTrustBlock />
+        <SectionComeFunziona />
+        <SectionAutomationBoundaries />
+        <SectionLeadMagnet />
         <SectionPricing />
-        <SectionAfterSignup />
+        <SectionTrustBlock />
         <SectionFaq />
         <SectionReferral />
         <SectionCtaFinal />

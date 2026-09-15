@@ -4,6 +4,8 @@ import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { TIERS, type Tier } from "@/lib/billing";
+import { AnalyticsEvent } from "@/lib/analytics";
+import { recordConversionEvent } from "@/lib/conversion-events";
 
 export const runtime = "nodejs";
 
@@ -108,6 +110,14 @@ export async function POST(request: NextRequest) {
           : {}),
       },
       locale: "it",
+    });
+
+    await recordConversionEvent(AnalyticsEvent.CHECKOUT_STARTED, {
+      userId: user.id,
+      plan: tier,
+      path: "/api/stripe/checkout",
+      valueCents: Math.round(TIERS[tier].price * 100),
+      dedupeKey: `checkout_started:${session.id}`,
     });
 
     return NextResponse.json({ url: session.url });

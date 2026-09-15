@@ -2,16 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useLocale } from "next-intl";
 
 const KEY = "lavorai-cookie-consent";
 
-/**
- * GDPR cookie banner — essential only (no analytics/marketing cookies
- * in this version, quindi il banner è solo notifica + accept).
- * Quando aggiungi analytics: estendere con granular consent (categorie).
- */
+/** Consent esplicito per strumenti esterni di analytics e advertising. */
 export function CookieBanner() {
   const [visible, setVisible] = useState(false);
+  const en = useLocale() === "en";
 
   useEffect(() => {
     const saved = localStorage.getItem(KEY);
@@ -20,50 +18,77 @@ export function CookieBanner() {
 
   if (!visible) return null;
 
-  function accept() {
-    localStorage.setItem(KEY, "accepted");
+  function choose(value: "accepted" | "essential") {
+    localStorage.setItem(KEY, value);
+    window.dispatchEvent(new CustomEvent("lavorai-consent-changed", { detail: value }));
     setVisible(false);
   }
 
   return (
-    <div
-      role="dialog"
-      aria-label="Informativa cookie"
-      style={{
-        position: "fixed",
-        bottom: 16,
-        left: 16,
-        right: 16,
-        zIndex: 90,
-        maxWidth: 560,
-        margin: "0 auto",
-        background: "var(--bg-elev)",
-        border: "1px solid var(--border-ds)",
-        borderRadius: "var(--radius)",
-        boxShadow: "var(--shadow-lg)",
-        padding: "14px 18px",
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        color: "var(--fg)",
-        fontSize: 13,
-      }}
-    >
-      <div style={{ flex: 1, lineHeight: 1.5 }}>
-        Usiamo solo cookie tecnici essenziali per autenticazione e
-        preferenze. Nessun tracker di marketing o profilazione. Vedi la{" "}
-        <Link href="/privacy" style={{ color: "var(--fg-muted)" }}>
-          privacy policy
-        </Link>
-        .
-      </div>
-      <button
-        type="button"
-        className="ds-btn ds-btn-primary ds-btn-sm"
-        onClick={accept}
+    <>
+      <div
+        role="dialog"
+        aria-label={en ? "Cookie notice" : "Informativa cookie"}
+        className="lavorai-cookie-banner"
       >
-        Ho capito
-      </button>
-    </div>
+        <div style={{ flex: 1, lineHeight: 1.5 }}>
+          {en
+            ? "We use essential cookies for login and preferences. With your permission, optional Google and Meta tools help us measure and improve results. See the "
+            : "Usiamo cookie essenziali per accesso e preferenze. Con il tuo consenso, gli strumenti facoltativi di Google e Meta ci aiutano a misurare e migliorare i risultati. Vedi la "}
+          <Link href="/privacy" style={{ color: "var(--fg-muted)" }}>
+            privacy policy
+          </Link>
+          .
+        </div>
+        <div className="lavorai-cookie-actions">
+          <button
+            type="button"
+            className="ds-btn ds-btn-sm"
+            onClick={() => choose("essential")}
+          >
+            {en ? "Essential only" : "Solo essenziali"}
+          </button>
+          <button
+            type="button"
+            className="ds-btn ds-btn-primary ds-btn-sm"
+            onClick={() => choose("accepted")}
+          >
+            {en ? "Allow analytics" : "Consenti analisi"}
+          </button>
+        </div>
+      </div>
+      <style>{`
+        .lavorai-cookie-banner {
+          position: fixed;
+          inset: auto 16px 16px;
+          z-index: 90;
+          max-width: 620px;
+          margin: 0 auto;
+          padding: 14px 18px;
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          border: 1px solid var(--border-ds);
+          border-radius: var(--radius);
+          background: var(--bg-elev);
+          box-shadow: var(--shadow-lg);
+          color: var(--fg);
+          font-size: 13px;
+        }
+        .lavorai-cookie-actions { display: flex; gap: 8px; flex-shrink: 0; }
+        @media (max-width: 640px) {
+          .lavorai-cookie-banner {
+            inset: auto 8px 8px;
+            padding: 14px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+            font-size: 12.5px;
+          }
+          .lavorai-cookie-actions { width: 100%; }
+          .lavorai-cookie-actions > button { flex: 1; justify-content: center; }
+        }
+      `}</style>
+    </>
   );
 }

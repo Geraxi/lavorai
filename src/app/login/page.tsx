@@ -276,7 +276,7 @@ function LoginContent() {
                 </button>
 
                 <div style={{ marginTop: 14 }}>
-                  <GoogleButton mode="login" position="below" />
+                  <GoogleButton mode="login" position="below" callbackUrl={callbackUrl} />
                 </div>
               </form>
 

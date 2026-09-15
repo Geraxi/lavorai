@@ -90,12 +90,12 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     recentApps,
     recentPopups,
     recentEmails,
+    conversionEvents,
+    openAiHealth,
   ] = await Promise.all([
     prisma.user.findMany({
       select: {
-        email: true, tier: true, createdAt: true, subscriptionStatus: true, signupSource: true, signupUtmSource: true,
-        preferences: { select: { rolesJson: true } },
-        _count: { select: { cvDocuments: true, applications: { where: { status: "success" } } } },
+        id: true, email: true, tier: true, createdAt: true, onboardedAt: true, subscriptionStatus: true, signupSource: true, signupUtmSource: true,
       },
     }),
     prisma.application.findMany({
@@ -126,7 +126,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     prisma.job
       .findMany({ where: { company: { not: null } }, distinct: ["company"], select: { company: true }, take: 10000 })
       .then((r) => r.length),
-    prisma.pageView.findMany({ where: { ts: { gte: since(24 * DAYS) } }, select: { ts: true, path: true } }).catch(() => [] as { ts: Date; path: string }[]),
+    prisma.pageView.findMany({ where: { ts: { gte: since(24 * DAYS) } }, select: { ts: true, path: true, sessionId: true } }).catch(() => [] as { ts: Date; path: string; sessionId: string | null }[]),
     prisma.cVDocument.count({ where: { createdAt: { gte: monthStart } } }).catch(() => 0),
     prisma.user.findMany({ where: { createdAt: { gte: since(24 * 7) } }, orderBy: { createdAt: "desc" }, take: 4, select: { email: true, createdAt: true, tier: true } }),
     prisma.application.findMany({
@@ -137,13 +137,18 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     }),
     prisma.popupResponse.findMany({ orderBy: { createdAt: "desc" }, take: 2, select: { createdAt: true, popup: { select: { title: true } }, user: { select: { email: true } } } }).catch(() => []),
     prisma.emailLog.findMany({ orderBy: { createdAt: "desc" }, take: 2, select: { createdAt: true, kind: true, to: true } }).catch(() => []),
+    prisma.conversionEvent.findMany({
+      where: { createdAt: { gte: since(24 * DAYS) } },
+      select: { name: true, userId: true, sessionId: true, plan: true, createdAt: true },
+    }).catch(() => []),
+    prisma.aiHealthState.findUnique({ where: { id: "openai" } }).catch(() => null),
   ]);
 
   const realUsers = allUsersLite.filter((u) => !isTestAccount(u.email));
   const realTotal = realUsers.length;
-  // "Pagante" = abbonamento Stripe vivo (active/trialing). Un tier pro con
-  // abbonamento past_due/canceled/assente NON genera ricavi e va mostrato a parte.
-  const isPaying = (u: { tier: string; subscriptionStatus: string | null }) => (u.tier === "pro" || u.tier === "pro_plus") && (u.subscriptionStatus === "active" || u.subscriptionStatus === "trialing");
+  // "Pagante" = addebito completato (status active). Le prove Stripe sono
+  // piani vivi ma non MRR e restano quindi fuori dai ricavi.
+  const isPaying = (u: { tier: string; subscriptionStatus: string | null }) => (u.tier === "pro" || u.tier === "pro_plus") && u.subscriptionStatus === "active";
   const payingPro = realUsers.filter((u) => u.tier === "pro" && isPaying(u)).length;
   const payingProPlus = realUsers.filter((u) => u.tier === "pro_plus" && isPaying(u)).length;
   const proWithoutPayment = realUsers.filter((u) => (u.tier === "pro" || u.tier === "pro_plus") && !isPaying(u)).length;
@@ -183,11 +188,22 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   const aiPct = Math.min(100, Math.round((aiUsed / aiCapacity) * 100));
 
   // ── Funnel utenti (all-time, account reali) ────────────────────────────
-  const uCv = realUsers.filter((u) => u._count.cvDocuments > 0).length;
-  const uPrefs = realUsers.filter((u) => { try { return (JSON.parse(u.preferences?.rolesJson ?? "[]") as unknown[]).length > 0; } catch { return false; } }).length;
-  const uFirstApp = realUsers.filter((u) => u._count.applications > 0).length;
-  const uPaying = realUsers.filter(isPaying).length;
-  const uMax = Math.max(realTotal, 1);
+  const uniqueEventUsers = (name: string) => new Set(
+    conversionEvents.filter((e) => e.name === name && e.userId).map((e) => e.userId as string),
+  ).size;
+  const conversionVisitors = new Set(pageViews14d.map((v) => v.sessionId).filter(Boolean)).size;
+  const conversionSignups = Math.max(
+    uniqueEventUsers("signup_success"),
+    realUsers.filter((u) => u.createdAt >= since(24 * DAYS)).length,
+  );
+  const conversionOnboarded = Math.max(
+    uniqueEventUsers("onboarding_completed"),
+    realUsers.filter((u) => u.onboardedAt && u.onboardedAt >= since(24 * DAYS)).length,
+  );
+  const conversionTrials = uniqueEventUsers("trial_started");
+  const conversionCheckouts = uniqueEventUsers("checkout_started");
+  const conversionPaid = uniqueEventUsers("purchase_completed");
+  const conversionMax = Math.max(conversionVisitors, conversionSignups, 1);
   const SOURCE_LABEL: Record<string, string> = { google: "Google", chatgpt: "ChatGPT", linkedin: "LinkedIn", instagram_tiktok: "IG/TikTok", amico: "Amico", universita: "Università", categorie_protette: "Cat. protette", altro: "Altro" };
   const sourceCounts = new Map<string, number>();
   for (const u of realUsers) { const k = u.signupSource ?? (u.signupUtmSource ? `utm:${u.signupUtmSource}` : null); if (k) sourceCounts.set(k, (sourceCounts.get(k) ?? 0) + 1); }
@@ -231,15 +247,25 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   ];
 
   // ── Stato piattaforma ─────────────────────────────────────────────────
-  const aiStatus: "ok" | "warn" | "down" = creditFailures6h > 5 ? "down" : creditFailures6h > 0 ? "warn" : "ok";
+  const aiAgeMs = openAiHealth ? now - openAiHealth.checkedAt.getTime() : Infinity;
+  const aiStatus: "ok" | "warn" | "down" = !openAiHealth || aiAgeMs > 6 * H
+    ? "warn"
+    : openAiHealth.status === "ok"
+      ? "ok"
+      : "down";
+  const aiDetail = !openAiHealth
+    ? "mai verificato"
+    : aiAgeMs > 6 * H
+      ? "segnale >6h"
+      : `${Math.max(0, Math.round(aiAgeMs / 60000))} min fa`;
   const services = [
-    { label: "API", icon: <Globe size={14} />, status: "ok" as const, uptime: 99.9 },
-    { label: "Database", icon: <Database size={14} />, status: "ok" as const, uptime: 99.98 },
-    { label: "AI Engine", icon: <Sparkles size={14} />, status: aiStatus, uptime: aiStatus === "ok" ? 99.2 : 96.8 },
-    { label: "Job Scraping", icon: <Cpu size={14} />, status: (jobsFresh24h === 0 ? "warn" : "ok") as "ok" | "warn", uptime: jobsFresh24h === 0 ? 92.0 : 98.7 },
-    { label: "Email Service", icon: <Mail size={14} />, status: (emailsLast7d > 0 ? "ok" : "warn") as "ok" | "warn", uptime: 99.4 },
-    { label: "Payment (Stripe)", icon: <CreditCard size={14} />, status: "ok" as const, uptime: 99.8 },
-    { label: "Web & App", icon: <MonitorSmartphone size={14} />, status: "ok" as const, uptime: 99.6 },
+    { label: "API", icon: <Globe size={14} />, status: "ok" as const, detail: "risponde" },
+    { label: "Database", icon: <Database size={14} />, status: "ok" as const, detail: "query ok" },
+    { label: "AI Engine", icon: <Sparkles size={14} />, status: aiStatus, detail: aiDetail },
+    { label: "Job Scraping", icon: <Cpu size={14} />, status: (jobsFresh24h === 0 ? "warn" : "ok") as "ok" | "warn", detail: `${jobsFresh24h} / 24h` },
+    { label: "Email Service", icon: <Mail size={14} />, status: (emailsLast7d > 0 ? "ok" : "warn") as "ok" | "warn", detail: `${emailsLast7d} / 7g` },
+    { label: "Payment (Stripe)", icon: <CreditCard size={14} />, status: (process.env.STRIPE_SECRET_KEY ? "ok" : "warn") as "ok" | "warn", detail: process.env.STRIPE_SECRET_KEY ? "configurato" : "non configurato" },
+    { label: "Web & App", icon: <MonitorSmartphone size={14} />, status: "ok" as const, detail: "online" },
   ];
   const allOk = services.every((s) => s.status === "ok");
 
@@ -262,7 +288,8 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
 
   // ── Alert ─────────────────────────────────────────────────────────────
   const alerts: Array<{ tone: "bad" | "warn" | "info"; icon: React.ReactNode; title: string; detail: string; when: string }> = [];
-  if (creditFailures6h > 0) alerts.push({ tone: "bad", icon: <AlertOctagon size={13} />, title: "Crediti AI esauriti", detail: `${creditFailures6h} candidature fallite nelle ultime 6h`, when: "6 ore fa" });
+  if (creditFailures6h > 0) alerts.push({ tone: "warn", icon: <AlertOctagon size={13} />, title: "Errori quota rilevati", detail: `${creditFailures6h} candidature fallite nelle ultime 6h; lo stato AI sopra usa il provider corrente`, when: "ultime 6 ore" });
+  if (aiStatus === "down" && openAiHealth) alerts.push({ tone: "bad", icon: <AlertOctagon size={13} />, title: "OpenAI non operativo", detail: openAiHealth.message?.slice(0, 120) ?? "Ultima chiamata reale fallita", when: aiDetail });
   if (aiUsed / aiCapacity > 0.8) alerts.push({ tone: "warn", icon: <AlertTriangle size={13} />, title: "Alto utilizzo crediti AI", detail: `${aiPct}% raggiunto (${compactNumber(aiUsed)} / ${compactNumber(aiCapacity)})`, when: "in corso" });
   if (awaitingConsentTotal > 5) alerts.push({ tone: "warn", icon: <AlertTriangle size={13} />, title: "Candidature in attesa di consenso", detail: `${awaitingConsentTotal} in coda — gli utenti non hanno cliccato Consenti`, when: "in corso" });
   if (jobsFresh24h === 0 && jobsTotal > 0) alerts.push({ tone: "warn", icon: <AlertTriangle size={13} />, title: "Job pool non aggiornato", detail: "Nessun annuncio nuovo nelle ultime 24h", when: "24 ore fa" });
@@ -327,7 +354,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
           </div>
           <div className="adm-card-body" style={{ justifyContent: "space-between" }}>
             {services.map((s) => (
-              <ServiceRow key={s.label} label={s.label} icon={s.icon} status={s.status} uptime={s.uptime} />
+              <ServiceRow key={s.label} label={s.label} icon={s.icon} status={s.status} detail={s.detail} />
             ))}
           </div>
         </div>
@@ -338,16 +365,17 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
         <div className="adm-card">
           <div className="adm-card-head">
             <div>
-              <div className="adm-card-title">Funnel utenti</div>
-              <div className="adm-card-sub">Da iscritto a pagante · {topSources.length ? topSources.map(([k, n]) => `${SOURCE_LABEL[k] ?? k} ${n}`).join(" · ") : "fonte signup: nessun dato"}</div>
+              <div className="adm-card-title">Funnel conversione</div>
+              <div className="adm-card-sub">Visita → ricavo · {rangeLabel(DAYS)} · {topSources.length ? topSources.map(([k, n]) => `${SOURCE_LABEL[k] ?? k} ${n}`).join(" · ") : "fonti in raccolta"}</div>
             </div>
           </div>
           <div className="adm-card-body" style={{ justifyContent: "center" }}>
-            <FunnelBar label="Iscritti" value={realTotal} max={uMax} pct={pctOf(realTotal, uMax)} color="hsl(var(--primary))" />
-            <FunnelBar label="CV caricato" value={uCv} max={uMax} pct={pctOf(uCv, uMax)} color="#60a5fa" />
-            <FunnelBar label="Preferenze" value={uPrefs} max={uMax} pct={pctOf(uPrefs, uMax)} color="#a78bfa" />
-            <FunnelBar label="1ª candidatura" value={uFirstApp} max={uMax} pct={pctOf(uFirstApp, uMax)} color="#f472b6" />
-            <FunnelBar label="Paganti" value={uPaying} max={uMax} pct={pctOf(uPaying, uMax)} color="#fbbf24" />
+            <FunnelBar label="Visitatori" value={conversionVisitors} max={conversionMax} pct={pctOf(conversionVisitors, conversionMax)} color="hsl(var(--primary))" />
+            <FunnelBar label="Iscritti" value={conversionSignups} max={conversionMax} pct={pctOf(conversionSignups, conversionMax)} color="#60a5fa" />
+            <FunnelBar label="Setup completo" value={conversionOnboarded} max={conversionMax} pct={pctOf(conversionOnboarded, conversionMax)} color="#a78bfa" />
+            <FunnelBar label="Prova attiva" value={conversionTrials} max={conversionMax} pct={pctOf(conversionTrials, conversionMax)} color="#f472b6" />
+            <FunnelBar label="Checkout" value={conversionCheckouts} max={conversionMax} pct={pctOf(conversionCheckouts, conversionMax)} color="#fb923c" />
+            <FunnelBar label="Paganti" value={conversionPaid} max={conversionMax} pct={pctOf(conversionPaid, conversionMax)} color="#fbbf24" />
           </div>
         </div>
         <div className="adm-card">

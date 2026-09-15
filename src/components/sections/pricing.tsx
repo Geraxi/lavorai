@@ -35,16 +35,70 @@ function parseFeature(raw: string): {
   }
   return { icon: null, text: s, comingSoon };
 }
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Reveal } from "@/components/reveal";
 import { TIER_LIST, type TierConfig } from "@/lib/billing";
 import { cn } from "@/lib/utils";
+import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
+
+const EN_TIER_COPY: Record<TierConfig["id"], Pick<TierConfig, "tagline" | "features" | "cta" | "badge" | "priceSuffix">> = {
+  free: {
+    tagline: "7 days of full Pro after setup, with no card and no automatic renewal.",
+    priceSuffix: "",
+    badge: undefined,
+    cta: "Try Pro free for 7 days",
+    features: [
+      "Your trial starts when setup is complete",
+      "7 full days of Pro, no card",
+      "Then: matching jobs every day",
+      "Recruiter replies in your Inbox",
+      "ATS analysis of your CV",
+      "No automatic applications after the trial",
+    ],
+  },
+  pro: {
+    tagline: "50 applications a month with a tailored CV and letter. 7 free days if you have not used the trial.",
+    priceSuffix: "/ month",
+    badge: undefined,
+    cta: "Try 7 days free",
+    features: [
+      "50 applications per month",
+      "Automatic applications on supported portals",
+      "AI CV optimization",
+      "AI cover letters",
+      "DOCX format",
+      "Basic analytics",
+      "Email support",
+    ],
+  },
+  pro_plus: {
+    tagline: "Unlimited applications, every supported portal and Founder Coach. Cancel anytime.",
+    priceSuffix: "/ month",
+    badge: "Recommended",
+    cta: "Try 7 days free",
+    features: [
+      "[target] Founder Interview Coach (opportunity, equity and vocabulary)",
+      "Unlimited applications",
+      "All supported ATS portals (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee and more)",
+      "Multi-version AI CV optimization",
+      "Personalized AI cover letters",
+      "DOCX, PDF and Europass formats",
+      "Advanced analytics (funnel, geography and heatmap)",
+      "Priority support (<4h)",
+      "Cancel anytime",
+    ],
+  },
+};
 
 export function SectionPricing() {
   const t = useTranslations("pricing");
+  const locale = useLocale();
+  const tiers = locale === "en"
+    ? TIER_LIST.map((tier) => ({ ...tier, ...EN_TIER_COPY[tier.id] }))
+    : TIER_LIST;
   return (
     <section
       id="prezzi"
@@ -107,7 +161,7 @@ export function SectionPricing() {
         </Reveal>
 
         <div className="mx-auto mt-16 grid max-w-6xl gap-6 md:grid-cols-3">
-          {TIER_LIST.map((tier, idx) => (
+          {tiers.map((tier, idx) => (
             <Reveal key={tier.id} delay={idx * 0.05}>
               <TierCard tier={tier} />
             </Reveal>
@@ -123,8 +177,7 @@ export function SectionPricing() {
 }
 
 function TierCard({ tier }: { tier: TierConfig }) {
-  const isFree = tier.id === "free";
-  const href = isFree ? "/onboarding" : `/login?plan=${tier.id}`;
+  const href = tier.id === "free" ? "/signup" : `/signup?plan=${tier.id}`;
 
   return (
     <motion.div
@@ -201,7 +254,7 @@ function TierCard({ tier }: { tier: TierConfig }) {
           </div>
 
           <ul className="flex flex-col gap-3">
-            {tier.features.map((raw) => {
+            {tier.features.filter((raw) => !parseFeature(raw).comingSoon).map((raw) => {
               const f = parseFeature(raw);
               return (
                 <li
@@ -273,7 +326,10 @@ function TierCard({ tier }: { tier: TierConfig }) {
                 "group relative overflow-hidden bg-primary text-primary-foreground hover:bg-primary/90",
             )}
           >
-            <Link href={href}>
+            <Link
+              href={href}
+              onClick={() => trackEvent(AnalyticsEvent.PRICING_CTA, { plan: tier.id })}
+            >
               <span className="relative z-10">{tier.cta}</span>
               {tier.highlight && (
                 <span

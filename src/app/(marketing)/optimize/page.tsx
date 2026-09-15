@@ -137,12 +137,12 @@ function FormCard({
       <CardContent className="p-6 md:p-8">
         <div className="space-y-2">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Inizia gratis — 3 candidature incluse
+            Inizia gratis — 7 giorni di Pro
           </h1>
           <p className="text-sm text-muted-foreground">
             Carica il CV e inserisci l&apos;email. Ti invieremo un magic link:
-            dopo il login LavorAI si candida in automatico agli annunci che
-            fanno per te.
+            dopo il login completi il setup e da quel momento partono i tuoi
+            7 giorni di Pro, senza carta e senza rinnovo automatico.
           </p>
         </div>
 
@@ -297,4 +297,3 @@ function SentCard({ email }: { email: string }) {
     </Card>
   );
 }
-

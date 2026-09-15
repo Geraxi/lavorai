@@ -6,7 +6,8 @@ import { authLimiter } from "@/lib/rate-limit";
 import { validatePassword } from "@/lib/password-policy";
 import { checkOrigin } from "@/lib/csrf";
 import { sendVerificationEmail } from "@/lib/email-verification";
-import { sendTrialStartedEmail } from "@/lib/trial";
+import { AnalyticsEvent } from "@/lib/analytics";
+import { recordConversionEvent } from "@/lib/conversion-events";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,8 @@ const SignupSchema = z.object({
   protectedCategory: z.boolean().optional(),
   /** Codice promo dal link (es. STUDENTI → 30 giorni di Pro, fonte università). */
   promo: z.string().max(40).optional(),
+  /** Piano scelto sulla pricing page; serve solo per attribuzione funnel. */
+  plan: z.enum(["free", "pro", "pro_plus"]).optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -131,17 +134,29 @@ export async function POST(request: NextRequest) {
         signupUtmCampaign: attrib.c ?? null,
         signupLandingPath: attrib.p ?? null,
         signupSource: parsed.data.source ?? (parsed.data.promo?.toUpperCase() === "STUDENTI" ? "universita" : parsed.data.protectedCategory ? "categorie_protette" : null),
-        // Prova Pro senza carta: 7 giorni dalla registrazione.
-        trialEndsAt: new Date(Date.now() + (parsed.data.promo?.toUpperCase() === "STUDENTI" ? 30 : 7) * 86400_000),
+        // La prova parte quando l'utente completa il setup, non mentre
+        // aspetta di verificare l'email. Conserviamo qui solo la durata.
+        trialDurationDays: parsed.data.promo?.toUpperCase() === "STUDENTI" ? 30 : 7,
         ...(parsed.data.protectedCategory ? { preferences: { create: { protectedCategory: true, autoApplyMode: "auto" } } } : {}),
       },
-      select: { id: true, email: true, locale: true, name: true, trialEndsAt: true },
+      select: { id: true, email: true, locale: true, name: true },
+    });
+
+    await recordConversionEvent(AnalyticsEvent.SIGNUP_SUCCESS, {
+      userId: user.id,
+      sessionId: request.cookies.get("lv_sid")?.value ?? null,
+      plan: parsed.data.plan ?? "free",
+      source: user.email ? "email" : null,
+      path: parsed.data.protectedCategory ? "/signup?protected=1" : "/signup",
+      properties: {
+        declaredSource: parsed.data.source ?? null,
+        promo: parsed.data.promo?.toUpperCase() ?? null,
+      },
+      dedupeKey: `signup_success:${user.id}`,
     });
 
     // Invia email di verifica (best-effort; non blocca signup se fallisce)
     await sendVerificationEmail(user.id, user.email, user.locale);
-    // Email "i tuoi 7 giorni di Pro iniziano adesso" (non blocca il signup).
-    sendTrialStartedEmail(user).catch((err) => console.error("[signup] trial email failed", err));
 
     return NextResponse.json({ ok: true, verifyRequired: true });
   } catch (err) {

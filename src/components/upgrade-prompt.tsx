@@ -190,7 +190,7 @@ const COPY = {
   cold: {
     title: (_used: number, _cap: number) =>
       "Trova lavoro fino a 17× più veloce con Pro",
-    body: "Piano Free: 3 candidature. Piano Pro: 50 candidature/mese, priorità sui portali diretti, cover letter personalizzata. 7 giorni gratis, poi €19,99/mese, disdici quando vuoi.",
+    body: "Prova Pro: 7 giorni completi dal termine del setup, senza carta. Poi 50 candidature/mese, priorità sui portali supportati e cover letter personalizzata a €19,99/mese. Disdici quando vuoi.",
     cta: "Prova Pro gratis",
   },
   warning: {

@@ -31,6 +31,8 @@ import {
   WORKABLE_COMPANIES,
   SMARTRECRUITERS_COMPANIES,
 } from "@/lib/scrapers/ats-companies";
+import { AnalyticsEvent } from "@/lib/analytics";
+import { recordConversionEvent } from "@/lib/conversion-events";
 
 // Set di nomi azienda con board ATS noto (normalizzati). Usato per evitare
 // il fallback email verso indirizzi scrapati quando esiste un portale
@@ -1235,6 +1237,16 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
     },
   });
   if (!app) return;
+
+  await recordConversionEvent(AnalyticsEvent.FIRST_APPLICATION_DELIVERED, {
+    userId: app.userId,
+    path: "/applications",
+    properties: {
+      channel: app.submittedVia ?? "unknown",
+      confirmation: app.submitConfirmation ?? "unknown",
+    },
+    dedupeKey: `first_application_delivered:${app.userId}`,
+  });
 
   // Cooldown 2h: burst di N success in pochi minuti = 1 sola email
   // individuale; le successive vengono raccolte dal daily_summary. Case

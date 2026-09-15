@@ -57,8 +57,8 @@ ${snapshot}
 
 CONOSCENZA DEL PRODOTTO (per domande su come funziona la piattaforma):
 - Stack: Next.js 15 App Router + Prisma/Postgres su Vercel; worker Playwright su Railway (coda BullMQ su Upstash Redis, fallback self-invoke /api/applications/process su Vercel); email via Resend; pagamenti Stripe (checkout, portal, webhook).
-- Piani: Free (3 candidature totali, no carta), Pro €19.99/mese (50 candidature/mese), Pro+ €39.99/mese (illimitate + Founder Coach + Interview Copilot). Paywall dopo il limite; upgrade nudge email agli utenti Free attivi.
-- Pipeline candidatura: job dal pool (Greenhouse, Lever, Workable, Ashby, SmartRecruiters via API + Adzuna) → match col profilo CV (quickMatchScore) e ruoli/località delle preferenze → CV e cover letter riscritti da Claude → invio: (a) adapter ATS Playwright che compila e invia il form (conferma DETECTED_HTTP/DOM), (b) email al recruiter se trovata, (c) ready_to_apply manuale. Captcha interattivo → CAPTCHA (riaccodabile da Admin → Consegna). Domande obbligatorie sconosciute → needs_answers (l'utente risponde in /questions).
+- Piani: prova Pro di 7 giorni dal completamento del setup (senza carta e senza rinnovo automatico), poi Pro €19.99/mese (50 candidature/mese) o Pro+ €39.99/mese (illimitate + Founder Coach). Alla scadenza senza piano l'account resta in sola visualizzazione.
+- Pipeline candidatura: job dal pool (Greenhouse, Lever, Workable, Ashby, SmartRecruiters via API + Adzuna) → match col profilo CV (quickMatchScore) e ruoli/località delle preferenze → CV e cover letter riscritti da OpenAI, con fallback operativo opzionale → invio: (a) adapter ATS Playwright che compila e invia il form (conferma DETECTED_HTTP/DOM), (b) email al recruiter se trovata, (c) ready_to_apply manuale. Captcha interattivo → CAPTCHA (riaccodabile da Admin → Consegna). Domande obbligatorie sconosciute → needs_answers (l'utente risponde in /questions).
 - Cron (Vercel Hobby, max 2): nudges 10:00 UTC, sync-jobs 05:30 UTC; auto-apply schedulato dal worker Railway alle 8/12/16 UTC. Job chiusi (404/board) marcati closedAt ed esclusi.
 - Pagine admin: Panoramica, Traffico (PageView + globo), Consegna (verità consegna, retry captcha), Utenti, Job pool & motore (sync, salute AI), Automazione & Utenti (test apply, nudge, popup, assistente). Utente: Dashboard (globo opportunità con pin per città, regioni), Candidature, CV per posizione, Domande, Job board, Analisi, Colloqui, Founder Coach, Preferenze, Impostazioni.
 - Marketing/SEO: landing /auto-candidatura, /analizza-cv, /optimize, /proof, /interview-buddy, /pricing; sitemap.xml; Vercel Analytics e GA/Meta pixel via env.
@@ -138,8 +138,8 @@ async function buildSnapshot(): Promise<string> {
     deliveredByPortal30d,
     recentApps,
   ] = await Promise.all([
-    prisma.user.findMany({ select: { email: true, tier: true, emailVerified: true, createdAt: true, _count: { select: { applications: true } } } }),
-    prisma.user.count({ where: { tier: { in: ["pro", "pro_plus"] } } }),
+    prisma.user.findMany({ select: { email: true, tier: true, subscriptionStatus: true, emailVerified: true, createdAt: true, _count: { select: { applications: true } } } }),
+    prisma.user.count({ where: { tier: { in: ["pro", "pro_plus"] }, subscriptionStatus: "active" } }),
     prisma.user.count({ where: { emailVerified: { not: null } } }),
     prisma.application.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.application.groupBy({ by: ["submitConfirmation"], _count: { _all: true } }),
@@ -171,7 +171,7 @@ async function buildSnapshot(): Promise<string> {
   ]);
 
   const real = allUsers.filter((u) => !isTestAccount(u.email));
-  const realPaying = real.filter((u) => u.tier === "pro" || u.tier === "pro_plus").length;
+  const realPaying = real.filter((u) => (u.tier === "pro" || u.tier === "pro_plus") && u.subscriptionStatus === "active").length;
   const real7d = real.filter((u) => u.createdAt >= since(24 * 7)).length;
   const real30d = real.filter((u) => u.createdAt >= since(24 * 30)).length;
   const realList = real

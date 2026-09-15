@@ -35,6 +35,13 @@ export const AnalyticsEvent = {
   SIGNUP_SUCCESS: "signup_success",
   SIGNUP_FAIL: "signup_fail",
   EMAIL_VERIFY_OPEN: "email_verify_open",
+  ONBOARDING_CV_UPLOADED: "onboarding_cv_uploaded",
+  ONBOARDING_COMPLETED: "onboarding_completed",
+  TRIAL_STARTED: "trial_started",
+  CHECKOUT_STARTED: "checkout_started",
+  SUBSCRIPTION_STARTED: "subscription_started",
+  PURCHASE_COMPLETED: "purchase_completed",
+  FIRST_APPLICATION_DELIVERED: "first_application_delivered",
 
   // Proof / content interactions
   FAQ_EXPAND: "faq_expand",
@@ -88,6 +95,33 @@ export function trackEvent(
     window.dataLayer.push(event);
   } catch {
     /* sandboxed iframe / quota */
+  }
+
+  try {
+    const plan = typeof payload?.plan === "string" ? payload.plan : undefined;
+    const source = typeof payload?.source === "string" ? payload.source : undefined;
+    const body = JSON.stringify({
+      name,
+      path: window.location.pathname,
+      plan,
+      source,
+      payload,
+    });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(
+        "/api/analytics/event",
+        new Blob([body], { type: "application/json" }),
+      );
+    } else {
+      fetch("/api/analytics/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+      }).catch(() => void 0);
+    }
+  } catch {
+    /* measurement never blocks navigation */
   }
 }
 

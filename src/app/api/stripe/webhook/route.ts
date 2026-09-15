@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { stripe, priceIdToTier } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
+import { AnalyticsEvent } from "@/lib/analytics";
+import { recordConversionEvent } from "@/lib/conversion-events";
+import { TIERS } from "@/lib/billing";
 
 export const runtime = "nodejs";
 
@@ -103,6 +106,25 @@ export async function POST(request: NextRequest) {
             },
           }).catch((err) => console.error("[stripe/webhook] fallback update failed", err));
         }
+        const convertedUser = userId
+          ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
+          : await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
+        if (convertedUser) {
+          await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
+            userId: convertedUser.id,
+            plan: tier,
+            valueCents: Math.round(TIERS[tier].price * 100),
+            properties: { stripeStatus: sub.status },
+            dedupeKey: `subscription_started:${sub.id}`,
+          });
+          await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
+            userId: convertedUser.id,
+            plan: tier,
+            valueCents: Math.round(TIERS[tier].price * 100),
+            properties: { stripeStatus: sub.status, checkoutPaid: true },
+            dedupeKey: `purchase_completed:${sub.id}`,
+          });
+        }
         break;
       }
       case "customer.subscription.created":
@@ -168,6 +190,28 @@ export async function POST(request: NextRequest) {
               currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
             },
           }).catch((err) => console.error("[stripe/webhook] metadata fallback failed", err));
+        }
+        const convertedUser = await prisma.user.findFirst({
+          where: { stripeCustomerId: customerId },
+          select: { id: true },
+        });
+        if (convertedUser && (sub.status === "active" || sub.status === "trialing")) {
+          await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
+            userId: convertedUser.id,
+            plan: tier,
+            valueCents: Math.round(TIERS[tier].price * 100),
+            properties: { stripeStatus: sub.status },
+            dedupeKey: `subscription_started:${sub.id}`,
+          });
+        }
+        if (convertedUser && sub.status === "active" && !paused) {
+          await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
+            userId: convertedUser.id,
+            plan: tier,
+            valueCents: Math.round(TIERS[tier].price * 100),
+            properties: { stripeStatus: sub.status },
+            dedupeKey: `purchase_completed:${sub.id}`,
+          });
         }
         break;
       }

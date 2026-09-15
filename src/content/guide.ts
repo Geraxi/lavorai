@@ -40,8 +40,8 @@ export type Guide = {
 
 const CTA_AUTO = {
   title: "Stanco di compilare form?",
-  body: "LavorAI riscrive il CV per ogni annuncio e invia le candidature al posto tuo su Greenhouse, Lever, Ashby e Workable. 3 candidature gratis, senza carta.",
-  label: "Prova 3 candidature gratis",
+  body: "LavorAI riscrive il CV per ogni annuncio e invia le candidature al posto tuo sui portali supportati. Prova Pro per 7 giorni dal completamento del setup, senza carta.",
+  label: "Prova Pro 7 giorni gratis",
   href: "/signup",
 };
 
@@ -635,7 +635,7 @@ export const GUIDES: Guide[] = [
           "Simplify: estensione gratuita che autocompila i form ATS mentre navighi, con una versione a pagamento per l'AI. Nessuna automazione della ricerca; ottima come assistente manuale, in inglese.",
           "Sonara: agente che cerca e invia candidature in automatico, mercato USA, da circa 30 dollari a settimana. Non supporta annunci italiani.",
           "LoopCV: piattaforma europea che invia CV via email e su alcuni portali, con cicli automatici. Adattamento del CV limitato, interfaccia in inglese.",
-          "LavorAI: agente italiano che trova annunci in Italia, Europa e remote, riscrive CV e lettera per ogni annuncio con OpenAI, compila i form di Greenhouse, Lever, Ashby, SmartRecruiters e Workable e mostra la prova di consegna di ogni invio. 3 candidature gratis, poi da 19,99 euro al mese per 50 candidature. Non automatizza i form che richiedono login LinkedIn o Indeed.",
+          "LavorAI: agente italiano che trova annunci in Italia, Europa e remote, riscrive CV e lettera per ogni annuncio con OpenAI, compila i form dei portali supportati e mostra la prova di consegna di ogni invio. Prova Pro per 7 giorni dal completamento del setup, poi da 19,99 euro al mese per 50 candidature. Non automatizza i form che richiedono login LinkedIn o Indeed.",
         ],
       },
       {

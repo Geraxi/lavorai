@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     template: "%s · LavorAI",
   },
   description:
-    "Invia CV in automatico a 50 lavori al mese. LavorAI riscrive il CV per ogni annuncio, compila i form al posto tuo su Greenhouse, Lever, Ashby, Workable e altri ATS. 7 giorni di Pro gratis, senza carta. Da €19.99/mese.",
+    "Invia CV in automatico a 50 lavori al mese. LavorAI adatta CV e lettera a ogni annuncio e compila i form ATS. La prova Pro di 7 giorni parte dopo il setup, senza carta e senza rinnovo automatico.",
   keywords: [
     // KEYWORD AD ALTA INTENT COMMERCIALE (chi cerca soluzione, non info)
     "auto candidatura lavoro",
@@ -72,7 +72,6 @@ export const metadata: Metadata = {
     "inviare CV automaticamente",
     "software candidature automatiche",
     "auto apply italiano",
-    "bot candidature LinkedIn",
     "candidature automatiche AI",
     // KEYWORD DI MERCATO (product category)
     "auto-apply",
@@ -89,13 +88,13 @@ export const metadata: Metadata = {
     siteName: "LavorAI",
     title: "LavorAI — Candidature automatiche ai lavori | Auto-apply CV",
     description:
-      "Invia CV in automatico a 50 lavori al mese. LavorAI riscrive il CV per ogni annuncio e invia le candidature al posto tuo. 3 gratis, no carta.",
+      "50 candidature al mese, con CV e lettera su misura. Prova Pro per 7 giorni dal termine del setup, senza carta e senza rinnovo automatico.",
   },
   twitter: {
     card: "summary_large_image",
     title: "LavorAI — Candidature automatiche ai lavori",
     description:
-      "50 candidature/mese automatiche. CV riscritto per ogni annuncio. 3 gratis.",
+      "50 candidature/mese automatiche. CV e lettera su misura. Prova di 7 giorni dopo il setup, senza carta.",
   },
   robots: { index: true, follow: true },
 };

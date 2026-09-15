@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Reveal } from "@/components/reveal";
 import { Icon, type IconName } from "@/components/design/icon";
 import {
@@ -11,6 +11,15 @@ import {
   AnalyticsEvent,
 } from "@/lib/analytics";
 import { TRUST_CLAIMS } from "@/lib/marketing-content";
+
+const TRUST_CLAIMS_EN: typeof TRUST_CLAIMS = [
+  { icon: "shield", title: "European database, GDPR-first", body: "The primary database is hosted by Neon in Frankfurt. Every provider and processing purpose is listed in the privacy policy." },
+  { icon: "lock", title: "AI response storage disabled", body: "Requests that tailor CVs and letters use OpenAI with response storage disabled. Text is sent only when needed to produce the requested result." },
+  { icon: "check", title: "Explicit activation", body: "Auto-apply starts only after you enable it. No hidden submission and no silent opt-in." },
+  { icon: "eye", title: "You stay in control", body: "Pause anytime, block companies and set match thresholds. See every application in your live dashboard." },
+  { icon: "download", title: "Complete one-click export", body: "Download your profile, CV and application history as JSON from Settings, without waiting for support." },
+  { icon: "trash", title: "Complete one-click deletion", body: "Delete your account, CV, files, queues and open applications directly from Settings." },
+];
 
 /**
  * Trust block: GDPR + encryption + consent + control + export + delete.
@@ -21,6 +30,8 @@ import { TRUST_CLAIMS } from "@/lib/marketing-content";
  */
 export function SectionTrustBlock() {
   const t = useTranslations("trustSection");
+  const locale = useLocale();
+  const claims = locale === "en" ? TRUST_CLAIMS_EN : TRUST_CLAIMS;
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -64,7 +75,7 @@ export function SectionTrustBlock() {
         </Reveal>
 
         <div className="mx-auto mt-14 grid max-w-5xl gap-4 md:grid-cols-3">
-          {TRUST_CLAIMS.map((claim, i) => (
+          {claims.map((claim, i) => (
             <Reveal key={claim.title} delay={i * 0.04}>
               <TrustClaim claim={claim} />
             </Reveal>

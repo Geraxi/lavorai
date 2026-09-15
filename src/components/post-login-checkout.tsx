@@ -21,12 +21,6 @@ export function PostLoginCheckout() {
     }
     if (!plan || (plan !== "pro" && plan !== "pro_plus")) return;
     firedRef.current = true;
-    // Consuma l'intent — così niente loop se checkout fallisce
-    try {
-      localStorage.removeItem("lavorai.selectedPlan");
-    } catch {
-      /* noop */
-    }
     (async () => {
       try {
         const res = await fetch("/api/stripe/checkout", {
@@ -36,9 +30,15 @@ export function PostLoginCheckout() {
         });
         const body = await res.json().catch(() => ({}));
         if (res.ok && body?.url) {
+          try {
+            localStorage.removeItem("lavorai.selectedPlan");
+          } catch {
+            /* noop */
+          }
           window.location.href = body.url;
         }
-        // altrimenti fail silent: l'utente può riprovare da /preferences
+        // In caso di errore conserviamo la scelta: al prossimo accesso può
+        // riprovare senza perdere l'intento di acquisto.
       } catch {
         /* noop */
       }

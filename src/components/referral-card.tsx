@@ -18,8 +18,7 @@ interface MyReferral {
 /**
  * Card "Invita un amico" nel /settings.
  * Mostra il link univoco dell'utente + stats (invitati totali, paganti).
- * Reward: quando un amico passa a Pro, entrambi ricevono 1 mese gratis
- * (riscatto manuale via supporto in v1).
+ * Reward: quando un amico diventa pagante, l'invitante riceve 1 mese gratis.
  */
 export function ReferralCard() {
   const [data, setData] = useState<MyReferral | null>(null);
@@ -46,7 +45,7 @@ export function ReferralCard() {
     <SectionCard>
       <SectionHead
         icon={<Icon name="sparkles" size={14} />}
-        title="Invita un amico — 1 mese Pro per entrambi"
+        title="Invita un amico — guadagna 1 mese Pro"
       />
       <SectionBody>
         <p style={{ fontSize: 12.5, color: "var(--fg-muted)", margin: "0 0 14px", lineHeight: 1.55 }}>

@@ -3,8 +3,8 @@ import { prisma } from "@/lib/db";
 
 /**
  * Referral: ogni utente ha un codice univoco da condividere. Quando un
- * referred sale a Pro, entrambi guadagnano 1 mese gratis (gestione reward
- * via Stripe coupon / admin alert in v1).
+ * referred diventa pagante, l'invitante guadagna 1 mese gratis via
+ * coupon Stripe o credito sul prossimo checkout.
  *
  * Codice: 8 char alfanumerici case-insensitive (lowercase). Generato al
  * primo accesso alla sezione referral (lazy) — evita migrazione di massa.

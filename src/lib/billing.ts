@@ -46,7 +46,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 0,
     priceDisplay: "€0",
     priceSuffix: "",
-    tagline: "7 giorni di Pro completo, senza carta. Poi resti in sola visualizzazione: offerte e risposte sì, invii no.",
+    tagline: "7 giorni di Pro completo dal termine del setup, senza carta e senza rinnovo automatico.",
     monthlyApplications: 0,
     portals: 0,
     coverLetter: "basic",
@@ -55,6 +55,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasFounderCoach: false,
     hasInterviewCopilot: false,
     features: [
+      "La prova parte quando completi il setup",
       "7 giorni di Pro completo, nessuna carta",
       "Poi: offerte compatibili ogni giorno",
       "Risposte dei recruiter nella Inbox",
@@ -70,7 +71,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 19.99,
     priceDisplay: "€19.99",
     priceSuffix: "/ mese",
-    tagline: "7 giorni gratis, poi €19.99/mese. 50 candidature al mese, zero sforzo. Disdici quando vuoi.",
+    tagline: "50 candidature al mese con CV e lettera su misura. 7 giorni gratis se non hai già usato la prova.",
     monthlyApplications: 50,
     portals: 1,
     coverLetter: "basic",
@@ -80,7 +81,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasInterviewCopilot: false,
     features: [
       "50 candidature al mese",
-      "Auto-apply su 1 ATS a scelta",
+      "Candidature automatiche sui portali supportati",
       "CV optimization AI",
       "Cover letter AI",
       "Formato DOCX",
@@ -96,7 +97,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 39.99,
     priceDisplay: "€39.99",
     priceSuffix: "/ mese",
-    tagline: "7 giorni gratis, poi €39.99/mese. Modalità full-auto, candidature illimitate, Founder Coach.",
+    tagline: "Candidature senza limite, tutti i portali supportati e Founder Coach. Disdici quando vuoi.",
     monthlyApplications: "unlimited",
     portals: "all",
     coverLetter: "advanced",
@@ -116,7 +117,7 @@ export const TIERS: Record<Tier, TierConfig> = {
       "Formato DOCX, PDF e Europass",
       "Analytics avanzata (funnel, geo, heatmap)",
       "Supporto prioritario (<4h)",
-      "API access (in arrivo)",
+      "API access {soon}",
       "Cancelli in qualsiasi momento",
     ],
     stripePriceIdEnv: "STRIPE_PRICE_ID_PRO_PLUS",
@@ -209,7 +210,7 @@ export function effectiveTier(user: {
 }): Tier {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
   const base = normalizeTier(user.tier);
-  // Prova Pro senza carta (7 giorni dal signup): Free → Pro fino a scadenza.
+  // Prova Pro senza carta (dal completamento del setup): Free → Pro fino a scadenza.
   if (base === "free" && user.trialEndsAt && new Date(user.trialEndsAt).getTime() > Date.now()) return "pro";
   return base;
 }

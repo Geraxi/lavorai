@@ -135,9 +135,11 @@ export default function TerminiPage() {
           <section>
             <h2 className="text-xl font-semibold">5. Piani e pagamento</h2>
             <p>
-              LavorAI offre un piano Free (3 candidature totali) e un piano Pro
-              (€19/mese, candidature illimitate). Nessun credito nascosto.
-              Cancellabile in qualsiasi momento dal portale Stripe.
+              LavorAI offre una prova Pro gratuita di 7 giorni, senza carta e
+              senza rinnovo automatico. Al termine, le candidature si fermano
+              finché non scegli Pro (€19,99/mese, 50 candidature) o Pro+
+              (€39,99/mese, candidature illimitate). Puoi cancellare in
+              qualsiasi momento dal portale Stripe.
             </p>
           </section>
 

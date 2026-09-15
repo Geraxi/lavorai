@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
           error: "paywall",
           message:
             tier === "free"
-              ? "Hai esaurito le 3 candidature del piano Free di questo mese."
+              ? "La prova è terminata. Scegli Pro per continuare a inviare candidature."
               : `Hai esaurito il limite mensile del piano ${tier}.`,
           tier,
         },
