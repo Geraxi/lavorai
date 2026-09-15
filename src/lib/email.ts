@@ -76,6 +76,7 @@ export async function forwardReplyToUser(input: {
     rifiutata: "❌ Esito negativo",
     risposta: "💬 Risposta",
     auto: "🤖 Risposta automatica",
+    ricevuta: "📩 Candidatura ricevuta",
     bounce: "⚠️ Mancata consegna",
   };
   const label = kindLabel[input.kind] ?? "💬 Risposta";

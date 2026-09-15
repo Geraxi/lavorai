@@ -1,3 +1,4 @@
+import { isGreenhouseSecurityMessage } from "@/lib/application-security-code";
 import { NextResponse, type NextRequest } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/db";
@@ -61,6 +62,8 @@ function htmlToText(html: string): string {
 
 const MAX_BODY = 8000;
 
+class InboundBodyUnavailableError extends Error {}
+
 /**
  * Gestisce una risposta inbound del recruiter (Resend Inbound → email.received).
  * Mappa l'email all'application via l'indirizzo reply+<appId>@inbound,
@@ -89,6 +92,7 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
     where: { id: appId },
     select: {
       id: true,
+      status: true,
       userStatus: true,
       user: { select: { email: true } },
       job: { select: { title: true, company: true } },
@@ -110,10 +114,11 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
         const full = (await r.json()) as { text?: string; html?: string; subject?: string; from?: string };
         data = { ...data, text: full.text, html: full.html, subject: data.subject ?? full.subject, from: data.from ?? full.from };
       } else {
-        console.warn(`[webhook/resend] receiving fetch ${r.status} for ${data.email_id}`);
+        throw new Error(`Inbound email body unavailable (HTTP ${r.status})`);
       }
     } catch (err) {
-      console.warn("[webhook/resend] receiving fetch failed", err);
+      // Retry delivery instead of permanently saving an empty security email.
+      throw new InboundBodyUnavailableError("Inbound body retrieval failed", { cause: err });
     }
   }
 
@@ -144,6 +149,14 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
       isHuman,
     },
   });
+
+  // The active worker consumes these messages from ApplicationReply. They
+  // are technical verification steps, not recruiter replies to forward.
+  if (!forwardedFrom && app.status === "applying" && kind === "auto" &&
+      process.env.INBOUND_ROUTE_ATS_EMAIL !== "false" &&
+      isGreenhouseSecurityMessage({ fromAddress: from, subject, bodyText })) {
+    return;
+  }
 
   // 2. Aggiorna l'application SOLO per risposte umane reali. Non sovrascriviamo
   //    uno status più avanzato già impostato a mano (es. "offerta").
@@ -356,6 +369,9 @@ export async function POST(request: NextRequest) {
       await handleInboundReply(event.data);
     } catch (err) {
       console.error("[webhook/resend] inbound handling failed", err);
+      if (err instanceof InboundBodyUnavailableError) {
+        return NextResponse.json({ error: "inbound_body_unavailable" }, { status: 500 });
+      }
     }
   }
 

@@ -23,10 +23,6 @@ export interface ClassifiedReply {
 const BOUNCE_FROM = [
   "mailer-daemon",
   "postmaster@",
-  "no-reply@",
-  "noreply@",
-  "donotreply@",
-  "do-not-reply@",
 ];
 
 const BOUNCE_SUBJECT = [
@@ -180,6 +176,12 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     return { kind: "bounce", isHuman: false };
   }
 
+  // Security challenges are automated messages, not delivery failures or
+  // application receipts, even if their template thanks the applicant.
+  if (/\b(security code|verification code|one[- ]time (?:code|password)|codice di (?:sicurezza|verifica))\b/i.test(subjectBody)) {
+    return { kind: "auto", isHuman: false };
+  }
+
   // 2. Conferma di ricezione → in Inbox, conta come risposta ricevuta,
   //    ma non cambia lo stato (non è un umano che ha letto il CV).
   //    Un umano che scrive "grazie per la candidatura, ci sentiamo domani?"
@@ -214,6 +216,10 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
   // 4. Invito a colloquio / next steps.
   if (containsAny(subjectBody, INTERVIEW)) {
     return { kind: "colloquio", isHuman: true };
+  }
+
+  if (containsAny(from, ["no-reply@", "noreply@", "donotreply@", "do-not-reply@"])) {
+    return { kind: "auto", isHuman: false };
   }
 
   // 5. Risposta umana generica (qualcuno ha scritto, ma senza segnali chiari).

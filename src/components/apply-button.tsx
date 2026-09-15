@@ -32,12 +32,6 @@ export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
         router.push("/onboarding");
         return;
       }
-      if (res.status === 409 && body?.error === "missing_session") {
-        toast.error(
-          `Collega prima il tuo account ${portal}. (arriva in Sprint 5 con l'extension Chrome)`,
-        );
-        return;
-      }
       if (res.status === 402) {
         setPaywallMessage(body?.message ?? null);
         setPaywallOpen(true);

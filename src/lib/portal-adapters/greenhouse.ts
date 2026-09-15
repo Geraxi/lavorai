@@ -1,3 +1,4 @@
+import { extractApplicationSecurityCode, isGreenhouseSecurityMessage, SECURITY_CODE_FIELD, hasApplicationConfirmation } from "../application-security-code";
 import { findSubmitButton } from "./submit-button";
 import type {
   PortalAdapter,
@@ -528,6 +529,7 @@ export const greenhouseAdapter: PortalAdapter = {
       //   - nessuna POST = la validazione client-side ha bloccato il
       //     submit prima ancora di inviare → NON arrivata
       const urlBeforeSubmit = page.url();
+      const submittedAt = new Date();
       const submissionResponsePromise = page
         .waitForResponse(
           (resp) => {
@@ -607,6 +609,17 @@ export const greenhouseAdapter: PortalAdapter = {
         );
       }
 
+      // A challenge can be rendered even with HTTP 200 or an endpoint we
+      // did not capture. Resolve it before interpreting any HTTP success.
+      const codeRequested = await page.locator(SECURITY_CODE_FIELD).first().isVisible().catch(() => false);
+      if (codeRequested || (submitHttpStatus === 428 && /captcha|security|verification/i.test(submitHttpBody ?? ""))) {
+        if (!input.applicationId || !/^reply\+/i.test(input.userEmail)) {
+          return { ok: false, status: "missing_field", error: "Verifica email automatica non disponibile: configurare la ricezione email per le candidature.", canary: canaryFull };
+        }
+        const verified = await submitWithSecurityCode(page, input.applicationId, submittedAt);
+        return { ...verified, canary: canaryFull };
+      }
+
       // ============================================================
       // CASE A: catturata la POST → decide dallo status code
       // ============================================================
@@ -620,15 +633,6 @@ export const greenhouseAdapter: PortalAdapter = {
             confirmation: `DETECTED_HTTP_${status}`,
             canary: canaryFull,
           };
-        }
-        // 428 captcha-failed: Greenhouse non si fida del browser headless e
-        // manda un codice di sicurezza all'email del candidato. Se quella
-        // email è il nostro alias inbound (reply+<id>@inbound.lavorai.it), il
-        // codice arriva al webhook come ApplicationReply: lo leggiamo,
-        // compiliamo il campo e reinviamo. Prova definitiva di consegna.
-        if (status === 428 && /captcha/i.test(submitHttpBody ?? "") && input.applicationId && /^reply\+/i.test(input.userEmail)) {
-          const retry = await submitWithSecurityCode(page, input.applicationId, urlBeforeSubmit);
-          if (retry) return { ...retry, canary: canaryFull };
         }
         // 4xx → server rifiuta (validazione, duplicato, job chiuso).
         if (status >= 400 && status < 500) {
@@ -737,49 +741,47 @@ function buildApplyUrlCandidates(jobUrl: string): string[] {
   return candidates;
 }
 
-/**
- * Flusso "security code" di Greenhouse: attende (max ~150s) l'email col
- * codice a 6 cifre inoltrata dal webhook inbound, lo inserisce nel campo
- * comparso nel form e clicca di nuovo Invia, catturando la POST.
- */
-async function submitWithSecurityCode(page: Page, applicationId: string, urlBeforeSubmit: string): Promise<ApplyOutcome | null> {
-  const { prisma } = await import("@/lib/db");
-  const since = new Date(Date.now() - 2 * 60_000);
-  let code: string | null = null;
-  for (let i = 0; i < 30 && !code; i++) {
-    await page.waitForTimeout(5_000);
-    const replies = await prisma.applicationReply.findMany({
+/** Read the current attempt's verification email and finish the same form. */
+export async function submitWithSecurityCode(
+  page: Page,
+  applicationId: string,
+  since: Date,
+  readReplies = async () => {
+    const { prisma } = await import("@/lib/db");
+    return prisma.applicationReply.findMany({
       where: { applicationId, receivedAt: { gte: since } },
       orderBy: { receivedAt: "desc" },
-      take: 5,
+      take: 10,
       select: { subject: true, bodyText: true, fromAddress: true },
-    }).catch(() => []);
-    for (const r of replies) {
-      const txt = `${r.subject ?? ""}\n${r.bodyText ?? ""}`;
-      if (!/security|verification|codice|code/i.test(txt) && !/greenhouse/i.test(r.fromAddress)) continue;
-      // Greenhouse manda un codice alfanumerico di 8 caratteri
-      // ("Copy and paste this code … : YqOsq2bB"), non 6 cifre.
-      const m = txt.match(/code[^:\n]{0,60}:\s*([A-Za-z0-9]{6,12})\b/i) ?? txt.match(/\b([A-Za-z0-9]{8})\b(?=\s*(?:After you enter|Dopo))/i) ?? txt.match(/\b(\d{6})\b/);
-      if (m) { code = m[1]; break; }
+    });
+  },
+): Promise<ApplyOutcome> {
+  const field = page.locator(SECURITY_CODE_FIELD).first();
+  await field.waitFor({ state: "visible", timeout: 15_000 });
+  let code: string | null = null;
+  for (let i = 0; i < 30 && !code; i++) {
+    const replies = await readReplies();
+    for (const reply of replies) {
+      if (!isGreenhouseSecurityMessage(reply)) continue;
+      code = extractApplicationSecurityCode(reply.bodyText ?? "");
+      if (code) break;
     }
+    if (!code) await page.waitForTimeout(5_000);
   }
   if (!code) {
-    console.warn(`[greenhouse] security code non arrivato per ${applicationId}`);
-    return null;
+    return { ok: false, status: "unknown_error", error: "Codice di verifica Greenhouse non ricevuto in tempo. Verifica automatica da ritentare." };
   }
-  console.log(`[greenhouse] security code ricevuto per ${applicationId}, reinvio`);
-  const field = page.locator('input[name*="security" i], input[id*="security" i], input[autocomplete="one-time-code"], input[name*="code" i]:visible').first();
-  if ((await field.count().catch(() => 0)) === 0) return null;
-  await field.fill(code).catch(() => void 0);
+  await field.fill(code);
   const submit = await findSubmitButton(page);
-  if (!submit) return null;
-  const respP = page.waitForResponse((resp) => resp.request().method() === "POST" && /greenhouse\.io/.test(resp.url()) && /\/jobs\/\d+|\/job_app|\/applications/.test(resp.url()), { timeout: 25_000 }).catch(() => null);
-  await submit.click().catch(() => void 0);
-  const resp = await respP;
-  await page.waitForTimeout(800);
-  if (resp && resp.status() >= 200 && resp.status() < 400) {
-    return { ok: true, status: "submitted", confirmation: `DETECTED_HTTP_${resp.status()}_SECURITY_CODE` };
+  if (!submit) return { ok: false, status: "validation_failed", error: "Pulsante di conferma del codice Greenhouse non trovato." };
+  const responsePromise = page.waitForResponse((response) => response.request().method() === "POST" && /greenhouse\.io/.test(response.url()) && /\/jobs\/\d+|\/job_app|\/applications|\/submit/.test(response.url()), { timeout: 25_000 }).catch(() => null);
+  await submit.click();
+  const response = await responsePromise;
+  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => void 0);
+  const text = await page.locator("body").innerText();
+  const challengeRemains = await field.isVisible().catch(() => false);
+  if (!challengeRemains && (!response || response.status() < 400) && hasApplicationConfirmation(text, page.url())) {
+    return { ok: true, status: "submitted", confirmation: "DETECTED_DOM_SECURITY_CODE" };
   }
-  const body = resp ? await resp.text().catch(() => "") : "";
-  return { ok: false, status: "validation_failed", error: `Greenhouse ha rifiutato anche con security code (HTTP ${resp?.status() ?? "none"}): ${body.slice(0, 200)}` };
+  return { ok: false, status: "validation_failed", error: `Verifica Greenhouse non confermata dopo inserimento del codice (HTTP ${response?.status() ?? "none"}). Nessun invio confermato.` };
 }

@@ -63,15 +63,12 @@ export async function POST(request: NextRequest) {
     // --- Paywall per-tier enforcement ---
     const tier = effectiveTier(user);
     const limits = getLimits(tier);
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
 
     // --- Parallel batch reads (era 6+ query sequenziali → 700-1500ms
     // di round-trip Neon. Ora tutto in 1 sola tornata) ---
-    const needsPortalCheck =
-      process.env.AUTO_APPLY_ENABLED === "true";
-    const [usedThisMonth, cv, job, portalSession, prefs, profileRow] =
+    // Public ATS forms and recruiter email do not require a connected account.
+    // The worker checks sessions only when the selected portal needs one.
+    const [usedThisMonth, cv, job, prefs, profileRow] =
       await Promise.all([
         prisma.application.count({
           where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) } },
@@ -81,11 +78,6 @@ export async function POST(request: NextRequest) {
           orderBy: { createdAt: "desc" },
         }),
         prisma.job.findUnique({ where: { id: jobId } }),
-        needsPortalCheck
-          ? prisma.portalSession.findUnique({
-              where: { userId_portal: { userId: user.id, portal } },
-            })
-          : Promise.resolve(null),
         prisma.userPreferences.findUnique({
           where: { userId: user.id },
           select: { autoApplyMode: true, matchMin: true },
@@ -121,17 +113,6 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       );
     }
-    if (needsPortalCheck && job.source !== "mock" && !portalSession) {
-      return NextResponse.json(
-        {
-          error: "missing_session",
-          message: `Collega prima il tuo account ${portal} per l'auto-apply.`,
-          portal,
-        },
-        { status: 409 },
-      );
-    }
-
     type Mode = "off" | "manual" | "hybrid" | "auto";
     const mode: Mode = (prefs?.autoApplyMode as Mode) ?? "manual";
 
