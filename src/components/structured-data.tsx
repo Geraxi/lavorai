@@ -48,7 +48,10 @@ export function StructuredData() {
     inLanguage: "it-IT",
     potentialAction: {
       "@type": "SearchAction",
-      target: `${SITE_URL}/jobs?q={search_term_string}`,
+      // La ricerca pubblica vive su /lavoro. /jobs è la job board
+      // autenticata: indicarla qui portava crawler e risultati Google a
+      // una pagina non accessibile ai visitatori anonimi.
+      target: `${SITE_URL}/lavoro?q={search_term_string}`,
       "query-input": "required name=search_term_string",
     },
   };

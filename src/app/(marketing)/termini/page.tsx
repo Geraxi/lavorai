@@ -46,25 +46,33 @@ export default function TerminiPage() {
               2. Auto-apply: come funziona e cosa autorizzi
             </h2>
             <p>
-              Attivando l&apos;auto-apply su un portale, ci autorizzi espressamente a:
+              Attivando l&apos;auto-apply, ci autorizzi espressamente a usare i
+              dati del profilo, il CV e le preferenze che hai inserito per:
             </p>
             <ul className="ml-5 list-disc space-y-2">
               <li>
-                Memorizzare, in forma cifrata (AES-256-GCM), il cookie di
-                sessione del tuo account su quel portale
+                individuare offerte compatibili sulle fonti supportate e
+                preparare una candidatura su misura
               </li>
               <li>
-                Utilizzare il tuo account per navigare le pagine di annuncio e
-                compilare/inviare form di candidatura per tuo conto
+                generare o adattare CV e lettera di presentazione per lo
+                specifico annuncio
               </li>
               <li>
-                Allegare automaticamente il CV e la lettera motivazionale
-                generati da LavorAI
+                compilare e inviare, secondo la modalità scelta, i form
+                pubblici dei sistemi ATS supportati
               </li>
               <li>
-                Conservare uno screenshot di conferma come prova dell&apos;invio
+                registrare lo stato tecnico e la prova di consegna disponibile
+                per ogni invio nella tua dashboard
               </li>
             </ul>
+            <p>
+              LavorAI non chiede, non conserva e non usa password, cookie di
+              sessione o credenziali dei tuoi account LinkedIn, Indeed o di
+              altri portali. Per le fonti che richiedono un accesso personale,
+              l&apos;utente completa la candidatura sul sito originale.
+            </p>
           </section>
 
           <section>
@@ -72,30 +80,25 @@ export default function TerminiPage() {
               3. Rischi e limiti che accetti
             </h2>
             <p>
-              Le politiche di alcuni portali e aziende possono limitare l&apos;uso
-              di strumenti automatizzati per inviare candidature. Riconosci e
-              accetti che:
+              I form e le politiche delle aziende possono cambiare senza
+              preavviso. Riconosci e accetti che:
             </p>
             <ul className="ml-5 list-disc space-y-2">
               <li>
-                Il tuo account sul portale può essere sospeso, limitato o
-                disattivato dal portale stesso per uso non conforme alle loro
-                condizioni d&apos;uso
+                alcune offerte potrebbero non essere candidabili in automatico
+                o potrebbero richiedere un passaggio manuale
               </li>
               <li>
-                LavorAI non è responsabile di eventuali conseguenze derivanti
-                dall&apos;uso della funzionalità auto-apply, inclusi ma non
-                limitati a: ban dell&apos;account, perdita di accesso, mancata
-                ricezione della candidatura da parte dell&apos;azienda
+                la consegna di una candidatura non garantisce un colloquio,
+                una risposta o un&apos;offerta di lavoro
               </li>
               <li>
-                Ti impegni a non usare l&apos;auto-apply in modo da violare le
-                condizioni d&apos;uso dei portali terzi
+                sei responsabile dell&apos;accuratezza delle informazioni del tuo
+                profilo e dei documenti che autorizzi a inviare
               </li>
               <li>
-                Puoi revocare la tua autorizzazione in qualsiasi momento dalle
-                impostazioni del tuo account, che comporterà la cancellazione
-                immediata dei cookie memorizzati
+                puoi mettere in pausa l&apos;auto-apply o cambiare la modalità in
+                qualsiasi momento dalle impostazioni del tuo account
               </li>
             </ul>
           </section>
@@ -105,30 +108,28 @@ export default function TerminiPage() {
               4. Manleva e limitazioni di responsabilità
             </h2>
             <p>
-              Nella misura massima consentita dalla legge italiana applicabile
-              (inclusa la Parte III del Codice del Consumo), LavorAI non sarà
-              responsabile di:
+              Nei limiti consentiti dalla legge applicabile, LavorAI non
+              garantisce:
             </p>
             <ul className="ml-5 list-disc space-y-2">
               <li>
-                Azioni o omissioni dei portali terzi, inclusi modifiche delle
-                loro policy, UI, o API che rendano l&apos;auto-apply temporaneamente
-                o permanentemente inutilizzabile
+                che tutte le fonti terze rimangano disponibili o mantengano lo
+                stesso modulo di candidatura
               </li>
               <li>
-                Perdite economiche indirette, perdita di opportunità di lavoro o
-                danni reputazionali derivanti dall&apos;uso della piattaforma
+                risultati di selezione, tempi di risposta o decisioni dei
+                recruiter e delle aziende
               </li>
               <li>
                 Contenuti generati dall&apos;intelligenza artificiale che dovessero
-                contenere inesattezze, pur avendo impostato il sistema per
-                evitare fabbricazioni
+                contenere inesattezze: nella modalità Hybrid puoi rivedere ogni
+                candidatura prima dell&apos;invio
               </li>
             </ul>
             <p>
-              L&apos;utente ha sempre l&apos;ultima responsabilità di revisionare CV e
-              lettera prima dell&apos;invio e può disabilitare l&apos;auto-apply in ogni
-              momento.
+              Puoi disabilitare l&apos;auto-apply in ogni momento. Per assistenza o
+              per segnalare un invio da verificare, contattaci prima di
+              proseguire con nuove candidature.
             </p>
           </section>
 
@@ -136,10 +137,12 @@ export default function TerminiPage() {
             <h2 className="text-xl font-semibold">5. Piani e pagamento</h2>
             <p>
               LavorAI offre una prova Pro gratuita di 7 giorni, senza carta e
-              senza rinnovo automatico. Al termine, le candidature si fermano
-              finché non scegli Pro (€19,99/mese, 50 candidature) o Pro+
-              (€39,99/mese, candidature illimitate). Puoi cancellare in
-              qualsiasi momento dal portale Stripe.
+              senza rinnovo automatico, che inizia quando completi il setup.
+              Al termine, gli invii automatici si fermano finché non scegli
+              Pro (€19,99/mese, 50 candidature) o Pro+ (€39,99/mese,
+              candidature illimitate). Prima di qualsiasi acquisto Stripe
+              mostra prezzo e condizioni; puoi gestire o cancellare
+              l&apos;abbonamento dal portale Stripe.
             </p>
           </section>
 
@@ -161,7 +164,7 @@ export default function TerminiPage() {
           </section>
 
           <p className="text-xs text-muted-foreground">
-            Ultimo aggiornamento: 10 settembre 2026.
+            Ultimo aggiornamento: 15 settembre 2026.
           </p>
         </div>
       </main>
