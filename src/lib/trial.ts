@@ -43,13 +43,15 @@ export async function sendTrialStartedEmail(u: { id: string; email: string; name
     greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
     paragraphs: opts?.granted
       ? en
-        ? [`You signed up when LavorAI still had a limited free plan. From today, and until <strong>${ends}</strong>, your account runs on full Pro: automatic applications every day, tailored CV and cover letter, replies in your Inbox.`, "No card, nothing to do. If it works for you, you can continue with Pro afterwards."]
-        : [`Ti sei iscritto quando LavorAI aveva ancora un piano gratuito limitato. Da oggi, e fino a <strong>${ends}</strong>, il tuo account gira su Pro completo: candidature automatiche ogni giorno, CV e lettera su misura, risposte nella tua Inbox.`, "Nessuna carta, niente da fare. Se funziona per te, dopo potrai continuare con Pro."]
+        ? [`You signed up when LavorAI still had a limited free plan. From today, and until <strong>${ends}</strong>, your account has full Pro. Complete your CV and preferences to start receiving matching jobs, tailored applications, and replies in your Inbox.`, "No card and no automatic renewal. When the trial ends, you can choose whether to continue with Pro."]
+        : [`Ti sei iscritto quando LavorAI aveva ancora un piano gratuito limitato. Da oggi, e fino a <strong>${ends}</strong>, il tuo account ha Pro completo. Completa CV e preferenze per iniziare a ricevere offerte compatibili, candidature su misura e risposte nella tua Inbox.`, "Nessuna carta e nessun rinnovo automatico. Alla fine della prova potrai scegliere se continuare con Pro."]
       : en
         ? [`Until <strong>${ends}</strong> your account runs on full Pro: LavorAI finds the jobs matching your profile, adapts your CV and cover letter, and applies for you every day. No card needed.`, "To get the most out of it, do these two things today:"]
         : [`Fino a <strong>${ends}</strong> il tuo account gira su Pro completo: LavorAI trova le offerte compatibili con il tuo profilo, adatta CV e lettera, e si candida per te ogni giorno. Nessuna carta richiesta.`, "Per sfruttarla al massimo, fai queste due cose oggi:"],
     bullets: opts?.granted
-      ? undefined
+      ? en
+        ? ["<strong>Complete your setup</strong>: upload your CV and choose 1 to 3 roles and a city.", "<strong>Then let LavorAI work</strong>: it finds matching jobs, tailors your documents, and submits applications on supported public forms."]
+        : ["<strong>Completa il setup</strong>: carica il CV e scegli 1-3 ruoli e una città.", "<strong>Poi lascia lavorare LavorAI</strong>: trova offerte compatibili, adatta i documenti e invia candidature sui moduli pubblici supportati."]
       : en
         ? ["<strong>Upload your CV</strong>, even a rough one: we rewrite it for every job.", "<strong>Set 1 to 3 roles and a city</strong> in Preferences. Everything else is automatic."]
         : ["<strong>Carica il CV</strong>, anche grezzo: lo riscriviamo per ogni annuncio.", "<strong>Imposta 1-3 ruoli e una città</strong> nelle Preferenze. Il resto è automatico."],
@@ -58,7 +60,9 @@ export async function sendTrialStartedEmail(u: { id: string; email: string; name
       { label: en ? "Ends" : "Scade", value: ends },
       { label: en ? "Card" : "Carta", value: en ? "Not required" : "Non richiesta" },
     ],
-    cta: { label: en ? "Open LavorAI" : "Apri LavorAI", url: `${site()}/dashboard` },
+    cta: opts?.granted
+      ? { label: en ? "Complete setup" : "Completa il setup", url: `${site()}/onboarding` }
+      : { label: en ? "Open LavorAI" : "Apri LavorAI", url: `${site()}/dashboard` },
     secondary: { label: en ? "What Pro includes" : "Cosa include Pro", url: `${site()}/pricing` },
     footnote: en ? "When the trial ends, your account switches to view-only: you keep seeing matches and replies, but no application is sent until you choose Pro." : "Alla fine della prova l'account passa in sola visualizzazione: continui a vedere offerte e risposte, ma nessuna candidatura parte finché non scegli Pro.",
   });
