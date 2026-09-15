@@ -24,7 +24,7 @@ function authorized(token: string): boolean {
  */
 export async function POST(request: NextRequest) {
   if (Date.now() > EXPIRES_AT) return NextResponse.json({ error: "expired" }, { status: 410 });
-  if (!authorized(request.nextUrl.searchParams.get("token") ?? "")) {
+  if (!authorized(request.headers.get("x-trial-launch-token") ?? "")) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
