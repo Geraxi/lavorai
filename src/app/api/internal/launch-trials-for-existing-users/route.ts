@@ -28,8 +28,8 @@ export async function POST(request: NextRequest) {
     select: { id: true, email: true, name: true, locale: true, trialEndsAt: true },
   });
   const targets = candidates.filter((user) => !isAdmin(user.email) && !isTestAccount(user.email) && user.name?.trim().toLowerCase() !== EXCLUDED_NAME);
-  const alreadyNotified = new Set((await prisma.emailLog.findMany({
-    where: { kind: "trial_granted", to: { in: targets.map((user) => user.email) } },
+  const recentlyNotified = new Set((await prisma.emailLog.findMany({
+    where: { kind: "trial_granted", createdAt: { gte: new Date(now.getTime() - 5 * 60_000) }, to: { in: targets.map((user) => user.email) } },
     select: { to: true },
   })).map((entry) => entry.to.trim().toLowerCase()));
   let activated = 0;
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   for (const user of targets) {
     await prisma.user.update({ where: { id: user.id }, data: { trialEndsAt: ends, proTrialUsedAt: now } });
     activated++;
-    if (alreadyNotified.has(user.email.trim().toLowerCase())) continue;
+    if (recentlyNotified.has(user.email.trim().toLowerCase())) continue;
     try {
       const result = await sendTrialStartedEmail({ ...user, trialEndsAt: ends }, { granted: true });
       if (result.sent) sent++;
