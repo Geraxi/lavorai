@@ -129,7 +129,7 @@ export default async function SettingsPage() {
                     }}
                   >
                     {trial.status === "active" && trial.endsAt
-                      ? `Prova gratuita attiva fino al ${trial.endsAt.toLocaleDateString("it-IT", { day: "numeric", month: "long" })}: candidature automatiche, CV e lettera su misura. Nessuna carta registrata. Alla scadenza l'account passa in sola visualizzazione.`
+                      ? `Prova gratuita attiva fino al ${trial.endsAt.toLocaleDateString("it-IT", { day: "numeric", month: "long" })}: fino a 5 candidature automatiche al giorno, CV e lettera su misura. Nessuna carta registrata. Alla scadenza l'account passa in pausa.`
                       : trial.status === "ended"
                         ? "La prova Pro è terminata: vedi offerte e risposte, ma nessuna candidatura viene inviata. Con Pro riparti da dove ti eri fermato."
                         : cfg.tagline}
@@ -205,4 +205,3 @@ export default async function SettingsPage() {
     </>
   );
 }
-

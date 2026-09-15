@@ -36,18 +36,18 @@ export async function sendTrialStartedEmail(u: { id: string; email: string; name
   const { html, text } = renderBrandEmail({
     locale: u.locale,
     eyebrow: en ? "Pro trial · day 1" : "Prova Pro · giorno 1",
-    preheader: en ? `Full Pro until ${ends}. No card needed.` : `Pro completo fino a ${ends}. Nessuna carta richiesta.`,
+    preheader: en ? `Up to 5 applications a day until ${ends}. No card needed.` : `Fino a 5 candidature al giorno fino al ${ends}. Nessuna carta richiesta.`,
     title: opts?.granted
       ? en ? "We turned on Pro for you, for 7 days" : "Ti abbiamo attivato Pro per 7 giorni"
       : en ? "Your 7 days of Pro start now" : "I tuoi 7 giorni di Pro iniziano adesso",
     greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
     paragraphs: opts?.granted
       ? en
-        ? [`You signed up when LavorAI still had a limited free plan. From today, and until <strong>${ends}</strong>, your account has full Pro. Complete your CV and preferences to start receiving matching jobs, tailored applications, and replies in your Inbox.`, "No card and no automatic renewal. When the trial ends, you can choose whether to continue with Pro."]
-        : [`Ti sei iscritto quando LavorAI aveva ancora un piano gratuito limitato. Da oggi, e fino a <strong>${ends}</strong>, il tuo account ha Pro completo. Completa CV e preferenze per iniziare a ricevere offerte compatibili, candidature su misura e risposte nella tua Inbox.`, "Nessuna carta e nessun rinnovo automatico. Alla fine della prova potrai scegliere se continuare con Pro."]
+        ? [`You signed up when LavorAI still had a limited free plan. From today, and until <strong>${ends}</strong>, your account has Pro access with up to <strong>5 applications a day</strong>. Complete your CV and preferences to start receiving matching jobs, tailored applications, and replies in your Inbox.`, "No card and no automatic renewal. When the trial ends, you can choose whether to continue with Pro."]
+        : [`Ti sei iscritto quando LavorAI aveva ancora un piano gratuito limitato. Da oggi, e fino a <strong>${ends}</strong>, il tuo account ha accesso Pro con fino a <strong>5 candidature al giorno</strong>. Completa CV e preferenze per iniziare a ricevere offerte compatibili, candidature su misura e risposte nella tua Inbox.`, "Nessuna carta e nessun rinnovo automatico. Alla fine della prova potrai scegliere se continuare con Pro."]
       : en
-        ? [`Until <strong>${ends}</strong> your account runs on full Pro: LavorAI finds the jobs matching your profile, adapts your CV and cover letter, and applies for you every day. No card needed.`, "To get the most out of it, do these two things today:"]
-        : [`Fino a <strong>${ends}</strong> il tuo account gira su Pro completo: LavorAI trova le offerte compatibili con il tuo profilo, adatta CV e lettera, e si candida per te ogni giorno. Nessuna carta richiesta.`, "Per sfruttarla al massimo, fai queste due cose oggi:"],
+        ? [`Until <strong>${ends}</strong> your account has Pro access: LavorAI finds jobs matching your profile, adapts your CV and cover letter, and applies for you — up to <strong>5 applications a day</strong>. No card needed.`, "To get the most out of it, do these two things today:"]
+        : [`Fino a <strong>${ends}</strong> il tuo account ha accesso Pro: LavorAI trova le offerte compatibili con il tuo profilo, adatta CV e lettera, e si candida per te — fino a <strong>5 candidature al giorno</strong>. Nessuna carta richiesta.`, "Per sfruttarla al massimo, fai queste due cose oggi:"],
     bullets: opts?.granted
       ? en
         ? ["<strong>Complete your setup</strong>: upload your CV and choose 1 to 3 roles and a city.", "<strong>Then let LavorAI work</strong>: it finds matching jobs, tailors your documents, and submits applications on supported public forms."]

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { effectiveTier } from "@/lib/billing";
+import { dailyApplicationLimit } from "@/lib/billing";
 
 export const runtime = "nodejs";
 
@@ -19,17 +19,18 @@ export async function GET() {
   if (!user) {
     return NextResponse.json({ applicationsCount: 0, autoApplyToday: 0, autoApplyRemaining: 0 });
   }
-  const [applicationsCount, todayCount] = await Promise.all([
+  const [applicationsCount, todayCount, prefs] = await Promise.all([
     prisma.application.count({ where: { userId: user.id } }),
     prisma.application.count({
       where: {
         userId: user.id,
         createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+        status: { not: "failed" },
       },
     }),
+    prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { dailyCap: true } }),
   ]);
-  const tier = effectiveTier(user);
-  const dailyCap = tier === "free" ? 3 : tier === "pro" ? 50 : 100;
+  const dailyCap = dailyApplicationLimit(user, prefs?.dailyCap);
   return NextResponse.json({
     applicationsCount,
     autoApplyToday: todayCount,

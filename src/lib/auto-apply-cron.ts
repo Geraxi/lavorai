@@ -4,7 +4,7 @@ import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
-import { effectiveTier, getLimits } from "@/lib/billing";
+import { dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused } from "@/lib/billing";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { runSelfHeal } from "@/lib/auto-apply-self-heal";
 
@@ -14,12 +14,12 @@ import { runSelfHeal } from "@/lib/auto-apply-self-heal";
  *
  * Guardrail:
  *  - solo mode=auto
- *  - rispetta UserPreferences.dailyCap (candidature già create oggi)
+ *  - rispetta il cap giornaliero effettivo (Free in prova: max 5/giorno)
  *  - score >= matchMin (già nel profilo)
  *  - aziende escluse → skip
  *  - job già candidati → skip (dedup su userId+jobId)
  *  - session.status=paused → skip
- *  - tier paywall mensile (free: 3/mese)
+ *  - alla fine della prova Free il motore si ferma (account view-only)
  *  - cap globale per run: 5 candidature per utente (per non saturare la coda)
  */
 
@@ -290,6 +290,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       id: true,
       email: true,
       tier: true,
+      trialEndsAt: true,
       avoidCompanies: true,
       quotaResetAt: true,
       preferences: {
@@ -326,6 +327,7 @@ async function processUser(
     id: string;
     email: string;
     tier: string;
+    trialEndsAt: Date | null;
     avoidCompanies: string | null;
     preferences: {
       autoApplyMode: string;
@@ -438,14 +440,19 @@ async function processUser(
   const todayCount = await prisma.application.count({
     where: { userId: user.id, createdAt: { gte: todayStart }, status: { not: "failed" } },
   });
-  let remainingToday = Math.max(0, prefs.dailyCap - todayCount);
+  if (isApplicationAccessPaused(user)) {
+    stats.skippedMonthlyPaywall++;
+    return;
+  }
+  const dailyLimit = dailyApplicationLimit(user, prefs.dailyCap);
+  let remainingToday = Math.max(0, dailyLimit - todayCount);
   if (remainingToday === 0) {
     stats.skippedDailyCap++;
     return;
   }
 
-  // Paywall mensile (free = 3/mese; pro/pro+ = più alto)
-  const tier = effectiveTier({ tier: user.tier, email: user.email, trialEndsAt: (user as { trialEndsAt?: Date | null }).trialEndsAt ?? null });
+  // Paywall mensile (Free fuori prova = view-only; Pro/Pro+ = più alto)
+  const tier = effectiveTier(user);
   const limits = getLimits(tier);
   if (limits.monthlyApplications !== Infinity) {
     const monthCount = await prisma.application.count({

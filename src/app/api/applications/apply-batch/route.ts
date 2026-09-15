@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
-import { getLimits, effectiveTier } from "@/lib/billing";
+import { dailyApplicationLimit, getLimits, effectiveTier } from "@/lib/billing";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { resolveSession } from "@/lib/apply-session";
@@ -93,12 +93,21 @@ export async function POST(request: NextRequest) {
     // --- Paywall per-tier ---
     const tier = effectiveTier(user);
     const limits = getLimits(tier);
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
-    const usedThisMonth = await prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) } },
-    });
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const [usedThisMonth, usedToday, prefs, profileRow] = await Promise.all([
+      prisma.application.count({
+        where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { not: "failed" } },
+      }),
+      prisma.application.count({
+        where: { userId: user.id, createdAt: { gte: todayStart }, status: { not: "failed" } },
+      }),
+      prisma.userPreferences.findUnique({
+        where: { userId: user.id },
+        select: { autoApplyMode: true, matchMin: true, dailyCap: true },
+      }),
+      prisma.cVProfile.findUnique({ where: { userId: user.id } }),
+    ]);
     const remainingQuota =
       limits.monthlyApplications === Infinity
         ? Infinity
@@ -115,6 +124,21 @@ export async function POST(request: NextRequest) {
           tier,
         },
         { status: 402 },
+      );
+    }
+    const dailyLimit = dailyApplicationLimit(user, prefs?.dailyCap);
+    const remainingToday = Math.max(0, dailyLimit - usedToday);
+    if (remainingToday === 0) {
+      return NextResponse.json(
+        {
+          error: dailyLimit === 0 ? "paywall" : "daily_limit",
+          message:
+            dailyLimit === 0
+              ? "La prova è terminata: il tuo account è in pausa. Scegli Pro per continuare a inviare candidature."
+              : `Hai raggiunto il limite di ${dailyLimit} candidature per oggi. Torna domani oppure passa a Pro.`,
+          limit: dailyLimit,
+        },
+        { status: dailyLimit === 0 ? 402 : 429 },
       );
     }
 
@@ -145,17 +169,9 @@ export async function POST(request: NextRequest) {
     const excludedByCompany =
       jobs.length - alreadySet.size - toApply.length;
 
-    const capped =
-      remainingQuota === Infinity ? toApply : toApply.slice(0, remainingQuota);
+    const capped = toApply.slice(0, Math.min(remainingToday, remainingQuota));
 
     // --- Auto-apply mode + match threshold + CV profile ---
-    const [prefs, profileRow] = await Promise.all([
-      prisma.userPreferences.findUnique({
-        where: { userId: user.id },
-        select: { autoApplyMode: true, matchMin: true },
-      }),
-      prisma.cVProfile.findUnique({ where: { userId: user.id } }),
-    ]);
     type Mode = "off" | "manual" | "hybrid" | "auto";
     const mode: Mode = (prefs?.autoApplyMode as Mode) ?? "manual";
     const matchMin = prefs?.matchMin ?? 0;
@@ -245,6 +261,7 @@ export async function POST(request: NextRequest) {
       matchMin,
       mode,
       errors,
+      dailyRemaining: Math.max(0, remainingToday - enqueued - awaitingConsent),
       remaining:
         remainingQuota === Infinity
           ? null

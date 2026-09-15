@@ -59,7 +59,7 @@ export default async function AppLayout({
                 ? `Prova Pro · ${trial.daysLeft} ${trial.daysLeft === 1 ? "giorno" : "giorni"}`
                 : tier === "pro"
                   ? "Piano Pro"
-                  : "Solo visualizzazione",
+                  : "Account in pausa",
           isAdmin: isAdmin(user.email),
         }}
       >

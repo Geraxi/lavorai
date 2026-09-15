@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
-import { getLimits, effectiveTier } from "@/lib/billing";
+import { dailyApplicationLimit, getLimits, effectiveTier } from "@/lib/billing";
 import { applyLimiter } from "@/lib/rate-limit";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -68,10 +68,15 @@ export async function POST(request: NextRequest) {
     // di round-trip Neon. Ora tutto in 1 sola tornata) ---
     // Public ATS forms and recruiter email do not require a connected account.
     // The worker checks sessions only when the selected portal needs one.
-    const [usedThisMonth, cv, job, prefs, profileRow] =
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const [usedThisMonth, usedToday, cv, job, prefs, profileRow] =
       await Promise.all([
         prisma.application.count({
-          where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) } },
+          where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { not: "failed" } },
+        }),
+        prisma.application.count({
+          where: { userId: user.id, createdAt: { gte: todayStart }, status: { not: "failed" } },
         }),
         prisma.cVDocument.findFirst({
           where: { userId: user.id },
@@ -80,7 +85,7 @@ export async function POST(request: NextRequest) {
         prisma.job.findUnique({ where: { id: jobId } }),
         prisma.userPreferences.findUnique({
           where: { userId: user.id },
-          select: { autoApplyMode: true, matchMin: true },
+          select: { autoApplyMode: true, matchMin: true, dailyCap: true },
         }),
         prisma.cVProfile.findUnique({ where: { userId: user.id } }),
       ]);
@@ -99,6 +104,20 @@ export async function POST(request: NextRequest) {
           limit: limits.monthlyApplications,
         },
         { status: 402 },
+      );
+    }
+    const dailyLimit = dailyApplicationLimit(user, prefs?.dailyCap);
+    if (usedToday >= dailyLimit) {
+      return NextResponse.json(
+        {
+          error: dailyLimit === 0 ? "paywall" : "daily_limit",
+          message:
+            dailyLimit === 0
+              ? "La prova è terminata: il tuo account è in pausa. Scegli Pro per continuare a inviare candidature."
+              : `Hai raggiunto il limite di ${dailyLimit} candidature per oggi. Torna domani oppure passa a Pro per continuare senza la pausa della prova.`,
+          limit: dailyLimit,
+        },
+        { status: dailyLimit === 0 ? 402 : 429 },
       );
     }
     if (!cv) {
@@ -191,9 +210,7 @@ export async function POST(request: NextRequest) {
       matchMin,
       session: { id: session.id, label: session.label, status: session.status },
       remaining:
-        limits.monthlyApplications === Infinity
-          ? null
-          : limits.monthlyApplications - usedThisMonth - 1,
+        dailyLimit - usedToday - 1,
     });
   } catch (err) {
     console.error("[api/applications/apply]", err);

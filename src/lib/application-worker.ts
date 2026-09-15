@@ -33,6 +33,7 @@ import {
 } from "@/lib/scrapers/ats-companies";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
+import { isApplicationAccessPaused } from "@/lib/billing";
 
 // Set di nomi azienda con board ATS noto (normalizzati). Usato per evitare
 // il fallback email verso indirizzi scrapati quando esiste un portale
@@ -91,6 +92,22 @@ export async function processApplication(
 
   if (!app) {
     console.error(`[worker] Application ${applicationId} non trovata`);
+    return;
+  }
+
+  // Una candidatura può restare in coda mentre termina la prova. Da quel
+  // momento l'account resta accessibile, ma nessun CV o form può partire
+  // finché l'utente non attiva un piano a pagamento.
+  if (isApplicationAccessPaused(app.user)) {
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: {
+        status: "cancelled",
+        completedAt: new Date(),
+        errorMessage:
+          "Prova Pro terminata: candidatura non inviata. Attiva Pro per riprendere l'auto-apply.",
+      },
+    });
     return;
   }
 
