@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { isFailoverError, openai, providerOrder } from "@/lib/ai-router";
+import { recordAiHealth } from "@/lib/ai-health-state";
 import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json";
 import type { OptimizationResult } from "@/types/cv";
 import {
@@ -258,25 +259,45 @@ function validateShape(data: unknown): asserts data is OptimizationResult {
 /** Stessa pipeline (system prompt + CV + annuncio → JSON) su OpenAI. */
 async function optimizeWithOpenAI(input: OptimizeCVInput, userContent: string): Promise<OptimizationResult> {
   const model = process.env.OPENAI_MODEL_STRONG ?? "gpt-5.6-terra";
-  const res = await openai().responses.create({
-    model,
-    max_output_tokens: 16000,
-    store: false,
-    instructions:
-      SYSTEM_PROMPT +
-      "\nRispondi esclusivamente con l'oggetto JSON richiesto.\n\n" +
-      `Ecco il CV originale del candidato. Questo è l'UNICO contenuto verificato di cui dispone il candidato — qualsiasi cosa fuori da qui va considerata assente.\n\n<CV>\n${input.cvText}\n</CV>`,
-    input: userContent,
-    text: { format: { type: "json_object" } },
-  });
-  const raw = (res.output_text ?? "").trim();
-  if (!raw) {
-    throw new Error(
-      `OpenAI empty response (${res.status}${res.incomplete_details?.reason ? `: ${res.incomplete_details.reason}` : ""})`,
-    );
+  const startedAt = Date.now();
+  try {
+    const res = await openai().responses.create({
+      model,
+      max_output_tokens: 16000,
+      store: false,
+      instructions:
+        SYSTEM_PROMPT +
+        "\nRispondi esclusivamente con l'oggetto JSON richiesto.\n\n" +
+        `Ecco il CV originale del candidato. Questo è l'UNICO contenuto verificato di cui dispone il candidato — qualsiasi cosa fuori da qui va considerata assente.\n\n<CV>\n${input.cvText}\n</CV>`,
+      input: userContent,
+      text: { format: { type: "json_object" } },
+    });
+    const raw = (res.output_text ?? "").trim();
+    if (!raw) {
+      throw new Error(
+        `OpenAI empty response (${res.status}${res.incomplete_details?.reason ? `: ${res.incomplete_details.reason}` : ""})`,
+      );
+    }
+    const parsed = parseModelJson(stripCodeFence(raw)) as OptimizationResult;
+    validateShape(parsed);
+    await recordAiHealth({
+      provider: "openai",
+      ok: true,
+      model,
+      source: "cv_optimization",
+      latencyMs: Date.now() - startedAt,
+    });
+    console.log(`[optimizeCV] generato via openai/${model}`);
+    return parsed;
+  } catch (err) {
+    await recordAiHealth({
+      provider: "openai",
+      ok: false,
+      model,
+      source: "cv_optimization",
+      message: err instanceof Error ? err.message : String(err),
+      latencyMs: Date.now() - startedAt,
+    });
+    throw err;
   }
-  const parsed = parseModelJson(stripCodeFence(raw)) as OptimizationResult;
-  validateShape(parsed);
-  console.log(`[optimizeCV] generato via openai/${model}`);
-  return parsed;
 }
