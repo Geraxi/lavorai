@@ -18,6 +18,7 @@ export async function TrialBanner() {
   const pct = Math.max(6, Math.min(100, Math.round(((total - t.daysLeft) / total) * 100)));
   const ends = t.endsAt.toLocaleDateString("it-IT", { day: "numeric", month: "long" });
   const last = t.daysLeft <= 2;
+  const needsSetup = !user.onboardedAt;
 
   return (
     <div
@@ -54,18 +55,18 @@ export async function TrialBanner() {
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 5 }}>
         <div style={{ fontSize: 13, color: "var(--fg)", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
           <strong style={{ fontWeight: 600 }}>
-            {last ? `Prova Pro: ${t.daysLeft === 1 ? "ultimo giorno" : "ultimi 2 giorni"}` : `Prova Pro attiva · ${t.daysLeft} giorni`}
+            {last ? `Prova Pro: ${t.daysLeft === 1 ? "ultimo giorno" : "ultimi 2 giorni"}` : needsSetup ? `La tua prova Pro è attiva · ${t.daysLeft} giorni` : `Prova Pro attiva · ${t.daysLeft} giorni`}
           </strong>
           <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-            {last ? `Scade il ${ends}. Poi solo visualizzazione: continua con Pro per non fermare le candidature.` : `Fino al ${ends} LavorAI si candida per te ogni giorno. Nessuna carta richiesta.`}
+            {last ? `Scade il ${ends}. Poi solo visualizzazione: continua con Pro per non fermare le candidature.` : needsSetup ? `Completa CV e preferenze per iniziare: la prova scade il ${ends}.` : `Fino al ${ends} LavorAI si candida per te ogni giorno. Nessuna carta richiesta.`}
           </span>
         </div>
         <div style={{ height: 3, borderRadius: 999, background: "var(--border-ds)", overflow: "hidden" }}>
           <div style={{ width: `${pct}%`, height: "100%", background: last ? "var(--amber)" : "hsl(var(--primary))", borderRadius: 999 }} />
         </div>
       </div>
-      <Link href="/settings#billing" className={`ds-btn ds-btn-sm ${last ? "ds-btn-primary" : ""}`} style={{ flexShrink: 0 }}>
-        {last ? "Continua con Pro" : "Dettagli"}
+      <Link href={last ? "/settings#billing" : needsSetup ? "/onboarding" : "/settings#billing"} className={`ds-btn ds-btn-sm ${last || needsSetup ? "ds-btn-primary" : ""}`} style={{ flexShrink: 0 }}>
+        {last ? "Continua con Pro" : needsSetup ? "Completa il setup" : "Dettagli"}
       </Link>
     </div>
   );
