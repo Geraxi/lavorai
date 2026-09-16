@@ -66,7 +66,10 @@ export async function findUpgradeCandidates(opts?: {
           tier: "free",
           createdAt: { lte: minAge }, // rimosso il floor 90gg: limit-hit vince
           // In prova Pro attiva parlano le email di prova, non il nudge upgrade.
-          OR: [{ trialEndsAt: null }, { trialEndsAt: { lt: new Date() } }],
+          AND: [
+            { OR: [{ trialEndsAt: null }, { trialEndsAt: { lt: new Date() } }] },
+            { OR: [{ trialGraceEndsAt: null }, { trialGraceEndsAt: { lt: new Date() } }] },
+          ],
         },
     select: {
       id: true,
