@@ -9,7 +9,7 @@
  *
  * Env richieste:
  *  - DATABASE_URL                 (stesso del web)
- *  - REDIS_URL                    (BullMQ)
+ *  - REDIS_URL                    (solo se QUEUE_MODE=bullmq)
  *  - OPENAI_API_KEY               (AI CV optimization + ATS answers)
  *  - RESEND_API_KEY + EMAIL_FROM  (email delivery)
  *  - SUPABASE_URL + SERVICE_ROLE_KEY + STORAGE_BUCKET  (storage CV)
@@ -31,14 +31,15 @@ import { claimApplication, findClaimableQueued } from "./src/lib/application-cla
 
 async function main(): Promise<void> {
   const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 2) || 2);
+  const queueMode = process.env.QUEUE_MODE ?? "db";
   console.log(
-    `[worker] concurrency=${concurrency}, auto-apply=${process.env.AUTO_APPLY_ENABLED ?? "false"}, redis=${process.env.REDIS_URL ? "set" : "assente"}`,
+    `[worker] concurrency=${concurrency}, auto-apply=${process.env.AUTO_APPLY_ENABLED ?? "false"}, queue=${queueMode}`,
   );
 
-  // 1) BullMQ (se Redis è configurato). Opzionale: se Upstash è rate-limited o
-  //    assente, il polling DB qui sotto elabora comunque la coda.
+  // 1) BullMQ è opt-in. Il polling DB è il percorso predefinito: evita il
+  //    rate-limit di Upstash e usa comunque claim atomici.
   let worker: ReturnType<typeof createApplicationsWorker> | null = null;
-  if (process.env.REDIS_URL) {
+  if (queueMode === "bullmq" && process.env.REDIS_URL) {
     try {
       worker = createApplicationsWorker(async (job) => {
         const id = job.data.applicationId;

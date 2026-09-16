@@ -2,7 +2,7 @@ import { encode } from "next-auth/jwt";
 import { NextRequest } from "next/server";
 import { proxy } from "../src/proxy";
 import assert from "node:assert/strict";
-import { registrationTrialEnd, trialState, effectiveTier, isApplicationAccessPaused, FREE_TRIAL_APPLICATION_LIMIT } from "../src/lib/billing";
+import { registrationTrialEnd, trialState, effectiveTier, isApplicationAccessPaused, dailyApplicationLimit, FREE_TRIAL_DAILY_APPLICATION_LIMIT } from "../src/lib/billing";
 import { requiresTrialAccess } from "../src/lib/trial-access";
 import { prisma } from "../src/lib/db";
 import { reserveTrialApplication } from "../src/lib/trial-quota";
@@ -20,7 +20,9 @@ async function main() {
   assert.equal(isApplicationAccessPaused(grace), false, "Explicit grace unlocks expired accounts");
   assert.equal(trialState(grace).endsAt?.getTime(), grace.trialGraceEndsAt.getTime());
   assert.equal(isApplicationAccessPaused({ ...expired, trialGraceEndsAt: new Date(now - 1) }), true, "Expired grace must lock again");
-  assert.equal(FREE_TRIAL_APPLICATION_LIMIT, 20, "Grace must not increase the application allowance");
+  assert.equal(FREE_TRIAL_DAILY_APPLICATION_LIMIT, 5, "Free trials are capped at five applications per day");
+  assert.equal(dailyApplicationLimit(active), 5);
+  assert.equal(dailyApplicationLimit(expired), 0);
   assert.equal(isApplicationAccessPaused({ ...expired, tier: "pro" }), false);
   assert.equal(isApplicationAccessPaused({ ...expired, stripeSubscriptionId: "incomplete" }), true, "A Stripe ID alone must not unlock access");
   for (const path of ["/dashboard", "/settings", "/onboarding", "/api/cv/profile", "/api/applications/apply", "/api/interview/prep", "/api/optimize"]) assert.equal(requiresTrialAccess(path), true, path);
@@ -46,7 +48,6 @@ async function main() {
 
   // In-memory transaction harness; the production transaction uses a PostgreSQL
   // advisory lock to provide the same serialization across worker instances.
-  const reservations = new Set<string>();
   let currentUser: Omit<typeof active, "trialEndsAt"> & { trialEndsAt: Date | null } = active;
   let tail = Promise.resolve();
   const original = prisma.$transaction;
@@ -55,8 +56,7 @@ async function main() {
       $queryRaw: async () => [{ "?column?": 1 }],
       user: { findUniqueOrThrow: async () => currentUser },
       application: {
-        count: async ({ where }: any) => [...reservations].filter(id => id !== where.id.not).length,
-        update: async ({ where }: any) => { reservations.add(where.id); },
+        update: async () => undefined,
       },
     }));
     tail = result.then(() => undefined, () => undefined);
@@ -64,14 +64,14 @@ async function main() {
   };
   try {
     const results = await Promise.all(Array.from({ length: 25 }, (_, i) => reserveTrialApplication(active.id, `app-${i}`)));
-    assert.equal(results.filter(Boolean).length, FREE_TRIAL_APPLICATION_LIMIT);
-    assert.equal(await reserveTrialApplication(active.id, "app-0"), true, "Retry must reuse its reserved slot");
-    assert.equal(await reserveTrialApplication(active.id, "app-25"), false, "The 21st distinct application is blocked");
+    assert.equal(results.filter(Boolean).length, 25, "The worker does not impose a separate all-time trial quota");
+    assert.equal(await reserveTrialApplication(active.id, "app-0"), true, "Retry remains processable during the active trial");
+    assert.equal(await reserveTrialApplication(active.id, "app-25"), true, "The daily cap is applied when applications are created");
     currentUser = expired;
     assert.equal(await reserveTrialApplication(active.id, "app-0"), false, "Queued work is blocked after expiry");
     currentUser = { ...expired, tier: "pro" };
     assert.equal(await reserveTrialApplication(active.id, "paid-app"), true, "Payment unlocks worker");
   } finally { prisma.$transaction = original; }
-  console.log("PASS: signup trial, 7-day boundary, month boundary, expiry gates, billing access, quota reservations, retry and payment unlock");
+  console.log("PASS: signup trial, 7-day boundary, five-per-day cap, expiry gates, worker reservations and payment unlock");
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });

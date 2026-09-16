@@ -16,7 +16,7 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
       <section className="w-full max-w-lg rounded-2xl border bg-card p-8 shadow-lg text-center">
         <p className="text-sm font-semibold text-muted-foreground mb-3">LavorAI</p>
         <h1 className="text-3xl font-bold mb-4">Free trial expired</h1>
-        <p className="text-muted-foreground mb-6">La tua prova gratuita di 7 giorni dalla registrazione è terminata. La prova includeva fino a 20 candidature totali. Per tornare a utilizzare le funzionalità, attiva un abbonamento.</p>
+        <p className="text-muted-foreground mb-6">La tua prova gratuita di 7 giorni dalla registrazione è terminata. Durante la prova potevi inviare fino a 5 candidature al giorno. Per tornare a utilizzare le funzionalità, attiva un abbonamento.</p>
         <TrialExpiredActions confirming={confirming} />
       </section>
     </main>

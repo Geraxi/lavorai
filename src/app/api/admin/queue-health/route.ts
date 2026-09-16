@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
 
   const env = {
     REDIS_URL: !!process.env.REDIS_URL,
+    QUEUE_MODE: process.env.QUEUE_MODE ?? "db",
     PORTAL_SUBMIT_ENABLED: process.env.PORTAL_SUBMIT_ENABLED ?? null,
     PORTAL_SUBMIT_DRY_RUN: process.env.PORTAL_SUBMIT_DRY_RUN ?? null,
     AUTO_APPLY_ENABLED: process.env.AUTO_APPLY_ENABLED ?? null,
@@ -39,7 +40,10 @@ export async function GET(req: NextRequest) {
   };
 
   // Percorso di enqueue che verrebbe usato ORA (stessa logica di application-queue.ts).
-  const enqueuePath = process.env.REDIS_URL
+  const useBullmq = process.env.QUEUE_MODE === "bullmq";
+  const enqueuePath = !useBullmq
+    ? "polling DB→worker Railway"
+    : process.env.REDIS_URL
     ? "bullmq→worker Railway"
     : process.env.INNGEST_EVENT_KEY
       ? "inngest"
@@ -51,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   // Redis / BullMQ (con timeout: non deve bloccare la pagina).
   let redis: { ping: string | null; waiting?: number; active?: number; delayed?: number; failed?: number; completed?: number; error?: string } = { ping: null };
-  if (process.env.REDIS_URL) {
+  if (useBullmq && process.env.REDIS_URL) {
     try {
       const { getApplicationsQueue } = await import("@/lib/bullmq-queue");
       const q = getApplicationsQueue();
@@ -87,8 +91,8 @@ export async function GET(req: NextRequest) {
     verdict: [
       env.PORTAL_SUBMIT_ENABLED === "false" ? "PORTAL_SUBMIT_ENABLED=false su Vercel: gli adapter ATS sono spenti esplicitamente." : null,
       env.PORTAL_SUBMIT_DRY_RUN === "true" ? "PORTAL_SUBMIT_DRY_RUN=true su Vercel: i form vengono compilati ma non inviati." : null,
-      !env.REDIS_URL ? "REDIS_URL assente su Vercel: la coda NON va al worker Railway, tutto gira in serverless su Vercel." : null,
-      env.REDIS_URL && redis.error ? `REDIS_URL presente ma Redis non risponde (${redis.error}): enqueue fallisce e ripiega su self-invoke.` : null,
+      useBullmq && !env.REDIS_URL ? "QUEUE_MODE=bullmq ma REDIS_URL è assente: la coda non può raggiungere il worker Railway." : null,
+      useBullmq && env.REDIS_URL && redis.error ? `REDIS_URL presente ma Redis non risponde (${redis.error}): l'enqueue fallisce.` : null,
       !env.CRON_SECRET ? "CRON_SECRET assente: i cron Vercel (auto-apply/sync-jobs/nudges) rispondono 401." : null,
     ].filter(Boolean),
   });

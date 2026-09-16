@@ -133,7 +133,7 @@ export async function processApplication(
   if (!await reserveTrialApplication(app.user.id, applicationId)) {
     await prisma.application.update({ where: { id: applicationId }, data: {
       status: "cancelled", completedAt: new Date(),
-      errorMessage: "Prova scaduta o limite di 20 candidature gratuite raggiunto. Attiva un piano per continuare.",
+      errorMessage: "Prova scaduta: candidatura non inviata. Attiva Pro per continuare.",
     } });
     return;
   }
