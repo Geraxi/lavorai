@@ -37,7 +37,7 @@ const jetbrains = JetBrains_Mono({
   display: "swap",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://lavorai.it";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
