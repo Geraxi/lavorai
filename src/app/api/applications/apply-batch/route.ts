@@ -1,3 +1,4 @@
+import { remainingTrialApplications } from "@/lib/trial-quota";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -126,7 +127,9 @@ export async function POST(request: NextRequest) {
         { status: 402 },
       );
     }
-    const dailyLimit = dailyApplicationLimit(user, prefs?.dailyCap);
+    const remainingTrial = await remainingTrialApplications(user);
+    if (remainingTrial === 0) return NextResponse.json({ error: "trial_quota_exhausted", message: "Hai esaurito le 20 candidature gratuite. Attiva Pro per continuare." }, { status: 402 });
+    const dailyLimit = Math.min(dailyApplicationLimit(user, prefs?.dailyCap), usedToday + remainingTrial);
     const remainingToday = Math.max(0, dailyLimit - usedToday);
     if (remainingToday === 0) {
       return NextResponse.json(

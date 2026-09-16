@@ -124,7 +124,7 @@ model User {
   proTrialUsedAt   DateTime?
   /// Prova Pro senza carta: fino a questa data l'utente Free è trattato come Pro.
   trialEndsAt      DateTime?
-  /// Durata promessa al signup; il conto parte solo a onboarding completato.
+  /// Durata della prova dalla creazione dell’account (7 giorni).
   trialDurationDays Int      @default(7)
   /// Mesi gratis maturati dal referral, da applicare al prossimo checkout.
   referralCredits  Int       @default(0)

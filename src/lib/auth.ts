@@ -1,3 +1,5 @@
+import { AnalyticsEvent } from "@/lib/analytics";
+import { recordConversionEvent } from "@/lib/conversion-events";
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -6,7 +8,7 @@ import { Resend } from "resend";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { moveFile } from "@/lib/storage";
-import { effectiveTier, type Tier } from "@/lib/billing";
+import { effectiveTier, registrationTrialEnd, type Tier } from "@/lib/billing";
 
 /**
  * NextAuth v5 config — Email magic link via Resend.
@@ -35,7 +37,15 @@ const EMAIL_FROM =
   "LavorAI <onboarding@resend.dev>";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  adapter: {
+    ...PrismaAdapter(prisma),
+    async createUser(data) {
+      return prisma.user.create({ data: {
+        ...data, trialDurationDays: 7,
+        trialEndsAt: registrationTrialEnd(new Date()), proTrialUsedAt: new Date(),
+      } });
+    },
+  },
   // Credentials richiede strategy "jwt" — il Prisma adapter continua
   // a funzionare per email magic link + Account/User lookup.
   session: {
@@ -190,6 +200,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             email: true,
             name: true,
             trialEndsAt: true,
+            createdAt: true,
           },
         });
         if (dbUser) {
@@ -197,6 +208,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             tier: dbUser.tier,
             email: dbUser.email,
             trialEndsAt: dbUser.trialEndsAt,
+            createdAt: dbUser.createdAt,
           });
           token.subscriptionStatus = dbUser.subscriptionStatus ?? null;
           if (dbUser.email) token.email = dbUser.email;
@@ -223,6 +235,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   events: {
     async createUser({ user }) {
+      if (user.id) await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
+        userId: user.id, plan: "pro", path: "/signup", valueCents: 0,
+        properties: { days: 7, applicationLimit: 20 }, dedupeKey: `trial_started:${user.id}`,
+      });
       // Primo signup → welcome email
       if (!user.email) return;
       try {

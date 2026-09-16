@@ -1,3 +1,4 @@
+import { reserveTrialApplication } from "@/lib/trial-quota";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { optimizeCV } from "@/lib/claude";
@@ -129,10 +130,13 @@ export async function processApplication(
     return;
   }
 
-  await prisma.application.update({
-    where: { id: applicationId },
-    data: { status: "optimizing", startedAt: new Date() },
-  });
+  if (!await reserveTrialApplication(app.user.id, applicationId)) {
+    await prisma.application.update({ where: { id: applicationId }, data: {
+      status: "cancelled", completedAt: new Date(),
+      errorMessage: "Prova scaduta o limite di 20 candidature gratuite raggiunto. Attiva un piano per continuare.",
+    } });
+    return;
+  }
 
   const jobPosting = `${app.job.title}\n${app.job.company ?? ""}\n\n${app.job.description}`;
   const jobLang = detectLanguage(`${app.job.title} ${app.job.description}`);

@@ -1,3 +1,4 @@
+import { remainingTrialApplications } from "@/lib/trial-quota";
 import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -210,6 +211,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
       email: true,
       tier: true,
       trialEndsAt: true,
+      createdAt: true,
       avoidCompanies: true,
       quotaResetAt: true,
       preferences: {
@@ -291,6 +293,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       email: true,
       tier: true,
       trialEndsAt: true,
+      createdAt: true,
       avoidCompanies: true,
       quotaResetAt: true,
       preferences: {
@@ -328,6 +331,7 @@ async function processUser(
     email: string;
     tier: string;
     trialEndsAt: Date | null;
+    createdAt: Date;
     avoidCompanies: string | null;
     preferences: {
       autoApplyMode: string;
@@ -445,7 +449,7 @@ async function processUser(
     return;
   }
   const dailyLimit = dailyApplicationLimit(user, prefs.dailyCap);
-  let remainingToday = Math.max(0, dailyLimit - todayCount);
+  let remainingToday = Math.min(Math.max(0, dailyLimit - todayCount), await remainingTrialApplications(user));
   if (remainingToday === 0) {
     stats.skippedDailyCap++;
     return;

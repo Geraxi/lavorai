@@ -6,7 +6,7 @@ import { UserPopup } from "@/components/user-popup";
 import { OnboardingBanner } from "@/components/onboarding-banner";
 import { UpgradePrompt } from "@/components/upgrade-prompt";
 import { TrialBanner } from "@/components/trial-banner";
-import { trialState } from "@/lib/billing";
+import { isApplicationAccessPaused, trialState } from "@/lib/billing";
 import { CoverageWarning } from "@/components/coverage-warning";
 import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
@@ -34,6 +34,8 @@ export default async function AppLayout({
     if (process.env.AUTH_SECRET) redirect("/login");
     return null;
   }
+
+  if (!isAdmin(user.email) && isApplicationAccessPaused(user)) redirect("/trial-expired");
 
   const tier = effectiveTier(user);
   const trial = trialState(user);

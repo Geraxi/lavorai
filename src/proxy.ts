@@ -1,3 +1,8 @@
+import { getToken } from "next-auth/jwt";
+import { prisma } from "@/lib/db";
+import { isApplicationAccessPaused } from "@/lib/billing";
+import { isAdmin } from "@/lib/admin";
+import { requiresTrialAccess } from "@/lib/trial-access";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isBotUserAgent } from "@/lib/bot-ua";
@@ -50,6 +55,19 @@ export async function proxy(request: NextRequest) {
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("next", pathname);
       response = NextResponse.redirect(loginUrl);
+    }
+  }
+
+  if (!response && requiresTrialAccess(pathname)) {
+    const secureCookie = request.cookies.getAll().some(({ name }) => name.startsWith("__Secure-authjs.session-token"));
+    const token = await getToken({ req: request, secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET, secureCookie });
+    if (token?.sub) {
+      const user = await prisma.user.findUnique({ where: { id: token.sub } });
+      if (user && !isAdmin(user.email) && isApplicationAccessPaused(user)) {
+        return pathname.startsWith("/api/")
+          ? NextResponse.json({ error: "trial_expired", message: "Free trial expired", redirect: "/trial-expired" }, { status: 402 })
+          : NextResponse.redirect(new URL("/trial-expired", request.url));
+      }
     }
   }
 

@@ -46,7 +46,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 0,
     priceDisplay: "€0",
     priceSuffix: "",
-    tagline: "7 giorni di Pro dal termine del setup, fino a 5 candidature al giorno. Senza carta né rinnovo automatico.",
+    tagline: "7 giorni di Pro dalla registrazione, fino a 20 candidature totali nella prova. Senza carta né rinnovo automatico.",
     monthlyApplications: 0,
     portals: 0,
     coverLetter: "basic",
@@ -55,9 +55,9 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasFounderCoach: false,
     hasInterviewCopilot: false,
     features: [
-      "La prova parte quando completi il setup",
-      "Fino a 5 candidature al giorno durante la prova",
-      "Poi: offerte compatibili ogni giorno",
+      "La prova parte dalla registrazione",
+      "Fino a 20 candidature totali durante la prova",
+      "Offerte compatibili durante la prova",
       "Risposte dei recruiter nella Inbox",
       "Analisi ATS del CV",
       "Dopo la prova: account in pausa finché non attivi Pro",
@@ -71,7 +71,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 19.99,
     priceDisplay: "€19.99",
     priceSuffix: "/ mese",
-    tagline: "50 candidature al mese con CV e lettera su misura. 7 giorni gratis se non hai già usato la prova.",
+    tagline: "50 candidature al mese con CV e lettera su misura.",
     monthlyApplications: 50,
     portals: 1,
     coverLetter: "basic",
@@ -89,7 +89,7 @@ export const TIERS: Record<Tier, TierConfig> = {
       "Supporto via email",
     ],
     stripePriceIdEnv: "STRIPE_PRICE_ID_PRO",
-    cta: "Prova 7 giorni gratis",
+    cta: "Attiva il piano",
   },
   pro_plus: {
     id: "pro_plus",
@@ -121,7 +121,7 @@ export const TIERS: Record<Tier, TierConfig> = {
       "Cancelli in qualsiasi momento",
     ],
     stripePriceIdEnv: "STRIPE_PRICE_ID_PRO_PLUS",
-    cta: "Prova 7 giorni gratis",
+    cta: "Attiva il piano",
     highlight: true,
     badge: "Consigliato",
   },
@@ -134,7 +134,18 @@ export const TIER_LIST: TierConfig[] = [TIERS.free, TIERS.pro, TIERS.pro_plus];
  * loro di vedere valore ogni giorno senza trasformare la prova in consumo AI
  * senza guardrail.
  */
-export const FREE_TRIAL_DAILY_APPLICATION_LIMIT = 5;
+export const FREE_TRIAL_APPLICATION_LIMIT = 20;
+export const FREE_TRIAL_DAYS = 7;
+export const FREE_TRIAL_DAILY_APPLICATION_LIMIT = FREE_TRIAL_APPLICATION_LIMIT;
+
+export function registrationTrialEnd(createdAt: Date | string): Date {
+  return new Date(new Date(createdAt).getTime() + FREE_TRIAL_DAYS * 86400_000);
+}
+
+export function trialEnd(user: { createdAt?: Date | string; trialEndsAt?: Date | string | null }): Date | null {
+  if (user.createdAt) return registrationTrialEnd(user.createdAt);
+  return user.trialEndsAt ? new Date(user.trialEndsAt) : null;
+}
 
 /**
  * Ritorna i limiti effettivi per un tier.
@@ -213,33 +224,36 @@ export function isLifetimeProPlus(email: string | null | undefined): boolean {
 export function effectiveTier(user: {
   tier?: string | null;
   email?: string | null;
+  createdAt?: Date | string;
   trialEndsAt?: Date | string | null;
 }): Tier {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
   const base = normalizeTier(user.tier);
-  // Prova Pro senza carta (dal completamento del setup): Free → Pro fino a scadenza.
-  if (base === "free" && user.trialEndsAt && new Date(user.trialEndsAt).getTime() > Date.now()) return "pro";
+  // Prova Pro senza carta (dalla registrazione): Free → Pro fino a scadenza.
+  if (base === "free" && (trialEnd(user)?.getTime() ?? 0) > Date.now()) return "pro";
   return base;
 }
 
 /** Stato della prova gratuita per UI/email. */
-export function trialState(user: { tier?: string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null }): {
+export function trialState(user: { tier?: string | null; createdAt?: Date | string;
+  trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null }): {
   status: "none" | "active" | "ended";
   endsAt: Date | null;
   daysLeft: number;
 } {
-  if (!user.trialEndsAt || normalizeTier(user.tier) !== "free" || user.stripeSubscriptionId) return { status: "none", endsAt: null, daysLeft: 0 };
-  const endsAt = new Date(user.trialEndsAt);
+  if (!trialEnd(user) || normalizeTier(user.tier) !== "free") return { status: "none", endsAt: null, daysLeft: 0 };
+  const endsAt = trialEnd(user)!;
   const msLeft = endsAt.getTime() - Date.now();
   return { status: msLeft > 0 ? "active" : "ended", endsAt, daysLeft: Math.max(0, Math.ceil(msLeft / 86400_000)) };
 }
 
 /**
  * Cap giornaliero effettivo. Le preferenze controllano Pro/Pro+, mentre Free
- * è limitato a 5 candidature/giorno durante la prova e a zero alla scadenza.
+ * è limitato a 20 candidature totali durante la prova e a zero alla scadenza.
  */
 export function dailyApplicationLimit(
-  user: { tier?: string | null; email?: string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
+  trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
   preferredCap?: number | null,
 ): number {
   if (isLifetimeProPlus(user.email)) return Math.max(1, Math.min(100, preferredCap ?? 100));
@@ -249,9 +263,10 @@ export function dailyApplicationLimit(
   return Math.max(1, Math.min(100, preferredCap ?? 10));
 }
 
-/** Un account Free fuori dalla prova può accedere, ma non creare/inviare candidature. */
+/** Un account Free fuori dalla prova deve passare dalla schermata di pagamento. */
 export function isApplicationAccessPaused(
-  user: { tier?: string | null; email?: string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
+  trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
 ): boolean {
   return !isLifetimeProPlus(user.email) && normalizeTier(user.tier) === "free" && trialState(user).status !== "active";
 }

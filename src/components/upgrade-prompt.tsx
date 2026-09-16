@@ -190,29 +190,29 @@ const COPY = {
   cold: {
     title: (_used: number, _cap: number) =>
       "Trova lavoro fino a 17× più veloce con Pro",
-    body: "Prova Pro: 7 giorni completi dal termine del setup, senza carta. Poi 50 candidature/mese, priorità sui portali supportati e cover letter personalizzata a €19,99/mese. Disdici quando vuoi.",
+    body: "Prova Pro: 7 giorni dalla registrazione, fino a 20 candidature totali, senza carta. Poi 50 candidature/mese, priorità sui portali supportati e cover letter personalizzata a €19,99/mese. Disdici quando vuoi.",
     cta: "Prova Pro gratis",
   },
   warning: {
     title: (used: number, cap: number) =>
       `Hai usato ${used}/${cap} candidature del mese — stai per finire`,
     body: "Ogni candidatura in più conta: più profili raggiunti = più colloqui. Con Pro passi a 50/mese e nessuna interruzione fino alla firma.",
-    cta: "Prova Pro 7 giorni gratis",
+    cta: "Attiva Pro",
   },
   viewOnly: {
-    title: (_used: number, _cap: number) => "Il tuo account è in sola visualizzazione",
-    body: "Vedi le offerte compatibili e le risposte, ma nessuna candidatura parte. Con Pro LavorAI si candida per te ogni giorno: 7 giorni gratis, poi €19,99/mese.",
-    cta: "Attiva Pro, 7 giorni gratis",
+    title: (_used: number, _cap: number) => "Free trial expired",
+    body: "La prova è terminata. Attiva Pro a €19,99/mese per riattivare le funzionalità.",
+    cta: "Attiva Pro",
   },
   trialEnded: {
     title: (_used: number, _cap: number) => "La prova Pro è finita: le candidature sono in pausa",
-    body: "Le offerte compatibili continuano ad arrivare e ricevi le risposte a ciò che è già stato inviato. Con Pro riparti esattamente da dove ti eri fermato: €19,99/mese, disdici quando vuoi.",
+    body: "Attiva Pro per tornare a utilizzare le funzionalità: €19,99/mese, disdici quando vuoi.",
     cta: "Riparti con Pro",
   },
   blocked: {
     title: (_used: number, cap: number) =>
       `Limite Free raggiunto (${cap}/mese) — pipeline in pausa`,
-    body: "Il motore trova nuovi annunci ma non può più candidarti. Con Pro riparti subito: 7 giorni gratis, poi 50 candidature/mese.",
-    cta: "Sblocca ora, 7 giorni gratis",
+    body: "Attiva Pro per continuare con 50 candidature al mese.",
+    cta: "Attiva Pro",
   },
 } as const;

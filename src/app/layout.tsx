@@ -88,7 +88,7 @@ export const metadata: Metadata = {
     siteName: "LavorAI",
     title: "LavorAI — Candidature automatiche ai lavori | Auto-apply CV",
     description:
-      "50 candidature al mese, con CV e lettera su misura. Prova Pro per 7 giorni dal termine del setup, senza carta e senza rinnovo automatico.",
+      "50 candidature al mese, con CV e lettera su misura. Prova Pro per 7 giorni dalla registrazione, senza carta e senza rinnovo automatico.",
   },
   twitter: {
     card: "summary_large_image",

@@ -276,7 +276,7 @@ export default function AutoCandidaturaPage() {
             },
             {
               q: "Quanto costa?",
-              a: "La prova Pro dura 7 giorni dal completamento del setup, senza carta e senza rinnovo automatico. Poi Pro costa €19,99/mese per 50 candidature e Pro+ €39,99/mese per candidature illimitate, coda prioritaria e Founder Coach. Disdici quando vuoi.",
+              a: "La prova Pro dura 7 giorni dalla registrazione, senza carta e senza rinnovo automatico. Poi Pro costa €19,99/mese per 50 candidature e Pro+ €39,99/mese per candidature illimitate, coda prioritaria e Founder Coach. Disdici quando vuoi.",
             },
             {
               q: "Cosa succede se voglio candidarmi solo ad alcuni annunci?",
@@ -343,7 +343,7 @@ export default function AutoCandidaturaPage() {
               marginBottom: 28,
             }}
           >
-            7 giorni di Pro completo dal termine del setup, senza carta di
+            7 giorni di Pro completo dalla registrazione, senza carta di
             credito e senza rinnovo automatico. Se non ti convince, non paghi nulla.
           </p>
           <Link
