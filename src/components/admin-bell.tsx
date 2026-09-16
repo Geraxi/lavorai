@@ -51,7 +51,8 @@ export function AdminBell({ alerts }: { alerts: AdminAlert[] }) {
           aria-label="Notifiche"
           style={{
             position: "absolute", top: 40, right: 0, width: 340, zIndex: 60,
-            background: "var(--bg-elev)", border: "1px solid var(--border-ds)", borderRadius: 14,
+            // Composite the translucent elevation over a solid theme background.
+            background: "linear-gradient(var(--bg-elev), var(--bg-elev)), var(--bg)", color: "var(--fg)", border: "1px solid var(--border-ds)", borderRadius: 14,
             boxShadow: "0 16px 40px rgba(0,0,0,0.35)", overflow: "hidden",
           }}
         >
