@@ -46,7 +46,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 0,
     priceDisplay: "€0",
     priceSuffix: "",
-    tagline: "7 giorni di Pro dalla registrazione, fino a 20 candidature totali nella prova. Senza carta né rinnovo automatico.",
+    tagline: "7 giorni di Pro dalla registrazione, fino a 5 candidature al giorno. Senza carta né rinnovo automatico.",
     monthlyApplications: 0,
     portals: 0,
     coverLetter: "basic",
@@ -56,7 +56,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasInterviewCopilot: false,
     features: [
       "La prova parte dalla registrazione",
-      "Fino a 20 candidature totali durante la prova",
+      "Fino a 5 candidature al giorno durante la prova",
       "Offerte compatibili durante la prova",
       "Risposte dei recruiter nella Inbox",
       "Analisi ATS del CV",
@@ -134,9 +134,8 @@ export const TIER_LIST: TierConfig[] = [TIERS.free, TIERS.pro, TIERS.pro_plus];
  * loro di vedere valore ogni giorno senza trasformare la prova in consumo AI
  * senza guardrail.
  */
-export const FREE_TRIAL_APPLICATION_LIMIT = 20;
 export const FREE_TRIAL_DAYS = 7;
-export const FREE_TRIAL_DAILY_APPLICATION_LIMIT = FREE_TRIAL_APPLICATION_LIMIT;
+export const FREE_TRIAL_DAILY_APPLICATION_LIMIT = 5;
 
 export function registrationTrialEnd(createdAt: Date | string): Date {
   return new Date(new Date(createdAt).getTime() + FREE_TRIAL_DAYS * 86400_000);
@@ -251,7 +250,7 @@ export function trialState(user: { tier?: string | null; createdAt?: Date | stri
 
 /**
  * Cap giornaliero effettivo. Le preferenze controllano Pro/Pro+, mentre Free
- * è limitato a 20 candidature totali durante la prova e a zero alla scadenza.
+ * è limitato a 5 candidature al giorno durante la prova e a zero alla scadenza.
  */
 export function dailyApplicationLimit(
   user: { tier?: string | null; email?: string | null; createdAt?: Date | string;

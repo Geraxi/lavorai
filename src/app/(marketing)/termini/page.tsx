@@ -138,7 +138,7 @@ export default function TerminiPage() {
             <p>
               LavorAI offre una prova Pro gratuita di 7 giorni, senza carta e
               senza rinnovo automatico, che inizia quando crei il tuo account.
-              La prova include al massimo 20 candidature totali. Al termine, le funzionalità sono bloccate finché non scegli
+              La prova include al massimo 5 candidature al giorno. Al termine, le funzionalità sono bloccate finché non scegli
               Pro (€19,99/mese, 50 candidature) o Pro+ (€39,99/mese,
               candidature illimitate). Prima di qualsiasi acquisto Stripe
               mostra prezzo e condizioni; puoi gestire o cancellare

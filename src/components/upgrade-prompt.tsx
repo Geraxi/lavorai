@@ -190,7 +190,7 @@ const COPY = {
   cold: {
     title: (_used: number, _cap: number) =>
       "Trova lavoro fino a 17× più veloce con Pro",
-    body: "Prova Pro: 7 giorni dalla registrazione, fino a 20 candidature totali, senza carta. Poi 50 candidature/mese, priorità sui portali supportati e cover letter personalizzata a €19,99/mese. Disdici quando vuoi.",
+    body: "Prova Pro: 7 giorni dalla registrazione, fino a 5 candidature al giorno, senza carta. Poi 50 candidature/mese, priorità sui portali supportati e cover letter personalizzata a €19,99/mese. Disdici quando vuoi.",
     cta: "Prova Pro gratis",
   },
   warning: {

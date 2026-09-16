@@ -1,4 +1,3 @@
-import { remainingTrialApplications } from "@/lib/trial-quota";
 import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -450,7 +449,7 @@ async function processUser(
     return;
   }
   const dailyLimit = dailyApplicationLimit(user, prefs.dailyCap);
-  let remainingToday = Math.min(Math.max(0, dailyLimit - todayCount), await remainingTrialApplications(user));
+  let remainingToday = Math.max(0, dailyLimit - todayCount);
   if (remainingToday === 0) {
     stats.skippedDailyCap++;
     return;

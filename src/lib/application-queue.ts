@@ -5,15 +5,18 @@ import { processApplication } from "@/lib/application-worker";
  *
  * Modalità, scelte via env (priorità in ordine):
  *
- * 1. `REDIS_URL` set → **BullMQ** (target produzione consigliato).
+ * 1. default / `QUEUE_MODE=db` → polling PostgreSQL nel worker Railway.
+ *    È resiliente a Redis rate-limited e usa claim atomici.
+ *
+ * 2. `QUEUE_MODE=bullmq` + `REDIS_URL` → **BullMQ**.
  *    Enqueue su Redis, worker standalone (Railway/Render) consuma.
  *    Supporta retry, dead letter, concurrency, scheduling.
  *
- * 2. `INNGEST_EVENT_KEY` set → Inngest HTTP event.
+ * 3. `INNGEST_EVENT_KEY` set → Inngest HTTP event.
  *
- * 3. `QSTASH_TOKEN` set → Upstash QStash HTTP.
+ * 4. `QSTASH_TOKEN` set → Upstash QStash HTTP.
  *
- * 4. Nessuno → in-process (solo dev / MVP).
+ * 5. Nessuno → in-process (solo dev / MVP).
  */
 
 export async function enqueueApplication(applicationId: string): Promise<void> {
@@ -22,12 +25,12 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
   const { resetClaim } = await import("@/lib/application-claim");
   await resetClaim(applicationId);
 
-  // Modalità consigliata in produzione: QUEUE_MODE=db. Il worker Railway
+  // Il polling DB è il default. Il worker Railway
   // fa polling su Postgres (status=queued, claim atomico) ogni 15s: non
   // serve Redis, e soprattutto NON si passa dal fallback self-invoke su
   // Vercel, dove Playwright non c'è e le candidature ATS finiscono in
   // ready_to_apply senza invio.
-  if (process.env.QUEUE_MODE === "db") {
+  if (process.env.QUEUE_MODE !== "bullmq") {
     console.log(`[queue] queued for db-polling worker app=${applicationId}`);
     return;
   }
@@ -145,7 +148,7 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
  * il record Application non esisterà più dopo la cancellazione account.
  */
 export async function cancelApplication(applicationId: string): Promise<void> {
-  if (!process.env.REDIS_URL) return;
+  if (process.env.QUEUE_MODE !== "bullmq" || !process.env.REDIS_URL) return;
   try {
     const { getApplicationsQueue } = await import("@/lib/bullmq-queue");
     const q = getApplicationsQueue();
