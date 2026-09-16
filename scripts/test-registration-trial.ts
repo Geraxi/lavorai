@@ -16,6 +16,11 @@ async function main() {
   assert.equal(effectiveTier(active), "pro");
   assert.equal(trialState(expired).status, "ended", "Delayed setup or stored extension must not restart trial");
   assert.equal(isApplicationAccessPaused(expired), true);
+  const grace = { ...expired, trialGraceEndsAt: new Date(now + 4 * 86400_000) };
+  assert.equal(isApplicationAccessPaused(grace), false, "Explicit grace unlocks expired accounts");
+  assert.equal(trialState(grace).endsAt?.getTime(), grace.trialGraceEndsAt.getTime());
+  assert.equal(isApplicationAccessPaused({ ...expired, trialGraceEndsAt: new Date(now - 1) }), true, "Expired grace must lock again");
+  assert.equal(FREE_TRIAL_APPLICATION_LIMIT, 20, "Grace must not increase the application allowance");
   assert.equal(isApplicationAccessPaused({ ...expired, tier: "pro" }), false);
   assert.equal(isApplicationAccessPaused({ ...expired, stripeSubscriptionId: "incomplete" }), true, "A Stripe ID alone must not unlock access");
   for (const path of ["/dashboard", "/settings", "/onboarding", "/api/cv/profile", "/api/applications/apply", "/api/interview/prep", "/api/optimize"]) assert.equal(requiresTrialAccess(path), true, path);

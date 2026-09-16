@@ -199,7 +199,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             subscriptionStatus: true,
             email: true,
             name: true,
-            trialEndsAt: true,
+            trialEndsAt: true, trialGraceEndsAt: true,
             createdAt: true,
           },
         });
@@ -208,6 +208,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             tier: dbUser.tier,
             email: dbUser.email,
             trialEndsAt: dbUser.trialEndsAt,
+            trialGraceEndsAt: dbUser.trialGraceEndsAt,
             createdAt: dbUser.createdAt,
           });
           token.subscriptionStatus = dbUser.subscriptionStatus ?? null;

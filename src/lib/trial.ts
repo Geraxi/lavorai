@@ -81,7 +81,7 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
   const now = Date.now();
   const users = await prisma.user.findMany({
     where: { trialEndsAt: { not: null }, stripeSubscriptionId: null, suspendedAt: null, emailVerified: { not: null } },
-    select: { id: true, email: true, name: true, locale: true, createdAt: true, trialEndsAt: true, tier: true, _count: { select: { applications: { where: { status: "success" } } } } },
+    select: { id: true, email: true, name: true, locale: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, tier: true, _count: { select: { applications: { where: { status: "success" } } } } },
   });
   const logs = await prisma.emailLog.findMany({ where: { kind: { in: ["trial_ending", "trial_ended"] } }, select: { kind: true, to: true } });
   const sentKey = new Set(logs.map((l) => `${l.kind}:${l.to.toLowerCase()}`));

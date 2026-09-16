@@ -142,9 +142,11 @@ export function registrationTrialEnd(createdAt: Date | string): Date {
   return new Date(new Date(createdAt).getTime() + FREE_TRIAL_DAYS * 86400_000);
 }
 
-export function trialEnd(user: { createdAt?: Date | string; trialEndsAt?: Date | string | null }): Date | null {
-  if (user.createdAt) return registrationTrialEnd(user.createdAt);
-  return user.trialEndsAt ? new Date(user.trialEndsAt) : null;
+export function trialEnd(user: { createdAt?: Date | string; trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null }): Date | null {
+  const base = user.createdAt ? registrationTrialEnd(user.createdAt) : user.trialEndsAt ? new Date(user.trialEndsAt) : null;
+  const grace = user.trialGraceEndsAt ? new Date(user.trialGraceEndsAt) : null;
+  if (grace && (!base || grace.getTime() > base.getTime())) return grace;
+  return base;
 }
 
 /**
@@ -225,7 +227,7 @@ export function effectiveTier(user: {
   tier?: string | null;
   email?: string | null;
   createdAt?: Date | string;
-  trialEndsAt?: Date | string | null;
+  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null;
 }): Tier {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
   const base = normalizeTier(user.tier);
@@ -236,7 +238,7 @@ export function effectiveTier(user: {
 
 /** Stato della prova gratuita per UI/email. */
 export function trialState(user: { tier?: string | null; createdAt?: Date | string;
-  trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null }): {
+  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null }): {
   status: "none" | "active" | "ended";
   endsAt: Date | null;
   daysLeft: number;
@@ -253,7 +255,7 @@ export function trialState(user: { tier?: string | null; createdAt?: Date | stri
  */
 export function dailyApplicationLimit(
   user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
-  trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
   preferredCap?: number | null,
 ): number {
   if (isLifetimeProPlus(user.email)) return Math.max(1, Math.min(100, preferredCap ?? 100));
@@ -266,7 +268,7 @@ export function dailyApplicationLimit(
 /** Un account Free fuori dalla prova deve passare dalla schermata di pagamento. */
 export function isApplicationAccessPaused(
   user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
-  trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
 ): boolean {
   return !isLifetimeProPlus(user.email) && normalizeTier(user.tier) === "free" && trialState(user).status !== "active";
 }
