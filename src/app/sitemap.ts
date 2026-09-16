@@ -22,8 +22,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${base}/analizza-cv`, lastModified: now, priority: 0.75 },
     { url: `${base}/interview-buddy`, lastModified: now, priority: 0.7 },
     ...guides,
-    { url: `${base}/login`, lastModified: now, priority: 0.5 },
-    { url: `${base}/signup`, lastModified: now, priority: 0.6 },
     { url: `${base}/contatti`, lastModified: now, priority: 0.3 },
     { url: `${base}/privacy`, lastModified: now, priority: 0.3 },
     { url: `${base}/termini`, lastModified: now, priority: 0.3 },
