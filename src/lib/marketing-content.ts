@@ -21,38 +21,30 @@ export interface Testimonial {
 }
 
 /**
- * PLACEHOLDER — sostituire con testimonial reali raccolti via Resend
- * dopo i primi 50 utenti paganti (vedi TODO-LAUNCH.md).
+ * ⚠️ TESTIMONIALS DISABLED — raccogliere testimonial reali dai primi utenti
+ * prima di mostrare placeholder inventati. Marketing guideline: trasparenza > volume.
+ * 
+ * Quando avrete 3+ testimonial reali con opt-in, decommentare e sostituire
+ * i placeholder (vedi TODO-LAUNCH.md).
  */
 export const TESTIMONIALS: Testimonial[] = [
-  {
-    name: "Marco R.",
-    role: "Product Designer · scaleup SaaS",
-    quote:
-      "Avevo perso il conto dei portali. Ora rivedo solo le risposte dei recruiter — la candidatura la fa LavorAI.",
-    outcome: "12 colloqui in 3 settimane",
-  },
-  {
-    name: "Giulia S.",
-    role: "Junior Developer · neolaureata",
-    quote:
-      "Ho iniziato con 3 candidature gratuite per testare. La cover letter era così specifica che pensavo l'avessi scritta io.",
-    outcome: "Primo colloquio in 6 giorni",
-  },
-  {
-    name: "Andrea C.",
-    role: "UX Designer · cerca remoto",
-    quote:
-      "L'avevo provato per scetticismo. Il giorno dopo ho ricevuto 2 risposte. Mi sono accorto che funzionava davvero.",
-    outcome: "2 offer in un mese",
-  },
+  // PLACEHOLDER — non usare finché non avrai testimonial reali raccolti via Resend
+  // {
+  //   name: "Marco R.",
+  //   role: "Product Designer · scaleup SaaS",
+  //   quote:
+  //     "Avevo perso il conto dei portali. Ora rivedo solo le risposte dei recruiter — la candidatura la fa LavorAI.",
+  //   outcome: "12 colloqui in 3 settimane",
+  // },
 ];
 
 /**
  * Metriche della landing. I valori di default sono statici e difendibili;
  * la homepage li sovrascrive con i conteggi live dal DB (vedi
- * app/(marketing)/page.tsx → SectionStats metrics). Niente stime inventate:
- * ogni numero è verificabile su /proof.
+ * app/(marketing)/page.tsx → SectionStats metrics).
+ * 
+ * ⚠️ SOLO NUMERI VERIFICABILI: nessuna stima inventata, ogni metrica è 
+ * difendibile pubblicamente su /proof o da feature documentata.
  */
 export interface SuccessMetric {
   value: string;
