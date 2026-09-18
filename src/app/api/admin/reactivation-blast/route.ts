@@ -242,6 +242,8 @@ function renderSegmentC(
 ): { subject: string; html: string; text: string } {
   const en = user.locale === "en";
   const first = user.name?.trim().split(/\s+/)[0];
+  const fromEmail = process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>";
+  const replyEmail = fromEmail.match(/<(.+)>/)?.[1] ?? "noreply@lavorai.it";
   
   const subject = "Un favore (e 1 mese Pro se porti un amico)";
   const { html, text } = renderBrandEmail({
@@ -256,7 +258,7 @@ function renderSegmentC(
     ],
     cta: {
       label: "Chiedi il tuo link referral",
-      url: `mailto:${from.match(/<(.+)>/)?.[1] ?? "noreply@lavorai.it"}?subject=Link referral`,
+      url: `mailto:${replyEmail}?subject=Link referral`,
     },
     secondary: {
       label: "Scopri il piano Pro",
