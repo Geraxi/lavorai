@@ -93,6 +93,7 @@ export type EmailKind =
   | "trial_ending"
   | "trial_ended"
   | "founder_alert"
+  | "reactivation_blast"
   | "other";
 
 /** Marca un'email come effettivamente consegnata per il tracking quota. */
