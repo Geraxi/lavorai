@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Icon, type IconName } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import Link from "next/link";
+import { GmailConnectModal } from "@/components/gmail-connect-modal";
 
 export interface GmailInboxMessage {
   id: string;
@@ -54,11 +55,13 @@ const fmtFull = (iso: string) =>
  */
 export function GmailInboxView({ messages, gmailConnected, userEmail, interviewCount }: InboxViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [filter, setFilter] = useState<Filter>("inbox");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(messages[0]?.id ?? null);
   const [syncing, setSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [showGmailModal, setShowGmailModal] = useState(false);
 
   const filtered = messages.filter((m) => {
     if (filter === "unread" && m.read) return false;
@@ -105,6 +108,19 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
     router.refresh();
   };
 
+  // Detect OAuth return and show success message
+  useEffect(() => {
+    const gmailParam = searchParams.get("gmail");
+    if (gmailParam === "linked") {
+      setSyncNotice("Gmail collegato con successo! Le risposte dei recruiter appariranno qui.");
+      // Remove param from URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete("gmail");
+      window.history.replaceState({}, "", url.toString());
+      router.refresh();
+    }
+  }, [searchParams, router]);
+
   const labelCls = (kind: string) => {
     switch (kind) {
       case "colloquio":
@@ -123,44 +139,46 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
   // Empty state: Gmail not connected
   if (!gmailConnected) {
     return (
-      <div className="fit-page" style={{ placeItems: "center" }}>
-        <div
-          className="fit-card"
-          style={{
-            maxWidth: 480,
-            textAlign: "center",
-            padding: 40,
-            display: "grid",
-            gap: 20,
-          }}
-        >
-          <div style={{ fontSize: 48 }}>📧</div>
-          <div>
-            <h2 style={{ fontSize: 22, fontWeight: 600, marginBottom: 10 }}>
-              Collega Gmail
-            </h2>
-            <p style={{ fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.6 }}>
-              Connetti il tuo account Gmail per vedere le risposte dei recruiter
-              direttamente qui, classificate automaticamente (colloqui, rifiuti,
-              conferme).
-            </p>
-          </div>
-          <form action="/api/auth/signin/google" method="POST">
+      <>
+        <GmailConnectModal open={showGmailModal} onClose={() => setShowGmailModal(false)} />
+        <div className="fit-page" style={{ placeItems: "center" }}>
+          <div
+            className="fit-card"
+            style={{
+              maxWidth: 480,
+              textAlign: "center",
+              padding: 40,
+              display: "grid",
+              gap: 20,
+            }}
+          >
+            <div style={{ fontSize: 48 }}>📧</div>
+            <div>
+              <h2 style={{ fontSize: 22, fontWeight: 600, marginBottom: 10 }}>
+                Collega Gmail
+              </h2>
+              <p style={{ fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.6 }}>
+                Connetti il tuo account Gmail per vedere le risposte dei recruiter
+                direttamente qui, classificate automaticamente (colloqui, rifiuti,
+                conferme).
+              </p>
+            </div>
             <button
-              type="submit"
+              type="button"
+              onClick={() => setShowGmailModal(true)}
               className="ds-btn ds-btn-primary"
               style={{ width: "100%" }}
             >
-              <Icon name="mail" size={14} />
+              <Icon name="inbox" size={14} />
               Collega Gmail
             </button>
-          </form>
-          <p style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
-            Le tue email non vengono mai inviate o modificate. Accesso in sola
-            lettura.
-          </p>
+            <p style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
+              Le tue email non vengono mai inviate o modificate. Accesso in sola
+              lettura.
+            </p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
