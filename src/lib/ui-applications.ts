@@ -59,7 +59,7 @@ export async function getUIApplications(
     
     // viewedAt > userStatus override > ghosting > backend status
     const userOverride = row.userStatus as UIApplication["status"] | null;
-    let baseStatus = mapStatus(row.status);
+    let baseStatus: UIApplication["status"] = mapStatus(row.status);
     
     // Upgrade status based on real tracking
     if (row.viewedAt) baseStatus = "vista";
