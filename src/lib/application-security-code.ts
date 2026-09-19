@@ -5,8 +5,16 @@ export function isGreenhouseSecurityMessage(input: {
   bodyText?: string | null;
 }): boolean {
   const address = input.fromAddress.match(/<?([^\s<>]+@[^\s<>]+)>?/)?.[1] ?? "";
-  return /@(?:[a-z0-9-]+\.)*greenhouse\.io$/i.test(address) &&
-    /\b(security code|verification code|codice di (?:sicurezza|verifica))\b/i.test(`${input.subject ?? ""}\n${input.bodyText ?? ""}`);
+  // Real OTP mail comes from no-reply@us.greenhouse-mail.io (and similar),
+  // not only @greenhouse.io — the old regex rejected those and left applies
+  // stuck waiting for a code that was already in ApplicationReply.
+  const fromGreenhouse =
+    /@(?:[a-z0-9-]+\.)*(?:greenhouse\.io|greenhouse-mail\.io)$/i.test(address);
+  const mentionsCode =
+    /\b(security code|verification code|codice di (?:sicurezza|verifica))\b/i.test(
+      `${input.subject ?? ""}\n${input.bodyText ?? ""}`,
+    );
+  return fromGreenhouse && mentionsCode;
 }
 
 export function extractApplicationSecurityCode(text: string): string | null {
@@ -21,5 +29,5 @@ export const SECURITY_CODE_FIELD = 'input[name*="security" i]:visible, input[id*
 
 export function hasApplicationConfirmation(text: string, url: string): boolean {
   return /\b(application (?:has been )?(?:received|submitted|successful)|we (?:have )?received your application|candidatura (?:inviata|ricevuta))\b/i.test(text) ||
-    /\/(?:thank[-_]?you|confirmation|success)(?:[/?#]|$)/i.test(url);
+    /\/(?:thank[-_]?you|confirmation|success)(?:[\/?#]|$)/i.test(url);
 }
