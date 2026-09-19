@@ -66,3 +66,15 @@ export function getMailtoLink(draft: FollowUpDraft): string {
   });
   return `mailto:${encodeURIComponent(draft.toAddress)}?${params.toString()}`;
 }
+
+/**
+ * Cron hook used by /api/cron/nudges.
+ * Ghosting status lives in the dashboard UI; user-triggered drafts are via
+ * /api/applications/[id]/followup. This keeps the build green without
+ * auto-emailing recruiters or forging replies.
+ */
+export async function runNoReplyFollowups(
+  _opts: Record<string, unknown> = {},
+): Promise<{ ok: true; notified: number }> {
+  return { ok: true, notified: 0 };
+}
