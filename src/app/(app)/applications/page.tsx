@@ -28,6 +28,11 @@ interface ApiApplication {
   userStatus: string | null;
   viewedAt: string | null;
   submittedVia: string | null;
+  submittedAt: string | null;
+  lastReplyAt: string | null;
+  replyCount: number;
+  lastReplyKind: string | null;
+  submitConfirmation: string | null;
   job: {
     id: string;
     title: string;
@@ -62,6 +67,10 @@ interface Row {
   backendStatus?: string; // raw status from API ("awaiting_consent" etc.)
   viewedAt?: string | null;
   submittedVia?: string | null;
+  submittedAt?: string | null;
+  lastReplyAt?: string | null;
+  replyCount?: number;
+  ghostingDays?: number;
 }
 
 type Range = "today" | "week" | "month" | "all";
@@ -83,7 +92,12 @@ export default function ApplicationsPage() {
   );
   const [selected, setSelected] = useState<Row | null>(null);
 
-  const toRow = (a: ApiApplication): Row => ({
+  const toRow = (a: ApiApplication): Row => {
+    const ghostingDays =
+      a.status === "success" && a.submittedAt && !a.lastReplyAt
+        ? Math.floor((Date.now() - new Date(a.submittedAt).getTime()) / (1000 * 60 * 60 * 24))
+        : undefined;
+    return {
       id: a.id,
       company: a.job.company ?? "—",
       color: companyColor(a.job.company ?? a.job.title),
@@ -108,7 +122,12 @@ export default function ApplicationsPage() {
       backendStatus: a.status,
       viewedAt: a.viewedAt,
       submittedVia: a.submittedVia,
-    });
+      submittedAt: a.submittedAt,
+      lastReplyAt: a.lastReplyAt,
+      replyCount: a.replyCount,
+      ghostingDays,
+    };
+  };
   const realRows: Row[] = data?.applications.map(toRow) ?? [];
 
   // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).
@@ -346,6 +365,20 @@ export default function ApplicationsPage() {
                         }}
                       >
                         <StatusChip status={a.status} />
+                        {a.ghostingDays !== undefined && a.ghostingDays >= 7 && !a.lastReplyAt && (
+                          <span
+                            className="ds-chip"
+                            title={`Nessuna risposta dopo ${a.ghostingDays} giorni. Normale per molti ATS — considera di inviare un follow-up.`}
+                            style={{
+                              background: "var(--bg-sunken)",
+                              color: "var(--fg-muted)",
+                              fontSize: 10.5,
+                              cursor: "help",
+                            }}
+                          >
+                            {a.ghostingDays}g senza risposta
+                          </span>
+                        )}
                         {a.submittedVia?.startsWith("portal_") &&
                           a.status === "inviata" && (
                             <span

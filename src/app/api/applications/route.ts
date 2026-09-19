@@ -77,6 +77,12 @@ export async function GET(request: NextRequest) {
       userStatus: a.userStatus,
       viewedAt: a.viewedAt?.toISOString() ?? null,
       submittedVia: a.submittedVia,
+      // Response tracking for honest ghosting UX
+      submittedAt: a.submittedAt?.toISOString() ?? null,
+      lastReplyAt: a.lastReplyAt?.toISOString() ?? null,
+      replyCount: a.replyCount,
+      lastReplyKind: a.lastReplyKind,
+      submitConfirmation: a.submitConfirmation,
       job: a.job,
     })),
   });
