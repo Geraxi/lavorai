@@ -1,3 +1,21 @@
+/**
+ * DEPRECATED: Old inbox-view component.
+ * 
+ * This component has been replaced by gmail-inbox-view.tsx (Gmail integration).
+ * Kept as backup/reference only. Not used in production.
+ * 
+ * Previous behavior:
+ * - Showed Application-based conversations (sent applications + ApplicationReply)
+ * - Two-pane layout: conversation list + thread view
+ * - Included pending questions and UserAnswer management
+ * 
+ * New behavior (gmail-inbox-view.tsx):
+ * - Shows real Gmail messages synced via Gmail API
+ * - Matches the AIApply screenshot UX
+ * - Classifies messages (interview/rejection/confirmation)
+ * - Links to Applications when matched
+ */
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
