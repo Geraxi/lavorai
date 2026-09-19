@@ -1,6 +1,6 @@
 # Gmail Account Linking - Testing Guide
 
-> **Note:** This feature is integrated with the Gmail Inbox from PR #14. The account linking modal replaces the old POST form in the empty state.
+> **Note:** This feature uses a standalone OAuth flow that does NOT call NextAuth signIn, preventing logout issues for password/magic-link users.
 
 ## Setup Requirements
 
@@ -8,12 +8,15 @@
    ```bash
    GOOGLE_CLIENT_ID=your_google_client_id
    GOOGLE_CLIENT_SECRET=your_google_client_secret
+   AUTH_SECRET=your_auth_secret  # Required for HMAC state signing
    NEXT_PUBLIC_GOOGLE_ENABLED=true
    ```
 
 2. **Google Cloud Console:**
    - OAuth 2.0 Client configured
-   - Authorized redirect URIs must include: `https://your-domain.com/api/auth/callback/google`
+   - **⚠️ CRITICAL:** Authorized redirect URIs must include:
+     - Production: `https://lavorai.it/api/gmail/callback`
+     - Dev: `http://localhost:3000/api/gmail/callback`
    - Scopes: openid, email, profile, https://www.googleapis.com/auth/gmail.readonly
 
 3. **Database:**
@@ -88,10 +91,11 @@
 
 **Expected Results:**
 - ✓ User remains logged in as `user@example.com` (original account)
-- ✓ NextAuth creates a **new separate user** with email `different@gmail.com`
-- ✓ No linking occurs (allowDangerousEmailAccountLinking only links when emails match)
+- ✓ Error message shown: "L'email Google non corrisponde all'account LavorAI (user@example.com). Usa lo stesso indirizzo email."
+- ✓ **No account linking occurs** (email validation enforced in callback)
+- ✓ **No new user created** (standalone flow never creates users)
 - ✓ Original user's session is **not affected**
-- ⚠️ Modal warns: "L'account Gmail che colleghi deve avere la stessa email del tuo account LavorAI"
+- ✓ User can retry with correct email
 
 ### Scenario 5: User Not Logged In
 
@@ -169,16 +173,53 @@ If issues occur in production:
    git revert <commit-hash>
    ```
 
+## Implementation Details
+
+### Standalone OAuth Flow
+
+This implementation uses a **standalone Google OAuth flow** separate from NextAuth to prevent session replacement:
+
+1. **`/api/gmail/connect`**:
+   - Generates HMAC-signed state token with `{ userId, nonce, exp }`
+   - Redirects to Google OAuth (NOT to NextAuth)
+   - State signature prevents CSRF attacks
+
+2. **`/api/gmail/callback`**:
+   - Verifies state signature using `AUTH_SECRET`
+   - Exchanges code for tokens directly with Google
+   - Validates email match (normalized comparison)
+   - Checks for account conflicts (another user owns this Google account)
+   - Upserts `Account` table record
+   - Redirects with success/error query params
+
+3. **Session Preservation**:
+   - Never calls NextAuth `signIn()` or `signOut()`
+   - Session cookies remain unchanged
+   - User ID stays the same throughout flow
+
+### Error Handling
+
+All error cases redirect to `/inbox?gmail=error&reason=<code>` with Italian error messages:
+- `denied`: User canceled OAuth
+- `email_mismatch`: Google email ≠ LavorAI email
+- `account_already_linked`: Google account owned by different user
+- `state_expired`: State token older than 10 minutes
+- `invalid_state`: CSRF/tampering detected
+- `token_exchange`: Failed to get tokens from Google
+- `server_config`: Missing env vars
+- `db_error`: Database operation failed
+
 ## Known Limitations
 
-1. **Token Refresh Not Implemented:**
+1. **Token Refresh Implemented:**
    - Access tokens expire (typically 1 hour)
-   - Current implementation stores token but doesn't auto-refresh
-   - TODO: Implement refresh logic in `getGmailAccessToken()`
+   - Refresh logic exists in `getGmailAccessToken()` in `gmail-client.ts`
+   - Automatically refreshes using `refresh_token`
 
 2. **No Disconnect UI:**
    - User can link Gmail but no UI to unlink
    - TODO: Add "Scollega Gmail" in Settings
+   - Manual disconnect: delete `Account` row with `provider='google'`
 
 3. **No Email Change Handling:**
    - If user changes primary email on Google account, link may break
