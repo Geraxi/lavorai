@@ -223,13 +223,34 @@ export async function processApplication(
     );
   } catch (err) {
     console.error(`[worker] ${applicationId} AI/generate failed`, err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    
+    // Blob storage sospeso (116 casi reali): FAIL LOUD con messaggio chiaro
+    if (/BLOB_SUSPENDED|suspended|store.*disabled/i.test(errMsg)) {
+      await markFailed(
+        applicationId,
+        "STORAGE SOSPESO: Vercel Blob non disponibile. Configura Supabase Storage nelle impostazioni. Candidatura in coda per retry automatico.",
+      );
+      await alertFounder(
+        "blob_suspended",
+        "Vercel Blob sospeso — storage candidature bloccato",
+        `Candidatura ${applicationId} fallita: Vercel Blob store sospeso o quota superata.\n\n` +
+        `AZIONE IMMEDIATA:\n` +
+        `1. Controlla dashboard Vercel Blob → Unsuspend se possibile\n` +
+        `2. OPPURE configura Supabase Storage (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY)\n` +
+        `   Il fallover automatico userà Supabase se Blob non disponibile.\n\n` +
+        `Errore: ${errMsg}`,
+      ).catch(() => void 0);
+      return;
+    }
+    
     // Crediti AI esauriti / quota: è un outage di SISTEMA, non un errore
     // della singola candidatura. Avvisa subito il founder (deduplicato) così
     // non resta in silenzio come è successo dal 12/05.
     if (isCreditExhaustedError(err)) {
       await markFailed(
         applicationId,
-        "Servizio AI temporaneamente non disponibile (crediti esauriti). La candidatura verrà ritentata appena ripristinato.",
+        "CREDITI AI ESAURITI: servizio temporaneamente non disponibile. Ricarica crediti OpenAI/Anthropic. Candidatura in coda per retry automatico.",
       );
       await alertFounder(
         "ai_credits",
@@ -499,6 +520,7 @@ export async function processApplication(
       console.log(
         `[worker] ${applicationId} adapter ${adapter.id} → submitted (${confState})${isUnconfirmed ? " [UNCONFIRMED — needs review]" : ""}`,
       );
+      const now = new Date();
       await prisma.application.update({
         where: { id: applicationId },
         data: {
@@ -512,7 +534,10 @@ export async function processApplication(
               : "success",
           submittedVia:
             isDryRun || isUnconfirmed ? null : `portal_${adapter.id}`,
-          completedAt: isDryRun || isUnconfirmed ? null : new Date(),
+          completedAt: isDryRun || isUnconfirmed ? null : now,
+          // submittedAt REALE: popolato SOLO per invii confermati con prova HARD.
+          // Usato per contare giorni senza risposta (ghosting UX onesta).
+          submittedAt: !isDryRun && isConfirmed ? now : null,
           // Persistiamo confState (DETECTED/UNCONFIRMED/DRY_RUN) per
           // diagnosi successive — pre-fix non c'era e non possiamo
           // sapere retroattivamente lo stato delle vecchie candidature.
@@ -785,12 +810,15 @@ export async function processApplication(
     });
 
     if (delivered) {
+      const now = new Date();
       await prisma.application.update({
         where: { id: applicationId },
         data: {
           status: "success",
           submittedVia: "email_recruiter",
-          completedAt: new Date(),
+          completedAt: now,
+          // submittedAt anche per email: abbiamo SMTP 250 OK, conta per tracking ghosting.
+          submittedAt: now,
           // EMAIL_SENT ≠ DETECTED_*. La SMTP ci ha detto 250 OK ma
           // non abbiamo prova che il recruiter esista/legga. In /proof
           // e negli aggregate contiamo solo DETECTED come "consegnata

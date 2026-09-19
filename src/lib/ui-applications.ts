@@ -1,5 +1,6 @@
 import { prisma, getDemoUser } from "@/lib/db";
 import { companyColor } from "@/components/design/company-logo";
+import { computeGhostingStatus, type GhostingStatus } from "@/lib/ghosting-tracker";
 
 /**
  * Shape utilizzato dal layer UI.
@@ -14,11 +15,14 @@ export interface UIApplication {
   mode: string;
   salary: string;
   applied: string;
-  status: "pronta" | "inviata" | "vista" | "colloquio" | "offerta" | "rifiutata";
+  status: "pronta" | "inviata" | "vista" | "colloquio" | "offerta" | "rifiutata" | "ghosted";
   match: number;
   source: string;
   stage: number;
   isReal: boolean;
+  ghosting: GhostingStatus | null;
+  submittedAt: Date | null;
+  recruiterEmail: string | null;
 }
 
 /**
@@ -44,10 +48,24 @@ export async function getUIApplications(
   });
 
   return rows.map((row) => {
-    // viewedAt > userStatus override > backend status. Se il recruiter ha
-    // aperto la mail (pixel Resend o webhook), upgrade da "inviata" a "vista".
+    // Calcola ghosting status ONESTO
+    const ghosting = computeGhostingStatus({
+      status: row.status,
+      submittedAt: row.submittedAt,
+      lastReplyAt: row.lastReplyAt,
+      replyCount: row.replyCount,
+      submitConfirmation: row.submitConfirmation,
+    });
+    
+    // viewedAt > userStatus override > ghosting > backend status
     const userOverride = row.userStatus as UIApplication["status"] | null;
-    const baseStatus = row.viewedAt ? "vista" : mapStatus(row.status);
+    let baseStatus = mapStatus(row.status);
+    
+    // Upgrade status based on real tracking
+    if (row.viewedAt) baseStatus = "vista";
+    if (ghosting?.status === "replied") baseStatus = "vista"; // ha risposto
+    if (ghosting?.status === "ghosted") baseStatus = "ghosted"; // ghosting onesto
+    
     return {
       id: row.id,
       company: row.job.company ?? "—",
@@ -62,11 +80,14 @@ export async function getUIApplications(
       source: capitalize(row.job.source),
       stage: stageFromStatus(row.status),
       isReal: true,
+      ghosting,
+      submittedAt: row.submittedAt,
+      recruiterEmail: row.job.recruiterEmail,
     };
   });
 }
 
-function mapStatus(backend: string): UIApplication["status"] {
+function mapStatus(backend: string): Exclude<UIApplication["status"], "ghosted"> {
   switch (backend) {
     case "success":
       return "inviata";

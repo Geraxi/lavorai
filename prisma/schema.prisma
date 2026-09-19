@@ -569,6 +569,12 @@ model Application {
   /// { label, answer, source: "user"|"profile"|"rule"|"ai" }). Mostrate
   /// all'utente in /inbox così vede cosa è stato inviato a suo nome.
   answersUsedJson String? @db.Text
+  /// Timestamp REALE dell'invio confermato (per contare giorni senza risposta).
+  /// Popolato SOLO quando status=success E submitConfirmation=DETECTED*.
+  /// Usato per UX onesta "Nessuna risposta dopo N giorni" (ghosting).
+  submittedAt     DateTime?
+  /// Ultimo check status recruiter (per rate-limit check giornalieri).
+  lastStatusCheckAt DateTime?
   createdAt       DateTime  @default(now())
   startedAt       DateTime?
   completedAt     DateTime?
