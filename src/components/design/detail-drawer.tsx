@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { CompanyLogo } from "@/components/design/company-logo";
 import { Icon } from "@/components/design/icon";
+import { toast } from "sonner";
 
 export interface DrawerApp {
   id: string;
@@ -16,12 +17,15 @@ export interface DrawerApp {
   match: number;
   source: string;
   stage: number;
+  status: "inviata" | "vista" | "colloquio" | "offerta" | "rifiutata";
   jobUrl?: string;
   coverLetterText?: string | null;
   hasCvDocx?: boolean;
   hasCoverLetterDocx?: boolean;
   hasCvPdf?: boolean;
   cvLanguage?: string | null;
+  ghostingDays?: number;
+  lastReplyAt?: string | null;
 }
 
 const PIPELINE = ["Applicata", "Vista", "Screening", "Colloquio", "Offerta"];
@@ -213,6 +217,38 @@ export function DetailDrawer({
               )}
 
 
+              {/* User status + Follow-up actions */}
+              {app.ghostingDays !== undefined && app.ghostingDays >= 7 && !app.lastReplyAt && (
+                <div
+                  className="ds-section-card mb-6"
+                  style={{
+                    padding: "14px 16px",
+                    background: "var(--bg-sunken)",
+                    border: "1px solid var(--border-ds)",
+                  }}
+                >
+                  <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 10 }}>
+                    Nessuna risposta dopo {app.ghostingDays} giorni — normale per molti ATS
+                  </div>
+                  <FollowUpButton appId={app.id} />
+                </div>
+              )}
+
+              <div className="ds-section-card mb-6">
+                <div className="ds-section-head">
+                  <div className="ds-section-head-title">
+                    <Icon name="clipboard-check" size={13} />
+                    Aggiorna stato
+                  </div>
+                </div>
+                <div className="ds-section-body flush">
+                  <div style={{ fontSize: 12, color: "var(--fg-muted)", padding: "0 0 10px 0" }}>
+                    Hai ricevuto risposte via email o LinkedIn? Aggiorna lo stato manualmente:
+                  </div>
+                  <UserStatusButtons appId={app.id} currentStatus={app.status} />
+                </div>
+              </div>
+
               <div className="flex gap-2" style={{ marginTop: 22 }}>
                 {app.jobUrl ? (
                   <a
@@ -341,6 +377,98 @@ function DocRow({
         </span>
       )}
     </div>
+  );
+}
+
+function UserStatusButtons({ appId, currentStatus }: { appId: string; currentStatus: string }) {
+  const [updating, setUpdating] = useState(false);
+
+  async function setStatus(status: string) {
+    setUpdating(true);
+    try {
+      const res = await fetch(`/api/applications/${appId}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.error ?? "Errore aggiornamento stato");
+        return;
+      }
+      toast.success("Stato aggiornato");
+      // Refresh the page to show updated status
+      window.location.reload();
+    } catch {
+      toast.error("Errore di rete");
+    } finally {
+      setUpdating(false);
+    }
+  }
+
+  const statuses = [
+    { key: "vista", label: "Risposta ricevuta", icon: "mail" },
+    { key: "colloquio", label: "Colloquio", icon: "calendar" },
+    { key: "rifiutata", label: "Rifiutata", icon: "x-circle" },
+    { key: "offerta", label: "Offerta", icon: "check-circle" },
+  ] as const;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      {statuses.map(({ key, label, icon }) => (
+        <button
+          key={key}
+          type="button"
+          className="ds-btn ds-btn-sm"
+          style={{
+            justifyContent: "flex-start",
+            opacity: currentStatus === key ? 0.5 : 1,
+            cursor: currentStatus === key ? "not-allowed" : "pointer",
+          }}
+          disabled={updating || currentStatus === key}
+          onClick={() => setStatus(key)}
+        >
+          <Icon name={icon} size={13} /> {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function FollowUpButton({ appId }: { appId: string }) {
+  const [loading, setLoading] = useState(false);
+
+  async function openFollowUp() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/applications/${appId}/followup`);
+      if (!res.ok) {
+        toast.error("Errore generazione follow-up");
+        return;
+      }
+      const { mailto, hasRecruiterEmail } = await res.json();
+      if (!hasRecruiterEmail) {
+        toast.error("Email recruiter non disponibile per questo annuncio");
+        return;
+      }
+      window.location.href = mailto;
+    } catch {
+      toast.error("Errore di rete");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className="ds-btn ds-btn-sm ds-btn-primary"
+      onClick={openFollowUp}
+      disabled={loading}
+      style={{ width: "100%" }}
+    >
+      <Icon name="send" size={13} /> Invia follow-up
+    </button>
   );
 }
 

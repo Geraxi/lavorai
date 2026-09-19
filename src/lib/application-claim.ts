@@ -23,8 +23,44 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
   return r.count === 1;
 }
 
-/** Candidature in coda prendibili, dalla più vecchia. */
+/**
+ * Recupera candidature bloccate in `optimizing` o `applying` da troppo tempo.
+ * Un worker crash, timeout AI, o Playwright hang lasciano la candidatura in
+ * uno stato intermedio senza completedAt. Dopo STALE_CLAIM_MS le riportiamo
+ * in `queued` così il prossimo worker le riprende.
+ */
+export async function recoverStuckApplications(): Promise<number> {
+  const stale = new Date(Date.now() - STALE_CLAIM_MS);
+  const stuck = await prisma.application.findMany({
+    where: {
+      status: { in: ["optimizing", "applying"] },
+      startedAt: { lt: stale },
+      completedAt: null,
+    },
+    select: { id: true, status: true },
+    take: 50,
+  });
+  let recovered = 0;
+  for (const app of stuck) {
+    await prisma.application.update({
+      where: { id: app.id },
+      data: {
+        status: "queued",
+        startedAt: null,
+        errorMessage: `Riavviato: bloccato in ${app.status} per più di ${STALE_CLAIM_MS / 60_000} minuti (worker crash/timeout). Nessun dato perso.`,
+      },
+    });
+    recovered++;
+  }
+  return recovered;
+}
+
+/** Candidature in coda prendibili, dalla più vecchia. Richiama recovery prima. */
 export async function findClaimableQueued(limit: number): Promise<string[]> {
+  // Recupera candidature stuck PRIMA di prendere le queued (così se ne libera qualcuna)
+  await recoverStuckApplications().catch((err) =>
+    console.warn("[claim] recovery failed", err),
+  );
   const stale = new Date(Date.now() - STALE_CLAIM_MS);
   const rows = await prisma.application.findMany({
     where: { status: "queued", OR: [{ startedAt: null }, { startedAt: { lt: stale } }] },

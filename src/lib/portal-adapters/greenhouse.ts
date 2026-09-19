@@ -613,8 +613,12 @@ export const greenhouseAdapter: PortalAdapter = {
       // did not capture. Resolve it before interpreting any HTTP success.
       const codeRequested = await page.locator(SECURITY_CODE_FIELD).first().isVisible().catch(() => false);
       if (codeRequested || (submitHttpStatus === 428 && /captcha|security|verification/i.test(submitHttpBody ?? ""))) {
-        if (!input.applicationId || !/^reply\+/i.test(input.userEmail)) {
-          return { ok: false, status: "missing_field", error: "Verifica email automatica non disponibile: configurare la ricezione email per le candidature.", canary: canaryFull };
+        // OTP gate: richiede applicationId E che l'email sul form sia reply+<appId>@...
+        // (INBOUND_ROUTE_ATS_EMAIL !== false implica che input.userEmail è l'alias).
+        const inboundEnabled = process.env.INBOUND_ROUTE_ATS_EMAIL !== "false";
+        const hasInboundAlias = /^reply\+/i.test(input.userEmail);
+        if (!input.applicationId || !inboundEnabled || !hasInboundAlias) {
+          return { ok: false, status: "missing_field", error: "Verifica email automatica non disponibile: configurare la ricezione email per le candidature (INBOUND_EMAIL_DOMAIN).", canary: canaryFull };
         }
         const verified = await submitWithSecurityCode(page, input.applicationId, submittedAt);
         return { ...verified, canary: canaryFull };
