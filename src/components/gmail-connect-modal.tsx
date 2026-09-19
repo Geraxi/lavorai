@@ -170,9 +170,9 @@ export function GmailConnectModal({
                 lineHeight: 1.5,
               }}
             >
-              <strong>Nota:</strong> L&apos;account Gmail che colleghi deve avere
-              la stessa email del tuo account LavorAI. Se usi un&apos;email
-              Google diversa, resterai connesso con il tuo account attuale.
+              <strong>Importante:</strong> L&apos;account Gmail che colleghi deve avere
+              la <strong>stessa email</strong> del tuo account LavorAI. Il collegamento
+              fallirà se le email non corrispondono.
             </div>
           </div>
 

@@ -108,18 +108,50 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
     router.refresh();
   };
 
-  // Detect OAuth return and show success message
+  // Detect OAuth return and show success/error message
   useEffect(() => {
     const gmailParam = searchParams.get("gmail");
+    const reasonParam = searchParams.get("reason");
+    
     if (gmailParam === "linked") {
       setSyncNotice("Gmail collegato con successo! Le risposte dei recruiter appariranno qui.");
-      // Remove param from URL
+      // Remove params from URL
       const url = new URL(window.location.href);
       url.searchParams.delete("gmail");
       window.history.replaceState({}, "", url.toString());
       router.refresh();
+    } else if (gmailParam === "error") {
+      // Map error reasons to user-friendly messages
+      const errorMessages: Record<string, string> = {
+        denied: "Collegamento annullato. Devi autorizzare l'accesso a Gmail per vedere le risposte dei recruiter.",
+        email_mismatch: `L'email Google non corrisponde all'account LavorAI (${userEmail}). Usa lo stesso indirizzo email.`,
+        account_already_linked: "Questo account Google è già collegato a un altro utente LavorAI.",
+        state_expired: "Sessione scaduta. Riprova a collegare Gmail.",
+        invalid_state: "Errore di sicurezza. Riprova a collegare Gmail.",
+        token_exchange: "Errore durante lo scambio dei token con Google. Riprova.",
+        userinfo_fetch: "Impossibile recuperare i dati del tuo account Google. Riprova.",
+        server_config: "Errore di configurazione del server. Contatta il supporto.",
+        db_error: "Errore durante il salvataggio. Riprova tra qualche minuto.",
+        oauth_error: "Errore OAuth. Riprova a collegare Gmail.",
+        missing_params: "Parametri OAuth mancanti. Riprova.",
+        no_access_token: "Token di accesso non ricevuto da Google. Riprova.",
+        userinfo_missing: "Email non trovata nell'account Google. Riprova.",
+        user_not_found: "Utente non trovato. Effettua nuovamente il login.",
+      };
+      
+      const message = reasonParam && errorMessages[reasonParam]
+        ? errorMessages[reasonParam]
+        : "Errore durante il collegamento di Gmail. Riprova.";
+      
+      setSyncNotice(message);
+      
+      // Remove params from URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete("gmail");
+      url.searchParams.delete("reason");
+      window.history.replaceState({}, "", url.toString());
     }
-  }, [searchParams, router]);
+  }, [searchParams, router, userEmail]);
 
   const labelCls = (kind: string) => {
     switch (kind) {
