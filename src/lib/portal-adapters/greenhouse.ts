@@ -787,16 +787,33 @@ export async function submitWithSecurityCode(
     };
   }
   
-  // 2. Poll per l'email di verifica (max 150s = 30 tentativi * 5s)
+  // 2. Poll per l'email di verifica (max 180s = 36 tentativi * 5s)
   // Greenhouse tipicamente invia in 5-30s, ma alcuni relay possono ritardare.
+  // Include 10s lookback buffer per evitare race: se l'email arriva MENTRE
+  // stiamo cliccando submit, potrebbe avere receivedAt leggermente < since.
   let code: string | null = null;
-  const MAX_ATTEMPTS = 30;
+  const MAX_ATTEMPTS = 36;
   const POLL_INTERVAL_MS = 5_000;
+  const LOOKBACK_BUFFER_MS = 10_000; // 10s before submit click
   
-  console.log(`[greenhouse/otp] ${applicationId} polling ApplicationReply for security code (max ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s)...`);
+  console.log(`[greenhouse/otp] ${applicationId} polling ApplicationReply for security code (max ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s, lookback ${LOOKBACK_BUFFER_MS / 1000}s)...`);
+  
+  // Adjust since to include lookback buffer
+  const sinceWithBuffer = new Date(since.getTime() - LOOKBACK_BUFFER_MS);
+  
+  // Override readReplies to use buffered timestamp
+  const readRepliesWithBuffer = async () => {
+    const { prisma } = await import("@/lib/db");
+    return prisma.applicationReply.findMany({
+      where: { applicationId, receivedAt: { gte: sinceWithBuffer } },
+      orderBy: { receivedAt: "desc" },
+      take: 15, // Increased from 10 to handle more potential replies
+      select: { subject: true, bodyText: true, fromAddress: true },
+    });
+  };
   
   for (let attempt = 1; attempt <= MAX_ATTEMPTS && !code; attempt++) {
-    const replies = await readReplies();
+    const replies = await readRepliesWithBuffer();
     
     for (const reply of replies) {
       if (!isGreenhouseSecurityMessage(reply)) continue;

@@ -122,7 +122,7 @@ assert.equal(
 // GREENHOUSE MESSAGE IDENTIFICATION
 // ============================================================
 
-// Valid Greenhouse domains
+// Valid Greenhouse domains - greenhouse.io
 assert.ok(
   isGreenhouseSecurityMessage({
     fromAddress: "Greenhouse <no-reply@us.greenhouse.io>",
@@ -149,13 +149,40 @@ assert.ok(
   "EU subdomain with Italian"
 );
 
-// Invalid - spoofed domain
+// Valid Greenhouse domains - greenhouse-mail.io (CRITICAL: production uses this)
+assert.ok(
+  isGreenhouseSecurityMessage({
+    fromAddress: "no-reply@us.greenhouse-mail.io",
+    subject: "Security code for your application",
+    bodyText: "Your security code is 987654"
+  }),
+  "US greenhouse-mail.io (real production domain)"
+);
+
+assert.ok(
+  isGreenhouseSecurityMessage({
+    fromAddress: "Greenhouse <no-reply@greenhouse-mail.io>",
+    subject: "Verification code required"
+  }),
+  "Root greenhouse-mail.io domain"
+);
+
+assert.ok(
+  isGreenhouseSecurityMessage({
+    fromAddress: "notifications@eu.greenhouse-mail.io",
+    subject: "Codice di verifica",
+    bodyText: "Codice: ABC123"
+  }),
+  "EU greenhouse-mail.io with Italian"
+);
+
+// Invalid - spoofed domains (greenhouse.io)
 assert.ok(
   !isGreenhouseSecurityMessage({
     fromAddress: "no-reply@greenhouse.io.attacker.test",
     subject: "Security code for application"
   }),
-  "Spoofed domain rejected"
+  "Spoofed greenhouse.io rejected"
 );
 
 assert.ok(
@@ -163,7 +190,32 @@ assert.ok(
     fromAddress: "no-reply@fakegreenhouse.io",
     subject: "Security code for application"
   }),
-  "Fake domain rejected"
+  "Fake greenhouse.io rejected"
+);
+
+// Invalid - spoofed domains (greenhouse-mail.io)
+assert.ok(
+  !isGreenhouseSecurityMessage({
+    fromAddress: "no-reply@greenhouse-mail.io.attacker.test",
+    subject: "Security code for application"
+  }),
+  "Spoofed greenhouse-mail.io rejected"
+);
+
+assert.ok(
+  !isGreenhouseSecurityMessage({
+    fromAddress: "no-reply@fakegreenhouse-mail.io",
+    subject: "Security code for application"
+  }),
+  "Fake greenhouse-mail.io rejected"
+);
+
+assert.ok(
+  !isGreenhouseSecurityMessage({
+    fromAddress: "no-reply@greenhouse-mailbox.io",
+    subject: "Security code for application"
+  }),
+  "Similar domain greenhouse-mailbox.io rejected"
 );
 
 // Invalid - not a security message
@@ -336,4 +388,4 @@ assert.equal(
   "Whitespace only"
 );
 
-console.log("✓ All 40+ OTP auto-complete tests passed");
+console.log("✓ All 50+ OTP auto-complete tests passed");
