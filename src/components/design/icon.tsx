@@ -21,8 +21,10 @@ export type IconName =
   | "x"
   | "chevron-right"
   | "chevron-down"
+  | "chevron-left"
   | "arrow-right"
   | "arrow-up-right"
+  | "arrow-down"
   | "external"
   | "bell"
   | "more"
@@ -41,6 +43,7 @@ export type IconName =
   | "moon"
   | "globe"
   | "refresh"
+  | "refresh-cw"
   | "download"
   | "linkedin"
   | "indeed"
@@ -48,7 +51,13 @@ export type IconName =
   | "edit"
   | "send"
   | "pause-circle"
-  | "target";
+  | "target"
+  | "mail"
+  | "circle"
+  | "reply"
+  | "corner-up-right"
+  | "trash-2"
+  | "file-text";
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   name: IconName;
@@ -308,6 +317,15 @@ export function Icon({ name, size = 16, ...rest }: IconProps) {
           <path d="M21 3v5h-5" />
         </svg>
       );
+    case "refresh-cw":
+      return (
+        <svg {...common}>
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+          <path d="M21 3v5h-5" />
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+          <path d="M3 21v-5h5" />
+        </svg>
+      );
     case "download":
       return (
         <svg {...common}>
@@ -363,6 +381,59 @@ export function Icon({ name, size = 16, ...rest }: IconProps) {
           <circle cx="12" cy="12" r="9" />
           <circle cx="12" cy="12" r="5" />
           <circle cx="12" cy="12" r="1.5" fill="currentColor" />
+        </svg>
+      );
+    case "mail":
+      return (
+        <svg {...common}>
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+        </svg>
+      );
+    case "circle":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+      );
+    case "reply":
+      return (
+        <svg {...common}>
+          <path d="M9 17 4 12l5-5" />
+          <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+        </svg>
+      );
+    case "corner-up-right":
+      return (
+        <svg {...common}>
+          <path d="M15 14 20 9l-5-5" />
+          <path d="M4 20v-7a4 4 0 0 1 4-4h12" />
+        </svg>
+      );
+    case "trash-2":
+      return (
+        <svg {...common}>
+          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <path d="M10 11v6M14 11v6" />
+        </svg>
+      );
+    case "file-text":
+      return (
+        <svg {...common}>
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+        </svg>
+      );
+    case "chevron-left":
+      return (
+        <svg {...common}>
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+      );
+    case "arrow-down":
+      return (
+        <svg {...common}>
+          <path d="M12 5v14M19 12l-7 7-7-7" />
         </svg>
       );
     default:
