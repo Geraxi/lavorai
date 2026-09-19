@@ -6,7 +6,8 @@ import {
   applicationIdFromInboundAddress,
   forwardReplyToUser,
 } from "@/lib/email";
-import { classifyReply, replyKindToUserStatus } from "@/lib/reply-parser";
+import { classifyReply } from "@/lib/reply-parser";
+import { applyReplyToApplication } from "@/lib/apply-reply-to-application";
 
 export const runtime = "nodejs";
 
@@ -163,43 +164,13 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
     return;
   }
 
-  // 2. Aggiorna l'application SOLO per risposte umane reali. Non sovrascriviamo
-  //    uno status più avanzato già impostato a mano (es. "offerta").
-  if (isHuman) {
-    const nextStatus = replyKindToUserStatus(kind);
-    const ADVANCED = ["offerta", "colloquio"];
-    const keepExisting =
-      app.userStatus && ADVANCED.includes(app.userStatus) && kind === "risposta";
-
-    await prisma.application.update({
-      where: { id: app.id },
-      data: {
-        lastReplyAt: new Date(),
-        lastReplyKind: kind,
-        replyCount: { increment: 1 },
-        ...(nextStatus && !keepExisting ? { userStatus: nextStatus } : {}),
-      },
-    });
-  } else if (kind === "ricevuta") {
-    // Conferma di ricezione: prova di consegna. Conta come risposta,
-    // segna "vista" se non c'è già uno stato, non sovrascrive nulla.
-    await prisma.application.update({
-      where: { id: app.id },
-      data: {
-        lastReplyAt: new Date(),
-        lastReplyKind: kind,
-        replyCount: { increment: 1 },
-        viewedAt: new Date(),
-        ...(app.userStatus ? {} : { userStatus: "vista" }),
-      },
-    });
-  } else {
-    // auto/bounce: traccia il conteggio ma non tocca lo status.
-    await prisma.application.update({
-      where: { id: app.id },
-      data: { replyCount: { increment: 1 } },
-    });
-  }
+  // 2. Aggiorna l'application usando la logica condivisa (anche usata da Gmail sync).
+  await applyReplyToApplication({
+    applicationId: app.id,
+    kind,
+    isHuman,
+    existingApp: { userStatus: app.userStatus },
+  });
 
   // 3. Inoltra all'utente (anche auto/bounce: vuole comunque vederle).
   if (app.user?.email) {

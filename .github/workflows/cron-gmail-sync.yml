@@ -1,0 +1,32 @@
+name: gmail-sync cron
+
+# Background Gmail sync to fetch recruiter replies from users' personal Gmail
+# and apply them to Applications (lastReplyAt, lastReplyKind, userStatus, etc.).
+#
+# Runs 4 times per day at off-peak hours to avoid interfering with Gmail API
+# quota limits while ensuring timely detection of recruiter responses.
+#
+# Orari UTC → IT (CET inverno / CEST estate):
+#   06:00 UTC = 07:00 / 08:00  - Early morning before work
+#   11:00 UTC = 12:00 / 13:00  - Midday check
+#   15:00 UTC = 16:00 / 17:00  - Afternoon check
+#   20:00 UTC = 21:00 / 22:00  - Evening check
+#
+# Richiede: Settings → Secrets → Actions → CRON_SECRET
+
+on:
+  schedule:
+    - cron: "0 6,11,15,20 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit gmail-sync endpoint
+        run: |
+          curl -sS -o /tmp/out -w "HTTP %{http_code} in %{time_total}s\n" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://lavorai.it/api/cron/gmail-sync
+          echo "--- response body ---"
+          cat /tmp/out

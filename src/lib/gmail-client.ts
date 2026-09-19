@@ -10,6 +10,7 @@
 
 import { prisma } from "@/lib/db";
 import { classifyReply, type ClassifyInput } from "@/lib/reply-parser";
+import { applyReplyToApplication } from "@/lib/apply-reply-to-application";
 
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1";
 
@@ -382,6 +383,16 @@ export async function syncGmailMessages(
           archived: false,
         },
       });
+
+      // Apply reply to Application if matched and human
+      // Skip OTP/security codes (classified as auto), auto-replies, bounces
+      if (applicationId && classified.isHuman) {
+        await applyReplyToApplication({
+          applicationId,
+          kind: classified.kind,
+          isHuman: classified.isHuman,
+        });
+      }
 
       synced++;
     }
