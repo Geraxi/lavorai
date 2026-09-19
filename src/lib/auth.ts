@@ -149,6 +149,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           Google({
             clientId: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+            // authorization richiede le scopes esplicite: openid, email, profile
+            // sono implicit; aggiungiamo gmail.readonly per leggere inbox.
+            // NextAuth v5 supporta incremental consent: l'utente può loggarsi
+            // senza Gmail, poi "Collega Gmail" richiede solo la scope addizionale.
+            authorization: {
+              params: {
+                scope: "openid email profile https://www.googleapis.com/auth/gmail.readonly",
+                // access_type: offline richiede refresh token per sincronizzare
+                // Gmail in background (anche quando l'utente non è loggato).
+                access_type: "offline",
+                // prompt: consent forza il consent screen per ottenere sempre
+                // un refresh_token (altrimenti solo al primo login).
+                prompt: "consent",
+              },
+            },
             // profile() serve a marcare l'email come verified: Google
             // già garantisce l'email verificata, quindi saltiamo il
             // gate `emailVerified` che blocca il Credentials login.

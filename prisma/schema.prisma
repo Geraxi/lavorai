@@ -172,6 +172,7 @@ model User {
   popupResponses PopupResponse[]
   answers        UserAnswer[]
   conversionEvents ConversionEvent[]
+  gmailMessages  GmailMessage[]
 
   // Referral: ogni utente ha un codice univoco da condividere; referredById
   // punta a chi l'ha invitato (se applicabile). Reward gestito a parte
@@ -585,6 +586,7 @@ model Application {
 
   interviewSessions InterviewSession[]
   replies           ApplicationReply[]
+  gmailMessages     GmailMessage[]
 
   @@index([userId, createdAt])
   @@index([sessionId])
@@ -612,6 +614,52 @@ model ApplicationReply {
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId, receivedAt])
+}
+
+/// Messaggio Gmail sincronizzato: email ricevute dall'account Gmail dell'utente,
+/// filtrate per recruiter/job mail e classificate. Fonte: Gmail API via OAuth.
+/// Permette di vedere risposte recruiter che arrivano all'email personale,
+/// non solo quelle inviate via reply+ inbound.
+model GmailMessage {
+  id            String   @id @default(cuid())
+  userId        String
+  /// Gmail message ID (permanente, usato per dedup).
+  gmailMessageId String
+  /// Gmail thread ID.
+  threadId      String?
+  /// Mittente (from header).
+  fromAddress   String
+  /// Destinatario (to header).
+  toAddress     String?
+  subject       String?
+  /// Snippet (~200 char preview fornito da Gmail API).
+  snippet       String?
+  /// Corpo testuale completo (text/plain preferito, fallback html→text).
+  bodyText      String?  @db.Text
+  /// Data di invio/ricezione del messaggio.
+  date          DateTime
+  /// Classificazione: "colloquio" | "rifiutata" | "risposta" | "ricevuta" | "auto" | "bounce".
+  kind          String
+  /// true se è una risposta umana reale.
+  isHuman       Boolean  @default(true)
+  /// Application collegata (quando riusciamo a matchare company/title/email).
+  applicationId String?
+  /// Label/category per filtri UI (popolato dalla classificazione kind).
+  label         String?
+  /// true se l'utente ha visualizzato il messaggio nella UI Inbox.
+  read          Boolean  @default(false)
+  /// true se l'utente ha archiviato/nascosto il messaggio.
+  archived      Boolean  @default(false)
+  syncedAt      DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, gmailMessageId])
+  @@index([userId, date])
+  @@index([userId, read])
+  @@index([applicationId])
 }
 
 /// Sessione di preparazione + Copilot per un colloquio specifico.
