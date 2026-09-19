@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getCurrentUser();
   if (!user) {
@@ -20,8 +20,9 @@ export async function GET(
     );
   }
 
+  const { id } = await params;
   const app = await prisma.application.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: {
       userId: true,
       job: {
@@ -42,7 +43,6 @@ export async function GET(
     );
   }
 
-  const company = app.job.company ?? "l'azienda";
   const role = app.job.title;
   const recruiterEmail = app.job.recruiterEmail ?? "";
 
