@@ -13,7 +13,7 @@ const ALLOWED_STATUSES = ["vista", "colloquio", "rifiutata", "offerta"];
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getCurrentUser();
   if (!user) {
@@ -23,6 +23,7 @@ export async function PUT(
     );
   }
 
+  const { id } = await params;
   const { status } = await request.json().catch(() => ({}));
   if (!status || !ALLOWED_STATUSES.includes(status)) {
     return NextResponse.json(
@@ -32,7 +33,7 @@ export async function PUT(
   }
 
   const app = await prisma.application.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: { userId: true },
   });
 
@@ -44,7 +45,7 @@ export async function PUT(
   }
 
   await prisma.application.update({
-    where: { id: params.id },
+    where: { id },
     data: { userStatus: status },
   });
 
