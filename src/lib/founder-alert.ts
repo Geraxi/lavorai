@@ -23,6 +23,7 @@ export type AlertReason =
   | "resend_error"
   | "resend_reject"
   | "email_from_sandbox"
+  | "blob_suspended"
   | "other";
 
 /** Riconosce un errore del provider AI dovuto a crediti/quota esauriti. */
