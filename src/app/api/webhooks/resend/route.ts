@@ -150,11 +150,16 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
     },
   });
 
-  // The active worker consumes these messages from ApplicationReply. They
-  // are technical verification steps, not recruiter replies to forward.
-  if (!forwardedFrom && app.status === "applying" && kind === "auto" &&
-      process.env.INBOUND_ROUTE_ATS_EMAIL !== "false" &&
-      isGreenhouseSecurityMessage({ fromAddress: from, subject, bodyText })) {
+  // NEVER forward security code emails to the user. These are technical
+  // verification messages consumed by the worker's auto-OTP flow, not
+  // recruiter replies. Forwarding them would:
+  // 1. Confuse the user (they see codes they don't need to enter)
+  // 2. Create notification noise for a purely automated step
+  // 3. Appear in inbox as if it were a recruiter response
+  //
+  // The worker polls ApplicationReply directly to extract codes.
+  if (isGreenhouseSecurityMessage({ fromAddress: from, subject, bodyText })) {
+    console.log(`[webhook/resend] ${app.id} security code email detected — saved to ApplicationReply but NOT forwarded to user`);
     return;
   }
 

@@ -1862,11 +1862,28 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   const profile = rowToProfile(profileRow);
 
   // Email candidato nei form ATS: se l'inbound è configurato
-  // (INBOUND_EMAIL_DOMAIN), usiamo l'alias reply+<appId>@inbound così le
-  // conferme ATS e le risposte dei recruiter passano da LavorAI (Inbox,
-  // stato "risposta/colloquio") e vengono inoltrate all'utente. Senza
-  // inbound, tutto va direttamente all'utente e non possiamo misurare nulla.
+  // (INBOUND_EMAIL_DOMAIN), usiamo SEMPRE l'alias reply+<appId>@inbound così le
+  // conferme ATS (security codes, etc.) e le risposte dei recruiter passano da
+  // LavorAI (auto-OTP, Inbox, stato "risposta/colloquio") e vengono inoltrate
+  // all'utente. Senza inbound, tutto va direttamente all'utente e non possiamo
+  // completare automaticamente gli OTP né misurare le risposte.
+  //
+  // FAIL LOUD: se manca INBOUND_EMAIL_DOMAIN su Railway/worker, il submit di
+  // portali che richiedono OTP (Greenhouse, Ashby) fallirà con errore chiaro.
   const inboundAlias = process.env.INBOUND_ROUTE_ATS_EMAIL === "false" ? null : inboundReplyAddress(applicationId);
+  
+  // Per portali ATS che richiedono verifica OTP (Greenhouse/Ashby), l'inbound
+  // è OBBLIGATORIO. Se manca, fail con messaggio chiaro invece di usare l'email
+  // personale dell'utente (che causerebbe invio di codici alla sua casella).
+  const portalNeedsOtp = adapter.id === "greenhouse" || adapter.id === "ashby";
+  if (portalNeedsOtp && !inboundAlias) {
+    return {
+      ok: false,
+      status: "missing_field",
+      error: `${adapter.label} richiede verifica email automatica. Configura INBOUND_EMAIL_DOMAIN sul worker (Railway) per abilitare l'auto-OTP. Senza, i codici arriverebbero all'utente invece che al sistema.`,
+    };
+  }
+  
   const formEmail = inboundAlias ?? input.userEmail;
   if (inboundAlias) profile.email = inboundAlias;
 
