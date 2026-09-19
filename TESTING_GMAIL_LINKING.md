@@ -1,5 +1,7 @@
 # Gmail Account Linking - Testing Guide
 
+> **Note:** This feature is integrated with the Gmail Inbox from PR #14. The account linking modal replaces the old POST form in the empty state.
+
 ## Setup Requirements
 
 1. **Environment Variables Required:**
@@ -13,6 +15,10 @@
    - OAuth 2.0 Client configured
    - Authorized redirect URIs must include: `https://your-domain.com/api/auth/callback/google`
    - Scopes: openid, email, profile, https://www.googleapis.com/auth/gmail.readonly
+
+3. **Database:**
+   - `GmailMessage` table exists (from PR #14)
+   - `Account` table with Google provider support
 
 ## Test Scenarios
 
@@ -36,9 +42,10 @@
 **Expected Results:**
 - ✓ User stays logged in as same account
 - ✓ Success message: "Gmail collegato con successo! Le risposte dei recruiter appariranno qui."
-- ✓ "Collega Gmail" button no longer visible
+- ✓ Gmail inbox UI appears with messages (after sync)
 - ✓ Database `Account` table has new row with provider='google', access_token present, scope includes 'gmail.readonly'
 - ✓ No duplicate user created
+- ✓ Can use "Sincronizza" button to fetch new messages
 
 ### Scenario 2: Magic Link User Links Gmail
 
@@ -54,7 +61,7 @@
 **Expected Results:**
 - Same as Scenario 1
 
-### Scenario 3: User Already Has Google Account (No Button Shown)
+### Scenario 3: User Already Has Google Account (Direct to Inbox)
 
 **Setup:**
 - User registered directly with Google OAuth
@@ -64,8 +71,9 @@
 2. Navigate to `/inbox`
 
 **Expected Results:**
-- ✓ "Collega Gmail" button is **not visible**
+- ✓ Gmail inbox UI loads directly (no empty state)
 - ✓ `hasGmailConnected()` returns true
+- ✓ Messages display after first sync
 
 ### Scenario 4: Email Mismatch (Edge Case)
 
