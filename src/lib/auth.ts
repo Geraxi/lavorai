@@ -164,6 +164,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 prompt: "consent",
               },
             },
+            // Consente il link di account Google a utenti già loggati con
+            // email/password o magic link, SE l'email Google coincide.
+            // Senza questo, NextAuth creerebbe un nuovo utente.
+            allowDangerousEmailAccountLinking: true,
             // profile() serve a marcare l'email come verified: Google
             // già garantisce l'email verificata, quindi saltiamo il
             // gate `emailVerified` che blocca il Credentials login.
