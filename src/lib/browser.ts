@@ -1,18 +1,20 @@
 import type { Browser } from "playwright";
 
 /**
- * Launcher browser unico per tutto il codice (portal adapters, onboarding,
- * resolve URL). Risolve il problema strutturale: su Vercel serverless il
- * pacchetto `playwright` completo NON ha il binario Chromium → `launch()`
- * fallisce → l'invio ATS non è mai partito in produzione.
+ * ⚠️ IMPORTANTE: NON importare questo file da API routes (/api/**)!
  *
- * Strategia (scelta B del founder):
- *   - In produzione/serverless (Vercel/Lambda) → `@sparticuz/chromium`:
- *     binario Chromium compresso compatibile con l'ambiente Lambda, guidato
- *     da `playwright-core`.
- *   - In locale (dev) → `playwright` completo coi browser bundlati.
+ * Il browser automation gira SOLO sul Railway worker. Le dipendenze
+ * playwright/@sparticuz/chromium sono in devDependencies per ridurre
+ * la dimensione delle Vercel serverless functions (prima: 51 MB × 323 = 205 GB).
  *
- * Stesso API Playwright in entrambi i casi: il resto del codice non cambia.
+ * Se un'API route deve triggerare browser work, deve:
+ *  1. Accodare un job via BullMQ (REDIS_URL) → application-worker.ts
+ *  2. Il Railway worker (worker.ts) processa il job con questo file
+ *
+ * Strategia browser (originale, ancora valida nel worker):
+ *   - In produzione serverless (VERCEL/AWS_LAMBDA) → `@sparticuz/chromium`
+ *   - In locale (dev) o Railway worker → `playwright` completo
+ *   - Stesso API Playwright in entrambi i casi.
  */
 
 const BASE_ARGS = [
