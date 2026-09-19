@@ -745,7 +745,19 @@ function buildApplyUrlCandidates(jobUrl: string): string[] {
   return candidates;
 }
 
-/** Read the current attempt's verification email and finish the same form. */
+/**
+ * Completa il submit dopo aver ricevuto e inserito il security code da Greenhouse.
+ * 
+ * Flow:
+ * 1. Attende che il campo security code sia visibile (già rilevato dal caller)
+ * 2. Poll ApplicationReply per max 150s (30 * 5s) aspettando l'email di Greenhouse
+ * 3. Estrae il codice dall'email di verifica
+ * 4. Compila il campo e clicca submit
+ * 5. Verifica conferma (HTTP 2xx/3xx o thank-you page)
+ * 
+ * Richiede che l'applicazione usi l'inbound email (reply+<appId>@domain) così
+ * l'email di verifica arrivi al sistema invece che all'utente.
+ */
 export async function submitWithSecurityCode(
   page: Page,
   applicationId: string,
@@ -760,32 +772,139 @@ export async function submitWithSecurityCode(
     });
   },
 ): Promise<ApplyOutcome> {
+  console.log(`[greenhouse/otp] applicationId=${applicationId} waiting for security code field...`);
+  
+  // 1. Attendi campo security code visibile
   const field = page.locator(SECURITY_CODE_FIELD).first();
-  await field.waitFor({ state: "visible", timeout: 15_000 });
+  try {
+    await field.waitFor({ state: "visible", timeout: 15_000 });
+  } catch (err) {
+    console.error(`[greenhouse/otp] ${applicationId} security code field not visible after 15s`, err);
+    return { 
+      ok: false, 
+      status: "validation_failed", 
+      error: "Campo codice di verifica Greenhouse non trovato. Il form potrebbe essere cambiato." 
+    };
+  }
+  
+  // 2. Poll per l'email di verifica (max 180s = 36 tentativi * 5s)
+  // Greenhouse tipicamente invia in 5-30s, ma alcuni relay possono ritardare.
+  // Include 10s lookback buffer per evitare race: se l'email arriva MENTRE
+  // stiamo cliccando submit, potrebbe avere receivedAt leggermente < since.
   let code: string | null = null;
-  for (let i = 0; i < 30 && !code; i++) {
-    const replies = await readReplies();
+  const MAX_ATTEMPTS = 36;
+  const POLL_INTERVAL_MS = 5_000;
+  const LOOKBACK_BUFFER_MS = 10_000; // 10s before submit click
+  
+  console.log(`[greenhouse/otp] ${applicationId} polling ApplicationReply for security code (max ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s, lookback ${LOOKBACK_BUFFER_MS / 1000}s)...`);
+  
+  // Adjust since to include lookback buffer
+  const sinceWithBuffer = new Date(since.getTime() - LOOKBACK_BUFFER_MS);
+  
+  // Override readReplies to use buffered timestamp
+  const readRepliesWithBuffer = async () => {
+    const { prisma } = await import("@/lib/db");
+    return prisma.applicationReply.findMany({
+      where: { applicationId, receivedAt: { gte: sinceWithBuffer } },
+      orderBy: { receivedAt: "desc" },
+      take: 15, // Increased from 10 to handle more potential replies
+      select: { subject: true, bodyText: true, fromAddress: true },
+    });
+  };
+  
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS && !code; attempt++) {
+    const replies = await readRepliesWithBuffer();
+    
     for (const reply of replies) {
       if (!isGreenhouseSecurityMessage(reply)) continue;
-      code = extractApplicationSecurityCode(reply.bodyText ?? "");
-      if (code) break;
+      
+      const extracted = extractApplicationSecurityCode(reply.bodyText ?? "");
+      if (extracted) {
+        code = extracted;
+        console.log(`[greenhouse/otp] ${applicationId} code extracted from email (attempt ${attempt}/${MAX_ATTEMPTS}): ${code.slice(0, 2)}...`);
+        break;
+      }
     }
-    if (!code) await page.waitForTimeout(5_000);
+    
+    if (!code && attempt < MAX_ATTEMPTS) {
+      console.log(`[greenhouse/otp] ${applicationId} no code yet (attempt ${attempt}/${MAX_ATTEMPTS}), waiting ${POLL_INTERVAL_MS}ms...`);
+      await page.waitForTimeout(POLL_INTERVAL_MS);
+    }
   }
+  
   if (!code) {
-    return { ok: false, status: "unknown_error", error: "Codice di verifica Greenhouse non ricevuto in tempo. Verifica automatica da ritentare." };
+    console.error(`[greenhouse/otp] ${applicationId} timeout: no security code received after ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s`);
+    return { 
+      ok: false, 
+      status: "unknown_error", 
+      error: `Codice di verifica Greenhouse non ricevuto in ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s. Verifica che INBOUND_EMAIL_DOMAIN sia configurato e che l'email di verifica non sia bloccata.` 
+    };
   }
+  
+  // 3. Compila il campo con il codice estratto
+  console.log(`[greenhouse/otp] ${applicationId} filling security code field...`);
   await field.fill(code);
+  
+  // 4. Trova e clicca il pulsante di submit
   const submit = await findSubmitButton(page);
-  if (!submit) return { ok: false, status: "validation_failed", error: "Pulsante di conferma del codice Greenhouse non trovato." };
-  const responsePromise = page.waitForResponse((response) => response.request().method() === "POST" && /greenhouse\.io/.test(response.url()) && /\/jobs\/\d+|\/job_app|\/applications|\/submit/.test(response.url()), { timeout: 25_000 }).catch(() => null);
+  if (!submit) {
+    console.error(`[greenhouse/otp] ${applicationId} submit button not found after filling code`);
+    return { 
+      ok: false, 
+      status: "validation_failed", 
+      error: "Pulsante di conferma del codice Greenhouse non trovato dopo aver compilato il campo." 
+    };
+  }
+  
+  const urlBeforeSubmit = page.url();
+  console.log(`[greenhouse/otp] ${applicationId} clicking submit after OTP fill...`);
+  
+  // Cattura la risposta POST per conferma HTTP
+  const responsePromise = page.waitForResponse(
+    (response) => 
+      response.request().method() === "POST" && 
+      /greenhouse\.io/.test(response.url()) && 
+      /\/jobs\/\d+|\/job_app|\/applications|\/submit/.test(response.url()), 
+    { timeout: 25_000 }
+  ).catch(() => null);
+  
   await submit.click();
   const response = await responsePromise;
+  
+  // 5. Attendi stabilizzazione pagina
   await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => void 0);
+  
+  const finalUrl = page.url();
   const text = await page.locator("body").innerText();
+  
+  // Verifica se il campo security code è ancora visibile (challenge fallito)
   const challengeRemains = await field.isVisible().catch(() => false);
-  if (!challengeRemains && (!response || response.status() < 400) && hasApplicationConfirmation(text, page.url())) {
-    return { ok: true, status: "submitted", confirmation: "DETECTED_DOM_SECURITY_CODE" };
+  
+  // Conferma: challenge NON presente + (HTTP ok O conferma DOM)
+  const httpOk = response && response.status() >= 200 && response.status() < 400;
+  const domConfirmed = hasApplicationConfirmation(text, finalUrl);
+  
+  if (!challengeRemains && (httpOk || domConfirmed)) {
+    const confirmation = httpOk 
+      ? `DETECTED_HTTP_${response!.status()}_OTP` 
+      : "DETECTED_DOM_OTP";
+    
+    console.log(`[greenhouse/otp] ${applicationId} success: ${confirmation} (urlChanged=${finalUrl !== urlBeforeSubmit})`);
+    
+    return { 
+      ok: true, 
+      status: "submitted", 
+      confirmation 
+    };
   }
-  return { ok: false, status: "validation_failed", error: `Verifica Greenhouse non confermata dopo inserimento del codice (HTTP ${response?.status() ?? "none"}). Nessun invio confermato.` };
+  
+  // Fallito: challenge ancora presente o nessuna conferma
+  const httpStatus = response?.status() ?? "none";
+  console.error(`[greenhouse/otp] ${applicationId} verification failed: challengeRemains=${challengeRemains} httpStatus=${httpStatus} domConfirmed=${domConfirmed}`);
+  
+  return { 
+    ok: false, 
+    status: "validation_failed", 
+    error: `Verifica Greenhouse non confermata dopo inserimento del codice. HTTP ${httpStatus}, challenge ancora visibile: ${challengeRemains}. Possibile codice errato o scaduto.` 
+  };
 }
