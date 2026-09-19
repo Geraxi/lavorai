@@ -69,3 +69,12 @@ After deployment:
 3. Click "Refresh" to trigger first sync
 4. Verify messages appear with correct classifications
 5. Check "View Application" link works for matched messages
+
+**Local Development:**
+If testing locally, ensure `.env` has these set:
+```bash
+DATABASE_URL="your_postgres_connection_string"
+DIRECT_URL="your_postgres_direct_connection_string"
+GOOGLE_CLIENT_ID="your_client_id"
+GOOGLE_CLIENT_SECRET="your_client_secret"
+```
