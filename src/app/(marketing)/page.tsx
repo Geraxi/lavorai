@@ -49,23 +49,24 @@ export const revalidate = 3600;
 
 async function liveMetrics(locale: string): Promise<SuccessMetric[]> {
   const fresh = new Date(Date.now() - 30 * 24 * 3600 * 1000);
-  const [delivered, jobs, companies] = await Promise.all([
+  const [delivered, jobs, companies, users] = await Promise.all([
     prisma.application.count({ where: { submitConfirmation: { startsWith: "DETECTED" } } }),
     prisma.job.count({ where: { closedAt: null, cachedAt: { gte: fresh } } }),
     prisma.job.findMany({ where: { closedAt: null, cachedAt: { gte: fresh }, company: { not: null } }, distinct: ["company"], select: { company: true } }).then((r) => r.length),
-  ]).catch(() => [0, 0, 0] as const);
+    prisma.user.count({ where: { emailVerified: { not: null } } }),
+  ]).catch(() => [0, 0, 0, 0] as const);
   const n = (v: number) => v.toLocaleString(locale === "en" ? "en-GB" : "it-IT");
   return locale === "en"
     ? [
+        { value: n(users), label: "registered users", caveat: "verified accounts actively using the platform" },
         { value: n(delivered), label: "applications delivered", caveat: "with delivery proof, listed on /proof" },
         { value: `${n(jobs)}+`, label: "active jobs in the pool", caveat: "refreshed every 2 hours" },
-        { value: `${n(companies)}+`, label: "companies monitored", caveat: "career pages and European boards" },
         { value: "24h", label: "first application", caveat: "delivered within 24 hours or refunded" },
       ]
     : [
+        { value: n(users), label: "utenti registrati", caveat: "account verificati che usano la piattaforma" },
         { value: n(delivered), label: "candidature consegnate", caveat: "con prova di consegna, elenco su /proof" },
         { value: `${n(jobs)}+`, label: "offerte attive nel pool", caveat: "aggiornate ogni 2 ore" },
-        { value: `${n(companies)}+`, label: "aziende monitorate", caveat: "pagine carriera e board europee" },
         { value: "24h", label: "prima candidatura", caveat: "consegnata entro 24 ore o rimborso" },
       ];
 }

@@ -345,6 +345,7 @@ async function adoptStagedCv(userId: string, rawEmail: string): Promise<void> {
       // Non sovrascrivere se già presente (updateMany with where clause would be cleaner,
       // ma qui sappiamo che nel primo signIn post-staging è sempre null)
       privacyConsentAt: staged.privacyConsentAt,
+      marketingConsent: staged.marketingConsent,
     },
   });
 
