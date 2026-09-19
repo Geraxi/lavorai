@@ -53,14 +53,26 @@ export async function saveUserFile(
   const drv = driver();
 
   if (drv === "vercel") {
-    const { put } = await import("@vercel/blob");
-    const result = await put(key, data, {
-      access: "public",
-      contentType: contentTypeFor(safeName),
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    });
-    return result.url;
+    try {
+      const { put } = await import("@vercel/blob");
+      const result = await put(key, data, {
+        access: "public",
+        contentType: contentTypeFor(safeName),
+        addRandomSuffix: false,
+        allowOverwrite: true,
+      });
+      return result.url;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/suspended|disabled|quota|rate.?limit/i.test(msg)) {
+        throw new Error(
+          `BLOB_SUSPENDED: Il Vercel Blob store è sospeso o ha raggiunto la quota. ` +
+          `Configura Supabase Storage (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) come alternativa. ` +
+          `Errore originale: ${msg}`
+        );
+      }
+      throw err;
+    }
   }
 
   if (drv === "supabase") {
