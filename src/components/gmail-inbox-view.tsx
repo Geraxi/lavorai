@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Icon } from "@/components/design/icon";
+import { Icon, type IconName } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import Link from "next/link";
 
@@ -680,7 +680,7 @@ function FilterButton({
 }: {
   active: boolean;
   onClick: () => void;
-  icon: string;
+  icon: IconName;
   label: string;
   count: number;
 }) {
