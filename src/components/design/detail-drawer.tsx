@@ -237,7 +237,7 @@ export function DetailDrawer({
               <div className="ds-section-card mb-6">
                 <div className="ds-section-head">
                   <div className="ds-section-head-title">
-                    <Icon name="clipboard-check" size={13} />
+                    <Icon name="check" size={13} />
                     Aggiorna stato
                   </div>
                 </div>
@@ -407,11 +407,11 @@ function UserStatusButtons({ appId, currentStatus }: { appId: string; currentSta
   }
 
   const statuses = [
-    { key: "vista", label: "Risposta ricevuta", icon: "mail" },
-    { key: "colloquio", label: "Colloquio", icon: "calendar" },
-    { key: "rifiutata", label: "Rifiutata", icon: "x-circle" },
-    { key: "offerta", label: "Offerta", icon: "check-circle" },
-  ] as const;
+    { key: "vista", label: "Risposta ricevuta", icon: "inbox" as const },
+    { key: "colloquio", label: "Colloquio", icon: "calendar" as const },
+    { key: "rifiutata", label: "Rifiutata", icon: "x" as const },
+    { key: "offerta", label: "Offerta", icon: "check" as const },
+  ];
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -471,4 +471,3 @@ function FollowUpButton({ appId }: { appId: string }) {
     </button>
   );
 }
-
