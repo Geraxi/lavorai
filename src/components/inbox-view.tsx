@@ -20,9 +20,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
+import { GmailConnectModal } from "@/components/gmail-connect-modal";
 
 export interface InboxSent {
   id: string;
@@ -111,8 +112,9 @@ function statusChip(s: InboxSent) {
  * candidatura inviata (lettera, risposte usate, CV), domande in sospeso
  * (rispondibili qui), risposte reali del recruiter.
  */
-export function InboxView({ sent, answers, replies, waiting, forwardAddress }: { sent: InboxSent[]; answers: InboxAnswer[]; replies: InboxReply[]; waiting: number; forwardAddress?: string | null }) {
+export function InboxView({ sent, answers, replies, waiting, forwardAddress, gmailConnected }: { sent: InboxSent[]; answers: InboxAnswer[]; replies: InboxReply[]; waiting: number; forwardAddress?: string | null; gmailConnected?: boolean }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<string | null>(sent[0]?.id ?? null);
@@ -121,6 +123,7 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
   const [notice, setNotice] = useState<string | null>(null);
   const [localAnswers, setLocalAnswers] = useState(answers);
   const [editKey, setEditKey] = useState<string | null>(null);
+  const [showGmailModal, setShowGmailModal] = useState(false);
 
   const repliesByApp = useMemo(() => {
     const m = new Map<string, InboxReply[]>();
@@ -144,6 +147,19 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
   useEffect(() => {
     if (filter !== "answers" && threads.length > 0 && !threads.some((t) => t.id === selected)) setSelected(threads[0].id);
   }, [threads, selected, filter]);
+
+  // Rileva il ritorno da OAuth Google e mostra un messaggio di successo
+  useEffect(() => {
+    const gmailParam = searchParams.get("gmail");
+    if (gmailParam === "linked") {
+      setNotice("Gmail collegato con successo! Le risposte dei recruiter appariranno qui.");
+      // Rimuovi il parametro dall'URL senza ricaricare
+      const url = new URL(window.location.href);
+      url.searchParams.delete("gmail");
+      window.history.replaceState({}, "", url.toString());
+      router.refresh();
+    }
+  }, [searchParams, router]);
 
   const cur = sent.find((s) => s.id === selected) ?? null;
   const counts = {
@@ -185,26 +201,41 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
 
   return (
     <div className="fit-page" style={{ gridTemplateColumns: "minmax(300px, 360px) minmax(0,1fr)", gridTemplateRows: "auto minmax(0,1fr)", gap: 14 }}>
+      <GmailConnectModal open={showGmailModal} onClose={() => setShowGmailModal(false)} />
+      
       <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 className="fit-h1">Inbox</h1>
           <p className="fit-hero-sub">Ogni candidatura è una conversazione: cosa abbiamo inviato a tuo nome, cosa ha risposto l&apos;azienda, cosa manca.</p>
         </div>
-        {forwardAddress && (
-          <div style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <Icon name="send" size={12} />
-            Ricevuto una risposta sulla tua email? Inoltrala a
-            <button type="button" className="ds-btn ds-btn-sm" style={{ padding: "2px 8px", fontFamily: "monospace", fontSize: 12 }} onClick={() => { try { navigator.clipboard.writeText(forwardAddress); setNotice("Indirizzo copiato."); } catch { /* ignore */ } }} title="Copia">
-              {forwardAddress}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          {!gmailConnected && (
+            <button
+              type="button"
+              className="ds-btn ds-btn-primary ds-btn-sm"
+              onClick={() => setShowGmailModal(true)}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <Icon name="inbox" size={12} />
+              Collega Gmail
             </button>
-            e la troverai qui.
-          </div>
-        )}
-        {waiting > 0 && (
-          <button type="button" className="ds-btn ds-btn-sm" onClick={() => setFilter("waiting")}>
-            <Icon name="clock" size={12} /> {waiting} {waiting === 1 ? "candidatura aspetta" : "candidature aspettano"} una risposta
-          </button>
-        )}
+          )}
+          {forwardAddress && (
+            <div style={{ fontSize: 12, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <Icon name="send" size={12} />
+              Ricevuto una risposta sulla tua email? Inoltrala a
+              <button type="button" className="ds-btn ds-btn-sm" style={{ padding: "2px 8px", fontFamily: "monospace", fontSize: 12 }} onClick={() => { try { navigator.clipboard.writeText(forwardAddress); setNotice("Indirizzo copiato."); } catch { /* ignore */ } }} title="Copia">
+                {forwardAddress}
+              </button>
+              e la troverai qui.
+            </div>
+          )}
+          {waiting > 0 && (
+            <button type="button" className="ds-btn ds-btn-sm" onClick={() => setFilter("waiting")}>
+              <Icon name="clock" size={12} /> {waiting} {waiting === 1 ? "candidatura aspetta" : "candidature aspettano"} una risposta
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Colonna sinistra: filtri + lista */}
