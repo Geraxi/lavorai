@@ -70,6 +70,7 @@ interface Row {
   submittedAt?: string | null;
   lastReplyAt?: string | null;
   replyCount?: number;
+  lastReplyKind?: string | null;
   ghostingDays?: number;
 }
 
@@ -125,6 +126,7 @@ export default function ApplicationsPage() {
       submittedAt: a.submittedAt,
       lastReplyAt: a.lastReplyAt,
       replyCount: a.replyCount,
+      lastReplyKind: a.lastReplyKind,
       ghostingDays,
     };
   };
@@ -365,6 +367,25 @@ export default function ApplicationsPage() {
                         }}
                       >
                         <StatusChip status={a.status} />
+                        {(a.lastReplyKind === "colloquio" ||
+                          a.lastReplyKind === "risposta" ||
+                          a.lastReplyKind === "rifiutata" ||
+                          (a.replyCount ?? 0) > 0) && (
+                          <span
+                            className="ds-chip"
+                            style={{
+                              background: "var(--primary-weak)",
+                              color: "var(--primary-ds)",
+                              fontSize: 10.5,
+                            }}
+                          >
+                            {a.lastReplyKind === "colloquio"
+                              ? "Colloquio"
+                              : a.lastReplyKind === "rifiutata"
+                                ? "Risposta: no"
+                                : "Risposta"}
+                          </span>
+                        )}
                         {a.ghostingDays !== undefined && a.ghostingDays >= 7 && !a.lastReplyAt && (
                           <span
                             className="ds-chip"
