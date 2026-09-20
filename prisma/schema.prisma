@@ -142,6 +142,8 @@ model User {
   onboardedAt      DateTime?
   lastLoginAt      DateTime?
   privacyConsentAt DateTime?
+  /// Marketing opt-in: l'utente vuole ricevere offerte di lavoro simili
+  marketingConsent Boolean  @default(false)
 
   // Dati per auto-apply targeting
   seniority        String?  // "junior" | "mid" | "senior" | "lead" | "principal"
@@ -720,6 +722,8 @@ model PendingCvSubmission {
   storagePath       String
   extractedText     String
   privacyConsentAt  DateTime
+  /// Opt-in marketing: l'utente vuole ricevere offerte di lavoro simili
+  marketingConsent  Boolean  @default(false)
   createdAt         DateTime @default(now())
   expiresAt         DateTime
 
