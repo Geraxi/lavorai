@@ -80,6 +80,42 @@ const testCases = [
     },
     expected: { kind: "risposta", isHuman: true },
   },
+  {
+    name: "Vercel deployment failure with 'interview' in commit (NOT colloquio)",
+    input: {
+      fromAddress: "notifications@vercel.com",
+      subject: "2 deployments failed for main at 2bffe97",
+      bodyText: "2 deployments for branch main at commit 2bffe97 could not be completed.\n\nCommit message: fix: Greenhouse OTP recovery + honest response/interview UX",
+    },
+    expected: { kind: "auto", isHuman: false },
+  },
+  {
+    name: "GitHub PR notification (NOT colloquio)",
+    input: {
+      fromAddress: "notifications@github.com",
+      subject: "[repo] New PR: Add interview feature",
+      bodyText: "A new pull request has been opened.",
+    },
+    expected: { kind: "auto", isHuman: false },
+  },
+  {
+    name: "Real recruiter interview invitation with specific phrase",
+    input: {
+      fromAddress: "talent@startup.io",
+      subject: "Interview opportunity",
+      bodyText: "We'd like to invite you to an interview next Tuesday. Please let me know your availability.",
+    },
+    expected: { kind: "colloquio", isHuman: true },
+  },
+  {
+    name: "Netlify deployment notification (auto)",
+    input: {
+      fromAddress: "noreply@netlify.com",
+      subject: "Deploy succeeded",
+      bodyText: "Your site has been deployed successfully.",
+    },
+    expected: { kind: "auto", isHuman: false },
+  },
 ];
 
 function runTests() {
