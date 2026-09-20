@@ -15,6 +15,7 @@ import {
   GdprExportButton,
   DeleteAccountButton,
 } from "@/components/settings-actions";
+import { ChangePasswordForm } from "@/components/change-password-form";
 import { prisma } from "@/lib/db";
 import { ReferralCard } from "@/components/referral-card";
 import { Suspense } from "react";
@@ -38,8 +39,6 @@ export default async function SettingsPage() {
 
   return (
     <>
-      {/* Post-checkout: forza refresh tier dopo redirect Stripe
-          (?subscribed=1), gestendo la latenza del webhook. */}
       <Suspense fallback={null}>
         <PostCheckoutRefresh />
       </Suspense>
@@ -66,7 +65,6 @@ export default async function SettingsPage() {
         </div>
 
         <div className="flex flex-col" style={{ gap: 16 }}>
-          {/* Account (con tema) */}
           <SectionCard>
             <SectionHead
               icon={<Icon name="user" size={14} />}
@@ -101,12 +99,25 @@ export default async function SettingsPage() {
             </SectionBody>
           </SectionCard>
 
-          {/* Piano */}
+          <SectionCard>
+            <SectionHead
+              icon={<Icon name="settings" size={14} />}
+              title="Password"
+            />
+            <SectionBody>
+              <ChangePasswordForm hasPassword={hasPassword} />
+            </SectionBody>
+          </SectionCard>
+
           <SectionCard>
             <SectionHead
               icon={<Icon name="zap" size={14} />}
               title="Piano"
-              actions={<span className="ds-chip ds-chip-green">{trial.status === "active" ? "Pro · prova" : cfg.name}</span>}
+              actions={
+                <span className="ds-chip ds-chip-green">
+                  {trial.status === "active" ? "Pro · prova" : cfg.name}
+                </span>
+              }
             />
             <SectionBody>
               <div className="flex items-start justify-between gap-4">
@@ -152,16 +163,17 @@ export default async function SettingsPage() {
                 {user.stripeSubscriptionId ? (
                   <SubscriptionManager planName={cfg.name} />
                 ) : (
-                  <SubscriptionActions tier={trial.status === "active" ? "free" : tier} hasStripe={false} />
+                  <SubscriptionActions
+                    tier={trial.status === "active" ? "free" : tier}
+                    hasStripe={false}
+                  />
                 )}
               </div>
             </SectionBody>
           </SectionCard>
 
-          {/* Referral */}
           <ReferralCard />
 
-          {/* Dati & account */}
           <SectionCard>
             <SectionHead
               icon={<Icon name="download" size={14} />}
@@ -174,7 +186,13 @@ export default async function SettingsPage() {
                     <div style={{ fontWeight: 500, fontSize: 13.5 }}>
                       Esporta i tuoi dati (GDPR)
                     </div>
-                    <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: "var(--fg-muted)",
+                        marginTop: 2,
+                      }}
+                    >
                       JSON con profilo, CV, candidature e preferenze.
                     </p>
                   </div>
@@ -191,7 +209,13 @@ export default async function SettingsPage() {
                     <div style={{ fontWeight: 500, fontSize: 13.5 }}>
                       Cancella account
                     </div>
-                    <p style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 2 }}>
+                    <p
+                      style={{
+                        fontSize: 12,
+                        color: "var(--fg-muted)",
+                        marginTop: 2,
+                      }}
+                    >
                       Rimuove tutti i dati. Irreversibile.
                     </p>
                   </div>
