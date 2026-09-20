@@ -152,6 +152,126 @@ let failed = 0;
   }
 }
 
+// Test 8: Vercel deployment notification with "interview" in commit message is NOT colloquio
+{
+  const name = "Vercel deployment notification with 'interview' in commit message is NOT colloquio";
+  const result = classifyReply({
+    fromAddress: "notifications@vercel.com",
+    subject: "2 deployments failed for main at 2bffe97",
+    bodyText: "2 deployments for branch main at commit 2bffe97 could not be completed.\n\nTeam: umbertogeraci0-gmailcom's projects\nCommit message: fix: Greenhouse OTP recovery + honest response/interview UX",
+  });
+
+  if (result.kind === "auto" && result.isHuman === false) {
+    console.log(`✅ ${name}`);
+    passed++;
+  } else {
+    console.log(`❌ ${name}`);
+    console.log(`   Expected: { kind: "auto", isHuman: false }`);
+    console.log(`   Got: ${JSON.stringify(result)}`);
+    failed++;
+  }
+}
+
+// Test 9: GitHub notification is auto (not human)
+{
+  const name = "GitHub notification is auto (not human)";
+  const result = classifyReply({
+    fromAddress: "notifications@github.com",
+    subject: "[owner/repo] PR merged: Add interview prep feature (#123)",
+    bodyText: "Your pull request has been merged.",
+  });
+
+  if (result.kind === "auto" && result.isHuman === false) {
+    console.log(`✅ ${name}`);
+    passed++;
+  } else {
+    console.log(`❌ ${name}`);
+    console.log(`   Expected: { kind: "auto", isHuman: false }`);
+    console.log(`   Got: ${JSON.stringify(result)}`);
+    failed++;
+  }
+}
+
+// Test 10: Real recruiter with "interview" phrase is colloquio
+{
+  const name = "Real recruiter with 'schedule an interview' phrase is colloquio";
+  const result = classifyReply({
+    fromAddress: "recruiter@techcorp.io",
+    subject: "Next steps for your application",
+    bodyText: "We'd like to invite you to an interview next week. Are you available?",
+  });
+
+  if (result.kind === "colloquio" && result.isHuman === true) {
+    console.log(`✅ ${name}`);
+    passed++;
+  } else {
+    console.log(`❌ ${name}`);
+    console.log(`   Expected: { kind: "colloquio", isHuman: true }`);
+    console.log(`   Got: ${JSON.stringify(result)}`);
+    failed++;
+  }
+}
+
+// Test 11: Railway deployment notification is auto
+{
+  const name = "Railway deployment notification is auto";
+  const result = classifyReply({
+    fromAddress: "noreply@railway.app",
+    subject: "Deployment successful",
+    bodyText: "Your deployment has been completed successfully.",
+  });
+
+  if (result.kind === "auto" && result.isHuman === false) {
+    console.log(`✅ ${name}`);
+    passed++;
+  } else {
+    console.log(`❌ ${name}`);
+    console.log(`   Expected: { kind: "auto", isHuman: false }`);
+    console.log(`   Got: ${JSON.stringify(result)}`);
+    failed++;
+  }
+}
+
+// Test 12: Sentry error notification is auto
+{
+  const name = "Sentry error notification is auto";
+  const result = classifyReply({
+    fromAddress: "alerts@sentry.io",
+    subject: "New error in production",
+    bodyText: "Your application has encountered an error.",
+  });
+
+  if (result.kind === "auto" && result.isHuman === false) {
+    console.log(`✅ ${name}`);
+    passed++;
+  } else {
+    console.log(`❌ ${name}`);
+    console.log(`   Expected: { kind: "auto", isHuman: false }`);
+    console.log(`   Got: ${JSON.stringify(result)}`);
+    failed++;
+  }
+}
+
+// Test 13: Real interview invitation with "phone interview" is colloquio
+{
+  const name = "Real interview invitation with 'phone interview' is colloquio";
+  const result = classifyReply({
+    fromAddress: "hr@company.com",
+    subject: "Phone interview opportunity",
+    bodyText: "We'd like to schedule a phone interview with you. When are you available?",
+  });
+
+  if (result.kind === "colloquio" && result.isHuman === true) {
+    console.log(`✅ ${name}`);
+    passed++;
+  } else {
+    console.log(`❌ ${name}`);
+    console.log(`   Expected: { kind: "colloquio", isHuman: true }`);
+    console.log(`   Got: ${JSON.stringify(result)}`);
+    failed++;
+  }
+}
+
 console.log(`\n📊 Results: ${passed} passed, ${failed} failed`);
 
 if (failed > 0) {

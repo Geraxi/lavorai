@@ -25,6 +25,45 @@ const BOUNCE_FROM = [
   "postmaster@",
 ];
 
+/**
+ * System/automated notification senders that should NEVER be classified as
+ * colloquio/rifiutata/risposta (human responses). These are CI/CD platforms,
+ * monitoring services, and infrastructure notifications.
+ */
+const SYSTEM_NOTIFICATION_DOMAINS = [
+  "vercel.com",
+  "github.com",
+  "gitlab.com",
+  "bitbucket.org",
+  "railway.app",
+  "heroku.com",
+  "netlify.com",
+  "circleci.com",
+  "travis-ci.com",
+  "jenkins.io",
+  "atlassian.com",
+  "jira.atlassian.com",
+  "sentry.io",
+  "datadog.com",
+  "pagerduty.com",
+  "statuspage.io",
+  "google.com", // Google Alerts, Calendar, etc.
+  "amazonaws.com", // AWS notifications
+  "azure.com", // Azure notifications
+];
+
+const SYSTEM_NOTIFICATION_FROM = [
+  "notifications@",
+  "noreply@",
+  "no-reply@",
+  "donotreply@",
+  "do-not-reply@",
+  "alerts@",
+  "notify@",
+  "system@",
+  "automated@",
+];
+
 const BOUNCE_SUBJECT = [
   "delivery status notification",
   "undeliverable",
@@ -116,10 +155,16 @@ const REJECTION = [
 ];
 
 const INTERVIEW = [
-  // EN
-  "interview",
+  // EN - phrases (more specific, less likely to false-match)
+  "schedule an interview",
+  "interview invitation",
+  "invite you to an interview",
+  "for an interview",
+  "phone interview",
+  "technical interview",
+  "video interview",
+  "in-person interview",
   "phone screen",
-  "next steps",
   "schedule a call",
   "schedule a chat",
   "book a time",
@@ -134,6 +179,7 @@ const INTERVIEW = [
   "calendly.com",
   "meet you",
   "video call",
+  "next steps", // common recruiter phrase
   // IT
   "colloquio",
   "intervista",
@@ -176,18 +222,20 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     return { kind: "bounce", isHuman: false };
   }
 
-  // Security challenges are automated messages, not delivery failures or
-  // application receipts, even if their template thanks the applicant.
+  // 2. Security challenges are automated messages, not delivery failures or
+  //    application receipts, even if their template thanks the applicant.
   if (/\b(security code|verification code|one[- ]time (?:code|password)|codice di (?:sicurezza|verifica))\b/i.test(subjectBody)) {
     return { kind: "auto", isHuman: false };
   }
 
-  // 2. Conferma di ricezione → in Inbox, conta come risposta ricevuta,
+  // 3. Conferma di ricezione → in Inbox, conta come risposta ricevuta,
   //    ma non cambia lo stato (non è un umano che ha letto il CV).
   //    Un umano che scrive "grazie per la candidatura, ci sentiamo domani?"
   //    non è una conferma automatica: se c'è una domanda, o manca ogni
   //    segnale di sistema (no-reply, "non rispondere") e il testo è breve,
   //    resta una risposta umana.
+  //    Check BEFORE system notifications so ATS acknowledgements (Greenhouse, Lever)
+  //    are properly classified as "ricevuta" instead of generic "auto".
   const asksSomething = /\?/.test(body);
   const systemSignal =
     containsAny(from, ["no-reply", "noreply", "donotreply", "do-not-reply", "notification", "careers@", "jobs@", "recruiting@", "talent@", "greenhouse", "lever.co", "workable", "ashbyhq", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr"]) ||
@@ -202,27 +250,41 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     return { kind: "ricevuta", isHuman: false };
   }
 
-  // 3. Auto-reply (out of office, ecc.) → non conta come risposta reale.
+  // 4. System/automated notifications (CI/CD, monitoring, etc.) → auto, never human.
+  //    Check AFTER acknowledgements to allow ATS confirmations through, but BEFORE
+  //    INTERVIEW/REJECTION checks to prevent Vercel/GitHub/etc. from hitting the
+  //    INTERVIEW keyword path (e.g., "interview" in commit message).
+  //    HOWEVER: Don't block noreply@ addresses here - they could be ATS systems
+  //    sending important rejection/interview notifications. We'll catch generic
+  //    noreply@ at the end if they don't match any job-related patterns.
+  if (SYSTEM_NOTIFICATION_DOMAINS.some((domain) => from.includes(domain))) {
+    return { kind: "auto", isHuman: false };
+  }
+
+  // 5. Auto-reply (out of office, ecc.) → non conta come risposta reale.
   if (containsAny(subjectBody, AUTO_REPLY)) {
     return { kind: "auto", isHuman: false };
   }
 
-  // 3. Rifiuto. Controllato PRIMA del colloquio: un'email di rifiuto può
+  // 6. Rifiuto. Controllato PRIMA del colloquio: un'email di rifiuto può
   //    contenere "interview" ("thank you for interviewing") ma resta un no.
   if (containsAny(subjectBody, REJECTION)) {
     return { kind: "rifiutata", isHuman: true };
   }
 
-  // 4. Invito a colloquio / next steps.
+  // 7. Invito a colloquio / next steps.
   if (containsAny(subjectBody, INTERVIEW)) {
     return { kind: "colloquio", isHuman: true };
   }
 
-  if (containsAny(from, ["no-reply@", "noreply@", "donotreply@", "do-not-reply@"])) {
+  // 8. Catch remaining system notification senders (noreply@, notifications@, etc.)
+  //    that didn't match acknowledgement/rejection/interview patterns above.
+  //    These are generic automated messages, not job-related responses.
+  if (containsAny(from, SYSTEM_NOTIFICATION_FROM)) {
     return { kind: "auto", isHuman: false };
   }
 
-  // 5. Risposta umana generica (qualcuno ha scritto, ma senza segnali chiari).
+  // 9. Risposta umana generica (qualcuno ha scritto, ma senza segnali chiari).
   return { kind: "risposta", isHuman: true };
 }
 
