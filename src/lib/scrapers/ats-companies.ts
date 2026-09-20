@@ -1,1 +1,1 @@
-PLACEHOLDER_ATS
+@file:///workspace/pr25/CONTENT_ats.ts
