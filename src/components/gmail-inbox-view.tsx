@@ -1,1 +1,1 @@
-PLACEHOLDER_GMAIL
+@file:///tmp/gmail_only_content.txt
