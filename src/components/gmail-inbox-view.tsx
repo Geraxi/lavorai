@@ -29,29 +29,32 @@ interface InboxViewProps {
   interviewCount: number;
 }
 
-type Filter = "inbox" | "unread" | "interviews" | "rejections" | "confirmations";
+type StatusOption = "not-this-time" | "interested" | "applied" | "interviewing" | null;
+
+type Filter = "inbox" | "unread" | "interviews" | "rejections" | "confirmations" | "other";
 
 const fmtDay = (iso: string) => {
   const d = new Date(iso);
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
   return sameDay
-    ? d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+    ? d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+    : d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 };
 
 const fmtFull = (iso: string) =>
-  new Date(iso).toLocaleString("it-IT", {
+  new Date(iso).toLocaleString("en-US", {
     day: "numeric",
     month: "long",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
 
 /**
  * Gmail-style inbox view matching AIApply screenshot.
- * Two-pane layout: list on left, detail on right.
+ * Three-pane layout: list, detail, with toolbar and filters.
  */
 export function GmailInboxView({ messages, gmailConnected, userEmail, interviewCount }: InboxViewProps) {
   const router = useRouter();
@@ -62,19 +65,30 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
   const [syncing, setSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [showGmailModal, setShowGmailModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [currentStatus, setCurrentStatus] = useState<StatusOption>(null);
+  const [inboxFilter, setInboxFilter] = useState<"inbox" | "all">("inbox");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
 
-  const filtered = messages.filter((m) => {
-    if (filter === "unread" && m.read) return false;
-    if (filter === "interviews" && m.kind !== "colloquio") return false;
-    if (filter === "rejections" && m.kind !== "rifiutata") return false;
-    if (filter === "confirmations" && m.kind !== "ricevuta") return false;
-    if (search) {
-      const needle = search.toLowerCase();
-      const haystack = `${m.from} ${m.subject} ${m.snippet}`.toLowerCase();
-      if (!haystack.includes(needle)) return false;
-    }
-    return true;
-  }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const filtered = messages
+    .filter((m) => {
+      if (filter === "unread" && m.read) return false;
+      if (filter === "interviews" && m.kind !== "colloquio") return false;
+      if (filter === "rejections" && m.kind !== "rifiutata") return false;
+      if (filter === "confirmations" && m.kind !== "ricevuta") return false;
+      if (filter === "other" && !["colloquio", "rifiutata", "ricevuta"].includes(m.kind)) return false;
+      if (search) {
+        const needle = search.toLowerCase();
+        const haystack = `${m.from} ${m.subject} ${m.snippet}`.toLowerCase();
+        if (!haystack.includes(needle)) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      const aTime = new Date(a.date).getTime();
+      const bTime = new Date(b.date).getTime();
+      return sortOrder === "newest" ? bTime - aTime : aTime - bTime;
+    });
 
   const current = filtered.find((m) => m.id === selected) ?? null;
 
@@ -106,6 +120,34 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
   const handleMarkAllRead = async () => {
     // TODO: implement mark all read endpoint
     router.refresh();
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filtered.length && filtered.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filtered.map((m) => m.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const handleStatusChange = async (status: StatusOption) => {
+    if (!current?.applicationId) return;
+    setCurrentStatus(status);
+    // TODO: implement status update API
+    // await fetch(`/api/applications/${current.applicationId}/status`, {
+    //   method: 'PATCH',
+    //   body: JSON.stringify({ userStatus: status })
+    // });
   };
 
   // Detect OAuth return and show success/error message
@@ -216,18 +258,19 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
 
   return (
     <div
-      className="fit-page"
       style={{
-        gridTemplateColumns: "360px minmax(0, 1fr)",
-        gridTemplateRows: "auto minmax(0, 1fr)",
-        gap: 0,
+        display: "grid",
+        gridTemplateColumns: "minmax(320px, 380px) minmax(0, 1fr)",
+        gridTemplateRows: "auto auto minmax(0, 1fr)",
+        height: "100%",
+        background: "var(--bg)",
       }}
     >
-      {/* Header */}
+      {/* Header Bar */}
       <div
         style={{
           gridColumn: "1 / -1",
-          padding: "14px 20px",
+          padding: "16px 24px",
           borderBottom: "1px solid var(--border-ds)",
           display: "flex",
           alignItems: "center",
@@ -237,7 +280,7 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Inbox</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 600, margin: 0 }}>Inbox</h1>
           {userEmail && (
             <div
               style={{
@@ -246,12 +289,13 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
-                padding: "4px 10px",
+                padding: "6px 12px",
                 border: "1px solid var(--border-ds)",
-                borderRadius: 6,
+                borderRadius: 8,
+                background: "var(--bg-elev)",
               }}
             >
-              <Icon name="mail" size={12} />
+              <Icon name="mail" size={14} />
               {userEmail}
             </div>
           )}
@@ -260,191 +304,284 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
           <button
             type="button"
             onClick={() => setFilter("interviews")}
-            className="ds-chip ds-chip-purple"
             style={{
               cursor: "pointer",
-              padding: "6px 12px",
-              fontSize: 13,
-              fontWeight: 500,
+              padding: "8px 16px",
+              fontSize: 14,
+              fontWeight: 600,
+              border: "1.5px dashed hsl(var(--primary) / 0.5)",
+              borderRadius: 8,
+              background: "hsl(var(--primary) / 0.08)",
+              color: "hsl(var(--primary))",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
             }}
           >
-            <Icon name="calendar" size={12} />
+            <Icon name="calendar" size={16} />
             {interviewCount}{" "}
             {interviewCount === 1 ? "Interview invitation" : "Interview invitations"}
           </button>
         )}
       </div>
 
-      {/* Left sidebar: filters + message list */}
+      {/* Toolbar */}
       <div
-        className="fit-card"
         style={{
-          padding: 0,
-          borderRadius: 0,
-          border: "none",
-          borderRight: "1px solid var(--border-ds)",
+          gridColumn: "1 / -1",
+          padding: "10px 24px",
+          borderBottom: "1px solid var(--border-ds)",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          background: "var(--bg-elev)",
+          flexWrap: "wrap",
         }}
       >
-        <div
-          style={{
-            padding: "12px 14px",
-            borderBottom: "1px solid var(--border-ds)",
-            display: "grid",
-            gap: 10,
-          }}
-        >
-          {/* Search */}
-          <div style={{ position: "relative" }}>
-            <span
-              style={{
-                position: "absolute",
-                left: 10,
-                top: 9,
-                color: "var(--fg-subtle)",
-              }}
-            >
-              <Icon name="search" size={13} />
-            </span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search emails..."
-              className="fit-input"
-              style={{ paddingLeft: 32, fontSize: 13 }}
-            />
-          </div>
-
-          {/* Filters */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <FilterButton
-              active={filter === "inbox"}
-              onClick={() => setFilter("inbox")}
-              icon="inbox"
-              label="Inbox"
-              count={messages.length}
-            />
-            <FilterButton
-              active={filter === "unread"}
-              onClick={() => setFilter("unread")}
-              icon="circle"
-              label="Unread only"
-              count={messages.filter((m) => !m.read).length}
-            />
-          </div>
-
-          {/* Labels */}
-          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--fg-subtle)", marginTop: 4 }}>
-            All Labels ▼
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <LabelButton
-              active={filter === "interviews"}
-              onClick={() => setFilter("interviews")}
-              label="Interview invitation"
-              color="green"
-              count={messages.filter((m) => m.kind === "colloquio").length}
-            />
-            <LabelButton
-              active={filter === "confirmations"}
-              onClick={() => setFilter("confirmations")}
-              label="Application Confirmation"
-              color="blue"
-              count={messages.filter((m) => m.kind === "ricevuta").length}
-            />
-            <LabelButton
-              active={filter === "rejections"}
-              onClick={() => setFilter("rejections")}
-              label="Not this time"
-              color="red"
-              count={messages.filter((m) => m.kind === "rifiutata").length}
-            />
-          </div>
-
-          {/* Actions */}
-          <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-            <button
-              type="button"
-              onClick={handleMarkAllRead}
-              className="ds-btn ds-btn-sm"
-              style={{ flex: 1, fontSize: 11 }}
-            >
-              <Icon name="check" size={10} />
-              Mark all read
-            </button>
-            <button
-              type="button"
-              onClick={handleRefresh}
-              disabled={syncing}
-              className="ds-btn ds-btn-sm"
-              style={{ flex: 1, fontSize: 11 }}
-            >
-              <Icon name="refresh-cw" size={10} />
-              {syncing ? "Syncing..." : "Refresh"}
-            </button>
-          </div>
-
-          {syncNotice && (
-            <div
-              style={{
-                fontSize: 11,
-                color: "var(--fg-muted)",
-                padding: "6px 8px",
-                background: "var(--bg-sunken)",
-                borderRadius: 4,
-              }}
-            >
-              {syncNotice}
-            </div>
-          )}
-
-          {/* Newest sort indicator */}
-          <div
+        {/* Left toolbar group */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <select
+            value={inboxFilter}
+            onChange={(e) => setInboxFilter(e.target.value as "inbox" | "all")}
             style={{
+              padding: "6px 10px",
+              fontSize: 13,
+              fontWeight: 500,
+              border: "1px solid var(--border-ds)",
+              borderRadius: 6,
+              background: "var(--bg)",
+              color: "var(--fg)",
+              cursor: "pointer",
+            }}
+          >
+            <option value="inbox">Inbox</option>
+            <option value="all">All Mail</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => setFilter(filter === "unread" ? "inbox" : "unread")}
+            style={{
+              padding: "6px 12px",
+              fontSize: 13,
+              fontWeight: 500,
+              border: filter === "unread" ? "1px solid var(--border-strong)" : "1px solid var(--border-ds)",
+              borderRadius: 6,
+              background: filter === "unread" ? "var(--bg-sunken)" : "var(--bg)",
+              color: "var(--fg)",
+              cursor: "pointer",
               display: "flex",
               alignItems: "center",
               gap: 6,
-              fontSize: 11,
+            }}
+          >
+            <Icon name="circle" size={12} />
+            Unread only
+          </button>
+
+          <select
+            style={{
+              padding: "6px 10px",
+              fontSize: 13,
+              fontWeight: 500,
+              border: "1px solid var(--border-ds)",
+              borderRadius: 6,
+              background: "var(--bg)",
+              color: "var(--fg)",
+              cursor: "pointer",
+            }}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value as Filter)}
+          >
+            <option value="inbox">All Labels</option>
+            <option value="interviews">Interview invitation</option>
+            <option value="confirmations">Application Confirmation</option>
+            <option value="rejections">Not this time</option>
+            <option value="other">Other</option>
+          </select>
+
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as "newest" | "oldest")}
+            style={{
+              padding: "6px 10px",
+              fontSize: 13,
+              fontWeight: 500,
+              border: "1px solid var(--border-ds)",
+              borderRadius: 6,
+              background: "var(--bg)",
+              color: "var(--fg)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+          </select>
+        </div>
+
+        {/* Center: Search */}
+        <div style={{ flex: 1, minWidth: 200, maxWidth: 400, position: "relative" }}>
+          <Icon
+            name="search"
+            size={14}
+            style={{
+              position: "absolute",
+              left: 10,
+              top: "50%",
+              transform: "translateY(-50%)",
               color: "var(--fg-subtle)",
+              pointerEvents: "none",
+            }}
+          />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search emails..."
+            style={{
+              width: "100%",
+              padding: "7px 12px 7px 34px",
+              fontSize: 13,
+              border: "1px solid var(--border-ds)",
+              borderRadius: 6,
+              background: "var(--bg)",
+              color: "var(--fg)",
+              outline: "none",
+            }}
+          />
+        </div>
+
+        {/* Right toolbar group */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            onClick={handleMarkAllRead}
+            style={{
+              padding: "6px 12px",
+              fontSize: 13,
+              fontWeight: 500,
+              border: "1px solid var(--border-ds)",
+              borderRadius: 6,
+              background: "var(--bg)",
+              color: "var(--fg)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <Icon name="check" size={12} />
+            Mark all read
+          </button>
+
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={syncing}
+            style={{
+              padding: "6px 12px",
+              fontSize: 13,
+              fontWeight: 500,
+              border: "1px solid var(--border-ds)",
+              borderRadius: 6,
+              background: "var(--bg)",
+              color: "var(--fg)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              opacity: syncing ? 0.6 : 1,
+            }}
+          >
+            <Icon name="refresh-cw" size={12} />
+            Refresh
+          </button>
+        </div>
+
+        {syncNotice && (
+          <div
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              fontSize: 12,
+              color: "var(--fg-muted)",
+              background: "var(--bg-sunken)",
+              borderRadius: 6,
               marginTop: 4,
             }}
           >
-            <Icon name="arrow-down" size={10} />
-            Newest
+            {syncNotice}
           </div>
+        )}
+      </div>
+
+      {/* Left sidebar: message list */}
+      <div
+        style={{
+          borderRight: "1px solid var(--border-ds)",
+          display: "flex",
+          flexDirection: "column",
+          background: "var(--bg)",
+        }}
+      >
+        {/* Select all checkbox */}
+        <div
+          style={{
+            padding: "10px 16px",
+            borderBottom: "1px solid var(--border-ds)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={selectedIds.size === filtered.length && filtered.length > 0}
+            onChange={toggleSelectAll}
+            style={{ width: 16, height: 16, cursor: "pointer" }}
+          />
+          <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+            Select all on this page
+          </span>
         </div>
 
         {/* Message list */}
-        <div className="fit-body fit-scroll" style={{ padding: 0 }}>
+        <div
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            overflowX: "hidden",
+          }}
+        >
           {filtered.length === 0 ? (
             <div
               style={{
-                padding: 32,
+                padding: 40,
                 textAlign: "center",
                 color: "var(--fg-muted)",
-                fontSize: 13,
+                fontSize: 14,
               }}
             >
-              Nessun messaggio con questo filtro.
+              No messages with this filter.
             </div>
           ) : (
             filtered.map((msg) => {
               const active = msg.id === selected;
+              const isSelected = selectedIds.has(msg.id);
               const labelColor = labelCls(msg.kind);
               return (
-                <button
+                <div
                   key={msg.id}
-                  type="button"
                   onClick={() => setSelected(msg.id)}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "32px minmax(0, 1fr) auto",
-                    gap: 10,
-                    padding: "12px 14px",
+                    gridTemplateColumns: "auto 36px minmax(0, 1fr) auto",
+                    gap: 12,
+                    padding: "12px 16px",
                     borderBottom: "1px solid var(--border-ds)",
                     background: active ? "var(--bg-sunken)" : "transparent",
-                    borderLeft: active ? "3px solid hsl(var(--primary))" : "3px solid transparent",
-                    textAlign: "left",
-                    width: "100%",
                     cursor: "pointer",
                     transition: "background 0.1s",
                   }}
@@ -455,57 +592,74 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
                     if (!active) e.currentTarget.style.background = "transparent";
                   }}
                 >
+                  {/* Checkbox */}
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={(e) => {
+                      e.stopPropagation();
+                      toggleSelect(msg.id);
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ width: 16, height: 16, cursor: "pointer", marginTop: 4 }}
+                  />
+
                   {/* Avatar */}
                   <div
                     style={{
-                      width: 32,
-                      height: 32,
+                      width: 36,
+                      height: 36,
                       borderRadius: "50%",
-                      background: "var(--primary-weak)",
+                      background: active
+                        ? "hsl(var(--primary))"
+                        : "var(--primary-weak)",
                       display: "grid",
                       placeItems: "center",
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "hsl(var(--primary))",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: active ? "#FFF" : "hsl(var(--primary))",
                       flexShrink: 0,
                     }}
                   >
-                    {msg.from.charAt(0).toUpperCase()}
+                    {msg.from.substring(0, 2).toUpperCase()}
                   </div>
 
                   {/* Content */}
                   <div style={{ minWidth: 0 }}>
                     <div
                       style={{
-                        fontSize: 13,
+                        fontSize: 14,
                         fontWeight: msg.read ? 500 : 700,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
-                        marginBottom: 2,
+                        marginBottom: 3,
+                        color: "var(--fg)",
                       }}
                     >
-                      {msg.from}
+                      {msg.from.split("<")[0].trim() || msg.from}
                     </div>
                     <div
                       style={{
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: msg.read ? 400 : 600,
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
                         marginBottom: 4,
+                        color: "var(--fg)",
                       }}
                     >
                       {msg.subject || "(no subject)"}
                     </div>
                     <div
                       style={{
-                        fontSize: 11.5,
+                        fontSize: 12,
                         color: "var(--fg-muted)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
+                        marginBottom: 6,
                       }}
                     >
                       {msg.snippet || "..."}
@@ -513,7 +667,7 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
                     {msg.label && (
                       <span
                         className={`ds-chip ${labelColor}`}
-                        style={{ marginTop: 6, display: "inline-block", fontSize: 10 }}
+                        style={{ fontSize: 11, padding: "3px 8px" }}
                       >
                         {msg.label}
                       </span>
@@ -526,24 +680,31 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
                       display: "flex",
                       flexDirection: "column",
                       alignItems: "flex-end",
-                      gap: 4,
+                      gap: 6,
                       flexShrink: 0,
                     }}
                   >
                     <span
-                      className="mono"
-                      style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}
+                      style={{
+                        fontSize: 11,
+                        color: "var(--fg-subtle)",
+                        fontVariantNumeric: "tabular-nums",
+                      }}
                     >
                       {fmtDay(msg.date)}
                     </span>
                     {!msg.read && (
-                      <span
-                        className="ds-dot ds-dot-purple"
-                        style={{ width: 8, height: 8 }}
+                      <div
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: "50%",
+                          background: "hsl(var(--primary))",
+                        }}
                       />
                     )}
                   </div>
-                </button>
+                </div>
               );
             })
           )}
@@ -553,24 +714,47 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
         {filtered.length > 0 && (
           <div
             style={{
-              padding: "8px 14px",
+              padding: "12px 16px",
               borderTop: "1px solid var(--border-ds)",
-              fontSize: 11,
+              fontSize: 12,
               color: "var(--fg-subtle)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
+              background: "var(--bg-elev)",
             }}
           >
-            <span>
-              1–{filtered.length} of {filtered.length}
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>
+              1–{filtered.length} of {messages.length}
             </span>
-            <div style={{ display: "flex", gap: 4 }}>
-              <button type="button" className="ds-btn ds-btn-sm" disabled>
-                <Icon name="chevron-left" size={10} />
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                type="button"
+                disabled
+                style={{
+                  padding: "4px 8px",
+                  border: "1px solid var(--border-ds)",
+                  borderRadius: 4,
+                  background: "var(--bg)",
+                  cursor: "not-allowed",
+                  opacity: 0.5,
+                }}
+              >
+                <Icon name="chevron-left" size={12} />
               </button>
-              <button type="button" className="ds-btn ds-btn-sm" disabled>
-                <Icon name="chevron-right" size={10} />
+              <button
+                type="button"
+                disabled
+                style={{
+                  padding: "4px 8px",
+                  border: "1px solid var(--border-ds)",
+                  borderRadius: 4,
+                  background: "var(--bg)",
+                  cursor: "not-allowed",
+                  opacity: 0.5,
+                }}
+              >
+                <Icon name="chevron-right" size={12} />
               </button>
             </div>
           </div>
@@ -579,8 +763,11 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
 
       {/* Right detail pane */}
       <div
-        className="fit-card"
-        style={{ padding: 0, borderRadius: 0, border: "none" }}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          background: "var(--bg)",
+        }}
       >
         {!current ? (
           <div
@@ -592,78 +779,163 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
               fontSize: 14,
             }}
           >
-            Seleziona un messaggio
+            Select a message to view
           </div>
         ) : (
           <>
             {/* Detail header */}
             <div
               style={{
-                padding: "16px 20px",
+                padding: "20px 24px",
                 borderBottom: "1px solid var(--border-ds)",
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 16,
               }}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h2
+              <h2
+                style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  marginBottom: 12,
+                  lineHeight: 1.3,
+                  color: "var(--fg)",
+                }}
+              >
+                {current.subject || "(no subject)"}
+              </h2>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  marginBottom: 16,
+                  flexWrap: "wrap",
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 500, color: "var(--fg)" }}>
+                  {current.from.split("<")[0].trim() || current.from}
+                </span>
+                <span
                   style={{
-                    fontSize: 18,
-                    fontWeight: 600,
-                    marginBottom: 8,
-                    lineHeight: 1.3,
+                    fontSize: 12,
+                    color: "var(--fg-subtle)",
+                    fontVariantNumeric: "tabular-nums",
                   }}
                 >
-                  {current.subject || "(no subject)"}
-                </h2>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>
-                    {current.from}
-                  </span>
-                  <span
-                    className="mono"
-                    style={{ fontSize: 11, color: "var(--fg-subtle)" }}
-                  >
-                    {fmtFull(current.date)}
-                  </span>
-                  {current.label && (
-                    <span className={`ds-chip ${labelCls(current.kind)}`}>
-                      {current.label}
-                    </span>
-                  )}
-                </div>
+                  {fmtFull(current.date)}
+                </span>
               </div>
 
-              {/* Actions dropdown */}
-              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              {/* Action bar */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                }}
+              >
                 {current.applicationId && (
                   <Link
                     href={`/applications?id=${current.applicationId}`}
-                    className="ds-btn ds-btn-sm ds-btn-primary"
+                    style={{
+                      padding: "8px 14px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      border: "1px solid hsl(var(--primary))",
+                      borderRadius: 6,
+                      background: "hsl(var(--primary))",
+                      color: "#FFF",
+                      textDecoration: "none",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 6,
+                    }}
                   >
-                    <Icon name="file-text" size={12} />
+                    <Icon name="file-text" size={14} />
                     View Application
                   </Link>
                 )}
-                <button type="button" className="ds-btn ds-btn-sm">
-                  <Icon name="reply" size={12} />
+
+                <select
+                  value={currentStatus || ""}
+                  onChange={(e) =>
+                    handleStatusChange((e.target.value || null) as StatusOption)
+                  }
+                  disabled={!current.applicationId}
+                  style={{
+                    padding: "8px 12px",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    border: "1px solid var(--border-ds)",
+                    borderRadius: 6,
+                    background: "var(--bg-elev)",
+                    color: "var(--fg)",
+                    cursor: current.applicationId ? "pointer" : "not-allowed",
+                    opacity: current.applicationId ? 1 : 0.5,
+                  }}
+                >
+                  <option value="">Not this time</option>
+                  <option value="interested">Interested</option>
+                  <option value="applied">Applied</option>
+                  <option value="interviewing">Interviewing</option>
+                </select>
+
+                <button
+                  type="button"
+                  style={{
+                    padding: "8px 12px",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    border: "1px solid var(--border-ds)",
+                    borderRadius: 6,
+                    background: "var(--bg-elev)",
+                    color: "var(--fg)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Icon name="reply" size={14} />
                   Reply
                 </button>
-                <button type="button" className="ds-btn ds-btn-sm">
-                  <Icon name="corner-up-right" size={12} />
+
+                <button
+                  type="button"
+                  style={{
+                    padding: "8px 12px",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    border: "1px solid var(--border-ds)",
+                    borderRadius: 6,
+                    background: "var(--bg-elev)",
+                    color: "var(--fg)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Icon name="corner-up-right" size={14} />
                   Forward
                 </button>
-                <button type="button" className="ds-btn ds-btn-sm">
-                  <Icon name="trash-2" size={12} />
+
+                <button
+                  type="button"
+                  style={{
+                    padding: "8px 12px",
+                    fontSize: 13,
+                    fontWeight: 500,
+                    border: "1px solid var(--border-ds)",
+                    borderRadius: 6,
+                    background: "var(--bg-elev)",
+                    color: "var(--fg)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  <Icon name="trash-2" size={14} />
                   Delete
                 </button>
               </div>
@@ -671,33 +943,37 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
 
             {/* Message body */}
             <div
-              className="fit-body fit-scroll"
-              style={{ padding: "24px 20px" }}
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                padding: "24px",
+              }}
             >
               {current.company && (
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 12,
-                    padding: 14,
+                    gap: 14,
+                    padding: 16,
                     background: "var(--bg-sunken)",
-                    borderRadius: 8,
-                    marginBottom: 20,
+                    borderRadius: 10,
+                    marginBottom: 24,
+                    border: "1px solid var(--border-ds)",
                   }}
                 >
                   <CompanyLogo
                     company={current.company}
                     color={companyColor(current.company)}
-                    size={40}
+                    size={48}
                     url=""
                   />
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>
+                    <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>
                       {current.company}
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-                      {current.jobTitle || "Candidatura collegata"}
+                    <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+                      {current.jobTitle || "Related application"}
                     </div>
                   </div>
                 </div>
@@ -721,100 +997,3 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, interviewC
   );
 }
 
-function FilterButton({
-  active,
-  onClick,
-  icon,
-  label,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: IconName;
-  label: string;
-  count: number;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`ds-btn ds-btn-sm ${active ? "ds-btn-primary" : ""}`}
-      style={{ padding: "4px 9px", fontSize: 11 }}
-    >
-      <Icon name={icon} size={10} />
-      {label}
-      <span style={{ opacity: 0.65, fontVariantNumeric: "tabular-nums" }}>
-        {count}
-      </span>
-    </button>
-  );
-}
-
-function LabelButton({
-  active,
-  onClick,
-  label,
-  color,
-  count,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  color: "green" | "blue" | "red" | "purple";
-  count: number;
-}) {
-  const colorMap = {
-    green: "#16a34a",
-    blue: "#2563eb",
-    red: "#dc2626",
-    purple: "hsl(var(--primary))",
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "6px 8px",
-        background: active ? "var(--bg-sunken)" : "transparent",
-        border: "none",
-        borderRadius: 4,
-        fontSize: 12,
-        textAlign: "left",
-        cursor: "pointer",
-        transition: "background 0.1s",
-      }}
-      onMouseEnter={(e) => {
-        if (!active) e.currentTarget.style.background = "var(--bg-hover)";
-      }}
-      onMouseLeave={(e) => {
-        if (!active) e.currentTarget.style.background = "transparent";
-      }}
-    >
-      <span
-        style={{
-          width: 10,
-          height: 10,
-          borderRadius: "50%",
-          background: colorMap[color],
-          flexShrink: 0,
-        }}
-      />
-      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: 11,
-          color: "var(--fg-subtle)",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {count}
-      </span>
-    </button>
-  );
-}

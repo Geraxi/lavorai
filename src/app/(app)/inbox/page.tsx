@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { AppTopbar } from "@/components/design/topbar";
 import { GmailInboxView, type GmailInboxMessage } from "@/components/gmail-inbox-view";
 import { hasGmailConnected } from "@/lib/gmail-client";
 
@@ -21,15 +20,14 @@ export default async function InboxPage() {
 
   if (!gmailConnected) {
     return (
-      <>
-        <AppTopbar title="Inbox" breadcrumb="Lavoro" />
+      <div style={{ height: "100%", overflow: "hidden" }}>
         <GmailInboxView
           messages={[]}
           gmailConnected={false}
           userEmail={user.email ?? null}
           interviewCount={0}
         />
-      </>
+      </div>
     );
   }
 
@@ -77,14 +75,13 @@ export default async function InboxPage() {
   const interviewCount = messages.filter((m) => m.kind === "colloquio").length;
 
   return (
-    <>
-      <AppTopbar title="Inbox" breadcrumb="Lavoro" />
+    <div style={{ height: "100%", overflow: "hidden" }}>
       <GmailInboxView
         messages={messages}
         gmailConnected={true}
         userEmail={user.email ?? null}
         interviewCount={interviewCount}
       />
-    </>
+    </div>
   );
 }
