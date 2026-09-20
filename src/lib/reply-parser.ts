@@ -33,6 +33,7 @@ const BOUNCE_FROM = [
 const SYSTEM_NOTIFICATION_DOMAINS = [
   "vercel.com",
   "github.com",
+  "notifications.github.com",
   "gitlab.com",
   "bitbucket.org",
   "railway.app",
@@ -50,6 +51,12 @@ const SYSTEM_NOTIFICATION_DOMAINS = [
   "google.com", // Google Alerts, Calendar, etc.
   "amazonaws.com", // AWS notifications
   "azure.com", // Azure notifications
+  "linkedin.com", // job alerts / marketing — never human risposta
+  "jobalerts-noreply@linkedin",
+  "mail.ideabrowser.com",
+  "polymarket.com",
+  "fundingoptions",
+  "tide.co",
 ];
 
 const SYSTEM_NOTIFICATION_FROM = [
@@ -179,7 +186,8 @@ const INTERVIEW = [
   "calendly.com",
   "meet you",
   "video call",
-  "next steps", // common recruiter phrase
+  "next steps in the process",
+  "next steps for your application",
   // IT
   "colloquio",
   "intervista",
