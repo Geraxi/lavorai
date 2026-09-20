@@ -15,6 +15,7 @@ import {
   GdprExportButton,
   DeleteAccountButton,
 } from "@/components/settings-actions";
+import { ChangePasswordForm } from "@/components/change-password-form";
 import { prisma } from "@/lib/db";
 import { ReferralCard } from "@/components/referral-card";
 import { Suspense } from "react";
@@ -98,6 +99,17 @@ export default async function SettingsPage() {
                   />
                 </div>
               </div>
+            </SectionBody>
+          </SectionCard>
+
+          {/* Password */}
+          <SectionCard>
+            <SectionHead
+              icon={<Icon name="lock" size={14} />}
+              title="Password"
+            />
+            <SectionBody>
+              <ChangePasswordForm hasPassword={hasPassword} />
             </SectionBody>
           </SectionCard>
 
