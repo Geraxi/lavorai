@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-const ALLOWED_STATUSES = ["vista", "colloquio", "rifiutata", "offerta"];
+const ALLOWED_STATUSES = ["vista", "colloquio", "rifiutata", "offerta", "risposta"];
 
 /**
  * PUT /api/applications/:id/status
