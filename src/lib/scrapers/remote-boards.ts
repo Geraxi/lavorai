@@ -6,6 +6,7 @@ import { cleanHtmlText } from "./html-clean";
  *   - Remotive   https://remotive.com/api/remote-jobs
  *   - Jobicy     https://jobicy.com/api/v2/remote-jobs
  *   - RemoteOK   https://remoteok.com/api
+ *   - Arbeitnow  https://www.arbeitnow.com/api/job-board-api
  *
  * Tutte rimandano alla propria pagina annuncio (link-out): niente submit
  * automatico, ma arricchiscono il pool di offerte remote per l'Europa e
@@ -136,8 +137,67 @@ export async function fetchRemoteOkJobs(): Promise<JobListItem[]> {
   }
 }
 
+
+export async function fetchArbeitnowJobs(): Promise<JobListItem[]> {
+  try {
+    const res = await fetch("https://www.arbeitnow.com/api/job-board-api", {
+      headers: { "User-Agent": UA },
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      data?: Array<{
+        slug: string;
+        company_name: string;
+        title: string;
+        description?: string;
+        remote?: boolean;
+        url: string;
+        tags?: string[];
+        job_types?: string[];
+        location?: string;
+        created_at?: number;
+      }>;
+    };
+    return (data.data ?? [])
+      .filter((j) => {
+        if (!j.title || !j.url || !j.slug) return false;
+        // Keep remote EU-ish / European locations (Arbeitnow is DE/EU focused)
+        if (j.remote) return true;
+        return geoOk(j.location);
+      })
+      .map((j) =>
+        item({
+          externalId: j.slug,
+          source: "arbeitnow",
+          title: j.title,
+          company: j.company_name || null,
+          location: j.remote
+            ? `Remote · ${j.location || "Europe"}`
+            : j.location || "Europe",
+          description: cleanHtmlText(j.description ?? "").slice(0, 2000),
+          url: j.url,
+          remote: !!j.remote,
+          category: j.tags?.[0] ?? "Remote",
+          contractType: j.job_types?.[0] ?? null,
+          postedAt: j.created_at ? new Date(j.created_at * 1000) : new Date(),
+        }),
+      );
+  } catch (err) {
+    console.warn("[arbeitnow] fetch failed", err instanceof Error ? err.message : err);
+    return [];
+  }
+}
+
 export async function fetchRemoteBoards(): Promise<JobListItem[]> {
-  const [a, b, c] = await Promise.all([fetchRemotiveJobs(), fetchJobicyJobs(), fetchRemoteOkJobs()]);
-  console.log(`[remote-boards] remotive=${a.length} jobicy=${b.length} remoteok=${c.length}`);
-  return [...a, ...b, ...c];
+  const [a, b, c, d] = await Promise.all([
+    fetchRemotiveJobs(),
+    fetchJobicyJobs(),
+    fetchRemoteOkJobs(),
+    fetchArbeitnowJobs(),
+  ]);
+  console.log(
+    `[remote-boards] remotive=${a.length} jobicy=${b.length} remoteok=${c.length} arbeitnow=${d.length}`,
+  );
+  return [...a, ...b, ...c, ...d];
 }
