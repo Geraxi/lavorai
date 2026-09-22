@@ -15,24 +15,40 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const pending = await prisma.userAnswer.findMany({
-    where: { userId: user.id, OR: [{ answer: null }, { answer: "" }] },
+  const [answers, waitingApps] = await Promise.all([prisma.userAnswer.findMany({
+    where: { userId: user.id },
     orderBy: { createdAt: "asc" },
-    select: { id: true, labelKey: true, label: true, kind: true, optionsJson: true },
-  });
-  const waitingApps = await prisma.application.count({
+    select: { id: true, labelKey: true, label: true, kind: true, optionsJson: true, answer: true, source: true },
+  }), prisma.application.findMany({
     where: { userId: user.id, status: "needs_answers" },
-  });
+    select: { id: true, pendingQuestionsJson: true, job: { select: { company: true, title: true } } },
+  })]);
+
+  const affected = new Map<string, Array<{ id: string; company: string; title: string }>>();
+  for (const app of waitingApps) {
+    const pending = safeParse(app.pendingQuestionsJson ?? "[]");
+    if (!Array.isArray(pending)) continue;
+    const keys = new Set(pending.map((q) => normalizeLabel(typeof q?.label === "string" ? q.label : "")));
+    for (const key of keys) {
+      if (!key) continue;
+      const list = affected.get(key) ?? [];
+      list.push({ id: app.id, company: app.job.company ?? "Azienda", title: app.job.title });
+      affected.set(key, list);
+    }
+  }
 
   return NextResponse.json({
-    questions: pending.map((q) => ({
+    questions: answers.map((q) => ({
       id: q.id,
       labelKey: q.labelKey,
       label: q.label,
       kind: q.kind,
-      options: q.optionsJson ? safeParse(q.optionsJson) : undefined,
+      options: q.optionsJson && Array.isArray(safeParse(q.optionsJson)) ? safeParse(q.optionsJson) : undefined,
+      answer: q.answer ?? "",
+      source: q.source,
+      applications: affected.get(q.labelKey) ?? [],
     })),
-    waitingApplications: waitingApps,
+    waitingApplications: waitingApps.length,
   });
 }
 
@@ -65,7 +81,10 @@ export async function POST(request: NextRequest) {
         // Una modifica dell'utente vince sempre sulla risposta AI/regola.
         data: { answer: answer.slice(0, 2000), answeredAt: new Date(), source: "user" },
       })
-      .catch(() => void 0);
+      .catch((error) => {
+        console.error("[questions] save answer failed", error);
+        throw error;
+      });
   }
 
   // 2. Ricostruisci la mappa risposte attuale dell'utente.
