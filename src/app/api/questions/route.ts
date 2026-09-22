@@ -40,6 +40,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
+    locale: user.locale,
     questions: answers.map((q) => {
       const parsedOptions = q.optionsJson ? safeParse(q.optionsJson) : null;
       const options = Array.isArray(parsedOptions) ? parsedOptions.filter((value): value is string => typeof value === "string") : undefined;
