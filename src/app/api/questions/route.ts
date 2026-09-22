@@ -3,26 +3,28 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
 import { normalizeLabel } from "@/lib/portal-adapters/ai-answer";
+import { rowToProfile } from "@/lib/cv-profile-types";
+import { suggestAnswerFromCv } from "@/lib/cv-question-suggestions";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/questions
- * Domande dei form di candidatura a cui l'utente non ha ancora risposto.
- * (UserAnswer con answer vuoto.) + quante candidature sono in attesa.
+ * Domande dei form, risposte salvate e suggerimenti fattuali dal CV.
  */
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const [answers, waitingApps] = await Promise.all([prisma.userAnswer.findMany({
+  const [answers, waitingApps, profileRow] = await Promise.all([prisma.userAnswer.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
     select: { id: true, labelKey: true, label: true, kind: true, optionsJson: true, answer: true, source: true },
   }), prisma.application.findMany({
     where: { userId: user.id, status: "needs_answers" },
     select: { id: true, pendingQuestionsJson: true, job: { select: { company: true, title: true } } },
-  })]);
+  }), prisma.cVProfile.findUnique({ where: { userId: user.id } })]);
+  const profile = profileRow ? rowToProfile(profileRow) : null;
 
   const affected = new Map<string, Array<{ id: string; company: string; title: string }>>();
   for (const app of waitingApps) {
@@ -38,16 +40,20 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    questions: answers.map((q) => ({
+    questions: answers.map((q) => {
+      const parsedOptions = q.optionsJson ? safeParse(q.optionsJson) : null;
+      const options = Array.isArray(parsedOptions) ? parsedOptions.filter((value): value is string => typeof value === "string") : undefined;
+      return {
       id: q.id,
       labelKey: q.labelKey,
       label: q.label,
       kind: q.kind,
-      options: q.optionsJson && Array.isArray(safeParse(q.optionsJson)) ? safeParse(q.optionsJson) : undefined,
+      options,
       answer: q.answer ?? "",
       source: q.source,
+      suggestion: q.answer?.trim() ? null : suggestAnswerFromCv(q.label, q.kind, options, profile, user.yearsExperience),
       applications: affected.get(q.labelKey) ?? [],
-    })),
+    }; }),
     waitingApplications: waitingApps.length,
   });
 }

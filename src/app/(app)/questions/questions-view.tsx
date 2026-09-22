@@ -15,6 +15,7 @@ interface Question {
   options?: string[];
   answer: string;
   source: string;
+  suggestion?: string | null;
   applications: ApplicationExample[];
 }
 type View = "pending" | "review" | "completed" | "focus";
@@ -33,7 +34,7 @@ function cleanLabel(raw: string) {
   return cleaned || raw.slice(0, 80);
 }
 function categoryFor(label: string) { return categories.find((category) => category.pattern.test(label)) ?? categories[categories.length - 1]; }
-function needsReview(question: Question) { return Boolean(question.answer.trim()) && question.source !== "user"; }
+function needsReview(question: Question) { return Boolean(question.suggestion || (question.answer.trim() && question.source !== "user")); }
 
 function AnswerField({ question, value, onChange }: { question: Question; value: string; onChange: (value: string) => void }) {
   const options = question.kind === "checkbox" ? ["Yes", "No"] : (question.options ?? []).filter((option): option is string => typeof option === "string" && Boolean(option.trim()));
@@ -62,20 +63,24 @@ export function QuestionsView() {
     const data: { questions?: Question[]; waitingApplications?: number } = await response.json();
     const rows = data.questions ?? [];
     setQuestions(rows);
-    setValues(Object.fromEntries(rows.map((question) => [question.labelKey, question.answer ?? ""])));
+    setValues(Object.fromEntries(rows.map((question) => [question.labelKey, question.answer || question.suggestion || ""])));
     setWaiting(data.waitingApplications ?? 0);
+    if (rows.length && rows.every((question) => question.answer.trim() || question.suggestion) && rows.some(needsReview)) {
+      setView((current) => current === "pending" ? "review" : current);
+    }
   }
   useEffect(() => { void load().catch(() => setNotice("Non riusciamo a caricare le domande. Ricarica la pagina.")).finally(() => setLoading(false)); }, []);
 
-  const pending = useMemo(() => questions.filter((question) => !question.answer.trim()).sort((a, b) => b.applications.length - a.applications.length), [questions]);
+  const pending = useMemo(() => questions.filter((question) => !question.answer.trim() && !question.suggestion).sort((a, b) => b.applications.length - a.applications.length), [questions]);
   const review = useMemo(() => questions.filter(needsReview), [questions]);
+  const cvSuggestions = review.filter((question) => question.suggestion && !question.answer.trim());
   const completed = useMemo(() => questions.filter((question) => question.answer.trim() && question.source === "user"), [questions]);
   const activeList = view === "review" ? review : view === "completed" ? completed : pending;
   const filtered = activeList.filter((question) => `${question.label} ${categoryFor(question.label).label} ${question.applications.map((app) => app.company).join(" ")}`.toLocaleLowerCase("it-IT").includes(query.toLocaleLowerCase("it-IT")));
   const focused = questions.find((question) => question.id === focusId) ?? pending[0] ?? null;
   const focusedIndex = focused ? pending.findIndex((question) => question.id === focused.id) : -1;
   const total = questions.length;
-  const answeredCount = total - pending.length;
+  const answeredCount = questions.filter((question) => question.answer.trim()).length;
   const progress = total ? Math.round(answeredCount / total * 100) : 100;
 
   async function save(selected: Question[]) {
@@ -128,8 +133,9 @@ export function QuestionsView() {
             <div className="qa-toolbar"><nav className="qa-tabs" aria-label="Stato domande">{([["pending", "Da rispondere", pending.length], ["review", "Da verificare", review.length], ["completed", "Completate", completed.length]] as const).map(([key, label, count]) => <button type="button" key={key} className={view === key ? "is-active" : ""} onClick={() => { setView(key); setExpandedId(null); }} aria-pressed={view === key}>{label}<span>{count}</span></button>)}</nav><label className="qa-search"><Search size={16} aria-hidden /><span className="sr-only">Cerca domande</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cerca domande o aziende" /></label></div>
             <div className="qa-list">{filtered.length ? filtered.map((question, index) => {
               const expanded = expandedId === question.id;
-              return <article className={`qa-row ${expanded ? "is-expanded" : ""}`} key={question.id}><button type="button" className="qa-row-head" onClick={() => setExpandedId(expanded ? null : question.id)} aria-expanded={expanded}><span className="qa-number">{index + 1}</span><span className="qa-category">{categoryFor(question.label).label}</span><span className="qa-question">{cleanLabel(question.label)}{question.answer && <small>{question.answer}</small>}</span><span className="qa-impact-count">{question.applications.length ? `${question.applications.length} in attesa` : ""}</span><ChevronDown size={16} aria-hidden /></button>{expanded && <div className="qa-row-body"><AnswerField question={question} value={values[question.labelKey] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [question.labelKey]: value }))} /><div className="qa-row-actions">{view === "pending" && <button type="button" className="qa-secondary" onClick={() => { setFocusId(question.id); setView("focus"); }}>Apri a schermo intero</button>}<button type="button" className="qa-primary" disabled={saving} onClick={() => void save([question])}>{saving ? "Salvataggio…" : view === "review" ? "Conferma risposta" : "Salva risposta"}<ArrowRight size={15} aria-hidden /></button></div></div>}</article>;
+              return <article className={`qa-row ${expanded ? "is-expanded" : ""}`} key={question.id}><button type="button" className="qa-row-head" onClick={() => setExpandedId(expanded ? null : question.id)} aria-expanded={expanded}><span className="qa-number">{index + 1}</span><span className="qa-category">{categoryFor(question.label).label}</span><span className="qa-question">{cleanLabel(question.label)}{question.suggestion && !question.answer ? <small>Dal tuo CV: {question.suggestion}</small> : question.answer && <small>{question.answer}</small>}</span><span className="qa-impact-count">{question.applications.length ? `${question.applications.length} in attesa` : ""}</span><ChevronDown size={16} aria-hidden /></button>{expanded && <div className="qa-row-body"><AnswerField question={question} value={values[question.labelKey] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [question.labelKey]: value }))} /><div className="qa-row-actions">{view === "pending" && <button type="button" className="qa-secondary" onClick={() => { setFocusId(question.id); setView("focus"); }}>Apri a schermo intero</button>}<button type="button" className="qa-primary" disabled={saving} onClick={() => void save([question])}>{saving ? "Salvataggio…" : view === "review" ? "Conferma risposta" : "Salva risposta"}<ArrowRight size={15} aria-hidden /></button></div></div>}</article>;
             }) : <div className="qa-list-empty">{query ? "Nessuna domanda corrisponde alla ricerca." : view === "pending" ? "Hai risposto a tutte le domande in sospeso." : view === "review" ? "Nessuna risposta da verificare." : "Nessuna risposta completata."}</div>}</div>
+            {view === "review" && cvSuggestions.length > 0 && <div className="qa-batch"><div><strong>{cvSuggestions.length} {cvSuggestions.length === 1 ? "risposta trovata" : "risposte trovate"} nel CV</strong><span>Controllale prima di usarle nelle candidature.</span></div><button type="button" className="qa-primary" disabled={saving} onClick={() => void save(cvSuggestions)}>{saving ? "Salvataggio…" : "Conferma quelle dal CV"}<ArrowRight size={15} aria-hidden /></button></div>}
             {pending.length > 0 && view === "pending" && <button type="button" className="qa-start" onClick={() => { setFocusId(pending[0].id); setView("focus"); }}>Rispondi una domanda alla volta <ArrowRight size={16} aria-hidden /></button>}
           </section>
           <aside className="qa-aside"><div className="qa-aside-card"><div className="qa-aside-heading"><Sparkles size={19} aria-hidden /><h3>I tuoi progressi</h3></div><div className="qa-ring" style={{ background: `conic-gradient(#6cefd1 ${progress * 3.6}deg, #2b3943 0)` }}><span>{progress}%</span></div><p><strong>{answeredCount} di {total}</strong> risposte disponibili</p><div className="qa-aside-rule" /><p><strong>{waiting}</strong> {waiting === 1 ? "candidatura attende" : "candidature attendono"} una o più risposte.</p></div><div className="qa-aside-card"><div className="qa-aside-heading"><Users size={19} aria-hidden /><h3>Per categoria</h3></div>{categories.map((category) => { const rows = questions.filter((question) => categoryFor(question.label).key === category.key); if (!rows.length) return null; const count = rows.filter((question) => Boolean(question.answer.trim())).length; return <div className="qa-category-progress" key={category.key}><span>{category.label}</span><small>{count}/{rows.length}</small><div><i style={{ width: `${Math.round(count / rows.length * 100)}%` }} /></div></div>; })}</div><div className="qa-privacy"><LockKeyhole size={17} aria-hidden /> Le risposte vengono usate solo per compilare le tue candidature.</div></aside>
