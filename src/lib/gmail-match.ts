@@ -27,8 +27,11 @@ export function isLikelyJobMail(from: string, subject: string, bodyText: string)
   ];
   const strongAppSignal =
     /application|candidatura|colloquio|interview invitation|thank you for applying|we received your application|abbiamo ricevuto/i.test(
-      combinedText,
+      subjectLower,
     );
+  if (/trouble viewing this email\?|view (?:it|this email) in your browser/i.test(bodyText) && !strongAppSignal) {
+    return false;
+  }
   if (noiseDomains.some((d) => fromLower.includes(d)) && !strongAppSignal) {
     return false;
   }

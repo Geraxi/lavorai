@@ -12,6 +12,7 @@ import { prisma } from "@/lib/db";
 import { classifyReply } from "@/lib/reply-parser";
 import { applyReplyToApplication } from "@/lib/apply-reply-to-application";
 import { isLikelyJobMail, matchToApplication } from "@/lib/gmail-match";
+import { extractGmailBody, type GmailPart } from "@/lib/gmail-body";
 
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1";
 
@@ -21,10 +22,8 @@ interface GmailMessage {
   labelIds?: string[];
   snippet?: string;
   internalDate?: string;
-  payload?: {
+  payload?: GmailPart & {
     headers?: { name: string; value: string }[];
-    parts?: { mimeType?: string; body?: { data?: string; size?: number } }[];
-    body?: { data?: string; size?: number };
   };
 }
 
@@ -138,16 +137,7 @@ function parseGmailMessage(msg: GmailMessage): {
   const date = dateStr ? new Date(dateStr) : new Date(parseInt(msg.internalDate || "0", 10));
   const snippet = msg.snippet || "";
 
-  let bodyText = "";
-  const parts = msg.payload?.parts || [];
-  const bodyPart = parts.find((p) => p.mimeType === "text/plain");
-  if (bodyPart?.body?.data) {
-    bodyText = Buffer.from(bodyPart.body.data, "base64").toString("utf-8");
-  } else if (msg.payload?.body?.data) {
-    bodyText = Buffer.from(msg.payload.body.data, "base64").toString("utf-8");
-  } else {
-    bodyText = snippet;
-  }
+  const bodyText = extractGmailBody(msg.payload, snippet);
 
   return { from, to, subject, date, bodyText: bodyText.slice(0, 5000), snippet };
 }

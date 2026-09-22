@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { GmailInboxView, type GmailInboxMessage } from "@/components/gmail-inbox-view";
 import { hasGmailConnected } from "@/lib/gmail-client";
+import { formatInboxEmailText } from "@/lib/inbox-email-text";
+import { isLikelyJobMail } from "@/lib/gmail-match";
 
 export const metadata: Metadata = { title: "Inbox" };
 export const dynamic = "force-dynamic";
@@ -57,22 +59,26 @@ export default async function InboxPage() {
     },
   });
 
-  const messages: GmailInboxMessage[] = gmailMessages.map((m) => ({
+  const messages: GmailInboxMessage[] = gmailMessages.map((m) => {
+    const jobRelated = isLikelyJobMail(m.fromAddress, m.subject ?? "", m.bodyText ?? "");
+    return {
     id: m.id,
     from: m.fromAddress,
     subject: m.subject,
-    snippet: m.snippet,
-    bodyText: m.bodyText,
+    snippet: formatInboxEmailText(m.snippet ?? ""),
+    bodyText: formatInboxEmailText(m.bodyText ?? ""),
     date: m.date.toISOString(),
-    kind: m.kind,
-    label: m.label,
+    kind: jobRelated ? m.kind : "auto",
+    label: jobRelated ? m.label : "Other",
     read: m.read,
-    applicationId: m.applicationId,
-    company: m.application?.job.company ?? null,
-    jobTitle: m.application?.job.title ?? null,
-  }));
+    applicationId: jobRelated ? m.applicationId : null,
+    company: jobRelated ? m.application?.job.company ?? null : null,
+    jobTitle: jobRelated ? m.application?.job.title ?? null : null,
+    jobRelated,
+    };
+  });
 
-  const interviewCount = messages.filter((m) => m.kind === "colloquio").length;
+  const interviewCount = messages.filter((m) => m.jobRelated && m.kind === "colloquio").length;
 
   return (
     <div style={{ height: "100%", overflow: "hidden" }}>

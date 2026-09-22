@@ -38,7 +38,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       id: true, email: true, name: true, tier: true, emailVerified: true, createdAt: true, lastLoginAt: true,
       subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true, stripePriceId: true, suspendedAt: true,
       referralCode: true, referredById: true, signupReferrer: true, signupUtmSource: true,
-      preferences: { select: { autoApplyMode: true, autoApplyOn: true, dailyCap: true, matchMin: true, rolesJson: true, locationsJson: true } },
+      preferences: { select: { autoApplyMode: true, dailyCap: true, matchMin: true, rolesJson: true, locationsJson: true } },
       _count: { select: { applications: true, cvDocuments: true } },
     },
   });
@@ -181,7 +181,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   <span className={`adm-pill ${u.emailVerified ? "good" : "warn"}`} style={{ padding: "3px 9px", fontSize: 10.5, justifySelf: "start" }}><span className="dot" />{u.emailVerified ? "Verificata" : "In attesa"}</span>
                   <div><TierChip tier={u.tier} /></div>
                   <Onboarding step={step} />
-                  <Toggle on={u.preferences?.autoApplyOn ?? false} />
+                  <Toggle on={!!u.preferences && u.preferences.autoApplyMode !== "off"} />
                   <div className="adm-num" style={{ color: "var(--fg)", fontWeight: 600, textAlign: "center" }}>{u._count.applications}</div>
                   <div className="adm-num" style={{ color: "var(--fg-muted)", fontSize: 11.5, lineHeight: 1.3 }}>{fmt2(u.lastLoginAt)}</div>
                   <div className="adm-ellipsis" style={{ color: "var(--fg-muted)", fontSize: 11.5 }}>{source(u.signupReferrer, u.signupUtmSource)}</div>
@@ -274,7 +274,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               <PSection title="Stato e attività">
                 <KV k="Onboarding" v={<Onboarding step={onboarding(selected)} wide />} />
                 <KV k="Preferenze CV" v={selected.preferences ? "Sì" : "No"} />
-                <KV k="Auto-apply" v={selected.preferences ? `${selected.preferences.autoApplyOn ? "ON" : "OFF"} · ${selected.preferences.autoApplyMode} · cap ${selected.preferences.dailyCap}/g` : "—"} />
+                <KV k="Auto-apply" v={selected.preferences ? `${selected.preferences.autoApplyMode !== "off" ? "ON" : "OFF"} · ${selected.preferences.autoApplyMode} · cap ${selected.preferences.dailyCap}/g` : "—"} />
                 <KV k="Match min" v={selected.preferences ? `${selected.preferences.matchMin}%` : "—"} />
                 <KV k="Ruoli" v={selected.preferences ? arr(selected.preferences.rolesJson).slice(0, 3).join(", ") || "—" : "—"} />
                 <KV k="Località" v={selected.preferences ? arr(selected.preferences.locationsJson).slice(0, 3).join(", ") || "—" : "—"} />
@@ -353,6 +353,6 @@ function fmt2(d: Date | null | undefined): string {
   if (!d) return "—";
   return `${d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit" })} ${d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
 }
-function onboarding(u: { emailVerified: Date | null; preferences: { autoApplyOn: boolean } | null; _count: { cvDocuments: number } }): number {
-  return (u.emailVerified ? 1 : 0) + (u._count.cvDocuments > 0 ? 1 : 0) + (u.preferences ? 1 : 0) + (u.preferences?.autoApplyOn ? 1 : 0);
+function onboarding(u: { emailVerified: Date | null; preferences: { autoApplyMode: string } | null; _count: { cvDocuments: number } }): number {
+  return (u.emailVerified ? 1 : 0) + (u._count.cvDocuments > 0 ? 1 : 0) + (u.preferences ? 1 : 0) + (u.preferences && u.preferences.autoApplyMode !== "off" ? 1 : 0);
 }

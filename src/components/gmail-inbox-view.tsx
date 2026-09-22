@@ -19,6 +19,7 @@ read: boolean;
 applicationId: string | null;
 company?: string | null;
 jobTitle?: string | null;
+jobRelated: boolean;
 }
 interface InboxViewProps {
 messages: GmailInboxMessage[];
@@ -61,6 +62,7 @@ const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
 const filtered = messages
 .filter((m) => {
 if (inboxFilter === "inbox") {
+if (!m.jobRelated) return false;
 const fromLower = m.from.toLowerCase();
 const isNoise =
 m.kind === "auto" &&
@@ -267,7 +269,7 @@ return (
 <div key={msg.id} onClick={() => setSelected(msg.id)} style={{ padding: 12, borderBottom: "1px solid var(--border-ds)", background: msg.id === selected ? "var(--bg-sunken)" : undefined, cursor: "pointer" }}>
 <div style={{ fontWeight: msg.read ? 500 : 700 }}>{msg.from.split("<")[0].trim() || msg.from}</div>
 <div>{msg.subject || "(no subject)"}</div>
-<div style={{ fontSize: 12, color: "var(--fg-muted)" }}>{msg.snippet}</div>
+<div style={{ fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.snippet}</div>
 <span style={{ fontSize: 11 }}>{fmtDay(msg.date)}</span>
 </div>
 ))}
@@ -299,7 +301,7 @@ disabled={!current.applicationId}
 <button type="button" disabled title="Coming soon" style={{ opacity: 0.5, cursor: "not-allowed" }}>Delete</button>
 </div>
 </div>
-<div style={{ flex: 1, overflowY: "auto", padding: 20, whiteSpace: "pre-wrap" }}>
+<div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: 20, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
 {current.company && (
 <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
 <CompanyLogo company={current.company} color={companyColor(current.company)} size={40} url="" />
