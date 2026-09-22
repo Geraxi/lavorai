@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowDown, ArrowUpRight, BriefcaseBusiness, Check, ChevronRight,
@@ -60,6 +60,45 @@ function Match({ value, large = false }: { value: number | null; large?: boolean
 
 function DownloadLink({ id, kind, label }: { id: string; kind: "pdf" | "cv" | "cover"; label: string }) {
   return <a className="mat-download" href={`/api/applications/${id}/document?kind=${kind}`} download><Download size={15} aria-hidden />{label}</a>;
+}
+
+function CvPreview({ item }: { item: MaterialItem }) {
+  const [preview, setPreview] = useState<{ pdfUrl?: string; text?: string; error?: boolean }>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | undefined;
+    async function load() {
+      setPreview({});
+      if (item.hasPdf) {
+        try {
+          const response = await fetch(`/api/applications/${item.id}/document?kind=pdf&disposition=inline`, { cache: "no-store" });
+          if (!response.ok || !response.headers.get("content-type")?.includes("application/pdf")) throw new Error("PDF unavailable");
+          const blob = await response.blob();
+          const signature = new TextDecoder().decode(await blob.slice(0, 5).arrayBuffer());
+          if (signature !== "%PDF-") throw new Error("Invalid PDF");
+          objectUrl = URL.createObjectURL(blob);
+          if (!cancelled) { setPreview({ pdfUrl: objectUrl }); return; }
+        } catch { /* Try the Word document below. */ }
+      }
+      if (item.hasDocx) {
+        try {
+          const response = await fetch(`/api/applications/${item.id}/cv-preview`, { cache: "no-store" });
+          if (!response.ok) throw new Error("CV unavailable");
+          const data: { text?: string } = await response.json();
+          if (!data.text) throw new Error("Empty CV");
+          if (!cancelled) { setPreview({ text: data.text }); return; }
+        } catch { /* Display a useful error below. */ }
+      }
+      if (!cancelled) setPreview({ error: true });
+    }
+    void load();
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [item.id, item.hasPdf, item.hasDocx]);
+
+  if (preview.pdfUrl) return <><iframe title={`CV su misura per ${item.title}`} src={preview.pdfUrl} /><a className="mat-preview-open" href={preview.pdfUrl} target="_blank" rel="noopener noreferrer">Apri il CV in una nuova scheda <ArrowUpRight size={14} aria-hidden /></a></>;
+  if (preview.text) return <article className="mat-cv-paper"><span>CV su misura · {item.company}</span><div>{preview.text}</div></article>;
+  return <div className="mat-preview-fallback"><FileText size={32} aria-hidden /><h3>{preview.error ? "Anteprima non disponibile" : "Caricamento del CV…"}</h3><p>{preview.error ? "Non siamo riusciti ad aprire questo documento. Puoi scaricarlo dal pannello accanto." : "Stiamo aprendo il documento per questa posizione."}</p></div>;
 }
 
 export function MaterialiView({ items, total }: { items: MaterialItem[]; total: number }) {
@@ -161,7 +200,7 @@ export function MaterialiView({ items, total }: { items: MaterialItem[]; total: 
 
                 <div className="mat-detail-main">
                   <div className="mat-preview" role="tabpanel" id={`mat-panel-${tab}`} aria-labelledby={`mat-tab-${tab}`}>
-                    {tab === "cv" ? selected.hasPdf ? <iframe key={selected.id} title={`CV su misura per ${selected.title}`} src={`/api/applications/${selected.id}/document?kind=pdf&disposition=inline`} /> : <div className="mat-preview-fallback"><FileText size={32} aria-hidden /><h3>{selected.hasDocx ? "CV pronto in formato DOCX" : "CV in preparazione"}</h3><p>{selected.hasDocx ? "Scarica il documento Word dal pannello accanto. L’anteprima nel browser è disponibile per i CV in PDF." : "Il CV comparirà qui non appena sarà disponibile."}</p></div> : null}
+                    {tab === "cv" ? <CvPreview key={selected.id} item={selected} /> : null}
                     {tab === "letter" ? selected.letterText ? <article className="mat-letter-paper"><span>Lettera per {selected.company}</span><h3>{selected.title}</h3><div>{selected.letterText}</div></article> : <div className="mat-preview-fallback"><Mail size={32} aria-hidden /><h3>{selected.hasLetter ? "Lettera pronta da scaricare" : "Lettera non disponibile"}</h3><p>{selected.hasLetter ? "Puoi scaricarla in formato DOCX dal pannello accanto." : "Questa candidatura non ha ancora una lettera associata."}</p></div> : null}
                     {tab === "job" ? <div className="mat-job-paper"><BriefcaseBusiness size={30} aria-hidden /><span>Annuncio originale</span><h3>{selected.title}</h3><p>{selected.company}{selected.location ? ` · ${selected.location}` : ""}</p><a href={selected.jobUrl} target="_blank" rel="noopener noreferrer">Apri annuncio <ArrowUpRight size={16} aria-hidden /></a></div> : null}
                   </div>

@@ -92,17 +92,20 @@ export async function saveUserFile(
 }
 
 export async function readUserFile(storagePath: string): Promise<Buffer> {
-  const drv = driver();
-
-  if (drv === "vercel") {
-    // storagePath qui è una URL pubblica del blob
+  // Existing documents may have been written by a different storage driver.
+  // Select the reader from the persisted path, not today's upload setting.
+  if (/^https:\/\//i.test(storagePath)) {
+    const url = new URL(storagePath);
+    if (!url.hostname.endsWith(".blob.vercel-storage.com")) {
+      throw new Error("unsupported file host");
+    }
     const res = await fetch(storagePath);
     if (!res.ok)
       throw new Error(`vercel blob fetch failed: ${res.status}`);
     return Buffer.from(await res.arrayBuffer());
   }
 
-  if (drv === "supabase") {
+  if (storagePath.startsWith("users/") && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     const { data, error } = await sb()
       .storage.from(bucket())
       .download(storagePath);
