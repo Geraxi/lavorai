@@ -1,5 +1,6 @@
 "use client";
 
+import { jobSourceLabel } from "@/lib/job-source-label";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Heart, Sparkles, Target } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from "motion/react";
@@ -1333,7 +1334,7 @@ function JobDetailDrawer({
                 }}
               >
                 <Icon name="arrow-up-right" size={12} />
-                {labels.openOriginal}
+                {labels.openOriginal}{jobSourceLabel(job.url) ? ` · ${jobSourceLabel(job.url)}` : ""}
               </a>
             </div>
 

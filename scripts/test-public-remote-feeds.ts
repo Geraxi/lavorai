@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import { parseHimalayas, parseWwr } from "../src/lib/scrapers/public-remote-feeds";
+const now = Date.UTC(2026, 8, 23);
+const base = { title: "Engineer", companyName: "Example", guid: "https://himalayas.app/jobs/example", pubDate: now / 1000 - 3600, expiryDate: now / 1000 + 86400, locationRestrictions: [], currency: "USD", salaryPeriod: "annual", minSalary: 100000 };
+assert.equal(parseHimalayas({jobs:[base]}, now)[0].postedAt?.getTime(), now - 3600000);
+assert.equal(parseHimalayas({jobs:[base]}, now)[0].salaryMin, null);
+assert.equal(parseHimalayas({jobs:[base,base]}, now).length, 1);
+for (const change of [{locationRestrictions:["United States"]},{expiryDate:now/1000-1},{guid:"https://evil.test/a"},{pubDate:"bad"},{locationRestrictions:[{}]}]) assert.equal(parseHimalayas({jobs:[{...base,...change}]},now).length,0);
+assert.equal(parseHimalayas({jobs:[{...base,locationRestrictions:[{name:"Italy"}],currency:"EUR"}]},now)[0].salaryMin,100000);
+const rss = (country="", description="", expiry="2026-10-01") => `<rss><channel><item><title><![CDATA[Acme: A &amp; B]]></title><link>https://weworkremotely.com/remote-jobs/acme</link><pubDate>2026-09-22</pubDate><expires_at>${expiry}</expires_at><region>Anywhere in the World</region><country>${country}</country><description>${description}</description></item></channel></rss>`;
+assert.equal(parseWwr(rss(),now)[0].title,"A & B");
+assert.equal(parseWwr(rss("United States"),now).length,0);
+assert.equal(parseWwr(rss("","Remote - US"),now).length,0);
+assert.equal(parseWwr(rss("Italy"),now).length,1);
+assert.equal(parseWwr(rss("","","2026-09-01"),now).length,0);
+assert.deepEqual(parseHimalayas(null),[]);
+assert.deepEqual(parseWwr("invalid"),[]);
+console.log("Public remote feed regression checks passed");

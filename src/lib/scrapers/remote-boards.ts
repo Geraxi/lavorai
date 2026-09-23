@@ -1,3 +1,4 @@
+import { fetchHimalayasJobs, fetchWwrJobs } from "./public-remote-feeds";
 import type { JobListItem } from "@/lib/adzuna";
 import { cleanHtmlText } from "./html-clean";
 
@@ -190,14 +191,16 @@ export async function fetchArbeitnowJobs(): Promise<JobListItem[]> {
 }
 
 export async function fetchRemoteBoards(): Promise<JobListItem[]> {
-  const [a, b, c, d] = await Promise.all([
+  const [a, b, c, d, e, f] = await Promise.all([
     fetchRemotiveJobs(),
     fetchJobicyJobs(),
     fetchRemoteOkJobs(),
     fetchArbeitnowJobs(),
+    fetchHimalayasJobs(),
+    fetchWwrJobs(),
   ]);
   console.log(
-    `[remote-boards] remotive=${a.length} jobicy=${b.length} remoteok=${c.length} arbeitnow=${d.length}`,
+    `[remote-boards] remotive=${a.length} jobicy=${b.length} remoteok=${c.length} arbeitnow=${d.length} himalayas=${e.length} weworkremotely=${f.length}`,
   );
-  return [...a, ...b, ...c, ...d];
+  return [...a, ...b, ...c, ...d, ...e, ...f];
 }

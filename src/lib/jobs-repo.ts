@@ -169,6 +169,9 @@ function sourceRank(source: string): number {
     case "remotive":
     case "jobicy":
     case "remoteok":
+    case "arbeitnow":
+    case "himalayas":
+    case "weworkremotely":
       return 2; // fonte ufficiale / board, link-out
     case "linkedin":
       return 2;
