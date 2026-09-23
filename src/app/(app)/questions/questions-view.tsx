@@ -31,7 +31,7 @@ const categories = [
 ];
 
 function categoryFor(label: string) { return categories.find((category) => category.pattern.test(label)) ?? categories[categories.length - 1]; }
-function needsReview(question: Question) { return Boolean(question.suggestion || (question.answer.trim() && question.source !== "user")); }
+function needsReview(question: Question) { return Boolean(question.suggestion || (question.answer.trim() && !["user", "cv"].includes(question.source))); }
 
 function AnswerField({ question, value, onChange, locale }: { question: Question; value: string; onChange: (value: string) => void; locale: string }) {
   const options = question.kind === "checkbox" ? ["Yes", "No"] : (question.options ?? []).filter((option): option is string => typeof option === "string" && Boolean(option.trim()));
@@ -56,6 +56,8 @@ export function QuestionsView() {
   const [locale, setLocale] = useState("it");
 
   async function load() {
+    const reused = await fetch("/api/questions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reuseCvOnly: true }) });
+    if (!reused.ok) throw new Error("Impossibile recuperare le risposte dal CV.");
     const response = await fetch("/api/questions", { cache: "no-store" });
     if (!response.ok) throw new Error("Impossibile caricare le domande.");
     const data: { questions?: Question[]; waitingApplications?: number; locale?: string } = await response.json();
@@ -73,7 +75,7 @@ export function QuestionsView() {
   const pending = useMemo(() => questions.filter((question) => !question.answer.trim() && !question.suggestion).sort((a, b) => b.applications.length - a.applications.length), [questions]);
   const review = useMemo(() => questions.filter(needsReview), [questions]);
   const cvSuggestions = review.filter((question) => question.suggestion && !question.answer.trim());
-  const completed = useMemo(() => questions.filter((question) => question.answer.trim() && question.source === "user"), [questions]);
+  const completed = useMemo(() => questions.filter((question) => question.answer.trim() && ["user", "cv"].includes(question.source)), [questions]);
   const activeList = view === "review" ? review : view === "completed" ? completed : pending;
   const filtered = activeList.filter((question) => `${question.label} ${categoryFor(question.label).label} ${question.applications.map((app) => app.company).join(" ")}`.toLocaleLowerCase("it-IT").includes(query.toLocaleLowerCase("it-IT")));
   const focused = questions.find((question) => question.id === focusId) ?? pending[0] ?? null;
@@ -109,7 +111,7 @@ export function QuestionsView() {
     <AppTopbar title="Domande" breadcrumb="Lavoro" />
     <main className="qa-page">
       <header className="qa-header">
-        <div><span className="qa-eyebrow">Il tuo profilo candidature</span><h1>{view === "focus" ? "Una risposta alla volta" : view === "review" ? "Verifica le tue risposte" : "Domande per le candidature"}</h1><p>Rispondi una volta. LavorAI riutilizza la risposta nei form delle candidature compatibili.</p></div>
+        <div><span className="qa-eyebrow">Il tuo profilo candidature</span><h1>{view === "focus" ? "Una risposta alla volta" : view === "review" ? "Verifica le tue risposte" : "Domande per le candidature"}</h1><p>I dati già presenti nel CV sono compilati automaticamente. Rispondi solo alle informazioni mancanti.</p></div>
         {waiting > 0 && <Link className="qa-waiting" href="/applications"><BriefcaseBusiness size={17} aria-hidden />{waiting} {waiting === 1 ? "candidatura in attesa" : "candidature in attesa"}<ChevronRight size={15} aria-hidden /></Link>}
       </header>
 
@@ -133,7 +135,7 @@ export function QuestionsView() {
             <div className="qa-list">{filtered.length ? filtered.map((question, index) => {
               const expanded = expandedId === question.id;
               const wording = displayQuestion(question.label, locale);
-              return <article className={`qa-row ${expanded ? "is-expanded" : ""}`} key={question.id}><button type="button" className="qa-row-head" onClick={() => setExpandedId(expanded ? null : question.id)} aria-expanded={expanded}><span className="qa-number">{index + 1}</span><span className="qa-category">{categoryFor(question.label).label}</span><span className="qa-question" title={wording.translated ? question.label : undefined}>{wording.text}{question.suggestion && !question.answer ? <small>Dal tuo CV: {displayOption(question.suggestion, locale)}</small> : question.answer && <small>{displayOption(question.answer, locale)}</small>}</span><span className="qa-impact-count">{question.applications.length ? `${question.applications.length} in attesa` : ""}</span><ChevronDown size={16} aria-hidden /></button>{expanded && <div className="qa-row-body"><AnswerField question={question} locale={locale} value={values[question.labelKey] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [question.labelKey]: value }))} /><div className="qa-row-actions">{view === "pending" && <button type="button" className="qa-secondary" onClick={() => { setFocusId(question.id); setView("focus"); }}>Apri a schermo intero</button>}<button type="button" className="qa-primary" disabled={saving} onClick={() => void save([question])}>{saving ? "Salvataggio…" : view === "review" ? "Conferma risposta" : "Salva risposta"}<ArrowRight size={15} aria-hidden /></button></div></div>}</article>;
+              return <article className={`qa-row ${expanded ? "is-expanded" : ""}`} key={question.id}><button type="button" className="qa-row-head" onClick={() => setExpandedId(expanded ? null : question.id)} aria-expanded={expanded}><span className="qa-number">{index + 1}</span><span className="qa-category">{categoryFor(question.label).label}</span><span className="qa-question" title={wording.translated ? question.label : undefined}>{wording.text}{question.suggestion && !question.answer ? <small>Dal tuo CV: {displayOption(question.suggestion, locale)}</small> : question.answer && <small>{question.source === "cv" ? "Dal tuo CV · " : ""}{displayOption(question.answer, locale)}</small>}</span><span className="qa-impact-count">{question.applications.length ? `${question.applications.length} in attesa` : ""}</span><ChevronDown size={16} aria-hidden /></button>{expanded && <div className="qa-row-body"><AnswerField question={question} locale={locale} value={values[question.labelKey] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [question.labelKey]: value }))} /><div className="qa-row-actions">{view === "pending" && <button type="button" className="qa-secondary" onClick={() => { setFocusId(question.id); setView("focus"); }}>Apri a schermo intero</button>}<button type="button" className="qa-primary" disabled={saving} onClick={() => void save([question])}>{saving ? "Salvataggio…" : view === "review" ? "Conferma risposta" : "Salva risposta"}<ArrowRight size={15} aria-hidden /></button></div></div>}</article>;
             }) : <div className="qa-list-empty">{query ? "Nessuna domanda corrisponde alla ricerca." : view === "pending" ? "Hai risposto a tutte le domande in sospeso." : view === "review" ? "Nessuna risposta da verificare." : "Nessuna risposta completata."}</div>}</div>
             {view === "review" && cvSuggestions.length > 0 && <div className="qa-batch"><div><strong>{cvSuggestions.length} {cvSuggestions.length === 1 ? "risposta trovata" : "risposte trovate"} nel CV</strong><span>Controllale prima di usarle nelle candidature.</span></div><button type="button" className="qa-primary" disabled={saving} onClick={() => void save(cvSuggestions)}>{saving ? "Salvataggio…" : "Conferma quelle dal CV"}<ArrowRight size={15} aria-hidden /></button></div>}
             {pending.length > 0 && view === "pending" && <button type="button" className="qa-start" onClick={() => { setFocusId(pending[0].id); setView("focus"); }}>Rispondi una domanda alla volta <ArrowRight size={16} aria-hidden /></button>}

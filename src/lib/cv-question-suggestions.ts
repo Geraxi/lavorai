@@ -8,14 +8,26 @@ export function suggestAnswerFromCv(
   profile: CVProfile | null,
   yearsExperience?: number | null,
 ): string | null {
-  if (!profile || kind === "checkbox" || kind === "radio") return null;
-  const normalized = label.toLocaleLowerCase("en").replace(/[?*:.]/g, "").replace(/\s+/g, " ").trim();
-  const field = normalized.replace(/^(what is|please enter|please provide|enter|provide) (your )?/, "").replace(/^your /, "");
+  if (!profile || kind === "checkbox") return null;
+  const normalized = label.toLocaleLowerCase("en").replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim();
+  const aliases: Record<string, string> = {
+    "where are you based": "city", "where are you currently based": "city", "where do you live": "city",
+    "what city do you live in": "city", "where are you located": "city", "current location": "city",
+    "dove vivi": "city", "dove risiedi": "city", "in quale città vivi": "city", "qual è la tua città di residenza": "city",
+    "qual è il tuo ruolo attuale": "current job title", "qual è la tua posizione attuale": "current job title",
+    "what is your current role": "current job title", "current role": "current job title",
+    "qual è la tua azienda attuale": "current employer", "where do you currently work": "current employer",
+    "come ti chiami": "full name", "qual è il tuo nome": "first name", "qual è il tuo cognome": "last name",
+    "qual è il tuo indirizzo email": "email", "qual è il tuo numero di telefono": "phone",
+    "how many years of experience do you have": "years of experience", "total years of experience": "years of experience",
+    "quanti anni di esperienza hai": "years of experience", "anni di esperienza": "years of experience",
+  };
+  const field = aliases[normalized] ?? normalized.replace(/^(what is|please enter|please provide|enter|provide) (your )?/, "").replace(/^your /, "");
   // Preferences, consent, legal status and role-specific experience cannot be
   // proved by a name, a CV headline or a total years-of-experience field.
   if (/authori[sz]|visa|sponsor|permit|citizen|right to work|eligible|criminal|disabilit|ethnic|gender|salary|stipend|compens|retribuz|relocat|trasfer|remote|remot|hybrid|ibrid|availab|disponib|notice|preavviso|prefer|consent|privacy|financial sector|settore finanziario/.test(normalized)) return null;
 
-  const current = profile.experiences.find((experience) => experience.company.trim() && !experience.endDate.trim());
+  const current = profile.experiences.find((experience) => experience.company.trim() && /^(?:present|current|now|oggi|presente|attuale|in corso)?$/i.test(experience.endDate.trim()));
   const recent = profile.experiences.find((experience) => experience.company.trim());
   const link = (pattern: RegExp) => profile.links.find((item) => pattern.test(`${item.label} ${item.url}`))?.url ?? "";
   let answer = "";
@@ -44,7 +56,7 @@ export function suggestAnswerFromCv(
 
   answer = answer.trim();
   if (!answer) return null;
-  if (kind === "select" || kind === "react-select") {
+  if (kind === "select" || kind === "react-select" || kind === "radio") {
     if (!options?.length) return null;
     return options.find((option) => option.trim().toLocaleLowerCase("en") === answer.toLocaleLowerCase("en")) ?? null;
   }

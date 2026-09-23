@@ -22,3 +22,12 @@ assert.equal(suggestAnswerFromCv("Desired salary", "text", undefined, cv), null)
 assert.equal(suggestAnswerFromCv("First name", "select", ["Another name"], cv), null);
 assert.equal(suggestAnswerFromCv("Current employer", "text", undefined, { ...cv, experiences: [{ ...cv.experiences[0], endDate: "2024" }] }), null);
 assert.equal(suggestAnswerFromCv("First name", "text", undefined, null), null);
+assert.equal(suggestAnswerFromCv("Where are you currently based?", "text", undefined, cv), "Milano");
+assert.equal(suggestAnswerFromCv("Qual è il tuo ruolo attuale?", "text", undefined, { ...cv, experiences: [{ ...cv.experiences[0], endDate: "Present" }] }), "Engineer");
+assert.equal(suggestAnswerFromCv("Dove vivi?", "radio", ["Roma", "Milano"], cv), "Milano");
+assert.equal(suggestAnswerFromCv("How many years of experience do you have?", "number", undefined, cv, 7), "7");
+assert.equal(suggestAnswerFromCv("Are you willing to relocate to Milano?", "radio", ["Yes", "No"], cv), null);
+assert.equal(suggestAnswerFromCv("Do you have experience with React?", "radio", ["Yes", "No"], cv), "Yes");
+assert.equal(suggestAnswerFromCv("Country of residence", "text", undefined, cv), null);
+assert.equal(suggestAnswerFromCv("What is your current role?", "text", undefined, { ...cv, experiences: [] }), null);
+console.log("CV answer reuse: wording, current roles, option matching and sensitive exclusions passed");

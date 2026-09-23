@@ -1,3 +1,4 @@
+import { reuseCvAnswers } from "@/lib/cv-answer-reuse";
 import { reserveTrialApplication } from "@/lib/trial-quota";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
@@ -426,6 +427,7 @@ export async function processApplication(
     if (!userAnswers.salaryExpectationEur && prefSalaryK > 0) userAnswers.salaryExpectationEur = prefSalaryK * 1000;
     // Risposte riutilizzabili già date dall'utente a domande di form
     // precedenti — riempiono i campi custom senza ridisturbarlo.
+    await reuseCvAnswers(app.userId, app.user.yearsExperience);
     const storedRows = await prisma.userAnswer.findMany({
       where: { userId: app.userId, NOT: { answer: null } },
       select: { label: true, answer: true, kind: true },

@@ -1,3 +1,4 @@
+import { reuseCvAnswers } from "@/lib/cv-answer-reuse";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -69,12 +70,14 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  let body: { answers?: Array<{ labelKey?: string; answer?: string }> };
+  let body: { reuseCvOnly?: boolean; answers?: Array<{ labelKey?: string; answer?: string }> };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
+  await reuseCvAnswers(user.id, user.yearsExperience);
+  if (body.reuseCvOnly === true) return NextResponse.json({ ok: true });
   const answers = Array.isArray(body.answers) ? body.answers : [];
 
   // 1. Salva le risposte (solo quelle non vuote).
