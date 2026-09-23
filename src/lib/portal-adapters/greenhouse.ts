@@ -1,3 +1,4 @@
+import { collectInvalidFields } from "./validation-fields";
 import { extractApplicationSecurityCode, isGreenhouseSecurityMessage, SECURITY_CODE_FIELD, hasApplicationConfirmation } from "../application-security-code";
 import { findSubmitButton } from "./submit-button";
 import type {
@@ -660,6 +661,11 @@ export const greenhouseAdapter: PortalAdapter = {
       // CASE B: nessuna POST catturata → validazione client-side ha
       // bloccato il submit OPPURE l'endpoint non corrisponde al pattern
       // ============================================================
+      const invalidFields = await collectInvalidFields(page);
+      if (invalidFields.length) {
+        return { ok: false, status: "needs_user_input", pendingQuestions: invalidFields,
+          error: "Il portale segnala campi mancanti o non validi. Correggi le risposte prima di riprovare.", canary: canaryFull };
+      }
       const errorPatterns =
         /(there\s+(was|were)\s+problems?|this\s+field\s+is\s+required|please\s+(correct|fix|enter)|invalid\s+(email|input|file)|errore|campo\s+obbligatorio|inserisci|file\s+too\s+large|select\s+a\s+(valid\s+)?file)/i;
       if (errorPatterns.test(bodyText)) {
@@ -697,8 +703,8 @@ export const greenhouseAdapter: PortalAdapter = {
 
       return {
         ok: false,
-        status: "unknown_error",
-        error: `Submit cliccato ma niente è stato confermato (no POST HTTP catturata, no thank-you page, no error banner). URL ${urlChanged ? "cambiato" : "invariato"}: ${finalUrl}. Caller dovrebbe ritentare.`,
+        status: "submission_unconfirmed",
+        error: `Submit cliccato ma niente è stato confermato (no POST HTTP catturata, no thank-you page, no error banner). URL ${urlChanged ? "cambiato" : "invariato"}: ${finalUrl}. Non ritentare automaticamente: verificare prima la ricezione per evitare duplicati.`,
         canary: canaryFull,
       };
     } catch (err) {

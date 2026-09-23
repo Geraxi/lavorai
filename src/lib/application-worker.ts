@@ -568,6 +568,15 @@ export async function processApplication(
       return; // fatto
     }
 
+    if (outcome.status === "submission_unconfirmed") {
+      await prisma.application.update({ where: { id: applicationId }, data: {
+        status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
+        errorMessage: outcome.error,
+        canaryLog: JSON.stringify(outcome.canary ?? { adapterFailure: outcome.status, error: outcome.error }),
+      } });
+      return; // A missing receipt is not permission to submit the same application again.
+    }
+
     // L'adapter ha trovato campi OBBLIGATORI che non sappiamo rispondere:
     // chiediamo all'utente invece di inviare un form incompleto o fingere.
     if (outcome.status === "needs_user_input") {

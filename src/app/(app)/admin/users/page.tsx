@@ -1,3 +1,4 @@
+import { AdminRepairApplications } from "@/components/admin-repair-applications";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
@@ -245,7 +246,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   )}
                 </PSection>
               )}
-              {tab !== "log" && (
+              {tab !== "log" && (<>
+              <AdminRepairApplications key={selected.id} userId={selected.id} />
               <PSection title={tab === "apps" ? `Candidature (${selected._count.applications})` : `Ultime candidature (${selected._count.applications})`}>
                 {selectedApps.length === 0 ? (
                   <div style={{ fontSize: 11.5, color: "var(--fg-subtle)" }}>Nessuna candidatura.</div>
@@ -254,13 +256,13 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                     {selectedApps.map((a) => {
                       const ok = a.status === "success";
                       const bad = a.status === "failed";
-                      const reason = bad ? failReason(a) : null;
+                      const reason = bad ? failReason(a) : a.errorMessage;
                       return (
                         <div key={a.id} style={{ display: "grid", gridTemplateColumns: "auto minmax(0,1fr) auto", gap: 8, alignItems: "start", fontSize: 11.5, padding: "6px 8px", borderRadius: 8, background: "var(--bg-sunken)" }}>
                           <span className={`adm-pill ${ok ? "good" : bad ? "bad" : "warn"}`} style={{ padding: "2px 7px", fontSize: 10, marginTop: 1 }}><span className="dot" />{ok ? (a.submitConfirmation?.startsWith("DETECTED") ? "confermata" : "inviata") : a.status.replace(/_/g, " ")}</span>
                           <div style={{ minWidth: 0 }}>
                             <div className="adm-ellipsis" style={{ color: "var(--fg)", fontWeight: 600 }}>{a.job.title} <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· {a.job.company ?? "—"} · {a.job.source}{a.submittedVia ? ` · ${a.submittedVia}` : ""}</span></div>
-                            {reason && <div style={{ color: "#f87171", fontSize: 11, lineHeight: 1.4, marginTop: 2, whiteSpace: "normal" }}>{reason.slice(0, 220)}</div>}
+                            {reason && <div style={{ color: bad ? "#f87171" : "var(--fg-muted)", fontSize: 11, lineHeight: 1.4, marginTop: 2, whiteSpace: "normal", overflowWrap: "anywhere" }}>{reason}</div>}
                           </div>
                           <span style={{ color: "var(--fg-subtle)", whiteSpace: "nowrap" }}>{fmt2(a.createdAt)}</span>
                         </div>
@@ -269,7 +271,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   </div>
                 )}
               </PSection>
-              )}
+              </>)}
               {tab === "overview" && (
               <PSection title="Stato e attività">
                 <KV k="Onboarding" v={<Onboarding step={onboarding(selected)} wide />} />
