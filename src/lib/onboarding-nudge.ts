@@ -65,6 +65,7 @@ export interface NudgeCandidate {
 export async function findNudgeCandidates(opts?: {
   onlyEmail?: string;
   ignoreCooldown?: boolean;
+  incompleteSetupOnly?: boolean;
 }): Promise<NudgeCandidate[]> {
   const now = Date.now();
   const minAge = new Date(now - MIN_AGE_HOURS * 3600_000);
@@ -101,6 +102,7 @@ export async function findNudgeCandidates(opts?: {
       step = "preferences";
     else if (u._count.applications === 0) step = "first_application";
 
+    if (opts?.incompleteSetupOnly && step === "first_application") continue;
     if (!step) continue; // utente completo: niente nudge
 
     // Cooldown: niente nudge se ne ha ricevuto uno di recente.
@@ -142,11 +144,13 @@ export async function runOnboardingNudges(opts?: {
   dryRun?: boolean;
   onlyEmail?: string;
   ignoreCooldown?: boolean;
+  incompleteSetupOnly?: boolean;
   cap?: number;
 }): Promise<NudgeRunResult> {
   const candidates = await findNudgeCandidates({
     onlyEmail: opts?.onlyEmail,
     ignoreCooldown: opts?.ignoreCooldown,
+    incompleteSetupOnly: opts?.incompleteSetupOnly,
   });
   const cap = opts?.cap ?? DEFAULT_BATCH_CAP;
   const batch = candidates.slice(0, cap);

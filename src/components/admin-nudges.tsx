@@ -47,6 +47,9 @@ export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
     fetcher,
   );
 
+  const [confirmSend, setConfirmSend] = useState(false);
+  const [incompleteSetupOnly, setIncompleteSetupOnly] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<RunResult | null>(null);
   const [history, setHistory] = useState<
@@ -57,6 +60,8 @@ export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
 
   async function run(dryRun: boolean) {
     if (sending) return;
+    setConfirmSend(false);
+    setError(null);
     setSending(true);
     setResult(null);
     try {
@@ -67,8 +72,10 @@ export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
           dryRun,
           onlyEmail: onlyEmail.trim() || undefined,
           ignoreCooldown,
+          incompleteSetupOnly,
         }),
       });
+      if (!res.ok) throw new Error("Invio non riuscito. Riprova dopo aver verificato la cronologia.");
       const j = (await res.json()) as RunResult;
       setResult(j);
       // Persist every run in a session-local history so picking another
@@ -85,12 +92,14 @@ export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
         ...prev,
       ].slice(0, 20));
       if (!dryRun) mutate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invio non riuscito");
     } finally {
       setSending(false);
     }
   }
 
-  const candidates = data?.candidates ?? [];
+  const candidates = (data?.candidates ?? []).filter((c) => (!incompleteSetupOnly || c.step !== "first_application") && (!onlyEmail || c.email === onlyEmail));
 
   return (
     <section
@@ -141,10 +150,22 @@ export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
         </label>
       </div>
 
+      <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <input type="checkbox" checked={incompleteSetupOnly} onChange={(e) => { setIncompleteSetupOnly(e.target.checked); setResult(null); setConfirmSend(false); }} />
+        Solo onboarding incompleto o CV mancante
+      </label>
+      {error && <p role="alert">{error}</p>}
+      {confirmSend && (
+        <div role="alertdialog" aria-label="Conferma invio nudge" style={{ padding: 12, marginBottom: 12, border: "1px solid var(--border-ds)", borderRadius: 10 }}>
+          <p>Inviare email reali a {onlyEmail || `${candidates.length} utenti idonei`}? I destinatari saranno ricontrollati prima dell’invio.</p>
+          <button className="adm-btn primary" onClick={() => run(false)} disabled={sending}>Conferma invio email</button>
+          <button className="adm-btn" onClick={() => setConfirmSend(false)}>Annulla</button>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         <button
           type="button"
-          onClick={() => { if (confirm("Inviare i nudge email REALI agli utenti elencati? Verranno mandate email vere.")) run(false); }}
+          onClick={() => setConfirmSend(true)}
           disabled={sending}
           className="adm-btn primary"
           style={{ padding: "9px 16px", fontSize: 13 }}
@@ -166,7 +187,7 @@ export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
       >
         {isLoading
           ? "Calcolo destinatari…"
-          : `${data?.count ?? 0} utenti riceverebbero un nudge ora.`}
+          : `${candidates.length} utenti riceverebbero un nudge ora.`}
       </div>
 
       {!isLoading && candidates.length > 0 && !result && (

@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     dryRun?: boolean;
     onlyEmail?: string;
     ignoreCooldown?: boolean;
+    incompleteSetupOnly?: boolean;
   } = {};
   try {
     body = await request.json();
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
     dryRun: body.dryRun === true,
     onlyEmail: body.onlyEmail?.trim() || undefined,
     ignoreCooldown: body.ignoreCooldown === true,
+    incompleteSetupOnly: body.incompleteSetupOnly === true,
   });
   return NextResponse.json(result);
 }
