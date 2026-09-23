@@ -228,6 +228,7 @@ export function Hero() {
             >
               {t("subtitleV2")}
             </motion.p>
+            <p className="mt-3 text-sm leading-relaxed text-white/60">{t("volumeNote")}</p>
 
             {/* Garanzia rimborso — proof of confidence, sostituisce
                 bisogno di testimonial fake. Il founder ci mette i soldi. */}
