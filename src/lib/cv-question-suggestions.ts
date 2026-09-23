@@ -11,6 +11,9 @@ export function suggestAnswerFromCv(
   if (!profile || kind === "checkbox") return null;
   const normalized = label.toLocaleLowerCase("en").replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim();
   const aliases: Record<string, string> = {
+    "location (city)": "city",
+    "what is your current or previous job title": "current or previous job title",
+    "who is your current or previous employer": "current or previous employer",
     "where are you based": "city", "where are you currently based": "city", "where do you live": "city",
     "what city do you live in": "city", "where are you located": "city", "current location": "city",
     "dove vivi": "city", "dove risiedi": "city", "in quale città vivi": "city", "qual è la tua città di residenza": "city",
@@ -38,6 +41,8 @@ export function suggestAnswerFromCv(
   else if (/^(phone|phone number|telephone|mobile|telefono|numero di telefono|cellulare)$/.test(field)) answer = profile.phone;
   else if (/^(city|current city|city of residence|città|citta|città di residenza|citta di residenza)$/.test(field)) answer = profile.city;
   else if (/^(current employer|current company|azienda attuale|datore di lavoro attuale)$/.test(field)) answer = current?.company ?? "";
+  else if (field === "current or previous employer") answer = (current ?? recent)?.company ?? "";
+  else if (field === "current or previous job title") answer = (current ?? recent)?.role ?? "";
   else if (/^(most recent employer|last employer|ultima azienda)$/.test(field)) answer = recent?.company ?? "";
   else if (/^(current job title|current position|ruolo attuale|posizione attuale)$/.test(field)) answer = current?.role ?? "";
   else if (/^(linkedin|linkedin url|linkedin profile|profilo linkedin)$/.test(field)) answer = link(/linkedin/i);
