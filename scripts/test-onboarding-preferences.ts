@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { OnboardingPreferencesSchema } from "../src/lib/onboarding-preferences";
+const valid = { roles: ["Designer"], locations: [], salaryMin: 0, modeSel: { remoto: true, ibrido: false, sede: false } };
+assert.equal(OnboardingPreferencesSchema.safeParse(valid).success, true, "Remote-only searches need no city");
+assert.equal(OnboardingPreferencesSchema.safeParse({ ...valid, roles: [] }).success, false, "Do not finish onboarding without a target role");
+assert.equal(OnboardingPreferencesSchema.safeParse({ ...valid, roles: ["   "] }).success, false);
+assert.equal(OnboardingPreferencesSchema.safeParse({ ...valid, modeSel: { remoto: false, ibrido: false, sede: false } }).success, false, "No work arrangements would create an unusable search");
+assert.equal(OnboardingPreferencesSchema.safeParse({ ...valid, portfolioUrl: "not a url" }).success, false);
+assert.equal(OnboardingPreferencesSchema.safeParse({ ...valid, portfolioUrl: "" }).success, true, "Portfolio is optional");
+console.log("PASS: onboarding requires usable search preferences; remote and optional portfolio remain supported");

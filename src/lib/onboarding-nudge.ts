@@ -234,7 +234,7 @@ const COPY = {
       headline: "Manca solo il tuo CV",
       lead: "Hai creato l'account ma non hai ancora caricato il CV. È il passo che sblocca tutto: ottimizzazione automatica e candidature su misura.",
       cta: "Carica il CV",
-      path: "/onboarding/cv",
+      path: "/onboarding",
     },
     preferences: {
       subject: "Imposta le tue preferenze e inizia a ricevere candidature",
@@ -266,7 +266,7 @@ const COPY = {
       headline: "Your CV is the missing piece",
       lead: "You created your account but haven't uploaded a CV yet. That's the step that unlocks everything: automatic optimization and tailored applications.",
       cta: "Upload your CV",
-      path: "/onboarding/cv",
+      path: "/onboarding",
     },
     preferences: {
       subject: "Set your preferences and start getting applications sent",

@@ -74,8 +74,9 @@ export async function POST(request: NextRequest) {
       console.warn("[/api/onboarding/cv] profile extraction failed", err);
     }
 
-    await prisma.cVDocument.deleteMany({ where: { userId: user.id } });
-    const cv = await prisma.cVDocument.create({
+    const cv = await prisma.$transaction(async (tx) => {
+      await tx.cVDocument.deleteMany({ where: { userId: user.id } });
+      return tx.cVDocument.create({
       data: {
         userId: user.id,
         originalFilename: file.name,
@@ -83,6 +84,8 @@ export async function POST(request: NextRequest) {
         extractedText: text,
         parsedProfileJson,
       },
+    });
+
     });
 
     await recordConversionEvent(AnalyticsEvent.ONBOARDING_CV_UPLOADED, {
@@ -95,6 +98,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       cvId: cv.id,
+      profile: parsedProfileJson ? JSON.parse(parsedProfileJson) : null,
       preview: text.slice(0, 400),
       chars: text.length,
     });

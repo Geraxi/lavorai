@@ -66,6 +66,9 @@
     "trustD2": "quando vuoi"
   },
   "onboarding": {
+    "selectRoleError": "Seleziona almeno un ruolo per continuare.",
+    "selectModeError": "Seleziona almeno una modalità di lavoro.",
+    "activating": "Attivazione in corso…",
     "stepCv": "CV",
     "stepPrefs": "Ruolo & Città",
     "stepLaunch": "Avvia",

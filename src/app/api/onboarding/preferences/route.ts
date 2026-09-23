@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { z } from "zod";
+import { OnboardingPreferencesSchema as Schema } from "@/lib/onboarding-preferences";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { AnalyticsEvent } from "@/lib/analytics";
@@ -7,27 +7,7 @@ import { recordConversionEvent } from "@/lib/conversion-events";
 
 export const runtime = "nodejs";
 
-const Schema = z.object({
-  roles: z.array(z.string().trim().min(1).max(80)).max(30),
-  locations: z.array(z.string().trim().min(1).max(80)).max(30),
-  salaryMin: z.number().int().min(0).max(500),
-  modeSel: z.object({
-    remoto: z.boolean(),
-    ibrido: z.boolean(),
-    sede: z.boolean(),
-  }),
-  employmentType: z.enum(["employee", "piva", "both"]).optional(),
-  dailyRate: z.number().int().min(0).max(5000).nullable().optional(),
-  availableFrom: z.string().trim().max(60).nullable().optional(),
-  portfolioUrl: z
-    .string()
-    .trim()
-    .max(300)
-    .url()
-    .nullable()
-    .optional()
-    .or(z.literal("").transform(() => null)),
-});
+
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
