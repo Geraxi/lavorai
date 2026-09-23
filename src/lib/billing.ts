@@ -141,11 +141,20 @@ export function registrationTrialEnd(createdAt: Date | string): Date {
   return new Date(new Date(createdAt).getTime() + FREE_TRIAL_DAYS * 86400_000);
 }
 
+// One-time transition explicitly requested on 23 September 2026. These are
+// absolute timestamps: login, deployment and onboarding never restart them.
+export const EARLY_USER_TRIAL_COHORT_CUTOFF = "2026-09-23T12:43:08.000Z";
+export const EARLY_USER_TRIAL_FINAL_END = "2026-09-25T12:43:08.000Z";
+
 export function trialEnd(user: { createdAt?: Date | string; trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null }): Date | null {
-  const base = user.createdAt ? registrationTrialEnd(user.createdAt) : user.trialEndsAt ? new Date(user.trialEndsAt) : null;
-  const grace = user.trialGraceEndsAt ? new Date(user.trialGraceEndsAt) : null;
-  if (grace && (!base || grace.getTime() > base.getTime())) return grace;
-  return base;
+  const createdAt = user.createdAt ? new Date(user.createdAt) : null;
+  // The legacy field identifies the original extension recipients only. Its
+  // stored date no longer grants any configurable/rolling grace period.
+  if (createdAt && createdAt.getTime() < Date.parse(EARLY_USER_TRIAL_COHORT_CUTOFF)
+      && user.trialGraceEndsAt && Number.isFinite(new Date(user.trialGraceEndsAt).getTime())) {
+    return new Date(EARLY_USER_TRIAL_FINAL_END);
+  }
+  return createdAt ? registrationTrialEnd(createdAt) : user.trialEndsAt ? new Date(user.trialEndsAt) : null;
 }
 
 /**

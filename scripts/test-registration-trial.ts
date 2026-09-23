@@ -2,7 +2,7 @@ import { encode } from "next-auth/jwt";
 import { NextRequest } from "next/server";
 import { proxy } from "../src/proxy";
 import assert from "node:assert/strict";
-import { registrationTrialEnd, trialState, effectiveTier, isApplicationAccessPaused, dailyApplicationLimit, FREE_TRIAL_DAILY_APPLICATION_LIMIT } from "../src/lib/billing";
+import { registrationTrialEnd, trialState, effectiveTier, isApplicationAccessPaused, dailyApplicationLimit, FREE_TRIAL_DAILY_APPLICATION_LIMIT, EARLY_USER_TRIAL_COHORT_CUTOFF, EARLY_USER_TRIAL_FINAL_END } from "../src/lib/billing";
 import { requiresTrialAccess } from "../src/lib/trial-access";
 import { prisma } from "../src/lib/db";
 import { reserveTrialApplication } from "../src/lib/trial-quota";
@@ -16,10 +16,23 @@ async function main() {
   assert.equal(effectiveTier(active), "pro");
   assert.equal(trialState(expired).status, "ended", "Delayed setup or stored extension must not restart trial");
   assert.equal(isApplicationAccessPaused(expired), true);
-  const grace = { ...expired, trialGraceEndsAt: new Date(now + 4 * 86400_000) };
-  assert.equal(isApplicationAccessPaused(grace), false, "Explicit grace unlocks expired accounts");
-  assert.equal(trialState(grace).endsAt?.getTime(), grace.trialGraceEndsAt.getTime());
-  assert.equal(isApplicationAccessPaused({ ...expired, trialGraceEndsAt: new Date(now - 1) }), true, "Expired grace must lock again");
+  const legacy = { ...expired, createdAt: new Date("2026-09-01T12:00:00Z"), trialGraceEndsAt: new Date("2026-09-20T12:00:00Z") };
+  const realNow = Date.now;
+  try {
+    Date.now = () => Date.parse(EARLY_USER_TRIAL_COHORT_CUTOFF);
+    assert.equal(trialState(legacy).daysLeft, 2, "Original extension recipients receive exactly two final days");
+    assert.equal(trialState(legacy).endsAt?.toISOString(), EARLY_USER_TRIAL_FINAL_END);
+    assert.equal(isApplicationAccessPaused(legacy), false);
+    const futureGrace = { ...legacy, trialGraceEndsAt: new Date("2099-01-01") };
+    assert.equal(trialState(futureGrace).endsAt?.toISOString(), EARLY_USER_TRIAL_FINAL_END, "Stored grace cannot extend the fixed deadline");
+    assert.equal(isApplicationAccessPaused({ ...legacy, trialGraceEndsAt: null }), true, "Old users without the original extension do not receive a new trial");
+    const newcomer = { ...legacy, createdAt: new Date(EARLY_USER_TRIAL_COHORT_CUTOFF) };
+    assert.equal(trialState(newcomer).endsAt?.getTime(), registrationTrialEnd(newcomer.createdAt).getTime(), "New signups get seven days, ignoring grace");
+    Date.now = () => Date.parse(EARLY_USER_TRIAL_FINAL_END);
+    assert.equal(isApplicationAccessPaused(legacy), true, "Original cohort locks at the exact fixed deadline");
+    assert.equal(dailyApplicationLimit(legacy), 0);
+    assert.equal(isApplicationAccessPaused({ ...legacy, tier: "pro" }), false, "Paid access remains active");
+  } finally { Date.now = realNow; }
   assert.equal(FREE_TRIAL_DAILY_APPLICATION_LIMIT, 5, "Free trials are capped at five applications per day");
   assert.equal(dailyApplicationLimit(active), 5);
   assert.equal(dailyApplicationLimit(expired), 0);

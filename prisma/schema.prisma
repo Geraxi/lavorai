@@ -124,7 +124,7 @@ model User {
   proTrialUsedAt   DateTime?
   /// Prova Pro senza carta: fino a questa data l'utente Free è trattato come Pro.
   trialEndsAt      DateTime?
-  /// Proroga esplicita concessa agli account esistenti, senza azzerare le candidature.
+  /// Legacy cohort marker only; billing.ts fixes the final early-user deadline. No rolling grace.
   trialGraceEndsAt DateTime?
   /// Durata della prova dalla creazione dell’account (7 giorni).
   trialDurationDays Int      @default(7)

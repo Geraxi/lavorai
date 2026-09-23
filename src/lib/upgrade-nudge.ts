@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { trialState } from "@/lib/billing";
 import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { isTestAccount } from "@/lib/admin";
@@ -65,11 +66,7 @@ export async function findUpgradeCandidates(opts?: {
       : {
           tier: "free",
           createdAt: { lte: minAge }, // rimosso il floor 90gg: limit-hit vince
-          // In prova Pro attiva parlano le email di prova, non il nudge upgrade.
-          AND: [
-            { OR: [{ trialEndsAt: null }, { trialEndsAt: { lt: new Date() } }] },
-            { OR: [{ trialGraceEndsAt: null }, { trialGraceEndsAt: { lt: new Date() } }] },
-          ],
+
         },
     select: {
       id: true,
@@ -78,6 +75,8 @@ export async function findUpgradeCandidates(opts?: {
       locale: true,
       tier: true,
       createdAt: true,
+      trialEndsAt: true,
+      trialGraceEndsAt: true,
       _count: { select: { applications: true } },
     },
   });
@@ -101,6 +100,7 @@ export async function findUpgradeCandidates(opts?: {
 
   for (const u of users) {
     if (u.tier !== "free") continue;
+    if (trialState(u).status === "active") continue;
     if (isTestAccount(u.email)) continue;
 
     const usedThisMonth = monthlyUsed.get(u.id) ?? 0;
