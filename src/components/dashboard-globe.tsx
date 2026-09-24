@@ -314,21 +314,20 @@ export function DashboardGlobe({
       ? `<b>${esc(p.job.company ?? p.name)}</b><span>${esc(p.job.title)}</span>${p.job.match != null ? `<em>${Math.round(p.job.match)}% match</em>` : ""}`
       : `<b>${esc(p.name)}</b><span>${esc(PIN_LABELS[p.kind])}</span>`;
     el.innerHTML = `
-      <div class="dg-pin-body" role="button" tabindex="0" aria-label="${esc(p.name)}: ${p.total} ${esc(PIN_LABELS[p.kind].toLowerCase())}">
+      <button type="button" class="dg-pin-body" aria-pressed="${selected ? "true" : "false"}" aria-label="${esc(p.name)}: ${p.total} ${esc(PIN_LABELS[p.kind].toLowerCase())}">
         <span class="dg-pin-glow"></span>
         <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 22s7-7.1 7-12.5A7 7 0 0 0 5 9.5C5 14.9 12 22 12 22z" fill="${color}" stroke="rgba(255,255,255,.85)" stroke-width="1.3"/><circle cx="12" cy="9.5" r="2.7" fill="#fff"/></svg>
         ${p.total > 1 ? `<span class="dg-pin-count">${p.total}</span>` : ""}
         ${card ? "" : `<div class="dg-tip">${tip}</div>`}
-      </div>
+      </button>
       ${card ? `<div class="dg-card-anchor">${jobCardHtml(p, selected)}</div>` : ""}`;
     const stop = (e: Event) => e.stopPropagation();
     el.addEventListener("pointerdown", stop);
     el.addEventListener("mousedown", stop);
     el.addEventListener("touchstart", stop, { passive: true });
     el.addEventListener("wheel", stop, { passive: true });
-    const body = el.querySelector(".dg-pin-body") as HTMLElement;
+    const body = el.querySelector(".dg-pin-body") as HTMLButtonElement;
     body.addEventListener("click", (e) => { e.stopPropagation(); onSelect(selected ? null : p.key); });
-    body.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(selected ? null : p.key); } });
     el.querySelector("[data-more]")?.addEventListener("click", (e) => { e.stopPropagation(); onMore(p); });
     el.querySelector(".dg-card")?.addEventListener("click", (e) => e.stopPropagation());
     return el;

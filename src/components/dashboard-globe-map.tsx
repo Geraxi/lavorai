@@ -111,7 +111,10 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
       {/* Mobile: card scorrevoli sotto il globo */}
       <div className="dg-mobile-cards" aria-label="Opportunità">
         {mobilePins.map((p) => (
-          <div key={p.key} className={`dg-mobile-card${p.key === selectedKey ? " is-selected" : ""}`} onClick={() => setSelectedKey(p.key)}>
+          <div key={p.key} className={`dg-mobile-card${p.key === selectedKey ? " is-selected" : ""}`} role="group" aria-label={`${p.name}: ${p.total} opportunità`}>
+            <button type="button" className="dg-mobile-card-focus" aria-pressed={p.key === selectedKey} onClick={() => setSelectedKey(p.key)}>
+              {p.key === selectedKey ? "Nascondi dal globo" : "Mostra sul globo"}
+            </button>
             <JobCard pin={p} compact selected={p.key === selectedKey} onMore={(x) => setSheet(x)} />
           </div>
         ))}

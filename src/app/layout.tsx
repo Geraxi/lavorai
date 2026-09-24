@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     template: "%s · LavorAI",
   },
   description:
-    "Invia CV in automatico a 50 lavori al mese. LavorAI adatta CV e lettera a ogni annuncio e compila i form ATS. La prova Pro di 7 giorni parte dopo il setup, senza carta e senza rinnovo automatico.",
+    "Invia CV in automatico a 50 lavori al mese. LavorAI adatta CV e lettera a ogni annuncio e compila i form ATS. La prova Pro di 7 giorni parte dalla registrazione, fino a 5 candidature al giorno, senza carta e senza rinnovo automatico.",
   keywords: [
     // KEYWORD AD ALTA INTENT COMMERCIALE (chi cerca soluzione, non info)
     "auto candidatura lavoro",
@@ -94,7 +94,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "LavorAI — Candidature automatiche ai lavori",
     description:
-      "50 candidature/mese automatiche. CV e lettera su misura. Prova di 7 giorni dopo il setup, senza carta.",
+      "50 candidature/mese automatiche. CV e lettera su misura. Prova di 7 giorni dalla registrazione, fino a 5 candidature al giorno, senza carta.",
   },
   robots: { index: true, follow: true },
 };

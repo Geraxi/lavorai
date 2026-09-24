@@ -1475,6 +1475,8 @@
   .dg-sheet { top: 12px; right: 12px; bottom: auto; max-height: 70%; width: calc(100% - 24px); }
   .dg-mobile-cards { display: flex; gap: 10px; overflow-x: auto; padding: 12px 12px 4px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
   .dg-mobile-card { flex: 0 0 250px; scroll-snap-align: start; } .dg-mobile-card .dg-card { width: 100%; }
+  .dg-mobile-card-focus { width: 100%; margin: 0 0 6px; padding: 5px 8px; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; background: rgba(255,255,255,0.05); color: #cbd5e1; font: inherit; font-size: 11px; cursor: pointer; }
+  .dg-mobile-card-focus[aria-pressed="true"] { border-color: rgba(46,214,154,0.55); color: #82e8bf; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dg-pin-glow, .dg-live, .dg-dots i, .dg-fallback-earth { animation: none !important; }

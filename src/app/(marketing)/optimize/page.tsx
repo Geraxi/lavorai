@@ -141,8 +141,8 @@ function FormCard({
           </h1>
           <p className="text-sm text-muted-foreground">
             Carica il CV e inserisci l&apos;email. Ti invieremo un magic link:
-            dopo il login completi il setup e da quel momento partono i tuoi
-            7 giorni di Pro, senza carta e senza rinnovo automatico.
+            dopo il login completi il setup e scegli quando attivare l'auto-apply.
+            I tuoi 7 giorni di Pro partono dalla registrazione, senza carta e senza rinnovo automatico.
           </p>
         </div>
 
