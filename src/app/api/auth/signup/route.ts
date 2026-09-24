@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
 
     await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
       userId: user.id, plan: "pro", path: "/signup", valueCents: 0,
-      properties: { days: 7, applicationLimit: 20 }, dedupeKey: `trial_started:${user.id}`,
+      properties: { days: 7, applicationLimit: 5 }, dedupeKey: `trial_started:${user.id}`,
     });
 
     // Invia email di verifica (best-effort; non blocca signup se fallisce)

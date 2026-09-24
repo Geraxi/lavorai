@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
       plan: tier,
       path: "/api/stripe/checkout",
       valueCents: Math.round(TIERS[tier].price * 100),
+      properties: { checkoutSessionId: session.id },
       dedupeKey: `checkout_started:${session.id}`,
     });
 

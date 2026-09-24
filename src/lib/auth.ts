@@ -252,7 +252,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async createUser({ user }) {
       if (user.id) await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
         userId: user.id, plan: "pro", path: "/signup", valueCents: 0,
-        properties: { days: 7, applicationLimit: 20 }, dedupeKey: `trial_started:${user.id}`,
+        properties: { days: 7, applicationLimit: 5 }, dedupeKey: `trial_started:${user.id}`,
       });
       // Primo signup → welcome email
       if (!user.email) return;

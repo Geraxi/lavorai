@@ -36,7 +36,7 @@ export function CookieBanner() {
             ? "We use essential cookies for login and preferences. With your permission, optional Google and Meta tools help us measure and improve results. See the "
             : "Usiamo cookie essenziali per accesso e preferenze. Con il tuo consenso, gli strumenti facoltativi di Google e Meta ci aiutano a misurare e migliorare i risultati. Vedi la "}
           <Link href="/privacy" style={{ color: "var(--fg-muted)" }}>
-            privacy policy
+            {en ? "privacy policy" : "informativa privacy"}
           </Link>
           .
         </div>

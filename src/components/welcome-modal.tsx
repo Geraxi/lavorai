@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale } from "next-intl";
 import { Icon, type IconName } from "@/components/design/icon";
 
 interface Slide {
@@ -34,8 +35,10 @@ const SLIDES: Slide[] = [
 
 export function WelcomeModal({ show }: { show: boolean }) {
   const router = useRouter();
+  const locale = useLocale();
   const [open, setOpen] = useState(show);
   const [step, setStep] = useState(0);
+  const [source, setSource] = useState("");
 
   if (!open) return null;
 
@@ -48,6 +51,13 @@ export function WelcomeModal({ show }: { show: boolean }) {
   }
 
   async function finish() {
+    if (source) {
+      await fetch("/api/onboarding/signup-source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source }),
+      }).catch(() => null);
+    }
     await fetch("/api/onboarding/welcome-seen", { method: "POST" }).catch(
       () => null,
     );
@@ -57,7 +67,14 @@ export function WelcomeModal({ show }: { show: boolean }) {
   }
 
   const slide = SLIDES[step];
-  const isLast = step === SLIDES.length - 1;
+  const sourceStep = step === SLIDES.length;
+  const isLast = sourceStep;
+  const en = locale === "en";
+  const sourceOptions = [
+    ["google", "Google"], ["chatgpt", "ChatGPT / AI"], ["linkedin", "LinkedIn"], ["instagram_tiktok", "Instagram / TikTok"],
+    ["amico", en ? "A friend / word of mouth" : "Un amico / passaparola"], ["universita", en ? "University / career day" : "Università / career day"],
+    ["categorie_protette", en ? "Protected-category job search" : "Ricerca categorie protette"], ["altro", en ? "Other" : "Altro"],
+  ];
 
   return (
     <div
@@ -111,15 +128,15 @@ export function WelcomeModal({ show }: { show: boolean }) {
             width: 60,
             height: 60,
             borderRadius: 14,
-            background: `${slide.color.replace("var(", "color-mix(in oklch, ").replace(")", ", transparent 88%)")}`,
-            color: slide.color,
+            background: sourceStep ? "color-mix(in srgb, var(--primary-ds) 12%, transparent)" : `${slide.color.replace("var(", "color-mix(in oklch, ").replace(")", ", transparent 88%)")}`,
+            color: sourceStep ? "var(--primary-ds)" : slide.color,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             marginBottom: 20,
           }}
         >
-          <Icon name={slide.icon} size={26} />
+          <Icon name={sourceStep ? "chart" : slide.icon} size={26} />
         </div>
 
         <h2
@@ -130,7 +147,7 @@ export function WelcomeModal({ show }: { show: boolean }) {
             margin: "0 0 10px",
           }}
         >
-          {slide.title}
+          {sourceStep ? (en ? "How did you find LavorAI?" : "Come hai conosciuto LavorAI?") : slide.title}
         </h2>
         <p
           style={{
@@ -140,8 +157,15 @@ export function WelcomeModal({ show }: { show: boolean }) {
             margin: 0,
           }}
         >
-          {slide.body}
+          {sourceStep ? (en ? "Optional — your answer helps us understand what is useful. It will not change your experience." : "Facoltativo — la tua risposta ci aiuta a capire cosa funziona. Non cambia la tua esperienza.") : slide.body}
         </p>
+
+        {sourceStep && (
+          <select value={source} onChange={(event) => setSource(event.target.value)} aria-label={en ? "How did you find LavorAI?" : "Come hai conosciuto LavorAI?"} style={{ width: "100%", marginTop: 18, padding: "11px 12px", borderRadius: 9, border: "1px solid var(--border-ds)", background: "var(--bg-sunken)", color: "var(--fg)" }}>
+            <option value="">{en ? "Choose an option (optional)" : "Scegli un'opzione (facoltativo)"}</option>
+            {sourceOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        )}
 
         {/* Dots */}
         <div
@@ -152,7 +176,7 @@ export function WelcomeModal({ show }: { show: boolean }) {
             marginBottom: 24,
           }}
         >
-          {SLIDES.map((_, i) => (
+          {[...SLIDES, null].map((_, i) => (
             <button
               key={i}
               type="button"
@@ -204,11 +228,11 @@ export function WelcomeModal({ show }: { show: boolean }) {
             >
               {isLast ? (
                 <>
-                  Inizia <Icon name="arrow-right" size={13} />
+                  {en ? "Start" : "Inizia"} <Icon name="arrow-right" size={13} />
                 </>
               ) : (
                 <>
-                  Avanti <Icon name="arrow-right" size={13} />
+                  {en ? "Next" : "Avanti"} <Icon name="arrow-right" size={13} />
                 </>
               )}
             </button>

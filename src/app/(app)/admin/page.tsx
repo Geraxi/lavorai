@@ -187,7 +187,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   const aiUsed = appsMonth;
   const aiPct = Math.min(100, Math.round((aiUsed / aiCapacity) * 100));
 
-  // ── Funnel utenti (all-time, account reali) ────────────────────────────
+  // ── Funnel utenti (intervallo selezionato, account reali) ──────────────
   const uniqueEventUsers = (name: string) => new Set(
     conversionEvents.filter((e) => e.name === name && e.userId).map((e) => e.userId as string),
   ).size;
@@ -200,7 +200,8 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     uniqueEventUsers("onboarding_completed"),
     realUsers.filter((u) => u.onboardedAt && u.onboardedAt >= since(24 * DAYS)).length,
   );
-  const conversionTrials = uniqueEventUsers("trial_started");
+  const conversionCvUploaded = uniqueEventUsers("onboarding_cv_uploaded");
+  const conversionFirstDelivered = uniqueEventUsers("first_application_delivered");
   const conversionCheckouts = uniqueEventUsers("checkout_started");
   const conversionPaid = uniqueEventUsers("purchase_completed");
   const conversionMax = Math.max(conversionVisitors, conversionSignups, 1);
@@ -372,8 +373,9 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
           <div className="adm-card-body" style={{ justifyContent: "center" }}>
             <FunnelBar label="Visitatori" value={conversionVisitors} max={conversionMax} pct={pctOf(conversionVisitors, conversionMax)} color="hsl(var(--primary))" />
             <FunnelBar label="Iscritti" value={conversionSignups} max={conversionMax} pct={pctOf(conversionSignups, conversionMax)} color="#60a5fa" />
-            <FunnelBar label="Setup completo" value={conversionOnboarded} max={conversionMax} pct={pctOf(conversionOnboarded, conversionMax)} color="#a78bfa" />
-            <FunnelBar label="Prova attiva" value={conversionTrials} max={conversionMax} pct={pctOf(conversionTrials, conversionMax)} color="#f472b6" />
+            <FunnelBar label="CV caricato" value={conversionCvUploaded} max={conversionMax} pct={pctOf(conversionCvUploaded, conversionMax)} color="#a78bfa" />
+            <FunnelBar label="Setup completato" value={conversionOnboarded} max={conversionMax} pct={pctOf(conversionOnboarded, conversionMax)} color="#f472b6" />
+            <FunnelBar label="Prima candidatura inviata" value={conversionFirstDelivered} max={conversionMax} pct={pctOf(conversionFirstDelivered, conversionMax)} color="#c084fc" />
             <FunnelBar label="Checkout" value={conversionCheckouts} max={conversionMax} pct={pctOf(conversionCheckouts, conversionMax)} color="#fb923c" />
             <FunnelBar label="Paganti" value={conversionPaid} max={conversionMax} pct={pctOf(conversionPaid, conversionMax)} color="#fbbf24" />
           </div>

@@ -29,7 +29,6 @@ function SignupContent() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [consent, setConsent] = useState(false);
-  const [source, setSource] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
@@ -64,7 +63,6 @@ function SignupContent() {
     setErr(null);
     trackEvent(AnalyticsEvent.SIGNUP_SUBMIT, {
       plan: plan ?? "free",
-      source: source || null,
     });
     try {
       const signupRes = await fetch("/api/auth/signup", {
@@ -75,7 +73,6 @@ function SignupContent() {
           password,
           name: name || undefined,
           privacyConsent: true,
-          source: source || undefined,
           protectedCategory: protectedCategory || undefined,
           promo: promo || undefined,
           plan: plan === "pro" || plan === "pro_plus" ? plan : "free",
@@ -207,6 +204,13 @@ function SignupContent() {
             {t("signupSubheading")}
           </p>
 
+          <div style={{ marginBottom: 20 }}>
+            <GoogleButton mode="signup" position="above" />
+            <p style={{ margin: "8px 0 0", textAlign: "center", color: "var(--fg-subtle)", fontSize: 11.5 }}>
+              {t("signupGoogleFirst")}
+            </p>
+          </div>
+
           <form onSubmit={onSubmit}>
             <Label htmlFor="name">{t("name")}</Label>
             <input
@@ -274,23 +278,6 @@ function SignupContent() {
               }
             />
 
-            <select
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              aria-label="Come ci hai conosciuto?"
-              style={{ width: "100%", marginTop: 10, padding: "10px 12px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg-elev)", color: source ? "var(--fg)" : "var(--fg-muted)", fontSize: 13.5 }}
-            >
-              <option value="">Come ci hai conosciuto? (facoltativo)</option>
-              <option value="google">Google</option>
-              <option value="chatgpt">ChatGPT / AI</option>
-              <option value="linkedin">LinkedIn</option>
-              <option value="instagram_tiktok">Instagram / TikTok</option>
-              <option value="amico">Un amico / passaparola</option>
-              <option value="universita">Università / career day</option>
-              <option value="categorie_protette">Ricerca categorie protette</option>
-              <option value="altro">Altro</option>
-            </select>
-
             <label
               style={{
                 display: "flex",
@@ -315,7 +302,7 @@ function SignupContent() {
                   href="/privacy"
                   style={{ color: "var(--fg)", textDecoration: "underline" }}
                 >
-                  informativa privacy
+                  {t("privacyNotice")}
                 </Link>{" "}
                 {t("consentAuthorize")}
               </span>
@@ -373,9 +360,6 @@ function SignupContent() {
               {t("signupTrustCancel")}
             </p>
 
-            <div style={{ marginTop: 10 }}>
-              <GoogleButton mode="signup" position="below" />
-            </div>
           </form>
 
           <p
@@ -439,7 +423,7 @@ function SignupContent() {
               letterSpacing: "0.02em",
             }}
           >
-            Se i recruiter usano l&apos;AI,
+            {t("signupShowcaseEyebrow")}
           </div>
           <div
             style={{
@@ -450,7 +434,7 @@ function SignupContent() {
               marginBottom: 40,
             }}
           >
-            tu non puoi permetterti di non usarla.
+            {t("signupShowcaseTitle")}
           </div>
           <div
             style={{
@@ -460,9 +444,7 @@ function SignupContent() {
               maxWidth: 580,
             }}
           >
-            Smetti di candidarti. Inizia a essere chiamato.
-            LavorAI scansiona i portali 24/7, adatta CV e lettera ad ogni
-            annuncio e invia per te. Tu rispondi solo ai recruiter interessati.
+            {t("signupShowcaseBody")}
           </div>
         </div>
       </div>

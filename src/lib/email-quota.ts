@@ -92,6 +92,9 @@ export type EmailKind =
   | "trial_granted"
   | "trial_ending"
   | "trial_ended"
+  | "trial_day_3"
+  | "trial_day_6"
+  | "checkout_recovery"
   | "founder_alert"
   | "reactivation_blast"
   | "other";

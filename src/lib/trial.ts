@@ -5,6 +5,7 @@ import { sendWithinQuota } from "@/lib/email-quota";
 import { renderBrandEmail } from "@/lib/email-brand";
 import { trialState } from "@/lib/billing";
 import { isTestAccount } from "@/lib/admin";
+import { trialLifecycleStage } from "@/lib/lifecycle-cadence";
 
 /**
  * Prova Pro gratuita senza carta: parte alla registrazione.
@@ -73,17 +74,21 @@ export async function sendTrialStartedEmail(u: { id: string; email: string; name
   });
 }
 
-export interface TrialNudgeResult { ending: number; ended: number; skipped: number; details: string[] }
+export interface TrialNudgeResult { day3: number; day6: number; ending: number; ended: number; skipped: number; details: string[] }
 
 export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<TrialNudgeResult> {
-  const res: TrialNudgeResult = { ending: 0, ended: 0, skipped: 0, details: [] };
+  const res: TrialNudgeResult = { day3: 0, day6: 0, ending: 0, ended: 0, skipped: 0, details: [] };
   const apiKey = process.env.RESEND_API_KEY;
   const now = Date.now();
   const users = await prisma.user.findMany({
     where: { trialEndsAt: { not: null }, stripeSubscriptionId: null, suspendedAt: null, emailVerified: { not: null } },
-    select: { id: true, email: true, name: true, locale: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, tier: true, _count: { select: { applications: { where: { status: "success" } } } } },
+    select: {
+      id: true, email: true, name: true, locale: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, tier: true,
+      preferences: { select: { rolesJson: true, autoApplyMode: true } },
+      _count: { select: { cvDocuments: true, applications: { where: { status: "success" } } } },
+    },
   });
-  const logs = await prisma.emailLog.findMany({ where: { kind: { in: ["trial_ending", "trial_ended"] } }, select: { kind: true, to: true } });
+  const logs = await prisma.emailLog.findMany({ where: { kind: { in: ["trial_ending", "trial_ended", "trial_day_3", "trial_day_6"] } }, select: { kind: true, to: true } });
   const sentKey = new Set(logs.map((l) => `${l.kind}:${l.to.toLowerCase()}`));
 
   for (const u of users) {
@@ -91,22 +96,39 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
     if (isTestAccount(u.email) || !u.trialEndsAt || u.tier !== "free") continue;
     const en = u.locale === "en";
     const f = first(u.name);
-    const msLeft = u.trialEndsAt.getTime() - now;
-    const daysLeft = Math.ceil(msLeft / 86400_000);
-    let kind: "trial_ending" | "trial_ended" | null = null;
-    if (msLeft > 0 && daysLeft <= 2) kind = "trial_ending";
-    else if (msLeft <= 0 && msLeft > -3 * 86400_000) kind = "trial_ended";
-    if (!kind || sentKey.has(`${kind}:${u.email.toLowerCase()}`)) continue;
+    const stage = trialLifecycleStage({ now, createdAt: u.createdAt, trialEndsAt: u.trialEndsAt });
+    const kind: "trial_day_3" | "trial_day_6" | "trial_ended" | null = stage === "day_3" ? "trial_day_3" : stage === "day_6" ? "trial_day_6" : stage === "ended" ? "trial_ended" : null;
+    const emailKey = u.email.toLowerCase();
+    // trial_ending was the previous name for the final-days reminder. Treat it
+    // as already delivered so existing users never receive it twice.
+    const alreadySent = kind === "trial_day_6"
+      ? sentKey.has(`trial_day_6:${emailKey}`) || sentKey.has(`trial_ending:${emailKey}`)
+      : kind ? sentKey.has(`${kind}:${emailKey}`) : false;
+    if (!kind || alreadySent) continue;
     if (opts?.dryRun || !apiKey) { res.skipped++; res.details.push(`${u.email} ${kind} dry`); continue; }
 
-    const sent = u._count.applications;
     const pricing = `${site()}/settings#billing`;
-    const email = kind === "trial_ending"
+    const hasCv = u._count.cvDocuments > 0;
+    const hasRoles = (() => { try { return Array.isArray(JSON.parse(u.preferences?.rolesJson ?? "[]")) && JSON.parse(u.preferences?.rolesJson ?? "[]").length > 0; } catch { return false; } })();
+    const sent = u._count.applications;
+    const email = kind === "trial_day_3"
+      ? renderBrandEmail({
+          locale: u.locale,
+          eyebrow: en ? "Pro trial · day 3" : "Prova Pro · giorno 3",
+          preheader: en ? "A quick check-in to help LavorAI start working." : "Un controllo rapido per far iniziare a lavorare LavorAI.",
+          title: en ? "Let’s get your search moving" : "Facciamo partire la tua ricerca",
+          greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
+          paragraphs: en
+            ? [!hasCv ? "Your search is waiting for a CV. Upload one now — even a first draft — and LavorAI can tailor it to each role." : !hasRoles ? "Your CV is ready. Add the roles and locations you want so LavorAI can find the right opportunities." : "Your profile is ready. Keep an eye on your dashboard as LavorAI scans for roles that fit your preferences."]
+            : [!hasCv ? "La tua ricerca aspetta un CV. Caricalo ora — anche una prima bozza — e LavorAI potrà adattarlo a ogni ruolo." : !hasRoles ? "Il tuo CV è pronto. Aggiungi ruoli e località desiderati così LavorAI trova le opportunità giuste." : "Il tuo profilo è pronto. Controlla la dashboard mentre LavorAI cerca ruoli compatibili con le tue preferenze."],
+          cta: { label: !hasCv ? (en ? "Upload your CV" : "Carica il CV") : !hasRoles ? (en ? "Set preferences" : "Imposta preferenze") : (en ? "Open dashboard" : "Apri dashboard"), url: !hasCv ? `${site()}/onboarding` : !hasRoles ? `${site()}/preferences` : `${site()}/dashboard` },
+        })
+      : kind === "trial_day_6"
       ? renderBrandEmail({
           locale: u.locale,
           eyebrow: en ? "Pro trial" : "Prova Pro",
-          preheader: en ? "2 days left, then access expires." : "2 giorni, poi l’accesso scade.",
-          title: en ? "Your Pro trial ends in 2 days" : "La tua prova Pro finisce tra 2 giorni",
+          preheader: en ? "Your final trial days are here." : "Sei negli ultimi giorni della prova.",
+          title: en ? "Your Pro trial is nearly over" : "La tua prova Pro sta per finire",
           greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
           paragraphs: en
             ? [`On <strong>${fmt(u.trialEndsAt, en)}</strong> your trial expires and platform features are locked until you subscribe.`, sent > 0 ? `So far LavorAI has sent <strong>${sent} ${sent === 1 ? "application" : "applications"}</strong> on your behalf. Keeping that running is €19.99 a month, cancel any time.` : "Keeping the engine running is €19.99 a month, cancel any time from Settings."]
@@ -132,10 +154,15 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
         });
     try {
       const r = await sendWithinQuota(kind, u.email, async () => {
-        const { error } = await new Resend(apiKey).emails.send({ from: from(), to: u.email, subject: kind === "trial_ending" ? (en ? "Your Pro trial ends in 2 days" : "La tua prova Pro finisce tra 2 giorni") : en ? "Your Pro trial has ended" : "La tua prova Pro è finita", html: email.html, text: email.text });
+        const subject = kind === "trial_day_3"
+          ? (en ? "Let’s get your search moving" : "Facciamo partire la tua ricerca")
+          : kind === "trial_day_6"
+            ? (en ? "Your Pro trial is nearly over" : "La tua prova Pro sta per finire")
+            : (en ? "Your Pro trial has ended" : "La tua prova Pro è finita");
+        const { error } = await new Resend(apiKey).emails.send({ from: from(), to: u.email, subject, html: email.html, text: email.text });
         if (error) throw new Error(JSON.stringify(error));
       });
-      if (r.sent) { if (kind === "trial_ending") res.ending++; else res.ended++; } else res.skipped++;
+      if (r.sent) { if (kind === "trial_day_3") res.day3++; else if (kind === "trial_day_6") { res.day6++; res.ending++; } else res.ended++; } else res.skipped++;
       res.details.push(`${u.email} ${kind} ${r.sent ? "sent" : r.reason}`);
     } catch (err) {
       res.skipped++;

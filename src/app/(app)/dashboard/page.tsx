@@ -13,7 +13,9 @@ import { NewSearchButton } from "@/components/new-search-button";
 import { DashboardGlobeMap } from "@/components/dashboard-globe-map";
 import { DashboardFocusProvider } from "@/components/dashboard-focus";
 import { DashboardRegionPanel } from "@/components/dashboard-region-panel";
+import { AutoApplyReadinessCard } from "@/components/auto-apply-readiness";
 import { getDashboardGlobeData, type GlobeJob } from "@/lib/dashboard-globe-data";
+import { getAutoApplyReadiness } from "@/lib/auto-apply-readiness";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
 import { prisma } from "@/lib/db";
@@ -61,6 +63,7 @@ export default async function DashboardPage() {
   const greetingName = (user.name ?? user.email.split("@")[0]).split(/\s+/)[0];
   const showWelcome = !user.welcomeSeenAt;
   const allDone = onboarding.hasUploadedCv && onboarding.hasSetPreferences && onboarding.hasFirstApplication;
+  const readiness = await getAutoApplyReadiness(user.id, globe.stats.counts.open);
 
   const greeting = (
     <>
@@ -90,6 +93,8 @@ export default async function DashboardPage() {
           </div>
 
           <DashboardRegionPanel markers={globe.markers} />
+
+          <AutoApplyReadinessCard readiness={readiness} />
 
           {!allDone && <OnboardingChecklist state={onboarding} />}
 
