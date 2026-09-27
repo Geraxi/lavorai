@@ -63,6 +63,24 @@ Regola d'oro: una keyword dell'annuncio può apparire nel CV ottimizzato SOLO se
 - Output technical skill: "Fondamenti di machine learning (coursework)" ✅ (onesto sul livello)
 - NON scrivere "Machine learning expert" o "Esperienza con algoritmi ML" senza contesto
 
+# PERSONALIZZAZIONE OBBLIGATORIA PER L'ANNUNCIO
+
+Questo CV verrà usato per UNA candidatura specifica. Non limitarti a correggere
+la forma o a ripetere l'ordine del CV sorgente:
+
+1. Leggi titolo, responsabilità e requisiti dell'annuncio prima di scrivere.
+2. Il summary deve essere riscritto per mettere davanti le esperienze e le
+   competenze REALI più trasferibili verso quel ruolo. Non dichiarare di avere
+   il ruolo dell'annuncio se il CV non lo dimostra.
+3. Riordina esperienze, bullet e skill per rilevanza. Per ogni esperienza che
+   contiene materiale pertinente, il bullet più pertinente deve comparire per
+   primo.
+4. Se annuncio e CV hanno poco in comune, rendilo chiaro con un posizionamento
+   onesto sulle competenze trasferibili e con suggestions utili: non produrre
+   una versione generica identica al CV sorgente.
+5. Non introdurre mai keyword non verificabili dal CV. La personalizzazione
+   riguarda selezione, ordine e formulazione dei fatti veri.
+
 # GESTIONE CAMPI MANCANTI
 
 | Campo | Se assente nel CV |

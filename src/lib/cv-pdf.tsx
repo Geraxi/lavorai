@@ -40,6 +40,7 @@ const L = {
     languages: "LINGUE",
     links: "LINK",
     contact: "CONTATTI",
+    target: "CANDIDATURA MIRATA",
     present: "Presente",
   },
   en: {
@@ -50,6 +51,7 @@ const L = {
     languages: "LANGUAGES",
     links: "LINKS",
     contact: "CONTACT",
+    target: "TARGET APPLICATION",
     present: "Present",
   },
 } as const;
@@ -158,6 +160,13 @@ const styles = StyleSheet.create({
     marginTop: 0,
     letterSpacing: 0.4,
   },
+  target: {
+    fontSize: 8.5,
+    color: FG_MUTED,
+    marginTop: 4,
+    fontWeight: 700,
+    letterSpacing: 0.3,
+  },
   accentBar: {
     height: 2,
     backgroundColor: ACCENT,
@@ -261,6 +270,7 @@ const compactStyles = StyleSheet.create({
   photo: { ...styles.photo, width: 92, height: 92, borderRadius: 46 },
   name: { ...styles.name, fontSize: 19 },
   title: { ...styles.title, fontSize: 10 },
+  target: { ...styles.target, fontSize: 7.8 },
   sidebarTitle: { ...styles.sidebarTitle, fontSize: 8.5, marginTop: 12, marginBottom: 4 },
   contactRow: { ...styles.contactRow, fontSize: 8 },
   sectionTitle: { ...styles.sectionTitle, fontSize: 9, marginTop: 8, marginBottom: 4 },
@@ -279,11 +289,13 @@ function CVDocument({
   lang,
   photoDataUri,
   compact,
+  targetRole,
 }: {
   profile: CVProfile;
   lang: Lang;
   photoDataUri: string | null;
   compact: boolean;
+  targetRole?: string;
 }) {
   const st = compact ? compactStyles : styles;
   const t = L[lang];
@@ -354,6 +366,7 @@ function CVDocument({
         <View style={st.main}>
           <Text style={st.name}>{fullName}</Text>
           {profile.title ? <Text style={st.title}>{profile.title.toUpperCase()}</Text> : null}
+          {targetRole ? <Text style={st.target}>{t.target}: {targetRole}</Text> : null}
           <View style={st.accentBar} />
 
           {profile.summary ? (
@@ -430,6 +443,7 @@ export async function renderCVPdf(
   lang: Lang,
   photoBuffer?: Buffer | null,
   photoMime?: string,
+  targetRole?: string,
 ): Promise<Buffer> {
   const trimmed = fitToOnePage(profile);
   const density = contentDensity(trimmed);
@@ -447,6 +461,7 @@ export async function renderCVPdf(
       lang={lang}
       photoDataUri={photoDataUri}
       compact={compact}
+      targetRole={targetRole}
     />,
   );
 }

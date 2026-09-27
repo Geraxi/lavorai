@@ -47,6 +47,25 @@ export async function generateOptimizedCVDocx(
     }),
   );
 
+  // Added by the worker, never invented by the model. It makes clear that
+  // this document was produced for the current application, not a generic CV.
+  if (data.targetRole?.trim()) {
+    children.push(
+      new Paragraph({
+        spacing: { after: 90 },
+        children: [
+          new TextRun({
+            text: `Candidatura mirata: ${data.targetRole.trim()}`,
+            color: HEADING_COLOR,
+            bold: true,
+            size: SMALL_SIZE,
+            font: FONT,
+          }),
+        ],
+      }),
+    );
+  }
+
   // Riga contatti
   const contactParts: string[] = [
     data.email,

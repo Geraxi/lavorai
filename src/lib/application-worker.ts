@@ -55,6 +55,21 @@ function isKnownAtsCompany(company: string | null | undefined): boolean {
   return KNOWN_ATS_COMPANY_NAMES.has(company.toLowerCase().replace(/[^a-z0-9]/g, ""));
 }
 
+function applicationDocumentFilename(
+  prefix: string,
+  jobTitle: string | null | undefined,
+  applicationId: string,
+  extension: "docx" | "pdf",
+): string {
+  const role = (jobTitle ?? "posizione")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48) || "posizione";
+  return `${prefix}_${role}_${applicationId.slice(-8)}.${extension}`;
+}
+
 /**
  * Worker: processa una candidatura fino a consegna al utente.
  *
@@ -199,7 +214,10 @@ export async function processApplication(
       app.user.cvProfile?.linksJson ?? null,
     );
     [cvBuffer, clBuffer] = await Promise.all([
-      generateOptimizedCVDocx(result.optimizedCV),
+      generateOptimizedCVDocx({
+        ...result.optimizedCV,
+        targetRole: app.job.title,
+      }),
       generateCoverLetterDocx(
         result.coverLetter,
         undefined,
@@ -213,13 +231,13 @@ export async function processApplication(
     cvPath = await saveUserFile(
       app.userId,
       `applications/${applicationId}`,
-      "CV_Ottimizzato.docx",
+      applicationDocumentFilename("CV", app.job.title, applicationId, "docx"),
       cvBuffer,
     );
     clPath = await saveUserFile(
       app.userId,
       `applications/${applicationId}`,
-      "Lettera_Motivazionale.docx",
+      applicationDocumentFilename("Lettera", app.job.title, applicationId, "docx"),
       clBuffer,
     );
   } catch (err) {
@@ -309,11 +327,17 @@ export async function processApplication(
         photoBuffer = null;
       }
     }
-    const pdfBuffer = await renderCVPdf(tailored, jobLang, photoBuffer, photoMime);
+    const pdfBuffer = await renderCVPdf(
+      tailored,
+      jobLang,
+      photoBuffer,
+      photoMime,
+      app.job.title,
+    );
     cvPdfPath = await saveUserFile(
       app.userId,
       `applications/${applicationId}`,
-      `CV_${jobLang}.pdf`,
+      applicationDocumentFilename("CV", app.job.title, applicationId, "pdf"),
       pdfBuffer,
     );
   } catch (err) {
@@ -864,6 +888,7 @@ export async function processApplication(
         userSessions: app.user.portalSessions,
         cvPath,
         clPath,
+        jobTitle: app.job.title,
       });
     } else {
       // Nessuna email recruiter, adapter fallito o non disponibile → stato
@@ -1053,6 +1078,7 @@ interface AutoSubmitInput {
   }>;
   cvPath: string;
   clPath: string;
+  jobTitle: string;
 }
 
 async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
@@ -1151,7 +1177,10 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
 
     // Per Playwright serve il file sul filesystem locale. Se storage è remoto
     // (Supabase), lo scaricare temporaneamente.
-    const localCvPath = await ensureLocalPath(input.cvPath, "cv.docx");
+    const localCvPath = await ensureLocalPath(
+      input.cvPath,
+      applicationDocumentFilename("CV", input.jobTitle, applicationId, "docx"),
+    );
 
     const applied = await portalSubmitStrategy(portal, page, {
       localCvPath,
@@ -1900,8 +1929,14 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
 
   // Scarica i file localmente se storage remoto (Blob/Supabase)
   const [cvLocalPath, clLocalPath] = await Promise.all([
-    ensureLocalPath(cvPath, "cv.docx"),
-    ensureLocalPath(clPath, "cover_letter.docx"),
+    ensureLocalPath(
+      cvPath,
+      applicationDocumentFilename("CV", input.jobTitle, applicationId, "docx"),
+    ),
+    ensureLocalPath(
+      clPath,
+      applicationDocumentFilename("Lettera", input.jobTitle, applicationId, "docx"),
+    ),
   ]);
 
   let browser: import("playwright").Browser | undefined;

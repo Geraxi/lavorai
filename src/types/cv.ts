@@ -37,6 +37,8 @@ export interface Language {
 
 export interface OptimizedCVData {
   fullName: string;
+  /** Added by the application pipeline; it makes the target role explicit in the file. */
+  targetRole?: string;
   email: string;
   phone: string;
   location: string;
