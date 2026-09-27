@@ -18,8 +18,8 @@ const SUGGESTIONS = [
 ];
 
 /**
- * Sidebar assistente AI per la dashboard admin. Chat con Claude che
- * ha accesso allo snapshot live della piattaforma (via /api/admin/
+ * Sidebar assistente AI per la dashboard admin. Chat con OpenAI che
+ * riceve solo uno snapshot live aggregato della piattaforma (via /api/admin/
  * assistant). Floating panel a destra, toggle con bottone fisso.
  */
 export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}) {
@@ -147,7 +147,7 @@ export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}
             {messages.length === 0 ? (
               <div style={{ padding: "8px 2px" }}>
                 <div style={{ fontSize: 13, color: "var(--fg-muted)", lineHeight: 1.55, marginBottom: 14 }}>
-                  Chiedimi qualsiasi cosa sui dati della piattaforma. Ho accesso live a utenti, candidature, consegne, job pool, conversioni.
+                  Chiedimi dei dati della piattaforma: crescita, conversioni, traffico, candidature, consegne e job pool. Rispondo da metriche aggregate live.
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                   {SUGGESTIONS.map((s) => (
@@ -202,6 +202,9 @@ export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}
               <Icon name="arrow-up-right" size={15} />
             </button>
           </form>
+          <div className="admin-ai-privacy">
+            Solo dati aggregati. Non inserire informazioni personali, CV o contenuti delle candidature.
+          </div>
         </div>
       )}
 
@@ -257,6 +260,10 @@ export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}
           width: 40px; border-radius: 9px; border: none;
           background: hsl(var(--primary)); color: #001a0d; cursor: pointer;
           display: inline-flex; align-items: center; justify-content: center;
+        }
+        .admin-ai-privacy {
+          padding: 0 14px 12px; font-size: 11px; line-height: 1.4;
+          color: var(--fg-subtle); border-top: 0;
         }
         .admin-ai-input button:disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>

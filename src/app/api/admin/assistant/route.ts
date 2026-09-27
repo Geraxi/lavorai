@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin, isTestAccount } from "@/lib/admin";
@@ -7,17 +7,12 @@ import { isAdmin, isTestAccount } from "@/lib/admin";
 export const runtime = "nodejs";
 export const maxDuration = 45;
 
-const MODEL = "claude-sonnet-5";
+const MODEL = process.env.OPENAI_MODEL_STRONG ?? "gpt-5.6-terra";
 
 /**
- * POST /api/admin/assistant
- *
- * Assistente AI admin-only. Raccoglie uno snapshot live della
- * piattaforma (utenti reali vs test, candidature + verità consegna,
- * job pool, conversioni, email) e lo passa a Claude col messaggio
- * dell'admin. Risponde a domande operative/analitiche sui dati reali.
- *
- * Body: { messages: [{ role: "user"|"assistant", content: string }] }
+ * Admin-only analytics assistant. The OpenAI request contains only the
+ * aggregate snapshot built below: no user emails, CVs, application/job text,
+ * session identifiers, or raw failure messages leave LavorAI.
  */
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -31,194 +26,205 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
-  const messages = Array.isArray(body.messages) ? body.messages : [];
+
+  const messages = Array.isArray(body.messages)
+    ? body.messages
+        .filter((message) => message.role === "user" || message.role === "assistant")
+        .map((message) => ({
+          role: message.role as "user" | "assistant",
+          content: String(message.content ?? "").slice(0, 2_000),
+        }))
+        .filter((message) => message.content.length > 0)
+        .slice(-12)
+    : [];
+
   if (messages.length === 0) {
     return NextResponse.json({ error: "no_messages" }, { status: 400 });
   }
 
-  const snapshot = await buildSnapshot();
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "ai_not_configured", message: "ANTHROPIC_API_KEY mancante." },
+      { error: "ai_not_configured", message: "OPENAI_API_KEY mancante." },
       { status: 503 },
     );
   }
-  const client = new Anthropic({ apiKey });
 
-  const system = `Sei l'assistente AI interno della dashboard admin di LavorAI (SaaS italiano di auto-apply per la ricerca lavoro, founder Umberto Geraci).
+  const snapshot = await buildAggregateSnapshot();
+  const conversation = messages
+    .map((message) => `${message.role === "user" ? "FOUNDER" : "ASSISTANT"}: ${message.content}`)
+    .join("\n\n");
 
-Rispondi a domande operative, analitiche e strategiche del founder usando lo SNAPSHOT live dei dati qui sotto. Sii diretto, onesto, concreto. Italiano. Se un dato non è nello snapshot, dillo chiaramente invece di inventare. Quando rilevi problemi (es. zero consegne confermate, zero conversioni, pool job fermo), evidenziali con franchezza e proponi azioni.
+  const instructions = `Sei l'assistente AI interno, solo per gli amministratori, di LavorAI.
 
-=== SNAPSHOT LIVE (${new Date().toISOString()}) ===
+Rispondi in italiano al founder usando esclusivamente lo snapshot aggregato qui sotto e la conversazione. Sii concreto, sintetico e onesto: se un dato non è disponibile, dillo. Dai priorità a crescita, conversione, attivazione, consegna delle candidature e affidabilità operativa. Puoi fare calcoli sulle metriche aggregate.
+
+PRIVACY: lo snapshot non contiene dati personali, CV, testo delle candidature, nomi delle aziende o errori grezzi. Non chiedere né dedurre dati personali. Non suggerire di inviare email, modificare account, effettuare pagamenti o altre azioni esterne: questa chat è solo analisi e supporto decisionale.
+
+=== SNAPSHOT AGGREGATO LIVE (${new Date().toISOString()}) ===
 ${snapshot}
-=== FINE SNAPSHOT ===
-
-CONOSCENZA DEL PRODOTTO (per domande su come funziona la piattaforma):
-- Stack: Next.js 15 App Router + Prisma/Postgres su Vercel; worker Playwright su Railway (coda BullMQ su Upstash Redis, fallback self-invoke /api/applications/process su Vercel); email via Resend; pagamenti Stripe (checkout, portal, webhook).
-- Piani: prova Pro di 7 giorni dalla registrazione (senza carta e senza rinnovo automatico), fino a 5 candidature al giorno, poi Pro €19.99/mese (50 candidature/mese) o Pro+ €39.99/mese (illimitate + Founder Coach). Alla scadenza senza piano l'utente vede Free trial expired e le funzionalità sono bloccate.
-- Pipeline candidatura: job dal pool (Greenhouse, Lever, Workable, Ashby, SmartRecruiters via API + Adzuna) → match col profilo CV (quickMatchScore) e ruoli/località delle preferenze → CV e cover letter riscritti da OpenAI, con fallback operativo opzionale → invio: (a) adapter ATS Playwright che compila e invia il form (conferma DETECTED_HTTP/DOM), (b) email al recruiter se trovata, (c) ready_to_apply manuale. Captcha interattivo → CAPTCHA (riaccodabile da Admin → Consegna). Domande obbligatorie sconosciute → needs_answers (l'utente risponde in /questions).
-- Cron (Vercel Hobby, max 2): nudges 10:00 UTC, sync-jobs 05:30 UTC; auto-apply schedulato dal worker Railway alle 8/12/16 UTC. Job chiusi (404/board) marcati closedAt ed esclusi.
-- Pagine admin: Panoramica, Traffico (PageView + globo), Consegna (verità consegna, retry captcha), Utenti, Job pool & motore (sync, salute AI), Automazione & Utenti (test apply, nudge, popup, assistente). Utente: Dashboard (globo opportunità con pin per città, regioni), Candidature, CV per posizione, Domande, Job board, Analisi, Colloqui, Founder Coach, Preferenze, Impostazioni.
-- Marketing/SEO: landing /auto-candidatura, /analizza-cv, /optimize, /proof, /interview-buddy, /pricing; sitemap.xml; Vercel Analytics e GA/Meta pixel via env.
-
-Note di dominio:
-- "Utenti reali" = esclusi account test (testmail.app, postdbpush-) e interni (founder, tester).
-- "Consegna confermata" = candidatura con submitConfirmation DETECTED_HTTP/DOM (prova hard che è arrivata all'ATS). UNCONFIRMED/null = sospetta.
-- Il problema noto #1 è che le candidature potrebbero non arrivare davvero (canary in corso).
-- Tier: free / pro (€19.99) / pro_plus (€39.99).`;
-
-  const anthropicMessages = messages
-    .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content.slice(0, 4000),
-    }));
+=== FINE SNAPSHOT ===`;
 
   try {
-    const resp = await client.messages.create({
+    const client = new OpenAI({ apiKey });
+    const response = await client.responses.create({
       model: MODEL,
-      max_tokens: 1800,
-      system,
-      messages: anthropicMessages,
+      store: false,
+      max_output_tokens: 1_400,
+      temperature: 0.2,
+      instructions,
+      input: conversation,
     });
-    const text = resp.content
-      .filter((b): b is Extract<typeof b, { type: "text" }> => b.type === "text")
-      .map((b) => b.text)
-      .join("");
-    return NextResponse.json({ ok: true, reply: text });
-  } catch (err) {
-    console.error("[admin/assistant]", err);
+    const reply = response.output_text.trim();
+    if (!reply) throw new Error("Risposta AI vuota");
+
+    return NextResponse.json({ ok: true, reply, provider: "openai", model: MODEL });
+  } catch (error) {
+    console.error("[admin/assistant]", error);
     return NextResponse.json(
-      { error: "ai_error", message: err instanceof Error ? err.message : "AI failure" },
+      { error: "ai_error", message: error instanceof Error ? error.message : "AI failure" },
       { status: 500 },
     );
   }
 }
 
-/**
- * Raccoglie uno snapshot testuale compatto della piattaforma per dare
- * contesto a Claude. Stesse query della dashboard admin.
- */
-async function buildSnapshot(): Promise<string> {
+/** Builds a compact, aggregate-only operational snapshot for the assistant. */
+async function buildAggregateSnapshot(): Promise<string> {
   const now = Date.now();
-  const since = (h: number) => new Date(now - h * 3600_000);
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const since = (hours: number) => new Date(now - hours * 3_600_000);
+  const sevenDaysAgo = since(24 * 7);
+  const thirtyDaysAgo = since(24 * 30);
 
   const [
-    allUsers,
-    payingUsers,
-    verifiedUsers,
-    appsByStatus,
-    appsByConfirmation,
-    appsBySubmittedVia,
-    totalApps,
-    apps7d,
-    deliveredMonth,
-    jobsBySource,
-    newestJob,
-    emailsByKind7d,
-    activeSessions,
-    autoApplyModes,
-    views7d,
-    sessions7d,
-    topRefs7d,
-    topPaths7d,
-    topCountries7d,
-    failReasons30d,
+    users,
+    applicationsTotal,
+    applications7d,
+    applicationsByStatus,
+    applicationsByConfirmation,
+    applicationsByPortal7d,
+    applicationsByVia7d,
     captcha30d,
     needsAnswers,
-    interviews,
-    subStatuses,
-    jobsClosed,
+    activeSessions,
+    autoApplyModes,
+    jobsBySource,
     jobs24h,
     jobs7d,
-    lastSyncBySource,
-    deliveredByPortal30d,
-    recentApps,
+    closedJobs,
+    newestJob,
+    emailsByKind7d,
+    pageViews7d,
+    trafficReferrers7d,
+    subscriptionStatuses,
   ] = await Promise.all([
-    prisma.user.findMany({ select: { email: true, tier: true, subscriptionStatus: true, emailVerified: true, createdAt: true, _count: { select: { applications: true } } } }),
-    prisma.user.count({ where: { tier: { in: ["pro", "pro_plus"] }, subscriptionStatus: "active" } }),
-    prisma.user.count({ where: { emailVerified: { not: null } } }),
+    // Email is selected only to exclude test/internal accounts locally. It is never returned.
+    prisma.user.findMany({
+      select: { email: true, tier: true, subscriptionStatus: true, emailVerified: true, createdAt: true },
+    }),
+    prisma.application.count(),
+    prisma.application.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
     prisma.application.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.application.groupBy({ by: ["submitConfirmation"], _count: { _all: true } }),
-    prisma.application.groupBy({ by: ["submittedVia"], _count: { _all: true } }),
-    prisma.application.count(),
-    prisma.application.count({ where: { createdAt: { gte: since(24 * 7) } } }),
-    prisma.application.count({ where: { status: "success", submittedVia: { not: null }, createdAt: { gte: monthStart } } }),
-    prisma.job.groupBy({ by: ["source"], _count: { _all: true } }),
-    prisma.job.findFirst({ orderBy: { cachedAt: "desc" }, select: { cachedAt: true } }),
-    prisma.emailLog.groupBy({ by: ["kind"], where: { createdAt: { gte: since(24 * 7) } }, _count: { _all: true } }),
+    prisma.application.groupBy({
+      by: ["portal"],
+      where: { createdAt: { gte: sevenDaysAgo } },
+      _count: { _all: true },
+      orderBy: { _count: { portal: "desc" } },
+      take: 8,
+    }),
+    prisma.application.groupBy({
+      by: ["submittedVia"],
+      where: { createdAt: { gte: sevenDaysAgo } },
+      _count: { _all: true },
+      orderBy: { _count: { submittedVia: "desc" } },
+    }),
+    prisma.application.count({
+      where: { submitConfirmation: "CAPTCHA", createdAt: { gte: thirtyDaysAgo } },
+    }),
+    prisma.application.count({ where: { status: "needs_answers" } }),
     prisma.applicationSession.count({ where: { status: { in: ["active", "auto"] } } }),
     prisma.userPreferences.groupBy({ by: ["autoApplyMode"], _count: { _all: true } }),
-    prisma.pageView.count({ where: { ts: { gte: since(24 * 7) } } }).catch(() => 0),
-    prisma.pageView.findMany({ where: { ts: { gte: since(24 * 7) } }, distinct: ["sessionId"], select: { sessionId: true } }).then((r) => r.length).catch(() => 0),
-    prisma.pageView.groupBy({ by: ["referrer"], where: { ts: { gte: since(24 * 7) }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 10 }).catch(() => []),
-    prisma.pageView.groupBy({ by: ["path"], where: { ts: { gte: since(24 * 7) } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 12 }).catch(() => []),
-    prisma.pageView.groupBy({ by: ["country"], where: { ts: { gte: since(24 * 7) }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 8 }).catch(() => []),
-    prisma.application.groupBy({ by: ["errorMessage"], where: { status: "failed", createdAt: { gte: since(24 * 30) } }, _count: { _all: true }, orderBy: { _count: { errorMessage: "desc" } }, take: 10 }).catch(() => []),
-    prisma.application.count({ where: { submitConfirmation: "CAPTCHA", createdAt: { gte: since(24 * 30) } } }),
-    prisma.application.count({ where: { status: "needs_answers" } }),
-    prisma.application.count({ where: { OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }] } }),
-    prisma.user.groupBy({ by: ["subscriptionStatus"], _count: { _all: true } }).catch(() => []),
-    prisma.job.count({ where: { closedAt: { not: null } } }),
+    prisma.job.groupBy({ by: ["source"], _count: { _all: true } }),
     prisma.job.count({ where: { cachedAt: { gte: since(24) } } }),
-    prisma.job.count({ where: { cachedAt: { gte: since(24 * 7) } } }),
-    prisma.job.groupBy({ by: ["source"], _max: { cachedAt: true } }),
-    prisma.application.groupBy({ by: ["portal"], where: { status: "success", submittedVia: { not: null }, createdAt: { gte: since(24 * 30) } }, _count: { _all: true }, orderBy: { _count: { portal: "desc" } }, take: 10 }).catch(() => []),
-    prisma.application.findMany({ where: { createdAt: { gte: since(24 * 3) } }, orderBy: { createdAt: "desc" }, take: 25, select: { createdAt: true, status: true, portal: true, submittedVia: true, submitConfirmation: true, errorMessage: true, user: { select: { email: true } }, job: { select: { company: true, title: true, source: true } } } }).catch(() => []),
+    prisma.job.count({ where: { cachedAt: { gte: sevenDaysAgo } } }),
+    prisma.job.count({ where: { closedAt: { not: null } } }),
+    prisma.job.findFirst({ orderBy: { cachedAt: "desc" }, select: { cachedAt: true } }),
+    prisma.emailLog.groupBy({
+      by: ["kind"],
+      where: { createdAt: { gte: sevenDaysAgo } },
+      _count: { _all: true },
+    }),
+    prisma.pageView.count({ where: { ts: { gte: sevenDaysAgo } } }).catch(() => 0),
+    prisma.pageView
+      .groupBy({
+        by: ["referrer"],
+        where: { ts: { gte: sevenDaysAgo }, referrer: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { referrer: "desc" } },
+        take: 20,
+      })
+      .catch(() => []),
+    prisma.user.groupBy({ by: ["subscriptionStatus"], _count: { _all: true } }).catch(() => []),
   ]);
 
-  const real = allUsers.filter((u) => !isTestAccount(u.email));
-  const realPaying = real.filter((u) => (u.tier === "pro" || u.tier === "pro_plus") && u.subscriptionStatus === "active").length;
-  const real7d = real.filter((u) => u.createdAt >= since(24 * 7)).length;
-  const real30d = real.filter((u) => u.createdAt >= since(24 * 30)).length;
-  const realList = real
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .map((u) => `${u.email} (${u.tier}, ${u._count.applications} apps, ${u.createdAt.toISOString().slice(0, 10)})`);
+  const realUsers = users.filter((account) => !isTestAccount(account.email));
+  const realNew7d = realUsers.filter((account) => account.createdAt >= sevenDaysAgo).length;
+  const realNew30d = realUsers.filter((account) => account.createdAt >= thirtyDaysAgo).length;
+  const realVerified = realUsers.filter((account) => account.emailVerified !== null).length;
+  const realPaying = realUsers.filter(
+    (account) =>
+      (account.tier === "pro" || account.tier === "pro_plus") && account.subscriptionStatus === "active",
+  ).length;
+  const paidTrials = realUsers.filter(
+    (account) => account.tier === "pro" || account.tier === "pro_plus",
+  ).length;
 
-  const confMap = Object.fromEntries(appsByConfirmation.map((r) => [r.submitConfirmation ?? "null", r._count._all]));
-  const confirmed = Object.entries(confMap).filter(([k]) => k.startsWith("DETECTED")).reduce((s, [, v]) => s + v, 0);
+  const confirmationCounts = Object.fromEntries(
+    applicationsByConfirmation.map((row) => [row.submitConfirmation ?? "unknown", row._count._all]),
+  );
+  const hardConfirmed = Object.entries(confirmationCounts)
+    .filter(([confirmation]) => confirmation.startsWith("DETECTED"))
+    .reduce((total, [, count]) => total + count, 0);
+  const submitted = applicationsByStatus.find((row) => row.status === "success")?._count._all ?? 0;
+  const failed = applicationsByStatus.find((row) => row.status === "failed")?._count._all ?? 0;
+  const pending = applicationsTotal - submitted - failed;
+  const referrerTotals = aggregateReferrers(trafficReferrers7d);
 
   return [
-    `UTENTI: ${allUsers.length} totali, ${real.length} reali (test/interni esclusi), ${verifiedUsers} verificati.`,
-    `  Reali nuovi: 7g=${real7d}, 30g=${real30d}. Paganti reali: ${realPaying}. Paganti totali (incl interni): ${payingUsers}.`,
-    `  Lista utenti reali: ${realList.length ? realList.join("; ") : "nessuno"}`,
-    ``,
-    `CANDIDATURE: ${totalApps} totali, ${apps7d} ultimi 7g, ${deliveredMonth} consegnate questo mese.`,
-    `  Per status: ${appsByStatus.map((r) => `${r.status}=${r._count._all}`).join(", ")}`,
-    `  Per submitConfirmation: ${appsByConfirmation.map((r) => `${r.submitConfirmation ?? "null"}=${r._count._all}`).join(", ")}`,
-    `  Per submittedVia: ${appsBySubmittedVia.map((r) => `${r.submittedVia ?? "null"}=${r._count._all}`).join(", ")}`,
-    `  Consegna confermata HARD (DETECTED_*): ${confirmed}. ${confirmed === 0 && totalApps > 0 ? "⚠️ ZERO consegne confermate!" : ""}`,
-    ``,
-    `JOB POOL: ${jobsBySource.map((r) => `${r.source}=${r._count._all}`).join(", ") || "vuoto"}.`,
-    `  Job più recente cached: ${newestJob?.cachedAt ? newestJob.cachedAt.toISOString() : "mai"}.`,
-    ``,
-    `EMAIL 7g: ${emailsByKind7d.map((r) => `${r.kind}=${r._count._all}`).join(", ") || "nessuna"}.`,
-    `AUTO-APPLY mode utenti: ${autoApplyModes.map((r) => `${r.autoApplyMode}=${r._count._all}`).join(", ") || "nessuna pref"}.`,
-    `SESSIONI attive: ${activeSessions}.`,
-    ``,
-    `TRAFFICO 7g (PageView interno): ${views7d} viste, ${sessions7d} sessioni uniche.`,
-    `  Top referrer: ${topRefs7d.map((r) => `${shortRef(r.referrer)}=${r._count._all}`).join(", ") || "nessuno (tutto diretto/sconosciuto)"}.`,
-    `  Top pagine: ${topPaths7d.map((r) => `${r.path}=${r._count._all}`).join(", ") || "-"}.`,
-    `  Paesi: ${topCountries7d.map((r) => `${r.country}=${r._count._all}`).join(", ") || "-"}.`,
-    `  Nota: Vercel Web Analytics e GA non sono nello snapshot; qui c'è solo il beacon interno.`,
-    ``,
-    `CONSEGNA 30g per portale (success): ${deliveredByPortal30d.map((r) => `${r.portal}=${r._count._all}`).join(", ") || "nessuna"}.`,
-    `  Captcha 30g: ${captcha30d}. In attesa risposte utente (needs_answers): ${needsAnswers}. Colloqui segnalati: ${interviews}.`,
-    `  Motivi di fallimento 30g: ${failReasons30d.map((r) => `"${(r.errorMessage ?? "n/d").slice(0, 80)}"=${r._count._all}`).join("; ") || "nessuno"}.`,
-    ``,
-    `JOB: ${jobs24h} nuovi 24h, ${jobs7d} nuovi 7g, ${jobsClosed} chiusi (non più online).`,
-    `  Ultimo sync per fonte: ${lastSyncBySource.map((r) => `${r.source}=${r._max.cachedAt ? r._max.cachedAt.toISOString().slice(0, 16) : "mai"}`).join(", ")}.`,
-    ``,
-    `ABBONAMENTI (stato Stripe salvato su user.subscriptionStatus): ${subStatuses.map((r) => `${r.subscriptionStatus ?? "nessuno"}=${r._count._all}`).join(", ") || "-"}.`,
-    ``,
-    `ULTIME CANDIDATURE (3g, max 25): ${recentApps.length ? recentApps.map((a) => `${a.createdAt.toISOString().slice(5, 16)} ${a.user.email.split("@")[0]}@ → ${a.job.company ?? "?"} "${a.job.title.slice(0, 40)}" [${a.job.source}/${a.portal}] ${a.status}${a.submitConfirmation ? `/${a.submitConfirmation}` : ""}${a.errorMessage ? ` err:${a.errorMessage.slice(0, 50)}` : ""}`).join("; ") : "nessuna"}.`,
+    `UTENTI REALI: ${realUsers.length} totali; ${realNew7d} nuovi negli ultimi 7 giorni; ${realNew30d} nuovi negli ultimi 30 giorni; ${realVerified} verificati; ${realUsers.length - realVerified} da verificare.`,
+    `PAGAMENTI: ${realPaying} abbonamenti attivi paganti; ${paidTrials} utenti su tier Pro/Pro+ (può includere prove); stati abbonamento complessivi: ${formatCounts(subscriptionStatuses.map((row) => [row.subscriptionStatus ?? "none", row._count._all]))}.`,
+    `CANDIDATURE: ${applicationsTotal} totali; ${applications7d} create negli ultimi 7 giorni; ${submitted} con status success; ${failed} fallite; ${pending} negli altri stati.`,
+    `FUNNEL CONSEGNA: ${applicationsTotal} tentate → ${submitted} inviate/success → ${hardConfirmed} con conferma hard DETECTED_*. Conferme per classe: ${formatCounts(Object.entries(confirmationCounts))}.`,
+    `CANALI CANDIDATURA 7G: ${formatCounts(applicationsByVia7d.map((row) => [row.submittedVia ?? "unknown", row._count._all]))}. Portali 7g: ${formatCounts(applicationsByPortal7d.map((row) => [row.portal ?? "unknown", row._count._all]))}.`,
+    `BLOCCHI OPERATIVI: ${captcha30d} captcha negli ultimi 30 giorni; ${needsAnswers} candidature che richiedono risposte dell'utente; ${activeSessions} sessioni auto-apply attive. Nessun messaggio di errore grezzo è incluso.`,
+    `TRAFFICO INTERNO 7G: ${pageViews7d} page view. Referrer aggregati: ${formatCounts(referrerTotals)}. Il beacon interno non fornisce visite GA/Vercel o utenti unici.`,
+    `JOB POOL: ${formatCounts(jobsBySource.map((row) => [row.source, row._count._all]))}; ${jobs24h} job aggiornati nelle ultime 24h; ${jobs7d} negli ultimi 7 giorni; ${closedJobs} chiusi; job più recente: ${newestJob?.cachedAt?.toISOString() ?? "mai"}.`,
+    `EMAIL 7G (soli volumi per categoria): ${formatCounts(emailsByKind7d.map((row) => [row.kind, row._count._all]))}.`,
+    `AUTO-APPLY: modalità aggregate: ${formatCounts(autoApplyModes.map((row) => [row.autoApplyMode, row._count._all]))}.`,
+    `SNAPSHOT TIME: ${new Date().toISOString()}.`,
   ].join("\n");
 }
 
-function shortRef(r: string | null): string {
-  if (!r) return "diretto";
-  try { return new URL(r).hostname.replace(/^www\./, ""); } catch { return r.slice(0, 40); }
+function aggregateReferrers(
+  rows: Array<{ referrer: string | null; _count: { _all: number } }>,
+): Array<[string, number]> {
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    const host = referrerHost(row.referrer);
+    totals.set(host, (totals.get(host) ?? 0) + row._count._all);
+  }
+  return [...totals.entries()].sort(([, first], [, second]) => second - first).slice(0, 8);
+}
+
+function referrerHost(referrer: string | null): string {
+  if (!referrer) return "direct/unknown";
+  try {
+    return new URL(referrer).hostname.replace(/^www\./, "") || "direct/unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+function formatCounts(entries: Array<[string, number]>): string {
+  return entries.length ? entries.map(([label, count]) => `${label}=${count}`).join(", ") : "nessun dato";
 }
