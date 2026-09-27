@@ -111,6 +111,15 @@ export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}
 
   return (
     <>
+      <button
+        type="button"
+        className="admin-ai-fab"
+        onClick={() => setOpen(true)}
+        aria-label="Apri Admin AI"
+      >
+        <Icon name="sparkles" size={17} />
+        <span>Admin AI</span>
+      </button>
 
       {open && (
         <div className="admin-ai-panel">
@@ -211,11 +220,11 @@ export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}
       <style>{`
         .admin-ai-fab {
           position: fixed; bottom: 24px; right: 24px; z-index: 70;
-          width: 52px; height: 52px; border-radius: 999px;
+          min-width: 124px; height: 48px; padding: 0 18px; gap: 8px; border-radius: 999px;
           background: hsl(var(--primary)); color: #001a0d; border: none;
           display: inline-flex; align-items: center; justify-content: center;
           box-shadow: 0 8px 24px hsl(var(--primary)/0.4), 0 18px 50px rgba(0,0,0,0.3);
-          cursor: pointer; transition: transform 0.15s;
+          cursor: pointer; transition: transform 0.15s; font-weight: 800; font-size: 13px;
         }
         .admin-ai-fab:hover { transform: scale(1.06); }
         .admin-ai-panel {
