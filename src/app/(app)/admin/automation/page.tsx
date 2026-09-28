@@ -5,7 +5,7 @@ import { AdminTestApply } from "@/components/admin-test-apply";
 import { AdminNudges } from "@/components/admin-nudges";
 import { AdminPopups } from "@/components/admin-popups";
 import { AdminAssistant } from "@/components/admin-assistant";
-import { Send, Users, Mail, Target, FlaskConical, BellRing, MessageSquare, Sparkles, History, ArrowRight, CheckCircle2, ExternalLink } from "lucide-react";
+import { Send, Users, Mail, Target, FlaskConical, BellRing, MessageSquare, Sparkles, ArrowRight, CheckCircle2, ExternalLink } from "lucide-react";
 
 export const metadata: Metadata = { title: "Admin · Automazione & Utenti", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -87,24 +87,28 @@ export default async function AdminAutomationPage() {
   const CHIPS = ["Utenti senza CV", "Errori ultimi 24h", "Riepilogo candidature", "Invia nudge", "Crea popup", "Analizza performance"];
 
   return (
-    <div className="adm-page">
+    <div className="adm-page adm-automation-page">
       <PageTitle
         title="Automazione & Utenti"
         sub="Gestisci test, nudges, popup e l'assistente AI. Tutto in un'unica schermata."
         actions={<span className="adm-quote">"Più applicazioni, più opportunità."</span>}
       />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
+      <div className="adm-automation-kpis">
         <KpiTrendCard label="Candidature inviate (7g)" value={compactNumber(apps7)} delta={dPct(apps7, appsPrev7)} series={appsSeries} color="hsl(var(--primary))" icon={<Send size={15} />} />
         <KpiTrendCard label="Utenti attivi" value={compactNumber(activeUsers)} delta={dPct(activeUsers, activePrev)} series={appsSeries.map((v, i) => activeUsers * (0.8 + i * 0.015) + v * 0)} color="#60a5fa" icon={<Users size={15} />} />
         <KpiTrendCard label="Email inviate" value={compactNumber(emails7)} delta={dPct(emails7, emailsPrev7)} series={emailSeries} color="#a78bfa" icon={<Mail size={15} />} />
         <KpiTrendCard label="Tasso di completamento" value={`${rate.toFixed(1)}%`} deltaLabel={`${success14}/${apps14d.length}`} series={succSeries} color="hsl(var(--primary))" icon={<Target size={15} />} />
       </div>
 
-      {/* 1 · Test invio */}
-      <Section n={1} icon={<FlaskConical size={16} />} title="Test invio candidatura" sub="Esegui un apply end-to-end su Vercel. Genera CV + adapter ATS + Chromium." cols="minmax(0,1.3fr) minmax(0,1fr)">
-        <div><AdminTestApply embedded /></div>
-        <Side title="Ultimo test" right={lastTest ? <span className={`adm-pill ${testOk ? "good" : "bad"}`}><span className="dot" />{testOk ? (lastTest.t.dryRun ? "Dry-run OK" : "Completato") : "Fallito"}</span> : null} when={lastTest ? fmtDT(new Date(lastTest.t.at)) : undefined}>
+      <div className="adm-automation-grid">
+        <Section icon={<FlaskConical size={16} />} title="Test candidatura" sub="Esegui un apply end-to-end. Genera CV, adapter ATS e completa il flusso." cols="1fr">
+          <AdminTestApply embedded />
+        </Section>
+        <Section icon={<BellRing size={16} />} title="Nudge onboarding" sub="Email agli utenti bloccati per completare lo step mancante." cols="1fr">
+          <AdminNudges embedded />
+        </Section>
+        <Section icon={<CheckCircle2 size={16} />} title="Ultimo test" sub={lastTest ? fmtDT(new Date(lastTest.t.at)) : "Il prossimo test apparirà qui."} cols="1fr" right={lastTest ? <span className={`adm-pill ${testOk ? "good" : "bad"}`}><span className="dot" />{testOk ? (lastTest.t.dryRun ? "Dry-run OK" : "Completato") : "Fallito"}</span> : undefined}>
           {lastTest ? (
             <>
               <KV k="Azienda" v={<a href={lastTest.job?.url ?? "#"} target="_blank" rel="noreferrer" style={{ display: "inline-flex", gap: 6, alignItems: "center", color: "inherit", textDecoration: "none" }}>{lastTest.job?.company ?? "—"}<ExternalLink size={11} style={{ color: "var(--fg-subtle)" }} /></a>} />
@@ -118,13 +122,8 @@ export default async function AdminAutomationPage() {
           ) : (
             <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>Nessun test eseguito da questo pannello. Il risultato del primo test comparirà qui.</div>
           )}
-        </Side>
-      </Section>
-
-      {/* 2 · Nudge */}
-      <Section n={2} icon={<BellRing size={16} />} title="Nudge onboarding" sub="Email a utenti bloccati per completare lo step mancante (verifica → CV → preferenze → 1ª candidatura)." cols="minmax(0,1.3fr) minmax(0,1fr)">
-        <div><AdminNudges embedded /></div>
-        <Side title="Statistiche nudges" when="ultimi 7 giorni">
+        </Section>
+        <Section icon={<Target size={16} />} title="Statistiche nudge" sub="Andamento degli ultimi 7 giorni." cols="1fr" right={<span className="adm-section-period">7 giorni</span>}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch" }}>
             <div style={{ display: "grid", gap: 8, alignContent: "start" }}>
               <KV k="Email inviate" v={<b>{nudges7d.length}</b>} />
@@ -139,20 +138,20 @@ export default async function AdminAutomationPage() {
               <div style={{ display: "flex", gap: 6 }}>{["L", "M", "M", "G", "V", "S", "D"].map((d, i) => <span key={i} style={{ flex: 1, textAlign: "center", fontSize: 10, color: "var(--fg-subtle)" }}>{d}</span>)}</div>
             </div>
           </div>
-        </Side>
+        </Section>
+      </div>
+
+      <Section icon={<MessageSquare size={16} />} title="Popup & sondaggi utenti" sub="Crea popup in-app per raccogliere feedback, gradimento e proposte di miglioramento." cols="1fr" right={<span className="adm-section-period">in-app</span>}>
+        <div className="adm-card-body scroll"><AdminPopups embedded /></div>
       </Section>
 
-      {/* 3+4 · Popup · Assistant · Prompt */}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.15fr) minmax(0,0.75fr)", gap: 12, minHeight: 0 }}>
-        <Section n={3} icon={<MessageSquare size={16} />} title="Popup & sondaggi utenti" sub="Crea popup in-app per raccogliere feedback, gradimento e proposte di miglioramento." cols="1fr">
-          <div className="adm-card-body scroll"><AdminPopups embedded /></div>
-        </Section>
-        <Section n={4} icon={<Sparkles size={16} />} title="Assistant (chat operativa)" sub="Chat con l'AI per analisi, azioni admin e troubleshooting." cols="1fr">
+      <div className="adm-automation-secondary">
+        <Section icon={<Sparkles size={16} />} title="Assistente AI" sub="Analisi, azioni admin e troubleshooting in linguaggio naturale." cols="1fr">
           <div className="adm-card-body scroll"><AdminAssistant embedded /></div>
         </Section>
-        <div className="adm-card">
+        <section className="adm-automation-card">
           <div className="adm-card-head" style={{ alignItems: "center", marginBottom: 6 }}>
-            <div className="adm-card-title" style={{ fontSize: 14 }}>Esempi di prompt</div>
+            <div className="adm-card-title" style={{ fontSize: 14 }}>Prompt rapidi</div>
           </div>
           <div className="adm-card-body scroll">
             {PROMPTS.map((p) => (
@@ -162,41 +161,27 @@ export default async function AdminAutomationPage() {
               </div>
             ))}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
 }
 
-function Section({ n, icon, title, sub, cols, children }: { n: number; icon: React.ReactNode; title: string; sub: string; cols: string; children: React.ReactNode }) {
+function Section({ icon, title, sub, cols, children, right }: { icon: React.ReactNode; title: string; sub: string; cols: string; children: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <section className="adm-card" style={{ overflow: "visible", flexShrink: 0 }}>
+    <section className="adm-automation-card" style={{ overflow: "visible", flexShrink: 0 }}>
       <div className="adm-card-head" style={{ marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-start", minWidth: 0, flex: 1 }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: "hsl(var(--primary)/0.14)", color: "hsl(var(--primary))", display: "grid", placeItems: "center", flexShrink: 0 }}>{icon}</div>
           <div style={{ minWidth: 0 }}>
-            <div className="adm-card-title" style={{ fontSize: 15 }}>{n}. {title}</div>
+            <div className="adm-card-title" style={{ fontSize: 15 }}>{title}</div>
             <div className="adm-card-sub" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{sub}</div>
           </div>
         </div>
+        {right}
       </div>
       <div className="adm-card-body" style={{ display: "grid", gridTemplateColumns: cols, gap: 16, alignItems: "stretch" }}>{children}</div>
     </section>
-  );
-}
-
-function Side({ title, right, when, children }: { title: string; right?: React.ReactNode; when?: string; children: React.ReactNode }) {
-  return (
-    <div style={{ background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", borderRadius: 12, padding: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
-          <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--fg)", whiteSpace: "nowrap" }}>{title}</span>
-          {when && <span style={{ fontSize: 11.5, color: "var(--fg-subtle)", whiteSpace: "nowrap" }}>({when})</span>}
-          {right}
-        </div>
-      </div>
-      <div style={{ display: "grid", gap: 7 }}>{children}</div>
-    </div>
   );
 }
 
