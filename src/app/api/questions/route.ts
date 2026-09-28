@@ -39,11 +39,11 @@ export async function GET() {
     select: { id: true, labelKey: true, label: true, kind: true, optionsJson: true, answer: true, source: true },
   }), prisma.application.findMany({
     where: { userId: user.id, status: "needs_answers" },
-    select: { id: true, pendingQuestionsJson: true, job: { select: { company: true, title: true } } },
+    select: { id: true, pendingQuestionsJson: true, job: { select: { company: true, title: true, location: true } } },
   }), prisma.cVProfile.findUnique({ where: { userId: user.id } })]);
   const profile = profileRow ? rowToProfile(profileRow) : null;
 
-  const affected = new Map<string, Array<{ id: string; company: string; title: string }>>();
+  const affected = new Map<string, Array<{ id: string; company: string; title: string; location: string | null }>>();
   // Older applications can have pendingQuestionsJson without the matching
   // UserAnswer row. Rebuild those rows here so the user can still answer them.
   const questionRows = new Map<string, QuestionRow>();
@@ -66,7 +66,7 @@ export async function GET() {
       const key = normalizeLabel(label);
       if (!key) continue;
       const list = affected.get(key) ?? [];
-      list.push({ id: app.id, company: app.job.company ?? "Azienda", title: app.job.title });
+      list.push({ id: app.id, company: app.job.company ?? "Azienda", title: app.job.title, location: app.job.location });
       affected.set(key, list);
       if (!questionRows.has(key)) {
         const options = Array.isArray(question?.options)
