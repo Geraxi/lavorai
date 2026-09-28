@@ -91,9 +91,15 @@ export function QuestionsView() {
     try {
       const response = await fetch("/api/questions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers }) });
       if (!response.ok) throw new Error("Salvataggio non riuscito. Riprova.");
-      const result: { requeued?: number } = await response.json();
+      const result: { requeued?: number; remainingApplications?: number; saved?: number } = await response.json();
       await load();
-      setNotice(result.requeued ? `Risposte salvate. ${result.requeued} ${result.requeued === 1 ? "candidatura ripartita" : "candidature ripartite"}.` : "Risposta salvata.");
+      if (result.requeued) {
+        setNotice(`Risposte salvate. ${result.requeued} ${result.requeued === 1 ? "candidatura ripartita" : "candidature ripartite"}.`);
+      } else if (result.remainingApplications) {
+        setNotice(`Risposta salvata. Restano altre domande da completare per ${result.remainingApplications} ${result.remainingApplications === 1 ? "candidatura" : "candidature"} in attesa.`);
+      } else {
+        setNotice("Risposta salvata. Le candidature verranno aggiornate a breve.");
+      }
       return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Salvataggio non riuscito. Riprova.");

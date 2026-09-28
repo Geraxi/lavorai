@@ -46,9 +46,18 @@ export async function GET() {
   const affected = new Map<string, Array<{ id: string; company: string; title: string }>>();
   // Older applications can have pendingQuestionsJson without the matching
   // UserAnswer row. Rebuild those rows here so the user can still answer them.
-  const questionRows = new Map<string, QuestionRow>(
-    answers.map((question) => [question.labelKey, question] as const),
-  );
+  const questionRows = new Map<string, QuestionRow>();
+  for (const question of answers) {
+    // Alcune righe create dalle prime versioni del flow avevano una
+    // labelKey non normalizzata. Esporre sempre la chiave canonica evita
+    // che una risposta venga salvata correttamente ma non associata alla
+    // domanda che blocca la candidatura.
+    const labelKey = normalizeLabel(question.label) || question.labelKey;
+    const current = questionRows.get(labelKey);
+    if (!current || (!current.answer?.trim() && Boolean(question.answer?.trim()))) {
+      questionRows.set(labelKey, { ...question, labelKey });
+    }
+  }
   for (const app of waitingApps) {
     const pending = safeParse(app.pendingQuestionsJson ?? "[]");
     if (!Array.isArray(pending)) continue;
@@ -172,10 +181,12 @@ export async function POST(request: NextRequest) {
   // 2. Ricostruisci la mappa risposte attuale dell'utente.
   const answered = await prisma.userAnswer.findMany({
     where: { userId: user.id, NOT: { answer: null } },
-    select: { labelKey: true, answer: true },
+    select: { labelKey: true, label: true, answer: true },
   });
   const answeredKeys = new Set(
-    answered.filter((r) => r.answer && r.answer.trim()).map((r) => r.labelKey),
+    answered
+      .filter((r) => r.answer && r.answer.trim())
+      .map((r) => normalizeLabel(r.label) || r.labelKey),
   );
 
   // 3. Ri-accoda le candidature in needs_answers ora complete.
@@ -201,11 +212,12 @@ export async function POST(request: NextRequest) {
     requeued++;
   }
 
+  const remainingApplications = waiting.length - requeued;
   const stillPending = await prisma.userAnswer.count({
     where: { userId: user.id, OR: [{ answer: null }, { answer: "" }] },
   });
 
-  return NextResponse.json({ ok: true, requeued, stillPending });
+  return NextResponse.json({ ok: true, requeued, stillPending, remainingApplications, saved: answers.length });
 }
 
 function safeParse(s: string): unknown {
