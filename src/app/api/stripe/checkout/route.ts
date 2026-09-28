@@ -12,6 +12,9 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   tier: z.enum(["pro", "pro_plus"]),
+  // The expired-trial screen must return to itself on cancellation so the
+  // user does not lose the exact recovery action they just chose.
+  returnTo: z.literal("trial_expired").optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -31,7 +34,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const { tier } = parsed.data as { tier: Tier };
+  const { tier, returnTo } = parsed.data as { tier: Tier; returnTo?: "trial_expired" };
   const priceId = tierToPriceId(tier);
   if (!priceId) {
     // Log dettagliato lato server per debugging (non esposto all'utente).
@@ -98,7 +101,10 @@ export async function POST(request: NextRequest) {
       line_items: [{ price: priceId, quantity: 1 }],
       ...(referralCoupon ? { discounts: [{ coupon: referralCoupon }] } : {}),
       success_url: `${siteUrl}/trial-expired?subscribed=1`,
-      cancel_url: `${siteUrl}/#prezzi?canceled=1`,
+      cancel_url:
+        returnTo === "trial_expired"
+          ? `${siteUrl}/trial-expired?canceled=1`
+          : `${siteUrl}/#prezzi?canceled=1`,
       ...(referralCoupon ? {} : { allow_promotion_codes: true }),
       client_reference_id: user.id, // fallback per webhook checkout.session.completed
       subscription_data: {
