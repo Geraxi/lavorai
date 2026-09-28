@@ -9,6 +9,22 @@ import { suggestAnswerFromCv } from "@/lib/cv-question-suggestions";
 
 export const runtime = "nodejs";
 
+type QuestionRow = {
+  id: string;
+  labelKey: string;
+  label: string;
+  kind: string;
+  optionsJson: string | null;
+  answer: string | null;
+  source: string;
+};
+
+type PendingQuestion = {
+  label?: unknown;
+  kind?: unknown;
+  options?: unknown;
+};
+
 /**
  * GET /api/questions
  * Domande dei form, risposte salvate e suggerimenti fattuali dal CV.
@@ -28,21 +44,41 @@ export async function GET() {
   const profile = profileRow ? rowToProfile(profileRow) : null;
 
   const affected = new Map<string, Array<{ id: string; company: string; title: string }>>();
+  // Older applications can have pendingQuestionsJson without the matching
+  // UserAnswer row. Rebuild those rows here so the user can still answer them.
+  const questionRows = new Map<string, QuestionRow>(
+    answers.map((question) => [question.labelKey, question] as const),
+  );
   for (const app of waitingApps) {
     const pending = safeParse(app.pendingQuestionsJson ?? "[]");
     if (!Array.isArray(pending)) continue;
-    const keys = new Set(pending.map((q) => normalizeLabel(typeof q?.label === "string" ? q.label : "")));
-    for (const key of keys) {
+    for (const question of pending as PendingQuestion[]) {
+      const label = typeof question?.label === "string" ? question.label.trim() : "";
+      const key = normalizeLabel(label);
       if (!key) continue;
       const list = affected.get(key) ?? [];
       list.push({ id: app.id, company: app.job.company ?? "Azienda", title: app.job.title });
       affected.set(key, list);
+      if (!questionRows.has(key)) {
+        const options = Array.isArray(question?.options)
+          ? question.options.filter((option): option is string => typeof option === "string")
+          : undefined;
+        questionRows.set(key, {
+          id: `pending-${key}`,
+          labelKey: key,
+          label: label || "Domanda richiesta dalla candidatura",
+          kind: typeof question?.kind === "string" ? question.kind : "text",
+          optionsJson: options?.length ? JSON.stringify(options) : null,
+          answer: null,
+          source: "pending",
+        });
+      }
     }
   }
 
   return NextResponse.json({
     locale: user.locale,
-    questions: answers.map((q) => {
+    questions: [...questionRows.values()].map((q) => {
       const parsedOptions = q.optionsJson ? safeParse(q.optionsJson) : null;
       const options = Array.isArray(parsedOptions) ? parsedOptions.filter((value): value is string => typeof value === "string") : undefined;
       return {
@@ -80,16 +116,52 @@ export async function POST(request: NextRequest) {
   if (body.reuseCvOnly === true) return NextResponse.json({ ok: true });
   const answers = Array.isArray(body.answers) ? body.answers : [];
 
+  // Read pending form metadata before writing. It lets saves repair legacy
+  // applications that did not get a UserAnswer row when they were blocked.
+  const waiting = await prisma.application.findMany({
+    where: { userId: user.id, status: "needs_answers" },
+    select: { id: true, pendingQuestionsJson: true },
+  });
+  const pendingByKey = new Map<string, { label: string; kind: string; optionsJson: string | null }>();
+  for (const app of waiting) {
+    const pending = safeParse(app.pendingQuestionsJson ?? "[]");
+    if (!Array.isArray(pending)) continue;
+    for (const question of pending as PendingQuestion[]) {
+      const label = typeof question?.label === "string" ? question.label.trim() : "";
+      const labelKey = normalizeLabel(label);
+      if (!labelKey || pendingByKey.has(labelKey)) continue;
+      const options = Array.isArray(question?.options)
+        ? question.options.filter((option): option is string => typeof option === "string")
+        : undefined;
+      pendingByKey.set(labelKey, {
+        label: label || "Domanda richiesta dalla candidatura",
+        kind: typeof question?.kind === "string" ? question.kind : "text",
+        optionsJson: options?.length ? JSON.stringify(options) : null,
+      });
+    }
+  }
+
   // 1. Salva le risposte (solo quelle non vuote).
   for (const a of answers) {
     const labelKey = (a.labelKey ?? "").trim();
     const answer = (a.answer ?? "").trim();
     if (!labelKey || !answer) continue;
+    const pending = pendingByKey.get(labelKey);
     await prisma.userAnswer
-      .update({
+      .upsert({
         where: { userId_labelKey: { userId: user.id, labelKey } },
         // Una modifica dell'utente vince sempre sulla risposta AI/regola.
-        data: { answer: answer.slice(0, 2000), answeredAt: new Date(), source: "user" },
+        update: { answer: answer.slice(0, 2000), answeredAt: new Date(), source: "user" },
+        create: {
+          userId: user.id,
+          labelKey,
+          label: pending?.label ?? "Domanda richiesta dalla candidatura",
+          kind: pending?.kind ?? "text",
+          optionsJson: pending?.optionsJson ?? null,
+          answer: answer.slice(0, 2000),
+          answeredAt: new Date(),
+          source: "user",
+        },
       })
       .catch((error) => {
         console.error("[questions] save answer failed", error);
@@ -107,10 +179,6 @@ export async function POST(request: NextRequest) {
   );
 
   // 3. Ri-accoda le candidature in needs_answers ora complete.
-  const waiting = await prisma.application.findMany({
-    where: { userId: user.id, status: "needs_answers" },
-    select: { id: true, pendingQuestionsJson: true },
-  });
   let requeued = 0;
   for (const app of waiting) {
     const qs = safeParse(app.pendingQuestionsJson ?? "[]") as Array<{ label: string }>;
