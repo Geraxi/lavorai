@@ -71,7 +71,6 @@ ${snapshot}
       model: MODEL,
       store: false,
       max_output_tokens: 1_400,
-      temperature: 0.2,
       instructions,
       input: conversation,
     });
