@@ -1,0 +1,23 @@
+.adm-automation-page { display: grid; gap: 14px; padding: 4px 0 28px; }
+.adm-automation-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.adm-automation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.adm-automation-secondary { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); gap: 12px; align-items: start; }
+.adm-automation-card { min-width: 0; padding: 18px; border: 1px solid var(--border-ds); border-radius: 15px; background: linear-gradient(145deg, color-mix(in srgb, var(--bg-elev) 94%, #102935), var(--bg-elev)); box-shadow: 0 18px 44px rgba(0, 0, 0, .13); }
+.adm-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.adm-card-title { color: var(--fg); font-weight: 700; letter-spacing: -.018em; line-height: 1.2; }
+.adm-card-sub { margin-top: 3px; line-height: 1.45; }
+.adm-card-body.scroll { min-width: 0; }
+.adm-section-period { flex: none; color: var(--fg-subtle); font-size: 11px; white-space: nowrap; }
+.adm-pill { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 5px 9px; border-radius: 999px; font-size: 11px; font-weight: 650; }
+.adm-pill.good { color: hsl(var(--primary)); background: hsl(var(--primary)/.12); }
+.adm-pill.bad { color: #fca5a5; background: rgba(248, 113, 113, .12); }
+.adm-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 10px currentColor; }
+.adm-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 38px; border: 1px solid var(--border-ds); border-radius: 9px; background: var(--bg-sunken); color: var(--fg); font: inherit; font-weight: 650; cursor: pointer; transition: transform .16s ease, border-color .16s ease, background .16s ease; }
+.adm-btn:hover:not(:disabled) { transform: translateY(-1px); border-color: hsl(var(--primary)/.55); background: color-mix(in srgb, var(--bg-sunken) 72%, hsl(var(--primary))); }
+.adm-btn.primary { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); border-color: transparent; }
+.adm-btn.primary:hover:not(:disabled) { background: hsl(var(--primary)/.9); }
+.adm-btn:disabled { cursor: not-allowed; opacity: .58; }
+.adm-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1080px) { .adm-automation-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 820px) { .adm-automation-grid, .adm-automation-secondary { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .adm-automation-kpis { grid-template-columns: 1fr; } .adm-automation-card { padding: 14px; border-radius: 13px; } }

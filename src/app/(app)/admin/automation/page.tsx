@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import "./automation.css";
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, compactNumber } from "../_ui";
 import { AdminTestApply } from "@/components/admin-test-apply";
