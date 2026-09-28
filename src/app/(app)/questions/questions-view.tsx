@@ -36,7 +36,16 @@ function needsReview(question: Question) { return Boolean(question.suggestion ||
 function AnswerField({ question, value, onChange, locale }: { question: Question; value: string; onChange: (value: string) => void; locale: string }) {
   const options = question.kind === "checkbox" ? ["Yes", "No"] : (question.options ?? []).filter((option): option is string => typeof option === "string" && Boolean(option.trim()));
   if (options.length > 0 && options.length <= 8) {
-    return <div className="qa-options" role="group" aria-label={displayQuestion(question.label, locale).text}>{options.map((option) => <button key={option} type="button" className={value === option ? "is-selected" : ""} onClick={() => onChange(option)} aria-pressed={value === option}><span className="qa-radio" />{displayOption(option, locale)}</button>)}</div>;
+    return <fieldset className="qa-options" aria-label={displayQuestion(question.label, locale).text}>
+      {options.map((option) => {
+        const id = `qa-answer-${question.id}-${option.replace(/[^a-z0-9]/gi, "-")}`;
+        const selected = value === option;
+        return <label key={option} htmlFor={id} className={selected ? "is-selected" : ""}>
+          <input id={id} type="radio" name={`qa-answer-${question.id}`} value={option} checked={selected} onChange={() => onChange(option)} />
+          <span className="qa-radio" aria-hidden />{displayOption(option, locale)}
+        </label>;
+      })}
+    </fieldset>;
   }
   if (question.kind === "textarea") return <textarea className="qa-input" rows={4} value={value} onChange={(event) => onChange(event.target.value)} placeholder="Scrivi la tua risposta…" aria-label={displayQuestion(question.label, locale).text} />;
   return <><input className="qa-input" type="text" list={options.length ? `qa-options-${question.id}` : undefined} value={value} onChange={(event) => onChange(event.target.value)} placeholder="Scrivi o scegli una risposta…" aria-label={displayQuestion(question.label, locale).text} />{options.length ? <datalist id={`qa-options-${question.id}`}>{options.map((option) => <option key={option} value={option} label={displayOption(option, locale)} />)}</datalist> : null}</>;
@@ -92,7 +101,15 @@ export function QuestionsView() {
       const response = await fetch("/api/questions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers }) });
       if (!response.ok) throw new Error("Salvataggio non riuscito. Riprova.");
       const result: { requeued?: number; remainingApplications?: number; saved?: number } = await response.json();
-      await load();
+      // Aggiorna subito la UI con il valore che il server ha appena confermato.
+      // Evita che una GET ancora in propagazione faccia sembrare la risposta
+      // non salvata, soprattutto sui form sì/no.
+      const savedByKey = new Map(answers.map((answer) => [answer.labelKey, answer.answer]));
+      setQuestions((current) => current.map((question) => {
+        const answer = savedByKey.get(question.labelKey);
+        return answer == null ? question : { ...question, answer, source: "user" };
+      }));
+      setWaiting((current) => Math.max(0, current - (result.requeued ?? 0)));
       if (result.requeued) {
         setNotice(`Risposte salvate. ${result.requeued} ${result.requeued === 1 ? "candidatura ripartita" : "candidature ripartite"}.`);
       } else if (result.remainingApplications) {
