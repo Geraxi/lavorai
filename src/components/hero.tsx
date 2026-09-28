@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import { ShieldCheck, Sparkles } from "lucide-react";
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { useRef } from "react";
 import { useTranslations } from "next-intl";
@@ -15,24 +15,26 @@ export function Hero() {
   const t = useTranslations("hero");
   const heroRef = useRef<HTMLElement>(null);
   const reducedMotion = useReducedMotion();
-  const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
-  const sceneY = useTransform(scrollYProgress, [0, 1], ["0%", "-8%"]);
-  const sceneScale = useTransform(scrollYProgress, [0, 1], [1, 1.12]);
-  const copyY = useTransform(scrollYProgress, [0, 1], [0, -72]);
-  const copyOpacity = useTransform(scrollYProgress, [0, 0.72], [1, 0]);
-  const orbitRotate = useTransform(scrollYProgress, [0, 1], [0, 42]);
-  const orbitScale = useTransform(scrollYProgress, [0, 1], [1, 1.16]);
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end end"] });
+  const sceneY = useTransform(scrollYProgress, [0, 1], ["0%", "-11%"]);
+  const sceneScale = useTransform(scrollYProgress, [0, 1], [1, 1.3]);
+  const copyY = useTransform(scrollYProgress, [0, 0.76], [0, -104]);
+  const copyOpacity = useTransform(scrollYProgress, [0, 0.58, 0.82], [1, 1, 0]);
+  const orbitRotate = useTransform(scrollYProgress, [0, 1], [-8, 48]);
+  const orbitScale = useTransform(scrollYProgress, [0, 1], [1, 1.26]);
   const railScale = useTransform(scrollYProgress, [0, 1], [0.08, 1]);
+  const signalOpacity = useTransform(scrollYProgress, [0, 0.18, 0.7], [0, 1, 1]);
+  const signalY = useTransform(scrollYProgress, [0, 0.18, 0.72], [96, 0, -22]);
+  const signalRotate = useTransform(scrollYProgress, [0, 0.72], [8, -2]);
   return (
     <section
       ref={heroRef}
-      className="lavorai-hero-section relative overflow-hidden"
+      className="lavorai-hero-section relative min-h-[780px] overflow-hidden lg:h-[182svh]"
       style={{
         backgroundColor: "#010510",
-        display: "flex",
-        alignItems: "center",
       }}
     >
+      <div className="relative min-h-[780px] lg:sticky lg:top-0 lg:h-[100svh]">
       {/* Desktop (lg+): planet ruota a destra come sfondo full-section.
           Su mobile non lo mostriamo qui — il testo occuperebbe tutto
           il width e coprirebbe il pianeta. Vedi il blocco mobile sotto. */}
@@ -55,7 +57,7 @@ export function Hero() {
           // anche se il viewport cambia altezza. L'immagine è 766x765
           // (quadrata) → 88% di altezza section = anche larghezza
           // proporzionata, niente clipping orizzontale.
-          backgroundSize: "auto 88%",
+          backgroundSize: "auto 98%",
           // Right 20px + top 4%: pianeta in alto-destra con micro-margine
           // su entrambi i lati così niente edge viene mai toccato dal
           // micro respiro di scale.
@@ -135,7 +137,7 @@ export function Hero() {
       />
 
       <motion.div
-        className="relative z-10 w-full"
+        className="relative z-10 flex min-h-[780px] w-full items-center lg:h-full lg:min-h-0"
         style={{
           maxWidth: 1480,
           margin: "0 auto",
@@ -177,9 +179,9 @@ export function Hero() {
                 // Le righe precedenti sono in em per scalare in proporzione.
                 // Max ridotto da 7.5rem a 6rem così le 4 righe + content
                 // sotto stanno tutte nella section senza scroll/crop.
-                fontSize: "clamp(2.25rem, 4.2vw, 4.5rem)",
-                letterSpacing: "-0.03em",
-                lineHeight: 1.02,
+                fontSize: "clamp(2.5rem, 5vw, 5.35rem)",
+                letterSpacing: "-0.055em",
+                lineHeight: 0.98,
                 fontWeight: 800,
                 color: "#FFFFFF",
                 textShadow: "0 2px 24px rgba(0,5,20,0.5)",
@@ -357,12 +359,26 @@ export function Hero() {
         <div className="mt-10 mb-4" />
       </motion.div>
 
-      <div aria-hidden className="pointer-events-none absolute bottom-7 left-1/2 z-20 hidden w-[min(300px,30vw)] -translate-x-1/2 lg:block">
+      <motion.div
+        className="absolute bottom-[15%] right-[8%] z-20 hidden w-[min(340px,26vw)] border border-white/15 bg-[#071418]/80 p-5 shadow-[0_34px_90px_rgba(0,0,0,.5)] backdrop-blur-xl lg:block"
+        style={reducedMotion ? undefined : { opacity: signalOpacity, y: signalY, rotate: signalRotate }}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 pb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/45"><span>Role signal</span><Sparkles size={14} className="text-primary" /></div>
+        <div className="mt-5 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary">Your next move</p><strong className="mt-2 block text-4xl font-medium tracking-[-.06em] text-white">92<span className="ml-1 text-sm font-normal text-white/40">/100</span></strong></div><span className="border border-primary/30 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-primary">match</span></div>
+        <div className="mt-5 space-y-3 border-t border-white/10 pt-4 text-[12px] text-white/70"><SignalRow step="01" text="Profile read" active /><SignalRow step="02" text="Role and location" active /><SignalRow step="03" text="Application tailored" /></div>
+      </motion.div>
+
+      <div aria-hidden className="pointer-events-none absolute bottom-7 left-1/2 z-20 hidden w-[min(440px,36vw)] -translate-x-1/2 lg:block">
         <div className="mb-2 flex justify-between font-mono text-[9px] tracking-[0.22em] text-white/45"><span>01 / START</span><span>YOUR NEXT ROLE</span></div>
         <div className="h-px bg-white/20"><motion.span className="block h-px origin-left bg-primary" style={reducedMotion ? { width: "100%" } : { scaleX: railScale }} /></div>
       </div>
+      </div>
     </section>
   );
+}
+
+function SignalRow({ step, text, active = false }: { step: string; text: string; active?: boolean }) {
+  return <div className="flex items-center gap-3"><span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-primary shadow-[0_0_12px_hsl(var(--primary)/.9)]" : "bg-white/25"}`} /><span className="font-mono text-[10px] text-white/35">{step}</span><span>{text}</span></div>;
 }
 
 // Live-activity Counter + Product Hunt badge + 4-icon trust strip
