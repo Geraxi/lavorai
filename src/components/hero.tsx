@@ -23,9 +23,8 @@ export function Hero() {
   const orbitRotate = useTransform(scrollYProgress, [0, 1], [-8, 48]);
   const orbitScale = useTransform(scrollYProgress, [0, 1], [1, 1.26]);
   const railScale = useTransform(scrollYProgress, [0, 1], [0.08, 1]);
-  const signalOpacity = useTransform(scrollYProgress, [0, 0.18, 0.7], [0, 1, 1]);
-  const signalY = useTransform(scrollYProgress, [0, 0.18, 0.72], [96, 0, -22]);
-  const signalRotate = useTransform(scrollYProgress, [0, 0.72], [8, -2]);
+  const signalY = useTransform(scrollYProgress, [0, 0.72], [22, -22]);
+  const signalRotate = useTransform(scrollYProgress, [0, 0.72], [2, -2]);
   return (
     <section
       ref={heroRef}
@@ -360,8 +359,8 @@ export function Hero() {
       </motion.div>
 
       <motion.div
-        className="absolute bottom-[15%] right-[8%] z-20 hidden w-[min(340px,26vw)] border border-white/15 bg-[#071418]/80 p-5 shadow-[0_34px_90px_rgba(0,0,0,.5)] backdrop-blur-xl lg:block"
-        style={reducedMotion ? undefined : { opacity: signalOpacity, y: signalY, rotate: signalRotate }}
+        className="absolute right-[8%] top-[18%] z-20 hidden w-[min(340px,26vw)] border border-white/20 bg-[#071418]/95 p-5 shadow-[0_34px_90px_rgba(0,0,0,.62)] backdrop-blur-xl lg:block"
+        style={reducedMotion ? undefined : { y: signalY, rotate: signalRotate }}
       >
         <div className="flex items-center justify-between border-b border-white/10 pb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-white/45"><span>Role signal</span><Sparkles size={14} className="text-primary" /></div>
         <div className="mt-5 flex items-end justify-between"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary">Your next move</p><strong className="mt-2 block text-4xl font-medium tracking-[-.06em] text-white">92<span className="ml-1 text-sm font-normal text-white/40">/100</span></strong></div><span className="border border-primary/30 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-primary">match</span></div>
