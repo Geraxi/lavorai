@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, type Variants } from "motion/react";
+import { motion, useReducedMotion, type Variants } from "motion/react";
 import type { ReactNode } from "react";
 
 type RevealProps = {
@@ -28,6 +28,7 @@ export function Reveal({
   as = "div",
 }: RevealProps) {
   const MotionTag = motion[as];
+  const reducedMotion = useReducedMotion();
 
   const variants: Variants = {
     hidden: { opacity: 0, y, filter: "blur(6px)" },
@@ -45,8 +46,8 @@ export function Reveal({
 
   return (
     <MotionTag
-      initial={false}
-      whileInView="visible"
+      initial={reducedMotion ? false : "hidden"}
+      whileInView={reducedMotion ? undefined : "visible"}
       viewport={{ once, amount: 0.2 }}
       variants={variants}
       className={className}
@@ -68,10 +69,11 @@ export function RevealStagger({
   staggerDelay?: number;
   className?: string;
 }) {
+  const reducedMotion = useReducedMotion();
   return (
     <motion.div
-      initial={false}
-      whileInView="visible"
+      initial={reducedMotion ? false : "hidden"}
+      whileInView={reducedMotion ? undefined : "visible"}
       viewport={{ once: true, amount: 0.15 }}
       variants={{
         hidden: {},
@@ -95,8 +97,10 @@ export function RevealItem({
   y?: number;
   className?: string;
 }) {
+  const reducedMotion = useReducedMotion();
   return (
     <motion.div
+      initial={reducedMotion ? false : "hidden"}
       variants={{
         hidden: { opacity: 0, y, filter: "blur(4px)" },
         visible: {

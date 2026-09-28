@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
+import { useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 // Image import non più necessario — l'immagine pianeta è ora bg
@@ -12,8 +13,19 @@ import { LiveStatsBadge } from "@/components/live-stats-badge";
 
 export function Hero() {
   const t = useTranslations("hero");
+  const heroRef = useRef<HTMLElement>(null);
+  const reducedMotion = useReducedMotion();
+  const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
+  const sceneY = useTransform(scrollYProgress, [0, 1], ["0%", "-8%"]);
+  const sceneScale = useTransform(scrollYProgress, [0, 1], [1, 1.12]);
+  const copyY = useTransform(scrollYProgress, [0, 1], [0, -72]);
+  const copyOpacity = useTransform(scrollYProgress, [0, 0.72], [1, 0]);
+  const orbitRotate = useTransform(scrollYProgress, [0, 1], [0, 42]);
+  const orbitScale = useTransform(scrollYProgress, [0, 1], [1, 1.16]);
+  const railScale = useTransform(scrollYProgress, [0, 1], [0.08, 1]);
   return (
     <section
+      ref={heroRef}
       className="lavorai-hero-section relative overflow-hidden"
       style={{
         backgroundColor: "#010510",
@@ -24,11 +36,11 @@ export function Hero() {
       {/* Desktop (lg+): planet ruota a destra come sfondo full-section.
           Su mobile non lo mostriamo qui — il testo occuperebbe tutto
           il width e coprirebbe il pianeta. Vedi il blocco mobile sotto. */}
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
-        style={{
-          backgroundImage: "url('/Lavoraiherosection.png')",
+      <motion.div aria-hidden className="pointer-events-none absolute inset-0 z-0 hidden lg:block" style={reducedMotion ? undefined : { y: sceneY, scale: sceneScale }}>
+        <motion.div
+          className="absolute inset-0"
+          style={{
+            backgroundImage: "url('/Lavoraiherosection.png')",
           // Image fitting: ora 80% size + margine 40px sia a destra che
           // verticalmente. Niente più crop su nessun lato, sia per il
           // sizing che per la micro scale-animation (max 1.02).
@@ -51,16 +63,19 @@ export function Hero() {
           backgroundRepeat: "no-repeat",
           transformOrigin: "85% 20%",
         }}
-        animate={{
-          rotate: [0, 1, -1, 0],
-          scale: [1.0, 1.02, 1.02, 1.0],
-        }}
-        transition={{
-          duration: 18,
-          ease: "easeInOut",
-          repeat: Infinity,
-        }}
-      />
+          animate={reducedMotion ? undefined : { rotate: [0, 1, -1, 0], scale: [1.0, 1.02, 1.02, 1.0] }}
+          transition={{ duration: 18, ease: "easeInOut", repeat: Infinity }}
+        />
+      </motion.div>
+
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute -right-[15%] top-[4%] z-[1] hidden h-[84%] w-[68%] rounded-full border border-primary/20 lg:block"
+        style={reducedMotion ? undefined : { rotate: orbitRotate, scale: orbitScale }}
+      >
+        <span className="absolute -left-1 top-[23%] h-2 w-2 rounded-full bg-primary shadow-[0_0_22px_hsl(var(--primary)/0.9)]" />
+        <span className="absolute right-[14%] top-[68%] h-1.5 w-1.5 rounded-full bg-white/80" />
+      </motion.div>
 
       {/* Mobile (<lg): pianeta visibile come "top hero" sopra il testo.
           Niente rotazione (mantenere CPU + battery basso su device piccoli),
@@ -119,12 +134,13 @@ export function Hero() {
         }}
       />
 
-      <div
+      <motion.div
         className="relative z-10 w-full"
         style={{
           maxWidth: 1480,
           margin: "0 auto",
           padding: "24px 40px",
+          ...(reducedMotion ? {} : { y: copyY, opacity: copyOpacity }),
         }}
       >
         <div className="grid items-center gap-14 lg:grid-cols-2">
@@ -339,6 +355,11 @@ export function Hero() {
         </div>
 
         <div className="mt-10 mb-4" />
+      </motion.div>
+
+      <div aria-hidden className="pointer-events-none absolute bottom-7 left-1/2 z-20 hidden w-[min(300px,30vw)] -translate-x-1/2 lg:block">
+        <div className="mb-2 flex justify-between font-mono text-[9px] tracking-[0.22em] text-white/45"><span>01 / START</span><span>YOUR NEXT ROLE</span></div>
+        <div className="h-px bg-white/20"><motion.span className="block h-px origin-left bg-primary" style={reducedMotion ? { width: "100%" } : { scaleX: railScale }} /></div>
       </div>
     </section>
   );
