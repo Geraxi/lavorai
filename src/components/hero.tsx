@@ -36,8 +36,18 @@ export function Hero() {
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
         style={{
+          backgroundImage: "url('/lavorai-hero-space.png')",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "cover",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
+        style={{
           background:
-            "linear-gradient(90deg, #010510 0%, rgba(1,5,16,0.8) 40%, rgba(1,5,16,0) 100%)",
+            "linear-gradient(90deg, #010510 0%, rgba(1,5,16,0.92) 34%, rgba(1,5,16,0.28) 54%, rgba(1,5,16,0) 76%)",
         }}
       />
       <div
@@ -68,7 +78,7 @@ export function Hero() {
         }}
       />
 
-      <JobNetworkScene hero />
+      <JobNetworkScene hero showGlobe={false} />
 
 
       <motion.div
