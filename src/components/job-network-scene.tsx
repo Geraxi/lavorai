@@ -11,11 +11,11 @@ const roles = [
 ];
 
 const heroRoles = [
-  { role: "AI Engineer", company: "Revolut", location: "Londra, UK", score: "94%", mark: "R", x: "40%", y: "16%", delay: .05 },
+  { role: "AI Engineer", company: "Revolut", location: "Londra, UK", score: "94%", mark: "R", x: "47%", y: "16%", delay: .05 },
   { role: "Product Designer", company: "Bending Spoons", location: "Milano, Italia", score: "92%", mark: "B", x: "70%", y: "22%", delay: .13 },
-  { role: "Marketing Specialist", company: "Mokka Studios", location: "Milano, Italia", score: "86%", mark: "✳", x: "37%", y: "40%", delay: .21 },
+  { role: "Marketing Specialist", company: "Mokka Studios", location: "Milano, Italia", score: "86%", mark: "✳", x: "49%", y: "40%", delay: .21 },
   { role: "Data Analyst", company: "Scalapay", location: "Milano, Italia", score: "88%", mark: "S", x: "75%", y: "39%", delay: .29 },
-  { role: "Product Manager", company: "Google", location: "Barcellona, Spagna", score: "91%", mark: "G", x: "35%", y: "58%", delay: .37 },
+  { role: "Product Manager", company: "Google", location: "Barcellona, Spagna", score: "91%", mark: "G", x: "45%", y: "58%", delay: .37 },
   { role: "UX Designer", company: "Notion", location: "Remoto, Europa", score: "89%", mark: "N", x: "77%", y: "57%", delay: .45 },
   { role: "Software Engineer", company: "Twelve", location: "Roma, Italia", score: "87%", mark: "✳", x: "59%", y: "70%", delay: .53 },
 ];
