@@ -366,16 +366,6 @@ function LoginContent() {
           align-items: center;
           border-left: 1px solid var(--border-ds);
         }
-        /* Hide the narrow portion of the reference image that contains its
-           mock form; the real, interactive form remains in the left panel. */
-        .lavorai-login-right::before {
-          content: "";
-          position: absolute;
-          inset: 0;
-          background:
-            linear-gradient(90deg, #02060d 0%, rgba(2,6,13,.95) 9%, rgba(2,6,13,0) 26%);
-          pointer-events: none;
-        }
         @media (max-width: 1023px) {
           .lavorai-login { grid-template-columns: 1fr; }
           .lavorai-login-left { padding: 28px 20px; }
