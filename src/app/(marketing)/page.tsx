@@ -23,6 +23,7 @@ import {
 import { SectionFaq } from "@/components/sections/faq";
 import { SectionCtaFinal } from "@/components/sections/cta-final";
 import { StickyCta } from "@/components/sticky-cta";
+import { MarketingMotionShell } from "@/components/marketing-atmosphere";
 import { getLocale } from "next-intl/server";
 
 /**
@@ -76,16 +77,18 @@ export default async function Home() {
     <div className="flex min-h-screen flex-col">
       <SiteNav />
       <main className="flex-1">
-        <Hero />
-        <SectionStats metrics={metrics} />
-        <SectionComeFunziona />
-        <SectionAutomationBoundaries />
-        <SectionLeadMagnet />
-        <SectionPricing />
-        <SectionTrustBlock />
-        <SectionFaq />
-        <SectionReferral />
-        <SectionCtaFinal />
+        <MarketingMotionShell>
+          <Hero />
+          <SectionStats metrics={metrics} />
+          <SectionComeFunziona />
+          <SectionAutomationBoundaries />
+          <SectionLeadMagnet />
+          <SectionPricing />
+          <SectionTrustBlock />
+          <SectionFaq />
+          <SectionReferral />
+          <SectionCtaFinal />
+        </MarketingMotionShell>
       </main>
       <SiteFooter />
       <StickyCta />
