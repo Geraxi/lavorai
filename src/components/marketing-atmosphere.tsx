@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useReducedMotion, useScroll, useSpring, useTransform } from "motion/react";
+import { useReducedMotion } from "motion/react";
 import { type ReactNode, useEffect, useRef } from "react";
 import styles from "./marketing-atmosphere.module.css";
 
@@ -12,19 +12,6 @@ import styles from "./marketing-atmosphere.module.css";
 export function MarketingMotionShell({ children }: { children: ReactNode }) {
   const flowRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
-  const { scrollYProgress } = useScroll();
-
-  const smooth = useSpring(scrollYProgress, { stiffness: 65, damping: 24, mass: 0.35 });
-  // Nel primo viewport il globo vive nella metà destra, sotto la nav:
-  // dev'essere una presenza leggibile, non un crop che invade l'header.
-  const planetX = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["30vw", "14vw", "-18vw", "10vw", "26vw"]);
-  const planetY = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["7vh", "14vh", "8vh", "16vh", "28vh"]);
-  const planetScale = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], [0.7, 0.72, 0.62, 0.74, 0.58]);
-  const planetRotate = useTransform(smooth, [0, 1], [-7, 18]);
-  // L'hero ha una composizione propria e completa. Il pianeta condiviso
-  // entra soltanto dopo, così non esistono mai due Terre nello stesso frame.
-  const planetOpacity = useTransform(smooth, [0, 0.12, 0.24, 0.9, 1], [0, 0, 0.7, 0.58, 0.42]);
-
   useEffect(() => {
     const flow = flowRef.current;
     if (!flow || reducedMotion) return;
@@ -42,10 +29,6 @@ export function MarketingMotionShell({ children }: { children: ReactNode }) {
     <div className={styles.shell}>
       <div className={styles.atmosphere} aria-hidden>
         <div className={styles.stars} />
-        <motion.div
-          className={styles.planet}
-          style={reducedMotion ? undefined : { x: planetX, y: planetY, scale: planetScale, rotate: planetRotate, opacity: planetOpacity }}
-        />
         <div className={styles.haze} />
       </div>
       <div ref={flowRef} className={styles.flow}>{children}</div>
