@@ -20,7 +20,6 @@ export function MarketingMotionShell({ children }: { children: ReactNode }) {
   const planetScale = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], [0.88, 0.76, 0.64, 0.76, 0.6]);
   const planetRotate = useTransform(smooth, [0, 1], [-7, 18]);
   const planetOpacity = useTransform(smooth, [0, 0.1, 0.24, 0.9, 1], [0.98, 0.86, 0.7, 0.58, 0.42]);
-  const orbitRotate = useTransform(smooth, [0, 1], [-12, 120]);
 
   useEffect(() => {
     const flow = flowRef.current;
@@ -39,13 +38,6 @@ export function MarketingMotionShell({ children }: { children: ReactNode }) {
     <div className={styles.shell}>
       <div className={styles.atmosphere} aria-hidden>
         <div className={styles.stars} />
-        <motion.div
-          className={styles.orbit}
-          style={reducedMotion ? undefined : { rotate: orbitRotate }}
-        >
-          <span className={styles.orbitMarker} />
-          <span className={styles.orbitMarkerSoft} />
-        </motion.div>
         <motion.div
           className={styles.planet}
           style={reducedMotion ? undefined : { x: planetX, y: planetY, scale: planetScale, rotate: planetRotate, opacity: planetOpacity }}
