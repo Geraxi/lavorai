@@ -347,70 +347,76 @@ export function SectionAfterSignup() {
 /* -------------------- Referral loop -------------------- */
 export function SectionReferral() {
   const t = useTranslations("referral");
+  const steps = [
+    { number: "01", title: t("stepShareTitle"), body: t("stepShareBody") },
+    { number: "02", title: t("stepJoinTitle"), body: t("stepJoinBody") },
+    { number: "03", title: t("stepRewardTitle"), body: t("stepRewardBody") },
+  ];
   return (
     <section
       id="referral"
-      className="relative border-t border-border/60 py-16"
+      className="relative border-t border-border/60 py-20 sm:py-28"
     >
-      <div className="container">
-        <Reveal className="mx-auto max-w-3xl">
+      <div className="container max-w-6xl">
+        <Reveal>
           <div
             style={{
-              padding: "24px 28px",
-              borderRadius: 14,
-              background: "var(--bg-elev)",
+              overflow: "hidden",
+              borderRadius: 8,
+              background: "linear-gradient(145deg, rgba(12,23,30,.96), rgba(3,9,16,.96))",
               border: "1px solid var(--border-ds)",
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-              alignItems: "flex-start",
             }}
           >
-            <span
-              className="mono"
-              style={{
-                fontSize: 10.5,
-                textTransform: "uppercase",
-                letterSpacing: "0.18em",
-                color: "var(--fg-subtle)",
-                fontWeight: 500,
-              }}
-            >
-              {t("eyebrow")}
-            </span>
-            <h3
-              style={{
-                fontSize: 22,
-                fontWeight: 600,
-                letterSpacing: "-0.022em",
-                lineHeight: 1.25,
-                margin: 0,
-              }}
-            >
-              {t("title")}
-            </h3>
-            <p
-              style={{
-                fontSize: 14,
-                lineHeight: 1.6,
-                color: "var(--fg-muted)",
-                margin: 0,
-                maxWidth: 640,
-              }}
-            >
-              {t("body")}
-            </p>
-            <Link
-              href="/settings"
-              className="ds-btn ds-btn-primary"
-              style={{
-                fontSize: 14,
-                padding: "9px 18px",
-                fontWeight: 600,
-              }}
-            >
-              {t("cta")} →
-            </Link>
+            <div className="grid gap-8 px-6 py-7 sm:px-10 sm:py-10 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,.75fr)] lg:items-end">
+              <div>
+                <p
+                  className="mono"
+                  style={{ fontSize: 10.5, textTransform: "uppercase", letterSpacing: "0.18em", color: "hsl(var(--primary))", fontWeight: 600, margin: 0 }}
+                >
+                  {t("eyebrow")}
+                </p>
+                <h3
+                  className="mt-4 max-w-2xl text-balance text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl"
+                  style={{ lineHeight: 1.08, marginBottom: 0 }}
+                >
+                  {t("title")}
+                </h3>
+              </div>
+              <p className="max-w-xl text-sm leading-relaxed text-white/65 sm:text-base" style={{ margin: 0 }}>
+                {t("body")}
+              </p>
+            </div>
+
+            <div className="grid border-y border-white/10 md:grid-cols-3">
+              {steps.map((step, index) => (
+                <article
+                  key={step.number}
+                  className={index < steps.length - 1 ? "border-b border-white/10 px-6 py-6 md:border-b-0 md:border-r sm:px-10" : "px-6 py-6 sm:px-10"}
+                >
+                  <p className="mono text-[10px] font-medium tracking-[0.18em] text-primary/85">{step.number}</p>
+                  <h4 className="mt-3 text-base font-medium tracking-[-0.02em] text-white">{step.title}</h4>
+                  <p className="mt-2 max-w-xs text-sm leading-relaxed text-white/55">{step.body}</p>
+                </article>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-5 px-6 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-10">
+              <p className="max-w-2xl text-sm leading-relaxed text-white/55" style={{ margin: 0 }}>
+                <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-primary align-middle" />
+                {t("footnote")}
+              </p>
+              <Link
+                href="/settings"
+                className="ds-btn ds-btn-primary whitespace-nowrap"
+                style={{
+                  fontSize: 14,
+                  padding: "10px 16px",
+                  fontWeight: 600,
+                }}
+              >
+                {t("cta")}
+              </Link>
+            </div>
           </div>
         </Reveal>
       </div>

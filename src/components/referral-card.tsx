@@ -18,7 +18,8 @@ interface MyReferral {
 /**
  * Card "Invita un amico" nel /settings.
  * Mostra il link univoco dell'utente + stats (invitati totali, paganti).
- * Reward: quando un amico diventa pagante, l'invitante riceve 1 mese gratis.
+ * Reward: quando un amico completa il primo pagamento, l'invitante riceve
+ * un credito pari a un mese del suo piano.
  */
 export function ReferralCard() {
   const [data, setData] = useState<MyReferral | null>(null);
@@ -45,12 +46,12 @@ export function ReferralCard() {
     <SectionCard>
       <SectionHead
         icon={<Icon name="sparkles" size={14} />}
-        title="Invita un amico — guadagna 1 mese Pro"
+        title="Invita un amico"
       />
       <SectionBody>
         <p style={{ fontSize: 12.5, color: "var(--fg-muted)", margin: "0 0 14px", lineHeight: 1.55 }}>
-          Quando un amico si iscrive col tuo link e diventa Pro, ricevi{" "}
-          <strong style={{ color: "var(--fg)" }}>1 mese gratis</strong>: applicato subito se sei abbonato, altrimenti al tuo prossimo upgrade.
+          Quando un amico si iscrive col tuo link e completa il primo pagamento dopo la prova, ricevi{" "}
+          <strong style={{ color: "var(--fg)" }}>un mese di credito</strong>: sul prossimo rinnovo se sei abbonato, altrimenti al tuo prossimo upgrade.
           {data && (data.stats.credits ?? 0) > 0 && (
             <span style={{ display: "block", marginTop: 6, color: "hsl(var(--primary))", fontWeight: 600 }}>
               Hai {data.stats.credits} {data.stats.credits === 1 ? "mese gratis" : "mesi gratis"} da usare al prossimo checkout.
@@ -106,7 +107,7 @@ export function ReferralCard() {
               }}
             >
               <Stat label="Invitati" value={data.stats.total} />
-              <Stat label="Diventati Pro" value={data.stats.paying} tone="good" />
+              <Stat label="Premi confermati" value={data.stats.paying} tone="good" />
             </div>
           </>
         )}

@@ -391,10 +391,17 @@
     "subtitle": "From 0 to your first application sent in under 4 hours. Here are the steps."
   },
   "referral": {
-    "eyebrow": "Referral program live",
-    "title": "Invite a friend, earn 1 month of Pro",
-    "body": "Share your personal link. When a friend signs up and becomes a paying member, you earn one free month—on your current subscription or as credit for your next upgrade.",
-    "cta": "Find your link"
+    "eyebrow": "Referral program",
+    "title": "One month of Pro for every friend who becomes a customer.",
+    "body": "The reward is tied to a real payment, not simply a registration. That keeps the program simple and verifiable.",
+    "stepShareTitle": "Share your link",
+    "stepShareBody": "Your personal link connects their signup to your account.",
+    "stepJoinTitle": "Your friend tries LavorAI",
+    "stepJoinBody": "They can complete their free trial with no charge.",
+    "stepRewardTitle": "The credit is confirmed",
+    "stepRewardBody": "It starts after their first successful payment, following the trial.",
+    "footnote": "If you are already subscribed, the credit is applied automatically to your next renewal. Otherwise it remains available for your next upgrade.",
+    "cta": "Open the program"
   },
   "howItWorks": {
     "eyebrow": "Set up once · runs on its own forever",

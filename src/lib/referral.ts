@@ -3,8 +3,9 @@ import { prisma } from "@/lib/db";
 
 /**
  * Referral: ogni utente ha un codice univoco da condividere. Quando un
- * referred diventa pagante, l'invitante guadagna 1 mese gratis via
- * coupon Stripe o credito sul prossimo checkout.
+ * referred diventa pagante, l'invitante guadagna un credito pari a un
+ * mese del suo piano. Gli abbonati ricevono un credito Stripe cumulabile
+ * sul prossimo rinnovo; gli altri lo usano al prossimo checkout.
  *
  * Codice: 8 char alfanumerici case-insensitive (lowercase). Generato al
  * primo accesso alla sezione referral (lazy) — evita migrazione di massa.
@@ -39,14 +40,14 @@ export async function ensureReferralCode(userId: string): Promise<string> {
   throw new Error("Could not generate unique referral code");
 }
 
-/** Stats: quanti referred, quanti paganti. */
+/** Stats: quanti referred, quanti hanno completato il primo pagamento. */
 export async function getReferralStats(userId: string) {
   const referrals = await prisma.user.findMany({
     where: { referredById: userId },
-    select: { id: true, tier: true, createdAt: true },
+    select: { id: true, referralRewardedAt: true, createdAt: true },
   });
   const total = referrals.length;
-  const paying = referrals.filter((r) => r.tier === "pro" || r.tier === "pro_plus").length;
+  const paying = referrals.filter((r) => r.referralRewardedAt !== null).length;
   const me = await prisma.user.findUnique({ where: { id: userId }, select: { referralCredits: true } });
   const rewards = await prisma.subscriptionEvent.count({ where: { userId, action: "referral_reward" } }).catch(() => 0);
   return { total, paying, credits: me?.referralCredits ?? 0, rewards };
@@ -67,9 +68,11 @@ export const REFERRAL_COOKIE = COOKIE;
 /**
  * Premio referral: quando un utente invitato diventa pagante (status
  * "active", cioè dopo la prova), l'invitante riceve 1 mese gratis.
- * Se l'invitante ha un abbonamento vivo, il coupon 100%×1 viene applicato
- * subito su Stripe; altrimenti resta in `referralCredits` e viene usato al
- * suo prossimo checkout. Idempotente via `referralRewardedAt` sull'invitato.
+ * Se l'invitante ha un abbonamento vivo, il credito Stripe viene applicato
+ * sul prossimo rinnovo; altrimenti resta in `referralCredits` e viene usato
+ * al prossimo checkout. Un customer balance, a differenza di un coupon sulla
+ * subscription, accumula correttamente più referral. Idempotente via
+ * `referralRewardedAt` sull'invitato.
  */
 export async function rewardReferralIfDue(referredUserId: string): Promise<"rewarded" | "already" | "no_referrer"> {
   const referred = await prisma.user.findUnique({
@@ -86,27 +89,39 @@ export async function rewardReferralIfDue(referredUserId: string): Promise<"rewa
 
   const referrer = await prisma.user.findUnique({
     where: { id: referred.referredById },
-    select: { id: true, email: true, stripeSubscriptionId: true, subscriptionStatus: true },
+    select: { id: true, email: true, stripeCustomerId: true, stripeSubscriptionId: true, subscriptionStatus: true },
   });
   if (!referrer) return "no_referrer";
 
   let appliedNow = false;
-  if (referrer.stripeSubscriptionId && (referrer.subscriptionStatus === "active" || referrer.subscriptionStatus === "trialing")) {
+  if (referrer.stripeCustomerId && referrer.stripeSubscriptionId && referrer.subscriptionStatus === "active") {
     try {
-      const { stripe, ensureReferralCoupon } = await import("@/lib/stripe");
-      const coupon = await ensureReferralCoupon(stripe());
-      await stripe().subscriptions.update(referrer.stripeSubscriptionId, { discounts: [{ coupon }] });
-      appliedNow = true;
+      const { stripe } = await import("@/lib/stripe");
+      const client = stripe();
+      const subscription = await client.subscriptions.retrieve(referrer.stripeSubscriptionId);
+      const price = subscription.items.data[0]?.price;
+      if (price?.unit_amount && price.currency) {
+        await client.customers.createBalanceTransaction(
+          referrer.stripeCustomerId,
+          {
+            amount: -price.unit_amount,
+            currency: price.currency,
+            description: "LavorAI referral reward · 1 month credit",
+          },
+          { idempotencyKey: `referral-credit:${referredUserId}` },
+        );
+        appliedNow = true;
+      }
     } catch (err) {
-      console.error("[referral] coupon apply failed, keeping credit", err);
+      console.error("[referral] renewal credit failed, keeping checkout credit", err);
     }
   }
   if (!appliedNow) {
     await prisma.user.update({ where: { id: referrer.id }, data: { referralCredits: { increment: 1 } } });
   }
   await prisma.subscriptionEvent.create({
-    data: { userId: referrer.id, action: "referral_reward", reason: appliedNow ? "stripe" : "credit" },
+    data: { userId: referrer.id, action: "referral_reward", reason: appliedNow ? "renewal_credit" : "checkout_credit" },
   }).catch(() => void 0);
-  console.log(`[referral] reward → ${referrer.email} (${appliedNow ? "coupon on sub" : "credit"}) for ${referred.email}`);
+  console.log(`[referral] reward → ${referrer.email} (${appliedNow ? "renewal credit" : "checkout credit"}) for ${referred.email}`);
   return "rewarded";
 }

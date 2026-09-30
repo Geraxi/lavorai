@@ -391,10 +391,17 @@
     "subtitle": "Da 0 alla prima candidatura inviata in meno di 4 ore. Ecco gli step."
   },
   "referral": {
-    "eyebrow": "Programma referral attivo",
-    "title": "Invita un amico, guadagna 1 mese di Pro",
-    "body": "Condividi il tuo link personale. Quando un amico si iscrive e diventa pagante, ricevi 1 mese gratis: subito sul tuo abbonamento o come credito per il prossimo upgrade.",
-    "cta": "Trova il tuo link"
+    "eyebrow": "Programma referral",
+    "title": "Un mese di Pro per ogni amico che diventa cliente.",
+    "body": "Il premio è legato a un pagamento reale, non a una semplice registrazione. Così il programma resta semplice e verificabile.",
+    "stepShareTitle": "Condividi il tuo link",
+    "stepShareBody": "Il link personale associa l’iscrizione al tuo account.",
+    "stepJoinTitle": "L’amico prova LavorAI",
+    "stepJoinBody": "Può completare la prova gratuita senza alcun addebito.",
+    "stepRewardTitle": "Il credito viene confermato",
+    "stepRewardBody": "Scatta al primo pagamento riuscito, dopo la prova.",
+    "footnote": "Se sei già abbonato, il credito si applica automaticamente al prossimo rinnovo. Altrimenti resta disponibile per il tuo prossimo upgrade.",
+    "cta": "Apri il programma"
   },
   "howItWorks": {
     "eyebrow": "Setup una volta · gira da solo per sempre",
