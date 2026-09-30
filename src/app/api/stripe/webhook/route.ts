@@ -228,6 +228,13 @@ export async function POST(request: NextRequest) {
             stripePriceId: null,
           },
         });
+        const canceledUser = await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
+        if (canceledUser) {
+          await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_CANCELED, {
+            userId: canceledUser.id,
+            dedupeKey: `subscription_canceled:${sub.id}`,
+          });
+        }
         break;
       }
       case "invoice.payment_failed": {
@@ -239,6 +246,14 @@ export async function POST(request: NextRequest) {
             where: { stripeCustomerId: customerId },
             data: { subscriptionStatus: "past_due" },
           });
+          const failedUser = await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
+          if (failedUser) {
+            await recordConversionEvent(AnalyticsEvent.PAYMENT_FAILED, {
+              userId: failedUser.id,
+              valueCents: inv.amount_due ?? null,
+              dedupeKey: `payment_failed:${inv.id}`,
+            });
+          }
           // Dunning: avvisiamo l'utente con il link al portale per aggiornare
           // la carta (Stripe ritenta da solo, ma senza carta valida perde il piano).
           const u = await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { email: true, name: true } });

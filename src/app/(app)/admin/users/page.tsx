@@ -15,7 +15,7 @@ const H = 3600_000;
 const PAGE = 50;
 
 interface PageProps {
-  searchParams?: Promise<{ includeTest?: string; sel?: string; p?: string; plan?: string; tab?: string }>;
+  searchParams?: Promise<{ includeTest?: string; sel?: string; p?: string; plan?: string; tab?: string; verified?: string; cv?: string; onboarded?: string; apps?: string }>;
 }
 
 /**
@@ -28,6 +28,10 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   // Filtro piano: paying (addebito completato) | pro | pro_plus | free |
   // unpaid (trialing, past_due, cancellato o tier Pro senza pagamento).
   const plan = sp.plan ?? "";
+  const verifiedOnly = sp.verified === "yes";
+  const cvOnly = sp.cv === "yes";
+  const onboardedOnly = sp.onboarded === "yes";
+  const appsAtLeast = Math.max(0, Number(sp.apps ?? 0) || 0);
   const page = Math.max(1, Number(sp.p ?? 1) || 1);
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
@@ -36,7 +40,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
     orderBy: { createdAt: "desc" },
     take: 500,
     select: {
-      id: true, email: true, name: true, tier: true, emailVerified: true, createdAt: true, lastLoginAt: true,
+      id: true, email: true, name: true, tier: true, emailVerified: true, onboardedAt: true, createdAt: true, lastLoginAt: true,
       subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true, stripePriceId: true, suspendedAt: true,
       referralCode: true, referredById: true, signupReferrer: true, signupUtmSource: true,
       preferences: { select: { autoApplyMode: true, dailyCap: true, matchMin: true, rolesJson: true, locationsJson: true } },
@@ -48,10 +52,16 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   const paid = (u: { subscriptionStatus: string | null }) => u.subscriptionStatus === "active";
   const hasLiveSubscription = (u: { subscriptionStatus: string | null }) => u.subscriptionStatus === "active" || u.subscriptionStatus === "trialing";
   const isPro = (u: { tier: string }) => u.tier === "pro" || u.tier === "pro_plus";
-  const users = plan === "paying" ? base.filter((u) => isPro(u) && paid(u))
+  const planUsers = plan === "paying" ? base.filter((u) => isPro(u) && paid(u))
     : plan === "unpaid" ? base.filter((u) => isPro(u) && !paid(u))
     : plan === "pro" || plan === "pro_plus" || plan === "free" ? base.filter((u) => u.tier === plan)
     : base;
+  const users = planUsers.filter((u) =>
+    (!verifiedOnly || Boolean(u.emailVerified)) &&
+    (!cvOnly || Boolean(u.cvProfile) || u._count.cvDocuments > 0) &&
+    (!onboardedOnly || Boolean(u.onboardedAt)) &&
+    (appsAtLeast === 0 || u._count.applications >= appsAtLeast),
+  );
   const payingCount = base.filter((u) => isPro(u) && paid(u)).length;
   const unpaidProCount = base.filter((u) => isPro(u) && !paid(u)).length;
 

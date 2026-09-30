@@ -43,6 +43,18 @@ export const AnalyticsEvent = {
   PURCHASE_COMPLETED: "purchase_completed",
   FIRST_APPLICATION_DELIVERED: "first_application_delivered",
 
+  // Product, paywall and lifecycle — used by the admin operating system.
+  ONBOARDING_STARTED: "onboarding_started",
+  JOB_VIEWED: "job_viewed",
+  JOB_SEARCHED: "job_searched",
+  APPLICATION_CREATED: "application_created",
+  CV_TAILORED: "cv_tailored",
+  PAYWALL_VIEWED: "paywall_viewed",
+  PAYMENT_FAILED: "payment_failed",
+  SUBSCRIPTION_CANCELED: "subscription_canceled",
+  INTERVIEW_RECORDED: "interview_recorded",
+  OFFER_RECORDED: "offer_recorded",
+
   // Proof / content interactions
   FAQ_EXPAND: "faq_expand",
   TESTIMONIAL_INTERACT: "testimonial_interact",

@@ -7,6 +7,8 @@ import { resolveSession } from "@/lib/apply-session";
 import { dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused } from "@/lib/billing";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { runSelfHeal } from "@/lib/auto-apply-self-heal";
+import { recordConversionEvent } from "@/lib/conversion-events";
+import { AnalyticsEvent } from "@/lib/analytics";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -865,6 +867,11 @@ async function processUser(
           atsScore: score,
           sessionId,
         },
+      });
+      await recordConversionEvent(AnalyticsEvent.APPLICATION_CREATED, {
+        userId: user.id,
+        properties: { mode: isHybrid ? "hybrid" : "auto", consentRequired: isHybrid },
+        dedupeKey: `application_created:${app.id}`,
       });
       // Solo in auto mandiamo subito in coda. In hybrid resta
       // "awaiting_consent" finché l'utente non approva dal dashboard.

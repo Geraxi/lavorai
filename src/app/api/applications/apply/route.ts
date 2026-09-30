@@ -9,6 +9,8 @@ import { applyLimiter } from "@/lib/rate-limit";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { resolveSession } from "@/lib/apply-session";
+import { recordConversionEvent } from "@/lib/conversion-events";
+import { AnalyticsEvent } from "@/lib/analytics";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -195,6 +197,11 @@ export async function POST(request: NextRequest) {
         atsScore: score, // pre-stima; il worker la sovrascrive con score AI
         sessionId: session.id,
       },
+    });
+    await recordConversionEvent(AnalyticsEvent.APPLICATION_CREATED, {
+      userId: user.id,
+      properties: { mode, consentRequired: needsConsent },
+      dedupeKey: `application_created:${application.id}`,
     });
 
     if (!needsConsent) {
