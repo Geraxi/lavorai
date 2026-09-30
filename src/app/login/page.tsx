@@ -8,8 +8,6 @@ import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Icon } from "@/components/design/icon";
 import { GoogleButton } from "@/components/google-signin-button";
-import { JobNetworkScene } from "@/components/job-network-scene";
-import "@/components/job-network-scene.css";
 
 export default function LoginPage() {
   return (
@@ -358,11 +356,9 @@ function LoginContent() {
         .lavorai-login-right {
           position: relative;
           overflow: hidden;
-          /* Foto asset in /public/login-hero.jpg (uomo su bean bag,
-             dashboard LavorAI proiettato). Fallback verde brand se
-             l'asset non è ancora salvato in prod — evita pannello
-             bianco/nero durante la propagazione. */
-          background: radial-gradient(ellipse 75% 70% at 70% 48%, rgba(8,70,91,.32), transparent 65%), #010510;
+          /* The supplied login composition is an opaque image: keeping it
+             as one scene avoids the broken transparency from the old globe. */
+          background: #02060d url("/login-showcase-reference.png") right center / auto 100% no-repeat;
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
@@ -370,15 +366,14 @@ function LoginContent() {
           align-items: center;
           border-left: 1px solid var(--border-ds);
         }
-        /* Scrim dark per leggibilità testo (option B):
-           gradient orizzontale che scurisce il lato sinistro dove
-           siede la copy, lasciando il lato destro nitido. */
+        /* Hide the narrow portion of the reference image that contains its
+           mock form; the real, interactive form remains in the left panel. */
         .lavorai-login-right::before {
           content: "";
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(90deg, rgba(1,5,16,0.78) 0%, rgba(1,5,16,0.55) 40%, rgba(1,5,16,0.2) 75%, rgba(1,5,16,0) 100%);
+            linear-gradient(90deg, #02060d 0%, rgba(2,6,13,.95) 9%, rgba(2,6,13,0) 26%);
           pointer-events: none;
         }
         @media (max-width: 1023px) {
@@ -426,53 +421,9 @@ function Benefit({
 
 function LoginShowcase() {
   return (
-    <div className="lavorai-login-right">
-      <JobNetworkScene compact />
-      <div
-        className="lavorai-login-showcase"
-        style={{
-          // Niente più ds-glass + box-shadow heavy: ora il fondo è
-          // pulito (no bitmap dietro), la copy si legge senza scrim.
-          // Restano solo padding + max-width per centratura.
-          position: "relative",
-          zIndex: 1,
-          maxWidth: 560,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 20,
-            color: "var(--fg-muted)",
-            marginBottom: 12,
-            letterSpacing: "0.02em",
-          }}
-        >
-          Se i recruiter usano l&apos;AI,
-        </div>
-        <div
-          style={{
-            fontSize: 48,
-            fontWeight: 700,
-            letterSpacing: "-0.035em",
-            lineHeight: 1.05,
-            marginBottom: 40,
-          }}
-        >
-          tu non puoi permetterti di non usarla.
-        </div>
-        <div
-          style={{
-            fontSize: 20,
-            color: "var(--fg-muted)",
-            lineHeight: 1.6,
-            maxWidth: 580,
-          }}
-        >
-          Smetti di candidarti. Inizia a essere chiamato.
-          LavorAI scansiona i portali 24/7, adatta CV e lettera ad ogni
-          annuncio e invia per te. Tu rispondi solo ai recruiter interessati.
-        </div>
-      </div>
-    </div>
+    <aside
+      className="lavorai-login-right"
+      aria-label="LavorAI trova opportunità e prepara candidature personalizzate"
+    />
   );
 }
