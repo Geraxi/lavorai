@@ -16,8 +16,6 @@ export function Hero() {
   const heroRef = useRef<HTMLElement>(null);
   const reducedMotion = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end end"] });
-  const copyY = useTransform(scrollYProgress, [0, 0.76], [0, -104]);
-  const copyOpacity = useTransform(scrollYProgress, [0, 0.58, 0.82], [1, 1, 0]);
   const railScale = useTransform(scrollYProgress, [0, 1], [0.08, 1]);
   return (
     <>
@@ -81,13 +79,12 @@ export function Hero() {
       <JobNetworkScene hero showGlobe={false} />
 
 
-      <motion.div
+      <div
         className="relative z-10 flex min-h-[780px] w-full items-center lg:h-full lg:min-h-0"
         style={{
           maxWidth: 1580,
           margin: "0 auto",
           padding: "24px 40px",
-          ...(reducedMotion ? {} : { y: copyY, opacity: copyOpacity }),
         }}
       >
         <div className="grid items-center gap-14 lg:grid-cols-2">
@@ -236,7 +233,7 @@ export function Hero() {
         </div>
 
         <div className="mt-10 mb-4" />
-      </motion.div>
+      </div>
 
       <div aria-hidden className="pointer-events-none absolute bottom-7 left-1/2 z-20 hidden w-[min(440px,36vw)] -translate-x-1/2 lg:block">
         <div className="mb-2 flex justify-between font-mono text-[9px] tracking-[0.22em] text-white/45"><span>01 / START</span><span>YOUR NEXT ROLE</span></div>
