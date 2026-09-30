@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { isAdmin } from "@/lib/admin";
 import { getCurrentUser } from "@/lib/session";
-import { EDITORIAL_TOPICS, generateEditorialDraft, nextEditorialTopic } from "@/lib/editorial";
+import { EDITORIAL_TOPICS, ensureEditorialStore, generateEditorialDraft, nextEditorialTopic } from "@/lib/editorial";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null) as { action?: string; slug?: string } | null;
   if (!body?.action) return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+  await ensureEditorialStore();
 
   if (body.action === "generate") {
     const existing = await prisma.editorialArticle.findMany({ select: { slug: true } });

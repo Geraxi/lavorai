@@ -1,4 +1,5 @@
 import { complete } from "@/lib/ai-router";
+import { prisma } from "@/lib/db";
 
 export type EditorialSection = {
   h2: string;
@@ -87,4 +88,42 @@ export async function generateEditorialDraft(topic: EditorialTopic): Promise<Edi
 
 export function nextEditorialTopic(existingSlugs: string[]) {
   return EDITORIAL_TOPICS.find((topic) => !existingSlugs.includes(topic.slug)) ?? null;
+}
+
+let editorialStoreReady: Promise<void> | undefined;
+
+/**
+ * The production runtime has a pooled database connection while schema
+ * migrations use a separate direct connection. Initialise this isolated,
+ * additive store from the trusted runtime connection so a new deployment
+ * cannot leave the editorial controls unusable when that direct connection
+ * is unavailable. No existing application table is changed.
+ */
+export function ensureEditorialStore() {
+  editorialStoreReady ??= (async () => {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "EditorialArticle" (
+        "id" TEXT NOT NULL,
+        "slug" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "metaTitle" TEXT NOT NULL,
+        "description" TEXT NOT NULL,
+        "keyword" TEXT NOT NULL,
+        "category" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'review',
+        "content" JSONB NOT NULL,
+        "faq" JSONB NOT NULL,
+        "keywords" JSONB NOT NULL,
+        "scheduledFor" TIMESTAMP(3),
+        "generatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "publishedAt" TIMESTAMP(3),
+        "updatedAt" TIMESTAMP(3) NOT NULL,
+        CONSTRAINT "EditorialArticle_pkey" PRIMARY KEY ("id")
+      )
+    `);
+    await prisma.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "EditorialArticle_slug_key" ON "EditorialArticle"("slug")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "EditorialArticle_status_publishedAt_idx" ON "EditorialArticle"("status", "publishedAt")');
+    await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "EditorialArticle_scheduledFor_idx" ON "EditorialArticle"("scheduledFor")');
+  })();
+  return editorialStoreReady;
 }

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { EDITORIAL_TOPICS, generateEditorialDraft, nextEditorialTopic } from "@/lib/editorial";
+import { EDITORIAL_TOPICS, ensureEditorialStore, generateEditorialDraft, nextEditorialTopic } from "@/lib/editorial";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
   if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  await ensureEditorialStore();
   const existing = await prisma.editorialArticle.findMany({ select: { slug: true } });
   const topic = nextEditorialTopic(existing.map((article) => article.slug));
   if (!topic) return NextResponse.json({ ok: true, status: "calendar_complete" });
