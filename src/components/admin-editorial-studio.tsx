@@ -14,7 +14,13 @@ export function AdminEditorialStudio({ articles, nextTopic }: { articles: Articl
     setBusy(`${action}:${slug ?? "next"}`); setNotice(null);
     try {
       const res = await fetch("/api/admin/editorial", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, slug }) });
-      const data = await res.json();
+      const raw = await res.text();
+      let data: { message?: string } = {};
+      try {
+        data = raw ? JSON.parse(raw) as { message?: string } : {};
+      } catch {
+        // A proxy error page should still result in a useful in-product message.
+      }
       if (!res.ok) throw new Error(data.message ?? "Operazione non riuscita.");
       setNotice(action === "generate" ? "Bozza creata: rileggila prima di pubblicare." : action === "publish" ? "Guida pubblicata e pronta per l'indicizzazione." : "Guida rimessa in revisione.");
       router.refresh();

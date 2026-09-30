@@ -112,7 +112,7 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
         const res = await openai().responses.create({
           model: m,
           max_output_tokens: input.maxTokens,
-          temperature: input.temperature,
+          ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
           store: false,
           instructions:
             input.system +
@@ -142,7 +142,7 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
       const res = await anthropic().messages.create({
         model: m,
         max_tokens: input.maxTokens,
-        temperature: input.temperature,
+        ...(input.temperature === undefined ? {} : { temperature: input.temperature }),
         system: input.system,
         messages: [{ role: "user", content: input.user }],
       });
