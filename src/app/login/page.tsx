@@ -356,7 +356,7 @@ function LoginContent() {
         .lavorai-login-right {
           position: relative;
           overflow: hidden;
-          background: #02060d url("/login-showcase-scene.png") center / cover no-repeat;
+          background: #02060d url("/login-showcase-scene.jpg") center / cover no-repeat;
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
