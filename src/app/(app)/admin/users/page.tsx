@@ -15,7 +15,7 @@ const H = 3600_000;
 const PAGE = 50;
 
 interface PageProps {
-  searchParams?: Promise<{ includeTest?: string; sel?: string; p?: string; plan?: string; tab?: string; verified?: string; cv?: string; onboarded?: string; apps?: string }>;
+  searchParams?: Promise<{ includeTest?: string; sel?: string; p?: string; plan?: string; tab?: string; verified?: string; cv?: string; onboarded?: string; apps?: string; checkout?: string }>;
 }
 
 /**
@@ -32,6 +32,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
   const cvOnly = sp.cv === "yes";
   const onboardedOnly = sp.onboarded === "yes";
   const appsAtLeast = Math.max(0, Number(sp.apps ?? 0) || 0);
+  const checkoutOnly = sp.checkout === "started";
   const page = Math.max(1, Number(sp.p ?? 1) || 1);
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
@@ -48,7 +49,10 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       _count: { select: { applications: true, cvDocuments: true } },
     },
   });
-  const base = includeTest ? raw : raw.filter((u) => !isTestAccount(u.email));
+  const checkoutUserIds = checkoutOnly
+    ? new Set((await prisma.conversionEvent.findMany({ where: { name: "checkout_started", userId: { not: null } }, select: { userId: true } })).map((event) => event.userId).filter(Boolean) as string[])
+    : null;
+  const base = (includeTest ? raw : raw.filter((u) => !isTestAccount(u.email))).filter((u) => !checkoutUserIds || checkoutUserIds.has(u.id));
   const paid = (u: { subscriptionStatus: string | null }) => u.subscriptionStatus === "active";
   const hasLiveSubscription = (u: { subscriptionStatus: string | null }) => u.subscriptionStatus === "active" || u.subscriptionStatus === "trialing";
   const isPro = (u: { tier: string }) => u.tier === "pro" || u.tier === "pro_plus";
