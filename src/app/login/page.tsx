@@ -358,7 +358,7 @@ function LoginContent() {
           overflow: hidden;
           /* The supplied login composition is an opaque image: keeping it
              as one scene avoids the broken transparency from the old globe. */
-          background: #02060d url("/login-showcase-reference.png") right center / auto 100% no-repeat;
+          background: #02060d url("/login-showcase-reference.jpg") right center / auto 100% no-repeat;
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
