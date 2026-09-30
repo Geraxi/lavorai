@@ -193,6 +193,29 @@ model User {
   signupLandingPath  String? // primo path visitato (es. "/auto-candidatura")
 }
 
+/// Pipeline editoriale SEO. Le bozze generate dall'AI non diventano mai
+/// pubbliche senza un'azione esplicita dell'admin.
+model EditorialArticle {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  metaTitle   String
+  description String
+  keyword     String
+  category    String
+  status      String   @default("review") // review | published | archived
+  content     Json
+  faq         Json
+  keywords    Json
+  scheduledFor DateTime?
+  generatedAt DateTime @default(now())
+  publishedAt DateTime?
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, publishedAt])
+  @@index([scheduledFor])
+}
+
 /// Page-view tracking leggero per le metriche admin. Non sostituisce
 /// un'analytics seria (es. Vercel Analytics): è pensato come dato grezzo
 /// di cui abbiamo il controllo, mostrato nel pannello /admin.

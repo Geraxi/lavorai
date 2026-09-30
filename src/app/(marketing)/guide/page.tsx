@@ -3,6 +3,8 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { GUIDES, readingMinutes } from "@/content/guide";
+import { prisma } from "@/lib/db";
+import { editorialToGuide } from "@/lib/editorial-public";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 
@@ -17,17 +19,20 @@ export const metadata: Metadata = {
     url: "/guide",
   },
 };
+export const dynamic = "force-dynamic";
 
 const CATEGORIES = ["CV", "Candidature", "Colloquio", "Strumenti"] as const;
 
-export default function GuideIndexPage() {
+export default async function GuideIndexPage() {
+  const editorial = await prisma.editorialArticle.findMany({ where: { status: "published" }, orderBy: { publishedAt: "desc" } }).catch(() => []);
+  const guides = [...editorial.map(editorialToGuide), ...GUIDES];
   const collection = {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: "Guide LavorAI",
     url: `${SITE_URL}/guide`,
     inLanguage: "it-IT",
-    hasPart: GUIDES.map((g) => ({ "@type": "Article", headline: g.title, url: `${SITE_URL}/guide/${g.slug}` })),
+    hasPart: guides.map((g) => ({ "@type": "Article", headline: g.title, url: `${SITE_URL}/guide/${g.slug}` })),
   };
   const breadcrumb = {
     "@context": "https://schema.org",
@@ -54,7 +59,7 @@ export default function GuideIndexPage() {
         </header>
 
         {CATEGORIES.map((cat) => {
-          const items = GUIDES.filter((g) => g.category === cat);
+          const items = guides.filter((g) => g.category === cat);
           if (items.length === 0) return null;
           return (
             <section key={cat} className="gd-wrap gd-cat">

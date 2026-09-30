@@ -1,11 +1,19 @@
 import { loadAdminGrowthMetrics, adminPeriod } from "@/lib/admin-growth-metrics";
 import { DataNotice, Funnel, GrowthHeader, OverviewKpis, UpgradeReady } from "../_growth-ui";
+import { prisma } from "@/lib/db";
+import { nextEditorialTopic } from "@/lib/editorial";
+import { AdminEditorialStudio } from "@/components/admin-editorial-studio";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin · Growth", robots: { index: false } };
 
 export default async function AdminGrowthPage({ searchParams }: { searchParams?: Promise<{ range?: string; from?: string; to?: string }> }) {
-  const query = (await searchParams) ?? {}; const metrics = await loadAdminGrowthMetrics(adminPeriod(query));
+  const query = (await searchParams) ?? {};
+  const [metrics, editorialArticles] = await Promise.all([
+    loadAdminGrowthMetrics(adminPeriod(query)),
+    prisma.editorialArticle.findMany({ orderBy: { generatedAt: "desc" }, take: 8, select: { slug: true, title: true, keyword: true, category: true, status: true, generatedAt: true, publishedAt: true } }).catch(() => []),
+  ]);
+  const nextTopic = nextEditorialTopic(editorialArticles.map((article) => article.slug));
   return <div className="adm-page">
     <GrowthHeader title="Growth" sub="Acquisizione, conversione e utenti più vicini al valore." active="/admin/growth" query={query} />
     <OverviewKpis metrics={metrics} />
@@ -14,6 +22,7 @@ export default async function AdminGrowthPage({ searchParams }: { searchParams?:
       <section className="adm-card"><div className="adm-card-head"><div><div className="adm-card-title">Canali di acquisizione</div><div className="adm-card-sub">First-touch attribuito agli iscritti nel periodo.</div></div></div>{metrics.sourceRows.length ? metrics.sourceRows.map(([source, value]) => <MetricRow key={source} label={source} value={value} total={metrics.currentUsers.length} />) : <Empty />}</section>
       <section className="adm-card"><div className="adm-card-head"><div><div className="adm-card-title">Landing page che convertono</div><div className="adm-card-sub">Pagina iniziale salvata al momento dell&apos;iscrizione.</div></div></div>{metrics.landingRows.length ? metrics.landingRows.map(([path, value]) => <MetricRow key={path} label={path} value={value} total={metrics.currentUsers.length} />) : <Empty />}</section>
     </div>
+    <AdminEditorialStudio articles={editorialArticles.map((article) => ({ ...article, generatedAt: article.generatedAt.toISOString(), publishedAt: article.publishedAt?.toISOString() ?? null }))} nextTopic={nextTopic ? { keyword: nextTopic.keyword, category: nextTopic.category } : null} />
     <DataNotice>Il traffico per source, bounce rate e durata sessione diventano disponibili dai page-view futuri. L&apos;attribuzione signup è già attiva e non viene ricostruita artificialmente.</DataNotice>
   </div>;
 }

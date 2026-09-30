@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { GUIDES, getGuide, readingMinutes } from "@/content/guide";
+import { prisma } from "@/lib/db";
+import { editorialToGuide } from "@/lib/editorial-public";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 
@@ -13,9 +15,16 @@ export function generateStaticParams(): Params[] {
   return GUIDES.map((g) => ({ slug: g.slug }));
 }
 
+async function resolveGuide(slug: string) {
+  const staticGuide = getGuide(slug);
+  if (staticGuide) return staticGuide;
+  const editorial = await prisma.editorialArticle.findFirst({ where: { slug, status: "published" } }).catch(() => null);
+  return editorial ? editorialToGuide(editorial) : null;
+}
+
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
-  const g = getGuide(slug);
+  const g = await resolveGuide(slug);
   if (!g) return {};
   return {
     title: g.metaTitle,
@@ -39,7 +48,7 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("it-IT", { day
 
 export default async function GuidePage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
-  const g = getGuide(slug);
+  const g = await resolveGuide(slug);
   if (!g) notFound();
 
   const url = `${SITE_URL}/guide/${g.slug}`;

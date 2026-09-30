@@ -25,7 +25,8 @@ export type AiTask =
   | "email_extract"     // trova l'email del recruiter in una pagina
   | "interview"         // interview buddy / copilot
   | "founder_coach"
-  | "admin_assistant";
+  | "admin_assistant"
+  | "editorial";
 
 type Provider = "anthropic" | "openai";
 type Tier = "strong" | "fast";
@@ -39,6 +40,7 @@ const TASK_DEFAULTS: Record<AiTask, { primary: Provider; tier: Tier }> = {
   interview: { primary: "openai", tier: "strong" },
   founder_coach: { primary: "anthropic", tier: "strong" },
   admin_assistant: { primary: "anthropic", tier: "strong" },
+  editorial: { primary: "openai", tier: "strong" },
 };
 
 function model(provider: Provider, tier: Tier): string {
