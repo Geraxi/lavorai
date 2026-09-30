@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowUpRight, BriefcaseBusiness, Check, FileText, MapPin, Send, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, ArrowUpRight, BriefcaseBusiness, Check, FileText, MapPin, Send, Sparkles } from "lucide-react";
 import { motion, useReducedMotion, useScroll, useTransform } from "motion/react";
 import { useRef } from "react";
 import { useTranslations } from "next-intl";
@@ -149,7 +149,7 @@ export function Hero() {
                   marginTop: "0.04em",
                 }}
               >
-                {t("titleLineB")}
+                <span style={{ color: "hsl(var(--primary))", textShadow: "0 0 40px hsl(var(--primary)/0.35)" }}>LavorAI</span>{t("titleLineB")}
               </motion.span>
               <motion.span
                 initial={{ opacity: 0, y: 10 }}
@@ -157,8 +157,7 @@ export function Hero() {
                 transition={{ duration: 0.6, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
                 style={{
                   display: "block",
-                  color: "hsl(var(--primary))",
-                  textShadow: "0 0 40px hsl(var(--primary)/0.35)",
+                  color: "#FFFFFF",
                   marginTop: "0.14em",
                   fontSize: "0.95em",
                 }}
@@ -180,104 +179,40 @@ export function Hero() {
             >
               {t("subtitleV2")}
             </motion.p>
-            <p className="mt-3 text-sm leading-relaxed text-white/60">{t("volumeNote")}</p>
-
-            {/* Garanzia rimborso — proof of confidence, sostituisce
-                bisogno di testimonial fake. Il founder ci mette i soldi. */}
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.55, delay: 0.28 }}
-              className="mt-3 inline-flex items-start gap-2 rounded-lg px-3 py-1.5"
-              style={{
-                background: "hsl(var(--primary) / 0.08)",
-                borderLeft: "3px solid hsl(var(--primary))",
-                maxWidth: 520,
-                fontSize: 12,
-                lineHeight: 1.45,
-                color: "rgba(255,255,255,0.85)",
-              }}
-            >
-              <span
-                aria-hidden
-                style={{ color: "hsl(var(--primary))", fontWeight: 700, fontSize: 15, lineHeight: 1 }}
-              >
-                <ShieldCheck size={15} aria-hidden />
-              </span>
-              <span>
-                <strong style={{ color: "#fff" }}>{t("guaranteeLabel")}</strong>{" "}
-                {t("guaranteeText")}
-              </span>
-            </motion.div>
-
             <motion.div
               initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.55, delay: 0.35 }}
-              className="mt-4 flex flex-col items-start gap-3 w-full"
+              className="mt-7 flex flex-col items-start gap-6 w-full"
             >
               <div className="flex flex-wrap items-center gap-3">
                 <Button
                   asChild
                   className="group relative overflow-hidden bg-primary text-primary-foreground hover:bg-primary/90"
                   style={{
-                    minHeight: 44,
-                    paddingLeft: 20,
-                    paddingRight: 20,
-                    fontSize: 14.5,
+                    minHeight: 64,
+                    minWidth: 304,
+                    paddingLeft: 30,
+                    paddingRight: 30,
+                    fontSize: 17,
                     fontWeight: 600,
-                    borderRadius: 10,
+                    borderRadius: 14,
                   }}
                 >
                   <Link href="/signup" onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, { label: "signup" })}>
-                    <span className="relative z-10">{t("ctaPrimaryV2")}</span>
+                    <span className="relative z-10 inline-flex items-center gap-7">{t("ctaPrimaryV2")} <ArrowRight size={21} /></span>
                   </Link>
                 </Button>
-                <Link
-                  href="/analizza-cv"
-                  onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_SECONDARY, { label: "lead_magnet" })}
-                  className="ds-btn"
-                  style={{
-                    minHeight: 52,
-                    paddingLeft: 24,
-                    paddingRight: 24,
-                    fontSize: 16,
-                    fontWeight: 600,
-                    background: "#FFFFFF",
-                    color: "#000000",
-                    borderRadius: 12,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 8,
-                  }}
-                >
-                  {t("ctaSecondaryV2")}
-                </Link>
               </div>
-              
-              {/* Checkmarks row + Product Hunt badge inline — compatto */}
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-2" style={{ fontSize: 13, color: "rgba(255,255,255,0.9)", fontWeight: 500 }}>
-                {[t("checkA"), t("checkB"), t("checkC")].map((text) => (
-                  <span key={text} className="inline-flex items-center gap-1.5">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    {text}
-                  </span>
-                ))}
-                <a
-                  href="https://www.producthunt.com/products/lavorai-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lavorai-it"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block"
-                  style={{ lineHeight: 0 }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    alt="Lavorai.it - AI-powered auto apply for job seekers | Product Hunt"
-                    width={170}
-                    height={37}
-                    src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1151760&theme=light&t=1779546633084"
-                  />
-                </a>
+              <div className="grid grid-cols-3 gap-7 text-white/80" style={{ maxWidth: 440 }}>
+                {[
+                  [FileText, t("featureA")],
+                  [MapPin, t("featureB")],
+                  [Sparkles, t("featureC")],
+                ].map(([Icon, label]) => {
+                  const FeatureIcon = Icon as typeof FileText;
+                  return <div key={String(label)} className="space-y-2 text-[13px] font-medium leading-snug"><FeatureIcon className="text-primary" size={22} strokeWidth={1.8} /><span className="block whitespace-pre-line">{String(label)}</span></div>;
+                })}
               </div>
 
             </motion.div>
