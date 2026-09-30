@@ -356,11 +356,7 @@ function LoginContent() {
         .lavorai-login-right {
           position: relative;
           overflow: hidden;
-          /* The supplied login composition is an opaque image: keeping it
-             as one scene avoids the broken transparency from the old globe. */
-          /* The source has a mock form at its far left; this crop leaves the
-             actual interactive form as the only form the visitor can see. */
-          background: #02060d url("/login-showcase-reference.jpg") right center / auto 130% no-repeat;
+          background: #02060d url("/login-showcase-scene.png") center / cover no-repeat;
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
