@@ -36,7 +36,7 @@ export function Hero() {
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
         style={{
-          backgroundImage: "url('/lavorai-hero-space.png')",
+          backgroundImage: "url('/lavorai-hero-space.jpg')",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
           backgroundSize: "cover",
