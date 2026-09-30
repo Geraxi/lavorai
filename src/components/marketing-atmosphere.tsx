@@ -21,7 +21,9 @@ export function MarketingMotionShell({ children }: { children: ReactNode }) {
   const planetY = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["7vh", "14vh", "8vh", "16vh", "28vh"]);
   const planetScale = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], [0.7, 0.72, 0.62, 0.74, 0.58]);
   const planetRotate = useTransform(smooth, [0, 1], [-7, 18]);
-  const planetOpacity = useTransform(smooth, [0, 0.1, 0.24, 0.9, 1], [0.98, 0.86, 0.7, 0.58, 0.42]);
+  // L'hero ha una composizione propria e completa. Il pianeta condiviso
+  // entra soltanto dopo, così non esistono mai due Terre nello stesso frame.
+  const planetOpacity = useTransform(smooth, [0, 0.12, 0.24, 0.9, 1], [0, 0, 0.7, 0.58, 0.42]);
 
   useEffect(() => {
     const flow = flowRef.current;

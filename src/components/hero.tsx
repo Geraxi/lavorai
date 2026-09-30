@@ -8,6 +8,8 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
 import { LiveStatsBadge } from "@/components/live-stats-badge";
+import { JobNetworkScene } from "@/components/job-network-scene";
+import "@/components/job-network-scene.css";
 
 export function Hero() {
   const t = useTranslations("hero");
@@ -27,9 +29,9 @@ export function Hero() {
       }}
     >
       <div className="relative min-h-[780px] lg:sticky lg:top-0 lg:h-[100svh]">
-      {/* Il pianeta è renderizzato una sola volta da MarketingMotionShell.
-          Questa hero resta trasparente: le scrim servono esclusivamente a
-          mantenere il copy leggibile mentre il pianeta attraversa la pagina. */}
+      {/* La composizione vive interamente nella metà destra: la Terra e le
+          opportunità sono un unico soggetto, mentre il copy resta libero a
+          sinistra. Il pianeta condiviso riappare più avanti nello scroll. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
@@ -66,11 +68,13 @@ export function Hero() {
         }}
       />
 
+      <JobNetworkScene hero />
+
 
       <motion.div
         className="relative z-10 flex min-h-[780px] w-full items-center lg:h-full lg:min-h-0"
         style={{
-          maxWidth: 1480,
+          maxWidth: 1580,
           margin: "0 auto",
           padding: "24px 40px",
           ...(reducedMotion ? {} : { y: copyY, opacity: copyOpacity }),
