@@ -6,8 +6,6 @@ import { motion, useReducedMotion, useScroll, useTransform } from "motion/react"
 import { useRef } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
-// Image import non più necessario — l'immagine pianeta è ora bg
-// CSS della section, non un <Image> renderizzato.
 import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
 import { LiveStatsBadge } from "@/components/live-stats-badge";
 
@@ -16,12 +14,8 @@ export function Hero() {
   const heroRef = useRef<HTMLElement>(null);
   const reducedMotion = useReducedMotion();
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end end"] });
-  const sceneY = useTransform(scrollYProgress, [0, 1], ["0%", "-11%"]);
-  const sceneScale = useTransform(scrollYProgress, [0, 1], [1, 1.3]);
   const copyY = useTransform(scrollYProgress, [0, 0.76], [0, -104]);
   const copyOpacity = useTransform(scrollYProgress, [0, 0.58, 0.82], [1, 1, 0]);
-  const orbitRotate = useTransform(scrollYProgress, [0, 1], [-8, 48]);
-  const orbitScale = useTransform(scrollYProgress, [0, 1], [1, 1.26]);
   const railScale = useTransform(scrollYProgress, [0, 1], [0.08, 1]);
   return (
     <>
@@ -29,74 +23,13 @@ export function Hero() {
       ref={heroRef}
       className="lavorai-hero-section relative min-h-[780px] overflow-hidden lg:h-[100svh]"
       style={{
-        backgroundColor: "#010510",
+        backgroundColor: "transparent",
       }}
     >
       <div className="relative min-h-[780px] lg:sticky lg:top-0 lg:h-[100svh]">
-      {/* Desktop (lg+): planet ruota a destra come sfondo full-section.
-          Su mobile non lo mostriamo qui — il testo occuperebbe tutto
-          il width e coprirebbe il pianeta. Vedi il blocco mobile sotto. */}
-      <motion.div aria-hidden className="pointer-events-none absolute inset-0 z-0 hidden lg:block" style={reducedMotion ? undefined : { y: sceneY, scale: sceneScale }}>
-        <motion.div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: "url('/Lavoraiherosection.png')",
-          // Image fitting: ora 80% size + margine 40px sia a destra che
-          // verticalmente. Niente più crop su nessun lato, sia per il
-          // sizing che per la micro scale-animation (max 1.02).
-          //   - size 80%: lascia ~10% bezel orizzontale per non toccare
-          //     mai i bordi laterali (anche con scale 1.02).
-          //   - position "right 40px center": ancora 40px dal bordo destro
-          //     così c'è respiro tra il pianeta e l'edge del viewport.
-          //   - transformOrigin centro: ora che c'è margine, la scale
-          //     può animarsi simmetricamente senza creare crop laterali.
-          // Iterazione 4: vincolare l'altezza dell'immagine alla section
-          // (auto 88%) garantisce che la sfera entra SEMPRE verticalmente
-          // anche se il viewport cambia altezza. L'immagine è 766x765
-          // (quadrata) → 88% di altezza section = anche larghezza
-          // proporzionata, niente clipping orizzontale.
-          backgroundSize: "auto 98%",
-          // Right 20px + top 4%: pianeta in alto-destra con micro-margine
-          // su entrambi i lati così niente edge viene mai toccato dal
-          // micro respiro di scale.
-          backgroundPosition: "right 20px top 4%",
-          backgroundRepeat: "no-repeat",
-          transformOrigin: "85% 20%",
-        }}
-          animate={reducedMotion ? undefined : { rotate: [0, 1, -1, 0], scale: [1.0, 1.02, 1.02, 1.0] }}
-          transition={{ duration: 18, ease: "easeInOut", repeat: Infinity }}
-        />
-      </motion.div>
-
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -right-[15%] top-[4%] z-[1] hidden h-[84%] w-[68%] rounded-full border border-primary/20 lg:block"
-        style={reducedMotion ? undefined : { rotate: orbitRotate, scale: orbitScale }}
-      >
-        <span className="absolute -left-1 top-[23%] h-2 w-2 rounded-full bg-primary shadow-[0_0_22px_hsl(var(--primary)/0.9)]" />
-        <span className="absolute right-[14%] top-[68%] h-1.5 w-1.5 rounded-full bg-white/80" />
-      </motion.div>
-
-      {/* Mobile (<lg): pianeta visibile come "top hero" sopra il testo.
-          Niente rotazione (mantenere CPU + battery basso su device piccoli),
-          centrato sopra il blocco testo. Text container ha pt extra
-          (vedi sotto) per non sovrapporsi. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 z-0 block lg:hidden"
-        style={{
-          height: 320,
-          backgroundImage: "url('/Lavoraiherosection.png')",
-          backgroundSize: "auto 100%",
-          backgroundPosition: "center top",
-          backgroundRepeat: "no-repeat",
-          opacity: 0.95,
-        }}
-      />
-
-      {/* Soft gradient — su desktop sfuma il bordo sinistro per blendare
-          il pianeta col nero; su mobile sfuma il bordo INFERIORE del
-          pianeta nel resto della section. Due gradient compositi. */}
+      {/* Il pianeta è renderizzato una sola volta da MarketingMotionShell.
+          Questa hero resta trasparente: le scrim servono esclusivamente a
+          mantenere il copy leggibile mentre il pianeta attraversa la pagina. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
@@ -107,11 +40,10 @@ export function Hero() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 z-0 block lg:hidden"
+        className="pointer-events-none absolute inset-0 z-0 block lg:hidden"
         style={{
-          height: 340,
           background:
-            "linear-gradient(180deg, transparent 0%, transparent 55%, rgba(1,5,16,0.6) 80%, #010510 100%)",
+            "linear-gradient(180deg, rgba(1,5,16,0.18) 0%, rgba(1,5,16,0.08) 30%, #010510 78%)",
         }}
       />
 
@@ -149,9 +81,8 @@ export function Hero() {
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            // pt-[280px] su mobile spinge il testo SOTTO il pianeta-hero
-            // (alto 320px nel blocco bg di sopra) — su desktop torna a
-            // pt-10 perché il pianeta è laterale, non sovrastante.
+            // Su mobile lasciamo spazio al pianeta condiviso, che è già
+            // presente dal primo frame e continua lungo tutta la landing.
             className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-[280px] pb-8 lg:pt-4 lg:pb-6"
           >
             {/* Badge live — stats REALI dal DB via /api/public/stats.

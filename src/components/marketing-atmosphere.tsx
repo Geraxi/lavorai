@@ -15,11 +15,11 @@ export function MarketingMotionShell({ children }: { children: ReactNode }) {
   const { scrollYProgress } = useScroll();
 
   const smooth = useSpring(scrollYProgress, { stiffness: 65, damping: 24, mass: 0.35 });
-  const planetX = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["38vw", "24vw", "-22vw", "16vw", "31vw"]);
-  const planetY = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["14vh", "29vh", "13vh", "22vh", "34vh"]);
-  const planetScale = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], [0.54, 0.78, 0.64, 0.78, 0.57]);
+  const planetX = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["28vw", "14vw", "-18vw", "10vw", "26vw"]);
+  const planetY = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["2vh", "22vh", "10vh", "18vh", "30vh"]);
+  const planetScale = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], [0.88, 0.76, 0.64, 0.76, 0.6]);
   const planetRotate = useTransform(smooth, [0, 1], [-7, 18]);
-  const planetOpacity = useTransform(smooth, [0, 0.1, 0.24, 0.9, 1], [0, 0.22, 0.68, 0.5, 0.24]);
+  const planetOpacity = useTransform(smooth, [0, 0.1, 0.24, 0.9, 1], [0.98, 0.86, 0.7, 0.58, 0.42]);
   const orbitRotate = useTransform(smooth, [0, 1], [-12, 120]);
 
   useEffect(() => {

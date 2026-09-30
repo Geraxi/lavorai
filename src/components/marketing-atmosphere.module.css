@@ -1,7 +1,7 @@
 .shell { position: relative; isolation: isolate; overflow: clip; background: #010510; }
 .atmosphere { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: radial-gradient(72% 48% at 65% 12%, rgba(31, 127, 112, .14), transparent 68%), #010510; }
 .stars { position: absolute; inset: 0; opacity: .72; background-image: radial-gradient(circle at 12% 24%, rgba(255,255,255,.84) 0 1px, transparent 1.5px), radial-gradient(circle at 73% 17%, rgba(145,255,220,.7) 0 1px, transparent 1.5px), radial-gradient(circle at 42% 73%, rgba(255,255,255,.55) 0 .8px, transparent 1.4px), radial-gradient(circle at 88% 68%, rgba(105,222,188,.7) 0 1px, transparent 1.5px); background-size: 287px 233px, 419px 357px, 179px 271px, 503px 391px; animation: starDrift 24s ease-in-out infinite alternate; }
-.planet { position: absolute; top: 0; left: 0; width: min(76vw, 930px); aspect-ratio: 1; background: url("/Lavoraiherosection.png") center / contain no-repeat; filter: drop-shadow(0 34px 68px rgba(1, 180, 137, .17)); transform-origin: 50% 50%; will-change: transform, opacity; }
+.planet { position: absolute; top: 0; left: 0; width: min(92vw, 1120px); aspect-ratio: 1; background: url("/Lavoraiherosection.png") center / contain no-repeat; filter: drop-shadow(0 34px 68px rgba(1, 180, 137, .17)); transform-origin: 50% 50%; will-change: transform, opacity; }
 .orbit { position: absolute; top: -30vh; right: -18vw; width: min(104vw, 1420px); aspect-ratio: 1; border: 1px solid rgba(79, 234, 184, .17); border-radius: 50%; will-change: transform; }
 .orbit::before, .orbit::after { content: ""; position: absolute; inset: 16%; border: 1px solid rgba(118, 213, 255, .08); border-radius: 50%; }
 .orbit::after { inset: 33%; border-color: rgba(79, 234, 184, .11); }
@@ -14,5 +14,5 @@
 .section { opacity: 0; transform: translateY(26px); transition: opacity .72s cubic-bezier(.22,1,.36,1), transform .72s cubic-bezier(.22,1,.36,1); }
 .section.visible { opacity: 1; transform: none; }
 @keyframes starDrift { from { transform: translate3d(-1%, -1%, 0); } to { transform: translate3d(1.5%, 1%, 0); } }
-@media (max-width: 760px) { .planet { width: 112vw; } .orbit { width: 138vw; right: -54vw; top: 8vh; } }
+@media (max-width: 760px) { .planet { width: 132vw; } .orbit { width: 138vw; right: -54vw; top: 8vh; } }
 @media (prefers-reduced-motion: reduce) { .stars { animation: none; } .section { opacity: 1; transform: none; transition: none; } }
