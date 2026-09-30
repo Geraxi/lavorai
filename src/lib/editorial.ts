@@ -78,10 +78,10 @@ function parseDraft(raw: string): EditorialDraft {
 export async function generateEditorialDraft(topic: EditorialTopic): Promise<EditorialDraft> {
   const { text } = await complete({
     task: "editorial",
-    maxTokens: 2600,
+    maxTokens: 3400,
     json: true,
     system,
-    user: `Prepara una bozza SEO in italiano per questa guida.\n\nKeyword primaria: ${topic.keyword}\nCategoria: ${topic.category}\nAngolo: ${topic.angle}\n\nRestituisci JSON puro con title, metaTitle, description, keywords, intro (1-2 paragrafi), sections (4-6 elementi con h2, paragraphs e lista opzionale) e faq (3-5 elementi q/a). Titolo e meta title devono essere diversi. Il testo deve essere utile anche senza LavorAI; niente CTA nel corpo, niente numeri non verificabili e niente citazioni inventate.`,
+    user: `Prepara una bozza SEO in italiano per questa guida.\n\nKeyword primaria: ${topic.keyword}\nCategoria: ${topic.category}\nAngolo: ${topic.angle}\n\nRestituisci JSON puro con title, metaTitle, description, keywords, intro (1-2 paragrafi), sections (esattamente 4 elementi con h2, 1-2 paragraphs brevi e lista opzionale) e faq (esattamente 3 elementi q/a). Mantieni ogni paragrafo sotto le 85 parole. Titolo e meta title devono essere diversi. Il testo deve essere utile anche senza LavorAI; niente CTA nel corpo, niente numeri non verificabili e niente citazioni inventate.`,
   });
   return parseDraft(text);
 }
