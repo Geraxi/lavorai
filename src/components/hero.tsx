@@ -21,12 +21,12 @@ export function Hero() {
     <>
     <section
       ref={heroRef}
-      className="lavorai-hero-section relative min-h-[780px] overflow-hidden lg:h-[100svh]"
+      className="lavorai-hero-section relative min-h-[780px] lg:min-h-[150svh]"
       style={{
         backgroundColor: "transparent",
       }}
     >
-      <div className="relative min-h-[780px] lg:sticky lg:top-0 lg:h-[100svh]">
+      <div className="relative min-h-[780px] overflow-hidden lg:sticky lg:top-0 lg:h-[100svh]">
       {/* La composizione vive interamente nella metà destra: la Terra e le
           opportunità sono un unico soggetto, mentre il copy resta libero a
           sinistra. Il pianeta condiviso riappare più avanti nello scroll. */}
