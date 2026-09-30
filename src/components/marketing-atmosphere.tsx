@@ -15,9 +15,11 @@ export function MarketingMotionShell({ children }: { children: ReactNode }) {
   const { scrollYProgress } = useScroll();
 
   const smooth = useSpring(scrollYProgress, { stiffness: 65, damping: 24, mass: 0.35 });
-  const planetX = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["28vw", "14vw", "-18vw", "10vw", "26vw"]);
-  const planetY = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["-24vh", "14vh", "8vh", "16vh", "28vh"]);
-  const planetScale = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], [0.76, 0.72, 0.62, 0.74, 0.58]);
+  // Nel primo viewport il globo vive nella metà destra, sotto la nav:
+  // dev'essere una presenza leggibile, non un crop che invade l'header.
+  const planetX = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["30vw", "14vw", "-18vw", "10vw", "26vw"]);
+  const planetY = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], ["7vh", "14vh", "8vh", "16vh", "28vh"]);
+  const planetScale = useTransform(smooth, [0, 0.18, 0.48, 0.78, 1], [0.7, 0.72, 0.62, 0.74, 0.58]);
   const planetRotate = useTransform(smooth, [0, 1], [-7, 18]);
   const planetOpacity = useTransform(smooth, [0, 0.1, 0.24, 0.9, 1], [0.98, 0.86, 0.7, 0.58, 0.42]);
 
