@@ -8,6 +8,8 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
 import { LiveStatsBadge } from "@/components/live-stats-badge";
+import { JobNetworkScene } from "@/components/job-network-scene";
+import "@/components/job-network-scene.css";
 
 export function Hero() {
   const t = useTranslations("hero");
@@ -66,6 +68,10 @@ export function Hero() {
         }}
       />
 
+      {/* La scena prodotto rende visibile il valore: la Terra resta il
+          soggetto in movimento, le offerte sono segnali di opportunità. */}
+      <JobNetworkScene showGlobe={false} />
+
       <motion.div
         className="relative z-10 flex min-h-[780px] w-full items-center lg:h-full lg:min-h-0"
         style={{
@@ -108,7 +114,7 @@ export function Hero() {
                 // Le righe precedenti sono in em per scalare in proporzione.
                 // Max ridotto da 7.5rem a 6rem così le 4 righe + content
                 // sotto stanno tutte nella section senza scroll/crop.
-                fontSize: "clamp(2.5rem, 5vw, 5.35rem)",
+                fontSize: "clamp(2.7rem, 5.35vw, 5.7rem)",
                 letterSpacing: "-0.055em",
                 lineHeight: 0.98,
                 fontWeight: 800,

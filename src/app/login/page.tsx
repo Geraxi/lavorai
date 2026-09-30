@@ -8,6 +8,8 @@ import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Icon } from "@/components/design/icon";
 import { GoogleButton } from "@/components/google-signin-button";
+import { JobNetworkScene } from "@/components/job-network-scene";
+import "@/components/job-network-scene.css";
 
 export default function LoginPage() {
   return (
@@ -360,9 +362,7 @@ function LoginContent() {
              dashboard LavorAI proiettato). Fallback verde brand se
              l'asset non è ancora salvato in prod — evita pannello
              bianco/nero durante la propagazione. */
-          background:
-            url('/login-hero.png') center/cover no-repeat,
-            linear-gradient(165deg, hsl(155 55% 25%) 0%, hsl(160 60% 18%) 100%);
+          background: radial-gradient(ellipse 75% 70% at 70% 48%, rgba(8,70,91,.32), transparent 65%), #010510;
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
@@ -427,6 +427,7 @@ function Benefit({
 function LoginShowcase() {
   return (
     <div className="lavorai-login-right">
+      <JobNetworkScene compact />
       <div
         className="lavorai-login-showcase"
         style={{

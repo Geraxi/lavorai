@@ -8,6 +8,8 @@ import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/design/icon";
 import { GoogleButton } from "@/components/google-signin-button";
 import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
+import { JobNetworkScene } from "@/components/job-network-scene";
+import "@/components/job-network-scene.css";
 
 export default function SignupPage() {
   return (
@@ -407,6 +409,7 @@ function SignupContent() {
 
       {/* RIGHT — showcase (solo desktop) */}
       <div className="lavorai-login-right">
+        <JobNetworkScene compact />
         <div
           className="lavorai-login-showcase"
           style={{
@@ -467,9 +470,7 @@ function SignupContent() {
           overflow: hidden;
           /* Foto asset /public/login-hero.jpg + fallback verde brand
              se l'asset manca in prod. Vedi commento identico su /login. */
-          background:
-            url('/login-hero.png') center/cover no-repeat,
-            linear-gradient(165deg, hsl(155 55% 25%) 0%, hsl(160 60% 18%) 100%);
+          background: radial-gradient(ellipse 75% 70% at 70% 48%, rgba(8,70,91,.32), transparent 65%), #010510;
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
