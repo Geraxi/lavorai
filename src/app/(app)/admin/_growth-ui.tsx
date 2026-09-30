@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowUpRight, CheckCircle2, DatabaseZap, Users } from "lucide-react";
 import { Kpi, PageTitle } from "./_ui";
-import { AdminGrowthNav } from "@/components/admin-growth-nav";
 import { AdminPeriodPicker } from "@/components/admin-period-picker";
 import type { loadAdminGrowthMetrics } from "@/lib/admin-growth-metrics";
 
@@ -10,7 +9,6 @@ type Metrics = Awaited<ReturnType<typeof import("@/lib/admin-growth-metrics").lo
 export function GrowthHeader({ title, sub, active, query }: { title: string; sub: string; active: string; query: { range?: string; from?: string; to?: string } }) {
   return <>
     <PageTitle title={title} sub={sub} actions={<AdminPeriodPicker range={query.range} from={query.from} to={query.to} />} />
-    <AdminGrowthNav active={active} />
   </>;
 }
 

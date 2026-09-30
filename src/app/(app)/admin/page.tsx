@@ -36,7 +36,6 @@ import {
   AlertOctagon,
   Info,
 } from "lucide-react";
-import { AdminGrowthNav } from "@/components/admin-growth-nav";
 
 export const metadata: Metadata = { title: "Admin · Panoramica", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -309,14 +308,12 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
         actions={<AdminRangeSelect value={DAYS} />}
       />
 
-      <AdminGrowthNav active="/admin" />
-
       {/* Row 1 · 5 KPI */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
         <KpiTrendCard label="Utenti totali" value={realTotal.toLocaleString("it-IT")} sub={`+${sum(usersSeries)} nuovi (${rangeLabel(DAYS)})`} delta={delta(sum(usersSeries), usersPrev14)} series={usersSeries} color="hsl(var(--primary))" icon={<Users size={15} />} />
         <KpiTrendCard label="Candidature totali" value={compactNumber(apps28dCount + apps14dRows.length)} sub={`+${apps14dRows.length.toLocaleString("it-IT")} (${rangeLabel(DAYS)})`} delta={delta(apps14dRows.length, apps28dCount)} series={appsSeries} color="#60a5fa" icon={<FileText size={15} />} />
         <KpiTrendCard label="Aziende attive" value={compactNumber(distinctCompanies)} sub={`+${sum(companiesSeries)} con candidature (${rangeLabel(DAYS)})`} series={companiesSeries} color="#a78bfa" icon={<Building2 size={15} />} />
-        <KpiTrendCard href="/admin/revenue" label="Ricavi (EUR)" value={`€${mrr.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`} sub={proWithoutPayment > 0 ? `MRR attuale · ${proWithoutPayment} piani senza pagamento attivo` : "MRR attuale · storico in raccolta"} deltaLabel={`${payingPro + payingProPlus} paganti`} series={usersSeries.map(() => mrr)} color="hsl(var(--primary))" icon={<Wallet size={15} />} />
+        <KpiTrendCard label="Ricavi (EUR)" value={`€${mrr.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`} sub={proWithoutPayment > 0 ? `MRR attuale · ${proWithoutPayment} piani senza pagamento attivo` : "MRR attuale · storico in raccolta"} deltaLabel={`${payingPro + payingProPlus} paganti`} series={usersSeries.map(() => mrr)} color="hsl(var(--primary))" icon={<Wallet size={15} />} />
         <KpiTrendCard label="Crediti AI utilizzati" value={compactNumber(aiUsed)} sub={`su ${compactNumber(aiCapacity)}`} deltaLabel={`${aiPct}%`} series={appsSeries} color="#a78bfa" icon={<Zap size={15} />} />
       </div>
 

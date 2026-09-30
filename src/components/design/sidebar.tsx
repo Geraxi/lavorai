@@ -93,11 +93,7 @@ export function AppSidebar({
   // Un'unica sidebar: niente nav annidata dentro /admin.
   const adminItems: NavItem[] = [
     { href: "/admin", label: "Panoramica", icon: "dashboard" },
-    { href: "/admin/growth", label: "Growth", icon: "chart" },
     { href: "/admin/users", label: "Utenti", icon: "user" },
-    { href: "/admin/product", label: "Product", icon: "sparkles" },
-    { href: "/admin/revenue", label: "Revenue", icon: "target" },
-    { href: "/admin/outcomes", label: "Outcomes", icon: "check" },
     { href: "/admin/traffic", label: "Traffico", icon: "chart" },
     { href: "/admin/delivery", label: "Consegna", icon: "send" },
     { href: "/admin/jobs", label: "Job pool", icon: "briefcase" },
