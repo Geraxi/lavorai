@@ -4,15 +4,26 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
+import { ACTIVATION_MESSAGES, getActivationReadiness } from "@/lib/activation-readiness";
 
 export const runtime = "nodejs";
-
 
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+
+  const beforePreferences = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { emailVerified: true, _count: { select: { cvDocuments: true } } },
+  });
+  if (!beforePreferences?.emailVerified) {
+    return NextResponse.json({ error: "activation_incomplete", issue: "verify_email", message: ACTIVATION_MESSAGES.verify_email }, { status: 409 });
+  }
+  if (beforePreferences._count.cvDocuments === 0) {
+    return NextResponse.json({ error: "activation_incomplete", issue: "upload_cv", message: ACTIVATION_MESSAGES.upload_cv }, { status: 409 });
   }
 
   const body = await request.json().catch(() => null);
@@ -39,8 +50,6 @@ export async function POST(request: NextRequest) {
     modeSel.ibrido && "ibrido",
     modeSel.sede && "sede",
   ].filter(Boolean) as string[];
-
-  const completedAt = new Date();
 
   await prisma.$transaction([
     prisma.userPreferences.upsert({
@@ -72,11 +81,14 @@ export async function POST(request: NextRequest) {
         sourcesJson: JSON.stringify(sources),
       },
     }),
-    prisma.user.updateMany({
-      where: { id: user.id, onboardedAt: null },
-      data: { onboardedAt: completedAt },
-    }),
   ]);
+
+  const readiness = await getActivationReadiness(user.id);
+  if (!readiness.ready) {
+    return NextResponse.json({ error: "activation_incomplete", issue: readiness.issue, message: ACTIVATION_MESSAGES[readiness.issue!] }, { status: 409 });
+  }
+
+  await prisma.user.updateMany({ where: { id: user.id, onboardedAt: null }, data: { onboardedAt: new Date() } });
 
   await recordConversionEvent(AnalyticsEvent.ONBOARDING_COMPLETED, {
     userId: user.id,

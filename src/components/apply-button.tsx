@@ -27,8 +27,11 @@ export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
       });
       const body = await res.json().catch(() => ({}));
 
-      if (res.status === 409 && body?.error === "missing_cv") {
-        toast.error("Carica il tuo CV prima di candidarti.");
+      if (
+        res.status === 409 &&
+        (body?.error === "missing_cv" || body?.error === "activation_incomplete")
+      ) {
+        toast.error(body?.message ?? "Completa il profilo prima di candidarti.");
         router.push("/onboarding");
         return;
       }

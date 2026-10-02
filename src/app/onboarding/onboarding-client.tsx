@@ -29,14 +29,12 @@ interface Details {
   avoidCompanies: string;
 }
 
-// 3 step come da specs: CV → Ruolo+Città → Avvia (= dashboard).
-// Profilo/Esperienza rimosse: il profilo viene auto-estratto dal provider AI
-// dal CV; gli Esperienza/Notice period si possono editare in Preferenze
-// dopo (opzionale, non blocca il valore principale).
-// STEPS labels are localized inside the component via useTranslations
+// Un profilo attivo deve avere CV, preferenze e dettagli professionali
+// sufficienti a generare candidature pertinenti.
 const STEPS: StepDef[] = [
   { key: "cv", label: "CV", icon: "file" },
   { key: "prefs", label: "Role & Location", icon: "target" },
+  { key: "details", label: "Dettagli", icon: "user" },
   { key: "confirm", label: "Launch", icon: "zap" },
 ];
 
@@ -89,7 +87,14 @@ export default function OnboardingClient({
   // Steps localized — usiamo questo array invece di STEPS in render
   const stepsLocalized: StepDef[] = STEPS.map((s, i) => ({
     ...s,
-    label: i === 0 ? t("stepCv") : i === 1 ? t("stepPrefs") : t("stepLaunch"),
+    label:
+      i === 0
+        ? t("stepCv")
+        : i === 1
+          ? t("stepPrefs")
+          : i === 2
+            ? "Dettagli"
+            : t("stepLaunch"),
   }));
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -183,7 +188,7 @@ export default function OnboardingClient({
   async function saveDetails() {
     setSavingDetails(true);
     try {
-      await fetch("/api/onboarding/details", {
+      const response = await fetch("/api/onboarding/details", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -196,8 +201,10 @@ export default function OnboardingClient({
           avoidCompanies: details.avoidCompanies.trim() || null,
         }),
       });
+      return response.ok;
     } catch (err) {
       console.error("saveDetails failed", err);
+      return false;
     } finally {
       setSavingDetails(false);
     }
@@ -209,7 +216,25 @@ export default function OnboardingClient({
     return true;
   };
   const next = async () => {
-    if (step === 1 && !preferencesValid()) return;
+    if (step === 1) {
+      const hasRole = roles.some((role) => role.selected);
+      const hasLocation = locations.some((location) => location.selected);
+      const hasWorkMode = Object.values(modeSel).some(Boolean);
+      if (!hasRole || !hasLocation || !hasWorkMode) {
+        toast.error("Scegli almeno un ruolo, una località e una modalità di lavoro.");
+        return;
+      }
+    }
+    if (step === 2) {
+      if (!details.seniority || !details.englishLevel || !details.noticePeriod) {
+        toast.error("Completa seniority, inglese e preavviso per continuare.");
+        return;
+      }
+      if (!(await saveDetails())) {
+        toast.error(t("retryError"));
+        return;
+      }
+    }
     setStep((s) => Math.min(stepsLocalized.length - 1, s + 1));
   };
   const prev = () => setStep((s) => Math.max(0, s - 1));
@@ -240,7 +265,10 @@ export default function OnboardingClient({
     }).catch(() => null);
 
     if (!result?.ok) {
-      toast.error(t("retryError"));
+      const error = result
+        ? await result.json().catch(() => null)
+        : null;
+      toast.error(error?.message ?? t("retryError"));
       return;
     }
 
@@ -359,6 +387,9 @@ export default function OnboardingClient({
             />
           )}
           {step === 2 && (
+            <StepDetails details={details} setDetails={setDetails} />
+          )}
+          {step === 3 && (
             <StepConfirm
               salary={salary}
               rolesSelected={roles.filter((r) => r.selected).length}
@@ -395,10 +426,10 @@ export default function OnboardingClient({
             type="button"
             className="ds-btn ds-btn-primary"
             onClick={step === stepsLocalized.length - 1 ? finish : next}
-            disabled={finishing || uploading || (step === 0 && !canContinueStep0)}
+            disabled={finishing || uploading || savingDetails || (step === 0 && !canContinueStep0)}
             style={{
-              opacity: step === 0 && !canContinueStep0 ? 0.5 : 1,
-              cursor: step === 0 && !canContinueStep0 ? "not-allowed" : "pointer",
+              opacity: finishing || uploading || savingDetails || (step === 0 && !canContinueStep0) ? 0.5 : 1,
+              cursor: finishing || uploading || savingDetails || (step === 0 && !canContinueStep0) ? "not-allowed" : "pointer",
             }}
           >
             {finishing ? t("activating") : step === stepsLocalized.length - 1 ? t("activateAutoApply") : t("continue")}{" "}

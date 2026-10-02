@@ -11,6 +11,7 @@ import { rowToProfile } from "@/lib/cv-profile-types";
 import { resolveSession } from "@/lib/apply-session";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { AnalyticsEvent } from "@/lib/analytics";
+import { ACTIVATION_MESSAGES, getActivationReadiness } from "@/lib/activation-readiness";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -61,6 +62,14 @@ export async function POST(request: NextRequest) {
       );
     }
     const { jobId, portal } = parsed.data;
+
+    const readiness = await getActivationReadiness(user.id);
+    if (!readiness.ready) {
+      return NextResponse.json(
+        { error: "activation_incomplete", issue: readiness.issue, message: ACTIVATION_MESSAGES[readiness.issue!] },
+        { status: 409 },
+      );
+    }
 
     // --- Paywall per-tier enforcement ---
     const tier = effectiveTier(user);

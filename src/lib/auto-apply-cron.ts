@@ -203,7 +203,19 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   const eligibleUsers = await prisma.user.findMany({
     where: {
       suspendedAt: null,
-      preferences: { autoApplyMode: { in: ["auto", "hybrid"] } },
+      emailVerified: { not: null },
+      onboardedAt: { not: null },
+      seniority: { not: null },
+      englishLevel: { not: null },
+      noticePeriod: { not: null },
+      preferences: {
+        is: {
+          autoApplyMode: { in: ["auto", "hybrid"] },
+          rolesJson: { not: "[]" },
+          locationsJson: { not: "[]" },
+          sourcesJson: { not: "[]" },
+        },
+      },
       cvDocuments: { some: {} },
       cvProfile: { isNot: null },
     },
@@ -288,7 +300,25 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
     errors: 0,
   };
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: {
+      id: userId,
+      suspendedAt: null,
+      emailVerified: { not: null },
+      onboardedAt: { not: null },
+      seniority: { not: null },
+      englishLevel: { not: null },
+      noticePeriod: { not: null },
+      preferences: {
+        is: {
+          autoApplyMode: { in: ["auto", "hybrid"] },
+          rolesJson: { not: "[]" },
+          locationsJson: { not: "[]" },
+          sourcesJson: { not: "[]" },
+        },
+      },
+      cvDocuments: { some: {} },
+      cvProfile: { isNot: null },
+    },
     select: {
       id: true,
       email: true,
