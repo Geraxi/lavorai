@@ -165,7 +165,7 @@ export function PaywallDialog({
             }}
           >
             <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
-              Pro e Pro+: 7 giorni gratis, poi si rinnova · Disdici in un clic dalle Impostazioni
+              La prova gratuita parte dalla registrazione. Quando scegli un piano, il pagamento parte subito · Disdici in un clic dalle Impostazioni
             </div>
             <button
               type="button"
