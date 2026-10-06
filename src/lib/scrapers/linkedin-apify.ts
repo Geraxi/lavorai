@@ -218,7 +218,10 @@ export async function fetchLinkedinViaApify(
 }
 
 /**
- * Query di default per il cron — ruoli tech/design/product italiani + EU.
+ * Query di default per il cron — ruoli italiani + EU. Le query demand-driven
+ * e Adzuna assicurano la copertura ampia di tutti i settori; qui manteniamo
+ * anche alcuni ruoli sanitari/laboratorio perché spesso conducono a ATS
+ * pubblici candidabili direttamente.
  * Mix posizioni dipendente + gig freelance/contract (per utenti P.IVA).
  * In produzione si può spostare in DB / env.
  */
@@ -253,4 +256,13 @@ export const DEFAULT_LINKEDIN_QUERIES: { search: string; location?: string }[] =
     { search: "Contract Full Stack", location: "Italy" },
     { search: "Consulente informatico", location: "Milan, Italy" },
     { search: "Project Product Designer", location: "European Union" },
+    // Sanità e life sciences — inclusi i sinonimi del profilo TSLB.
+    { search: "Tecnico di laboratorio biomedico", location: "Italy" },
+    { search: "Tecnico sanitario di laboratorio biomedico", location: "Italy" },
+    { search: "Biomedical laboratory technician", location: "Italy" },
+    { search: "Clinical research", location: "Italy" },
+    // Modalità di lavoro: il pool include in sede, ibrido e remoto.
+    { search: "Hybrid", location: "Italy" },
+    { search: "Remote", location: "Italy" },
+    { search: "Full remote", location: "Italy" },
   ];
