@@ -20,8 +20,90 @@ export interface DemandQuery {
   where: string;
 }
 
-const MAX_QUERIES = 40; // budget anti rate-limit Adzuna
+const MAX_QUERIES = 80; // budget anti rate-limit Adzuna
 const PER_QUERY_RESULTS = 25;
+
+/**
+ * Copertura minima del catalogo, indipendente dagli utenti già iscritti.
+ *
+ * Le query basate sulla domanda restano prioritarie: questa lista evita però
+ * che il pool parta solo da tech/design e renda invisibili interi mestieri a
+ * chi arriva per primo (sanità, laboratorio, edilizia, retail, ecc.). Ogni
+ * voce è una ricerca concreta, non una categoria generica, così restituisce
+ * annunci effettivamente indicizzabili dai provider.
+ */
+export const BASELINE_SECTOR_QUERIES = [
+  // Digitale, IT e creatività
+  "Software developer",
+  "Data analyst",
+  "Product manager",
+  "UX designer",
+  "Digital marketing",
+  "Graphic designer",
+  "Cyber security",
+  // Commerciale, customer e funzioni aziendali
+  "Sales account manager",
+  "Customer service",
+  "Amministrativo contabile",
+  "Risorse umane",
+  "Project manager",
+  "Acquisti procurement",
+  "Export manager",
+  "Consultant",
+  // Ingegneria, industria, edilizia ed energia
+  "Ingegnere meccanico",
+  "Ingegnere civile",
+  "Ingegnere elettronico",
+  "Ingegnere chimico",
+  "Architetto",
+  "Operaio specializzato",
+  "Manutentore",
+  "Quality assurance",
+  "Energy manager",
+  // Trasporti, logistica, retail, turismo e servizi
+  "Logistica magazziniere",
+  "Autista",
+  "Retail store manager",
+  "Cameriere ristorazione",
+  "Receptionist",
+  "Turismo hotel",
+  "Sicurezza vigilanza",
+  "Pulizie",
+  // Sanità, life sciences e laboratorio
+  "Medico",
+  "Infermiere",
+  "Operatore socio sanitario",
+  "Fisioterapista",
+  "Tecnico di laboratorio biomedico",
+  "Tecnico sanitario di laboratorio biomedico",
+  "TSLB",
+  "Biologo",
+  "Biotecnologo",
+  "Chimico laboratorio",
+  "Ricerca clinica",
+  "Farmacista",
+  // Formazione, legale, pubblico, agricoltura e non-profit
+  "Insegnante",
+  "Legale avvocato",
+  "Agronomo",
+  "Assistente sociale",
+  "Pubblica amministrazione",
+  "Ricercatore universitario",
+] as const;
+
+/**
+ * Query trasversali sulle modalità di lavoro. Un annuncio senza queste
+ * parole rimane comunque nel catalogo settoriale; queste ricerche aggiuntive
+ * evitano però che il discovery privilegi involontariamente il solo lavoro
+ * in sede.
+ */
+export const WORK_MODE_QUERIES = [
+  "in sede",
+  "ibrido",
+  "smart working",
+  "remoto",
+  "full remote",
+] as const;
 
 /** Mappa una località utente sul parametro `where` di Adzuna (Italia). */
 function normalizeLocation(raw: string): string | null {
@@ -110,12 +192,25 @@ export async function collectDemandQueries(): Promise<DemandQuery[]> {
     queries.push({ what, where });
   };
 
-  // Pass 1: ogni ruolo a livello nazionale.
+  // Pass 1: catalogo comune per tutti i macro-settori. Viene prima della
+  // domanda individuale per assicurare che ogni settore sia sempre scoperto.
+  for (const role of BASELINE_SECTOR_QUERIES) {
+    if (queries.length >= MAX_QUERIES) break;
+    push(role, "Italia");
+  }
+  // Pass 2: tutte le modalità — in sede, ibrido, smart working/remoto e
+  // full remote — sono raccolte in modo esplicito.
+  for (const mode of WORK_MODE_QUERIES) {
+    if (queries.length >= MAX_QUERIES) break;
+    push(mode, "Italia");
+  }
+  // Pass 3: ruoli richiesti dagli utenti a livello nazionale. Questo copre
+  // anche qualsiasi professione molto specifica non presente nel catalogo.
   for (const role of rankedRoles) {
     if (queries.length >= MAX_QUERIES) break;
     push(role, "Italia");
   }
-  // Pass 2: ruoli più richiesti anche nelle città specifiche.
+  // Pass 4: ruoli più richiesti anche nelle città specifiche.
   const cities = locations.filter((l) => l.toLowerCase() !== "italia").slice(0, 4);
   for (const role of rankedRoles) {
     for (const city of cities) {
