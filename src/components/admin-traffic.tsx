@@ -4,6 +4,7 @@ import { AdminTrafficMap } from "@/components/admin-traffic-map";
 import { AdminRangeSelect } from "@/components/admin-range-select";
 import { rangeLabel } from "@/components/admin-range";
 import { itRegionOf } from "@/lib/it-regions";
+import { isTestAccount } from "@/lib/admin";
 import { Eye, Users, UserPlus, Layers, Download } from "lucide-react";
 
 const H = 3600_000;
@@ -29,18 +30,20 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     dayKeys.push(d.toISOString().slice(0, 10));
   }
 
-  const [views14d, uniq7d, uniqPrev7, newUsers7, newUsersPrev7, topPaths, topReferrers, byCountry, itGeo] = await Promise.all([
+  const [views14d, uniq7d, uniqPrev7, newUserRows, topPaths, topReferrers, directReferrals, byCountry, itGeo] = await Promise.all([
     prisma.pageView.findMany({ where: { ts: { gte: since(24 * 2 * P) } }, select: { ts: true, sessionId: true } }).catch(() => [] as { ts: Date; sessionId: string }[]),
     prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
     prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * 2 * P), lt: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
-    prisma.user.count({ where: { createdAt: { gte: since(24 * P) } } }),
-    prisma.user.count({ where: { createdAt: { gte: since(24 * 2 * P), lt: since(24 * P) } } }),
+    prisma.user.findMany({ where: { createdAt: { gte: since(24 * 2 * P) } }, select: { email: true, createdAt: true } }),
     prisma.pageView.groupBy({ by: ["path"], where: { ts: { gte: since(24 * P) } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 12 }).catch(() => [] as Array<{ path: string; _count: { _all: number } }>),
     prisma.pageView.groupBy({ by: ["referrer"], where: { ts: { gte: since(24 * P) }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 12 }).catch(() => [] as Array<{ referrer: string | null; _count: { _all: number } }>),
+    prisma.pageView.count({ where: { ts: { gte: since(24 * P) }, referrer: null } }).catch(() => 0),
     prisma.pageView.groupBy({ by: ["country"], where: { ts: { gte: since(24 * P) }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 30 }).catch(() => [] as Array<{ country: string | null; _count: { _all: number } }>),
     // Regione/città delle visite italiane (geo header Vercel; null per le visite precedenti al tracking)
     prisma.pageView.groupBy({ by: ["region", "city"], where: { ts: { gte: since(24 * P) }, country: "IT" }, _count: { _all: true } }).catch(() => [] as Array<{ region: string | null; city: string | null; _count: { _all: number } }>),
   ]);
+  const newUsers7 = newUserRows.filter((u) => u.createdAt >= since(24 * P) && !isTestAccount(u.email)).length;
+  const newUsersPrev7 = newUserRows.filter((u) => u.createdAt >= since(24 * 2 * P) && u.createdAt < since(24 * P) && !isTestAccount(u.email)).length;
 
   // Aggregazione per regione italiana
   const regionMap = new Map<string, { key: string; name: string; lat: number; lng: number; count: number; cities: Map<string, number> }>();
@@ -78,8 +81,9 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     const k = shortenRef(r.referrer);
     refMap.set(k, (refMap.get(k) ?? 0) + r._count._all);
   }
+  if (directReferrals > 0) refMap.set("Nessun referrer visibile", directReferrals);
   const refs = [...refMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  const refTotal = refs.reduce((s, [, v]) => s + v, 0) || 1;
+  const refTotal = views7 || 1;
   // Normalizza: il tipo groupBy+catch confonde TS sull'unione di _count.
   const paths: Array<{ path: string; n: number }> = topPaths.map((p) => ({ path: p.path, n: Number((p._count as { _all: number })._all) }));
   const pathTotal = paths.reduce((s, p) => s + p.n, 0) || 1;
@@ -90,7 +94,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(520px,1fr) auto" }}>
       <PageTitle
         title="Traffico sito"
-        sub="Scopri da dove arrivano i tuoi visitatori e come interagiscono con la piattaforma."
+        sub="Dati first-party: browser e cookie, non persone deduplicate. Ad blocker e bot possono alterare i conteggi."
         actions={
           <>
             <AdminRangeSelect value={P} />
@@ -101,8 +105,8 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
         <KpiTrendCard label="Page views" value={compactNumber(views7)} delta={dPct(views7, viewsPrev7)} series={viewsSeries} color="hsl(var(--primary))" icon={<Eye size={15} />} />
-        <KpiTrendCard label="Visitatori unici" value={compactNumber(uniq7d)} delta={dPct(uniq7d, uniqPrev7)} series={uniqSeries} color="hsl(var(--primary))" icon={<Users size={15} />} />
-        <KpiTrendCard label="Nuovi utenti" value={compactNumber(newUsers7)} delta={dPct(newUsers7, newUsersPrev7)} series={uniqSeries.map((v) => v * 0.3)} color="hsl(var(--primary))" icon={<UserPlus size={15} />} />
+        <KpiTrendCard label="Browser unici (stima)" value={compactNumber(uniq7d)} sub="cookie lv_sid · non persone" delta={dPct(uniq7d, uniqPrev7)} series={uniqSeries} color="hsl(var(--primary))" icon={<Users size={15} />} />
+        <KpiTrendCard label="Nuovi utenti" value={compactNumber(newUsers7)} sub="esclusi account test" delta={dPct(newUsers7, newUsersPrev7)} series={undefined} color="hsl(var(--primary))" icon={<UserPlus size={15} />} />
         <KpiTrendCard label="Pagine per sessione" value={perSession.toFixed(1)} delta={dPct(perSession, perSessionPrev)} series={viewsSeries.map((v, i) => (uniqSeries[i] > 0 ? v / uniqSeries[i] : 0))} color="hsl(var(--primary))" icon={<Layers size={15} />} />
       </div>
 
@@ -128,7 +132,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
         </div>
         <div className="adm-card" style={{ padding: "10px 14px", minHeight: 0 }}>
           <div className="adm-card-head" style={{ marginBottom: 4 }}>
-            <div className="adm-card-title" style={{ fontSize: 13 }}>Top referrer <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 11 }}>· {rangeLabel(P)}</span></div>
+            <div className="adm-card-title" style={{ fontSize: 13 }}>Top referrer <span style={{ fontWeight: 400, color: "var(--fg-subtle)", fontSize: 11 }}>· {rangeLabel(P)} · % su tutte le viste</span></div>
             <span style={{ fontSize: 10.5, color: "var(--fg-subtle)", letterSpacing: 0.3, textTransform: "uppercase" }}>Visite · %</span>
           </div>
           <div className="adm-card-body scroll" style={{ minHeight: 0 }}>

@@ -392,7 +392,8 @@ export function KpiTrendCard({
   sub?: string;
   delta?: number; // percentuale (positiva/negativa)
   deltaLabel?: string; // testo alternativo al delta % (es. "68%")
-  series: number[];
+  /** Ometti la serie quando il valore è uno snapshot, non uno storico. */
+  series?: number[];
   color?: string;
   icon?: ReactNode;
   sparkKind?: "area" | "bars";
@@ -401,7 +402,7 @@ export function KpiTrendCard({
   /** Se presente la card è cliccabile e porta al dettaglio. */
   href?: string;
 }) {
-  const sparkLabels = seriesLabels ?? series.map((_, i) => { const back = series.length - 1 - i; return back === 0 ? "Oggi" : back === 1 ? "Ieri" : `${back} giorni fa`; });
+  const sparkLabels = seriesLabels ?? (series ?? []).map((_, i) => { const back = (series?.length ?? 0) - 1 - i; return back === 0 ? "Oggi" : back === 1 ? "Ieri" : `${back} giorni fa`; });
   const trendUp = delta != null && delta >= 0;
   const trendColor = delta == null ? "hsl(var(--primary))" : trendUp ? "hsl(var(--primary))" : "#f87171";
   const Tag = (href ? Link : "div") as React.ElementType;
@@ -460,8 +461,10 @@ export function KpiTrendCard({
           {sub && <div className="adm-ellipsis" style={{ fontSize: 11, color: "var(--fg-subtle)", marginTop: 5 }}>{sub}</div>}
         </div>
         <div style={{ height: 44, minWidth: 0, position: "relative" }}>
-          {sparkKind === "bars" ? <SparkBars data={series} color={color} /> : <Sparkline data={series} color={color} height={44} />}
-          <ChartHover items={series.map((v, i) => ({ label: sparkLabels[i] ?? "", rows: [{ name: label, value: v, color }] }))} guide={false} />
+          {series && series.length > 1 ? <>
+            {sparkKind === "bars" ? <SparkBars data={series} color={color} /> : <Sparkline data={series} color={color} height={44} />}
+            <ChartHover items={series.map((v, i) => ({ label: sparkLabels[i] ?? "", rows: [{ name: label, value: v, color }] }))} guide={false} />
+          </> : <div aria-label="Snapshot, nessuna serie storica disponibile" style={{ position: "absolute", left: 0, right: 0, bottom: 8, height: 1, background: "var(--border-ds)" }} />}
         </div>
       </div>
     </Tag>
@@ -714,7 +717,8 @@ export function FunnelBar({
   label: string;
   value: number | string;
   max: number;
-  pct: string;
+  /** Percentuale solo quando i passaggi appartengono alla stessa coorte. */
+  pct?: string;
   color: string;
 }) {
   const width = max > 0 ? Math.min(100, (Number(value) / max) * 100) : 0;
@@ -725,7 +729,7 @@ export function FunnelBar({
         <div style={{ width: `${width}%`, height: "100%", background: `linear-gradient(90deg, ${color}, color-mix(in srgb, ${color} 60%, transparent))`, borderRadius: 4 }} />
       </div>
       <div style={{ textAlign: "right", color: "var(--fg)", fontWeight: 700, fontFeatureSettings: '"tnum"' }}>{value.toLocaleString?.("it-IT") ?? value}</div>
-      <div style={{ textAlign: "right", color: "var(--fg-subtle)", fontFeatureSettings: '"tnum"' }}>{pct}</div>
+      <div style={{ textAlign: "right", color: "var(--fg-subtle)", fontFeatureSettings: '"tnum"' }}>{pct ?? "—"}</div>
     </div>
   );
 }

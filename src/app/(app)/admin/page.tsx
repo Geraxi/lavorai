@@ -46,8 +46,8 @@ const H = 3600_000;
  * /admin — Panoramica, layout viewport-fisso (nessuno scroll di pagina).
  * Righe: header · 5 KPI · [Andamento 2/3 | Stato piattaforma 1/3]
  *        · [Funnel | Per stato | Crediti AI] · [Attività recenti | Alert].
- * Tutti i numeri da Prisma; MRR = paganti × prezzo tier; capacità AI =
- * somma cap mensili dei tier attivi.
+ * Ogni card dichiara se è un conteggio osservato o una stima. MRR =
+ * abbonamenti attivi × prezzo di listino (non incassi Stripe).
  */
 export default async function AdminOverviewPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
   const sp = (await searchParams) ?? {};
@@ -73,7 +73,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   const [
     allUsersLite,
     apps14dRows,
-    apps28dCount,
+    applicationsAllTime,
     appsMonth,
     activeSessions,
     creditFailures6h,
@@ -100,9 +100,9 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     }),
     prisma.application.findMany({
       where: { createdAt: { gte: since(24 * DAYS) } },
-      select: { createdAt: true, status: true, replyCount: true, lastReplyKind: true, userStatus: true, atsScore: true, job: { select: { company: true } } },
+      select: { createdAt: true, status: true, submittedVia: true, submitConfirmation: true, replyCount: true, lastReplyKind: true, userStatus: true, atsScore: true, user: { select: { email: true } }, job: { select: { company: true } } },
     }),
-    prisma.application.count({ where: { createdAt: { gte: since(24 * DAYS * 2), lt: since(24 * DAYS) } } }),
+    prisma.application.count(),
     prisma.application.count({ where: { createdAt: { gte: monthStart } } }),
     prisma.applicationSession.count({ where: { status: { in: ["active", "auto"] } } }),
     prisma.application.count({
@@ -145,6 +145,8 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   ]);
 
   const realUsers = allUsersLite.filter((u) => !isTestAccount(u.email));
+  const realUserIds = new Set(realUsers.map((u) => u.id));
+  const realAppsInPeriod = apps14dRows.filter((a) => !isTestAccount(a.user?.email));
   const realTotal = realUsers.length;
   // "Pagante" = addebito completato (status active). Le prove Stripe sono
   // piani vivi ma non MRR e restano quindi fuori dai ricavi.
@@ -164,7 +166,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     return dayKeys.map((k) => m.get(k) ?? 0);
   };
   const usersSeries = bucket(realUsers.filter((u) => u.createdAt >= since(24 * DAYS)).map((u) => u.createdAt));
-  const appsSeries = bucket(apps14dRows.map((a) => a.createdAt));
+  const appsSeries = bucket(realAppsInPeriod.map((a) => a.createdAt));
   const viewsSeries = bucket(pageViews14d.map((p) => p.ts));
   // Aziende/giorno = company distinte fra le candidature del giorno
   const companiesSeries = dayKeys.map((k) => {
@@ -187,9 +189,9 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   const aiUsed = appsMonth;
   const aiPct = Math.min(100, Math.round((aiUsed / aiCapacity) * 100));
 
-  // ── Funnel utenti (all-time, account reali) ────────────────────────────
+  // ── Eventi di crescita (stesso periodo; non è una coorte attribuita) ──
   const uniqueEventUsers = (name: string) => new Set(
-    conversionEvents.filter((e) => e.name === name && e.userId).map((e) => e.userId as string),
+    conversionEvents.filter((e) => e.name === name && e.userId && realUserIds.has(e.userId)).map((e) => e.userId as string),
   ).size;
   const conversionVisitors = new Set(pageViews14d.map((v) => v.sessionId).filter(Boolean)).size;
   const conversionSignups = Math.max(
@@ -203,30 +205,31 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   const conversionTrials = uniqueEventUsers("trial_started");
   const conversionCheckouts = uniqueEventUsers("checkout_started");
   const conversionPaid = uniqueEventUsers("purchase_completed");
-  const conversionMax = Math.max(conversionVisitors, conversionSignups, 1);
+  const conversionMax = Math.max(conversionVisitors, conversionSignups, conversionOnboarded, conversionTrials, conversionCheckouts, conversionPaid, 1);
   const SOURCE_LABEL: Record<string, string> = { google: "Google", chatgpt: "ChatGPT", linkedin: "LinkedIn", instagram_tiktok: "IG/TikTok", amico: "Amico", universita: "Università", categorie_protette: "Cat. protette", altro: "Altro" };
   const sourceCounts = new Map<string, number>();
-  for (const u of realUsers) { const k = u.signupSource ?? (u.signupUtmSource ? `utm:${u.signupUtmSource}` : null); if (k) sourceCounts.set(k, (sourceCounts.get(k) ?? 0) + 1); }
+  for (const u of realUsers.filter((u) => u.createdAt >= since(24 * DAYS))) { const k = u.signupSource ?? (u.signupUtmSource ? `utm:${u.signupUtmSource}` : null); if (k) sourceCounts.set(k, (sourceCounts.get(k) ?? 0) + 1); }
   const topSources = [...sourceCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
 
   // ── Funnel (14gg) ─────────────────────────────────────────────────────
   const jobViews = pageViews14d.filter((p) => p.path.startsWith("/jobs") || p.path.startsWith("/discover")).length;
-  // "Inviate" = consegnate davvero (status success). Le create ma fallite o in coda
-  // non sono candidature inviate: contarle gonfiava il funnel (584 vs 41).
-  const fCreate = apps14dRows.length;
-  const fInviate = apps14dRows.filter((a) => a.status === "success").length;
-  const fRisposte = apps14dRows.filter((a) => a.replyCount > 0).length;
-  const fColloqui = apps14dRows.filter((a) => a.lastReplyKind === "colloquio" || a.userStatus === "colloquio").length;
-  const fOfferte = apps14dRows.filter((a) => a.userStatus === "offerta").length;
+  // "Consegnate" richiede successo, canale di invio e nessun esito esplicitamente
+  // simulato/non confermato. Gli invii legacy senza conferma restano inclusi, come
+  // nel report performance, perché non possiamo riclassificarli retroattivamente.
+  const fCreate = realAppsInPeriod.length;
+  const isConfirmedDelivery = (a: typeof realAppsInPeriod[number]) => a.status === "success" && !!a.submittedVia && !["DRY_RUN", "UNCONFIRMED"].includes(a.submitConfirmation ?? "");
+  const fInviate = realAppsInPeriod.filter(isConfirmedDelivery).length;
+  const fRisposte = realAppsInPeriod.filter((a) => a.replyCount > 0).length;
+  const fColloqui = realAppsInPeriod.filter((a) => a.lastReplyKind === "colloquio" || a.userStatus === "colloquio").length;
+  const fOfferte = realAppsInPeriod.filter((a) => a.userStatus === "offerta").length;
   const fMax = Math.max(jobViews, fCreate, 1);
-  const pctOf = (v: number, base = fMax) => (base > 0 ? `${((v / base) * 100).toFixed(v / base < 0.1 ? 1 : 0)}%` : "—");
 
   // ── Donut per stato ───────────────────────────────────────────────────
-  const stInviate = apps14dRows.filter((a) => a.status === "success").length;
-  const stAttesa = apps14dRows.filter((a) => ["awaiting_consent", "ready_to_apply", "queued", "in_progress", "optimizing", "applying", "needs_answers"].includes(a.status)).length;
+  const stInviate = fInviate;
+  const stAttesa = realAppsInPeriod.filter((a) => ["awaiting_consent", "ready_to_apply", "queued", "in_progress", "optimizing", "applying", "needs_answers"].includes(a.status)).length;
   // Fallite (errore tecnico nostro) e Rifiutate (risposta negativa del recruiter) sono due cose diverse.
-  const stFallite = apps14dRows.filter((a) => a.status === "failed").length;
-  const stRifiutate = apps14dRows.filter((a) => a.status !== "failed" && (a.lastReplyKind === "rifiutata" || a.userStatus === "rifiutata")).length;
+  const stFallite = realAppsInPeriod.filter((a) => a.status === "failed").length;
+  const stRifiutate = realAppsInPeriod.filter((a) => a.status !== "failed" && (a.lastReplyKind === "rifiutata" || a.userStatus === "rifiutata")).length;
   const donutSegments = [
     { label: "Inviate", value: stInviate, color: "hsl(var(--primary))" },
     { label: "In attesa", value: stAttesa, color: "#60a5fa" },
@@ -237,13 +240,13 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   ];
   const donutTotal = sum(donutSegments.map((s) => s.value));
 
-  // ── Crediti AI breakdown (proxy reali) ────────────────────────────────
-  const aiAnalisi = apps14dRows.filter((a) => a.atsScore != null).length;
-  const aiSegments = [
-    { label: "Job scraping", value: jobsFresh7d, color: "hsl(var(--primary))" },
-    { label: "Matching CV", value: cvDocsMonth, color: "#60a5fa" },
-    { label: "Auto-apply", value: appsMonth, color: "#a78bfa" },
-    { label: "Analisi CV", value: aiAnalisi, color: "#fbbf24" },
+  // ── Volume operativo: i campi sotto non sono token/crediti AI. ────────
+  const aiAnalisi = realAppsInPeriod.filter((a) => a.atsScore != null).length;
+  const operations = [
+    { label: "Annunci aggiornati (7g)", value: jobsFresh7d, color: "hsl(var(--primary))" },
+    { label: "CV caricati (mese)", value: cvDocsMonth, color: "#60a5fa" },
+    { label: "Candidature create (mese)", value: appsMonth, color: "#a78bfa" },
+    { label: "Con ATS score", value: aiAnalisi, color: "#fbbf24" },
   ];
 
   // ── Stato piattaforma ─────────────────────────────────────────────────
@@ -259,13 +262,13 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
       ? "segnale >6h"
       : `${Math.max(0, Math.round(aiAgeMs / 60000))} min fa`;
   const services = [
-    { label: "API", icon: <Globe size={14} />, status: "ok" as const, detail: "risponde" },
+    { label: "API", icon: <Globe size={14} />, status: "warn" as const, detail: "probe esterno assente" },
     { label: "Database", icon: <Database size={14} />, status: "ok" as const, detail: "query ok" },
     { label: "AI Engine", icon: <Sparkles size={14} />, status: aiStatus, detail: aiDetail },
     { label: "Job Scraping", icon: <Cpu size={14} />, status: (jobsFresh24h === 0 ? "warn" : "ok") as "ok" | "warn", detail: `${jobsFresh24h} / 24h` },
-    { label: "Email Service", icon: <Mail size={14} />, status: (emailsLast7d > 0 ? "ok" : "warn") as "ok" | "warn", detail: `${emailsLast7d} / 7g` },
-    { label: "Payment (Stripe)", icon: <CreditCard size={14} />, status: (process.env.STRIPE_SECRET_KEY ? "ok" : "warn") as "ok" | "warn", detail: process.env.STRIPE_SECRET_KEY ? "configurato" : "non configurato" },
-    { label: "Web & App", icon: <MonitorSmartphone size={14} />, status: "ok" as const, detail: "online" },
+    { label: "Attività email", icon: <Mail size={14} />, status: (emailsLast7d > 0 ? "ok" : "warn") as "ok" | "warn", detail: `${emailsLast7d} log / 7g` },
+    { label: "Stripe", icon: <CreditCard size={14} />, status: (process.env.STRIPE_SECRET_KEY ? "warn" : "warn") as "warn", detail: process.env.STRIPE_SECRET_KEY ? "chiave presente, nessun probe" : "non configurato" },
+    { label: "Web & App", icon: <MonitorSmartphone size={14} />, status: "warn" as const, detail: "probe esterno assente" },
   ];
   const allOk = services.every((s) => s.status === "ok");
 
@@ -310,10 +313,10 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
       {/* Row 1 · 5 KPI */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
         <KpiTrendCard label="Utenti totali" value={realTotal.toLocaleString("it-IT")} sub={`+${sum(usersSeries)} nuovi (${rangeLabel(DAYS)})`} delta={delta(sum(usersSeries), usersPrev14)} series={usersSeries} color="hsl(var(--primary))" icon={<Users size={15} />} />
-        <KpiTrendCard label="Candidature totali" value={compactNumber(apps28dCount + apps14dRows.length)} sub={`+${apps14dRows.length.toLocaleString("it-IT")} (${rangeLabel(DAYS)})`} delta={delta(apps14dRows.length, apps28dCount)} series={appsSeries} color="#60a5fa" icon={<FileText size={15} />} />
+        <KpiTrendCard label="Candidature create" value={compactNumber(applicationsAllTime)} sub={`${fCreate.toLocaleString("it-IT")} reali nel periodo · totale storico incl. test`} series={appsSeries} color="#60a5fa" icon={<FileText size={15} />} />
         <KpiTrendCard label="Aziende attive" value={compactNumber(distinctCompanies)} sub={`+${sum(companiesSeries)} con candidature (${rangeLabel(DAYS)})`} series={companiesSeries} color="#a78bfa" icon={<Building2 size={15} />} />
-        <KpiTrendCard href="/admin/users?plan=paying" label="Ricavi (EUR)" value={`€${mrr.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`} sub={proWithoutPayment > 0 ? `MRR · ${proWithoutPayment} piani Pro senza pagamento attivo` : "Mese in corso · MRR (abbonamenti Stripe attivi)"} deltaLabel={`${payingPro + payingProPlus} paganti`} series={usersSeries.map((_, i) => mrr * (0.7 + i * 0.022))} color="hsl(var(--primary))" icon={<Wallet size={15} />} />
-        <KpiTrendCard label="Crediti AI utilizzati" value={compactNumber(aiUsed)} sub={`su ${compactNumber(aiCapacity)}`} deltaLabel={`${aiPct}%`} series={appsSeries} color="#a78bfa" icon={<Zap size={15} />} />
+        <KpiTrendCard href="/admin/users?plan=paying" label="MRR a listino" value={`€${mrr.toLocaleString("it-IT", { maximumFractionDigits: 0 })}`} sub={proWithoutPayment > 0 ? `stima: ${proWithoutPayment} piani Pro senza pagamento attivo` : "stima: abbonamenti attivi × prezzo piano"} deltaLabel={`${payingPro + payingProPlus} paganti`} color="hsl(var(--primary))" icon={<Wallet size={15} />} />
+        <KpiTrendCard label="Capacità piano (stima)" value={compactNumber(aiUsed)} sub={`${compactNumber(aiCapacity)} candidature/mese teoriche`} deltaLabel={`${aiPct}%`} series={appsSeries} color="#a78bfa" icon={<Zap size={15} />} />
       </div>
 
       {/* Row 2 · Andamento + Stato piattaforma */}
@@ -365,33 +368,33 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
         <div className="adm-card">
           <div className="adm-card-head">
             <div>
-              <div className="adm-card-title">Funnel conversione</div>
-              <div className="adm-card-sub">Visita → ricavo · {rangeLabel(DAYS)} · {topSources.length ? topSources.map(([k, n]) => `${SOURCE_LABEL[k] ?? k} ${n}`).join(" · ") : "fonti in raccolta"}</div>
+              <div className="adm-card-title">Eventi di crescita</div>
+              <div className="adm-card-sub">Conteggi unici nel periodo, non tassi di conversione per coorte · {topSources.length ? topSources.map(([k, n]) => `${SOURCE_LABEL[k] ?? k} ${n}`).join(" · ") : "fonti in raccolta"}</div>
             </div>
           </div>
           <div className="adm-card-body" style={{ justifyContent: "center" }}>
-            <FunnelBar label="Visitatori" value={conversionVisitors} max={conversionMax} pct={pctOf(conversionVisitors, conversionMax)} color="hsl(var(--primary))" />
-            <FunnelBar label="Iscritti" value={conversionSignups} max={conversionMax} pct={pctOf(conversionSignups, conversionMax)} color="#60a5fa" />
-            <FunnelBar label="Setup completo" value={conversionOnboarded} max={conversionMax} pct={pctOf(conversionOnboarded, conversionMax)} color="#a78bfa" />
-            <FunnelBar label="Prova attiva" value={conversionTrials} max={conversionMax} pct={pctOf(conversionTrials, conversionMax)} color="#f472b6" />
-            <FunnelBar label="Checkout" value={conversionCheckouts} max={conversionMax} pct={pctOf(conversionCheckouts, conversionMax)} color="#fb923c" />
-            <FunnelBar label="Paganti" value={conversionPaid} max={conversionMax} pct={pctOf(conversionPaid, conversionMax)} color="#fbbf24" />
+            <FunnelBar label="Browser con visita" value={conversionVisitors} max={conversionMax} color="hsl(var(--primary))" />
+            <FunnelBar label="Iscritti" value={conversionSignups} max={conversionMax} color="#60a5fa" />
+            <FunnelBar label="Setup completo" value={conversionOnboarded} max={conversionMax} color="#a78bfa" />
+            <FunnelBar label="Prova avviata" value={conversionTrials} max={conversionMax} color="#f472b6" />
+            <FunnelBar label="Checkout avviato" value={conversionCheckouts} max={conversionMax} color="#fb923c" />
+            <FunnelBar label="Acquisto registrato" value={conversionPaid} max={conversionMax} color="#fbbf24" />
           </div>
         </div>
         <div className="adm-card">
           <div className="adm-card-head">
             <div>
-              <div className="adm-card-title">Funnel candidature</div>
-              <div className="adm-card-sub">Dalla scoperta al colloquio.</div>
+              <div className="adm-card-title">Eventi candidature</div>
+              <div className="adm-card-sub">Conteggi nello stesso periodo; non una coorte attribuita.</div>
             </div>
           </div>
           <div className="adm-card-body" style={{ justifyContent: "center" }}>
-            <FunnelBar label="Job visualizzati" value={jobViews} max={fMax} pct={pctOf(jobViews)} color="hsl(var(--primary))" />
-            <FunnelBar label="Candidature create" value={fCreate} max={fMax} pct={pctOf(fCreate)} color="#93c5fd" />
-            <FunnelBar label="Candidature consegnate" value={fInviate} max={fMax} pct={pctOf(fInviate)} color="#60a5fa" />
-            <FunnelBar label="Risposte ricevute" value={fRisposte} max={fMax} pct={pctOf(fRisposte)} color="#a78bfa" />
-            <FunnelBar label="Colloqui" value={fColloqui} max={fMax} pct={pctOf(fColloqui)} color="#f472b6" />
-            <FunnelBar label="Offerte" value={fOfferte} max={fMax} pct={pctOf(fOfferte)} color="#fbbf24" />
+            <FunnelBar label="Job visualizzati" value={jobViews} max={fMax} color="hsl(var(--primary))" />
+            <FunnelBar label="Candidature create" value={fCreate} max={fMax} color="#93c5fd" />
+            <FunnelBar label="Candidature consegnate" value={fInviate} max={fMax} color="#60a5fa" />
+            <FunnelBar label="Risposte registrate" value={fRisposte} max={fMax} color="#a78bfa" />
+            <FunnelBar label="Colloqui" value={fColloqui} max={fMax} color="#f472b6" />
+            <FunnelBar label="Offerte" value={fOfferte} max={fMax} color="#fbbf24" />
           </div>
         </div>
 
@@ -416,7 +419,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
 
         <div className="adm-card">
           <div className="adm-card-head" style={{ alignItems: "center" }}>
-            <div className="adm-card-title">Crediti AI</div>
+            <div className="adm-card-title">Capacità e volume operativo</div>
             <Link href="/admin/jobs" className="adm-link">Vedi dettagli →</Link>
           </div>
           <div className="adm-card-body" style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
@@ -430,7 +433,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
               thickness={20}
             />
             <div style={{ flex: 1, minWidth: 0, display: "grid", gap: 8, fontSize: 12 }}>
-              {aiSegments.map((s) => (
+              {operations.map((s) => (
                 <div key={s.label} style={{ display: "grid", gridTemplateColumns: "10px 1fr auto", gap: 8, alignItems: "center" }}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color }} />
                   <span className="adm-ellipsis" style={{ color: "var(--fg-muted)" }}>{s.label}</span>

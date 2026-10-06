@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 const C = { sent: "hsl(var(--primary))", eval: "#1F6BFF", int: "#7E3FF2", off: "#FFB400" };
 
 /**
- * Analisi fit-to-viewport: 4 KPI · [andamento 30g stacked | totali periodo]
+ * Analisi fit-to-viewport: KPI · [andamento periodo | totali periodo]
  * · [top aziende | canali | round attivi] · per portale ATS.
  */
 export default async function AnalyticsPage({ searchParams }: { searchParams?: Promise<{ days?: string }> }) {
@@ -26,13 +26,15 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: P
   const thirtyStart = new Date(todayStart.getTime() - (DAYS - 1) * 86400_000);
   const prevStart = new Date(thirtyStart.getTime() - DAYS * 86400_000);
 
-  const deliveredWhere = { userId: user.id, status: "success", submittedVia: { not: null } } as const;
+  // Una candidatura `success` è già stata consegnata: submittedVia può essere
+  // nullo per alcuni adapter e non deve azzerare le metriche.
+  const deliveredWhere = { userId: user.id, status: "success" } as const;
 
   const [totalApps, last30, prev30, bySubmittedVia, byCompanyRaw, bySource, activeSessions] = await Promise.all([
     prisma.application.count({ where: deliveredWhere }),
     prisma.application.findMany({
       where: { ...deliveredWhere, createdAt: { gte: thirtyStart } },
-      select: { createdAt: true, viewedAt: true, lastReplyAt: true, lastReplyKind: true, userStatus: true },
+      select: { createdAt: true, submittedVia: true, viewedAt: true, lastReplyAt: true, lastReplyKind: true, userStatus: true },
       orderBy: { createdAt: "asc" },
     }),
     prisma.application.count({ where: { ...deliveredWhere, createdAt: { gte: prevStart, lt: thirtyStart } } }),
@@ -51,28 +53,33 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: P
   const sent30 = last30.length;
   const isInterview = (a: { userStatus: string | null; lastReplyKind: string | null }) => a.userStatus === "colloquio" || a.lastReplyKind === "colloquio";
   const isOffer = (a: { userStatus: string | null }) => a.userStatus === "offerta";
-  const isEval = (a: { viewedAt: Date | null; lastReplyAt: Date | null; userStatus: string | null; lastReplyKind: string | null }) => !!a.viewedAt && !isInterview(a) && !isOffer(a);
+  // `viewedAt` è un pixel/open tracking dell'email: non prova che un recruiter
+  // stia valutando la candidatura, quindi viene mostrato come apertura email.
+  const isOpenedEmail = (a: { submittedVia: string | null; viewedAt: Date | null }) => a.submittedVia === "email_recruiter" && !!a.viewedAt;
 
-  const eval30 = last30.filter(isEval).length;
+  const opened30 = last30.filter(isOpenedEmail).length;
   const int30 = last30.filter(isInterview).length;
   const off30 = last30.filter(isOffer).length;
-  const viewed30 = last30.filter((a) => a.viewedAt).length;
+  const replied30 = last30.filter((a) => a.lastReplyAt).length;
+  const emailed30 = last30.filter((a) => a.submittedVia === "email_recruiter").length;
+  const openedEmail30 = opened30;
 
   const delta = prev30 === 0 ? (sent30 > 0 ? 100 : 0) : Math.round(((sent30 - prev30) / prev30) * 100);
-  const responseRate = sent30 === 0 ? 0 : Math.round((viewed30 / sent30) * 100);
-  const respTimes = last30.filter((a) => a.viewedAt).map((a) => a.viewedAt!.getTime() - a.createdAt.getTime());
+  const responseRate = sent30 === 0 ? null : Math.round((replied30 / sent30) * 100);
+  const openRate = emailed30 === 0 ? null : Math.round((openedEmail30 / emailed30) * 100);
+  const respTimes = last30.filter((a) => a.lastReplyAt).map((a) => a.lastReplyAt!.getTime() - a.createdAt.getTime());
   const avgMs = respTimes.length ? respTimes.reduce((s, n) => s + n, 0) / respTimes.length : null;
   const avgLabel = avgMs == null ? "—" : avgMs < 3600_000 ? `${Math.round(avgMs / 60_000)} min` : avgMs < 86400_000 ? `${Math.round(avgMs / 3600_000)} h` : `${Math.round(avgMs / 86400_000)} giorni`;
   const savedMin = totalApps * 15;
   const savedLabel = savedMin < 60 ? `${savedMin}m` : `${Math.floor(savedMin / 60)}h ${savedMin % 60}m`;
 
-  // Bucket giornalieri (30) per categoria
-  const days = Array.from({ length: 30 }, () => ({ sent: 0, eval: 0, int: 0, off: 0 }));
+  // Bucket giornalieri per il periodo selezionato.
+  const days = Array.from({ length: DAYS }, () => ({ sent: 0, opened: 0, int: 0, off: 0 }));
   for (const a of last30) {
     const i = Math.floor((a.createdAt.getTime() - thirtyStart.getTime()) / 86400_000);
-    if (i < 0 || i > 29) continue;
+    if (i < 0 || i >= DAYS) continue;
     days[i].sent++;
-    if (isEval(a)) days[i].eval++;
+    if (isOpenedEmail(a)) days[i].opened++;
     if (isInterview(a)) days[i].int++;
     if (isOffer(a)) days[i].off++;
   }
@@ -110,10 +117,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: P
         </div>
 
         {/* KPI */}
-        <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 12 }}>
+        <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(5, minmax(0,1fr))", gap: 12 }}>
           <Kpi icon="send" color={C.sent} label="Candidature inviate" value={String(sent30)} delta={isEmpty ? undefined : `${delta >= 0 ? "↗ +" : "↘ "}${delta}%`} up={delta >= 0} sub={`rispetto ai ${DAYS} giorni precedenti`} />
-          <Kpi icon="eye" color={C.eval} label="Tasso di risposta" value={`${responseRate}%`} sub={`${viewed30} su ${sent30} aperte`} />
-          <Kpi icon="clock" color={C.int} label="Tempo medio risposta" value={avgLabel} sub="per chi risponde" />
+          <Kpi icon="eye" color={C.eval} label="Aperture recruiter" value={openRate == null ? "—" : `${openRate}%`} sub={emailed30 === 0 ? "Nessuna candidatura email tracciabile" : `${openedEmail30} su ${emailed30} email aperte`} />
+          <Kpi icon="eye" color={C.eval} label="Risposte recruiter" value={responseRate == null ? "—" : `${responseRate}%`} sub={sent30 === 0 ? "Nessuna candidatura consegnata nel periodo" : `${replied30} su ${sent30} candidature con risposta`} />
+          <Kpi icon="clock" color={C.int} label="Tempo medio risposta" value={avgLabel} sub="dalla candidatura alla risposta" />
           <Kpi icon="zap" color={C.sent} label="Tempo risparmiato" value={isEmpty ? "0m" : savedLabel} sub="stima 15 min/candidatura" />
         </div>
 
@@ -123,7 +131,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: P
           <div className="fit-card-head">
             <div className="fit-card-title">Andamento candidature</div>
             <div style={{ display: "flex", gap: 14, fontSize: 11.5, color: "var(--fg-muted)" }}>
-              <Legend c={C.sent} l="Inviate" /><Legend c={C.eval} l="In valutazione" /><Legend c={C.int} l="Colloqui" /><Legend c={C.off} l="Offerte" />
+                  <Legend c={C.sent} l="Inviate" /><Legend c={C.eval} l="Email aperte" /><Legend c={C.int} l="Colloqui" /><Legend c={C.off} l="Offerte" />
             </div>
           </div>
           <div className="fit-body" style={{ flexDirection: "row", gap: 10 }}>
@@ -137,11 +145,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: P
                 ))}
                 {days.map((d, i) => {
                   const yMax = yTicks[yTicks.length - 1] || 1;
-                  const rest = Math.max(0, d.sent - d.eval - d.int - d.off);
+                  const rest = Math.max(0, d.sent - d.opened - d.int - d.off);
                   return (
-                    <div key={i} title={`${d.sent} inviate · ${d.eval} in valutazione · ${d.int} colloqui · ${d.off} offerte`} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", position: "relative", zIndex: 1 }}>
+                    <div key={i} title={`${d.sent} inviate · ${d.opened} email aperte · ${d.int} colloqui · ${d.off} offerte`} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", position: "relative", zIndex: 1 }}>
                       <div style={{ height: `${(rest / yMax) * 100}%`, background: C.sent, borderRadius: "3px 3px 0 0", minHeight: rest ? 2 : 0 }} />
-                      <div style={{ height: `${(d.eval / yMax) * 100}%`, background: C.eval, minHeight: d.eval ? 2 : 0 }} />
+                      <div style={{ height: `${(d.opened / yMax) * 100}%`, background: C.eval, minHeight: d.opened ? 2 : 0 }} />
                       <div style={{ height: `${(d.int / yMax) * 100}%`, background: C.int, minHeight: d.int ? 2 : 0 }} />
                       <div style={{ height: `${(d.off / yMax) * 100}%`, background: C.off, minHeight: d.off ? 2 : 0 }} />
                     </div>
@@ -149,7 +157,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: P
                 })}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--fg-subtle)", marginTop: 6 }} className="fit-num">
-                {[0, 5, 10, 15, 20, 25, 29].map((i) => { const d = new Date(thirtyStart.getTime() + i * 86400_000); return <span key={i}>{d.getDate()} {d.toLocaleDateString("it-IT", { month: "short" }).replace(".", "")}</span>; })}
+                {Array.from(new Set([0, Math.round((DAYS - 1) * .2), Math.round((DAYS - 1) * .4), Math.round((DAYS - 1) * .6), Math.round((DAYS - 1) * .8), DAYS - 1])).map((i) => { const d = new Date(thirtyStart.getTime() + i * 86400_000); return <span key={i}>{d.getDate()} {d.toLocaleDateString("it-IT", { month: "short" }).replace(".", "")}</span>; })}
               </div>
             </div>
           </div>
@@ -159,7 +167,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: P
         <div className="fit-card">
           <div className="fit-card-head"><div className="fit-card-title">Totali periodo</div></div>
           <div className="fit-body" style={{ justifyContent: "center", gap: 4 }}>
-            {[{ c: C.sent, l: "Inviate", n: sent30 }, { c: C.eval, l: "In valutazione", n: eval30 }, { c: C.int, l: "Colloqui", n: int30 }, { c: C.off, l: "Offerte", n: off30 }].map((r) => (
+            {[{ c: C.sent, l: "Inviate", n: sent30 }, { c: C.eval, l: "Email aperte", n: opened30 }, { c: C.int, l: "Colloqui", n: int30 }, { c: C.off, l: "Offerte", n: off30 }].map((r) => (
               <Link key={r.l} href="/applications" className="fit-row" style={{ gridTemplateColumns: "10px 1fr auto 14px", textDecoration: "none", color: "inherit", padding: "11px 0" }}>
                 <span style={{ width: 8, height: 8, borderRadius: 999, background: r.c }} />
                 <span>{r.l}</span>
