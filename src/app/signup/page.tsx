@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { signIn } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { Logo } from "@/components/logo";
 import { useSearchParams } from "next/navigation";
@@ -96,6 +97,13 @@ function SignupContent() {
         trackConversion("Lead");
       } catch {
         /* silenzioso — se pixel non caricato, non blocca il flow */
+      }
+      const result = await signIn("password", { email, password, redirect: false }).catch(() => null);
+      if (result && !result.error) {
+        window.location.href = plan === "pro" || plan === "pro_plus"
+          ? `/settings?upgrade=${plan}`
+          : "/onboarding";
+        return;
       }
       setCreated(true);
     } catch {

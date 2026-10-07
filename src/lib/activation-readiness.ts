@@ -17,7 +17,7 @@ function hasItems(value: string | null | undefined) {
   }
 }
 
-export async function getActivationReadiness(userId: string) {
+export async function getActivationReadiness(userId: string, { requireVerifiedEmail = true }: { requireVerifiedEmail?: boolean } = {}) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -31,7 +31,7 @@ export async function getActivationReadiness(userId: string) {
   });
 
   if (!user) return { ready: false, issue: "verify_email" as ActivationIssue };
-  if (!user.emailVerified) return { ready: false, issue: "verify_email" as ActivationIssue };
+  if (requireVerifiedEmail && !user.emailVerified) return { ready: false, issue: "verify_email" as ActivationIssue };
   if (user._count.cvDocuments === 0) return { ready: false, issue: "upload_cv" as ActivationIssue };
   if (!hasItems(user.preferences?.rolesJson)) return { ready: false, issue: "choose_role" as ActivationIssue };
   if (!hasItems(user.preferences?.locationsJson)) return { ready: false, issue: "choose_location" as ActivationIssue };

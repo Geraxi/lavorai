@@ -19,10 +19,7 @@ export async function POST(request: NextRequest) {
     where: { id: user.id },
     select: { emailVerified: true, _count: { select: { cvDocuments: true } } },
   });
-  if (!beforePreferences?.emailVerified) {
-    return NextResponse.json({ error: "activation_incomplete", issue: "verify_email", message: ACTIVATION_MESSAGES.verify_email }, { status: 409 });
-  }
-  if (beforePreferences._count.cvDocuments === 0) {
+  if (!beforePreferences || beforePreferences._count.cvDocuments === 0) {
     return NextResponse.json({ error: "activation_incomplete", issue: "upload_cv", message: ACTIVATION_MESSAGES.upload_cv }, { status: 409 });
   }
 
@@ -83,7 +80,7 @@ export async function POST(request: NextRequest) {
     }),
   ]);
 
-  const readiness = await getActivationReadiness(user.id);
+  const readiness = await getActivationReadiness(user.id, { requireVerifiedEmail: false });
   if (!readiness.ready) {
     return NextResponse.json({ error: "activation_incomplete", issue: readiness.issue, message: ACTIVATION_MESSAGES[readiness.issue!] }, { status: 409 });
   }
@@ -96,5 +93,5 @@ export async function POST(request: NextRequest) {
     properties: { roles: roles.length, locations: locations.length },
     dedupeKey: `onboarding_completed:${user.id}`,
   });
-  return NextResponse.json({ ok: true, trialStarted: false, trialEndsAt: user.trialEndsAt });
+  return NextResponse.json({ ok: true, trialStarted: false, trialEndsAt: user.trialEndsAt, verifyRequired: !beforePreferences.emailVerified });
 }

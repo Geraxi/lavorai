@@ -50,6 +50,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!user.emailVerified) {
+      return NextResponse.json(
+        { error: "activation_incomplete", issue: "verify_email", message: "Verifica prima la tua email per attivare le candidature." },
+        { status: 409 },
+      );
+    }
+
     // Rate limit globale (conta una sola chiamata, il limite reale è monthly)
     const rl = await applyBatchLimiter.limit(`user:${user.id}:batch`);
     if (!rl.success) {
