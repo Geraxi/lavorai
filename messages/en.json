@@ -465,6 +465,7 @@
     "builtWith": "Built with Next.js, OpenAI."
   },
   "auth": {
+    "verifyBannerText": "Confirm your email so applications can start: we sent a link to",
     "loginTitle": "Welcome back",
     "loginSubtitle": "Log in to your LavorAI account",
     "signupTitle": "Start free",

@@ -465,6 +465,7 @@
     "builtWith": "Built with Next.js, OpenAI."
   },
   "auth": {
+    "verifyBannerText": "Conferma la tua email per far partire le candidature: abbiamo inviato un link a",
     "loginTitle": "Bentornato",
     "loginSubtitle": "Accedi al tuo account LavorAI",
     "signupTitle": "Inizia gratis",
