@@ -85,12 +85,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-        // Gate: email deve essere verificata prima di poter fare login.
-        // Solo account con passwordHash vengono bloccati (i magic link
-        // impliciterebbero la verifica).
-        if (!user.emailVerified) {
-          throw new Error("EmailNotVerified");
-        }
+        // Unverified users can log in; applications stay blocked until verified.
         // Account sospeso dall'admin: niente login.
         if (user.suspendedAt) {
           throw new Error("AccountSuspended");
