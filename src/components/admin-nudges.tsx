@@ -54,6 +54,7 @@ export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
   >([]);
   const [onlyEmail, setOnlyEmail] = useState("");
   const [ignoreCooldown, setIgnoreCooldown] = useState(false);
+  const [includeOutsideAgeWindow, setIncludeOutsideAgeWindow] = useState(false);
 
   async function run(dryRun: boolean) {
     if (sending) return;
@@ -67,6 +68,7 @@ export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
           dryRun,
           onlyEmail: onlyEmail.trim() || undefined,
           ignoreCooldown,
+          includeOutsideAgeWindow,
         }),
       });
       const j = (await res.json()) as RunResult;
@@ -137,6 +139,13 @@ export function AdminNudges({ embedded = false }: { embedded?: boolean } = {}) {
           <span>
             Ignora cooldown
             <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-subtle)", marginTop: 1 }}>Consenti invio anche se già nudgato di recente</span>
+          </span>
+        </label>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 9, fontSize: 13, color: "var(--fg)", cursor: "pointer", marginTop: 10 }}>
+          <input type="checkbox" checked={includeOutsideAgeWindow} onChange={(e) => setIncludeOutsideAgeWindow(e.target.checked)} style={{ marginTop: 3 }} />
+          <span>
+            Includi account più vecchi
+            <span style={{ display: "block", fontSize: 11.5, color: "var(--fg-subtle)", marginTop: 1 }}>Include utenti registrati da oltre 30 giorni per una sola campagna mirata</span>
           </span>
         </label>
       </div>

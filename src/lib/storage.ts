@@ -53,14 +53,26 @@ export async function saveUserFile(
   const drv = driver();
 
   if (drv === "vercel") {
-    const { put } = await import("@vercel/blob");
-    const result = await put(key, data, {
-      access: "public",
-      contentType: contentTypeFor(safeName),
-      addRandomSuffix: false,
-      allowOverwrite: true,
-    });
-    return result.url;
+    try {
+      const { put } = await import("@vercel/blob");
+      const result = await put(key, data, {
+        access: "public",
+        contentType: contentTypeFor(safeName),
+        addRandomSuffix: false,
+        allowOverwrite: true,
+      });
+      return result.url;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/suspended|disabled|quota|rate.?limit/i.test(msg)) {
+        throw new Error(
+          `BLOB_SUSPENDED: Il Vercel Blob store è sospeso o ha raggiunto la quota. ` +
+          `Configura Supabase Storage (SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) come alternativa. ` +
+          `Errore originale: ${msg}`
+        );
+      }
+      throw err;
+    }
   }
 
   if (drv === "supabase") {
@@ -80,17 +92,20 @@ export async function saveUserFile(
 }
 
 export async function readUserFile(storagePath: string): Promise<Buffer> {
-  const drv = driver();
-
-  if (drv === "vercel") {
-    // storagePath qui è una URL pubblica del blob
+  // Existing documents may have been written by a different storage driver.
+  // Select the reader from the persisted path, not today's upload setting.
+  if (/^https:\/\//i.test(storagePath)) {
+    const url = new URL(storagePath);
+    if (!url.hostname.endsWith(".blob.vercel-storage.com")) {
+      throw new Error("unsupported file host");
+    }
     const res = await fetch(storagePath);
     if (!res.ok)
       throw new Error(`vercel blob fetch failed: ${res.status}`);
     return Buffer.from(await res.arrayBuffer());
   }
 
-  if (drv === "supabase") {
+  if (storagePath.startsWith("users/") && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     const { data, error } = await sb()
       .storage.from(bucket())
       .download(storagePath);

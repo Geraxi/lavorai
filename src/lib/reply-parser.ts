@@ -182,6 +182,12 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     return { kind: "auto", isHuman: false };
   }
 
+  // Marketing newsletters are not recruiter replies, even when their sender
+  // address is a person's name or their copy mentions a job/company.
+  if (/trouble viewing this email\?|view (?:it|this email) in your browser/i.test(body)) {
+    return { kind: "auto", isHuman: false };
+  }
+
   // 2. Conferma di ricezione → in Inbox, conta come risposta ricevuta,
   //    ma non cambia lo stato (non è un umano che ha letto il CV).
   //    Un umano che scrive "grazie per la candidatura, ci sentiamo domani?"

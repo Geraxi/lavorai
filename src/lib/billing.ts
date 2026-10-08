@@ -46,7 +46,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 0,
     priceDisplay: "€0",
     priceSuffix: "",
-    tagline: "7 giorni di Pro dalla registrazione, fino a 5 candidature al giorno. Senza carta né rinnovo automatico.",
+    tagline: "7 giorni di Pro dalla registrazione, fino a 5 candidature al giorno. Metodo di pagamento richiesto, nessun addebito oggi.",
     monthlyApplications: 0,
     portals: 0,
     coverLetter: "basic",
@@ -55,7 +55,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasFounderCoach: false,
     hasInterviewCopilot: false,
     features: [
-      "La prova parte dalla registrazione",
+      "Carta o wallet richiesto per iniziare la prova",
       "Fino a 5 candidature al giorno durante la prova",
       "Offerte compatibili durante la prova",
       "Risposte dei recruiter nella Inbox",
@@ -142,10 +142,14 @@ export function registrationTrialEnd(createdAt: Date | string): Date {
 }
 
 export function trialEnd(user: { createdAt?: Date | string; trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null }): Date | null {
-  const base = user.createdAt ? registrationTrialEnd(user.createdAt) : user.trialEndsAt ? new Date(user.trialEndsAt) : null;
-  const grace = user.trialGraceEndsAt ? new Date(user.trialGraceEndsAt) : null;
-  if (grace && (!base || grace.getTime() > base.getTime())) return grace;
-  return base;
+  // La prova è sempre di sette giorni dalla registrazione. `trialGraceEndsAt`
+  // resta nel modello per compatibilità con dati storici, ma non estende più
+  // l'accesso: alla scadenza il paywall deve essere immediato.
+  return user.createdAt
+    ? registrationTrialEnd(user.createdAt)
+    : user.trialEndsAt
+      ? new Date(user.trialEndsAt)
+      : null;
 }
 
 /**
@@ -230,7 +234,7 @@ export function effectiveTier(user: {
 }): Tier {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
   const base = normalizeTier(user.tier);
-  // Prova Pro senza carta (dalla registrazione): Free → Pro fino a scadenza.
+  // La prova Pro parte dalla registrazione: Free → Pro fino a scadenza.
   if (base === "free" && (trialEnd(user)?.getTime() ?? 0) > Date.now()) return "pro";
   return base;
 }
@@ -270,6 +274,27 @@ export function isApplicationAccessPaused(
   trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
 ): boolean {
   return !isLifetimeProPlus(user.email) && normalizeTier(user.tier) === "free" && trialState(user).status !== "active";
+}
+
+/**
+ * Le nuove prove richiedono un metodo di pagamento prima dell'ingresso
+ * nell'app. Non basta un customer Stripe: può essere stato creato da un
+ * checkout abbandonato. L'accesso è libero solo dopo che il webhook ha
+ * registrato una subscription attiva/in prova, oppure per i piani legacy.
+ */
+export function requiresPaymentMethodBeforeApp(
+  user: {
+    tier?: string | null;
+    email?: string | null;
+    createdAt?: Date | string;
+    trialGraceEndsAt?: Date | string | null;
+    trialEndsAt?: Date | string | null;
+    subscriptionStatus?: string | null;
+  },
+): boolean {
+  if (isLifetimeProPlus(user.email) || normalizeTier(user.tier) !== "free") return false;
+  if (user.subscriptionStatus === "active" || user.subscriptionStatus === "trialing") return false;
+  return trialState(user).status === "active";
 }
 
 /**

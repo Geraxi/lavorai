@@ -82,16 +82,20 @@ export async function POST(request: NextRequest) {
       }
     } else {
       const resend = new Resend(apiKey);
-      const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
-      await resend.emails
-        .send({
-          from,
-          to: email,
-          subject: "Reimposta la tua password LavorAI",
-          html: renderResetEmail(resetUrl),
-          text: `Reimposta la password:\n\n${resetUrl}\n\nIl link scade tra 30 minuti.`,
-        })
-        .catch((err) => console.error("[pw-reset] resend error", err));
+      // Stesso mittente verificato usato per le comunicazioni LavorAI.
+      // `EMAIL_FROM` può ancora puntare al sandbox Resend e impedire la
+      // consegna a indirizzi esterni.
+      const from = process.env.RESEND_FROM_OVERRIDE ?? "LavorAI <noreply@lavorai.it>";
+      const { error } = await resend.emails.send({
+        from,
+        to: email,
+        subject: "Reimposta la tua password LavorAI",
+        html: renderResetEmail(resetUrl),
+        text: `Reimposta la password:\n\n${resetUrl}\n\nIl link scade tra 30 minuti.`,
+      });
+      if (error) {
+        console.error("[pw-reset] Resend rejected reset email", error);
+      }
     }
 
     return NextResponse.json({ ok: true });

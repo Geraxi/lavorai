@@ -35,6 +35,7 @@ import {
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { isApplicationAccessPaused } from "@/lib/billing";
+import { guardExpensiveTailoring } from "@/lib/ai-spend-guard";
 
 // Set di nomi azienda con board ATS noto (normalizzati). Usato per evitare
 // il fallback email verso indirizzi scrapati quando esiste un portale
@@ -118,12 +119,51 @@ export async function processApplication(
     return;
   }
 
+  // Verifica prima che l'annuncio esista ancora: nessun provider AI viene
+  // coinvolto per offerte chiuse o rimosse.
+  if (!(await isJobUrlAlive(app.job.url))) {
+    console.warn(`[worker] ${applicationId} job non più online: ${app.job.url}`);
+    await markJobClosed(app.job.id);
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: {
+        status: "failed",
+        submitConfirmation: "JOB_CLOSED",
+        errorMessage: "Annuncio non più online (chiuso dall'azienda). Nessun invio effettuato.",
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
+  // Prima di spendere crediti per riscrivere CV e lettera, scartiamo solo
+  // incompatibilità palesi. Il gate TypeSafe è opt-in e fail-open: senza
+  // chiave o con bassa confidenza la candidatura prosegue normalmente.
+  const spendGuard = await guardExpensiveTailoring({
+    job: app.job,
+    preferences: app.user.preferences,
+  });
+  if (spendGuard.action === "skip") {
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: {
+        status: "cancelled",
+        completedAt: new Date(),
+        errorMessage:
+          "Offerta chiaramente incompatibile con le preferenze: candidatura non generata per non consumare crediti AI.",
+      },
+    });
+    return;
+  }
+
   // Budget AI giornaliero globale: oltre AI_DAILY_APP_BUDGET candidature
   // avviate oggi, le altre restano in coda e vengono riprese tra 20 minuti
   // (o domani). Evita di bruciare crediti AI in una notte.
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
   const startedToday = await prisma.application.count({ where: { startedAt: { gte: dayStart }, id: { not: applicationId } } });
-  const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 300);
+  // Default prudente: il valore può essere alzato esplicitamente solo quando
+  // il saldo AI e il costo per candidatura sono stati verificati.
+  const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 30);
   if (startedToday >= budget) {
     await prisma.application.update({ where: { id: applicationId }, data: { status: "queued", startedAt: new Date() } });
     console.warn(`[worker] budget AI giornaliero raggiunto (${startedToday}/${budget}): ${applicationId} rimandata di 20 min (alza AI_DAILY_APP_BUDGET per cambiare)`);
@@ -363,25 +403,6 @@ export async function processApplication(
       console.warn(`[worker] ${applicationId} URL resolve failed`, err);
     }
   }
-  // Annuncio ancora online? Un job chiuso (404 / "Job not found" / redirect
-  // alla lista del board) produceva form_not_found → failed o, in auto mode,
-  // awaiting_consent su un annuncio morto, bruciando cap giornaliero e quota
-  // Free. Qui lo chiudiamo nel pool e marchiamo l'application JOB_CLOSED.
-  if (!(await isJobUrlAlive(app.job.url))) {
-    console.warn(`[worker] ${applicationId} job non più online: ${app.job.url}`);
-    await markJobClosed(app.job.id);
-    await prisma.application.update({
-      where: { id: applicationId },
-      data: {
-        status: "failed",
-        submitConfirmation: "JOB_CLOSED",
-        errorMessage: "Annuncio non più online (chiuso dall'azienda). Nessun invio effettuato.",
-        completedAt: new Date(),
-      },
-    });
-    return;
-  }
-
   // Prova il match sull'URL canonico (Job.url) PRIMA di quello risolto:
   // alcuni ATS (Greenhouse) redirigono a career page custom dove il form
   // non è raggiungibile. L'URL canonico porta al form puro dell'ATS.
@@ -1698,6 +1719,11 @@ async function deliverApplicationToRecruiter(
           content: input.clBuffer,
         },
       ],
+      // Token opaco, già usato dal pixel di apertura. Resend lo restituisce
+      // nell'evento email.opened senza ricevere ID o dati del candidato.
+      ...(input.trackingToken
+        ? { tags: [{ name: "tracking_token", value: input.trackingToken }] }
+        : {}),
       headers: {
         "X-Lavorai-App-Id": input.applicationId,
       },

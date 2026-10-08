@@ -1,0 +1,16 @@
+{
+  "at": "2026-09-16T23:25:02.689Z",
+  "registered": 35,
+  "verified": 31,
+  "withCV": 22,
+  "onboarded": 19,
+  "withSuccessfulApplication": 4,
+  "referred": 0,
+  "sources": {
+    "unattributed": 32,
+    "direct": 1,
+    "google.com": 2
+  },
+  "target": 1000,
+  "remaining": 965
+}

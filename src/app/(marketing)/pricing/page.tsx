@@ -7,7 +7,7 @@ import { SectionFaq } from "@/components/sections/faq";
 export const metadata: Metadata = {
   title: "Prezzi: Free, Pro e Pro+",
   description:
-    "Prova Pro 7 giorni senza carta. Poi Pro a €19,99/mese per 50 candidature o Pro+ a €39,99/mese con candidature illimitate e Founder Coach.",
+    "Prova Pro 7 giorni con metodo di pagamento richiesto e nessun addebito durante la prova. Poi Pro a €19,99/mese per 50 candidature o Pro+ a €39,99/mese con candidature illimitate e Founder Coach.",
   alternates: { canonical: "/pricing" },
 };
 

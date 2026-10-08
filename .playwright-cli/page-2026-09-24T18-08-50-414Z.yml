@@ -1,0 +1,54 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - link "LavorAI — home" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e5]: avorAI
+      - generic [ref=e12]:
+        - heading "Welcome back." [level=1] [ref=e13]
+        - paragraph [ref=e14]: Log in to your account.
+        - generic [ref=e15]:
+          - generic [ref=e16]: Email
+          - textbox "Email" [active] [ref=e17]:
+            - /placeholder: john.doe@example.com
+          - generic [ref=e18]:
+            - generic [ref=e19]: Password
+            - link "Forgot?" [ref=e20] [cursor=pointer]:
+              - /url: /forgot-password
+          - textbox "Password" [ref=e21]:
+            - /placeholder: ••••••••
+          - button "Log in" [disabled] [ref=e22] [cursor=pointer]
+          - generic [ref=e25]:
+            - generic [ref=e26]: or
+            - button "Continue with Google" [ref=e29] [cursor=pointer]
+        - paragraph [ref=e36]:
+          - text: Don't have an account?
+          - link "Sign up free" [ref=e37] [cursor=pointer]:
+            - /url: /signup
+        - generic [ref=e38]:
+          - generic [ref=e39]: Apply automatically to italian and international portals
+          - generic [ref=e44]: CV and cover letter tailored to each posting
+          - generic [ref=e50]: 7 days of Pro free to try — no card
+      - paragraph [ref=e57]:
+        - text: By continuing you accept our
+        - link "terms" [ref=e58] [cursor=pointer]:
+          - /url: /termini
+        - text: and
+        - link "privacy policy" [ref=e59] [cursor=pointer]:
+          - /url: /privacy
+        - text: . Data processed in the EU · GDPR-compliant.
+    - generic [ref=e61]:
+      - generic [ref=e62]: Se i recruiter usano l'AI,
+      - generic [ref=e63]: tu non puoi permetterti di non usarla.
+      - generic [ref=e64]: Smetti di candidarti. Inizia a essere chiamato. LavorAI scansiona i portali 24/7, adatta CV e lettera ad ogni annuncio e invia per te. Tu rispondi solo ai recruiter interessati.
+  - region "Notifications alt+T"
+  - dialog "Cookie notice" [ref=e65]:
+    - generic [ref=e66]:
+      - text: We use essential cookies for login and preferences. With your permission, optional Google and Meta tools help us measure and improve results. See the
+      - link "privacy policy" [ref=e67] [cursor=pointer]:
+        - /url: /privacy
+      - text: .
+    - generic [ref=e68]:
+      - button "Essential only" [ref=e69] [cursor=pointer]
+      - button "Allow analytics" [ref=e70] [cursor=pointer]
+  - alert [ref=e71]

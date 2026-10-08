@@ -17,9 +17,8 @@ async function main() {
   assert.equal(trialState(expired).status, "ended", "Delayed setup or stored extension must not restart trial");
   assert.equal(isApplicationAccessPaused(expired), true);
   const grace = { ...expired, trialGraceEndsAt: new Date(now + 4 * 86400_000) };
-  assert.equal(isApplicationAccessPaused(grace), false, "Explicit grace unlocks expired accounts");
-  assert.equal(trialState(grace).endsAt?.getTime(), grace.trialGraceEndsAt.getTime());
-  assert.equal(isApplicationAccessPaused({ ...expired, trialGraceEndsAt: new Date(now - 1) }), true, "Expired grace must lock again");
+  assert.equal(isApplicationAccessPaused(grace), true, "A legacy grace value must not unlock an expired account");
+  assert.equal(trialState(grace).endsAt?.getTime(), registrationTrialEnd(expired.createdAt).getTime());
   assert.equal(FREE_TRIAL_DAILY_APPLICATION_LIMIT, 5, "Free trials are capped at five applications per day");
   assert.equal(dailyApplicationLimit(active), 5);
   assert.equal(dailyApplicationLimit(expired), 0);

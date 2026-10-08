@@ -46,14 +46,14 @@ import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 
 const EN_TIER_COPY: Record<TierConfig["id"], Pick<TierConfig, "tagline" | "features" | "cta" | "badge" | "priceSuffix">> = {
   free: {
-    tagline: "7 days of full Pro after setup, with no card and no automatic renewal.",
+    tagline: "7 days of Pro from signup, up to 5 applications a day. No card and no automatic renewal.",
     priceSuffix: "",
     badge: undefined,
     cta: "Try Pro free for 7 days",
     features: [
-      "Your trial starts when setup is complete",
-      "7 full days of Pro, no card",
-      "Then: matching jobs every day",
+      "Your trial starts at signup",
+      "Up to 5 applications a day during the trial",
+      "Matching jobs during the trial",
       "Recruiter replies in your Inbox",
       "ATS analysis of your CV",
       "No automatic applications after the trial",

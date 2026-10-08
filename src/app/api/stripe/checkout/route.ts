@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { TIERS, type Tier } from "@/lib/billing";
+import { TIERS, trialEnd, type Tier } from "@/lib/billing";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 
@@ -86,9 +86,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // The only free trial starts at registration; checkout charges the chosen plan.
+    // La prova continua a decorrere dalla registrazione, ma ora il checkout
+    // raccoglie il metodo di pagamento prima dell'accesso. Stripe mostra
+    // Apple Pay / Google Pay in Checkout quando browser, device e dominio
+    // sono idonei al wallet; restiamo su `card` per non esporre metodi non
+    // compatibili con gli abbonamenti.
     const fresh = await prisma.user.findUnique({ where: { id: user.id }, select: { referralCredits: true } });
     const referralCoupon = (fresh?.referralCredits ?? 0) > 0 ? await ensureReferralCoupon(s) : null;
+    const registrationTrialEndsAt = trialEnd(user);
+    const hasRemainingTrial = Boolean(
+      user.tier === "free"
+      && registrationTrialEndsAt
+      && registrationTrialEndsAt.getTime() > Date.now(),
+    );
 
     const session = await s.checkout.sessions.create({
       customer: customerId,
@@ -97,12 +107,20 @@ export async function POST(request: NextRequest) {
       payment_method_collection: "always",
       line_items: [{ price: priceId, quantity: 1 }],
       ...(referralCoupon ? { discounts: [{ coupon: referralCoupon }] } : {}),
-      success_url: `${siteUrl}/trial-expired?subscribed=1`,
-      cancel_url: `${siteUrl}/#prezzi?canceled=1`,
+      success_url: `${siteUrl}/start-membership?subscribed=1`,
+      cancel_url: `${siteUrl}/start-membership?canceled=1`,
       ...(referralCoupon ? {} : { allow_promotion_codes: true }),
       client_reference_id: user.id, // fallback per webhook checkout.session.completed
       subscription_data: {
-        metadata: { userId: user.id, tier, trial: "none", referralCredit: referralCoupon ? "1" : "0" },
+        metadata: {
+          userId: user.id,
+          tier,
+          trial: hasRemainingTrial ? "registration_trial_with_payment_method" : "none",
+          referralCredit: referralCoupon ? "1" : "0",
+        },
+        ...(hasRemainingTrial && registrationTrialEndsAt
+          ? { trial_end: Math.floor(registrationTrialEndsAt.getTime() / 1000) }
+          : {}),
       },
       locale: "it",
     });

@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-interface Stats {
-  users: number;
-  applicationsToday: number;
-  applicationsTotal: number;
-}
+import type { PublicStats as Stats } from "@/lib/public-stats";
 
 /**
  * Badge live che pesca stats REALI dal DB via /api/public/stats.
@@ -18,10 +13,14 @@ interface Stats {
  */
 export function LiveStatsBadge({
   variant = "hero",
+  initialStats,
 }: {
   variant?: "hero" | "inline";
+  initialStats?: Stats;
 }) {
-  const [stats, setStats] = useState<Stats | null>(null);
+  // Il dato server è già disponibile nel primo HTML: niente spazio vuoto o
+  // "pop-in" dopo hydration. Il fetch qui sotto aggiorna soltanto in silenzio.
+  const [stats, setStats] = useState<Stats | null>(initialStats ?? null);
 
   useEffect(() => {
     let alive = true;

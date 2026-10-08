@@ -149,12 +149,13 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     letterSpacing: -0.2,
     color: FG,
+    marginBottom: 10,
   },
   title: {
     fontSize: 11,
     color: ACCENT,
     fontWeight: 700,
-    marginTop: 3,
+    marginTop: 0,
     letterSpacing: 0.4,
   },
   accentBar: {

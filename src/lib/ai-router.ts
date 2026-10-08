@@ -50,14 +50,22 @@ function available(p: Provider): boolean {
   return p === "openai" ? !!process.env.OPENAI_API_KEY : !!process.env.ANTHROPIC_API_KEY;
 }
 
-/** Ordine provider per un task: forzatura env → split percentuale → default; il secondo è il fallback. */
+/**
+ * Ordine provider per un task. Il fallback cross-provider è opt-in: un errore
+ * ambiguo dal provider primario può arrivare dopo che la richiesta è stata
+ * comunque addebitata, quindi ritentare subito su un secondo provider può
+ * raddoppiare i costi senza migliorare il risultato.
+ */
 export function providerOrder(task: AiTask): Provider[] {
   const forced = process.env[`AI_TASK_${task.toUpperCase()}`] as Provider | undefined;
   let primary: Provider = forced === "openai" || forced === "anthropic" ? forced : TASK_DEFAULTS[task].primary;
   const split = Number(process.env[`AI_SPLIT_${task.toUpperCase()}`] ?? 0);
   if (!forced && split > 0 && Math.random() * 100 < split) primary = "openai";
   const other: Provider = primary === "openai" ? "anthropic" : "openai";
-  return [primary, other].filter(available);
+  const providers = process.env.AI_ALLOW_PROVIDER_FALLBACK === "true"
+    ? [primary, other]
+    : [primary];
+  return providers.filter(available);
 }
 
 /** Errori per cui ha senso passare al provider successivo. */

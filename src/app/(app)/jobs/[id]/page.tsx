@@ -1,3 +1,4 @@
+import { jobSourceLabel } from "@/lib/job-source-label";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -209,7 +210,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 underline-offset-4 hover:underline"
               >
-                Apri annuncio originale <Icon name="external" size={11} />
+                Apri annuncio originale{jobSourceLabel(job.url) ? ` · ${jobSourceLabel(job.url)}` : ""} <Icon name="external" size={11} />
               </a>
             </div>
           </SectionBody>

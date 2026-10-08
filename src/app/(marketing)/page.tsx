@@ -24,6 +24,7 @@ import { SectionFaq } from "@/components/sections/faq";
 import { SectionCtaFinal } from "@/components/sections/cta-final";
 import { StickyCta } from "@/components/sticky-cta";
 import { getLocale } from "next-intl/server";
+import { getPublicStats } from "@/lib/public-stats";
 
 /**
  * Homepage funnel — ordine ottimizzato per conversion:
@@ -43,9 +44,9 @@ import { getLocale } from "next-intl/server";
  * 14. Referral placeholder (lifecycle hook futuro)
  * 15. CTA finale
  */
-// Numeri live dal DB, rigenerati ogni ora: consegne confermate (prova
+// Numeri live dal DB, rigenerati ogni 30 secondi: consegne confermate (prova
 // HTTP/DOM), offerte attive nel pool, aziende monitorate. Stesse query di /proof.
-export const revalidate = 3600;
+export const revalidate = 30;
 
 async function liveMetrics(locale: string): Promise<SuccessMetric[]> {
   const fresh = new Date(Date.now() - 30 * 24 * 3600 * 1000);
@@ -71,12 +72,15 @@ async function liveMetrics(locale: string): Promise<SuccessMetric[]> {
 }
 
 export default async function Home() {
-  const metrics = await liveMetrics(await getLocale());
+  const [metrics, initialStats] = await Promise.all([
+    liveMetrics(await getLocale()),
+    getPublicStats(),
+  ]);
   return (
     <div className="flex min-h-screen flex-col">
       <SiteNav />
       <main className="flex-1">
-        <Hero />
+        <Hero initialStats={initialStats} />
         <SectionStats metrics={metrics} />
         <SectionComeFunziona />
         <SectionAutomationBoundaries />

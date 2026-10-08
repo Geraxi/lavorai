@@ -119,7 +119,8 @@ export type ApplyOutcome =
         | "missing_field"
         | "captcha"
         | "validation_failed"
-        | "unknown_error";
+        | "unknown_error"
+        | "submission_unconfirmed";
       error: string;
       canary?: CanaryLog;
     }

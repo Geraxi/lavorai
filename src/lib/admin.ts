@@ -43,6 +43,7 @@ const INTERNAL_EMAILS = new Set(
     "umbertogeraci0@gmail.com",
     "geracigears@gmail.com",
     "antonella.lasalandra07@gmail.com",
+    "test@lavorai.it",
   ].map(canonicalEmail),
 );
 

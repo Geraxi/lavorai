@@ -44,13 +44,15 @@ export function PaywallDialog({
 
   if (!open) return null;
 
-  const tiers = [TIERS.free, TIERS.pro, TIERS.pro_plus];
+  // La prova ora richiede Checkout: non offrire un percorso "Free" che
+  // aggirerebbe la raccolta del metodo di pagamento.
+  const tiers = [TIERS.pro, TIERS.pro_plus];
   const defaultHeadline =
     variant === "limit" ? "Hai raggiunto il limite Free" : "Scegli il tuo piano";
   const defaultSub =
     variant === "limit"
       ? "Passa a Pro per continuare a candidarti automaticamente."
-      : "Puoi iniziare gratis e passare a Pro quando vuoi.";
+      : "Aggiungi un metodo di pagamento: hai 7 giorni di Pro senza addebiti.";
 
   return (
     <>
@@ -165,7 +167,7 @@ export function PaywallDialog({
             }}
           >
             <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
-              La prova gratuita parte dalla registrazione. Quando scegli un piano, il pagamento parte subito · Disdici in un clic dalle Impostazioni
+              Nessun addebito prima della fine della prova · Carta, Apple Pay o Google Pay quando disponibili · Disdici dalle Impostazioni
             </div>
             <button
               type="button"
@@ -173,7 +175,7 @@ export function PaywallDialog({
               className="ds-btn ds-btn-ghost"
               style={{ fontSize: 13 }}
             >
-              {variant === "limit" ? "Chiudi" : "Continua gratis"}
+              Chiudi
             </button>
           </div>
         </div>
@@ -193,14 +195,9 @@ function TierCard({
 }) {
   const [loading, setLoading] = useState(false);
   const cfg = TIERS[tier];
-  const isFree = tier === "free";
   const isHighlighted = tier === "pro";
 
   async function onSelect() {
-    if (isFree) {
-      onClose();
-      return;
-    }
     if (variant === "signup") {
       // L'utente non è ancora loggato: salviamo l'intent e dopo il verify
       // email + login lo reindirizziamo a Stripe.
@@ -334,18 +331,14 @@ function TierCard({
         type="button"
         onClick={onSelect}
         disabled={loading}
-        className={`ds-btn ${isHighlighted ? "ds-btn-accent" : isFree ? "ds-btn-ghost" : "ds-btn-primary"}`}
+        className={`ds-btn ${isHighlighted ? "ds-btn-accent" : "ds-btn-primary"}`}
         style={{ width: "100%", fontSize: 13 }}
       >
         {loading ? (
           <>
             <Icon name="refresh" size={12} /> Apro checkout…
           </>
-        ) : isFree ? (
-          "Continua gratis"
-        ) : (
-          cfg.cta
-        )}
+        ) : cfg.cta}
       </button>
     </div>
   );

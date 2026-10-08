@@ -1,3 +1,4 @@
+import { ReferralCard } from "@/components/referral-card";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
@@ -92,6 +93,8 @@ export default async function DashboardPage() {
           <DashboardRegionPanel markers={globe.markers} />
 
           {!allDone && <OnboardingChecklist state={onboarding} />}
+
+          <ReferralCard compact />
 
           <div className="fit-card dg-side-card">
             <div className="fit-card-head">

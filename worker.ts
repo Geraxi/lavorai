@@ -16,7 +16,7 @@
  *  - APP_ENCRYPTION_KEY           (decrypt cookie portali)
  *  - AUTO_APPLY_ENABLED=true      (abilita Playwright submit)
  *  - NEXT_PUBLIC_SITE_URL         (per email template)
- *  - WORKER_CONCURRENCY=2         (opzionale, default 2)
+ *  - WORKER_CONCURRENCY=1         (opzionale, default 1)
  */
 
 // Carica .env / .env.local in dev. In prod (Railway) le env sono già injectate.
@@ -30,7 +30,9 @@ import { processApplication } from "./src/lib/application-worker";
 import { claimApplication, findClaimableQueued } from "./src/lib/application-claim";
 
 async function main(): Promise<void> {
-  const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 2) || 2);
+  // Un solo job alla volta è il default: evita picchi di chiamate AI e
+  // Playwright quando il saldo è limitato. Può essere alzato via env.
+  const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 1) || 1);
   const queueMode = process.env.QUEUE_MODE ?? "db";
   console.log(
     `[worker] concurrency=${concurrency}, auto-apply=${process.env.AUTO_APPLY_ENABLED ?? "false"}, queue=${queueMode}`,

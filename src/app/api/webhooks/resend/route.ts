@@ -7,6 +7,7 @@ import {
   forwardReplyToUser,
 } from "@/lib/email";
 import { classifyReply, replyKindToUserStatus } from "@/lib/reply-parser";
+import { formatInboxEmailText } from "@/lib/inbox-email-text";
 
 export const runtime = "nodejs";
 
@@ -71,6 +72,20 @@ class InboundBodyUnavailableError extends Error {}
  */
 async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
   let data = dataIn;
+  // Resend's inbound webhook normally contains metadata only. Fetch the body
+  // before attempting to match a manually forwarded message to an application.
+  if (!data.text && !data.html && data.email_id && process.env.RESEND_API_KEY) {
+    try {
+      const response = await fetch(`https://api.resend.com/emails/receiving/${data.email_id}`, {
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+      });
+      if (!response.ok) throw new Error(`Inbound email body unavailable (HTTP ${response.status})`);
+      const full = (await response.json()) as { text?: string; html?: string; subject?: string; from?: string };
+      data = { ...data, text: full.text, html: full.html, subject: data.subject ?? full.subject, from: data.from ?? full.from };
+    } catch (err) {
+      throw new InboundBodyUnavailableError("Inbound body retrieval failed", { cause: err });
+    }
+  }
   const toAddr = firstAddress(data.to);
   let appId = applicationIdFromInboundAddress(toAddr);
   let forwardedFrom: string | null = null;
@@ -103,25 +118,6 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
     return;
   }
 
-  // Il webhook `email.received` di Resend porta solo i metadati (from, to,
-  // subject, email_id): il corpo va letto dall'API Receiving.
-  if (!data.text && !data.html && data.email_id && process.env.RESEND_API_KEY) {
-    try {
-      const r = await fetch(`https://api.resend.com/emails/receiving/${data.email_id}`, {
-        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
-      });
-      if (r.ok) {
-        const full = (await r.json()) as { text?: string; html?: string; subject?: string; from?: string };
-        data = { ...data, text: full.text, html: full.html, subject: data.subject ?? full.subject, from: data.from ?? full.from };
-      } else {
-        throw new Error(`Inbound email body unavailable (HTTP ${r.status})`);
-      }
-    } catch (err) {
-      // Retry delivery instead of permanently saving an empty security email.
-      throw new InboundBodyUnavailableError("Inbound body retrieval failed", { cause: err });
-    }
-  }
-
   const from = forwardedFrom ?? data.from ?? "sconosciuto";
   const subject = (data.subject ?? "").replace(/^\s*(fwd?|i|tr|wg)\s*:\s*/i, "") || null;
   const bodyRaw =
@@ -130,7 +126,7 @@ async function handleInboundReply(dataIn: ResendEvent["data"]): Promise<void> {
       : data.html
         ? htmlToText(data.html)
         : "";
-  const bodyText = bodyRaw.slice(0, MAX_BODY) || null;
+  const bodyText = formatInboxEmailText(bodyRaw).slice(0, MAX_BODY) || null;
 
   const { kind, isHuman } = classifyReply({
     fromAddress: from,
@@ -235,9 +231,13 @@ async function matchForwardedReply(
   if (!user) return null;
 
   const raw = data.text && data.text.trim() ? data.text : data.html ? htmlToText(data.html) : "";
-  const text = `${data.subject ?? ""}\n${raw}`.toLowerCase();
+  // Only a genuine forwarded message with an original sender can be matched.
+  // Newsletter footers and quoted history can mention unrelated employers.
+  if (!/^\s*(?:fwd?|i|tr|wg)\s*:/i.test(data.subject ?? "")) return null;
   const fromLine = raw.match(/^\s*(?:from|da|de|von)\s*:\s*(.+)$/im)?.[1]?.trim() ?? null;
   const recruiterFrom = fromLine && /@/.test(fromLine) ? fromLine.slice(0, 320) : null;
+  if (!recruiterFrom) return null;
+  const text = `${data.subject ?? ""}\n${raw.slice(0, 1200)}`.toLowerCase();
   const recruiterDomain = recruiterFrom?.match(/@([\w.-]+)/)?.[1]?.toLowerCase().replace(/^(mail|email|jobs|careers|hr|recruiting)\./, "") ?? null;
 
   const apps = await prisma.application.findMany({
@@ -262,7 +262,7 @@ async function matchForwardedReply(
         if (brand.length >= 4 && company.includes(brand)) score += 2;
       } catch { /* url non valida */ }
     }
-    if (score > 0 && (!best || score > best.score)) best = { id: a.id, score };
+    if (score >= 3 && (!best || score > best.score)) best = { id: a.id, score };
   }
   if (!best) return null;
   console.log(`[webhook/resend] inoltro mappato → app ${best.id} (score ${best.score}) da ${senderEmail}`);
@@ -302,20 +302,27 @@ function verify(req: NextRequest, rawBody: string): boolean {
   }
 }
 
-function appIdFromEvent(data: ResendEvent["data"]): string | null {
+function applicationReferenceFromEvent(data: ResendEvent["data"]):
+  | { applicationId: string }
+  | { trackingToken: string }
+  | null {
   // Priorità: custom header → tags
   const headers = data.headers ?? {};
   const h =
     headers["x-lavorai-app-id"] ??
     headers["X-Lavorai-App-Id"] ??
     headers["X-LavorAI-App-Id"];
-  if (typeof h === "string") return h;
+  if (typeof h === "string") return { applicationId: h };
   if (Array.isArray(data.tags)) {
     const t = data.tags.find((x) => x.name === "app_id");
-    return t?.value ?? null;
+    if (t?.value) return { applicationId: t.value };
+    const tracking = data.tags.find((x) => x.name === "tracking_token");
+    return tracking?.value ? { trackingToken: tracking.value } : null;
   }
-  if (data.tags && typeof data.tags === "object" && "app_id" in data.tags) {
-    return (data.tags as Record<string, string>).app_id ?? null;
+  if (data.tags && typeof data.tags === "object") {
+    const tags = data.tags as Record<string, string>;
+    if (tags.app_id) return { applicationId: tags.app_id };
+    if (tags.tracking_token) return { trackingToken: tags.tracking_token };
   }
   return null;
 }
@@ -336,16 +343,18 @@ export async function POST(request: NextRequest) {
 
   // Eventi che ci interessano
   if (event.type === "email.opened") {
-    const appId = appIdFromEvent(event.data);
-    if (appId) {
+    const reference = applicationReferenceFromEvent(event.data);
+    if (reference) {
       try {
         const app = await prisma.application.findUnique({
-          where: { id: appId },
-          select: { viewedAt: true, userStatus: true },
+          where: "applicationId" in reference
+            ? { id: reference.applicationId }
+            : { trackingToken: reference.trackingToken },
+          select: { id: true, viewedAt: true, userStatus: true },
         });
         if (app && !app.viewedAt) {
           await prisma.application.update({
-            where: { id: appId },
+            where: { id: app.id },
             data: {
               viewedAt: new Date(),
               userStatus: app.userStatus ?? "vista",

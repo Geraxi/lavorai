@@ -124,7 +124,7 @@ export default function AutoCandidaturaPage() {
               marginTop: 14,
             }}
           >
-            ✓ Pro completo per 7 giorni · ✓ Nessuna carta richiesta · ✓ La prova parte dopo il setup
+            ✓ Pro completo per 7 giorni · ✓ Fino a 5 candidature al giorno · ✓ La prova parte dalla registrazione
           </p>
         </section>
 

@@ -136,13 +136,15 @@ export default function TerminiPage() {
           <section>
             <h2 className="text-xl font-semibold">5. Piani e pagamento</h2>
             <p>
-              LavorAI offre una prova Pro gratuita di 7 giorni, senza carta e
-              senza rinnovo automatico, che inizia quando crei il tuo account.
-              La prova include al massimo 5 candidature al giorno. Al termine, le funzionalità sono bloccate finché non scegli
-              Pro (€19,99/mese, 50 candidature) o Pro+ (€39,99/mese,
-              candidature illimitate). Prima di qualsiasi acquisto Stripe
-              mostra prezzo e condizioni; puoi gestire o cancellare
-              l&apos;abbonamento dal portale Stripe.
+              LavorAI offre una prova Pro gratuita di 7 giorni che inizia quando
+              crei il tuo account. Per accedere alla prova è necessario inserire
+              un metodo di pagamento; nessun addebito viene effettuato durante
+              la prova. La prova include al massimo 5 candidature al giorno. Al
+              termine, si applica il piano scelto: Pro (€19,99/mese, 50
+              candidature) o Pro+ (€39,99/mese, candidature illimitate), salvo
+              disdetta prima della scadenza. Prima dell&apos;acquisto Stripe mostra
+              prezzo e condizioni; puoi gestire o cancellare l&apos;abbonamento dal
+              portale Stripe.
             </p>
           </section>
 

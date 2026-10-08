@@ -1,0 +1,409 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - link "LavorAI — home" [ref=e6] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e7]: avorAI
+        - navigation [ref=e14]:
+          - link "How it works" [ref=e15] [cursor=pointer]:
+            - /url: /#come-funziona
+          - link "Real numbers" [ref=e16] [cursor=pointer]:
+            - /url: /proof
+          - link "Jobs" [ref=e17] [cursor=pointer]:
+            - /url: /lavoro
+          - link "Guides" [ref=e18] [cursor=pointer]:
+            - /url: /guide
+          - link "Mock interview" [ref=e19] [cursor=pointer]:
+            - /url: /interview-buddy
+          - link "Pricing" [ref=e20] [cursor=pointer]:
+            - /url: /#prezzi
+          - link "FAQ" [ref=e21] [cursor=pointer]:
+            - /url: /#faq
+        - generic [ref=e22]:
+          - generic [ref=e24]:
+            - button "Italiano" [ref=e25] [cursor=pointer]: IT
+            - button "English" [ref=e26] [cursor=pointer]: EN
+          - link "Log in" [ref=e27] [cursor=pointer]:
+            - /url: /login
+          - link "Start free" [ref=e28] [cursor=pointer]:
+            - /url: /signup
+    - main [ref=e30]:
+      - generic [ref=e34]:
+        - heading "Up to thousands of applications a month with Pro+. LavorAI." [level=1] [ref=e35]:
+          - generic [ref=e36]: Up to thousands of applications
+          - generic [ref=e37]: a month with Pro+.
+          - generic [ref=e38]: LavorAI.
+        - paragraph [ref=e39]: Connect your CV once. LavorAI finds the right openings, rewrites your CV for each one and sends the applications for you. You go back to interviews, not to filling forms.
+        - paragraph [ref=e40]: Volume depends on matching jobs, supported portals and your daily settings. Pro includes 50 applications per month.
+        - generic [ref=e46]:
+          - strong [ref=e47]: "Guarantee:"
+          - text: if within 24h of upgrading to Pro you don't receive at least 1 delivered application, full refund — no questions asked.
+        - generic [ref=e48]:
+          - generic [ref=e49]:
+            - link "Activate auto-apply — free" [ref=e50] [cursor=pointer]:
+              - /url: /signup
+            - link "First, show me my CV →" [ref=e52] [cursor=pointer]:
+              - /url: /analizza-cv
+          - generic [ref=e53]:
+            - generic [ref=e54]: Trial starts at signup
+            - generic [ref=e57]: No automatic renewal
+            - generic [ref=e60]: Pause anytime
+            - link [ref=e63] [cursor=pointer]:
+              - /url: https://www.producthunt.com/products/lavorai-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lavorai-it
+              - img "Lavorai.it - AI-powered auto apply for job seekers | Product Hunt" [ref=e64]
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - paragraph [ref=e68]: Live platform numbers
+          - heading "Open the app once. Applications keep moving." [level=2] [ref=e69]
+        - generic [ref=e71]:
+          - generic [ref=e73]:
+            - generic [ref=e74]: "186"
+            - generic [ref=e76]: applications delivered
+            - generic [ref=e77]: with delivery proof, listed on /proof
+          - generic [ref=e79]:
+            - generic [ref=e80]:
+              - generic [ref=e81]: 16,079
+              - generic [ref=e82]: +
+            - generic [ref=e83]: active jobs in the pool
+            - generic [ref=e84]: refreshed every 2 hours
+          - generic [ref=e86]:
+            - generic [ref=e87]:
+              - generic [ref=e88]: 4,018
+              - generic [ref=e89]: +
+            - generic [ref=e90]: companies monitored
+            - generic [ref=e91]: career pages and European boards
+          - generic [ref=e93]:
+            - generic [ref=e94]:
+              - generic [ref=e95]: "24"
+              - generic [ref=e96]: h
+            - generic [ref=e97]: first application
+            - generic [ref=e98]: delivered within 24 hours or refunded
+        - paragraph [ref=e100]:
+          - text: Numbers read from LavorAI's database and refreshed hourly. Every confirmed delivery is public at
+          - link "/proof" [ref=e101] [cursor=pointer]:
+            - /url: /proof
+          - text: .
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - paragraph [ref=e105]: Set up once · runs on its own forever
+          - heading "Three minutes of setup. Then LavorAI works for you, forever." [level=2] [ref=e106]
+        - generic [ref=e107]:
+          - generic [ref=e109]:
+            - generic [ref=e110]: "01"
+            - heading "Upload your CV" [level=3] [ref=e115]
+            - paragraph [ref=e116]: Upload your CV in PDF or DOCX. LavorAI reads everything, experience, skills, tone, and builds your AI profile.
+          - generic [ref=e118]:
+            - generic [ref=e119]: "02"
+            - heading "Pick the role" [level=3] [ref=e125]
+            - paragraph [ref=e126]: "Write the role you want and the city. You can add filters: remote only, startups only, big tech only."
+          - generic [ref=e128]:
+            - generic [ref=e129]: "03"
+            - heading "From here you touch nothing" [level=3] [ref=e133]
+            - paragraph [ref=e134]: From here LavorAI runs on its own. Every 2 hours it searches new openings, rewrites your CV to fit, fills the ATS form and submits. You only receive the interview invites.
+        - link "Start free. 7 days of Pro" [ref=e136] [cursor=pointer]:
+          - /url: /signup
+      - generic [ref=e138]:
+        - generic [ref=e139]:
+          - paragraph [ref=e140]: No AI magic · clear roles
+          - heading "What's automatic, and what you decide." [level=2] [ref=e141]
+          - paragraph [ref=e142]: No "AI that does everything", explicit boundaries, always reversible.
+        - generic [ref=e143]:
+          - generic [ref=e145]:
+            - generic [ref=e146]: Automatic
+            - heading "LavorAI does on its own" [level=3] [ref=e149]
+            - list [ref=e150]:
+              - listitem [ref=e151]:
+                - generic [aria-hidden] [ref=e152]: ›
+                - generic [ref=e153]: Discovers new openings every 2 hours on public ATS (Greenhouse, Lever, Ashby, SmartRecruiters, Workable)
+              - listitem [ref=e154]:
+                - generic [aria-hidden] [ref=e155]: ›
+                - generic [ref=e156]: Filters by roles, location, salary range and company blacklist you set
+              - listitem [ref=e157]:
+                - generic [aria-hidden] [ref=e158]: ›
+                - generic [ref=e159]: Rewrites CV and cover letter for each single posting using OpenAI (no templates)
+              - listitem [ref=e160]:
+                - generic [aria-hidden] [ref=e161]: ›
+                - generic [ref=e162]: Fills public ATS forms and submits the application
+          - generic [ref=e164]:
+            - generic [ref=e165]: You confirm
+            - 'heading "Hybrid mode: asks for your OK" [level=3] [ref=e168]'
+            - list [ref=e169]:
+              - listitem [ref=e170]:
+                - generic [aria-hidden] [ref=e171]: ›
+                - generic [ref=e172]: Every application shown in the dashboard before sending (24h to click "Send" or "Skip")
+              - listitem [ref=e173]:
+                - generic [aria-hidden] [ref=e174]: ›
+                - generic [ref=e175]: Notification email when thresholds are reached (e.g. 50 applications sent)
+              - listitem [ref=e176]:
+                - generic [aria-hidden] [ref=e177]: ›
+                - generic [ref=e178]: Explicit confirmation when first activating auto-apply
+          - generic [ref=e180]:
+            - generic [ref=e181]: You control
+            - heading "You set the rules" [level=3] [ref=e185]
+            - list [ref=e186]:
+              - listitem [ref=e187]:
+                - generic [aria-hidden] [ref=e188]: ›
+                - generic [ref=e189]: "3 modes in 1 click: Off, Hybrid (consent every send), Auto (zero touch)"
+              - listitem [ref=e190]:
+                - generic [aria-hidden] [ref=e191]: ›
+                - generic [ref=e192]: "Minimum match threshold: below X% an application won't go out"
+              - listitem [ref=e193]:
+                - generic [aria-hidden] [ref=e194]: ›
+                - generic [ref=e195]: Company blacklist, excluded cities, salary range, contract type
+              - listitem [ref=e196]:
+                - generic [aria-hidden] [ref=e197]: ›
+                - generic [ref=e198]: Instant pause from the dashboard, full export, total deletion
+        - paragraph [ref=e200]: Auto-apply starts only when you press Activate at the end of setup. Switch to Hybrid or Off anytime.
+      - generic [ref=e204]:
+        - generic [ref=e205]:
+          - paragraph [ref=e206]: Free test
+          - heading "Want to see how it works first?" [level=2] [ref=e207]
+          - paragraph [ref=e208]: Upload your CV and a posting. We rewrite your CV and cover letter in 60 seconds, free, no card.
+          - link "Try now · 3 free audits" [ref=e209] [cursor=pointer]:
+            - /url: /analizza-cv
+        - generic [ref=e213]:
+          - generic [ref=e214]: What you get
+          - list [ref=e215]:
+            - listitem [ref=e216]:
+              - generic [ref=e217]: ✓
+              - generic [ref=e218]: ATS readability score (out of 100)
+            - listitem [ref=e219]:
+              - generic [ref=e220]: ✓
+              - generic [ref=e221]: Optimized CV in DOCX
+            - listitem [ref=e222]:
+              - generic [ref=e223]: ✓
+              - generic [ref=e224]: Cover letter written by OpenAI for that posting
+            - listitem [ref=e225]:
+              - generic [ref=e226]: ✓
+              - generic [ref=e227]: 3-5 suggestions to improve
+      - generic [ref=e229]:
+        - generic [ref=e230]:
+          - paragraph [ref=e231]: Pricing
+          - heading "Transparent, no surprises." [level=2] [ref=e232]
+          - paragraph [ref=e233]: Try the service for 7 days from signup, with up to 20 applications in total. No card; then you decide whether to continue.
+          - generic [ref=e234]:
+            - generic [ref=e235]: Trial starts only after CV and preferences
+            - generic [ref=e237]: The no-card trial never auto-renews
+            - generic [ref=e239]: Cancel a subscription in one click
+        - generic [ref=e241]:
+          - generic [ref=e245]:
+            - generic [ref=e246]:
+              - heading "Free" [level=3] [ref=e247]
+              - paragraph [ref=e248]: 7 days of full Pro after setup, with no card and no automatic renewal.
+            - generic [ref=e249]: €0
+            - list [ref=e251]:
+              - listitem [ref=e252]:
+                - generic [ref=e256]: Your trial starts when setup is complete
+              - listitem [ref=e258]:
+                - generic [ref=e262]: 7 full days of Pro, no card
+              - listitem [ref=e264]:
+                - generic [ref=e268]: "Then: matching jobs every day"
+              - listitem [ref=e270]:
+                - generic [ref=e274]: Recruiter replies in your Inbox
+              - listitem [ref=e276]:
+                - generic [ref=e280]: ATS analysis of your CV
+              - listitem [ref=e282]:
+                - generic [ref=e286]: No automatic applications after the trial
+            - link "Try Pro free for 7 days" [ref=e288] [cursor=pointer]:
+              - /url: /signup
+          - generic [ref=e293]:
+            - generic [ref=e294]:
+              - heading "Pro" [level=3] [ref=e295]
+              - paragraph [ref=e296]: 50 applications a month with a tailored CV and letter. 7 free days if you have not used the trial.
+            - generic [ref=e297]:
+              - generic [ref=e298]: €19.99
+              - generic [ref=e299]: / month
+            - list [ref=e300]:
+              - listitem [ref=e301]:
+                - generic [ref=e305]: 50 applications per month
+              - listitem [ref=e307]:
+                - generic [ref=e311]: Automatic applications on supported portals
+              - listitem [ref=e313]:
+                - generic [ref=e317]: AI CV optimization
+              - listitem [ref=e319]:
+                - generic [ref=e323]: AI cover letters
+              - listitem [ref=e325]:
+                - generic [ref=e329]: DOCX format
+              - listitem [ref=e331]:
+                - generic [ref=e335]: Basic analytics
+              - listitem [ref=e337]:
+                - generic [ref=e341]: Email support
+            - link "Try 7 days free" [ref=e343] [cursor=pointer]:
+              - /url: /signup?plan=pro
+          - generic [ref=e348]:
+            - generic [ref=e349]: Recommended
+            - generic [ref=e351]:
+              - generic [ref=e352]:
+                - heading "Pro+" [level=3] [ref=e353]
+                - paragraph [ref=e354]: Unlimited applications, every supported portal and Founder Coach. Cancel anytime.
+              - generic [ref=e355]:
+                - generic [ref=e356]: €39.99
+                - generic [ref=e357]: / month
+              - list [ref=e358]:
+                - listitem [ref=e359]:
+                  - generic [ref=e363]: Founder Interview Coach (opportunity, equity and vocabulary)
+                - listitem [ref=e370]:
+                  - generic [ref=e374]: Unlimited applications
+                - listitem [ref=e376]:
+                  - generic [ref=e380]: All supported ATS portals (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee and more)
+                - listitem [ref=e382]:
+                  - generic [ref=e386]: Multi-version AI CV optimization
+                - listitem [ref=e388]:
+                  - generic [ref=e392]: Personalized AI cover letters
+                - listitem [ref=e394]:
+                  - generic [ref=e398]: DOCX, PDF and Europass formats
+                - listitem [ref=e400]:
+                  - generic [ref=e404]: Advanced analytics (funnel, geography and heatmap)
+                - listitem [ref=e406]:
+                  - generic [ref=e410]: Priority support (<4h)
+                - listitem [ref=e412]:
+                  - generic [ref=e416]: Cancel anytime
+              - link "Try 7 days free" [ref=e418] [cursor=pointer]:
+                - /url: /signup?plan=pro_plus
+        - paragraph [ref=e421]: VAT included. Cancel in 1 click from Stripe, no emails, no waiting. No commitment.
+      - generic [ref=e423]:
+        - generic [ref=e424]:
+          - paragraph [ref=e425]: Privacy · Security
+          - heading "Your data, treated as if it were ours." [level=2] [ref=e426]
+          - paragraph [ref=e427]: "Security not as a slogan: verifiable technical setup, EU servers, concrete controls."
+        - generic [ref=e428]:
+          - generic [ref=e430]:
+            - heading "European database, GDPR-first" [level=3] [ref=e436]
+            - paragraph [ref=e437]: The primary database is hosted by Neon in Frankfurt. Every provider and processing purpose is listed in the privacy policy.
+          - generic [ref=e439]:
+            - heading "AI response storage disabled" [level=3] [ref=e445]
+            - paragraph [ref=e446]: Requests that tailor CVs and letters use OpenAI with response storage disabled. Text is sent only when needed to produce the requested result.
+          - generic [ref=e448]:
+            - heading "Explicit activation" [level=3] [ref=e452]
+            - paragraph [ref=e453]: Auto-apply starts only after you enable it. No hidden submission and no silent opt-in.
+          - generic [ref=e455]:
+            - heading "You stay in control" [level=3] [ref=e460]
+            - paragraph [ref=e461]: Pause anytime, block companies and set match thresholds. See every application in your live dashboard.
+          - generic [ref=e463]:
+            - heading "Complete one-click export" [level=3] [ref=e467]
+            - paragraph [ref=e468]: Download your profile, CV and application history as JSON from Settings, without waiting for support.
+          - generic [ref=e470]:
+            - heading "Complete one-click deletion" [level=3] [ref=e474]
+            - paragraph [ref=e475]: Delete your account, CV, files, queues and open applications directly from Settings.
+        - link "Read the full privacy policy →" [ref=e477] [cursor=pointer]:
+          - /url: /privacy
+      - generic [ref=e479]:
+        - generic [ref=e480]:
+          - paragraph [ref=e481]: FAQ
+          - heading "Frequently asked questions" [level=2] [ref=e482]
+          - paragraph [ref=e483]:
+            - text: If you can't find the answer,
+            - link "write to us" [ref=e484] [cursor=pointer]:
+              - /url: /contatti
+            - text: .
+        - generic [ref=e487]:
+          - generic [ref=e488]:
+            - heading [level=3] [ref=e489]:
+              - button "Is my data safe?" [expanded] [ref=e490] [cursor=pointer]
+            - region "Is my data safe?" [ref=e493]:
+              - generic [ref=e494]: The primary database runs in Neon's European Frankfurt region. Your CV is processed only by the providers listed in the privacy policy, including OpenAI with response storage disabled. We do not sell your data; you can export it or delete your account, CV and applications from settings.
+          - generic [ref=e495]:
+            - heading [level=3] [ref=e496]:
+              - button "Do I stay in control of what's sent?" [expanded] [ref=e497] [cursor=pointer]
+            - region "Do I stay in control of what's sent?" [ref=e500]:
+              - generic [ref=e501]: "Yes, 3 modes you choose from preferences: Off (no sends), Hybrid (asks for ok before each application), Auto (runs on its own above a match threshold you set). One-click toggle, always reversible."
+          - heading [level=3] [ref=e503]:
+            - button "Does it actually work on major portals?" [ref=e504] [cursor=pointer]
+          - heading [level=3] [ref=e508]:
+            - button "Will applications look generic or templated?" [ref=e509] [cursor=pointer]
+          - heading [level=3] [ref=e513]:
+            - button "Can I review before sending?" [ref=e514] [cursor=pointer]
+          - heading [level=3] [ref=e518]:
+            - button "Who is LavorAI for?" [ref=e519] [cursor=pointer]
+          - heading [level=3] [ref=e523]:
+            - button "What happens after signup?" [ref=e524] [cursor=pointer]
+      - generic [ref=e530]:
+        - generic [ref=e531]: Referral program live
+        - heading "Invite a friend, earn 1 month of Pro" [level=3] [ref=e532]
+        - paragraph [ref=e533]: Share your personal link. When a friend signs up and becomes a paying member, you earn one free month—on your current subscription or as credit for your next upgrade.
+        - link "Find your link →" [ref=e534] [cursor=pointer]:
+          - /url: /settings
+      - generic [ref=e538]:
+        - heading "Tonight, don't reopen LinkedIn. Open LavorAI." [level=2] [ref=e539]
+        - paragraph [ref=e540]: Thirty seconds to set up. From there, the repetitive work is ours. Your first application goes out within 24 hours, with proof of delivery.
+        - link "Try it tonight" [ref=e542] [cursor=pointer]:
+          - /url: /signup
+        - generic [ref=e544]:
+          - generic [ref=e545]:
+            - generic [ref=e546]: ✓
+            - text: Explicit activation before auto-apply
+          - generic [ref=e547]:
+            - generic [ref=e548]: ✓
+            - text: Full deletion in 1 click
+          - generic [ref=e549]:
+            - generic [ref=e550]: ✓
+            - text: Complete export, always
+          - generic [ref=e551]:
+            - generic [ref=e552]: ✓
+            - text: GDPR-first · EU servers
+    - contentinfo [ref=e553]:
+      - generic [ref=e554]:
+        - generic [ref=e555]:
+          - generic [ref=e556]:
+            - link "LavorAI — home" [ref=e557] [cursor=pointer]:
+              - /url: /
+              - generic [ref=e558]: avorAI
+            - paragraph [ref=e565]: The AI copilot for your job search. Upload your CV, set your preferences, LavorAI applies automatically for you.
+            - generic [ref=e566]: Database in Frankfurt · GDPR compliant
+            - link [ref=e569] [cursor=pointer]:
+              - /url: https://www.producthunt.com/products/lavorai-it?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-lavorai-it
+              - img "Lavorai.it - AI-powered auto apply for job seekers | Product Hunt" [ref=e570]
+          - generic [ref=e571]:
+            - generic [ref=e572]: Product
+            - navigation [ref=e573]:
+              - link "Jobs" [ref=e574] [cursor=pointer]:
+                - /url: /lavoro
+              - link "Protected-category jobs" [ref=e575] [cursor=pointer]:
+                - /url: /categorie-protette
+              - link "Optimize CV" [ref=e576] [cursor=pointer]:
+                - /url: /optimize
+              - link "Pricing" [ref=e577] [cursor=pointer]:
+                - /url: /#prezzi
+              - link "How it works" [ref=e578] [cursor=pointer]:
+                - /url: /#come-funziona
+              - link "FAQ" [ref=e579] [cursor=pointer]:
+                - /url: /#faq
+          - generic [ref=e580]:
+            - generic [ref=e581]: Guides
+            - navigation [ref=e582]:
+              - link "CV ATS friendly" [ref=e583] [cursor=pointer]:
+                - /url: /guide/cv-ats-friendly
+              - link "Cover letter examples" [ref=e584] [cursor=pointer]:
+                - /url: /guide/lettera-di-presentazione-esempio
+              - link "Speculative applications" [ref=e585] [cursor=pointer]:
+                - /url: /guide/candidatura-spontanea-email
+              - link "How many applications" [ref=e586] [cursor=pointer]:
+                - /url: /guide/quante-candidature-per-trovare-lavoro
+              - link "Auto-apply software" [ref=e587] [cursor=pointer]:
+                - /url: /guide/software-candidature-automatiche
+              - link "All guides" [ref=e588] [cursor=pointer]:
+                - /url: /guide
+          - generic [ref=e589]:
+            - generic [ref=e590]: Legal
+            - navigation [ref=e591]:
+              - link "Privacy" [ref=e592] [cursor=pointer]:
+                - /url: /privacy
+              - link "Terms" [ref=e593] [cursor=pointer]:
+                - /url: /termini
+              - link "Contact" [ref=e594] [cursor=pointer]:
+                - /url: /contatti
+        - generic [ref=e595]:
+          - paragraph [ref=e596]: © 2026 LavorAI · P.IVA 01452520776
+          - paragraph [ref=e597]: Built with Next.js, OpenAI.
+  - region "Notifications alt+T"
+  - dialog "Cookie notice" [ref=e598]:
+    - generic [ref=e599]:
+      - text: We use essential cookies for login and preferences. With your permission, optional Google and Meta tools help us measure and improve results. See the
+      - link "privacy policy" [ref=e600] [cursor=pointer]:
+        - /url: /privacy
+      - text: .
+    - generic [ref=e601]:
+      - button "Essential only" [ref=e602] [cursor=pointer]
+      - button "Allow analytics" [ref=e603] [cursor=pointer]
+  - alert [ref=e604]

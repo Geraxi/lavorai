@@ -65,6 +65,7 @@ export interface NudgeCandidate {
 export async function findNudgeCandidates(opts?: {
   onlyEmail?: string;
   ignoreCooldown?: boolean;
+  includeOutsideAgeWindow?: boolean;
 }): Promise<NudgeCandidate[]> {
   const now = Date.now();
   const minAge = new Date(now - MIN_AGE_HOURS * 3600_000);
@@ -73,7 +74,9 @@ export async function findNudgeCandidates(opts?: {
   const users = await prisma.user.findMany({
     where: opts?.onlyEmail
       ? { email: opts.onlyEmail }
-      : { createdAt: { lte: minAge, gte: maxAge } },
+      : opts?.includeOutsideAgeWindow
+        ? undefined
+        : { createdAt: { lte: minAge, gte: maxAge } },
     select: {
       id: true,
       email: true,
@@ -142,11 +145,13 @@ export async function runOnboardingNudges(opts?: {
   dryRun?: boolean;
   onlyEmail?: string;
   ignoreCooldown?: boolean;
+  includeOutsideAgeWindow?: boolean;
   cap?: number;
 }): Promise<NudgeRunResult> {
   const candidates = await findNudgeCandidates({
     onlyEmail: opts?.onlyEmail,
     ignoreCooldown: opts?.ignoreCooldown,
+    includeOutsideAgeWindow: opts?.includeOutsideAgeWindow,
   });
   const cap = opts?.cap ?? DEFAULT_BATCH_CAP;
   const batch = candidates.slice(0, cap);

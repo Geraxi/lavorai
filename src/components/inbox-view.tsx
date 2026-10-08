@@ -50,6 +50,11 @@ export interface InboxReply {
   title: string;
 }
 
+export interface InboxProfile {
+  name: string | null;
+  email: string;
+}
+
 type Filter = "all" | "sent" | "waiting" | "replies" | "answers";
 
 const fmtDay = (iso: string) => {
@@ -93,7 +98,7 @@ function statusChip(s: InboxSent) {
  * candidatura inviata (lettera, risposte usate, CV), domande in sospeso
  * (rispondibili qui), risposte reali del recruiter.
  */
-export function InboxView({ sent, answers, replies, waiting, forwardAddress }: { sent: InboxSent[]; answers: InboxAnswer[]; replies: InboxReply[]; waiting: number; forwardAddress?: string | null }) {
+export function InboxView({ sent, answers, replies, waiting, forwardAddress, profile }: { sent: InboxSent[]; answers: InboxAnswer[]; replies: InboxReply[]; waiting: number; forwardAddress?: string | null; profile: InboxProfile }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
@@ -116,12 +121,12 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
       .filter((s) => {
         if (filter === "sent") return s.status === "success";
         if (filter === "waiting") return s.status !== "success";
-        if (filter === "replies") return s.replyCount > 0;
+        if (filter === "replies") return (repliesByApp.get(s.id)?.length ?? 0) > 0;
         return true;
       })
       .filter((s) => !needle || `${s.company} ${s.title} ${s.portal}`.toLowerCase().includes(needle))
       .sort((a, b) => new Date(b.lastReplyAt ?? b.date).getTime() - new Date(a.lastReplyAt ?? a.date).getTime());
-  }, [sent, filter, q]);
+  }, [sent, filter, q, repliesByApp]);
 
   useEffect(() => {
     if (filter !== "answers" && threads.length > 0 && !threads.some((t) => t.id === selected)) setSelected(threads[0].id);
@@ -132,7 +137,7 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
     all: sent.length,
     sent: sent.filter((s) => s.status === "success").length,
     waiting: sent.filter((s) => s.status !== "success").length,
-    replies: sent.filter((s) => s.replyCount > 0).length,
+    replies: sent.filter((s) => (repliesByApp.get(s.id)?.length ?? 0) > 0).length,
     answers: localAnswers.length,
   };
 
@@ -166,7 +171,7 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
   ];
 
   return (
-    <div className="fit-page" style={{ gridTemplateColumns: "minmax(300px, 360px) minmax(0,1fr)", gridTemplateRows: "auto minmax(0,1fr)", gap: 14 }}>
+    <div className="fit-page inbox-shell" style={{ gridTemplateColumns: "210px minmax(290px, 360px) minmax(0,1fr)", gridTemplateRows: "auto minmax(0,1fr)", gap: 12 }}>
       <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h1 className="fit-h1">Inbox</h1>
@@ -189,19 +194,31 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
         )}
       </div>
 
-      {/* Colonna sinistra: filtri + lista */}
+      {/* Cartelle: la navigazione resta sempre visibile, come in una mailbox. */}
+      <aside className="fit-card inbox-folders" style={{ padding: 10, display: "grid", alignContent: "start", gap: 3 }}>
+        <div style={{ padding: "6px 8px 10px", fontSize: 11, color: "var(--fg-subtle)", letterSpacing: "0.09em", fontWeight: 700 }}>CASSETTA POSTALE</div>
+        {filters.map((f) => (
+          <button key={f.key} type="button" onClick={() => setFilter(f.key)} className={`inbox-folder ${filter === f.key ? "is-active" : ""}`}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><Icon name={f.icon} size={14} /> {f.label}</span>
+            <span>{counts[f.key]}</span>
+          </button>
+        ))}
+        <div style={{ height: 1, background: "var(--border-ds)", margin: "10px 6px" }} />
+        <div style={{ padding: "3px 8px", fontSize: 11.5, color: "var(--fg-subtle)", lineHeight: 1.45 }}>
+          Le risposte dei recruiter restano qui, collegate alla candidatura giusta.
+        </div>
+      </aside>
+
+      {/* Lista conversazioni */}
       <div className="fit-card" style={{ padding: 0 }}>
-        <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--border-ds)", display: "grid", gap: 8 }}>
+        <div style={{ padding: "12px 12px 8px", borderBottom: "1px solid var(--border-ds)", display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 700 }}>{filter === "answers" ? "Risposte salvate" : "Conversazioni"}</span>
+            <span className="ds-chip">{filter === "answers" ? localAnswers.length : threads.length}</span>
+          </div>
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: 10, top: 9, color: "var(--fg-subtle)" }}><Icon name="search" size={13} /></span>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca azienda o ruolo…" className="fit-input" style={{ paddingLeft: 30, fontSize: 13 }} />
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {filters.map((f) => (
-              <button key={f.key} type="button" onClick={() => setFilter(f.key)} className={`ds-btn ds-btn-sm ${filter === f.key ? "ds-btn-primary" : ""}`} style={{ padding: "4px 9px", fontSize: 12 }}>
-                <Icon name={f.icon} size={11} /> {f.label} <span style={{ opacity: 0.65, fontVariantNumeric: "tabular-nums" }}>{counts[f.key]}</span>
-              </button>
-            ))}
           </div>
         </div>
         <div className="fit-body fit-scroll">
@@ -226,7 +243,7 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
               const chip = statusChip(s);
               const active = s.id === selected;
               const unread = !!s.lastReplyAt && (!s.viewedAt || new Date(s.lastReplyAt) > new Date(s.viewedAt));
-              const preview = s.replyCount > 0 ? (repliesByApp.get(s.id)?.[0]?.body ?? "Risposta del recruiter") : s.status === "needs_answers" ? `${s.pending.length} ${s.pending.length === 1 ? "domanda richiede" : "domande richiedono"} una tua risposta` : s.coverLetter ? s.coverLetter.split(/\n/).find((l) => l.trim().length > 20) ?? "Candidatura inviata" : "Candidatura inviata";
+              const preview = (repliesByApp.get(s.id)?.length ?? 0) > 0 ? (repliesByApp.get(s.id)?.[0]?.body.replace(/\s+/g, " ").slice(0, 150) ?? "Risposta del recruiter") : s.status === "needs_answers" ? `${s.pending.length} ${s.pending.length === 1 ? "domanda richiede" : "domande richiedono"} una tua risposta` : s.coverLetter ? s.coverLetter.split(/\n/).find((l) => l.trim().length > 20) ?? "Candidatura inviata" : "Candidatura inviata";
               return (
                 <button key={s.id} type="button" onClick={() => setSelected(s.id)} style={{ ...rowStyle(active), display: "grid", gridTemplateColumns: "32px minmax(0,1fr)", gap: 10, width: "100%", textAlign: "left" }}>
                   <CompanyLogo company={s.company} color={companyColor(s.company)} size={32} url={s.url} />
@@ -252,7 +269,7 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
       {/* Colonna destra: thread */}
       <div className="fit-card" style={{ padding: 0 }}>
         {filter === "answers" ? (
-          <AnswerEditor answers={localAnswers} editKey={editKey} draft={draft} setDraft={setDraft} saving={saving} notice={notice} onSave={(a, v) => submitAnswers([{ labelKey: a.labelKey, answer: v }], "Risposta salvata.")} onCancel={() => setEditKey(null)} />
+          <AnswerEditor answers={localAnswers} editKey={editKey} draft={draft} setDraft={setDraft} saving={saving} notice={notice} profile={profile} context={cur} onSave={(a, v) => submitAnswers([{ labelKey: a.labelKey, answer: v }], "Risposta salvata.")} onCancel={() => setEditKey(null)} />
         ) : !cur ? (
           <div style={{ flex: 1, display: "grid", placeItems: "center", color: "var(--fg-muted)", fontSize: 13.5, padding: 32, textAlign: "center" }}>
             {sent.length === 0 ? <><div style={{ marginBottom: 10 }}><Icon name="inbox" size={28} /></div>Nessuna conversazione ancora. <Link href="/discover" className="ds-btn ds-btn-primary ds-btn-sm" style={{ marginTop: 12 }}>Trova opportunità</Link></> : "Seleziona una conversazione"}
@@ -340,7 +357,7 @@ export function InboxView({ sent, answers, replies, waiting, forwardAddress }: {
               {(repliesByApp.get(cur.id) ?? []).slice().reverse().map((r) => (
                 <Bubble key={r.id} from={r.from} time={fmtFull(r.date)} tone="them" chip={r.kind === "colloquio" ? { label: "Colloquio", cls: "ds-chip-green" } : r.kind === "rifiutata" ? { label: "Rifiutata", cls: "ds-chip-red" } : r.kind === "ricevuta" ? { label: "Candidatura ricevuta", cls: "ds-chip-blue" } : undefined}>
                   {r.subject && <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 6 }}>{r.subject}</div>}
-                  <p style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.55, margin: 0 }}>{r.body}</p>
+                  <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 13, lineHeight: 1.55, margin: 0 }}>{r.body}</p>
                 </Bubble>
               ))}
 
@@ -381,7 +398,7 @@ function Bubble({ from, time, tone, chip, children }: { from: string; time: stri
   );
 }
 
-function AnswerEditor({ answers, editKey, draft, setDraft, saving, notice, onSave, onCancel }: { answers: InboxAnswer[]; editKey: string | null; draft: Record<string, string>; setDraft: (f: (d: Record<string, string>) => Record<string, string>) => void; saving: boolean; notice: string | null; onSave: (a: InboxAnswer, v: string) => void; onCancel: () => void }) {
+function AnswerEditor({ answers, editKey, draft, setDraft, saving, notice, profile, context, onSave, onCancel }: { answers: InboxAnswer[]; editKey: string | null; draft: Record<string, string>; setDraft: (f: (d: Record<string, string>) => Record<string, string>) => void; saving: boolean; notice: string | null; profile: InboxProfile; context: InboxSent | null; onSave: (a: InboxAnswer, v: string) => void; onCancel: () => void }) {
   const a = answers.find((x) => x.labelKey === editKey) ?? null;
   if (!a) {
     return (
@@ -393,15 +410,21 @@ function AnswerEditor({ answers, editKey, draft, setDraft, saving, notice, onSav
       </div>
     );
   }
-  const v = draft[a.labelKey] ?? a.answer;
-  const src = a.answer ? (SOURCE[a.source] ?? SOURCE.user) : { label: "Da rispondere", cls: "ds-chip-amber" };
+  const suggested = suggestedAnswer(a.label, profile);
+  const v = draft[a.labelKey] ?? (a.answer || suggested);
+  const src = a.answer ? (SOURCE[a.source] ?? SOURCE.user) : suggested ? SOURCE.profile : { label: "Da rispondere", cls: "ds-chip-amber" };
   return (
     <div className="fit-body fit-scroll" style={{ padding: 18, gap: 12 }}>
       {notice && <div style={{ padding: "10px 12px", borderRadius: 10, background: "hsl(var(--primary)/0.1)", border: "1px solid hsl(var(--primary)/0.35)", fontSize: 13 }}>{notice}</div>}
+      <div className="inbox-answer-context">
+        <div><span>CANDIDATO</span><strong>{profile.name || profile.email}</strong><small>{profile.email}</small></div>
+        {context ? <div><span>CANDIDATURA ATTIVA</span><strong>{context.company}</strong><small>{context.title}{context.location ? ` · ${context.location}` : ""}</small></div> : <div><span>CANDIDATURA ATTIVA</span><strong>Risposta riutilizzabile</strong><small>Verrà proposta nei prossimi form compatibili</small></div>}
+      </div>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
         <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35 }}>{cleanLabel(a.label)}</div>
         <span className={`ds-chip ${src.cls}`} style={{ flexShrink: 0 }}>{src.label}</span>
       </div>
+      {!a.answer && suggested && <div style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Abbiamo già trovato questa informazione nel tuo profilo. Salvala per riutilizzarla nei prossimi form.</div>}
       {a.source === "ai" && a.answer && <div style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>Questa risposta l&apos;ha scritta l&apos;AI dai dati del tuo CV. Se la modifichi, useremo sempre la tua versione.</div>}
       {a.source === "assumed" && a.answer && <div style={{ fontSize: 12.5, color: "var(--amber)" }}>Risposta dedotta in automatico (default prudente) per non bloccare la candidatura. Controllala: se la correggi, useremo sempre la tua versione.</div>}
       {renderInput(a.kind, a.options, v, (nv) => setDraft((d) => ({ ...d, [a.labelKey]: nv })), `ans-${a.id}`, true)}
@@ -412,6 +435,16 @@ function AnswerEditor({ answers, editKey, draft, setDraft, saving, notice, onSav
       {a.answeredAt && <div style={{ fontSize: 11.5, color: "var(--fg-subtle)" }}>Ultimo aggiornamento: {fmtFull(a.answeredAt)}</div>}
     </div>
   );
+}
+
+function suggestedAnswer(label: string, profile: InboxProfile): string {
+  const normalized = label.toLowerCase();
+  const name = profile.name?.trim() || "";
+  if (/e[ -]?mail|indirizzo.*mail/.test(normalized)) return profile.email;
+  if (/nome completo|full name|your name|nome e cognome/.test(normalized)) return name;
+  if (/first name|nome(?!.*cognome)/.test(normalized)) return name.split(/\s+/)[0] ?? "";
+  if (/last name|cognome/.test(normalized)) return name.split(/\s+/).slice(1).join(" ");
+  return "";
 }
 
 function renderInput(kind: string, options: string[], value: string, onChange: (v: string) => void, id: string, big = false) {

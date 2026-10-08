@@ -85,6 +85,7 @@ export default function OnboardingClient({
   const router = useRouter();
   const { update: updateSession } = useSession();
   const [step, setStep] = useState(0);
+  const [finishing, setFinishing] = useState(false);
   // Steps localized — usiamo questo array invece di STEPS in render
   const stepsLocalized: StepDef[] = STEPS.map((s, i) => ({
     ...s,
@@ -163,7 +164,17 @@ export default function OnboardingClient({
         chars: body.chars,
         preview: body.preview ?? "",
       });
+      if (body.profile) {
+        const extracted = body.profile as ProfileState;
+        setProfile(extracted);
+        if (extracted.suggestedRoles?.length) setRoles(extracted.suggestedRoles.map((title, i) => ({ title, selected: i < 3 })));
+        else if (extracted.title) setRoles([{ title: extracted.title, selected: true }]);
+        if (extracted.suggestedCities?.length) setLocations(extracted.suggestedCities.map((city, i) => ({ city, selected: i < 3 })));
+        else if (extracted.city) setLocations([{ city: extracted.city, selected: true }]);
+      }
       toast.success(t("cvUploaded"));
+    } catch {
+      toast.error(t("errorUpload"));
     } finally {
       setUploading(false);
     }
@@ -192,11 +203,20 @@ export default function OnboardingClient({
     }
   }
 
+  const preferencesValid = () => {
+    if (!roles.some(r => r.selected)) { toast.error(t("selectRoleError")); return false; }
+    if (!modeSel.remoto && !modeSel.ibrido && !modeSel.sede) { toast.error(t("selectModeError")); return false; }
+    return true;
+  };
   const next = async () => {
+    if (step === 1 && !preferencesValid()) return;
     setStep((s) => Math.min(stepsLocalized.length - 1, s + 1));
   };
   const prev = () => setStep((s) => Math.max(0, s - 1));
   const finish = async () => {
+    if (finishing || !preferencesValid()) return;
+    setFinishing(true);
+    try {
     // Salva preferenze su UserPreferences + marca User.onboardedAt
     const selectedRoles = roles.filter((r) => r.selected).map((r) => r.title);
     const selectedCities = locations
@@ -231,6 +251,11 @@ export default function OnboardingClient({
     await updateSession().catch(() => null);
     router.push("/dashboard");
     router.refresh();
+    } catch {
+      toast.error(t("retryError"));
+    } finally {
+      setFinishing(false);
+    }
   };
 
   const canContinueStep0 = cvInfo !== null;
@@ -362,6 +387,7 @@ export default function OnboardingClient({
             className="ds-btn ds-btn-ghost"
             style={{ visibility: step === 0 ? "hidden" : "visible" }}
             onClick={prev}
+            disabled={finishing}
           >
             ← {t("back")}
           </button>
@@ -369,13 +395,13 @@ export default function OnboardingClient({
             type="button"
             className="ds-btn ds-btn-primary"
             onClick={step === stepsLocalized.length - 1 ? finish : next}
-            disabled={step === 0 && !canContinueStep0}
+            disabled={finishing || uploading || (step === 0 && !canContinueStep0)}
             style={{
               opacity: step === 0 && !canContinueStep0 ? 0.5 : 1,
               cursor: step === 0 && !canContinueStep0 ? "not-allowed" : "pointer",
             }}
           >
-            {step === stepsLocalized.length - 1 ? t("activateAutoApply") : t("continue")}{" "}
+            {finishing ? t("activating") : step === stepsLocalized.length - 1 ? t("activateAutoApply") : t("continue")}{" "}
             <Icon name="arrow-right" size={13} />
           </button>
         </div>

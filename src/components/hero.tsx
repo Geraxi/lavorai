@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 // CSS della section, non un <Image> renderizzato.
 import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
 import { LiveStatsBadge } from "@/components/live-stats-badge";
+import type { PublicStats } from "@/lib/public-stats";
 
-export function Hero() {
+export function Hero({ initialStats }: { initialStats?: PublicStats }) {
   const t = useTranslations("hero");
   return (
     <section
@@ -148,7 +149,7 @@ export function Hero() {
               transition={{ duration: 0.5 }}
               className="mb-3"
             >
-              <LiveStatsBadge variant="hero" />
+              <LiveStatsBadge variant="hero" initialStats={initialStats} />
             </motion.div>
 
             <motion.h1
@@ -228,6 +229,7 @@ export function Hero() {
             >
               {t("subtitleV2")}
             </motion.p>
+            <p className="mt-3 text-sm leading-relaxed text-white/60">{t("volumeNote")}</p>
 
             {/* Garanzia rimborso — proof of confidence, sostituisce
                 bisogno di testimonial fake. Il founder ci mette i soldi. */}

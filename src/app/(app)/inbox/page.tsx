@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { AppTopbar } from "@/components/design/topbar";
 import { InboxView, type InboxAnswer, type InboxReply, type InboxSent } from "@/components/inbox-view";
+import { formatInboxEmailText } from "@/lib/inbox-email-text";
 
 export const metadata: Metadata = { title: "Inbox" };
 export const dynamic = "force-dynamic";
@@ -72,14 +73,16 @@ export default async function InboxPage() {
   const answers: InboxAnswer[] = answerRows.map((r) => ({
     id: r.id, labelKey: r.labelKey, label: r.label, kind: r.kind, options: parse<string>(r.optionsJson), answer: r.answer ?? "", source: r.source, answeredAt: r.answeredAt?.toISOString() ?? null,
   }));
-  const replies: InboxReply[] = replyRows.map((r) => ({
-    id: r.id, from: r.fromAddress, subject: r.subject, body: (r.bodyText ?? "").slice(0, 600), kind: r.kind, date: r.receivedAt.toISOString(), applicationId: r.application.id, company: r.application.job.company ?? "Azienda", title: r.application.job.title,
+  const replies: InboxReply[] = replyRows.filter((r) =>
+    !/trouble viewing this email\?|view (?:it|this email) in your browser/i.test(r.bodyText ?? "")
+  ).map((r) => ({
+    id: r.id, from: r.fromAddress, subject: r.subject, body: formatInboxEmailText(r.bodyText ?? ""), kind: r.kind, date: r.receivedAt.toISOString(), applicationId: r.application.id, company: r.application.job.company ?? "Azienda", title: r.application.job.title,
   }));
 
   return (
     <>
       <AppTopbar title="Inbox" breadcrumb="Lavoro" />
-      <InboxView sent={sent} answers={answers} replies={replies} waiting={waiting} forwardAddress={process.env.INBOUND_EMAIL_DOMAIN ? `inbox@${process.env.INBOUND_EMAIL_DOMAIN}` : null} />
+      <InboxView sent={sent} answers={answers} replies={replies} waiting={waiting} profile={{ name: user.name ?? null, email: user.email }} forwardAddress={process.env.INBOUND_EMAIL_DOMAIN ? `inbox@${process.env.INBOUND_EMAIL_DOMAIN}` : null} />
     </>
   );
 }

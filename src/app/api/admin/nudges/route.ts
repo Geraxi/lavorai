@@ -8,7 +8,7 @@ export const maxDuration = 60;
 
 /**
  * GET  /api/admin/nudges — anteprima: chi riceverebbe un nudge e per quale step.
- * POST /api/admin/nudges — invia. Body: { dryRun?, onlyEmail?, ignoreCooldown? }.
+ * POST /api/admin/nudges — invia. Body: { dryRun?, onlyEmail?, ignoreCooldown?, includeOutsideAgeWindow? }.
  * Admin-only (founder).
  */
 export async function GET() {
@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     dryRun?: boolean;
     onlyEmail?: string;
     ignoreCooldown?: boolean;
+    includeOutsideAgeWindow?: boolean;
   } = {};
   try {
     body = await request.json();
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
     dryRun: body.dryRun === true,
     onlyEmail: body.onlyEmail?.trim() || undefined,
     ignoreCooldown: body.ignoreCooldown === true,
+    includeOutsideAgeWindow: body.includeOutsideAgeWindow === true,
   });
   return NextResponse.json(result);
 }

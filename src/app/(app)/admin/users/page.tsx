@@ -1,3 +1,4 @@
+import { AdminRepairApplications } from "@/components/admin-repair-applications";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
@@ -38,7 +39,8 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       id: true, email: true, name: true, tier: true, emailVerified: true, createdAt: true, lastLoginAt: true,
       subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true, stripePriceId: true, suspendedAt: true,
       referralCode: true, referredById: true, signupReferrer: true, signupUtmSource: true,
-      preferences: { select: { autoApplyMode: true, autoApplyOn: true, dailyCap: true, matchMin: true, rolesJson: true, locationsJson: true } },
+      preferences: { select: { autoApplyMode: true, dailyCap: true, matchMin: true, rolesJson: true, locationsJson: true } },
+      cvProfile: { select: { id: true } },
       _count: { select: { applications: true, cvDocuments: true } },
     },
   });
@@ -91,6 +93,13 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
         orderBy: { createdAt: "desc" },
         take: tab === "apps" ? 100 : 8,
         select: { id: true, createdAt: true, status: true, submittedVia: true, submitConfirmation: true, errorMessage: true, canaryLog: true, job: { select: { title: true, company: true, source: true, url: true } } },
+      })
+    : [];
+  const selectedApplicationStatuses = selected
+    ? await prisma.application.groupBy({
+        by: ["status"],
+        where: { userId: selected.id },
+        _count: { _all: true },
       })
     : [];
   const selectedLog = selected && tab === "log"
@@ -160,7 +169,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
           </div>
 
           <div className="adm-th" style={{ gridTemplateColumns: "20px minmax(200px,2.4fr) minmax(88px,0.9fr) 60px minmax(80px,0.8fr) 64px 60px minmax(92px,1fr) minmax(64px,0.7fr) 20px" }}>
-            <Box /><div>Utente</div><div>Stato</div><div>Piano</div><div>Onboarding</div><div title="Auto-apply">Auto</div><div title="Candidature">Cand.</div><div title="Ultimo accesso">Accesso</div><div title="Sorgente">Fonte</div><div />
+            <Box /><div>Utente</div><div>Stato</div><div>Piano</div><div>Onboarding</div><div title="Auto-apply">Auto</div><div title="Tutte le candidature: inviate, in coda, in attesa e fallite">Tot.</div><div title="Ultimo accesso">Accesso</div><div title="Sorgente">Fonte</div><div />
           </div>
 
           <div className="adm-card-body scroll">
@@ -181,7 +190,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   <span className={`adm-pill ${u.emailVerified ? "good" : "warn"}`} style={{ padding: "3px 9px", fontSize: 10.5, justifySelf: "start" }}><span className="dot" />{u.emailVerified ? "Verificata" : "In attesa"}</span>
                   <div><TierChip tier={u.tier} /></div>
                   <Onboarding step={step} />
-                  <Toggle on={u.preferences?.autoApplyOn ?? false} />
+                  <Toggle on={!!u.preferences && u.preferences.autoApplyMode !== "off"} />
                   <div className="adm-num" style={{ color: "var(--fg)", fontWeight: 600, textAlign: "center" }}>{u._count.applications}</div>
                   <div className="adm-num" style={{ color: "var(--fg-muted)", fontSize: 11.5, lineHeight: 1.3 }}>{fmt2(u.lastLoginAt)}</div>
                   <div className="adm-ellipsis" style={{ color: "var(--fg-muted)", fontSize: 11.5 }}>{source(u.signupReferrer, u.signupUtmSource)}</div>
@@ -245,7 +254,9 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   )}
                 </PSection>
               )}
-              {tab !== "log" && (
+              {tab !== "log" && (<>
+              <AdminRepairApplications key={selected.id} userId={selected.id} />
+              <ApplicationStatusSummary counts={selectedApplicationStatuses} />
               <PSection title={tab === "apps" ? `Candidature (${selected._count.applications})` : `Ultime candidature (${selected._count.applications})`}>
                 {selectedApps.length === 0 ? (
                   <div style={{ fontSize: 11.5, color: "var(--fg-subtle)" }}>Nessuna candidatura.</div>
@@ -254,13 +265,13 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                     {selectedApps.map((a) => {
                       const ok = a.status === "success";
                       const bad = a.status === "failed";
-                      const reason = bad ? failReason(a) : null;
+                      const reason = bad ? failReason(a) : a.errorMessage;
                       return (
                         <div key={a.id} style={{ display: "grid", gridTemplateColumns: "auto minmax(0,1fr) auto", gap: 8, alignItems: "start", fontSize: 11.5, padding: "6px 8px", borderRadius: 8, background: "var(--bg-sunken)" }}>
                           <span className={`adm-pill ${ok ? "good" : bad ? "bad" : "warn"}`} style={{ padding: "2px 7px", fontSize: 10, marginTop: 1 }}><span className="dot" />{ok ? (a.submitConfirmation?.startsWith("DETECTED") ? "confermata" : "inviata") : a.status.replace(/_/g, " ")}</span>
                           <div style={{ minWidth: 0 }}>
                             <div className="adm-ellipsis" style={{ color: "var(--fg)", fontWeight: 600 }}>{a.job.title} <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>· {a.job.company ?? "—"} · {a.job.source}{a.submittedVia ? ` · ${a.submittedVia}` : ""}</span></div>
-                            {reason && <div style={{ color: "#f87171", fontSize: 11, lineHeight: 1.4, marginTop: 2, whiteSpace: "normal" }}>{reason.slice(0, 220)}</div>}
+                            {reason && <div style={{ color: bad ? "#f87171" : "var(--fg-muted)", fontSize: 11, lineHeight: 1.4, marginTop: 2, whiteSpace: "normal", overflowWrap: "anywhere" }}>{reason}</div>}
                           </div>
                           <span style={{ color: "var(--fg-subtle)", whiteSpace: "nowrap" }}>{fmt2(a.createdAt)}</span>
                         </div>
@@ -269,17 +280,18 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   </div>
                 )}
               </PSection>
-              )}
-              {tab === "overview" && (
+              </>)}
+              {tab === "overview" && (<>
               <PSection title="Stato e attività">
                 <KV k="Onboarding" v={<Onboarding step={onboarding(selected)} wide />} />
                 <KV k="Preferenze CV" v={selected.preferences ? "Sì" : "No"} />
-                <KV k="Auto-apply" v={selected.preferences ? `${selected.preferences.autoApplyOn ? "ON" : "OFF"} · ${selected.preferences.autoApplyMode} · cap ${selected.preferences.dailyCap}/g` : "—"} />
+                <KV k="Auto-apply" v={selected.preferences ? `${selected.preferences.autoApplyMode !== "off" ? "ON" : "OFF"} · ${selected.preferences.autoApplyMode} · cap ${selected.preferences.dailyCap}/g` : "—"} />
                 <KV k="Match min" v={selected.preferences ? `${selected.preferences.matchMin}%` : "—"} />
                 <KV k="Ruoli" v={selected.preferences ? arr(selected.preferences.rolesJson).slice(0, 3).join(", ") || "—" : "—"} />
                 <KV k="Località" v={selected.preferences ? arr(selected.preferences.locationsJson).slice(0, 3).join(", ") || "—" : "—"} />
               </PSection>
-              )}
+              <AutoApplyReadiness user={selected} />
+              </>)}
             </div>
 
             <UserActions id={selected.id} email={selected.email} suspended={!!selected.suspendedAt} />
@@ -312,6 +324,92 @@ function Onboarding({ step, wide }: { step: number; wide?: boolean }) {
 }
 function Toggle({ on }: { on: boolean }) {
   return <span className={`adm-pill ${on ? "good" : "neutral"}`} style={{ padding: "3px 9px", fontSize: 10.5, justifySelf: "start" }}><span className="dot" />{on ? "ON" : "OFF"}</span>;
+}
+function ApplicationStatusSummary({ counts }: { counts: Array<{ status: string; _count: { _all: number } }> }) {
+  if (counts.length === 0) {
+    return (
+      <PSection title="Candidature: stato reale">
+        <div style={{ fontSize: 11.5, color: "var(--fg-subtle)" }}>Nessun record di candidatura.</div>
+      </PSection>
+    );
+  }
+  const order = ["success", "applying", "optimizing", "queued", "awaiting_consent", "needs_answers", "ready_to_apply", "failed"];
+  const rank = (status: string) => {
+    const index = order.indexOf(status);
+    return index === -1 ? order.length : index;
+  };
+  const sorted = [...counts].sort((a, b) => rank(a.status) - rank(b.status));
+  return (
+    <PSection title="Candidature: stato reale">
+      <div role="list" aria-label="Ripartizione candidature per stato" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {sorted.map((row) => (
+          <span key={row.status} role="listitem" className={`adm-pill ${applicationTone(row.status)}`} style={{ padding: "3px 8px", fontSize: 10.5 }}>
+            {applicationLabel(row.status)} <b style={{ marginLeft: 4 }}>{row._count._all}</b>
+          </span>
+        ))}
+      </div>
+      <div style={{ fontSize: 11, lineHeight: 1.4, color: "var(--fg-subtle)" }}>Il totale in tabella include tutti questi stati, non solo gli invii confermati.</div>
+    </PSection>
+  );
+}
+function AutoApplyReadiness({ user }: { user: { suspendedAt: Date | null; cvProfile: { id: string } | null; preferences: { autoApplyMode: string; rolesJson: string | null } | null; _count: { cvDocuments: number } } }) {
+  let tone = "good";
+  let label = "Pronto";
+  let detail = "Il motore cerca offerte compatibili con ruoli, località, tipo di contratto e soglia di match.";
+  if (user.suspendedAt) {
+    tone = "bad";
+    label = "Bloccato";
+    detail = "Account sospeso: nessuna candidatura può essere preparata o inviata.";
+  } else if (!user.preferences) {
+    tone = "warn";
+    label = "Configurazione incompleta";
+    detail = "Mancano le preferenze di ricerca.";
+  } else if (user.preferences.autoApplyMode === "off") {
+    tone = "warn";
+    label = "In pausa";
+    detail = "L'auto-apply è disattivato dall'utente.";
+  } else if (user._count.cvDocuments === 0) {
+    tone = "warn";
+    label = "CV mancante";
+    detail = "Il motore richiede un CV caricato prima di poter preparare candidature.";
+  } else if (!user.cvProfile) {
+    tone = "warn";
+    label = "CV in elaborazione";
+    detail = "Il CV è caricato, ma il profilo strutturato non è ancora disponibile al motore.";
+  } else if (arr(user.preferences.rolesJson).length === 0) {
+    tone = "warn";
+    label = "Ruoli mancanti";
+    detail = "L'utente deve indicare almeno un ruolo per trovare offerte compatibili.";
+  } else if (user.preferences.autoApplyMode === "hybrid") {
+    label = "Pronto · con conferma";
+    detail = "Le offerte compatibili saranno preparate e resteranno in attesa dell'ok dell'utente.";
+  }
+  return (
+    <PSection title="Motore auto-apply">
+      <div role="status" style={{ display: "grid", gap: 5, padding: "8px 9px", borderRadius: 8, background: "var(--bg-sunken)" }}>
+        <span className={`adm-pill ${tone}`} style={{ justifySelf: "start", padding: "3px 8px", fontSize: 10.5 }}><span className="dot" />{label}</span>
+        <span style={{ fontSize: 11.5, lineHeight: 1.4, color: "var(--fg-muted)" }}>{detail}</span>
+      </div>
+    </PSection>
+  );
+}
+function applicationLabel(status: string): string {
+  return ({
+    success: "inviate",
+    applying: "in invio",
+    optimizing: "in preparazione",
+    queued: "in coda",
+    awaiting_consent: "attesa consenso",
+    needs_answers: "servono risposte",
+    ready_to_apply: "da inviare",
+    failed: "fallite",
+  } as Record<string, string>)[status] ?? status.replace(/_/g, " ");
+}
+function applicationTone(status: string): "good" | "warn" | "bad" | "neutral" {
+  if (status === "success") return "good";
+  if (status === "failed") return "bad";
+  if (status === "queued" || status === "optimizing" || status === "applying") return "warn";
+  return "neutral";
 }
 function PSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -353,6 +451,6 @@ function fmt2(d: Date | null | undefined): string {
   if (!d) return "—";
   return `${d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit" })} ${d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
 }
-function onboarding(u: { emailVerified: Date | null; preferences: { autoApplyOn: boolean } | null; _count: { cvDocuments: number } }): number {
-  return (u.emailVerified ? 1 : 0) + (u._count.cvDocuments > 0 ? 1 : 0) + (u.preferences ? 1 : 0) + (u.preferences?.autoApplyOn ? 1 : 0);
+function onboarding(u: { emailVerified: Date | null; preferences: { autoApplyMode: string } | null; _count: { cvDocuments: number } }): number {
+  return (u.emailVerified ? 1 : 0) + (u._count.cvDocuments > 0 ? 1 : 0) + (u.preferences ? 1 : 0) + (u.preferences && u.preferences.autoApplyMode !== "off" ? 1 : 0);
 }

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon, type IconName } from "@/components/design/icon";
+import { QuestionsView } from "./questions-view";
+import "./questions.css";
 
 interface Question {
   id: string;
@@ -38,6 +40,10 @@ const CATEGORIES: StepDef[] = [
  * Le risposte sono riutilizzabili e ri-accodano le candidature in attesa.
  */
 export default function QuestionsPage() {
+  return <QuestionsView />;
+}
+
+function LegacyQuestionsPage() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [waiting, setWaiting] = useState(0);
   const [values, setValues] = useState<Record<string, string>>({});
