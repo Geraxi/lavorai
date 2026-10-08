@@ -2,12 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
+import { humanPageViewWhere } from "@/lib/traffic-filter";
+import { realVisitorIds } from "@/lib/bot-filter";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/admin/traffic-export?range=7|14|30|90
  * CSV con: viste per giorno, top pagine, top referrer, paesi (periodo scelto).
+ * Solo traffico umano (bot/crawler e account interni esclusi); "sessioni" = visitatori reali.
  */
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -15,24 +18,26 @@ export async function GET(req: NextRequest) {
 
   const range = Math.min(365, Math.max(1, Number(req.nextUrl.searchParams.get("range") ?? 7) || 7));
   const since = new Date(Date.now() - range * 86400_000);
+  const human = await humanPageViewWhere();
   const [views, paths, refs, countries] = await Promise.all([
-    prisma.pageView.findMany({ where: { ts: { gte: since } }, select: { ts: true, sessionId: true } }),
-    prisma.pageView.groupBy({ by: ["path"], where: { ts: { gte: since } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 100 }),
-    prisma.pageView.groupBy({ by: ["referrer"], where: { ts: { gte: since }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 100 }),
-    prisma.pageView.groupBy({ by: ["country"], where: { ts: { gte: since }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 100 }),
+    prisma.pageView.findMany({ where: { ...human, ts: { gte: since } }, select: { ts: true, sessionId: true, userId: true } }),
+    prisma.pageView.groupBy({ by: ["path"], where: { ...human, ts: { gte: since } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 100 }),
+    prisma.pageView.groupBy({ by: ["referrer"], where: { ...human, ts: { gte: since }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 100 }),
+    prisma.pageView.groupBy({ by: ["country"], where: { ...human, ts: { gte: since }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 100 }),
   ]);
 
+  const visitors = realVisitorIds(views);
   const byDay = new Map<string, { views: number; sessions: Set<string> }>();
   for (const v of views) {
     const k = v.ts.toISOString().slice(0, 10);
     const d = byDay.get(k) ?? { views: 0, sessions: new Set<string>() };
     d.views++;
-    if (v.sessionId) d.sessions.add(v.sessionId);
+    if (v.sessionId && visitors.has(v.sessionId)) d.sessions.add(v.sessionId);
     byDay.set(k, d);
   }
   const q = (s: string | null | undefined) => `"${String(s ?? "").replace(/"/g, '""')}"`;
   const lines: string[] = [];
-  lines.push(`# LavorAI traffico — ultimi ${range} giorni — generato ${new Date().toISOString()}`);
+  lines.push(`# LavorAI traffico — ultimi ${range} giorni — bot, crawler e account interni esclusi — generato ${new Date().toISOString()}`);
   lines.push("sezione,chiave,viste,sessioni");
   for (const [day, d] of [...byDay.entries()].sort()) lines.push(`giorno,${day},${d.views},${d.sessions.size}`);
   for (const p of paths) lines.push(`pagina,${q(p.path)},${p._count._all},`);

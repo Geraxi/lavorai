@@ -4,6 +4,8 @@ import { AdminRangeSelect } from "@/components/admin-range-select";
 import { parseRange, rangeLabel } from "@/components/admin-range";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
+import { humanPageViewWhere } from "@/lib/traffic-filter";
+import { realVisitorIds } from "@/lib/bot-filter";
 import { TIERS } from "@/lib/billing";
 import {
   PageTitle,
@@ -70,6 +72,8 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     return `${d} ${MONTHS[Number(m) - 1]}`;
   });
 
+  // Traffico solo umano: bot/crawler e account interni/di test esclusi (anche sullo storico).
+  const humanPv = await humanPageViewWhere();
   const [
     allUsersLite,
     apps14dRows,
@@ -126,7 +130,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     prisma.job
       .findMany({ where: { company: { not: null } }, distinct: ["company"], select: { company: true }, take: 10000 })
       .then((r) => r.length),
-    prisma.pageView.findMany({ where: { ts: { gte: since(24 * DAYS) } }, select: { ts: true, path: true, sessionId: true } }).catch(() => [] as { ts: Date; path: string; sessionId: string | null }[]),
+    prisma.pageView.findMany({ where: { ...humanPv, ts: { gte: since(24 * DAYS) } }, select: { ts: true, path: true, sessionId: true, userId: true } }).catch(() => [] as { ts: Date; path: string; sessionId: string | null; userId: string | null }[]),
     prisma.cVDocument.count({ where: { createdAt: { gte: monthStart } } }).catch(() => 0),
     prisma.user.findMany({ where: { createdAt: { gte: since(24 * 7) } }, orderBy: { createdAt: "desc" }, take: 4, select: { email: true, createdAt: true, tier: true } }),
     prisma.application.findMany({
@@ -191,7 +195,8 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
   const uniqueEventUsers = (name: string) => new Set(
     conversionEvents.filter((e) => e.name === name && e.userId).map((e) => e.userId as string),
   ).size;
-  const conversionVisitors = new Set(pageViews14d.map((v) => v.sessionId).filter(Boolean)).size;
+  // Visitatori reali: bot/interni già esclusi dalla query; id non persistenti (1 hit senza cookie) esclusi qui.
+  const conversionVisitors = realVisitorIds(pageViews14d).size;
   const conversionSignups = Math.max(
     uniqueEventUsers("signup_success"),
     realUsers.filter((u) => u.createdAt >= since(24 * DAYS)).length,

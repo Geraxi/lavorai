@@ -4,6 +4,8 @@ import { AdminTrafficMap } from "@/components/admin-traffic-map";
 import { AdminRangeSelect } from "@/components/admin-range-select";
 import { rangeLabel } from "@/components/admin-range";
 import { itRegionOf } from "@/lib/it-regions";
+import { humanPageViewWhere } from "@/lib/traffic-filter";
+import { realVisitorIds } from "@/lib/bot-filter";
 import { Eye, Users, UserPlus, Layers, Download } from "lucide-react";
 
 const H = 3600_000;
@@ -21,7 +23,8 @@ function countAll(c: unknown): number {
 /**
  * /admin/traffic — viewport-fisso:
  * header · 4 KPI · Traffico globale (lista paesi | globo) · [Top pagine | Top referrer].
- * Dati da PageView (beacon /api/track/view; esclude /admin e /api).
+ * Dati da PageView (beacon /api/track/view; esclude /admin e /api), filtrati con
+ * humanPageViewWhere() (bot/crawler e account interni esclusi, anche sullo storico).
  */
 export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
   const now = Date.now();
@@ -39,17 +42,17 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     dayKeys.push(d.toISOString().slice(0, 10));
   }
 
-  const [views14d, uniq7d, uniqPrev7, newUsers7, newUsersPrev7, topPaths, topReferrers, byCountry, itGeo] = await Promise.all([
-    prisma.pageView.findMany({ where: { ts: { gte: since(24 * 2 * P) } }, select: { ts: true, sessionId: true } }).catch(() => [] as { ts: Date; sessionId: string }[]),
-    prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
-    prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * 2 * P), lt: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
+  // Solo traffico umano: bot/crawler (UA) e account interni/di test esclusi, anche sullo storico.
+  const human = await humanPageViewWhere();
+  const [views14d, newUsers7, newUsersPrev7, topPaths, topReferrers, byCountry, itGeo] = await Promise.all([
+    prisma.pageView.findMany({ where: { ...human, ts: { gte: since(24 * 2 * P) } }, select: { ts: true, sessionId: true, userId: true } }).catch(() => [] as { ts: Date; sessionId: string | null; userId: string | null }[]),
     prisma.user.count({ where: { createdAt: { gte: since(24 * P) } } }).catch(() => 0),
     prisma.user.count({ where: { createdAt: { gte: since(24 * 2 * P), lt: since(24 * P) } } }).catch(() => 0),
-    prisma.pageView.groupBy({ by: ["path"], where: { ts: { gte: since(24 * P) } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 12 }).catch(() => [] as Array<{ path: string; _count: { _all: number } }>),
-    prisma.pageView.groupBy({ by: ["referrer"], where: { ts: { gte: since(24 * P) }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 12 }).catch(() => [] as Array<{ referrer: string | null; _count: { _all: number } }>),
-    prisma.pageView.groupBy({ by: ["country"], where: { ts: { gte: since(24 * P) }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 30 }).catch(() => [] as Array<{ country: string | null; _count: { _all: number } }>),
+    prisma.pageView.groupBy({ by: ["path"], where: { ...human, ts: { gte: since(24 * P) } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 12 }).catch(() => [] as Array<{ path: string; _count: { _all: number } }>),
+    prisma.pageView.groupBy({ by: ["referrer"], where: { ...human, ts: { gte: since(24 * P) }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 12 }).catch(() => [] as Array<{ referrer: string | null; _count: { _all: number } }>),
+    prisma.pageView.groupBy({ by: ["country"], where: { ...human, ts: { gte: since(24 * P) }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 30 }).catch(() => [] as Array<{ country: string | null; _count: { _all: number } }>),
     // Regione/città delle visite italiane (geo header Vercel; null per le visite precedenti al tracking)
-    prisma.pageView.groupBy({ by: ["region", "city"], where: { ts: { gte: since(24 * P) }, country: "IT" }, _count: { _all: true } }).catch(() => [] as Array<{ region: string | null; city: string | null; _count: { _all: number } }>),
+    prisma.pageView.groupBy({ by: ["region", "city"], where: { ...human, ts: { gte: since(24 * P) }, country: "IT" }, _count: { _all: true } }).catch(() => [] as Array<{ region: string | null; city: string | null; _count: { _all: number } }>),
   ]);
 
   // Aggregazione per regione italiana
@@ -67,8 +70,16 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
   const regions = [...regionMap.values()].sort((a, b) => b.count - a.count).map((r) => ({ key: r.key, name: r.name, lat: r.lat, lng: r.lng, count: r.count, topCities: [...r.cities.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c, n]) => `${c} (${n})`) }));
 
   const views = (views14d ?? []).filter((v) => v?.ts && !Number.isNaN(new Date(v.ts).getTime()));
-  const views7 = views.filter((v) => v.ts >= since(24 * P)).length;
-  const viewsPrev7 = views.length - views7;
+  const curRows = views.filter((v) => v.ts >= since(24 * P));
+  const prevRows = views.filter((v) => v.ts < since(24 * P));
+  const views7 = curRows.length;
+  const viewsPrev7 = prevRows.length;
+  // Visitatori unici: solo id persistenti (localStorage `v_…`, cookie tornato ≥2 volte o utente
+  // loggato). Gli id coniati per client senza cookie (1 hit ciascuno) non contano.
+  const curVisitors = realVisitorIds(curRows);
+  const prevVisitors = realVisitorIds(prevRows);
+  const uniq7d = curVisitors.size;
+  const uniqPrev7 = prevVisitors.size;
   const bucket = (dates: Date[]) => {
     const m = new Map(dayKeys.map((k) => [k, 0]));
     for (const dt of dates) {
@@ -77,10 +88,14 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     }
     return dayKeys.map((k) => m.get(k) ?? 0);
   };
-  const viewsSeries = bucket(views.map((v) => v.ts));
-  const uniqSeries = dayKeys.map((k) => new Set(views.filter((v) => new Date(v.ts).toISOString().slice(0, 10) === k).map((v) => v.sessionId)).size);
-  const perSession = uniq7d > 0 ? views7 / uniq7d : 0;
-  const perSessionPrev = uniqPrev7 > 0 ? viewsPrev7 / uniqPrev7 : 0;
+  const viewsSeries = bucket(curRows.map((v) => v.ts));
+  const dayOf = (d: Date) => new Date(d).toISOString().slice(0, 10);
+  const uniqSeries = dayKeys.map((k) => new Set(curRows.filter((v) => v.sessionId && curVisitors.has(v.sessionId) && dayOf(v.ts) === k).map((v) => v.sessionId)).size);
+  // Pagine per sessione calcolate sulle sole sessioni reali (stesso perimetro dei visitatori unici).
+  const visitorViews = (rows: typeof views, ids: Set<string>) => rows.filter((v) => v.sessionId && ids.has(v.sessionId)).length;
+  const perSession = uniq7d > 0 ? visitorViews(curRows, curVisitors) / uniq7d : 0;
+  const perSessionPrev = uniqPrev7 > 0 ? visitorViews(prevRows, prevVisitors) / uniqPrev7 : 0;
+  const visitorViewsSeries = dayKeys.map((k) => curRows.filter((v) => v.sessionId && curVisitors.has(v.sessionId) && dayOf(v.ts) === k).length);
   const dPct = (c: number, p: number) => (p === 0 ? (c > 0 ? 100 : 0) : ((c - p) / p) * 100);
 
   // Referrer accorpati per host
@@ -104,7 +119,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     <div className="adm-page" style={{ gridTemplateRows: "auto auto minmax(520px,1fr) auto" }}>
       <PageTitle
         title="Traffico sito"
-        sub="Scopri da dove arrivano i tuoi visitatori e come interagiscono con la piattaforma."
+        sub="Scopri da dove arrivano i tuoi visitatori e come interagiscono con la piattaforma. Bot, crawler e account interni esclusi."
         actions={
           <>
             <AdminRangeSelect value={P} />
@@ -117,7 +132,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
         <KpiTrendCard label="Page views" value={compactNumber(views7)} delta={dPct(views7, viewsPrev7)} series={viewsSeries} color="hsl(var(--primary))" icon={<Eye size={15} />} />
         <KpiTrendCard label="Visitatori unici" value={compactNumber(uniq7d)} delta={dPct(uniq7d, uniqPrev7)} series={uniqSeries} color="hsl(var(--primary))" icon={<Users size={15} />} />
         <KpiTrendCard label="Nuovi utenti" value={compactNumber(newUsers7)} delta={dPct(newUsers7, newUsersPrev7)} series={uniqSeries.map((v) => v * 0.3)} color="hsl(var(--primary))" icon={<UserPlus size={15} />} />
-        <KpiTrendCard label="Pagine per sessione" value={perSession.toFixed(1)} delta={dPct(perSession, perSessionPrev)} series={viewsSeries.map((v, i) => (uniqSeries[i] > 0 ? v / uniqSeries[i] : 0))} color="hsl(var(--primary))" icon={<Layers size={15} />} />
+        <KpiTrendCard label="Pagine per sessione" value={perSession.toFixed(1)} delta={dPct(perSession, perSessionPrev)} series={visitorViewsSeries.map((v, i) => (uniqSeries[i] > 0 ? v / uniqSeries[i] : 0))} color="hsl(var(--primary))" icon={<Layers size={15} />} />
       </div>
 
       {/* Altezza fissa (non minHeight: il layout admin la azzera con !important), così il globo

@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
+import { humanPageViewWhere } from "@/lib/traffic-filter";
+import { realVisitorIds } from "@/lib/bot-filter";
 import { TIERS } from "@/lib/billing";
 
 export type AdminPeriod = { days: number; since: Date; previousSince: Date; previousUntil: Date; label: string };
@@ -33,6 +35,8 @@ const paid = (u: MetricUser) => (u.tier === "pro" || u.tier === "pro_plus") && u
 const hasCv = (u: MetricUser) => u._count.cvDocuments > 0 || Boolean(u.cvProfile);
 
 export async function loadAdminGrowthMetrics(period: AdminPeriod) {
+  // Traffico solo umano: bot/crawler e account interni/di test esclusi (anche sullo storico).
+  const humanPv = await humanPageViewWhere();
   const [rawUsers, events, views, previousUsers, applications] = await Promise.all([
     prisma.user.findMany({
       select: {
@@ -42,7 +46,7 @@ export async function loadAdminGrowthMetrics(period: AdminPeriod) {
       },
     }),
     prisma.conversionEvent.findMany({ where: { createdAt: { gte: period.since } }, select: { name: true, userId: true, sessionId: true, source: true, plan: true, createdAt: true } }).catch(() => []),
-    prisma.pageView.findMany({ where: { ts: { gte: period.since } }, select: { sessionId: true, path: true, ts: true, userId: true } }).catch(() => []),
+    prisma.pageView.findMany({ where: { ...humanPv, ts: { gte: period.since } }, select: { sessionId: true, path: true, ts: true, userId: true } }).catch(() => []),
     prisma.user.findMany({ where: { createdAt: { gte: period.previousSince, lt: period.previousUntil } }, select: { email: true } }),
     prisma.application.findMany({ where: { createdAt: { gte: period.since } }, select: { id: true, userId: true, status: true, createdAt: true, submittedAt: true, submitConfirmation: true, pendingQuestionsJson: true } }),
   ]);
@@ -64,7 +68,7 @@ export async function loadAdminGrowthMetrics(period: AdminPeriod) {
   }
   const sourceRows = [...bySource.entries()].sort((a, b) => b[1] - a[1]);
   const landingRows = [...byLanding.entries()].sort((a, b) => b[1] - a[1]);
-  const visitorSessions = unique(views.map((view) => view.sessionId));
+  const visitorSessions = realVisitorIds(views).size;
   const eventUsers = (name: string) => unique(events.filter((event) => event.name === name).map((event) => event.userId || event.sessionId));
   const funnel = [
     { label: "Visitatori", value: visitorSessions, href: "/admin/traffic" },

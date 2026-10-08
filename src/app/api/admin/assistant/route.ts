@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin, isTestAccount } from "@/lib/admin";
+import { humanPageViewWhere } from "@/lib/traffic-filter";
 
 export const runtime = "nodejs";
 export const maxDuration = 45;
@@ -93,6 +94,7 @@ async function buildAggregateSnapshot(): Promise<string> {
   const since = (hours: number) => new Date(now - hours * 3_600_000);
   const sevenDaysAgo = since(24 * 7);
   const thirtyDaysAgo = since(24 * 30);
+  const human = await humanPageViewWhere();
 
   const [
     users,
@@ -153,11 +155,11 @@ async function buildAggregateSnapshot(): Promise<string> {
       where: { createdAt: { gte: sevenDaysAgo } },
       _count: { _all: true },
     }),
-    prisma.pageView.count({ where: { ts: { gte: sevenDaysAgo } } }).catch(() => 0),
+    prisma.pageView.count({ where: { ...human, ts: { gte: sevenDaysAgo } } }).catch(() => 0),
     prisma.pageView
       .groupBy({
         by: ["referrer"],
-        where: { ts: { gte: sevenDaysAgo }, referrer: { not: null } },
+        where: { ...human, ts: { gte: sevenDaysAgo }, referrer: { not: null } },
         _count: { _all: true },
         orderBy: { _count: { referrer: "desc" } },
         take: 20,
@@ -196,7 +198,7 @@ async function buildAggregateSnapshot(): Promise<string> {
     `FUNNEL CONSEGNA: ${applicationsTotal} tentate → ${submitted} inviate/success → ${hardConfirmed} con conferma hard DETECTED_*. Conferme per classe: ${formatCounts(Object.entries(confirmationCounts))}.`,
     `CANALI CANDIDATURA 7G: ${formatCounts(applicationsByVia7d.map((row) => [row.submittedVia ?? "unknown", row._count._all]))}. Portali 7g: ${formatCounts(applicationsByPortal7d.map((row) => [row.portal ?? "unknown", row._count._all]))}.`,
     `BLOCCHI OPERATIVI: ${captcha30d} captcha negli ultimi 30 giorni; ${needsAnswers} candidature che richiedono risposte dell'utente; ${activeSessions} sessioni auto-apply attive. Nessun messaggio di errore grezzo è incluso.`,
-    `TRAFFICO INTERNO 7G: ${pageViews7d} page view. Referrer aggregati: ${formatCounts(referrerTotals)}. Il beacon interno non fornisce visite GA/Vercel o utenti unici.`,
+    `TRAFFICO INTERNO 7G (bot, crawler e account interni esclusi): ${pageViews7d} page view. Referrer aggregati: ${formatCounts(referrerTotals)}. Il beacon interno non fornisce visite GA/Vercel o utenti unici.`,
     `JOB POOL: ${formatCounts(jobsBySource.map((row) => [row.source, row._count._all]))}; ${jobs24h} job aggiornati nelle ultime 24h; ${jobs7d} negli ultimi 7 giorni; ${closedJobs} chiusi; job più recente: ${newestJob?.cachedAt?.toISOString() ?? "mai"}.`,
     `EMAIL 7G (soli volumi per categoria): ${formatCounts(emailsByKind7d.map((row) => [row.kind, row._count._all]))}.`,
     `AUTO-APPLY: modalità aggregate: ${formatCounts(autoApplyModes.map((row) => [row.autoApplyMode, row._count._all]))}.`,
