@@ -12,8 +12,9 @@ import { trialLifecycleStage } from "@/lib/lifecycle-cadence";
  *
  *   - startTrial(userId): imposta trialEndsAt (grant admin per utenti esistenti)
  *   - sendTrialStartedEmail: giorno 0
- *   - runTrialNudges (cron giornaliero): "finisce tra 2 giorni" e
- *     "è finita" — una volta sola per utente (EmailLog)
+ *   - runTrialNudges (cron giornaliero): giorno 3, "finisce tra 2 giorni"
+ *     (trial_day_6) e "è finita" (trial_ended) — una volta sola per utente
+ *     (dedup su EmailLog kind+email), CTA verso /pricing
  */
 
 export const TRIAL_DAYS = 7;
@@ -107,7 +108,7 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
     if (!kind || alreadySent) continue;
     if (opts?.dryRun || !apiKey) { res.skipped++; res.details.push(`${u.email} ${kind} dry`); continue; }
 
-    const pricing = `${site()}/settings#billing`;
+    const pricing = `${site()}/pricing`;
     const hasCv = u._count.cvDocuments > 0;
     const hasRoles = (() => { try { return Array.isArray(JSON.parse(u.preferences?.rolesJson ?? "[]")) && JSON.parse(u.preferences?.rolesJson ?? "[]").length > 0; } catch { return false; } })();
     const sent = u._count.applications;

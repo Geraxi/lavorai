@@ -23,16 +23,23 @@ export function stripe(): Stripe {
  * Mapping da Stripe priceId al tier business.
  * Letto da env in modo che lo stesso codice lavori in test e prod.
  */
+/** Legge un price ID dall'env ripulito da spazi/newline (copia-incolla su Vercel). */
+function envPriceId(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const v = process.env[name]?.trim();
+  return v ? v : null;
+}
+
 export function priceIdToTier(priceId: string): Tier | null {
-  if (priceId === process.env.STRIPE_PRICE_ID_PRO) return "pro";
-  if (priceId === process.env.STRIPE_PRICE_ID_PRO_PLUS) return "pro_plus";
+  const id = priceId.trim();
+  if (!id) return null;
+  if (id === envPriceId("STRIPE_PRICE_ID_PRO")) return "pro";
+  if (id === envPriceId("STRIPE_PRICE_ID_PRO_PLUS")) return "pro_plus";
   return null;
 }
 
 export function tierToPriceId(tier: Tier): string | null {
-  const cfg = TIERS[tier];
-  if (!cfg.stripePriceIdEnv) return null;
-  return process.env[cfg.stripePriceIdEnv] ?? null;
+  return envPriceId(TIERS[tier].stripePriceIdEnv);
 }
 
 

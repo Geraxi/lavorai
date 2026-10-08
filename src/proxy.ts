@@ -6,6 +6,7 @@ import { requiresTrialAccess } from "@/lib/trial-access";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isBotUserAgent } from "@/lib/bot-ua";
+import { ATTRIB_COOKIE, ATTRIB_MAX_AGE_SECONDS, buildAttribPayload } from "@/lib/signup-attribution";
 
 /**
  * Proxy (ex-middleware in Next 15): due responsabilità accoppiate
@@ -36,8 +37,11 @@ export async function proxy(request: NextRequest) {
 
   // Un solo dominio canonico. Ha effetto non appena www.lavorai.it viene
   // assegnato a questo progetto Vercel (oggi punta ancora al vecchio sito).
+  // Mai redirigere /api/*: Stripe (e altri webhook) non seguono i 308, quindi
+  // /api/stripe/webhook su www.lavorai.it fallirebbe con ogni evento.
   const requestHost = request.headers.get("host")?.split(":")[0]?.toLowerCase();
-  if (requestHost === "www.lavorai.it" || request.nextUrl.hostname.toLowerCase() === "www.lavorai.it") {
+  const isApi = pathname === "/api" || pathname.startsWith("/api/");
+  if (!isApi && (requestHost === "www.lavorai.it" || request.nextUrl.hostname.toLowerCase() === "www.lavorai.it")) {
     const canonical = request.nextUrl.clone();
     canonical.hostname = "lavorai.it";
     canonical.port = "";
@@ -82,7 +86,39 @@ export async function proxy(request: NextRequest) {
   // I crawler non ricevono cookie di lingua: vedono sempre l'italiano
   // (vedi src/i18n/request.ts). Senza questo Googlebot, che esplora da IP
   // USA, indicizzerebbe la versione inglese di lavorai.it.
-  if (!skipI18n && !isBotUserAgent(request.headers.get("user-agent"))) {
+  const isBot = isBotUserAgent(request.headers.get("user-agent"));
+
+  // ── First-touch attribution (landing page / UTM / referrer) ─────────
+  // Set server-side on the first real page request so it is captured even
+  // if the visitor signs up (e.g. with Google) before <TrackAttribution/>
+  // hydrates. Never overwritten: first-touch. Prefetches are skipped.
+  const isPrefetch =
+    request.headers.get("next-router-prefetch") === "1" ||
+    request.headers.get("purpose") === "prefetch" ||
+    request.headers.get("sec-purpose")?.includes("prefetch");
+  if (
+    !skipI18n &&
+    !isBot &&
+    !isPrefetch &&
+    request.method === "GET" &&
+    !request.cookies.get(ATTRIB_COOKIE)
+  ) {
+    const payload = buildAttribPayload({
+      referrer: request.headers.get("referer"),
+      currentHost: requestHost ?? request.nextUrl.hostname,
+      search: request.nextUrl.search,
+      pathname,
+    });
+    if (payload) {
+      response.cookies.set(ATTRIB_COOKIE, payload, {
+        path: "/",
+        maxAge: ATTRIB_MAX_AGE_SECONDS,
+        sameSite: "lax",
+      });
+    }
+  }
+
+  if (!skipI18n && !isBot) {
     const existing = request.cookies.get("NEXT_LOCALE")?.value;
     if (existing !== "it" && existing !== "en") {
       const country = (

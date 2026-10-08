@@ -562,6 +562,7 @@
     "loginFooterTerms": "termini",
     "loginFooterMid": " e la ",
     "loginFooterPrivacy": "privacy policy",
-    "loginFooterPost": ". Dati processati in UE · GDPR-compliant."
+    "loginFooterPost": ". Dati processati in UE · GDPR-compliant.",
+    "verifyBannerText": "Conferma la tua email per far partire le candidature: abbiamo inviato un link a"
   }
 }

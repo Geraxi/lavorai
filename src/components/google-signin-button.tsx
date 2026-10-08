@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
@@ -55,6 +56,7 @@ export function GoogleButton({
       disabled={loading}
       onClick={() => {
         setLoading(true);
+        if (mode === "signup") trackEvent(AnalyticsEvent.SIGNUP_SUBMIT, { method: "google" });
         signIn("google", { callbackUrl });
       }}
       style={{

@@ -9,6 +9,33 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { moveFile } from "@/lib/storage";
 import { effectiveTier, registrationTrialEnd, type Tier } from "@/lib/billing";
+import {
+  ATTRIB_COOKIE,
+  parseAttribCookie,
+  planFromCallbackUrl,
+  type SignupAttribution,
+} from "@/lib/signup-attribution";
+
+/** Best-effort read of attribution cookies during an OAuth/magic-link signup. */
+async function readSignupContext(): Promise<{
+  attrib: SignupAttribution;
+  plan: string;
+  sessionId: string | null;
+}> {
+  try {
+    const { cookies } = await import("next/headers");
+    const jar = await cookies();
+    return {
+      attrib: parseAttribCookie(jar.get(ATTRIB_COOKIE)?.value),
+      plan: planFromCallbackUrl(
+        jar.get("__Secure-authjs.callback-url")?.value ?? jar.get("authjs.callback-url")?.value,
+      ),
+      sessionId: jar.get("lv_sid")?.value ?? null,
+    };
+  } catch {
+    return { attrib: parseAttribCookie(null), plan: "free", sessionId: null };
+  }
+}
 
 /**
  * NextAuth v5 config — Email magic link via Resend.
@@ -40,10 +67,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: {
     ...PrismaAdapter(prisma),
     async createUser(data) {
-      return prisma.user.create({ data: {
+      // Google / magic-link signups bypass /api/auth/signup, so they used to
+      // land with no first-touch attribution. Read the same `lv_attrib` cookie.
+      const { attrib, plan, sessionId } = await readSignupContext();
+      const user = await prisma.user.create({ data: {
         ...data, trialDurationDays: 7,
         trialEndsAt: registrationTrialEnd(new Date()), proTrialUsedAt: new Date(),
+        ...attrib,
       } });
+      await recordConversionEvent(AnalyticsEvent.SIGNUP_SUCCESS, {
+        userId: user.id,
+        sessionId,
+        plan,
+        source: "nextauth",
+        path: "/signup",
+        properties: {
+          landingPath: attrib.signupLandingPath,
+          referrer: attrib.signupReferrer,
+          utmSource: attrib.signupUtmSource,
+        },
+        dedupeKey: `signup_success:${user.id}`,
+      });
+      return user;
     },
   },
   // Credentials richiede strategy "jwt" — il Prisma adapter continua

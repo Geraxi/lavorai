@@ -9,6 +9,7 @@ import { checkOrigin } from "@/lib/csrf";
 import { sendVerificationEmail } from "@/lib/email-verification";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
+import { ATTRIB_COOKIE, parseAttribCookie } from "@/lib/signup-attribution";
 
 export const runtime = "nodejs";
 
@@ -113,12 +114,7 @@ export async function POST(request: NextRequest) {
     // Attribution first-touch: parsato dal cookie `lv_attrib` scritto da
     // <TrackAttribution/> al primo pageload. Payload compatto pipe-separated:
     // "r=google.com|s=cpc|m=paid|c=brand|p=/auto-candidatura"
-    const attribRaw = request.cookies.get("lv_attrib")?.value ?? "";
-    const attrib: Record<string, string> = {};
-    for (const pair of attribRaw.split("|")) {
-      const [k, v] = pair.split("=");
-      if (k && v) attrib[k] = decodeURIComponent(v).slice(0, 120);
-    }
+    const attrib = parseAttribCookie(request.cookies.get(ATTRIB_COOKIE)?.value);
 
     const user = await prisma.user.create({
       data: {
@@ -129,11 +125,7 @@ export async function POST(request: NextRequest) {
         privacyConsentAt,
         locale,
         referredById,
-        signupReferrer: attrib.r ?? null,
-        signupUtmSource: attrib.s ?? null,
-        signupUtmMedium: attrib.m ?? null,
-        signupUtmCampaign: attrib.c ?? null,
-        signupLandingPath: attrib.p ?? null,
+        ...attrib,
         signupSource: parsed.data.source ?? (parsed.data.promo?.toUpperCase() === "STUDENTI" ? "universita" : parsed.data.protectedCategory ? "categorie_protette" : null),
         trialDurationDays: 7,
         trialEndsAt: registrationTrialEnd(new Date()),
@@ -152,6 +144,9 @@ export async function POST(request: NextRequest) {
       properties: {
         declaredSource: parsed.data.source ?? null,
         promo: parsed.data.promo?.toUpperCase() ?? null,
+        landingPath: attrib.signupLandingPath,
+        referrer: attrib.signupReferrer,
+        utmSource: attrib.signupUtmSource,
       },
       dedupeKey: `signup_success:${user.id}`,
     });

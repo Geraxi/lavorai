@@ -8,6 +8,16 @@ import { Eye, Users, UserPlus, Layers, Download } from "lucide-react";
 
 const H = 3600_000;
 
+/** Count Prisma → number sicuro (il driver adapter può restituire BigInt; null/undefined → 0). */
+function num(v: unknown): number {
+  const n = typeof v === "bigint" ? Number(v) : Number(v ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+function countAll(c: unknown): number {
+  if (c && typeof c === "object" && "_all" in c) return num((c as { _all: unknown })._all);
+  return num(c);
+}
+
 /**
  * /admin/traffic — viewport-fisso:
  * header · 4 KPI · Traffico globale (lista paesi | globo) · [Top pagine | Top referrer].
@@ -33,8 +43,8 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     prisma.pageView.findMany({ where: { ts: { gte: since(24 * 2 * P) } }, select: { ts: true, sessionId: true } }).catch(() => [] as { ts: Date; sessionId: string }[]),
     prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
     prisma.pageView.groupBy({ by: ["sessionId"], where: { ts: { gte: since(24 * 2 * P), lt: since(24 * P) } } }).then((r) => r.length).catch(() => 0),
-    prisma.user.count({ where: { createdAt: { gte: since(24 * P) } } }),
-    prisma.user.count({ where: { createdAt: { gte: since(24 * 2 * P), lt: since(24 * P) } } }),
+    prisma.user.count({ where: { createdAt: { gte: since(24 * P) } } }).catch(() => 0),
+    prisma.user.count({ where: { createdAt: { gte: since(24 * 2 * P), lt: since(24 * P) } } }).catch(() => 0),
     prisma.pageView.groupBy({ by: ["path"], where: { ts: { gte: since(24 * P) } }, _count: { _all: true }, orderBy: { _count: { path: "desc" } }, take: 12 }).catch(() => [] as Array<{ path: string; _count: { _all: number } }>),
     prisma.pageView.groupBy({ by: ["referrer"], where: { ts: { gte: since(24 * P) }, referrer: { not: null } }, _count: { _all: true }, orderBy: { _count: { referrer: "desc" } }, take: 12 }).catch(() => [] as Array<{ referrer: string | null; _count: { _all: number } }>),
     prisma.pageView.groupBy({ by: ["country"], where: { ts: { gte: since(24 * P) }, country: { not: null } }, _count: { _all: true }, orderBy: { _count: { country: "desc" } }, take: 30 }).catch(() => [] as Array<{ country: string | null; _count: { _all: number } }>),
@@ -46,7 +56,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
   const regionMap = new Map<string, { key: string; name: string; lat: number; lng: number; count: number; cities: Map<string, number> }>();
   let itUnresolved = 0;
   for (const g of itGeo) {
-    const n = Number((g._count as { _all: number })._all);
+    const n = countAll(g._count);
     const r = itRegionOf(g.region, g.city);
     if (!r) { itUnresolved += n; continue; }
     const cur = regionMap.get(r.key) ?? { key: r.key, name: r.name, lat: r.lat, lng: r.lng, count: 0, cities: new Map<string, number>() };
@@ -56,8 +66,9 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
   }
   const regions = [...regionMap.values()].sort((a, b) => b.count - a.count).map((r) => ({ key: r.key, name: r.name, lat: r.lat, lng: r.lng, count: r.count, topCities: [...r.cities.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c, n]) => `${c} (${n})`) }));
 
-  const views7 = views14d.filter((v) => v.ts >= since(24 * P)).length;
-  const viewsPrev7 = views14d.length - views7;
+  const views = (views14d ?? []).filter((v) => v?.ts && !Number.isNaN(new Date(v.ts).getTime()));
+  const views7 = views.filter((v) => v.ts >= since(24 * P)).length;
+  const viewsPrev7 = views.length - views7;
   const bucket = (dates: Date[]) => {
     const m = new Map(dayKeys.map((k) => [k, 0]));
     for (const dt of dates) {
@@ -66,22 +77,25 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
     }
     return dayKeys.map((k) => m.get(k) ?? 0);
   };
-  const viewsSeries = bucket(views14d.map((v) => v.ts));
-  const uniqSeries = dayKeys.map((k) => new Set(views14d.filter((v) => new Date(v.ts).toISOString().slice(0, 10) === k).map((v) => v.sessionId)).size);
+  const viewsSeries = bucket(views.map((v) => v.ts));
+  const uniqSeries = dayKeys.map((k) => new Set(views.filter((v) => new Date(v.ts).toISOString().slice(0, 10) === k).map((v) => v.sessionId)).size);
   const perSession = uniq7d > 0 ? views7 / uniq7d : 0;
   const perSessionPrev = uniqPrev7 > 0 ? viewsPrev7 / uniqPrev7 : 0;
   const dPct = (c: number, p: number) => (p === 0 ? (c > 0 ? 100 : 0) : ((c - p) / p) * 100);
 
   // Referrer accorpati per host
   const refMap = new Map<string, number>();
-  for (const r of topReferrers) {
-    const k = shortenRef(r.referrer);
-    refMap.set(k, (refMap.get(k) ?? 0) + r._count._all);
+  for (const r of topReferrers ?? []) {
+    const k = shortenRef(r?.referrer ?? null);
+    refMap.set(k, (refMap.get(k) ?? 0) + countAll(r?._count));
   }
   const refs = [...refMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   const refTotal = refs.reduce((s, [, v]) => s + v, 0) || 1;
   // Normalizza: il tipo groupBy+catch confonde TS sull'unione di _count.
-  const paths: Array<{ path: string; n: number }> = topPaths.map((p) => ({ path: p.path, n: Number((p._count as { _all: number })._all) }));
+  // Landing/top pagine: tollera righe senza path o con conteggi null.
+  const paths: Array<{ path: string; n: number }> = (topPaths ?? [])
+    .map((p) => ({ path: (p?.path ?? "").trim() || "(sconosciuta)", n: countAll(p?._count) }))
+    .filter((p) => p.n > 0);
   const pathTotal = paths.reduce((s, p) => s + p.n, 0) || 1;
   const pathMax = paths[0]?.n ?? 1;
   const refMax = refs[0]?.[1] ?? 1;
@@ -109,7 +123,7 @@ export async function AdminTraffic({ days = 7 }: { days?: number } = {}) {
       {/* Altezza fissa (non minHeight: il layout admin la azzera con !important), così il globo
           resta grande anche quando la lista paesi ha una sola riga (es. "Ultima ora"). */}
       <div className="adm-card adm-globe-card" style={{ padding: 0, position: "relative", height: 560, overflow: "hidden" }}>
-        <AdminTrafficMap rows={byCountry.map((c) => ({ country: c.country, count: c._count._all }))} regions={regions} regionsUnresolved={itUnresolved} days={P} />
+        <AdminTrafficMap rows={(byCountry ?? []).map((c) => ({ country: c?.country ?? null, count: countAll(c?._count) }))} regions={regions} regionsUnresolved={itUnresolved} days={P} />
       </div>
 
       {/* Riga compatta: altezza fissa (~3 righe visibili, scroll per il resto) così il globo prende lo spazio. */}

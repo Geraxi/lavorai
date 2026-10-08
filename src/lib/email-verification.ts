@@ -7,6 +7,30 @@ const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 type Locale = "it" | "en";
 
 /**
+ * Crea un nuovo token di verifica (invalidando quelli precedenti ancora
+ * validi) e ritorna il link assoluto /verify-email?token=…  Usato sia dalla
+ * email di signup sia dal promemoria di verifica (verify-reminder.ts).
+ */
+export async function createVerificationUrl(userId: string): Promise<string> {
+  const tokenPlain = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(tokenPlain).digest("hex");
+  const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+
+  // Invalida token verifica precedenti non ancora usati
+  await prisma.emailVerificationToken.updateMany({
+    where: { userId, usedAt: null, expiresAt: { gt: new Date() } },
+    data: { usedAt: new Date() },
+  });
+
+  await prisma.emailVerificationToken.create({
+    data: { userId, tokenHash, expiresAt },
+  });
+
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  return `${siteUrl}/verify-email?token=${tokenPlain}`;
+}
+
+/**
  * Genera un token di verifica email e lo invia via Resend nella lingua
  * dell'utente. In dev senza RESEND_API_KEY stampa il link in console.
  * Best-effort: errori loggati ma non lanciati.
@@ -17,22 +41,7 @@ export async function sendVerificationEmail(
   locale: string = "it",
 ): Promise<void> {
   try {
-    const tokenPlain = randomBytes(32).toString("hex");
-    const tokenHash = createHash("sha256").update(tokenPlain).digest("hex");
-    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
-
-    // Invalida token verifica precedenti non ancora usati
-    await prisma.emailVerificationToken.updateMany({
-      where: { userId, usedAt: null, expiresAt: { gt: new Date() } },
-      data: { usedAt: new Date() },
-    });
-
-    await prisma.emailVerificationToken.create({
-      data: { userId, tokenHash, expiresAt },
-    });
-
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-    const verifyUrl = `${siteUrl}/verify-email?token=${tokenPlain}`;
+    const verifyUrl = await createVerificationUrl(userId);
 
     const apiKey = process.env.RESEND_API_KEY;
     if (!apiKey) {

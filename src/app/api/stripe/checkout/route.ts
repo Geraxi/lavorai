@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const s = stripe();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").trim().replace(/\/+$/, "");
 
     // Guardia anti-doppio abbonamento: se il customer ha già una subscription
     // viva (active/trialing/past_due), NON apriamo un secondo checkout (è
@@ -104,11 +104,14 @@ export async function POST(request: NextRequest) {
       cancel_url:
         returnTo === "trial_expired"
           ? `${siteUrl}/trial-expired?canceled=1`
-          : `${siteUrl}/#prezzi?canceled=1`,
+          : `${siteUrl}/pricing?canceled=1`,
       ...(referralCoupon ? {} : { allow_promotion_codes: true }),
       client_reference_id: user.id, // fallback per webhook checkout.session.completed
+      metadata: { userId: user.id, plan: tier },
+      // Metadata copiati sulla subscription: il webhook ritrova l'utente e il
+      // piano anche senza stripeCustomerId persistito.
       subscription_data: {
-        metadata: { userId: user.id, tier, trial: "none", referralCredit: referralCoupon ? "1" : "0" },
+        metadata: { userId: user.id, plan: tier, tier, trial: "none", referralCredit: referralCoupon ? "1" : "0" },
       },
       locale: "it",
     });

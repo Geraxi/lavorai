@@ -1,6 +1,16 @@
 import { collectInvalidFields } from "./validation-fields";
 import { extractApplicationSecurityCode, isGreenhouseSecurityMessage, SECURITY_CODE_FIELD, hasApplicationConfirmation } from "../application-security-code";
 import { findSubmitButton } from "./submit-button";
+import {
+  checkConsentBoxes,
+  diagnoseMissingFields,
+  ensureSubmitEnabled,
+  fillLocationAutocomplete,
+  formatMissingFields,
+  nudgeFormValidation,
+  waitForUploadsSettled,
+  type MissingField,
+} from "./submit-readiness";
 import type {
   PortalAdapter,
   ApplyInput,
@@ -329,6 +339,13 @@ export const greenhouseAdapter: PortalAdapter = {
         };
       }
 
+      // L'upload S3 del CV (e il parsing "autofill from resume" di
+      // job-boards) è asincrono: finché non termina Greenhouse tiene il
+      // Submit disabilitato e può sovrascrivere i campi già compilati.
+      if (!(await waitForUploadsSettled(page, 20_000))) {
+        console.warn("[greenhouse] upload CV: indicatori di caricamento ancora attivi dopo 20s, proseguo");
+      }
+
       // Cover letter (textarea o file — opzionale)
       const clTextarea = page.locator(
         'textarea[name*="cover" i], textarea[aria-label*="cover" i]',
@@ -360,6 +377,14 @@ export const greenhouseAdapter: PortalAdapter = {
         console.warn("[greenhouse] generic-fill failed", err);
       }
 
+      // Location (City) con autocomplete: il valore conta solo se si
+      // SELEZIONA un'opzione (digitare non basta → campo required vuoto).
+      const cityForForm =
+        input.answers?.city || input.profile.city || input.preferredCity || null;
+      if (await fillLocationAutocomplete(page, cityForForm).catch(() => false)) {
+        console.log("[greenhouse] location autocomplete compilata");
+      }
+
       // GDPR/consenso + accetta termini (best-effort) — PRIMA dell'AI answerer
       // così non vengono contati come "domande senza risposta".
       for (const sel of [
@@ -375,6 +400,12 @@ export const greenhouseAdapter: PortalAdapter = {
             .check({ timeout: 1500 })
             .catch(() => void 0);
         }
+      }
+      // Consensi riconosciuti dalla LABEL (name tipo "question_123" non
+      // contiene "privacy"), incl. checkbox custom con input nascosto.
+      const consents = await checkConsentBoxes(page).catch(() => [] as string[]);
+      if (consents.length > 0) {
+        console.log(`[greenhouse] consensi spuntati: ${consents.map((c) => `"${c.slice(0, 60)}"`).join(", ")}`);
       }
 
       // AI answerer: compila i campi OBBLIGATORI ancora vuoti (incl.
@@ -438,6 +469,11 @@ export const greenhouseAdapter: PortalAdapter = {
         console.warn("[greenhouse] ai-answer failed", err);
       }
 
+      // Fa "vedere" a React/react-hook-form i valori inseriti (input/change/
+      // blur) e attende eventuali validazioni/upload asincroni rimasti.
+      await nudgeFormValidation(page);
+      await waitForUploadsSettled(page, 8_000);
+
       // Captcha: bloccante SOLO se interattivo (checkbox/challenge/hCaptcha/
       // Turnstile visibili). Il badge reCAPTCHA invisibile — presente su quasi
       // tutti i form Greenhouse — NON blocca: il token nasce al click su Invia.
@@ -467,6 +503,14 @@ export const greenhouseAdapter: PortalAdapter = {
       }
 
       if (input.dryRun) {
+        // Diagnostica anche in dry-run: il form sarebbe inviabile?
+        const dryBtn = await findSubmitButton(page);
+        if (dryBtn) {
+          const r = await ensureSubmitEnabled(page, dryBtn, 5_000);
+          if (!r.enabled) {
+            console.warn(`[greenhouse] DRY_RUN: Submit disabilitato — campi mancanti: ${formatMissingFields(r.missing) || "(nessuno rilevato)"}`);
+          }
+        }
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
 
@@ -515,6 +559,17 @@ export const greenhouseAdapter: PortalAdapter = {
           error: "Bottone submit non trovato.",
         };
       }
+
+      // Submit disabilitato = il form NON è valido per Greenhouse. Prima
+      // cliccavamo comunque: Playwright attendeva 30s che si abilitasse e
+      // lanciava un timeout generico (unknown_error) senza dire cosa
+      // mancava. Ora attendiamo upload/validazione e, se resta
+      // disabilitato, logghiamo i campi esatti che lo bloccano.
+      const readiness = await ensureSubmitEnabled(page, submit, 15_000);
+      if (!readiness.enabled) {
+        return disabledSubmitOutcome(readiness.missing, input.applicationId, aiDebug);
+      }
+
       // ============================================================
       // VERIFICA HARD: cattura la risposta HTTP della POST di submission
       // ============================================================
@@ -557,7 +612,22 @@ export const greenhouseAdapter: PortalAdapter = {
         .catch(() => null);
 
       await submit.scrollIntoViewIfNeeded().catch(() => void 0);
-      await submit.click();
+      try {
+        await submit.click({ timeout: 10_000 });
+      } catch (clickErr) {
+        // Click fallito (bottone ridisabilitato, overlay sopra, …): diagnosi
+        // esplicita invece del timeout generico.
+        const missing = await diagnoseMissingFields(page, submit);
+        console.warn(
+          `[greenhouse] click Submit fallito (${clickErr instanceof Error ? clickErr.message.split("\n")[0] : String(clickErr)}) — campi: ${formatMissingFields(missing) || "(nessuno rilevato)"}`,
+        );
+        if (missing.length > 0) return disabledSubmitOutcome(missing, input.applicationId, aiDebug);
+        return {
+          ok: false,
+          status: "unknown_error",
+          error: `Click sul bottone Submit Greenhouse fallito: ${clickErr instanceof Error ? clickErr.message.split("\n")[0] : String(clickErr)}`,
+        };
+      }
 
       const submissionResponse = await submissionResponsePromise;
 
@@ -716,6 +786,45 @@ export const greenhouseAdapter: PortalAdapter = {
     }
   },
 };
+
+/**
+ * Esito quando il Submit resta disabilitato: logga i campi mancanti in modo
+ * leggibile. Se sono tutte domande a cui l'utente può rispondere →
+ * needs_user_input (stesso flusso dei required non risposti); altrimenti
+ * (file, errori del portale, nessun campo rilevato) → validation_failed con
+ * l'elenco esplicito nel messaggio.
+ */
+function disabledSubmitOutcome(
+  missing: MissingField[],
+  applicationId: string | undefined,
+  aiDebug: string,
+): ApplyOutcome {
+  const list = formatMissingFields(missing);
+  console.warn(
+    `[greenhouse] Submit DISABILITATO app=${applicationId ?? "?"} — campi mancanti/non validi: ${list || "(nessuno rilevato: possibile validazione async, captcha o form cambiato)"}`,
+  );
+  const answerable = ["text", "textarea", "select", "react-select", "checkbox", "radio"];
+  if (missing.length > 0 && missing.every((m) => answerable.includes(m.kind))) {
+    return {
+      ok: false,
+      status: "needs_user_input",
+      error: `Bottone Submit disabilitato: ${missing.length} campi obbligatori mancanti (${missing.map((m) => m.label).join(", ").slice(0, 300)}).`,
+      pendingQuestions: missing.map((m) => ({
+        label: m.label,
+        kind: m.kind,
+        ...(m.options ? { options: m.options } : {}),
+      })),
+      debug: `submit-disabled: ${list} | ${aiDebug}`.slice(0, 2000),
+    };
+  }
+  return {
+    ok: false,
+    status: "validation_failed",
+    error: list
+      ? `Bottone Submit Greenhouse disabilitato. Campi mancanti/non validi: ${list}`.slice(0, 1000)
+      : "Bottone Submit Greenhouse disabilitato ma nessun campo mancante rilevato (validazione async, captcha o form cambiato).",
+  };
+}
 
 /**
  * Genera URL candidati per raggiungere il form puro Greenhouse,

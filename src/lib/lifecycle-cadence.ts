@@ -24,3 +24,22 @@ export function isCheckoutRecoveryWindow(createdAt: Date, now = Date.now()): boo
   const age = now - createdAt.getTime();
   return age >= 2 * 3_600_000 && age <= 72 * 3_600_000;
 }
+
+/** Promemoria verifica email: da 24h dopo il signup, non oltre 7 giorni. */
+export const VERIFY_REMINDER_MIN_AGE_MS = 24 * 3_600_000;
+export const VERIFY_REMINDER_MAX_AGE_MS = 7 * 86_400_000;
+
+export function isVerifyReminderDue(input: {
+  now: number;
+  createdAt: Date;
+  emailVerified: Date | null;
+}): boolean {
+  if (input.emailVerified) return false;
+  const age = input.now - input.createdAt.getTime();
+  return age >= VERIFY_REMINDER_MIN_AGE_MS && age <= VERIFY_REMINDER_MAX_AGE_MS;
+}
+
+/** True while the dedicated verify reminder still "owns" an unverified user. */
+export function isInVerifyReminderWindow(createdAt: Date, now = Date.now()): boolean {
+  return now - createdAt.getTime() <= VERIFY_REMINDER_MAX_AGE_MS;
+}

@@ -177,7 +177,7 @@ export function SectionPricing() {
 }
 
 function TierCard({ tier }: { tier: TierConfig }) {
-  const href = tier.id === "free" ? "/signup" : `/signup?plan=${tier.id}`;
+  const href = `/signup?plan=${tier.id}`;
 
   return (
     <motion.div

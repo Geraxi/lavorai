@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { isTestAccount } from "@/lib/admin";
+import { isInVerifyReminderWindow } from "@/lib/lifecycle-cadence";
 
 /**
  * Nudge di onboarding: email che ricordano agli utenti registrati ma "bloccati"
@@ -104,6 +105,9 @@ export async function findNudgeCandidates(opts?: {
 
     if (opts?.incompleteSetupOnly && step === "first_application") continue;
     if (!step) continue; // utente completo: niente nudge
+    // Nei primi 7 giorni la verifica è gestita dal promemoria dedicato
+    // (verify-reminder.ts, con link nuovo): evitiamo doppie email.
+    if (step === "verify" && !opts?.onlyEmail && isInVerifyReminderWindow(u.createdAt, now)) continue;
 
     // Cooldown: niente nudge se ne ha ricevuto uno di recente.
     if (!opts?.ignoreCooldown) {

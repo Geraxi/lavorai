@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -73,7 +74,8 @@ export function StickyCta() {
         })}
       </span>
       <Link
-        href="/optimize"
+        href="/signup?plan=free"
+        onClick={() => trackEvent(AnalyticsEvent.STICKY_CTA, { plan: "free" })}
         className="ds-btn ds-btn-sm ds-btn-primary"
         style={{ flex: "none", whiteSpace: "nowrap" }}
       >

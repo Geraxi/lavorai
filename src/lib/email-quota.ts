@@ -81,6 +81,7 @@ export type EmailKind =
   | "application_no_reply_yet"
   | "daily_summary"
   | "signup_verify"
+  | "verify_reminder"
   | "password_reset"
   | "welcome"
   | "magic_link"

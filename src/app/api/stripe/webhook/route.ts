@@ -4,9 +4,31 @@ import { stripe, priceIdToTier } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
-import { TIERS } from "@/lib/billing";
+import { TIERS, type Tier } from "@/lib/billing";
 
 export const runtime = "nodejs";
+
+/**
+ * Tier dalla subscription: prima dal price ID (env), poi dal metadata
+ * `plan`/`tier` settato al checkout (subscription_data.metadata) — così un
+ * price ID mal configurato non declassa a "free" chi ha pagato.
+ */
+function tierFromSubscription(sub: Stripe.Subscription): Tier {
+  const priceId = sub.items.data[0]?.price.id;
+  const fromPrice = priceId ? priceIdToTier(priceId) : null;
+  if (fromPrice) return fromPrice;
+  const meta = (sub.metadata?.plan ?? sub.metadata?.tier ?? "").trim();
+  return meta === "pro" || meta === "pro_plus" ? meta : "free";
+}
+
+/** ID subscription di una fattura (API nuove: parent.subscription_details; vecchie: invoice.subscription). */
+function invoiceSubscriptionId(inv: Stripe.Invoice): string | null {
+  const fromParent = inv.parent?.subscription_details?.subscription;
+  const legacy = (inv as unknown as { subscription?: string | { id: string } | null }).subscription;
+  const v = fromParent ?? legacy;
+  if (!v) return null;
+  return typeof v === "string" ? v : v.id;
+}
 
 /**
  * Stripe webhook — gestisce eventi subscription lifecycle.
@@ -48,14 +70,16 @@ export async function POST(request: NextRequest) {
         // (endpoint config incompleta, race, filtro eventi) l'evento
         // subscription non arriva, questo garantisce comunque l'upgrade.
         const sess = event.data.object as Stripe.Checkout.Session;
-        if (sess.mode !== "subscription" || sess.payment_status !== "paid") break;
+        // "no_payment_required" = totale 0 (coupon 100%, es. referral): è comunque un successo.
+        if (sess.mode !== "subscription") break;
+        if (sess.payment_status !== "paid" && sess.payment_status !== "no_payment_required") break;
         const customerId =
           typeof sess.customer === "string" ? sess.customer : sess.customer?.id;
         const subscriptionId =
           typeof sess.subscription === "string"
             ? sess.subscription
             : sess.subscription?.id;
-        const userId = sess.client_reference_id ?? undefined;
+        const userId = sess.client_reference_id ?? sess.metadata?.userId ?? undefined;
         if (!customerId || !subscriptionId) break;
 
         // Recupera la subscription per leggere price/status/period_end.
@@ -76,7 +100,7 @@ export async function POST(request: NextRequest) {
           console.error("[stripe/webhook] dedupe subscriptions failed", e);
         }
         const priceId = item?.price.id;
-        const tier = priceId ? priceIdToTier(priceId) ?? "free" : "free";
+        const tier = tierFromSubscription(sub);
         const anyItem = item as unknown as { current_period_end?: number };
         const anySub = sub as unknown as { current_period_end?: number };
         const periodEndTs = anyItem?.current_period_end ?? anySub.current_period_end;
@@ -134,7 +158,7 @@ export async function POST(request: NextRequest) {
           typeof sub.customer === "string" ? sub.customer : sub.customer.id;
         const item = sub.items.data[0];
         const priceId = item?.price.id;
-        const tier = priceId ? priceIdToTier(priceId) ?? "free" : "free";
+        const tier = tierFromSubscription(sub);
         const anyItem = item as unknown as { current_period_end?: number };
         const anySub = sub as unknown as { current_period_end?: number };
         const periodEndTs = anyItem?.current_period_end ?? anySub.current_period_end;
@@ -234,6 +258,51 @@ export async function POST(request: NextRequest) {
             userId: canceledUser.id,
             dedupeKey: `subscription_canceled:${sub.id}`,
           });
+        }
+        break;
+      }
+      case "invoice.paid": {
+        // Rinnovo (o primo pagamento) andato a buon fine: tiene il piano attivo
+        // anche se customer.subscription.updated arriva in ritardo o non arriva
+        // (es. dopo un past_due recuperato).
+        const inv = event.data.object as Stripe.Invoice;
+        const subscriptionId = invoiceSubscriptionId(inv);
+        const customerId =
+          typeof inv.customer === "string" ? inv.customer : inv.customer?.id;
+        if (!subscriptionId || !customerId) break;
+        const sub = await stripe().subscriptions.retrieve(subscriptionId);
+        if (sub.status !== "active" && sub.status !== "trialing") break;
+        const item = sub.items.data[0];
+        const priceId = item?.price.id;
+        const tier = tierFromSubscription(sub);
+        const anyItem = item as unknown as { current_period_end?: number };
+        const anySub = sub as unknown as { current_period_end?: number };
+        const periodEndTs = anyItem?.current_period_end ?? anySub.current_period_end;
+        const paused = !!sub.pause_collection;
+        const data = {
+          stripeSubscriptionId: sub.id,
+          stripePriceId: priceId ?? null,
+          subscriptionStatus: paused ? "paused" : sub.status,
+          tier: paused ? "free" : tier,
+          currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
+        };
+        const matched = await prisma.user.updateMany({ where: { stripeCustomerId: customerId }, data });
+        const metaUserId = sub.metadata?.userId;
+        if (matched.count === 0 && metaUserId) {
+          await prisma.user.update({
+            where: { id: metaUserId },
+            data: { ...data, stripeCustomerId: customerId },
+          }).catch((err) => console.error("[stripe/webhook] invoice.paid fallback update failed", err));
+        }
+        // Subscription senza metadata (create prima del fix o da dashboard):
+        // ripristina userId/plan per i webhook futuri, senza toccare il resto.
+        if (!metaUserId || !sub.metadata?.plan) {
+          const owner = await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
+          if (owner && tier !== "free") {
+            await stripe().subscriptions
+              .update(sub.id, { metadata: { ...sub.metadata, userId: metaUserId ?? owner.id, plan: tier } })
+              .catch((err) => console.error("[stripe/webhook] metadata backfill failed", err));
+          }
         }
         break;
       }

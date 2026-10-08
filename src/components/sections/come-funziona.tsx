@@ -112,7 +112,7 @@ export function SectionComeFunziona() {
 
         <Reveal delay={0.3} className="mt-12 flex justify-center">
           <Link
-            href="/signup"
+            href="/signup?plan=free"
             className="ds-btn ds-btn-primary"
             style={{
               minHeight: 48,

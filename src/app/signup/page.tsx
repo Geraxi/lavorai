@@ -215,7 +215,11 @@ function SignupContent() {
           </p>
 
           <div style={{ marginBottom: 20 }}>
-            <GoogleButton mode="signup" position="above" />
+            <GoogleButton
+              mode="signup"
+              position="above"
+              callbackUrl={plan === "pro" || plan === "pro_plus" ? `/settings?upgrade=${plan}` : "/onboarding"}
+            />
             <p style={{ margin: "8px 0 0", textAlign: "center", color: "var(--fg-subtle)", fontSize: 11.5 }}>
               {t("signupGoogleFirst")}
             </p>

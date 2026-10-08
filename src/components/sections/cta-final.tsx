@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 import Link from "next/link";
 import { motion } from "motion/react";
 import { useTranslations } from "next-intl";
@@ -75,7 +76,7 @@ export function SectionCtaFinal() {
                     "inset 0 1px 0 rgba(255,255,255,1), 0 8px 24px -6px rgba(15,40,30,0.30)",
                 }}
               >
-                <Link href="/signup">
+                <Link href="/signup?plan=free" onClick={() => trackEvent(AnalyticsEvent.CTA_FINAL, { plan: "free" })}>
                   <span className="relative z-10">{t("cta")}</span>
                   <span
                     aria-hidden

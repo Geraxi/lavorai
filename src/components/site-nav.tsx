@@ -1,5 +1,6 @@
 "use client";
 
+import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -117,7 +118,7 @@ export function SiteNav() {
                 className="group"
                 style={{ height: 44, paddingLeft: 22, paddingRight: 22, fontSize: 15 }}
               >
-                <Link href="/signup">
+                <Link href="/signup?plan=free" onClick={() => trackEvent(AnalyticsEvent.NAV_SIGNUP, { plan: "free" })}>
                   <span style={{ fontWeight: 600 }}>{t("signup")}</span>
                 </Link>
               </Button>

@@ -206,7 +206,7 @@ export function Hero() {
                     borderRadius: 14,
                   }}
                 >
-                  <Link href="/signup" onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, { label: "signup" })}>
+                  <Link href="/signup?plan=free" onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, { label: "signup" })}>
                     <span className="relative z-10 inline-flex items-center gap-7">{t("ctaPrimaryV2")} <ArrowRight size={21} /></span>
                   </Link>
                 </Button>
