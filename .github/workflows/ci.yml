@@ -27,6 +27,9 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: MCP protocol tests
+        run: npm run test:mcp
+
       - name: Lint
         run: npm run lint
 

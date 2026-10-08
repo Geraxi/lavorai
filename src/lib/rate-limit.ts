@@ -96,3 +96,4 @@ export const uploadLimiter: Limiter = buildLimiter(10, 60 * 60 * 1000, "lavorai:
 // Misurazione best-effort: abbastanza capiente per una normale sessione,
 // ma non una superficie aperta per riempire la tabella eventi.
 export const analyticsLimiter: Limiter = buildLimiter(120, 60 * 60 * 1000, "lavorai:analytics");
+export const mcpLimiter: Limiter = buildLimiter(60, 60 * 1000, "lavorai:mcp");

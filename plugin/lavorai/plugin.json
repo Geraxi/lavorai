@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "lavorai",
+  "version": "0.1.0",
+  "description": "Search real job listings from LavorAI and continue your application on lavorai.it.",
+  "author": { "name": "Umberto Geraci", "url": "https://lavorai.it" },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "LavorAI",
+        "shortDescription": "Find your next job",
+        "longDescription": "Search LavorAI's open job listings by role, company, city and remote work. Inspect job descriptions in chat, then continue on LavorAI to tailor your CV and apply. This version accesses public listings only.",
+        "developerName": "Umberto Geraci",
+        "category": "Productivity",
+        "defaultPrompt": "Find remote jobs that fit my experience."
+      }
+    }
+  }
+}
