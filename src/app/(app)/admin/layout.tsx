@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
+import { AdminAutoRefresh } from "@/components/admin-auto-refresh";
 import { AdminTopbar } from "@/components/admin-topbar";
 import { getAdminAlerts } from "@/lib/admin-alerts";
 
@@ -19,6 +20,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="adm-root">
+      <AdminAutoRefresh />
       <AdminTopbar userName={user?.name ?? "Umberto"} email={user?.email ?? ""} alerts={alerts} />
       <div className="adm-content">{children}</div>
 
