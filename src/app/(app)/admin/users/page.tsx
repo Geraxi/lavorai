@@ -377,7 +377,7 @@ function source(ref: string | null | undefined, utm: string | null | undefined):
 }
 function fmt2(d: Date | null | undefined): string {
   if (!d) return "—";
-  return `${d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "2-digit" })} ${d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}`;
+  return `${d.toLocaleDateString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "2-digit" })} ${d.toLocaleTimeString("it-IT", { timeZone: "Europe/Rome", hour: "2-digit", minute: "2-digit" })}`;
 }
 function onboarding(u: { emailVerified: Date | null; preferences: { autoApplyMode: string } | null; _count: { cvDocuments: number } }): number {
   return (u.emailVerified ? 1 : 0) + (u._count.cvDocuments > 0 ? 1 : 0) + (u.preferences ? 1 : 0) + (u.preferences && u.preferences.autoApplyMode !== "off" ? 1 : 0);

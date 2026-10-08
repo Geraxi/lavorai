@@ -303,7 +303,7 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
               return (
                 <div key={i} className="adm-tr" style={{ gridTemplateColumns: "12px 52px 90px 120px 1fr", padding: "6px 0", fontSize: 12 }} title={`${e.errorMessage ?? ""}\n\n${af.error ?? ""}`}>
                   <span style={{ width: 8, height: 8, borderRadius: 999, background: cls.c, boxShadow: `0 0 5px ${cls.c}` }} />
-                  <span className="adm-num" style={{ color: "var(--fg-muted)" }}>{e.createdAt.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })}</span>
+                  <span className="adm-num" style={{ color: "var(--fg-muted)" }}>{e.createdAt.toLocaleTimeString("it-IT", { timeZone: "Europe/Rome", hour: "2-digit", minute: "2-digit" })}</span>
                   <span className="adm-ellipsis" style={{ color: "var(--fg)", textTransform: "capitalize" }}>{e.portal || "—"}</span>
                   <span className="adm-ellipsis" style={{ color: "var(--fg-muted)", fontFamily: "ui-monospace, monospace", fontSize: 11 }}>{cls.type}</span>
                   <span style={{ color: "var(--fg-muted)", lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{msg}</span>

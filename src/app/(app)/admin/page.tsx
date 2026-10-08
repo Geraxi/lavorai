@@ -539,5 +539,5 @@ function formatWhen(d: Date): string {
   if (h < 24) return `${h} ore fa`;
   const days = Math.round(h / 24);
   if (days < 7) return `${days}g fa`;
-  return d.toLocaleDateString("it-IT", { day: "numeric", month: "short" });
+  return d.toLocaleDateString("it-IT", { timeZone: "Europe/Rome", day: "numeric", month: "short" });
 }
