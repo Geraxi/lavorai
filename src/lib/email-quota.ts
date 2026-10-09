@@ -95,6 +95,7 @@ export type EmailKind =
   | "trial_day_3"
   | "trial_day_6"
   | "checkout_recovery"
+  | "checkout_feedback"
   | "founder_alert"
   | "reactivation_blast"
   | "other";

@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd } from "@/lib/billing";
 import { StartMembershipActions } from "./start-membership-actions";
+import { UserPopup } from "@/components/user-popup";
 
 export const metadata = {
   title: "Attiva la prova Pro | LavorAI",
@@ -12,7 +13,7 @@ export const metadata = {
 export default async function StartMembershipPage({
   searchParams,
 }: {
-  searchParams: Promise<{ subscribed?: string; canceled?: string }>;
+  searchParams: Promise<{ subscribed?: string; canceled?: string; feedback?: string }>;
 }) {
   const params = await searchParams;
   const user = await getCurrentUser();
@@ -56,6 +57,7 @@ export default async function StartMembershipPage({
           <p className="mt-5 text-center text-xs leading-5 text-slate-400">Il pagamento viene gestito da Stripe. Apple Pay e Google Pay compaiono quando sono disponibili sul tuo dispositivo.</p>
         </div>
       </section>
+      {params.feedback === "checkout" && <UserPopup />}
     </main>
   );
 }
