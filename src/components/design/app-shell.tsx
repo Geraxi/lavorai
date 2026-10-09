@@ -21,6 +21,12 @@ export function AppShell({
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const mobileNavItems = [
+    { href: "/dashboard", label: "Home", icon: "dashboard" as const },
+    { href: "/discover", label: "Scopri", icon: "sparkles" as const },
+    { href: "/applications", label: "Candidature", icon: "briefcase" as const },
+    { href: "/inbox", label: "Inbox", icon: "inbox" as const },
+  ];
 
   // Chiudi automaticamente il drawer quando si naviga
   useEffect(() => {
@@ -95,18 +101,24 @@ export function AppShell({
         {children}
       </main>
 
-      {/* Floating Action Button (FAB) — sempre visibile su mobile, anche
-          se la topbar scrolla via. Quick access al drawer di navigazione.
-          Su desktop nascosto perché la sidebar è già fissa a sinistra. */}
+      {/* I percorsi quotidiani restano a portata di pollice; il drawer
+          conserva le sezioni meno frequenti. */}
       {!open && (
-        <button
-          type="button"
-          className="lavorai-nav-fab"
-          onClick={() => setOpen(true)}
-          aria-label="Apri menu di navigazione"
-        >
-          <Icon name="menu" size={22} />
-        </button>
+        <nav className="lavorai-mobile-bottom-nav" aria-label="Navigazione principale">
+          {mobileNavItems.map((item) => {
+            const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
+            return (
+              <Link key={item.href} href={item.href} className="lavorai-mobile-nav-item" aria-current={active ? "page" : undefined}>
+                <Icon name={item.icon} size={18} />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+          <button type="button" className="lavorai-mobile-nav-item lavorai-mobile-nav-menu" onClick={() => setOpen(true)} aria-label="Apri tutte le sezioni">
+            <Icon name="menu" size={19} />
+            <span>Altro</span>
+          </button>
+        </nav>
       )}
 
       <style>{`
@@ -129,7 +141,7 @@ export function AppShell({
         .lavorai-mobile-topbar { display: none; }
         .lavorai-sidebar-backdrop { display: none; }
         .lavorai-sidebar-drawer { display: none; }
-        .lavorai-nav-fab { display: none; }
+        .lavorai-mobile-bottom-nav { display: none; }
 
         .lavorai-menu-btn {
           display: inline-flex;
@@ -187,34 +199,53 @@ export function AppShell({
             animation: lavorai-slide-in 0.25s cubic-bezier(0.2, 0.8, 0.3, 1);
             overflow-y: auto;
           }
-          .lavorai-nav-fab {
-            display: inline-flex;
+          .lavorai-main {
+            padding-bottom: calc(88px + env(safe-area-inset-bottom));
+          }
+          .lavorai-mobile-bottom-nav {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 56px;
-            height: 56px;
-            border-radius: 999px;
-            background: hsl(var(--primary));
-            color: #001a0d;
+            left: max(12px, env(safe-area-inset-left));
+            right: max(12px, env(safe-area-inset-right));
+            bottom: max(12px, env(safe-area-inset-bottom));
+            z-index: 35;
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 2px;
+            min-height: 62px;
+            padding: 5px;
+            border: 1px solid rgba(184, 255, 226, 0.22);
+            border-radius: 22px;
+            background: linear-gradient(135deg, rgba(9, 22, 26, 0.82), rgba(10, 34, 29, 0.68));
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 16px 44px rgba(0,0,0,0.42), 0 2px 12px rgba(31, 224, 155, 0.10);
+            backdrop-filter: blur(20px) saturate(150%);
+            -webkit-backdrop-filter: blur(20px) saturate(150%);
+          }
+          .lavorai-mobile-nav-item {
+            display: flex;
+            min-width: 0;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
-            border: none;
-            box-shadow:
-              0 1px 2px rgba(0,0,0,0.18),
-              0 8px 24px hsl(var(--primary) / 0.35),
-              0 18px 50px rgba(0,0,0,0.30);
-            cursor: pointer;
-            z-index: 35;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            gap: 3px;
+            border-radius: 17px;
+            color: rgba(233, 246, 240, 0.66);
+            text-decoration: none;
+            font-size: 10px;
+            font-weight: 650;
+            line-height: 1;
+            letter-spacing: -0.01em;
+            transition: color .18s ease, background .18s ease, transform .18s ease;
           }
-          .lavorai-nav-fab:hover,
-          .lavorai-nav-fab:focus-visible {
-            transform: scale(1.05);
-            outline: none;
+          .lavorai-mobile-nav-item[aria-current="page"] {
+            color: #04150e;
+            background: linear-gradient(135deg, hsl(var(--primary)), #7cf2be);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.34), 0 5px 16px hsl(var(--primary) / .28);
           }
-          .lavorai-nav-fab:active {
-            transform: scale(0.96);
+          .lavorai-mobile-nav-item:active { transform: scale(.95); }
+          .lavorai-mobile-nav-item:focus-visible { outline: 2px solid #b9ffde; outline-offset: 2px; }
+          .lavorai-mobile-nav-menu { border: 0; background: transparent; font: inherit; cursor: pointer; }
+          .lavorai-mobile-nav-menu:hover { color: #fff; background: rgba(255,255,255,.08); }
+          @media (prefers-reduced-motion: reduce) { .lavorai-mobile-nav-item { transition: none; } }
           }
         }
         @keyframes lavorai-fade-in { from { opacity: 0; } to { opacity: 1; } }
