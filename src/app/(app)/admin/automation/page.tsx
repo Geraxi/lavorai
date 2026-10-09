@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, compactNumber } from "../_ui";
 import { AdminTestApply } from "@/components/admin-test-apply";
 import { AdminNudges } from "@/components/admin-nudges";
+import { AdminCheckoutFeedback } from "@/components/admin-checkout-feedback";
 import { AdminPopups } from "@/components/admin-popups";
 import { AdminAssistant } from "@/components/admin-assistant";
 import { Send, Users, Mail, Target, FlaskConical, BellRing, MessageSquare, Sparkles, ArrowRight, CheckCircle2, ExternalLink } from "lucide-react";
@@ -108,6 +109,9 @@ export default async function AdminAutomationPage() {
         </Section>
         <Section icon={<BellRing size={16} />} title="Nudge onboarding" sub="Email agli utenti bloccati per completare lo step mancante." cols="1fr">
           <AdminNudges embedded />
+        </Section>
+        <Section icon={<MessageSquare size={16} />} title="Checkout abbandonati" sub="Raccogli il motivo dell'abbandono e feedback sulla piattaforma." cols="1fr">
+          <AdminCheckoutFeedback />
         </Section>
         <Section icon={<CheckCircle2 size={16} />} title="Ultimo test" sub={lastTest ? fmtDT(new Date(lastTest.t.at)) : "Il prossimo test apparirà qui."} cols="1fr" right={lastTest ? <span className={`adm-pill ${testOk ? "good" : "bad"}`}><span className="dot" />{testOk ? (lastTest.t.dryRun ? "Dry-run OK" : "Completato") : "Fallito"}</span> : undefined}>
           {lastTest ? (
