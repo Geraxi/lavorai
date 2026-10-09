@@ -282,6 +282,27 @@ export function isApplicationAccessPaused(
 }
 
 /**
+ * Per le nuove prove un Customer Stripe non basta: può derivare da un
+ * checkout abbandonato. L'app si apre soltanto dopo che il webhook ha
+ * registrato una subscription `trialing` o `active`, cioè con un metodo
+ * di pagamento effettivamente raccolto da Stripe Checkout.
+ */
+export function requiresPaymentMethodBeforeApp(
+  user: {
+    tier?: string | null;
+    email?: string | null;
+    createdAt?: Date | string;
+    trialGraceEndsAt?: Date | string | null;
+    trialEndsAt?: Date | string | null;
+    subscriptionStatus?: string | null;
+  },
+): boolean {
+  if (isLifetimeProPlus(user.email) || normalizeTier(user.tier) !== "free") return false;
+  if (user.subscriptionStatus === "active" || user.subscriptionStatus === "trialing") return false;
+  return trialState(user).status === "active";
+}
+
+/**
  * Feature gate set: tutte le entitlement check le centralizziamo qui
  * così UI, server e API leggono dalla stessa logica. Aggiungere una
  * nuova feature premium = aggiungere una entry sotto + un boolean
