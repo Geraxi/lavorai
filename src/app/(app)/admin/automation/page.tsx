@@ -103,16 +103,21 @@ export default async function AdminAutomationPage() {
         <KpiTrendCard label="Tasso di completamento" value={`${rate.toFixed(1)}%`} deltaLabel={`${success14}/${apps14d.length}`} series={succSeries} color="hsl(var(--primary))" icon={<Target size={15} />} />
       </div>
 
-      <div className="adm-automation-grid">
-        <Section icon={<FlaskConical size={16} />} title="Test candidatura" sub="Esegui un apply end-to-end. Genera CV, adapter ATS e completa il flusso." cols="1fr">
-          <AdminTestApply embedded />
-        </Section>
-        <Section icon={<BellRing size={16} />} title="Nudge onboarding" sub="Email agli utenti bloccati per completare lo step mancante." cols="1fr">
+      <section className="adm-automation-workspace" aria-label="Azioni operative">
+        <div className="adm-automation-action-stack">
+          <Section icon={<FlaskConical size={16} />} title="Test candidatura" sub="Verifica il flusso completo prima di attivare un invio reale." cols="1fr">
+            <AdminTestApply embedded />
+          </Section>
+          <Section icon={<MessageSquare size={16} />} title="Checkout abbandonati" sub="Chiedi il motivo dell'abbandono e raccogli feedback sul prodotto." cols="1fr">
+            <AdminCheckoutFeedback />
+          </Section>
+        </div>
+        <Section icon={<BellRing size={16} />} title="Nudge onboarding" sub="Sblocca gli utenti che devono ancora completare uno step." cols="1fr">
           <AdminNudges embedded />
         </Section>
-        <Section icon={<MessageSquare size={16} />} title="Checkout abbandonati" sub="Raccogli il motivo dell'abbandono e feedback sulla piattaforma." cols="1fr">
-          <AdminCheckoutFeedback />
-        </Section>
+      </section>
+
+      <section className="adm-automation-insights" aria-label="Controllo operativo">
         <Section icon={<CheckCircle2 size={16} />} title="Ultimo test" sub={lastTest ? fmtDT(new Date(lastTest.t.at)) : "Il prossimo test apparirà qui."} cols="1fr" right={lastTest ? <span className={`adm-pill ${testOk ? "good" : "bad"}`}><span className="dot" />{testOk ? (lastTest.t.dryRun ? "Dry-run OK" : "Completato") : "Fallito"}</span> : undefined}>
           {lastTest ? (
             <>
@@ -144,7 +149,7 @@ export default async function AdminAutomationPage() {
             </div>
           </div>
         </Section>
-      </div>
+      </section>
 
       <Section icon={<MessageSquare size={16} />} title="Popup & sondaggi utenti" sub="Crea popup in-app per raccogliere feedback, gradimento e proposte di miglioramento." cols="1fr" right={<span className="adm-section-period">in-app</span>}>
         <div className="adm-card-body scroll"><AdminPopups embedded /></div>
