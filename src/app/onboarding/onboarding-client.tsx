@@ -74,6 +74,15 @@ interface InitialState {
   profile: ProfileState | null;
 }
 
+interface OnboardingDemo {
+  target: { title: string; company: string | null; location: string | null; matchedJob: boolean };
+  atsScore: number;
+  summary: string;
+  skills: string[];
+  suggestions: string[];
+  coverLetter: string;
+}
+
 export default function OnboardingClient({
   initial,
 }: {
@@ -84,6 +93,7 @@ export default function OnboardingClient({
   const { update: updateSession } = useSession();
   const [step, setStep] = useState(0);
   const [finishing, setFinishing] = useState(false);
+  const [demo, setDemo] = useState<OnboardingDemo | null>(null);
   // Steps localized — usiamo questo array invece di STEPS in render
   const stepsLocalized: StepDef[] = STEPS.map((s, i) => ({
     ...s,
@@ -242,7 +252,8 @@ export default function OnboardingClient({
     if (finishing || !preferencesValid()) return;
     setFinishing(true);
     try {
-    // Salva preferenze su UserPreferences + marca User.onboardedAt
+    // Salviamo il setup prima della demo, ma l'onboarding termina soltanto
+    // dopo che l'utente ha visto il CV e la lettera personalizzati.
     const selectedRoles = roles.filter((r) => r.selected).map((r) => r.title);
     const selectedCities = locations
       .filter((l) => l.selected)
@@ -272,7 +283,30 @@ export default function OnboardingClient({
       return;
     }
 
-    // Marca il welcome come già visto
+    if (!demo) {
+      const preview = await fetch("/api/onboarding/demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ targetRole: selectedRoles[0] }),
+      });
+      const previewBody = await preview.json().catch(() => null);
+      if (!preview.ok) {
+        toast.error(previewBody?.message ?? "Non siamo riusciti a creare l'anteprima. Riprova.");
+        return;
+      }
+      setDemo(previewBody as OnboardingDemo);
+      toast.success("La tua anteprima personalizzata è pronta.");
+      return;
+    }
+
+    const complete = await fetch("/api/onboarding/demo/complete", { method: "POST" });
+    if (!complete.ok) {
+      const error = await complete.json().catch(() => null);
+      toast.error(error?.message ?? t("retryError"));
+      return;
+    }
+
+    // L'utente ha visto il risultato: ora chiediamo il metodo di pagamento.
     await fetch("/api/onboarding/welcome-seen", { method: "POST" }).catch(
       () => null,
     );
@@ -401,6 +435,7 @@ export default function OnboardingClient({
                 .map((l) => l.city)
                 .join(" · ")}
               details={details}
+              demo={demo}
             />
           )}
         </div>
@@ -435,7 +470,11 @@ export default function OnboardingClient({
               cursor: finishing || uploading || savingDetails || (step === 0 && !canContinueStep0) ? "not-allowed" : "pointer",
             }}
           >
-            {finishing ? t("activating") : step === stepsLocalized.length - 1 ? t("activateAutoApply") : t("continue")}{" "}
+            {finishing
+              ? (demo ? "Apertura attivazione…" : "Creo la tua anteprima…")
+              : step === stepsLocalized.length - 1
+                ? (demo ? "Continua all'attivazione" : "Vedi CV e lettera personalizzati")
+                : t("continue")}{" "}
             <Icon name="arrow-right" size={13} />
           </button>
         </div>
@@ -1450,11 +1489,13 @@ function StepConfirm({
   rolesSelected,
   locationsSummary,
   details,
+  demo,
 }: {
   salary: number;
   rolesSelected: number;
   locationsSummary: string;
   details: Details;
+  demo: OnboardingDemo | null;
 }) {
   const t = useTranslations("onboarding");
   const seniorityLabel: Record<Seniority, string> = {
@@ -1473,8 +1514,40 @@ function StepConfirm({
 
   return (
     <>
-      <h1 style={stepTitle}>{t("confirmTitle")}</h1>
-      <p style={stepLead}>{t("confirmBody")}</p>
+      <h1 style={stepTitle}>{demo ? "Il tuo primo risultato è pronto." : "Prima, guarda cosa cambia per te."}</h1>
+      <p style={stepLead}>
+        {demo
+          ? "Abbiamo adattato il tuo profilo a una posizione concreta e preparato una lettera coerente. Questa è solo un’anteprima: non è stata inviata alcuna candidatura."
+          : "Creiamo una piccola anteprima personale: un CV migliorato e una lettera di presentazione per un ruolo compatibile con le tue preferenze."}
+      </p>
+      {demo && (
+        <div
+          className="ds-card"
+          style={{
+            padding: 18,
+            marginBottom: 14,
+            borderColor: "color-mix(in srgb, var(--primary-ds) 45%, transparent)",
+            background: "linear-gradient(135deg, color-mix(in srgb, var(--primary-ds) 12%, var(--bg-sunken)), var(--bg-sunken))",
+          }}
+        >
+          <div className="mono" style={{ fontSize: 10, color: "var(--primary-ds)", letterSpacing: ".12em" }}>ANTEPRIMA PERSONALIZZATA</div>
+          <div style={{ marginTop: 7, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{demo.target.title}</div>
+              <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 3 }}>{[demo.target.company, demo.target.location].filter(Boolean).join(" · ") || "Ruolo scelto da te"}</div>
+            </div>
+            <span className="ds-chip ds-chip-green">ATS {demo.atsScore}/100</span>
+          </div>
+          <p style={{ margin: "14px 0 10px", fontSize: 13, lineHeight: 1.55, color: "var(--fg-muted)" }}>{demo.summary}</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {demo.skills.map((skill) => <span key={skill} className="ds-chip" style={{ fontSize: 11 }}>{skill}</span>)}
+          </div>
+          <div style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 650, marginBottom: 7 }}>Lettera di presentazione</div>
+            <p style={{ margin: 0, whiteSpace: "pre-line", fontSize: 12.5, lineHeight: 1.6, color: "var(--fg-muted)", maxHeight: 170, overflowY: "auto", paddingRight: 4 }}>{demo.coverLetter}</p>
+          </div>
+        </div>
+      )}
       <div
         className="ds-card"
         style={{ padding: 18, background: "var(--bg-sunken)" }}

@@ -76,6 +76,12 @@ export async function POST(request: NextRequest) {
 
     const cv = await prisma.$transaction(async (tx) => {
       await tx.cVDocument.deleteMany({ where: { userId: user.id } });
+      // Un CV nuovo merita una nuova anteprima; non riutilizziamo un risultato
+      // creato su un documento diverso nel funnel di attivazione.
+      await tx.user.update({
+        where: { id: user.id },
+        data: { demoGeneratedAt: null, demoCompletedAt: null },
+      });
       return tx.cVDocument.create({
       data: {
         userId: user.id,

@@ -22,7 +22,7 @@ export default async function StartMembershipPage({
   if (isAdmin(user.email)) redirect("/dashboard");
   if (isApplicationAccessPaused(user)) redirect("/trial-expired");
   if (!requiresPaymentMethodBeforeApp(user)) redirect("/dashboard");
-  const readiness = await getActivationReadiness(user.id);
+  const readiness = await getActivationReadiness(user.id, { requireDemo: true });
   if (!readiness.ready) redirect("/onboarding");
 
   const endsAt = trialEnd(user);

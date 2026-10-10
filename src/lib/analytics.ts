@@ -36,6 +36,7 @@ export const AnalyticsEvent = {
   SIGNUP_FAIL: "signup_fail",
   EMAIL_VERIFY_OPEN: "email_verify_open",
   ONBOARDING_CV_UPLOADED: "onboarding_cv_uploaded",
+  ONBOARDING_DEMO_VIEWED: "onboarding_demo_viewed",
   ONBOARDING_COMPLETED: "onboarding_completed",
   TRIAL_STARTED: "trial_started",
   CHECKOUT_STARTED: "checkout_started",
