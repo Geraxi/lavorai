@@ -4,7 +4,7 @@ import { extractProfile, type ExtractedProfile } from "@/lib/cv-profile";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
-import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { isApplicationAccessPaused } from "@/lib/billing";
 import OnboardingClient from "./onboarding-client";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +16,12 @@ export default async function OnboardingPage() {
     return null;
   }
 
-  // Onboarding è fuori da `(app)`: il gate va applicato anche qui, altrimenti
-  // un link diretto permetterebbe di bypassare la raccolta del metodo.
+  // Onboarding viene prima della raccolta del metodo di pagamento: l'utente
+  // deve poter caricare il CV e definire la ricerca prima di arrivare a
+  // Stripe. L'app vera e propria resta comunque bloccata dal gate in `(app)`.
   const user = await getCurrentUser();
   if (user && !isAdmin(user.email)) {
     if (isApplicationAccessPaused(user)) redirect("/trial-expired");
-    if (requiresPaymentMethodBeforeApp(user)) redirect("/start-membership");
   }
 
   const cv = await prisma.cVDocument.findFirst({

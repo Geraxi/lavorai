@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
-import { dailyApplicationLimit, getLimits, effectiveTier } from "@/lib/billing";
+import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { resolveSession } from "@/lib/apply-session";
@@ -54,6 +54,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "activation_incomplete", issue: "verify_email", message: "Verifica prima la tua email per attivare le candidature." },
         { status: 409 },
+      );
+    }
+
+    if (requiresPaymentMethodBeforeApp(user)) {
+      return NextResponse.json(
+        { error: "payment_method_required", message: "Completa l'attivazione del pagamento per iniziare a candidarti.", redirect: "/start-membership" },
+        { status: 402 },
       );
     }
 

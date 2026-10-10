@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { runAutoApplyForUser } from "@/lib/auto-apply-cron";
+import { requiresPaymentMethodBeforeApp } from "@/lib/billing";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -25,6 +26,13 @@ export async function POST() {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+
+  if (requiresPaymentMethodBeforeApp(user)) {
+    return NextResponse.json(
+      { error: "payment_method_required", message: "Completa l'attivazione del pagamento prima di avviare le candidature.", redirect: "/start-membership" },
+      { status: 402 },
+    );
   }
 
   const existingApps = await prisma.application.count({

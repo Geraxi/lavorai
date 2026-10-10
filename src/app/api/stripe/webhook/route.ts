@@ -48,7 +48,12 @@ export async function POST(request: NextRequest) {
         // (endpoint config incompleta, race, filtro eventi) l'evento
         // subscription non arriva, questo garantisce comunque l'upgrade.
         const sess = event.data.object as Stripe.Checkout.Session;
-        if (sess.mode !== "subscription" || sess.payment_status !== "paid") break;
+        // Con una prova gratuita Stripe non addebita nulla oggi e segnala
+        // correttamente `no_payment_required`, pur avendo già raccolto il
+        // metodo di pagamento. Trattarlo come un checkout fallito lasciava
+        // l'utente bloccato dopo Stripe senza subscription nel DB.
+        const completedCheckout = sess.payment_status === "paid" || sess.payment_status === "no_payment_required";
+        if (sess.mode !== "subscription" || !completedCheckout) break;
         const customerId =
           typeof sess.customer === "string" ? sess.customer : sess.customer?.id;
         const subscriptionId =
@@ -114,16 +119,21 @@ export async function POST(request: NextRequest) {
             userId: convertedUser.id,
             plan: tier,
             valueCents: Math.round(TIERS[tier].price * 100),
-            properties: { stripeStatus: sub.status },
+            properties: { stripeStatus: sub.status, checkoutPaymentStatus: sess.payment_status },
             dedupeKey: `subscription_started:${sub.id}`,
           });
-          await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
-            userId: convertedUser.id,
-            plan: tier,
-            valueCents: Math.round(TIERS[tier].price * 100),
-            properties: { stripeStatus: sub.status, checkoutPaid: true },
-            dedupeKey: `purchase_completed:${sub.id}`,
-          });
+          // "purchase_completed" significa addebito effettuato, non solo
+          // carta raccolta per una prova: mantenerlo separato evita di
+          // gonfiare revenue/conversion reporting nei primi 7 giorni.
+          if (sess.payment_status === "paid") {
+            await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
+              userId: convertedUser.id,
+              plan: tier,
+              valueCents: Math.round(TIERS[tier].price * 100),
+              properties: { stripeStatus: sub.status, checkoutPaid: true },
+              dedupeKey: `purchase_completed:${sub.id}`,
+            });
+          }
         }
         break;
       }
