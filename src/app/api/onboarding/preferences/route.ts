@@ -80,7 +80,10 @@ export async function POST(request: NextRequest) {
     }),
   ]);
 
-  const readiness = await getActivationReadiness(user.id, { requireVerifiedEmail: false });
+  // Non segnare l'onboarding come concluso per account non verificati:
+  // altrimenti l'utente sembra pronto nell'admin, ma non può ricevere
+  // candidature né completare un checkout affidabile.
+  const readiness = await getActivationReadiness(user.id);
   if (!readiness.ready) {
     return NextResponse.json({ error: "activation_incomplete", issue: readiness.issue, message: ACTIVATION_MESSAGES[readiness.issue!] }, { status: 409 });
   }

@@ -277,7 +277,10 @@ export default function OnboardingClient({
       () => null,
     );
     await updateSession().catch(() => null);
-    router.push("/dashboard");
+    // Il setup è completo: ora raccogliamo il metodo di pagamento su Stripe.
+    // Il gate server-side impedisce comunque di saltare questo passaggio con
+    // un URL diretto verso la dashboard o le API di candidatura.
+    router.push("/start-membership");
     router.refresh();
     } catch {
       toast.error(t("retryError"));

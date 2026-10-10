@@ -4,7 +4,7 @@ import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
-import { dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused } from "@/lib/billing";
+import { dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { runSelfHeal } from "@/lib/auto-apply-self-heal";
 import { recordConversionEvent } from "@/lib/conversion-events";
@@ -477,6 +477,12 @@ async function processUser(
     where: { userId: user.id, createdAt: { gte: todayStart }, status: { not: "failed" } },
   });
   if (isApplicationAccessPaused(user)) {
+    stats.skippedMonthlyPaywall++;
+    return;
+  }
+  // Una prova senza metodo di pagamento non può consumare crediti o creare
+  // candidature: l'utente deve prima completare il checkout Stripe.
+  if (requiresPaymentMethodBeforeApp(user)) {
     stats.skippedMonthlyPaywall++;
     return;
   }

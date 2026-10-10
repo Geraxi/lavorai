@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd } from "@/lib/billing";
+import { getActivationReadiness } from "@/lib/activation-readiness";
 import { StartMembershipActions } from "./start-membership-actions";
 import { UserPopup } from "@/components/user-popup";
 
@@ -21,6 +22,8 @@ export default async function StartMembershipPage({
   if (isAdmin(user.email)) redirect("/dashboard");
   if (isApplicationAccessPaused(user)) redirect("/trial-expired");
   if (!requiresPaymentMethodBeforeApp(user)) redirect("/dashboard");
+  const readiness = await getActivationReadiness(user.id);
+  if (!readiness.ready) redirect("/onboarding");
 
   const endsAt = trialEnd(user);
   const date = endsAt?.toLocaleDateString("it-IT", { day: "numeric", month: "long" }) ?? "tra 7 giorni";

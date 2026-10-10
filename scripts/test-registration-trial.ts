@@ -2,7 +2,7 @@ import { encode } from "next-auth/jwt";
 import { NextRequest } from "next/server";
 import { proxy } from "../src/proxy";
 import assert from "node:assert/strict";
-import { registrationTrialEnd, trialState, effectiveTier, isApplicationAccessPaused, dailyApplicationLimit, FREE_TRIAL_DAILY_APPLICATION_LIMIT, EARLY_USER_TRIAL_COHORT_CUTOFF, EARLY_USER_TRIAL_FINAL_END } from "../src/lib/billing";
+import { registrationTrialEnd, trialState, effectiveTier, isApplicationAccessPaused, dailyApplicationLimit, requiresPaymentMethodBeforeApp, FREE_TRIAL_DAILY_APPLICATION_LIMIT, EARLY_USER_TRIAL_COHORT_CUTOFF, EARLY_USER_TRIAL_FINAL_END } from "../src/lib/billing";
 import { requiresTrialAccess } from "../src/lib/trial-access";
 import { prisma } from "../src/lib/db";
 import { reserveTrialApplication } from "../src/lib/trial-quota";
@@ -14,6 +14,9 @@ async function main() {
   assert.equal(registrationTrialEnd("2026-01-29T12:00:00Z").toISOString(), "2026-02-05T12:00:00.000Z");
   assert.equal(trialState(active).status, "active", "Signup without onboarding has an active trial");
   assert.equal(effectiveTier(active), "pro");
+  assert.equal(requiresPaymentMethodBeforeApp(active), true, "A free trial cannot enter the app or submit applications before Stripe has collected a payment method");
+  assert.equal(requiresPaymentMethodBeforeApp({ ...active, subscriptionStatus: "trialing" }), false, "A Stripe trial subscription unlocks the app");
+  assert.equal(requiresPaymentMethodBeforeApp({ ...active, tier: "pro" }), false, "A paid tier is never blocked by the new-member gate");
   assert.equal(trialState(expired).status, "ended", "Delayed setup or stored extension must not restart trial");
   assert.equal(isApplicationAccessPaused(expired), true);
   const legacy = { ...expired, createdAt: new Date("2026-09-01T12:00:00Z"), trialGraceEndsAt: new Date("2026-09-20T12:00:00Z") };

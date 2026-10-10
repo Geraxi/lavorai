@@ -3,9 +3,10 @@ import { z } from "zod";
 import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { TIERS, trialEnd, type Tier } from "@/lib/billing";
+import { TIERS, trialEnd, requiresPaymentMethodBeforeApp, type Tier } from "@/lib/billing";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
+import { ACTIVATION_MESSAGES, getActivationReadiness } from "@/lib/activation-readiness";
 
 export const runtime = "nodejs";
 
@@ -24,6 +25,23 @@ export async function POST(request: NextRequest) {
       { error: "unauthenticated", message: "Devi loggarti." },
       { status: 401 },
     );
+  }
+
+  // Require setup before activating a new trial. Expired users must still
+  // be able to resubscribe because onboarding is blocked after expiry.
+  if (requiresPaymentMethodBeforeApp(user)) {
+    const readiness = await getActivationReadiness(user.id);
+    if (!readiness.ready) {
+      return NextResponse.json(
+        {
+          error: "activation_incomplete",
+          issue: readiness.issue,
+          message: ACTIVATION_MESSAGES[readiness.issue!],
+          redirect: "/onboarding",
+        },
+        { status: 409 },
+      );
+    }
   }
 
   const body = await request.json().catch(() => null);

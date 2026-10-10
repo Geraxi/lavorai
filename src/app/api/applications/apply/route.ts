@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
-import { dailyApplicationLimit, getLimits, effectiveTier } from "@/lib/billing";
+import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
 import { applyLimiter } from "@/lib/rate-limit";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -36,6 +36,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "unauthenticated", message: "Devi loggarti per candidarti." },
         { status: 401 },
+      );
+    }
+
+    if (requiresPaymentMethodBeforeApp(user)) {
+      return NextResponse.json(
+        { error: "payment_method_required", message: "Completa l'attivazione del pagamento per iniziare a candidarti.", redirect: "/start-membership" },
+        { status: 402 },
       );
     }
 
