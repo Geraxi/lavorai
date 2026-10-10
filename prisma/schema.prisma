@@ -139,6 +139,10 @@ model User {
 
   // Onboarding / lifecycle
   welcomeSeenAt    DateTime?
+  /// Anteprima gratuita CV + lettera generata nel percorso di attivazione.
+  /// Serve a far vedere valore prima di chiedere il metodo di pagamento.
+  demoGeneratedAt  DateTime?
+  demoCompletedAt  DateTime?
   onboardedAt      DateTime?
   lastLoginAt      DateTime?
   privacyConsentAt DateTime?

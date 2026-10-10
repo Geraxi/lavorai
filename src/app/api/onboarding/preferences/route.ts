@@ -2,8 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { OnboardingPreferencesSchema as Schema } from "@/lib/onboarding-preferences";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { AnalyticsEvent } from "@/lib/analytics";
-import { recordConversionEvent } from "@/lib/conversion-events";
 import { ACTIVATION_MESSAGES, getActivationReadiness } from "@/lib/activation-readiness";
 
 export const runtime = "nodejs";
@@ -88,13 +86,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "activation_incomplete", issue: readiness.issue, message: ACTIVATION_MESSAGES[readiness.issue!] }, { status: 409 });
   }
 
-  await prisma.user.updateMany({ where: { id: user.id, onboardedAt: null }, data: { onboardedAt: new Date() } });
-
-  await recordConversionEvent(AnalyticsEvent.ONBOARDING_COMPLETED, {
-    userId: user.id,
-    path: "/onboarding",
-    properties: { roles: roles.length, locations: locations.length },
-    dedupeKey: `onboarding_completed:${user.id}`,
-  });
-  return NextResponse.json({ ok: true, trialStarted: false, trialEndsAt: user.trialEndsAt, verifyRequired: !beforePreferences.emailVerified });
+  // Le preferenze rendono l'utente pronto per una preview, ma non segnano
+  // ancora l'onboarding come completato: prima deve vedere il valore reale
+  // (CV + lettera personalizzati), poi potrà attivare il pagamento.
+  return NextResponse.json({ ok: true, readyForPreview: true, verifyRequired: !beforePreferences.emailVerified });
 }

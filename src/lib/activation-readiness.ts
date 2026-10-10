@@ -6,7 +6,8 @@ export type ActivationIssue =
   | "choose_role"
   | "choose_location"
   | "choose_work_mode"
-  | "add_professional_details";
+  | "add_professional_details"
+  | "preview_demo";
 
 function hasItems(value: string | null | undefined) {
   try {
@@ -17,7 +18,13 @@ function hasItems(value: string | null | undefined) {
   }
 }
 
-export async function getActivationReadiness(userId: string, { requireVerifiedEmail = true }: { requireVerifiedEmail?: boolean } = {}) {
+export async function getActivationReadiness(
+  userId: string,
+  {
+    requireVerifiedEmail = true,
+    requireDemo = false,
+  }: { requireVerifiedEmail?: boolean; requireDemo?: boolean } = {},
+) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -25,6 +32,7 @@ export async function getActivationReadiness(userId: string, { requireVerifiedEm
       seniority: true,
       englishLevel: true,
       noticePeriod: true,
+      demoCompletedAt: true,
       _count: { select: { cvDocuments: true } },
       preferences: { select: { rolesJson: true, locationsJson: true, sourcesJson: true } },
     },
@@ -39,6 +47,9 @@ export async function getActivationReadiness(userId: string, { requireVerifiedEm
   if (!user.seniority || !user.englishLevel || !user.noticePeriod) {
     return { ready: false, issue: "add_professional_details" as ActivationIssue };
   }
+  if (requireDemo && !user.demoCompletedAt) {
+    return { ready: false, issue: "preview_demo" as ActivationIssue };
+  }
   return { ready: true, issue: null };
 }
 
@@ -49,4 +60,5 @@ export const ACTIVATION_MESSAGES: Record<ActivationIssue, string> = {
   choose_location: "Scegli almeno una località di ricerca.",
   choose_work_mode: "Scegli almeno una modalità di lavoro.",
   add_professional_details: "Completa seniority, inglese e preavviso per ricevere candidature mirate.",
+  preview_demo: "Guarda prima l'anteprima del tuo CV e della lettera personalizzati.",
 };

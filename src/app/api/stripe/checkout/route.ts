@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   // Require setup before activating a new trial. Expired users must still
   // be able to resubscribe because onboarding is blocked after expiry.
   if (requiresPaymentMethodBeforeApp(user)) {
-    const readiness = await getActivationReadiness(user.id);
+    const readiness = await getActivationReadiness(user.id, { requireDemo: true });
     if (!readiness.ready) {
       return NextResponse.json(
         {
