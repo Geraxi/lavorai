@@ -26,6 +26,7 @@ export function GoogleButton({
   callbackUrl?: string;
 }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const t = useTranslations("auth");
   const enabled = process.env.NEXT_PUBLIC_GOOGLE_ENABLED === "true";
   if (!enabled) return null;
@@ -53,9 +54,29 @@ export function GoogleButton({
     <button
       type="button"
       disabled={loading}
-      onClick={() => {
+      onClick={async () => {
         setLoading(true);
-        signIn("google", { callbackUrl });
+        setError(null);
+        try {
+          // Ask Auth.js for the authorization URL explicitly, then navigate.
+          // This avoids a silent no-op when a browser interrupts Auth.js'
+          // internal redirect assignment (for example after a passkey prompt).
+          const result = await signIn("google", {
+            callbackUrl,
+            redirect: false,
+          });
+
+          if (result?.url) {
+            window.location.assign(result.url);
+            return;
+          }
+
+          setError("Impossibile avviare l'accesso con Google. Riprova.");
+        } catch {
+          setError("Impossibile avviare l'accesso con Google. Riprova.");
+        } finally {
+          setLoading(false);
+        }
       }}
       style={{
         width: "100%",
@@ -78,14 +99,25 @@ export function GoogleButton({
     </button>
   );
 
+  const content = (
+    <>
+      {button}
+      {error && (
+        <p role="alert" style={{ margin: "8px 0 0", color: "#f87171", fontSize: 12 }}>
+          {error}
+        </p>
+      )}
+    </>
+  );
+
   return position === "below" ? (
     <>
       {divider}
-      {button}
+      {content}
     </>
   ) : (
     <>
-      {button}
+      {content}
       {divider}
     </>
   );
