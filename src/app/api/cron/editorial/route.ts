@@ -6,8 +6,9 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * Due bozze a settimana, mai auto-pubblicate. Il ritmo è intenzionale:
- * qualità e revisione battono la quantità per una guida che deve durare.
+ * Una bozza per ogni giorno lavorativo, mai auto-pubblicata. Il ritmo aumenta
+ * la copertura delle query senza sacrificare qualità: ogni guida resta in
+ * revisione editoriale prima di poter comparire nel sito o nella sitemap.
  */
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;

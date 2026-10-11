@@ -15,10 +15,15 @@ import { isRemoteJob } from "@/lib/job-seo";
 export const revalidate = 1800;
 
 export const metadata: Metadata = {
-  title: "Offerte di lavoro aggiornate ogni giorno: candidati in un clic",
+  title: "Trova lavoro: offerte aggiornate e candidature in un clic",
   description:
-    "Migliaia di offerte di lavoro in Italia e da remoto, raccolte dai portali delle aziende. Con LavorAI ti candidi in un clic: CV ottimizzato e lettera inclusi.",
+    "Trova lavoro in Italia o da remoto tra offerte aggiornate dai portali delle aziende. Cerca per ruolo e città, poi candidati con CV e lettera su misura.",
   alternates: { canonical: "/lavoro" },
+  openGraph: {
+    title: "Trova lavoro tra offerte aggiornate ogni giorno | LavorAI",
+    description: "Cerca offerte per ruolo, città o lavoro da remoto. LavorAI prepara CV e lettera su misura per ogni candidatura.",
+    url: "/lavoro",
+  },
 };
 
 const CITIES = ["Milano", "Roma", "Torino", "Bologna", "Firenze", "Napoli", "Padova", "Verona", "Genova", "Bari"];
@@ -53,11 +58,43 @@ export default async function LavoroHub({ searchParams }: { searchParams: Promis
         ? `Offerte di lavoro a ${citta}`
         : q
           ? `Offerte di lavoro: ${q}`
-          : "Offerte di lavoro aggiornate ogni giorno";
+          : "Trova lavoro tra offerte aggiornate ogni giorno";
+
+  const faq = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: [
+      {
+        "@type": "Question",
+        name: "Come posso trovare lavoro su LavorAI?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Cerca un ruolo o una città, apri le offerte aggiornate e candidati. Dopo la registrazione puoi anche impostare preferenze e ricevere candidature preparate sui lavori compatibili.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Le offerte di lavoro sono aggiornate?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Mostriamo offerte ancora attive e raccolte dai portali delle aziende. Il pool viene aggiornato regolarmente; ogni scheda indica azienda, posizione e località disponibili.",
+        },
+      },
+      {
+        "@type": "Question",
+        name: "Posso cercare lavoro da remoto?",
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: "Sì. Usa il filtro Remoto per vedere le offerte che dichiarano esplicitamente lavoro da remoto, poi verifica i requisiti di località nella singola offerta.",
+        },
+      },
+    ],
+  };
 
   return (
     <div className="flex min-h-screen flex-col">
       <SiteNav />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faq) }} />
       <main className="gd-main flex-1">
         <div className="gd-wrap gd-article">
           <nav aria-label="breadcrumb" className="gd-crumbs">
@@ -65,7 +102,7 @@ export default async function LavoroHub({ searchParams }: { searchParams: Promis
           </nav>
           <h1>{heading}</h1>
           <p className="gd-lead">
-            {total.toLocaleString("it-IT")} offerte attive raccolte direttamente dai portali delle aziende (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee, EURES e altri). Con LavorAI ti candidi in un clic, oppure lasci che si candidi lui ogni giorno al posto tuo.
+            Cerca tra {total.toLocaleString("it-IT")} offerte attive raccolte direttamente dai portali delle aziende (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee, EURES e altri). Filtra per ruolo, città o remoto. Con LavorAI puoi candidarti in un clic oppure automatizzare la parte ripetitiva dopo aver configurato le tue preferenze.
           </p>
 
           <form action="/lavoro" method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 16px" }}>
@@ -102,9 +139,9 @@ export default async function LavoroHub({ searchParams }: { searchParams: Promis
           )}
 
           <aside className="gd-cta">
-            <h2 style={{ marginTop: 0 }}>Stanco di compilare form?</h2>
-            <p>LavorAI trova le offerte compatibili con il tuo profilo e si candida al posto tuo, ogni giorno, con CV e lettera su misura.</p>
-            <Link href="/signup" className="gd-cta-btn">Inizia gratis →</Link>
+            <h2 style={{ marginTop: 0 }}>Hai trovato un&apos;offerta interessante?</h2>
+            <p>Carica il CV: LavorAI lo adatta al ruolo e prepara anche una lettera di presentazione basata sull&apos;annuncio, prima dell&apos;invio.</p>
+            <Link href="/signup" className="gd-cta-btn">Prepara la candidatura →</Link>
           </aside>
         </div>
       </main>

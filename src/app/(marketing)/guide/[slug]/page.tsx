@@ -97,6 +97,9 @@ export default async function GuidePage({ params }: { params: Promise<Params> })
           <p className="gd-meta">
             Aggiornato il {fmtDate(g.updated)} · {readingMinutes(g)} min di lettura · di LavorAI
           </p>
+          <p className="gd-meta">
+            Guida pratica preparata dal team LavorAI e da verificare rispetto alla tua situazione specifica.
+          </p>
           {g.intro.map((p, i) => <p key={i} className="gd-lead">{p}</p>)}
 
           {g.sections.map((s) => (

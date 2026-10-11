@@ -9,8 +9,6 @@ import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/design/icon";
 import { GoogleButton } from "@/components/google-signin-button";
 import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
-import { JobNetworkScene } from "@/components/job-network-scene";
-import "@/components/job-network-scene.css";
 
 export default function SignupPage() {
   return (
@@ -417,7 +415,6 @@ function SignupContent() {
 
       {/* RIGHT — showcase (solo desktop) */}
       <div className="lavorai-login-right">
-        <JobNetworkScene compact />
         <div
           className="lavorai-login-showcase"
           style={{
@@ -476,9 +473,10 @@ function SignupContent() {
         .lavorai-login-right {
           position: relative;
           overflow: hidden;
-          /* Foto asset /public/login-hero.jpg + fallback verde brand
-             se l'asset manca in prod. Vedi commento identico su /login. */
-          background: radial-gradient(ellipse 75% 70% at 70% 48%, rgba(8,70,91,.32), transparent 65%), #010510;
+          /* Una sola scena composita: non sovrapponiamo un PNG del globo
+             separato. Questo elimina il bordo orizzontale visibile nel
+             vecchio compositing ed evita che la Terra sembri fluttuare. */
+          background: #02060d url("/login-showcase-scene.jpg") center / cover no-repeat;
           padding: 80px 56px;
           display: flex;
           flex-direction: column;
@@ -491,7 +489,8 @@ function SignupContent() {
           position: absolute;
           inset: 0;
           background:
-            linear-gradient(90deg, rgba(1,5,16,0.78) 0%, rgba(1,5,16,0.55) 40%, rgba(1,5,16,0.2) 75%, rgba(1,5,16,0) 100%);
+            linear-gradient(90deg, rgba(1,5,16,0.9) 0%, rgba(1,5,16,0.68) 42%, rgba(1,5,16,0.18) 100%),
+            linear-gradient(0deg, rgba(1,5,16,0.34), rgba(1,5,16,0.04) 58%);
           pointer-events: none;
         }
         .lavorai-login-showcase { max-width: 520px; }
