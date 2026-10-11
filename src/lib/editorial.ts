@@ -25,9 +25,9 @@ export type EditorialTopic = {
 };
 
 /**
- * Calendario editoriale deliberatamente stretto: query con un'intenzione
- * concreta, utili a chi cerca lavoro e vicine al prodotto. Non una content
- * farm di varianti città/ruolo quasi identiche.
+ * Calendario editoriale: query con un'intenzione concreta, utili a chi cerca
+ * lavoro e vicine al prodotto. Non è una content farm di varianti città/ruolo
+ * quasi identiche: ogni topic deve meritare una guida distinta e revisionata.
  */
 export const EDITORIAL_TOPICS: EditorialTopic[] = [
   { slug: "come-cercare-lavoro-linkedin", keyword: "come cercare lavoro su LinkedIn", category: "Candidature", angle: "Procedura concreta: filtri, alert, verifica della fonte ATS e tracciamento delle candidature." },
@@ -35,9 +35,26 @@ export const EDITORIAL_TOPICS: EditorialTopic[] = [
   { slug: "follow-up-candidatura-esempio", keyword: "follow up candidatura esempio", category: "Candidature", angle: "Quando scrivere, come non essere insistenti e tre template adattabili senza inventare informazioni." },
   { slug: "domande-colloquio-lavoro", keyword: "domande colloquio di lavoro", category: "Colloquio", angle: "Preparazione con storie verificabili, domande da fare al recruiter e metodo STAR senza frasi fatte." },
   { slug: "come-negoziare-stipendio", keyword: "come negoziare lo stipendio", category: "Colloquio", angle: "Preparazione, range, proposta e controproposta: guida pratica senza promettere risultati." },
-  { slug: "candidatura-spontanea-email", keyword: "candidatura spontanea email esempio", category: "Candidature", angle: "Quando funziona, come scegliere l'azienda e una struttura email breve che porta a una conversazione." },
   { slug: "portfolio-ux-designer", keyword: "portfolio UX designer", category: "CV", angle: "Come selezionare case study, mostrare decisioni e collegare il portfolio alla posizione desiderata." },
   { slug: "job-alert-efficaci", keyword: "job alert lavoro", category: "Strumenti", angle: "Come impostare alert utili senza ricevere rumore: ruoli, seniority, località, lingua e fonti." },
+  { slug: "come-scrivere-cv-senza-esperienza", keyword: "come scrivere un cv senza esperienza", category: "CV", angle: "Struttura per neolaureati e career switcher: progetti, tirocinio, risultati e competenze senza gonfiare il profilo." },
+  { slug: "competenze-cv-esempi", keyword: "competenze da inserire nel cv", category: "CV", angle: "Come scegliere hard skill e soft skill rilevanti dall'annuncio, con esempi per funzioni professionali diverse." },
+  { slug: "cv-europass-2026", keyword: "cv europass", category: "CV", angle: "Quando usare Europass, quando evitarlo e come renderlo leggibile dai software di recruiting." },
+  { slug: "curriculum-vitae-esempio", keyword: "curriculum vitae esempio", category: "CV", angle: "Un modello ragionato sezione per sezione: profilo, esperienze, risultati e competenze; niente template vuoti." },
+  { slug: "linkedin-profilo-ottimizzato", keyword: "come ottimizzare profilo LinkedIn", category: "CV", angle: "Headline, riepilogo, esperienze e keyword: checklist pratica per farsi trovare senza inventare titoli." },
+  { slug: "candidarsi-lavoro-estero", keyword: "come candidarsi per lavorare all'estero", category: "Candidature", angle: "Documenti, lingua, autorizzazione al lavoro, fonti e candidatura: una checklist per chi cerca in Europa." },
+  { slug: "come-candidarsi-lavoro-remoto", keyword: "come trovare lavoro da remoto", category: "Candidature", angle: "Dove cercare, come verificare che un annuncio sia davvero remoto e come presentare disponibilità e fuso orario." },
+  { slug: "lettera-motivazionale-esempio", keyword: "lettera motivazionale esempio", category: "Candidature", angle: "Quando differisce dalla cover letter e come scriverla per master, stage e programmi di selezione senza frasi fatte." },
+  { slug: "come-rispondere-annuncio-lavoro", keyword: "come rispondere a un annuncio di lavoro", category: "Candidature", angle: "Cosa allegare, cosa scrivere nel form e come adattare CV e messaggio all'annuncio prima di inviare." },
+  { slug: "stato-candidatura-inviata", keyword: "candidatura inviata cosa significa", category: "Candidature", angle: "Cosa succede dopo l'invio, tempi realistici, segnali da monitorare e quando fare follow-up." },
+  { slug: "come-prepararsi-colloquio", keyword: "come prepararsi a un colloquio di lavoro", category: "Colloquio", angle: "Piano in 45 minuti: azienda, annuncio, storie STAR e domande finali per arrivare preparati senza imparare un copione." },
+  { slug: "pregi-difetti-colloquio", keyword: "pregi e difetti colloquio esempi", category: "Colloquio", angle: "Come rispondere in modo credibile, con esempi di sviluppo reale invece di difetti finti." },
+  { slug: "domande-da-fare-al-recruiter", keyword: "domande da fare al recruiter", category: "Colloquio", angle: "Le domande che chiariscono ruolo, team, processo e aspettative, organizzate per fase del colloquio." },
+  { slug: "come-rispondere-perche-dovremmo-assumerti", keyword: "perche dovremmo assumerti risposta", category: "Colloquio", angle: "Un metodo per collegare requisiti del ruolo, prove dal CV e contributo concreto nei primi mesi." },
+  { slug: "simulazione-colloquio-online", keyword: "simulazione colloquio di lavoro", category: "Strumenti", angle: "Come fare una simulazione utile: domande specifiche per ruolo, registrazione, autovalutazione e iterazione." },
+  { slug: "come-usare-ai-per-cercare-lavoro", keyword: "come usare AI per cercare lavoro", category: "Strumenti", angle: "Usi concreti e limiti: analisi CV, preparazione al colloquio, ricerca annunci e controllo dei testi prima dell'invio." },
+  { slug: "organizzare-candidature-lavoro", keyword: "come organizzare le candidature di lavoro", category: "Strumenti", angle: "Pipeline semplice, stati, follow-up e metriche personali per non perdere candidature e opportunità." },
+  { slug: "software-ats-cosa-sono", keyword: "software ATS cosa sono", category: "Strumenti", angle: "Come funzionano Greenhouse, Lever e gli altri ATS, cosa vedono i recruiter e come preparare una candidatura leggibile." },
 ];
 
 const system = `Sei l'editor italiano di LavorAI. Scrivi guide accurate, concrete e originali per persone che cercano lavoro. Non inventare statistiche, fonti, risultati, normative o funzionalità. Non usare formule promozionali generiche. Il prodotto LavorAI può comparire solo nella CTA finale, in modo verificabile. Il lettore deve poter agire subito dopo aver letto.`;
