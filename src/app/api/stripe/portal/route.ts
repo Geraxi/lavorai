@@ -1,3 +1,4 @@
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getCurrentUser } from "@/lib/session";
@@ -25,7 +26,7 @@ export async function POST() {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
     const session = await s.billingPortal.sessions.create({
       customer: user.stripeCustomerId,
-      return_url: `${siteUrl}/settings`,
+      return_url: `${siteUrl}${isCardTrialCohort(user) ? "/start-membership" : "/settings"}`,
     });
     return NextResponse.json({ url: session.url });
   } catch (err) {

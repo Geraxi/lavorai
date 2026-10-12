@@ -1,3 +1,4 @@
+import { cardTrialAllowsPaidWork } from "@/lib/card-trial-access";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppTopbar } from "@/components/design/topbar";
@@ -17,6 +18,8 @@ export const dynamic = "force-dynamic";
 export default async function CVPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
+
+  if (!await cardTrialAllowsPaidWork(session.user.id)) redirect("/start-membership");
 
   const [cv, profileRow] = await Promise.all([
     prisma.cVDocument.findFirst({

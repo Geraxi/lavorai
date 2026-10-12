@@ -1,3 +1,4 @@
+import { cardTrialAllowsPaidWork } from "@/lib/card-trial-access";
 import { NextResponse, type NextRequest } from "next/server";
 import OpenAI from "openai";
 import { prisma } from "@/lib/db";
@@ -59,6 +60,8 @@ export async function POST(request: NextRequest) {
       { status: 401 },
     );
   }
+
+  if (!await cardTrialAllowsPaidWork(session.userId)) return NextResponse.json({ error: "payment_required" }, { status: 402 });
 
   if (audio.size < 1000) {
     // Chunk troppo piccolo per essere significativo. Skip silenzioso.

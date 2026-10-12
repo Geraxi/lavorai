@@ -1,3 +1,5 @@
+import { resolveCardTrialPolicy, isCardTrialUser } from "@/lib/card-trial-cohort";
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import NextAuth, { type DefaultSession } from "next-auth";
@@ -57,11 +59,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const normalizedData = {
         ...data,
         email: typeof data.email === "string" ? data.email.trim().toLowerCase() : data.email,
-        trialDurationDays: 7,
-        trialEndsAt: registrationTrialEnd(new Date()),
-        proTrialUsedAt: new Date(),
+        ...(isCardTrialCohort({ createdAt: new Date() })
+          ? { trialEndsAt: null }
+          : { trialDurationDays: 7, trialEndsAt: registrationTrialEnd(new Date()), proTrialUsedAt: new Date() }),
       };
-      return prisma.user.create({ data: normalizedData });
+      const created = await prisma.user.create({ data: normalizedData });
+      await resolveCardTrialPolicy(created);
+      return created;
     },
   },
   // Credentials richiede strategy "jwt" — il Prisma adapter continua
@@ -300,6 +304,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   events: {
     async createUser({ user }) {
+      if (user.id && await isCardTrialUser({ id: user.id, createdAt: new Date() })) return; // No legacy trial/welcome promises before checkout.
       if (user.id) await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
         userId: user.id, plan: "pro", path: "/signup", valueCents: 0,
         properties: { days: 7, applicationLimit: 5 }, dedupeKey: `trial_started:${user.id}`,
@@ -405,7 +410,10 @@ async function adoptStagedCv(userId: string, rawEmail: string): Promise<void> {
   let parsedProfileJson: string | null = null;
   try {
     const { extractProfileAI } = await import("@/lib/cv-profile-ai");
-    const profile = await extractProfileAI(staged.extractedText, email);
+    const owner = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, createdAt: true } });
+    const profile = owner && await isCardTrialUser(owner)
+      ? (await import("@/lib/cv-profile")).extractProfile(staged.extractedText, email)
+      : await extractProfileAI(staged.extractedText, email);
     parsedProfileJson = JSON.stringify(profile);
   } catch (err) {
     console.warn("[adoptStagedCv] profile extraction failed", err);

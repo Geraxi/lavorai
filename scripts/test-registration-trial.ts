@@ -45,6 +45,8 @@ async function main() {
   for (const path of ["/trial-expired", "/api/stripe/checkout", "/api/stripe/webhook", "/api/auth/signout", "/api/account/delete", "/api/gdpr/export", "/api/cron/auto-apply", "/lavoro"]) assert.equal(requiresTrialAccess(path), false, path);
 
   const originalFind = prisma.user.findUnique;
+  const originalQuery = prisma.$queryRaw;
+  (prisma as any).$queryRaw = async () => [{ exists: false }]; // Legacy schema, offline fixture.
   process.env.AUTH_SECRET = "local-test-secret-for-registration-trial-only";
   const cookieName = "__Secure-authjs.session-token";
   const token = await encode({ token: { sub: active.id }, secret: process.env.AUTH_SECRET, salt: cookieName });
@@ -67,6 +69,7 @@ async function main() {
   let currentUser: Omit<typeof active, "trialEndsAt"> & { trialEndsAt: Date | null } = active;
   let tail = Promise.resolve();
   const original = prisma.$transaction;
+  (prisma.user as any).findUnique = async () => currentUser;
   (prisma as any).$transaction = (operation: any) => {
     const result = tail.then(() => operation({
       $queryRaw: async () => [{ "?column?": 1 }],
@@ -87,7 +90,7 @@ async function main() {
     assert.equal(await reserveTrialApplication(active.id, "app-0"), false, "Queued work is blocked after expiry");
     currentUser = { ...expired, tier: "pro" };
     assert.equal(await reserveTrialApplication(active.id, "paid-app"), true, "Payment unlocks worker");
-  } finally { prisma.$transaction = original; }
+  } finally { prisma.$transaction = original; prisma.$queryRaw = originalQuery; prisma.user.findUnique = originalFind; }
   console.log("PASS: signup trial, 7-day boundary, five-per-day cap, expiry gates, worker reservations and payment unlock");
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });

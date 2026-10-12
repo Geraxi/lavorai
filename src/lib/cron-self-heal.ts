@@ -1,3 +1,4 @@
+import { cardTrialAllowsPaidWork } from "@/lib/card-trial-access";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { extractFullProfile } from "@/lib/cv-profile-ai-full";
@@ -65,6 +66,7 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
     .slice(0, MAX_CV_REPARSE_PER_RUN);
 
   for (const u of realBroken) {
+    if (!await cardTrialAllowsPaidWork(u.id)) { report.cvSkipped++; continue; }
     const text = u.cvDocuments[0]?.extractedText;
     if (!text || text.length < 50) {
       report.cvSkipped++;

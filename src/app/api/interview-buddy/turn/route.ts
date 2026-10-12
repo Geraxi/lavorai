@@ -1,3 +1,7 @@
+import { cardTrialPublicAccessRestricted } from "@/lib/card-trial-cohort";
+import { getCurrentUser } from "@/lib/session";
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
+import { hasCardTrialPaidAccess } from "@/lib/card-trial-store";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import {
@@ -42,6 +46,13 @@ const Schema = z.object({
  *  - Al 4° tentativo di start → 402 Payment Required + redirect signup
  */
 export async function POST(request: NextRequest) {
+  // Anonymous cookie quotas are not an entitlement. During rollout, require an
+  // account and enforce new-cohort paid proof at the actual cost boundary.
+  if (await cardTrialPublicAccessRestricted()) {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+    if (isCardTrialCohort(user) && !await hasCardTrialPaidAccess(user.id)) return NextResponse.json({ error: "payment_required" }, { status: 402 });
+  }
   let body: unknown;
   try {
     body = await request.json();

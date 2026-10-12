@@ -1,3 +1,5 @@
+import { resolveCardTrialPolicy } from "@/lib/card-trial-cohort";
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
 import { registrationTrialEnd } from "@/lib/billing";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -140,13 +142,15 @@ export async function POST(request: NextRequest) {
         signupUtmCampaign: attrib.c ?? null,
         signupLandingPath: attrib.p ?? null,
         signupSource: parsed.data.source ?? (parsed.data.promo?.toUpperCase() === "STUDENTI" ? "universita" : parsed.data.protectedCategory ? "categorie_protette" : null),
-        trialDurationDays: 7,
-        trialEndsAt: registrationTrialEnd(new Date()),
-        proTrialUsedAt: new Date(),
+        ...(isCardTrialCohort({ createdAt: new Date() })
+          ? { trialEndsAt: null }
+          : { trialDurationDays: 7, trialEndsAt: registrationTrialEnd(new Date()), proTrialUsedAt: new Date() }),
         ...(parsed.data.protectedCategory ? { preferences: { create: { protectedCategory: true, autoApplyMode: "auto" } } } : {}),
       },
-      select: { id: true, email: true, locale: true, name: true },
+      select: { id: true, email: true, locale: true, name: true, createdAt: true },
     });
+
+    const billingPolicy = await resolveCardTrialPolicy(user);
 
     await recordConversionEvent(AnalyticsEvent.SIGNUP_SUCCESS, {
       userId: user.id,
@@ -161,7 +165,7 @@ export async function POST(request: NextRequest) {
       dedupeKey: `signup_success:${user.id}`,
     });
 
-    await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
+    if (!billingPolicy) await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
       userId: user.id, plan: "pro", path: "/signup", valueCents: 0,
       properties: { days: 7, applicationLimit: 5 }, dedupeKey: `trial_started:${user.id}`,
     });

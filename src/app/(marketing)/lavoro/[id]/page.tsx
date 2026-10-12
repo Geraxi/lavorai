@@ -1,3 +1,4 @@
+import { getResolvedPublicCardTrialCopy } from "@/lib/card-trial-copy-server";
 import { jobSourceLabel } from "@/lib/job-source-label";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -42,6 +43,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
 const fmtDate = (d: Date) => d.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
 
 export default async function PublicJobPage({ params }: { params: Promise<Params> }) {
+  const offer = await getResolvedPublicCardTrialCopy();
   const { id } = await params;
   const job = await prisma.job.findUnique({ where: { id } });
   if (!job) notFound();
@@ -114,7 +116,7 @@ export default async function PublicJobPage({ params }: { params: Promise<Params
           ) : (
             <aside className="gd-cta" style={{ marginTop: 0 }}>
               <h2 style={{ marginTop: 0 }}>Candidati a questa offerta in un clic</h2>
-              <p>LavorAI adatta il tuo CV all&apos;annuncio, scrive la lettera di presentazione e compila il form dell&apos;azienda per te. Prova gratis, senza carta.</p>
+              <p>{offer.active ? offer.disclosure : <>LavorAI adatta il tuo CV all&apos;annuncio, scrive la lettera di presentazione e compila il form dell&apos;azienda per te. Prova gratis, senza carta.</>}</p>
               <Link href={signupHref} className="gd-cta-btn">Candidati con LavorAI →</Link>
               <a href={job.url} target="_blank" rel="nofollow noopener" style={{ marginLeft: 12, fontSize: 13, opacity: 0.8 }}>{jobSourceLabel(job.url) ? `Fonte: ${jobSourceLabel(job.url)} ↗` : "Apri annuncio originale ↗"}</a>
             </aside>

@@ -11,7 +11,11 @@
     "test:mcp": "node --import tsx scripts/test-mcp.ts",
     "worker": "tsx worker.ts",
     "worker:dev": "REDIS_URL=redis://localhost:6379 tsx watch worker.ts",
-    "seed:test-user": "tsx scripts/seed-test-user.ts"
+    "seed:test-user": "tsx scripts/seed-test-user.ts",
+    "test:card-trial": "node --import tsx scripts/test-card-trial-billing.ts && node --import tsx scripts/test-card-trial-preview.ts && node --import tsx scripts/test-card-trial-onboarding.ts && node --import tsx scripts/test-card-trial-copy.ts && node --import tsx scripts/test-card-trial-routing.ts && node --import tsx scripts/test-card-trial-reactivation.ts && node --import tsx scripts/test-card-trial-referral.ts",
+    "test:card-trial:browser": "node scripts/test-card-trial-browser.mjs",
+    "test:card-trial:postgres": "node --import tsx scripts/test-card-trial-postgres.ts",
+    "test:card-trial:build": "node scripts/test-card-trial-full-build.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

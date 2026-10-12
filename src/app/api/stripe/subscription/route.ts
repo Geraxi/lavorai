@@ -1,3 +1,4 @@
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
 import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { prisma } from "@/lib/db";
@@ -77,6 +78,13 @@ export async function POST(req: NextRequest) {
   const comment = (body.comment ?? "").trim().slice(0, 2000) || null;
   const foundViaUs = typeof body.foundViaUs === "boolean" ? body.foundViaUs : null;
   const s = stripe();
+  // All new-cohort lifecycle mutations go through the Stripe portal and the
+  // verified webhook reducer. Legacy resume must never write a paid tier.
+  if (isCardTrialCohort(user)) {
+    if (!user.stripeCustomerId) return NextResponse.json({ error: "no_customer" }, { status: 409 });
+    const portal = await s.billingPortal.sessions.create({ customer: user.stripeCustomerId, return_url: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/start-membership` });
+    return NextResponse.json({ error: "manage_in_portal", url: portal.url }, { status: 409 });
+  }
   const subId = user.stripeSubscriptionId;
 
   const log = (a: string) =>

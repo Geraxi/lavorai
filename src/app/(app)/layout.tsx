@@ -1,3 +1,5 @@
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
+import { hasCardTrialPaidAccess } from "@/lib/card-trial-store";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/design/app-shell";
 import { CommandPalette } from "@/components/design/command-palette";
@@ -35,6 +37,7 @@ export default async function AppLayout({
     return null;
   }
 
+  if (!isAdmin(user.email) && isCardTrialCohort(user) && !await hasCardTrialPaidAccess(user.id)) redirect("/start-membership");
   if (!isAdmin(user.email) && isApplicationAccessPaused(user)) redirect("/trial-expired");
   if (!isAdmin(user.email) && requiresPaymentMethodBeforeApp(user)) redirect("/start-membership");
 

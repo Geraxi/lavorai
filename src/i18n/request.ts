@@ -1,3 +1,5 @@
+import { getResolvedPublicCardTrialCopy } from "@/lib/card-trial-copy-server";
+import { applyPublicCardTrialMessages } from "@/lib/card-trial-copy";
 import { getRequestConfig } from "next-intl/server";
 import { cookies, headers } from "next/headers";
 import { isBotUserAgent } from "@/lib/bot-ua";
@@ -46,8 +48,9 @@ export default getRequestConfig(async () => {
     }
   }
 
+  const offer = await getResolvedPublicCardTrialCopy(locale);
   return {
     locale,
-    messages: (await import(`../../messages/${locale}.json`)).default,
+    messages: applyPublicCardTrialMessages((await import(`../../messages/${locale}.json`)).default, locale, offer.active),
   };
 });

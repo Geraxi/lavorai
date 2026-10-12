@@ -1,3 +1,4 @@
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isApplicationAccessPaused } from "@/lib/billing";
@@ -11,6 +12,7 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
   const confirming = (await searchParams).subscribed === "1";
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  if (isCardTrialCohort(user)) redirect("/start-membership");
   if (isAdmin(user.email) || !isApplicationAccessPaused(user)) redirect("/dashboard");
   const applicationsSent = await prisma.application.count({
     where: { userId: user.id, status: "success" },

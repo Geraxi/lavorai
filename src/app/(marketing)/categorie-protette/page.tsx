@@ -1,3 +1,4 @@
+import { getResolvedPublicCardTrialCopy } from "@/lib/card-trial-copy-server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
@@ -15,14 +16,17 @@ export const revalidate = 1800;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  const offer = await getResolvedPublicCardTrialCopy();
+  return {
   title: "Lavoro categorie protette: offerte L. 68/99 e candidatura automatica",
   description:
     "Offerte di lavoro riservate alle categorie protette (art. 1 e art. 18 L. 68/99) aggiornate ogni giorno. LavorAI trova gli annunci con quota riservata e si candida per te.",
   keywords: ["lavoro categorie protette", "categorie protette offerte di lavoro", "legge 68/99 lavoro", "art. 1 legge 68", "collocamento mirato", "invalidità civile lavoro", "assunzioni categorie protette"],
   alternates: { canonical: "/categorie-protette" },
   openGraph: { type: "website", title: "Lavoro categorie protette: offerte L. 68/99", description: "Offerte riservate aggiornate ogni giorno e candidatura automatica con LavorAI.", url: "/categorie-protette" },
-};
+  };
+}
 
 const FAQ = [
   {
@@ -48,6 +52,7 @@ const FAQ = [
 ];
 
 export default async function CategorieProtettePage() {
+  const offer = await getResolvedPublicCardTrialCopy();
   const jobs = await prisma.job.findMany({
     where: { protectedCategory: true, closedAt: null, cachedAt: { gte: new Date(Date.now() - 45 * 24 * 3600 * 1000) } },
     orderBy: { cachedAt: "desc" },
@@ -88,7 +93,8 @@ export default async function CategorieProtettePage() {
           <aside className="gd-cta" style={{ marginTop: 0 }}>
             <h2 style={{ marginTop: 0 }}>Attiva la ricerca riservata in 2 minuti</h2>
             <p>Carica il CV, scegli ruoli e città, attiva l&apos;opzione &quot;Categorie protette&quot;. Da quel momento LavorAI dà priorità agli annunci con quota riservata e risponde correttamente alla domanda nel form.</p>
-            <Link href="/signup?protected=1" className="gd-cta-btn">Inizia gratis →</Link>
+            {offer.active && <p>{offer.disclosure}</p>}
+            <Link href="/signup?protected=1" className="gd-cta-btn">{offer.active ? offer.cta : "Inizia gratis →"}</Link>
           </aside>
 
           <section>

@@ -1,3 +1,4 @@
+import { getResolvedPublicCardTrialCopy } from "@/lib/card-trial-copy-server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
@@ -13,21 +14,25 @@ import { LiveStatsBadge } from "@/components/live-stats-badge";
  * NON è un duplicato della homepage: risponde in modo diretto alla query
  * dell'utente, senza wordplay, con CTA immediato al signup.
  */
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  const offer = await getResolvedPublicCardTrialCopy();
+  return {
   title:
     "Auto candidatura lavoro: invia CV automaticamente",
   description:
-    "Cerchi un software per candidarti automaticamente ai lavori? LavorAI invia CV + lettera motivazionale AI a 50 offerte/mese al posto tuo. 7 giorni di Pro gratis, senza carta. Provalo in 2 minuti.",
+    (offer.active ? offer.disclosure : "Cerchi un software per candidarti automaticamente ai lavori? LavorAI invia CV + lettera motivazionale AI a 50 offerte/mese al posto tuo. 7 giorni di Pro gratis, senza carta. Provalo in 2 minuti."),
   alternates: { canonical: "/auto-candidatura" },
   openGraph: {
     title: "Auto candidatura lavoro — LavorAI",
     description:
-      "Il primo software italiano che invia CV in automatico a 50 lavori al mese. 7 giorni di Pro gratis, senza carta.",
+      (offer.active ? offer.disclosure : "Il primo software italiano che invia CV in automatico a 50 lavori al mese. 7 giorni di Pro gratis, senza carta."),
     url: "/auto-candidatura",
   },
-};
+  };
+}
 
-export default function AutoCandidaturaPage() {
+export default async function AutoCandidaturaPage() {
+  const offer = await getResolvedPublicCardTrialCopy();
   return (
     <div className="flex min-h-screen flex-col">
       <SiteNav />
@@ -103,7 +108,7 @@ export default function AutoCandidaturaPage() {
                 alignItems: "center",
               }}
             >
-              Attiva auto-apply — gratis
+              {offer.active ? offer.cta : <>Attiva auto-apply — gratis</>}
             </Link>
             <Link
               href="/pricing"
@@ -124,7 +129,7 @@ export default function AutoCandidaturaPage() {
               marginTop: 14,
             }}
           >
-            ✓ Pro completo per 7 giorni · ✓ Fino a 5 candidature al giorno · ✓ La prova parte dalla registrazione
+            {offer.active ? offer.disclosure : <>✓ Pro completo per 7 giorni · ✓ Fino a 5 candidature al giorno · ✓ La prova parte dalla registrazione</>}
           </p>
         </section>
 
@@ -276,7 +281,7 @@ export default function AutoCandidaturaPage() {
             },
             {
               q: "Quanto costa?",
-              a: "La prova Pro dura 7 giorni dalla registrazione, senza carta e senza rinnovo automatico. Poi Pro costa €19,99/mese per 50 candidature e Pro+ €39,99/mese per candidature illimitate, coda prioritaria e Founder Coach. Disdici quando vuoi.",
+              a: (offer.active ? offer.disclosure : "La prova Pro dura 7 giorni dalla registrazione, senza carta e senza rinnovo automatico. Poi Pro costa €19,99/mese per 50 candidature e Pro+ €39,99/mese per candidature illimitate, coda prioritaria e Founder Coach. Disdici quando vuoi."),
             },
             {
               q: "Cosa succede se voglio candidarmi solo ad alcuni annunci?",
@@ -333,7 +338,7 @@ export default function AutoCandidaturaPage() {
               marginBottom: 16,
             }}
           >
-            Prova LavorAI gratis
+            {offer.active ? offer.cta : <>Prova LavorAI gratis</>}
           </h2>
           <p
             style={{
@@ -343,8 +348,8 @@ export default function AutoCandidaturaPage() {
               marginBottom: 28,
             }}
           >
-            7 giorni di Pro completo dalla registrazione, senza carta di
-            credito e senza rinnovo automatico. Se non ti convince, non paghi nulla.
+            {offer.active ? offer.disclosure : <>7 giorni di Pro completo dalla registrazione, senza carta di
+            credito e senza rinnovo automatico. Se non ti convince, non paghi nulla.</>}
           </p>
           <Link
             href="/signup"
@@ -360,7 +365,7 @@ export default function AutoCandidaturaPage() {
               alignItems: "center",
             }}
           >
-            Attiva auto-apply ora →
+            {offer.active ? offer.cta : "Attiva auto-apply ora →"}
           </Link>
         </section>
       </main>

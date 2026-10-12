@@ -4,6 +4,9 @@ import { isAdmin } from "@/lib/admin";
 import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd } from "@/lib/billing";
 import { getActivationReadiness } from "@/lib/activation-readiness";
 import { StartMembershipActions } from "./start-membership-actions";
+import { isCardTrialCohort, cardTrialEnrollmentAvailable, cardTrialHasPaidAccess, cardTrialHasPreviewAccess } from "@/lib/card-trial-policy";
+import { getCardTrialEnrollment } from "@/lib/card-trial-store";
+import { CardTrialMembership } from "./card-trial-membership";
 import { UserPopup } from "@/components/user-popup";
 
 export const metadata = {
@@ -20,6 +23,31 @@ export default async function StartMembershipPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (isAdmin(user.email)) redirect("/dashboard");
+  // Cohort routing must precede legacy access guards: unpaid preview users
+  // remain here to manage billing rather than loop through /trial-expired.
+  if (isCardTrialCohort(user)) {
+    const enrollment = await getCardTrialEnrollment(user.id);
+    if (enrollment && cardTrialHasPaidAccess(enrollment)) redirect("/dashboard");
+    const available = cardTrialEnrollmentAvailable();
+    return <CardTrialMembership
+      email={user.email}
+      locale={user.locale === "en" ? "en" : "it"}
+      available={available}
+      emailVerified={Boolean(user.emailVerified)}
+      confirming={params.subscribed === "1"}
+      canceled={params.canceled === "1"}
+      previewAvailable={Boolean(enrollment && cardTrialHasPreviewAccess(enrollment))}
+      enrollment={enrollment ? {
+        checkoutKind: enrollment.checkoutKind,
+        tier: enrollment.tier,
+        status: enrollment.status,
+        hasSubscription: Boolean(enrollment.subscriptionId),
+        cardVerified: Boolean(enrollment.cardVerifiedAt),
+        trialEndsAt: enrollment.trialEndsAt?.toISOString() ?? null,
+        cancelAtPeriodEnd: enrollment.cancelAtPeriodEnd,
+      } : null}
+    />;
+  }
   if (isApplicationAccessPaused(user)) redirect("/trial-expired");
   if (!requiresPaymentMethodBeforeApp(user)) redirect("/dashboard");
   const readiness = await getActivationReadiness(user.id, { requireDemo: true });

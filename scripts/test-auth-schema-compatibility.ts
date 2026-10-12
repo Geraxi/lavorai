@@ -31,6 +31,7 @@ async function main() {
   let lookupError: unknown;
   let calls = 0;
   (globalThis as unknown as { prisma: unknown }).prisma = {
+    $queryRaw: async () => [{ exists: false }], // Additive rollout table absent on legacy installation.
     user: { findUnique: async (query: { where: { id: string }; select: unknown }) => {
       calls++;
       assert.equal(query.where.id, row.id);

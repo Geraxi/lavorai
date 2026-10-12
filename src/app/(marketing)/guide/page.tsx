@@ -1,3 +1,4 @@
+import { getResolvedPublicCardTrialCopy } from "@/lib/card-trial-copy-server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
@@ -8,7 +9,9 @@ import { editorialToGuide } from "@/lib/editorial-public";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  const offer = await getResolvedPublicCardTrialCopy();
+  return {
   title: "Guide: CV, candidature e colloquio",
   description:
     "Guide pratiche in italiano per trovare lavoro: CV ATS friendly, lettera di presentazione, candidatura spontanea, LinkedIn, domande del colloquio, software di auto-apply.",
@@ -18,12 +21,14 @@ export const metadata: Metadata = {
     description: "Guide pratiche per trovare lavoro, scritte da chi automatizza le candidature ogni giorno.",
     url: "/guide",
   },
-};
+  };
+}
 export const dynamic = "force-dynamic";
 
 const CATEGORIES = ["CV", "Candidature", "Colloquio", "Strumenti"] as const;
 
 export default async function GuideIndexPage() {
+  const offer = await getResolvedPublicCardTrialCopy();
   const editorial = await prisma.editorialArticle.findMany({ where: { status: "published" }, orderBy: { publishedAt: "desc" } }).catch(() => []);
   const guides = [...editorial.map(editorialToGuide), ...GUIDES];
   const collection = {
@@ -81,9 +86,9 @@ export default async function GuideIndexPage() {
           <div className="gd-cta">
             <div>
               <strong>Vuoi che le candidature le faccia LavorAI?</strong>
-              <p>CV riscritto per ogni annuncio, form compilati su Greenhouse, Lever, Ashby e Workable, prova di consegna. 7 giorni di Pro gratis.</p>
+              <p>{offer.active ? offer.disclosure : <>CV riscritto per ogni annuncio, form compilati su Greenhouse, Lever, Ashby e Workable, prova di consegna. 7 giorni di Pro gratis.</>}</p>
             </div>
-            <Link href="/signup" className="ds-btn">Prova gratis</Link>
+            <Link href="/signup" className="ds-btn">{offer.active ? offer.cta : "Prova gratis"}</Link>
           </div>
         </section>
       </main>

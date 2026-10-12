@@ -1,0 +1,36 @@
+/** Offline architecture regression checks; no database, provider, or network calls. */
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const read = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const page = read("src/app/onboarding/page.tsx");
+const upload = read("src/app/api/onboarding/cv/route.ts");
+const client = read("src/app/onboarding/card-trial-onboarding.tsx");
+const cohort = page.slice(page.indexOf("if (user && isCardTrialCohort(user) && !paidCardCohort)"), page.indexOf("if (user && !paidCardCohort && !isAdmin(user.email))"));
+assert.match(cohort, /hasCardTrialPreviewWindow\(user.id\)/);
+assert.ok(cohort.indexOf("hasCardTrialPreviewWindow") < cohort.indexOf("prisma.job.findMany"));
+assert.match(cohort, /return <CardTrialOnboarding/);
+assert.doesNotMatch(cohort, /extractProfileAI/);
+assert.match(cohort, /closedAt: null/);
+assert.match(cohort, /take: 20/);
+assert.match(upload, /isCardTrialCohort\(user\)\s*\? extractProfile\(text, user.email\)/);
+assert.match(upload, /if \(!isCardTrialCohort\(user\)\)\s*\{\s*await tx.user.update/);
+assert.match(upload, /assertCardTrialPreviewAccess\(user.id\)/);
+assert.match(upload, /hasCardTrialPaidAccess\(user.id\)/);
+assert.match(client, /JSON.stringify\(\{ jobId \}\)/);
+assert.match(client, /const saved = result.result/);
+assert.match(client, /reconciliation_required/);
+assert.match(client, /disabled=\{busy \|\| Boolean\(lockedJobId\)\}/);
+assert.doesNotMatch(client, /\/api\/applications|trigger-first-apply|extractProfileAI|optimizeCV\(/);
+assert.match(client, /cv.experiences.map/);
+assert.match(client, /cv.education.map/);
+assert.match(client, /cv.languages.map/);
+assert.match(client, /preview.coverLetter/);
+console.log("PASS: card-first onboarding, bounded job selection, local CV parsing, persistent preview hydration, and no application entrypoints (static offline checks)");
+
+const legacyClient = read("src/app/onboarding/onboarding-client.tsx");
+assert.match(page, /await hasCardTrialPaidAccess\(user.id\)/);
+assert.match(page, /paidCardCohort=\{paidCardCohort\}/);
+assert.match(legacyClient, /if \(!paidCardCohort && !demo\)/);
+assert.match(legacyClient, /router.push\(paidCardCohort \? "\/dashboard" : "\/start-membership"\)/);
+assert.match(legacyClient, /fetch\("\/api\/onboarding\/demo\/complete"/);
+console.log("PASS: verified paid cohort receives setup flow without legacy preview generation");

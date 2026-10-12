@@ -32,7 +32,7 @@ export async function getActivationReadiness(
       seniority: true,
       englishLevel: true,
       noticePeriod: true,
-      demoCompletedAt: true,
+      ...(requireDemo ? { demoCompletedAt: true } : {}),
       _count: { select: { cvDocuments: true } },
       preferences: { select: { rolesJson: true, locationsJson: true, sourcesJson: true } },
     },

@@ -1,3 +1,4 @@
+import { getResolvedPublicCardTrialCopy } from "@/lib/card-trial-copy-server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
@@ -5,12 +6,15 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { Icon } from "@/components/design/icon";
 
-export const metadata: Metadata = {
-  title: "Analizza il tuo CV gratis · ATS score + suggerimenti",
+export async function generateMetadata(): Promise<Metadata> {
+  const offer = await getResolvedPublicCardTrialCopy();
+  return {
+  title: offer.active ? "CV su misura · Anteprima limitata" : "Analizza il tuo CV gratis · ATS score + suggerimenti",
   description:
-    "Carica il CV e un annuncio. In 60 secondi ricevi: ATS score (su 100), CV ottimizzato in DOCX, cover letter scritta per quell'annuncio, 3-5 suggerimenti concreti.",
+    offer.active ? offer.disclosure : "Carica il CV e un annuncio. In 60 secondi ricevi: ATS score (su 100), CV ottimizzato in DOCX, cover letter scritta per quell'annuncio, 3-5 suggerimenti concreti.",
   alternates: { canonical: "/analizza-cv" },
-};
+  };
+}
 
 /**
  * /analizza-cv — dedicated lead-magnet landing.

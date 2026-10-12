@@ -1,3 +1,5 @@
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
+import { hasCardTrialPaidAccess } from "@/lib/card-trial-store";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -10,6 +12,14 @@ export const runtime = "nodejs";
 export async function POST() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+
+  if (isCardTrialCohort(user)) {
+    if (!await hasCardTrialPaidAccess(user.id)) return NextResponse.json({ error: "payment_required" }, { status: 402 });
+    const ready = await getActivationReadiness(user.id);
+    if (!ready.ready) return NextResponse.json({ error: "activation_incomplete", issue: ready.issue }, { status: 409 });
+    await prisma.user.update({ where: { id: user.id }, data: { onboardedAt: new Date() }, select: { id: true } });
+    return NextResponse.json({ ok: true });
+  }
 
   const readiness = await getActivationReadiness(user.id);
   if (!readiness.ready) {

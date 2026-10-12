@@ -1,3 +1,5 @@
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
+import { createCardTrialCheckout } from "@/lib/card-trial-checkout";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
@@ -13,6 +15,7 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   tier: z.enum(["pro", "pro_plus"]),
+  reactivate: z.boolean().optional(),
   // The expired-trial screen must return to itself on cancellation so the
   // user does not lose the exact recovery action they just chose.
   returnTo: z.literal("trial_expired").optional(),
@@ -25,6 +28,16 @@ export async function POST(request: NextRequest) {
       { error: "unauthenticated", message: "Devi loggarti." },
       { status: 401 },
     );
+  }
+
+  if (isCardTrialCohort(user)) {
+    const parsed = schema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: "validation" }, { status: 400 });
+    try { return NextResponse.json(await createCardTrialCheckout(user, parsed.data.tier, parsed.data.reactivate === true)); }
+    catch (error) {
+      console.error("[card-trial checkout]", error);
+      return NextResponse.json({ error: "trial_unavailable", message: user.locale === "en" ? "Checkout could not be confirmed. Refresh to check your current status before retrying. If you completed checkout, wait for confirmation or manage your subscription." : "Impossibile confermare il checkout. Aggiorna per verificare lo stato attuale prima di riprovare. Se hai completato il checkout, attendi la conferma o gestisci l’abbonamento." }, { status: 503 });
+    }
   }
 
   // Require setup before activating a new trial. Expired users must still

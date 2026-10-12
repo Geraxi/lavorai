@@ -1,3 +1,4 @@
+import { isCardTrialUser } from "@/lib/card-trial-cohort";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
@@ -44,6 +45,7 @@ export async function runCheckoutRecovery(opts?: { dryRun?: boolean }): Promise<
     const user = start.user;
     if (!user || seenUsers.has(user.id)) continue;
     seenUsers.add(user.id);
+    if (await isCardTrialUser({ id: user.id })) { result.skipped++; continue; }
     const paid = user.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(user.subscriptionStatus ?? "");
     if (!isCheckoutRecoveryWindow(start.createdAt, now) || paid || isTestAccount(user.email) || alreadySent.has(user.email.toLowerCase())) {
       result.skipped++;

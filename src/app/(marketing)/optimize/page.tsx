@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ type Status = "idle" | "loading" | "sent";
 const MAX_CV_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export default function OptimizePage() {
+  const trial = useTranslations("cardTrial");
   const [consenso, setConsenso] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [sentEmail, setSentEmail] = useState<string>("");
@@ -85,6 +87,15 @@ export default function OptimizePage() {
       setStatus("idle");
     }
   }
+
+  if (trial("mode") === "active") return (
+    <main className="container max-w-2xl py-16 space-y-6">
+      <Logo size="md" />
+      <h1 className="text-3xl font-bold">{trial("cta")}</h1>
+      <p>{trial("disclosure")}</p>
+      <Button asChild><Link href="/pricing">{trial("cta")}</Link></Button>
+    </main>
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

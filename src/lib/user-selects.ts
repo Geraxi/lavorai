@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 // Every entitlement input remains a required database read: never substitute
 // a tier or trial default when a required column is missing.
 export const accessUserSelect = {
+  id: true,
   email: true,
   tier: true,
   createdAt: true,
@@ -29,4 +30,4 @@ export const sessionUserSelect = {
   yearsExperience: true,
 } satisfies Prisma.UserSelect;
 
-export type CurrentUser = Prisma.UserGetPayload<{ select: typeof sessionUserSelect }>;
+export type CurrentUser = Prisma.UserGetPayload<{ select: typeof sessionUserSelect }> & { billingPolicy?: string | null };

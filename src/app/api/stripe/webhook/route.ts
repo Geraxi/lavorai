@@ -1,3 +1,4 @@
+import { handleCardTrialWebhook } from "@/lib/card-trial-webhook";
 import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { stripe, priceIdToTier } from "@/lib/stripe";
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    if (await handleCardTrialWebhook(event)) return NextResponse.json({ received: true });
     switch (event.type) {
       case "checkout.session.completed": {
         // Belt-and-suspenders: fires appena il pagamento va a buon fine,

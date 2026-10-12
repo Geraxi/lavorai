@@ -1,16 +1,21 @@
+import { getResolvedPublicCardTrialCopy } from "@/lib/card-trial-copy-server";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  const offer = await getResolvedPublicCardTrialCopy();
+  return {
   title: "Termini di servizio",
   description:
     "Termini e condizioni di LavorAI, inclusi i termini per la funzionalità di auto-apply sui portali di lavoro.",
   alternates: { canonical: "/termini" },
-};
+  };
+}
 
-export default function TerminiPage() {
+export default async function TerminiPage() {
+  const offer = await getResolvedPublicCardTrialCopy();
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b border-border/60">
@@ -135,6 +140,11 @@ export default function TerminiPage() {
 
           <section>
             <h2 className="text-xl font-semibold">5. Piani e pagamento</h2>
+            {offer.active ? <>
+              <p>{offer.disclosure}</p>
+              <p>La prova non parte dalla registrazione. Il periodo di tre giorni inizia solo dal checkout con carta completato e verificato. L’anteprima salvata comprende un solo CV e una sola lettera per un’offerta scelta; non include invii, simulazioni di colloquio o altre funzioni AI. L’importo del piano selezionato viene addebitato alla scadenza indicata nel checkout, salvo annullamento prima della scadenza da Gestisci abbonamento.</p>
+              <p>Queste condizioni valgono esclusivamente per i nuovi account nel nuovo regime. Gli account preesistenti mantengono i propri termini originari, inclusa l’eventuale prova di sette giorni senza carta e senza rinnovo automatico. I piani pagati, gli accessi già concessi e i crediti preesistenti restano soggetti ai rispettivi termini.</p>
+            </> : <>
             <p>
               LavorAI offre una prova Pro gratuita di 7 giorni, senza carta e
               senza rinnovo automatico, che inizia quando crei il tuo account.
@@ -144,6 +154,8 @@ export default function TerminiPage() {
               mostra prezzo e condizioni; puoi gestire o cancellare
               l&apos;abbonamento dal portale Stripe.
             </p>
+            </>}
+
           </section>
 
           <section>

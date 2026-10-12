@@ -1,3 +1,4 @@
+import { cardTrialAllowsPaidWork } from "@/lib/card-trial-access";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
@@ -92,7 +93,7 @@ export async function findNudgeCandidates(opts?: {
   const candidates: NudgeCandidate[] = [];
 
   for (const u of users) {
-    if (isTestAccount(u.email)) continue;
+    if (isTestAccount(u.email) || !await cardTrialAllowsPaidWork(u.id)) continue;
 
     // Step mancante (priorità: verifica → CV → preferenze → 1ª candidatura).
     let step: NudgeStep | null = null;

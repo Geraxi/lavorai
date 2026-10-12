@@ -563,5 +563,13 @@
     "loginFooterMid": " e la ",
     "loginFooterPrivacy": "privacy policy",
     "loginFooterPost": ". Dati processati in UE · GDPR-compliant."
+  },
+  "cardTrial": {
+    "mode": "legacy",
+    "availability": "unavailable",
+    "cta": "",
+    "summary": "",
+    "renewal": "",
+    "disclosure": ""
   }
 }

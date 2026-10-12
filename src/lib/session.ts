@@ -1,3 +1,4 @@
+import { resolveCardTrialPolicy } from "@/lib/card-trial-cohort";
 import { cache } from "react";
 import { auth } from "@/lib/auth";
 import { getDemoUser, prisma } from "@/lib/db";
@@ -17,7 +18,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   try {
     const session = await auth();
     if (session?.user?.id) {
-      return prisma.user.findUnique({ where: { id: session.user.id }, select: sessionUserSelect });
+      return prisma.user.findUnique({ where: { id: session.user.id }, select: sessionUserSelect }).then(async user => user ? { ...user, billingPolicy: await resolveCardTrialPolicy(user) } : null);
     }
   } catch {
     // auth() può fallire se env manca in dev — fallback sotto

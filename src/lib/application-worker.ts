@@ -1,3 +1,4 @@
+import { cardTrialAllowsPaidWork } from "@/lib/card-trial-access";
 import { reuseCvAnswers } from "@/lib/cv-answer-reuse";
 import { reserveTrialApplication } from "@/lib/trial-quota";
 import { Resend } from "resend";
@@ -115,7 +116,7 @@ export async function processApplication(
   // Una candidatura può restare in coda mentre termina la prova. Da quel
   // momento l'account resta accessibile, ma nessun CV o form può partire
   // finché l'utente non attiva un piano a pagamento.
-  if (isApplicationAccessPaused(app.user)) {
+  if (isApplicationAccessPaused(app.user) || !await cardTrialAllowsPaidWork(app.user.id)) {
     await prisma.application.update({
       where: { id: applicationId },
       data: {
@@ -360,6 +361,8 @@ export async function processApplication(
   });
 
   // 5. (rimossa) Email "CV pronto" prematura — era fuorviante: usciva
+  if (!await cardTrialAllowsPaidWork(app.user.id)) { await markFailed(applicationId, "Payment required before sending"); return; }
+
   // PRIMA del tentativo di submit, dando all'utente l'impressione che
   // la candidatura fosse stata inviata. Ora inviamo UNA SOLA email alla
   // fine, con l'esito reale (success / ready_to_apply manuale / failed).
@@ -1736,6 +1739,8 @@ async function deliverApplicationToRecruiter(
   const bccFounder = process.env.RECRUITER_DELIVERY_BCC?.trim() || undefined;
 
   const result = await sendWithinQuota("application_sent", input.to, async () => {
+    const owner = await prisma.application.findUnique({ where: { id: input.applicationId }, select: { userId: true } });
+    if (!owner || !await cardTrialAllowsPaidWork(owner.userId)) throw new Error("Payment required before recruiter email");
     const resp = await resend.emails.send({
       from,
       to: input.to,
@@ -1944,6 +1949,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     browser = await launchBrowser();
     const context = await humanContext(browser);
     const page = await context.newPage();
+    if (!await cardTrialAllowsPaidWork(userId)) throw new Error("Payment required before adapter submission");
     const outcome = await adapter.apply(page, {
       profile,
       userEmail: formEmail,

@@ -1,3 +1,4 @@
+import { isCardTrialUser } from "@/lib/card-trial-cohort";
 import { trialEnd } from "@/lib/billing";
 import { prisma } from "@/lib/db";
 import { Resend } from "resend";
@@ -30,6 +31,7 @@ const fmt = (d: Date, en: boolean) => d.toLocaleDateString(en ? "en-GB" : "it-IT
 const first = (name: string | null | undefined) => name?.trim().split(/\s+/)[0] || null;
 
 export async function sendTrialStartedEmail(u: { id: string; email: string; name: string | null; locale: string | null; trialEndsAt: Date | null }, opts?: { granted?: boolean }) {
+  if (await isCardTrialUser({ id: u.id })) return { sent: false, reason: "card_trial_separate_lifecycle" };
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || !u.trialEndsAt) return { sent: false, reason: "no_key_or_trial" };
   const en = u.locale === "en";
@@ -92,6 +94,7 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
   const sentKey = new Set(logs.map((l) => `${l.kind}:${l.to.toLowerCase()}`));
 
   for (const u of users) {
+    if (await isCardTrialUser(u)) continue;
     u.trialEndsAt = trialEnd(u);
     if (isTestAccount(u.email) || !u.trialEndsAt || u.tier !== "free") continue;
     const en = u.locale === "en";

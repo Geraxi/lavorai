@@ -96,9 +96,22 @@ const EN_TIER_COPY: Record<TierConfig["id"], Pick<TierConfig, "tagline" | "featu
 export function SectionPricing() {
   const t = useTranslations("pricing");
   const locale = useLocale();
-  const tiers = locale === "en"
+  const trial = useTranslations("cardTrial");
+  const legacyTiers = locale === "en"
     ? TIER_LIST.map((tier) => ({ ...tier, ...EN_TIER_COPY[tier.id] }))
     : TIER_LIST;
+  const tiers = trial("mode") === "active"
+    ? legacyTiers.map((tier) => ({
+        ...tier,
+        cta: trial("cta"),
+        tagline: tier.id === "free" ? trial("summary") : `${tier.id === "pro" ? (locale === "en" ? "50 applications/month." : "50 candidature/mese.") : (locale === "en" ? "Unlimited applications and Founder Coach." : "Candidature illimitate e Founder Coach.")} ${trial("renewal")}`,
+        ...(tier.id === "free" ? {
+          name: locale === "en" ? "Limited preview" : "Anteprima limitata",
+          priceSuffix: locale === "en" ? " / 3 days with card" : " / 3 giorni con carta",
+          features: [trial("summary"), trial("renewal")],
+        } : {}),
+      }))
+    : legacyTiers;
   return (
     <section
       id="prezzi"

@@ -56,6 +56,7 @@ export function SubscriptionManager({ planName }: { planName: string }) {
     try {
       const r = await fetch("/api/stripe/subscription", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, reason, foundViaUs, comment, ...extra }) });
       const j = await r.json().catch(() => ({}));
+      if (j.error === "manage_in_portal" && j.url) { window.location.assign(j.url); return null; }
       if (!r.ok) { toast.error(j.message ?? "Operazione non riuscita."); return null; }
       await load();
       router.refresh();

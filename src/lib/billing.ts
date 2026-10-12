@@ -1,3 +1,4 @@
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
 /**
  * Subscription tier definitions + entitlements.
  * Singolo source of truth — UI, paywall middleware, e Stripe pricing
@@ -147,6 +148,7 @@ export const EARLY_USER_TRIAL_COHORT_CUTOFF = "2026-09-23T12:43:08.000Z";
 export const EARLY_USER_TRIAL_FINAL_END = "2026-09-25T12:43:08.000Z";
 
 export function trialEnd(user: { createdAt?: Date | string; trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null }): Date | null {
+  if (isCardTrialCohort(user)) return null; // New cohort never receives legacy registration entitlements.
   const createdAt = user.createdAt ? new Date(user.createdAt) : null;
   // The legacy field identifies the original extension recipients only. Its
   // stored date no longer grants any configurable/rolling grace period.
@@ -298,6 +300,7 @@ export function requiresPaymentMethodBeforeApp(
   },
 ): boolean {
   if (isLifetimeProPlus(user.email) || normalizeTier(user.tier) !== "free") return false;
+  if (isCardTrialCohort(user)) return true;
   if (user.subscriptionStatus === "active" || user.subscriptionStatus === "trialing") return false;
   return trialState(user).status === "active";
 }

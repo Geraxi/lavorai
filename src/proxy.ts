@@ -1,3 +1,6 @@
+import { resolveCardTrialPolicy } from "@/lib/card-trial-cohort";
+import { isCardTrialCohort, isCardTrialSetupPath } from "@/lib/card-trial-policy";
+import { hasCardTrialPaidAccess } from "@/lib/card-trial-store";
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
 import { accessUserSelect } from "@/lib/user-selects";
@@ -65,8 +68,10 @@ export async function proxy(request: NextRequest) {
     const token = await getToken({ req: request, secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET, secureCookie });
     if (token?.sub) {
       let user;
+      let billingPolicy: string | null = null;
       try {
         user = await prisma.user.findUnique({ where: { id: token.sub }, select: accessUserSelect });
+        if (user) billingPolicy = await resolveCardTrialPolicy(user);
       } catch (error) {
         // Fail closed, but return a browser-renderable response rather than an
         // uncaught proxy exception. Do not hide schema drift behind free access.
@@ -75,7 +80,15 @@ export async function proxy(request: NextRequest) {
         });
         return accessUnavailableResponse(pathname);
       }
-      if (user && !isAdmin(user.email) && isApplicationAccessPaused(user)) {
+      if (user && !isAdmin(user.email) && isCardTrialCohort({ ...user, billingPolicy })) {
+        if (!isCardTrialSetupPath(pathname, request.method)) {
+          try {
+            if (!await hasCardTrialPaidAccess(user.id)) return pathname.startsWith("/api/")
+              ? NextResponse.json({ error: "payment_required", redirect: "/start-membership" }, { status: 402 })
+              : NextResponse.redirect(new URL("/start-membership", request.url));
+          } catch { return accessUnavailableResponse(pathname); }
+        }
+      } else if (user && !isAdmin(user.email) && isApplicationAccessPaused(user)) {
         return pathname.startsWith("/api/")
           ? NextResponse.json({ error: "trial_expired", message: "Free trial expired", redirect: "/trial-expired" }, { status: 402 })
           : NextResponse.redirect(new URL("/trial-expired", request.url));

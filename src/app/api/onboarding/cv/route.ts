@@ -4,6 +4,9 @@ import { getCurrentUser } from "@/lib/session";
 import { CVParseError, parseCV } from "@/lib/cv-parser";
 import { saveUserFile } from "@/lib/storage";
 import { uploadLimiter } from "@/lib/rate-limit";
+import { assertCardTrialPreviewAccess, hasCardTrialPaidAccess } from "@/lib/card-trial-store";
+import { isCardTrialCohort } from "@/lib/card-trial-policy";
+import { extractProfile } from "@/lib/cv-profile";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 
@@ -18,6 +21,10 @@ export async function POST(request: NextRequest) {
         { error: "unauthenticated", message: "Devi loggarti." },
         { status: 401 },
       );
+    }
+
+    if (isCardTrialCohort(user) && !(await assertCardTrialPreviewAccess(user.id)) && !(await hasCardTrialPaidAccess(user.id))) {
+      return NextResponse.json({ error: "card_trial_required", redirect: "/start-membership" }, { status: 403 });
     }
 
     const rl = await uploadLimiter.limit(`user:${user.id}`);
@@ -67,8 +74,9 @@ export async function POST(request: NextRequest) {
     // Estrazione profilo AI (best-effort, fallback interno a regex)
     let parsedProfileJson: string | null = null;
     try {
-      const { extractProfileAI } = await import("@/lib/cv-profile-ai");
-      const profile = await extractProfileAI(text, user.email);
+      const profile = isCardTrialCohort(user)
+        ? extractProfile(text, user.email)
+        : await (await import("@/lib/cv-profile-ai")).extractProfileAI(text, user.email);
       parsedProfileJson = JSON.stringify(profile);
     } catch (err) {
       console.warn("[/api/onboarding/cv] profile extraction failed", err);
@@ -78,10 +86,12 @@ export async function POST(request: NextRequest) {
       await tx.cVDocument.deleteMany({ where: { userId: user.id } });
       // Un CV nuovo merita una nuova anteprima; non riutilizziamo un risultato
       // creato su un documento diverso nel funnel di attivazione.
-      await tx.user.update({
-        where: { id: user.id },
-        data: { demoGeneratedAt: null, demoCompletedAt: null },
-      });
+      if (!isCardTrialCohort(user)) {
+        await tx.user.update({
+          where: { id: user.id },
+          data: { demoGeneratedAt: null, demoCompletedAt: null },
+        });
+      }
       return tx.cVDocument.create({
       data: {
         userId: user.id,

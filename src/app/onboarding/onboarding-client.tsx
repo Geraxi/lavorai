@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { useSession } from "next-auth/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Icon, type IconName } from "@/components/design/icon";
 import { Logo } from "@/components/logo";
@@ -85,10 +85,13 @@ interface OnboardingDemo {
 
 export default function OnboardingClient({
   initial,
+  paidCardCohort = false,
 }: {
   initial: InitialState;
+  paidCardCohort?: boolean;
 }) {
   const t = useTranslations("onboarding");
+  const en = useLocale() === "en";
   const router = useRouter();
   const { update: updateSession } = useSession();
   const [step, setStep] = useState(0);
@@ -283,7 +286,7 @@ export default function OnboardingClient({
       return;
     }
 
-    if (!demo) {
+    if (!paidCardCohort && !demo) {
       const preview = await fetch("/api/onboarding/demo", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -314,7 +317,7 @@ export default function OnboardingClient({
     // Il setup è completo: ora raccogliamo il metodo di pagamento su Stripe.
     // Il gate server-side impedisce comunque di saltare questo passaggio con
     // un URL diretto verso la dashboard o le API di candidatura.
-    router.push("/start-membership");
+    router.push(paidCardCohort ? "/dashboard" : "/start-membership");
     router.refresh();
     } catch {
       toast.error(t("retryError"));
@@ -436,6 +439,7 @@ export default function OnboardingClient({
                 .join(" · ")}
               details={details}
               demo={demo}
+              paidCardCohort={paidCardCohort}
             />
           )}
         </div>
@@ -471,9 +475,9 @@ export default function OnboardingClient({
             }}
           >
             {finishing
-              ? (demo ? "Apertura attivazione…" : "Creo la tua anteprima…")
+              ? (paidCardCohort ? (en ? "Saving setup…" : "Salvataggio…") : demo ? "Apertura attivazione…" : "Creo la tua anteprima…")
               : step === stepsLocalized.length - 1
-                ? (demo ? "Continua all'attivazione" : "Vedi CV e lettera personalizzati")
+                ? (paidCardCohort ? (en ? "Save and open dashboard" : "Salva e apri la dashboard") : demo ? "Continua all'attivazione" : "Vedi CV e lettera personalizzati")
                 : t("continue")}{" "}
             <Icon name="arrow-right" size={13} />
           </button>
@@ -1490,7 +1494,9 @@ function StepConfirm({
   locationsSummary,
   details,
   demo,
+  paidCardCohort = false,
 }: {
+  paidCardCohort?: boolean;
   salary: number;
   rolesSelected: number;
   locationsSummary: string;
@@ -1498,6 +1504,7 @@ function StepConfirm({
   demo: OnboardingDemo | null;
 }) {
   const t = useTranslations("onboarding");
+  const en = useLocale() === "en";
   const seniorityLabel: Record<Seniority, string> = {
     junior: "Junior",
     mid: "Mid",
@@ -1514,9 +1521,11 @@ function StepConfirm({
 
   return (
     <>
-      <h1 style={stepTitle}>{demo ? "Il tuo primo risultato è pronto." : "Prima, guarda cosa cambia per te."}</h1>
+      <h1 style={stepTitle}>{paidCardCohort ? (en ? "Confirm your job search preferences" : "Conferma le preferenze di ricerca") : demo ? "Il tuo primo risultato è pronto." : "Prima, guarda cosa cambia per te."}</h1>
       <p style={stepLead}>
-        {demo
+        {paidCardCohort
+          ? (en ? "Your first payment is confirmed. Save your setup to enable your job search and applications under your plan." : "Il primo pagamento è confermato. Salva il profilo per attivare la ricerca e le candidature previste dal tuo piano.")
+          : demo
           ? "Abbiamo adattato il tuo profilo a una posizione concreta e preparato una lettera coerente. Questa è solo un’anteprima: non è stata inviata alcuna candidatura."
           : "Creiamo una piccola anteprima personale: un CV migliorato e una lettera di presentazione per un ruolo compatibile con le tue preferenze."}
       </p>
@@ -1553,7 +1562,7 @@ function StepConfirm({
         style={{ padding: 18, background: "var(--bg-sunken)" }}
       >
         <div style={{ display: "grid", gap: 12 }}>
-          <ConfirmRow label={t("rowEstimatedApps")} value="~60–80" />
+          {!paidCardCohort && <ConfirmRow label={t("rowEstimatedApps")} value="~60–80" />}
           <ConfirmRow
             label={t("rowRoles")}
             value={t("rolesCount", { count: rolesSelected })}

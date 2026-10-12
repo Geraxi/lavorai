@@ -1,3 +1,4 @@
+import { isCardTrialUser } from "@/lib/card-trial-cohort";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
@@ -81,6 +82,7 @@ export async function runWeeklyDigest(opts?: {
   let candidates = 0;
 
   for (const u of users) {
+    if (await isCardTrialUser({ id: u.id })) continue; // Legacy free-trial digest is not a card-trial offer.
     if (isTestAccount(u.email)) continue;
     if (!opts?.force && alreadySent.has(u.email.toLowerCase())) continue;
     const roles = parseRoles(u.preferences?.rolesJson);

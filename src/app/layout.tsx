@@ -1,3 +1,4 @@
+import { getResolvedPublicCardTrialCopy } from "@/lib/card-trial-copy-server";
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
@@ -39,7 +40,9 @@ const jetbrains = JetBrains_Mono({
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://lavorai.it";
 
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  const offer = await getResolvedPublicCardTrialCopy();
+  return {
   metadataBase: new URL(siteUrl),
   // URL stabile (public/, senza hash per deploy): Chrome tiene in cache la
   // favicon per URL, e con l'hash che cambia a ogni deploy la tab restava
@@ -63,7 +66,7 @@ export const metadata: Metadata = {
     template: "%s · LavorAI",
   },
   description:
-    "Invia CV in automatico a 50 lavori al mese. LavorAI adatta CV e lettera a ogni annuncio e compila i form ATS. La prova Pro di 7 giorni parte dalla registrazione, fino a 5 candidature al giorno, senza carta e senza rinnovo automatico.",
+    (offer.active ? offer.disclosure : "Invia CV in automatico a 50 lavori al mese. LavorAI adatta CV e lettera a ogni annuncio e compila i form ATS. La prova Pro di 7 giorni parte dalla registrazione, fino a 5 candidature al giorno, senza carta e senza rinnovo automatico."),
   keywords: [
     // KEYWORD AD ALTA INTENT COMMERCIALE (chi cerca soluzione, non info)
     "auto candidatura lavoro",
@@ -88,16 +91,17 @@ export const metadata: Metadata = {
     siteName: "LavorAI",
     title: "LavorAI — Candidature automatiche ai lavori | Auto-apply CV",
     description:
-      "50 candidature al mese, con CV e lettera su misura. Prova Pro per 7 giorni dalla registrazione, senza carta e senza rinnovo automatico.",
+      (offer.active ? offer.disclosure : "50 candidature al mese, con CV e lettera su misura. Prova Pro per 7 giorni dalla registrazione, senza carta e senza rinnovo automatico."),
   },
   twitter: {
     card: "summary_large_image",
     title: "LavorAI — Candidature automatiche ai lavori",
     description:
-      "50 candidature/mese automatiche. CV e lettera su misura. Prova di 7 giorni dalla registrazione, fino a 5 candidature al giorno, senza carta.",
+      (offer.active ? offer.disclosure : "50 candidature/mese automatiche. CV e lettera su misura. Prova di 7 giorni dalla registrazione, fino a 5 candidature al giorno, senza carta."),
   },
   robots: { index: true, follow: true },
-};
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#FAFAF7",
