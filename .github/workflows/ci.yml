@@ -47,6 +47,12 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Push Prisma schema
+        run: npx prisma db push --skip-generate --accept-data-loss
+        env:
+          DATABASE_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
+          DIRECT_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
+
       - name: Build
         env:
           DATABASE_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
