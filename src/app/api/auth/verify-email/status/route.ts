@@ -31,8 +31,13 @@ export async function POST(request: NextRequest) {
     .safeParse(body);
   if (!parsed.success) return NextResponse.json({ needsVerify: false });
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email },
+  const user = await prisma.user.findFirst({
+    where: {
+      email: {
+        equals: parsed.data.email,
+        mode: "insensitive",
+      },
+    },
     select: { passwordHash: true, emailVerified: true },
   });
   const needsVerify = Boolean(user?.passwordHash && !user.emailVerified);

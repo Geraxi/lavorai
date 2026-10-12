@@ -24,7 +24,16 @@ function canonicalEmail(raw: string): string {
   return `${local}@${domain}`;
 }
 
-const ADMIN_EMAILS = new Set(ADMIN_EMAILS_RAW.map(canonicalEmail));
+function buildAdminEmailsSet(): Set<string> {
+  const emails = [...ADMIN_EMAILS_RAW];
+  const envAdmins = process.env.ADMIN_EMAILS;
+  if (envAdmins) {
+    emails.push(...envAdmins.split(",").map((e) => e.trim()).filter(Boolean));
+  }
+  return new Set(emails.map(canonicalEmail));
+}
+
+const ADMIN_EMAILS = buildAdminEmailsSet();
 
 export function isAdmin(email: string | null | undefined): boolean {
   if (!email) return false;

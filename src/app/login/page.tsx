@@ -47,9 +47,18 @@ function LoginContent() {
         callbackUrl,
       });
       if (!res || res.error) {
-        // NextAuth comprime gli errori del provider in un generico "CredentialsSignin".
-        // Distinguere "email non verificata" vs "password sbagliata" richiede un
-        // check lato client: proviamo a verificare lo stato via endpoint dedicato.
+        const errorCode = res?.error;
+        
+        if (errorCode === "no_password") {
+          setErr("Questo account non ha una password. Accedi con Google o imposta una password tramite 'Password dimenticata'.");
+          return;
+        }
+        
+        if (errorCode === "server_error") {
+          setErr("Errore del server. Riprova tra qualche istante.");
+          return;
+        }
+        
         const status = await fetch("/api/auth/verify-email/status", {
           method: "POST",
           headers: { "content-type": "application/json" },

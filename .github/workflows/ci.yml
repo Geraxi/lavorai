@@ -8,6 +8,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: ci_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - uses: actions/checkout@v4
 
@@ -21,8 +35,8 @@ jobs:
       - name: Generate Prisma
         run: npx prisma generate
         env:
-          DATABASE_URL: "file:./dev.db"
-          DIRECT_URL: "file:./dev.db"
+          DATABASE_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
+          DIRECT_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
 
       - name: Typecheck
         run: npx tsc --noEmit
@@ -33,10 +47,16 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Push Prisma schema
+        run: npx prisma db push --skip-generate --accept-data-loss
+        env:
+          DATABASE_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
+          DIRECT_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
+
       - name: Build
         env:
-          DATABASE_URL: "file:./dev.db"
-          DIRECT_URL: "file:./dev.db"
+          DATABASE_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
+          DIRECT_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
           AUTH_SECRET: ci-dummy-secret-for-build-only-ci-dummy-secret
           NEXT_PUBLIC_SITE_URL: http://localhost:3000
         run: npx next build

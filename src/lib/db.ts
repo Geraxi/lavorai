@@ -21,6 +21,18 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+function parseNeonEndpoint(connStr: string): { host: string; database: string } | null {
+  try {
+    const url = new URL(connStr);
+    if (!url.hostname || !url.pathname) return null;
+    const host = url.hostname.replace(/-pooler\./, ".");
+    const database = url.pathname.slice(1).split("/")[0];
+    return { host, database };
+  } catch {
+    return null;
+  }
+}
+
 function makePrisma(): PrismaClient {
   // The production schema is maintained through DIRECT_URL during the Vercel
   // build. Prefer that same endpoint at runtime so an old pooled DATABASE_URL
@@ -31,11 +43,35 @@ function makePrisma(): PrismaClient {
   const log: ("error" | "warn")[] =
     process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"];
 
-  if (isPostgres) {
+  if (process.env.NODE_ENV === "production") {
+    const directUrl = process.env.DIRECT_URL;
+    const databaseUrl = process.env.DATABASE_URL;
+    if (directUrl && databaseUrl) {
+      const direct = parseNeonEndpoint(directUrl);
+      const pooled = parseNeonEndpoint(databaseUrl);
+      if (direct && pooled) {
+        const mismatch = direct.host !== pooled.host || direct.database !== pooled.database;
+        if (mismatch) {
+          const msg = `[db] DATABASE_URL/DIRECT_URL endpoint mismatch: host ${pooled.host} vs ${direct.host}, database ${pooled.database} vs ${direct.database}`;
+          console.error(msg);
+          if (process.env.STRICT_DB_URL_CHECK === "1") {
+            throw new Error(msg);
+          }
+        }
+      }
+    }
+  }
+
+  // Use Neon adapter only in production for Vercel serverless optimization.
+  // In CI/test environments, use standard Prisma client to avoid WebSocket connection issues.
+  const useNeonAdapter = isPostgres && process.env.NODE_ENV === "production" && url.includes(".neon.tech");
+  
+  if (useNeonAdapter) {
     const adapter = new PrismaNeon({ connectionString: url });
     return new PrismaClient({ adapter, log });
   }
-  // Dev locale senza Postgres (sqlite/file:): client classico.
+  
+  // CI, dev locale, or non-Neon Postgres: client standard.
   return new PrismaClient({ log });
 }
 
