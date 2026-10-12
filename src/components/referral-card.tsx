@@ -21,24 +21,35 @@ interface MyReferral {
  * Reward: quando un amico completa il primo pagamento, l'invitante riceve
  * un credito pari a un mese del suo piano.
  */
-export function ReferralCard() {
+export function ReferralCard({ compact = false }: { compact?: boolean }) {
   const [data, setData] = useState<MyReferral | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/referral/me")
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error("referral_unavailable"); return r.json(); })
       .then((j) => setData(j))
+      .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, []);
 
-  function copyLink() {
+  async function copyLink() {
     if (!data) return;
     try {
-      navigator.clipboard.writeText(data.link);
+      await navigator.clipboard.writeText(data.link);
       toast.success("Link copiato!");
     } catch {
       toast.error("Copia fallita — copia manualmente");
+    }
+  }
+
+  async function shareLink() {
+    if (!data) return;
+    if (!navigator.share) { await copyLink(); return; }
+    try {
+      await navigator.share({ title: "LavorAI", text: "Cerchi lavoro? LavorAI adatta il CV e invia candidature sui portali supportati. Prova di 7 giorni dalla registrazione, senza carta. Se ti abboni con questo invito, ricevo un mese Pro gratuito.", url: data.link });
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) toast.error("Condivisione non riuscita. Puoi copiare il link.");
     }
   }
 
@@ -46,7 +57,7 @@ export function ReferralCard() {
     <SectionCard>
       <SectionHead
         icon={<Icon name="sparkles" size={14} />}
-        title="Invita un amico"
+        title={compact ? "Invita chi cerca lavoro" : "Invita un amico"}
       />
       <SectionBody>
         <p style={{ fontSize: 12.5, color: "var(--fg-muted)", margin: "0 0 14px", lineHeight: 1.55 }}>
@@ -99,7 +110,8 @@ export function ReferralCard() {
               </button>
             </div>
 
-            <div
+            <button type="button" className="ds-btn ds-btn-sm" onClick={shareLink} style={{ marginBottom: compact ? 0 : 14 }}>Condividi il tuo invito</button>
+            {!compact && <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
@@ -108,7 +120,7 @@ export function ReferralCard() {
             >
               <Stat label="Invitati" value={data.stats.total} />
               <Stat label="Premi confermati" value={data.stats.paying} tone="good" />
-            </div>
+            </div>}
           </>
         )}
       </SectionBody>
