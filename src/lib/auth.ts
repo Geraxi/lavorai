@@ -107,6 +107,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 mode: "insensitive",
               },
             },
+            // Do not fetch the whole User model here. The historical
+            // production database may not yet contain recently-added,
+            // unrelated columns; an implicit `SELECT *` would then make a
+            // valid credentials login appear as an invalid password.
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              image: true,
+              passwordHash: true,
+              suspendedAt: true,
+            },
           });
         } catch (err) {
           console.warn("[auth] credentials fail", { reason: "db_error", emailHash });
