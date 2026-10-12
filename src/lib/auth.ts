@@ -9,6 +9,8 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { moveFile } from "@/lib/storage";
 import { effectiveTier, registrationTrialEnd, type Tier } from "@/lib/billing";
+import { CredentialsSignin } from "next-auth";
+import { createHash } from "node:crypto";
 
 /**
  * NextAuth v5 config — Email magic link via Resend.
@@ -36,14 +38,30 @@ const EMAIL_FROM =
   process.env.RESEND_FROM_OVERRIDE ??
   "LavorAI <onboarding@resend.dev>";
 
+class NoPasswordError extends CredentialsSignin {
+  code = "no_password";
+}
+
+class ServerError extends CredentialsSignin {
+  code = "server_error";
+}
+
+function hashEmail(email: string): string {
+  return createHash("sha256").update(email.trim().toLowerCase()).digest("hex").slice(0, 12);
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: {
     ...PrismaAdapter(prisma),
     async createUser(data) {
-      return prisma.user.create({ data: {
-        ...data, trialDurationDays: 7,
-        trialEndsAt: registrationTrialEnd(new Date()), proTrialUsedAt: new Date(),
-      } });
+      const normalizedData = {
+        ...data,
+        email: typeof data.email === "string" ? data.email.trim().toLowerCase() : data.email,
+        trialDurationDays: 7,
+        trialEndsAt: registrationTrialEnd(new Date()),
+        proTrialUsedAt: new Date(),
+      };
+      return prisma.user.create({ data: normalizedData });
     },
   },
   // Credentials richiede strategy "jwt" — il Prisma adapter continua
@@ -79,15 +97,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           typeof credentials?.password === "string" ? credentials.password : "";
         if (!email || !password) return null;
 
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user?.passwordHash) return null;
+        const emailHash = hashEmail(email);
+        let user;
+        try {
+          user = await prisma.user.findFirst({
+            where: {
+              email: {
+                equals: email,
+                mode: "insensitive",
+              },
+            },
+          });
+        } catch (err) {
+          console.warn("[auth] credentials fail", { reason: "db_error", emailHash });
+          throw new ServerError();
+        }
+
+        if (!user) {
+          console.warn("[auth] credentials fail", { reason: "no_user", emailHash });
+          return null;
+        }
+
+        if (!user.passwordHash) {
+          console.warn("[auth] credentials fail", { reason: "no_password", emailHash });
+          throw new NoPasswordError();
+        }
 
         const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) return null;
+        if (!ok) {
+          console.warn("[auth] credentials fail", { reason: "bad_password", emailHash });
+          return null;
+        }
 
-        // Unverified users can log in; applications stay blocked until verified.
-        // Account sospeso dall'admin: niente login.
         if (user.suspendedAt) {
+          console.warn("[auth] credentials fail", { reason: "suspended", emailHash });
           throw new Error("AccountSuspended");
         }
 
@@ -267,7 +310,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         console.error("[auth.events.createUser] welcome email failed", err);
       }
     },
-    async signIn({ user }) {
+    async signIn({ user, account, profile }) {
       // Aggiorna lastLoginAt
       if (user.id) {
         await prisma.user
@@ -282,6 +325,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         await adoptStagedCv(user.id, user.email).catch((err) => {
           console.error("[auth.events.signIn] adoptStagedCv failed", err);
         });
+      }
+    },
+    async linkAccount({ user, account, profile }) {
+      if (account?.provider === "google" && user.email && profile?.email) {
+        const userEmailNorm = user.email.trim().toLowerCase();
+        const googleEmailNorm = (profile.email as string).trim().toLowerCase();
+        if (userEmailNorm !== googleEmailNorm) {
+          console.warn("[auth] Google Account link email mismatch", {
+            userId: user.id,
+            userEmailHash: hashEmail(user.email),
+            googleEmailHash: hashEmail(profile.email as string),
+          });
+        }
       }
     },
   },

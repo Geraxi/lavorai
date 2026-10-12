@@ -74,8 +74,13 @@ export async function POST(request: NextRequest) {
     // (con o senza password, con o senza CV/candidature).
     // Un utente che vuole "nuovo account" con stessa email deve prima
     // cancellare quello esistente.
-    const existing = await prisma.user.findUnique({
-      where: { email },
+    const existing = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email,
+          mode: "insensitive",
+        },
+      },
       select: { id: true },
     });
     if (existing) {
