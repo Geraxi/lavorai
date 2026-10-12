@@ -22,7 +22,11 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function makePrisma(): PrismaClient {
-  const url = process.env.DATABASE_URL ?? "";
+  // The production schema is maintained through DIRECT_URL during the Vercel
+  // build. Prefer that same endpoint at runtime so an old pooled DATABASE_URL
+  // cannot leave Auth.js querying a different, stale schema (which breaks
+  // OAuth callbacks before a user can be signed in).
+  const url = process.env.DIRECT_URL ?? process.env.DATABASE_URL ?? "";
   const isPostgres = /^postgres(ql)?:\/\//.test(url);
   const log: ("error" | "warn")[] =
     process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"];
