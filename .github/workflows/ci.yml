@@ -21,8 +21,8 @@ jobs:
       - name: Generate Prisma
         run: npx prisma generate
         env:
-          DATABASE_URL: "file:./dev.db"
-          DIRECT_URL: "file:./dev.db"
+          DATABASE_URL: "postgresql://user:password@localhost:5432/ci_db"
+          DIRECT_URL: "postgresql://user:password@localhost:5432/ci_db"
 
       - name: Typecheck
         run: npx tsc --noEmit
@@ -35,8 +35,8 @@ jobs:
 
       - name: Build
         env:
-          DATABASE_URL: "file:./dev.db"
-          DIRECT_URL: "file:./dev.db"
+          DATABASE_URL: "postgresql://user:password@localhost:5432/ci_db"
+          DIRECT_URL: "postgresql://user:password@localhost:5432/ci_db"
           AUTH_SECRET: ci-dummy-secret-for-build-only-ci-dummy-secret
           NEXT_PUBLIC_SITE_URL: http://localhost:3000
         run: npx next build
