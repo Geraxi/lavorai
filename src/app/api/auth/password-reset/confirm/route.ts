@@ -71,14 +71,18 @@ export async function POST(request: NextRequest) {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // Use updateMany deliberately: Prisma's single-record `update` returns
+    // every scalar field by default. Older database schemas can therefore
+    // reject an otherwise valid password change when an unrelated, newer
+    // User column is absent. These mutations only need affected-row counts.
     // Transaction: aggiorna password + marca token usato + invalida sessioni esistenti
     await prisma.$transaction([
-      prisma.user.update({
+      prisma.user.updateMany({
         where: { id: record.userId },
         data: { passwordHash },
       }),
-      prisma.passwordResetToken.update({
-        where: { id: record.id },
+      prisma.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null },
         data: { usedAt: new Date() },
       }),
       // Con JWT strategy le sessioni esistenti restano valide fino a scadenza
