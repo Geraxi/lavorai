@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { auth } from "@/lib/auth";
 import { getDemoUser, prisma } from "@/lib/db";
+import { sessionUserSelect, type CurrentUser } from "@/lib/user-selects";
 
 /**
  * Helper universale: ritorna l'utente corrente.
@@ -12,11 +13,11 @@ import { getDemoUser, prisma } from "@/lib/db";
  * Combinato col fix in auth.ts (JWT caching dei campi tier/email/name),
  * un page render tipico ora fa 1 query User invece di 2-4.
  */
-export const getCurrentUser = cache(async () => {
+export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   try {
     const session = await auth();
     if (session?.user?.id) {
-      return prisma.user.findUnique({ where: { id: session.user.id } });
+      return prisma.user.findUnique({ where: { id: session.user.id }, select: sessionUserSelect });
     }
   } catch {
     // auth() può fallire se env manca in dev — fallback sotto

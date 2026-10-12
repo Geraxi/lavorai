@@ -329,8 +329,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           .update({
             where: { id: user.id },
             data: { lastLoginAt: new Date() },
+            select: { id: true },
           })
-          .catch(() => void 0);
+          .catch((error) => {
+            console.error("[auth.events.signIn] lastLoginAt update failed", {
+              code: error && typeof error === "object" && "code" in error ? error.code : "unknown",
+            });
+          });
       }
       // Adotta CV staged da /optimize (se presente e non scaduto)
       if (user.id && user.email) {

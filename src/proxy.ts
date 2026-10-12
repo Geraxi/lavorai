@@ -1,5 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import { prisma } from "@/lib/db";
+import { accessUserSelect } from "@/lib/user-selects";
+import { accessUnavailableResponse } from "@/lib/access-unavailable";
 import { isApplicationAccessPaused } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
 import { requiresTrialAccess } from "@/lib/trial-access";
@@ -62,7 +64,17 @@ export async function proxy(request: NextRequest) {
     const secureCookie = request.cookies.getAll().some(({ name }) => name.startsWith("__Secure-authjs.session-token"));
     const token = await getToken({ req: request, secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET, secureCookie });
     if (token?.sub) {
-      const user = await prisma.user.findUnique({ where: { id: token.sub } });
+      let user;
+      try {
+        user = await prisma.user.findUnique({ where: { id: token.sub }, select: accessUserSelect });
+      } catch (error) {
+        // Fail closed, but return a browser-renderable response rather than an
+        // uncaught proxy exception. Do not hide schema drift behind free access.
+        console.error("[proxy] access lookup failed", {
+          code: error && typeof error === "object" && "code" in error ? error.code : "unknown",
+        });
+        return accessUnavailableResponse(pathname);
+      }
       if (user && !isAdmin(user.email) && isApplicationAccessPaused(user)) {
         return pathname.startsWith("/api/")
           ? NextResponse.json({ error: "trial_expired", message: "Free trial expired", redirect: "/trial-expired" }, { status: 402 })
