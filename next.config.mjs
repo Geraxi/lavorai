@@ -37,11 +37,15 @@ const nextConfig = {
     "@sparticuz/chromium",
     "mammoth",
   ],
-  // Traccia il binario Chromium compresso (@sparticuz/chromium) DENTRO il
-  // bundle delle function API che lanciano il browser. Senza, su Vercel il
-  // file .br non viene incluso e executablePath() fallisce a runtime.
-  outputFileTracingIncludes: {
-    "/api/**": ["./node_modules/@sparticuz/chromium/**"],
+  // ESCLUDI Chromium/Playwright da tutte le API routes — il browser gira SOLO
+  // sul Railway worker, NON su Vercel serverless. Prima questa config spediva
+  // 51 MB di Chromium in OGNI function (323 files × 51 MB = 205 GB storage).
+  outputFileTracingExcludes: {
+    "/api/**": [
+      "./node_modules/@sparticuz/chromium/**",
+      "./node_modules/playwright/**",
+      "./node_modules/playwright-core/**",
+    ],
   },
   async headers() {
     return [

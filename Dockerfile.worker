@@ -4,9 +4,13 @@
 FROM mcr.microsoft.com/playwright:v1.59.1-jammy AS base
 WORKDIR /app
 
-# Solo le deps necessarie al worker (no dev deps)
+# Copia package files
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+
+# CRITICO: installa TUTTE le deps (incluse devDependencies che contengono
+# playwright/@sparticuz/chromium) — il worker DEVE avere il browser. Vercel
+# serverless NON le installa più (sono in devDeps) = dimensione deploy ridotta.
+RUN npm ci
 
 # Prisma schema + generate client
 COPY prisma ./prisma
