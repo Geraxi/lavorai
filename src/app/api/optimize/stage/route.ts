@@ -38,10 +38,13 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const emailRaw = formData.get("email");
     const consentRaw = formData.get("privacyConsent");
+    const marketingConsentRaw = formData.get("marketingConsent");
     const file = formData.get("cv");
 
     const email =
       typeof emailRaw === "string" ? emailRaw.trim().toLowerCase() : "";
+    const marketingConsent = marketingConsentRaw === "true";
+    
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json(
         { error: "validation", message: "Email non valida." },
@@ -103,6 +106,7 @@ export async function POST(request: NextRequest) {
         storagePath,
         extractedText: text,
         privacyConsentAt,
+        marketingConsent,
         expiresAt,
       },
       update: {
@@ -110,6 +114,7 @@ export async function POST(request: NextRequest) {
         storagePath,
         extractedText: text,
         privacyConsentAt,
+        marketingConsent,
         expiresAt,
         createdAt: new Date(),
       },

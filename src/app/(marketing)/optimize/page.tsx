@@ -17,6 +17,7 @@ const MAX_CV_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export default function OptimizePage() {
   const [consenso, setConsenso] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [status, setStatus] = useState<Status>("idle");
   const [sentEmail, setSentEmail] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
@@ -43,12 +44,13 @@ export default function OptimizePage() {
     setStatus("loading");
 
     try {
-      // 1. Server-side staging: salva CV + consenso keyed by email.
+      // 1. Server-side staging: salva CV + consenso + marketing opt-in keyed by email.
       // Funziona cross-device (a differenza di localStorage).
       const stageFd = new FormData();
       stageFd.set("cv", file);
       stageFd.set("email", email);
       stageFd.set("privacyConsent", "true");
+      stageFd.set("marketingConsent", marketingConsent ? "true" : "false");
 
       const stageRes = await fetch("/api/optimize/stage", {
         method: "POST",
@@ -105,6 +107,8 @@ export default function OptimizePage() {
             onSubmit={onSubmit}
             consenso={consenso}
             setConsenso={setConsenso}
+            marketingConsent={marketingConsent}
+            setMarketingConsent={setMarketingConsent}
             loading={status === "loading"}
             file={file}
             setFile={setFile}
@@ -121,6 +125,8 @@ function FormCard({
   onSubmit,
   consenso,
   setConsenso,
+  marketingConsent,
+  setMarketingConsent,
   loading,
   file,
   setFile,
@@ -128,6 +134,8 @@ function FormCard({
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
   consenso: boolean;
   setConsenso: (v: boolean) => void;
+  marketingConsent: boolean;
+  setMarketingConsent: (v: boolean) => void;
   loading: boolean;
   file: File | null;
   setFile: (f: File | null) => void;
@@ -207,25 +215,40 @@ function FormCard({
             </p>
           </div>
 
-          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 bg-background/60 p-3 text-sm">
-            <input
-              type="checkbox"
-              checked={consenso}
-              onChange={(e) => setConsenso(e.target.checked)}
-              disabled={loading}
-              className="mt-0.5 h-4 w-4 accent-primary"
-            />
-            <span className="text-muted-foreground">
-              Ho letto la{" "}
-              <Link
-                href="/privacy"
-                className="text-foreground underline-offset-4 hover:underline"
-              >
-                privacy policy
-              </Link>{" "}
-              e autorizzo il trattamento dei dati.
-            </span>
-          </label>
+          <div className="space-y-3">
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border border-border/60 bg-background/60 p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={consenso}
+                onChange={(e) => setConsenso(e.target.checked)}
+                disabled={loading}
+                className="mt-0.5 h-4 w-4 accent-primary"
+              />
+              <span className="text-muted-foreground">
+                Ho letto la{" "}
+                <Link
+                  href="/privacy"
+                  className="text-foreground underline-offset-4 hover:underline"
+                >
+                  privacy policy
+                </Link>{" "}
+                e autorizzo il trattamento dei dati.
+              </span>
+            </label>
+
+            <label className="flex cursor-pointer items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={marketingConsent}
+                onChange={(e) => setMarketingConsent(e.target.checked)}
+                disabled={loading}
+                className="mt-0.5 h-4 w-4 accent-primary"
+              />
+              <span className="text-muted-foreground">
+                Voglio ricevere offerte di lavoro simili e aggiornamenti da LavorAI (opzionale)
+              </span>
+            </label>
+          </div>
 
           <Button
             type="submit"
@@ -272,7 +295,8 @@ function SentCard({ email }: { email: string }) {
           <p className="mt-3 text-sm text-muted-foreground">
             Abbiamo inviato un magic link a{" "}
             <span className="text-foreground">{email}</span>. Clicca il link
-            per accedere — il tuo CV verrà caricato automaticamente.
+            per accedere — il tuo CV verrà caricato automaticamente e riceverai
+            il risultato completo dell&apos;analisi.
           </p>
         </div>
 
@@ -280,7 +304,8 @@ function SentCard({ email }: { email: string }) {
           {[
             "Apri l'email da LavorAI",
             "Clicca il magic link",
-            "Completa le preferenze e attiva auto-apply",
+            "Vedi score ATS + CV ottimizzato + cover letter",
+            "Completa le preferenze per iniziare la prova gratuita",
           ].map((f) => (
             <li key={f} className="flex items-start gap-3">
               <Check className="mt-0.5 h-4 w-4 flex-none text-primary" />
@@ -289,7 +314,37 @@ function SentCard({ email }: { email: string }) {
           ))}
         </ul>
 
-        <p className="mt-8 text-center text-xs text-muted-foreground">
+        <div className="mt-8 space-y-3">
+          <Button asChild size="lg" className="w-full">
+            <Link href={`/login?email=${encodeURIComponent(email)}`}>
+              <Sparkles className="h-4 w-4" />
+              Completa il setup — 7 giorni gratis
+            </Link>
+          </Button>
+          
+          <p className="text-center text-xs text-muted-foreground">
+            Dopo il risultato, puoi attivare auto-apply su 100+ job board europei
+          </p>
+        </div>
+
+        <div className="mt-8 rounded-lg border border-border/60 bg-background/40 p-4">
+          <p className="text-center text-xs font-medium text-foreground">
+            💎 Passa a Pro per candidarti in automatico
+          </p>
+          <p className="mt-1 text-center text-xs text-muted-foreground">
+            Da €19.99/mese · Candidature illimitate · Cover letter AI · Pausa quando vuoi
+          </p>
+          <div className="mt-3 text-center">
+            <Link
+              href="/pricing"
+              className="text-xs font-medium text-primary hover:underline"
+            >
+              Vedi piani →
+            </Link>
+          </div>
+        </div>
+
+        <p className="mt-6 text-center text-xs text-muted-foreground">
           Non vedi l&apos;email? Controlla spam o riprova con un altro
           indirizzo.
         </p>

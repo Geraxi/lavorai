@@ -17,6 +17,11 @@ const testimonials = TESTIMONIALS.map((t) => ({
 }));
 
 export function SectionTestimonialsV2() {
+  // Non mostrare la sezione se non ci sono testimonial reali
+  if (testimonials.length === 0) {
+    return null;
+  }
+  
   return (
     <section className="relative border-t border-border/60 py-24 md:py-28">
       <div
