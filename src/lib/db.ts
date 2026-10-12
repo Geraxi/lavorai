@@ -62,11 +62,16 @@ function makePrisma(): PrismaClient {
     }
   }
 
-  if (isPostgres) {
+  // Use Neon adapter only in production for Vercel serverless optimization.
+  // In CI/test environments, use standard Prisma client to avoid WebSocket connection issues.
+  const useNeonAdapter = isPostgres && process.env.NODE_ENV === "production" && url.includes(".neon.tech");
+  
+  if (useNeonAdapter) {
     const adapter = new PrismaNeon({ connectionString: url });
     return new PrismaClient({ adapter, log });
   }
-  // Dev locale senza Postgres (sqlite/file:): client classico.
+  
+  // CI, dev locale, or non-Neon Postgres: client standard.
   return new PrismaClient({ log });
 }
 
