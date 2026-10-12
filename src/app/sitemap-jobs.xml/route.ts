@@ -2,6 +2,9 @@ import { prisma } from "@/lib/db";
 import { jobDatePosted } from "@/lib/job-seo";
 
 export const runtime = "nodejs";
+// The job index is backed by the live database.  Do not query it while Vercel
+// builds previews: previews deliberately have no production database access.
+export const dynamic = "force-dynamic";
 export const revalidate = 3600;
 
 /**

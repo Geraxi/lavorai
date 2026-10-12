@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && prisma db push --skip-generate && next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "echo 'next lint removed in Next 16; typecheck is the CI gate' && exit 0",
     "test": "npx tsx scripts/test-application-security-code.ts && npx tsx scripts/test-otp-auto-complete.ts && npx tsx scripts/test-auth-hardening.ts && npx tsx scripts/test-registration-trial.ts && npx tsx scripts/test-growth-lifecycle.ts",
