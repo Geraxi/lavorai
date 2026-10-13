@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { enqueueApplication, cancelApplication } from "@/lib/application-queue";
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
   if (!(await authorized(req))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  if (applicationsPaused()) return NextResponse.json({ error: "applications_paused" }, { status: 503 });
   const body = await req.json().catch(() => ({}));
   const days = Math.max(1, Math.min(60, Number(body?.days) || 30));
   const limit = Math.max(1, Math.min(300, Number(body?.limit) || 200));

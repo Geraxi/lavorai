@@ -1,3 +1,4 @@
+import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
 import { reuseCvAnswers } from "@/lib/cv-answer-reuse";
 import { reserveTrialApplication } from "@/lib/trial-quota";
 import { Resend } from "resend";
@@ -91,6 +92,7 @@ export async function processApplication(
   applicationId: string,
   opts?: { forceRealSubmit?: boolean },
 ): Promise<void> {
+  if (applicationsPaused()) return;
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -1082,6 +1084,7 @@ interface AutoSubmitInput {
 }
 
 async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
+  assertApplicationsRunning();
   const { applicationId, portal, jobUrl } = input;
 
   // Job mock/demo ESPLICITO: solo URL di sviluppo (example.com/org).
@@ -1882,6 +1885,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   import("@/lib/portal-adapters").ApplyOutcome
 > {
   const { applicationId, adapter, jobUrl, cvPath, clPath, userId } = input;
+  assertApplicationsRunning();
 
   await prisma.application.update({
     where: { id: applicationId },

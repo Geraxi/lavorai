@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -160,7 +161,26 @@ interface RunStats {
   errors: number;
 }
 
+function emptyRunStats(): RunStats {
+  return {
+    usersProcessed: 0,
+    applicationsEnqueued: 0,
+    applicationsAwaitingConsent: 0,
+    skippedDailyCap: 0,
+    skippedMonthlyPaywall: 0,
+    skippedMatchThreshold: 0,
+    skippedRoleMismatch: 0,
+    skippedAlreadyApplied: 0,
+    skippedAvoidedCompany: 0,
+    skippedSessionPaused: 0,
+    skippedEmploymentMismatch: 0,
+    skippedLocationMismatch: 0,
+    errors: 0,
+  };
+}
+
 export async function runAutoApplyCron(): Promise<RunStats> {
+  if (applicationsPaused()) return emptyRunStats();
   // Self-heal PRIMA di processare gli utenti: archivia sessioni garbage,
   // re-enqueue stuck apps, auto-lower matchMin per zero-throughput, alert
   // admin su credit exhaustion. Idempotente, gira ogni tick (~30min).
@@ -179,21 +199,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     console.error("[auto-apply-cron] self-heal crashed (non-fatal)", err);
   }
 
-  const stats: RunStats = {
-    usersProcessed: 0,
-    applicationsEnqueued: 0,
-    applicationsAwaitingConsent: 0,
-    skippedDailyCap: 0,
-    skippedMonthlyPaywall: 0,
-    skippedMatchThreshold: 0,
-    skippedRoleMismatch: 0,
-    skippedAlreadyApplied: 0,
-    skippedAvoidedCompany: 0,
-    skippedSessionPaused: 0,
-    skippedEmploymentMismatch: 0,
-    skippedLocationMismatch: 0,
-    errors: 0,
-  };
+  const stats = emptyRunStats();
 
   // Utenti in modalità auto O hybrid con CV + preferenze.
   // - "auto":   creiamo candidature "queued" e le mandiamo subito in coda.
@@ -284,21 +290,8 @@ export async function runAutoApplyCron(): Promise<RunStats> {
  * che mostra "N candidature accodate").
  */
 export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
-  const stats: RunStats = {
-    usersProcessed: 0,
-    applicationsEnqueued: 0,
-    applicationsAwaitingConsent: 0,
-    skippedDailyCap: 0,
-    skippedMonthlyPaywall: 0,
-    skippedMatchThreshold: 0,
-    skippedRoleMismatch: 0,
-    skippedAlreadyApplied: 0,
-    skippedAvoidedCompany: 0,
-    skippedSessionPaused: 0,
-    skippedEmploymentMismatch: 0,
-    skippedLocationMismatch: 0,
-    errors: 0,
-  };
+  if (applicationsPaused()) return emptyRunStats();
+  const stats = emptyRunStats();
   const user = await prisma.user.findUnique({
     where: {
       id: userId,

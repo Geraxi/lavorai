@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -37,6 +38,10 @@ export async function POST(request: NextRequest) {
         { error: "unauthenticated", message: "Devi loggarti per candidarti." },
         { status: 401 },
       );
+    }
+
+    if (applicationsPaused()) {
+      return NextResponse.json({ error: "applications_paused", message: "Invii temporaneamente in pausa per manutenzione." }, { status: 503 });
     }
 
     if (requiresPaymentMethodBeforeApp(user)) {

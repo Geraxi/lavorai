@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { runAutoApplyCron } from "@/lib/auto-apply-cron";
 
@@ -23,6 +24,7 @@ export async function GET(request: NextRequest) {
   if (!authorized) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  if (applicationsPaused()) return NextResponse.json({ ok: true, paused: true, reason: "applications_paused" });
   const t0 = Date.now();
   try {
     const stats = await runAutoApplyCron();

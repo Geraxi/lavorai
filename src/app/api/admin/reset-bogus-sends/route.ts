@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
   if (!cronSecret || auth !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  if (applicationsPaused()) return NextResponse.json({ error: "applications_paused" }, { status: 503 });
 
   // Trova le Application inviate via email a indirizzi chiaramente bogus
   const bogusPattern =

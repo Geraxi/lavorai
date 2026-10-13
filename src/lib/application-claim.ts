@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 
 /**
@@ -15,6 +16,7 @@ import { prisma } from "@/lib/db";
 export const STALE_CLAIM_MS = 20 * 60_000;
 
 export async function claimApplication(applicationId: string): Promise<boolean> {
+  if (applicationsPaused()) return false;
   const stale = new Date(Date.now() - STALE_CLAIM_MS);
   const r = await prisma.application.updateMany({
     where: { id: applicationId, status: "queued", OR: [{ startedAt: null }, { startedAt: { lt: stale } }] },
@@ -30,6 +32,7 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
  * in `queued` così il prossimo worker le riprende.
  */
 export async function recoverStuckApplications(): Promise<number> {
+  if (applicationsPaused()) return 0;
   const stale = new Date(Date.now() - STALE_CLAIM_MS);
   const stuck = await prisma.application.findMany({
     where: {
@@ -57,6 +60,7 @@ export async function recoverStuckApplications(): Promise<number> {
 
 /** Candidature in coda prendibili, dalla più vecchia. Richiama recovery prima. */
 export async function findClaimableQueued(limit: number): Promise<string[]> {
+  if (applicationsPaused()) return [];
   // Recupera candidature stuck PRIMA di prendere le queued (così se ne libera qualcuna)
   await recoverStuckApplications().catch((err) =>
     console.warn("[claim] recovery failed", err),
@@ -73,6 +77,7 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
 
 /** Rimette una candidatura in stato prendibile (da chiamare all'enqueue). */
 export async function resetClaim(applicationId: string): Promise<void> {
+  if (applicationsPaused()) return ;
   await prisma.application
     .updateMany({ where: { id: applicationId, status: "queued" }, data: { startedAt: null } })
     .catch(() => void 0);

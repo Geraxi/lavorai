@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { processApplication } from "@/lib/application-worker";
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
     // dev: permetti chiamate senza secret per test locale
   }
 
+  if (applicationsPaused()) return NextResponse.json({ ok: true, skipped: true, reason: "applications_paused" });
   const body = await request.json().catch(() => null);
   const parsed = Schema.safeParse(body);
   if (!parsed.success) {
