@@ -21,12 +21,12 @@ export function Hero() {
     <>
     <section
       ref={heroRef}
-      className="lavorai-hero-section relative min-h-[780px] lg:min-h-[150svh]"
+      className="lavorai-hero-section relative min-h-[760px] lg:min-h-[120svh]"
       style={{
         backgroundColor: "transparent",
       }}
     >
-      <div className="relative min-h-[780px] overflow-hidden lg:sticky lg:top-[77px] lg:h-[100svh]">
+      <div className="relative min-h-[760px] overflow-hidden lg:sticky lg:top-[77px] lg:h-[100svh]">
       {/* La composizione vive interamente nella metà destra: la Terra e le
           opportunità sono un unico soggetto, mentre il copy resta libero a
           sinistra. Il pianeta condiviso riappare più avanti nello scroll. */}
@@ -35,7 +35,7 @@ export function Hero() {
         className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
         style={{
           backgroundImage: "url('/lavorai-hero-space.jpg')",
-          backgroundPosition: "center",
+          backgroundPosition: "66% center",
           backgroundRepeat: "no-repeat",
           backgroundSize: "cover",
         }}
@@ -45,7 +45,7 @@ export function Hero() {
         className="pointer-events-none absolute inset-0 z-0 hidden lg:block"
         style={{
           background:
-            "linear-gradient(90deg, #010510 0%, rgba(1,5,16,0.92) 34%, rgba(1,5,16,0.28) 54%, rgba(1,5,16,0) 76%)",
+            "linear-gradient(90deg, #010510 0%, rgba(1,5,16,0.97) 31%, rgba(1,5,16,0.64) 46%, rgba(1,5,16,0.12) 67%, rgba(1,5,16,0.04) 100%)",
         }}
       />
       <div
@@ -60,7 +60,7 @@ export function Hero() {
       {/* Subtle green atmospheric glow */}
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute inset-0 z-0"
+        className="pointer-events-none absolute inset-0 z-0 lavorai-hero-atmosphere"
         style={{
           background:
             "radial-gradient(ellipse 40% 50% at 75% 50%, hsl(var(--primary) / 0.15), transparent 70%)",
@@ -82,12 +82,12 @@ export function Hero() {
       <div
         className="relative z-10 flex min-h-[780px] w-full items-center lg:h-full lg:min-h-0"
         style={{
-          maxWidth: 1580,
+          maxWidth: 1540,
           margin: "0 auto",
-          padding: "24px 40px",
+          padding: "24px clamp(28px, 4vw, 68px)",
         }}
       >
-        <div className="grid items-center gap-14 lg:grid-cols-2">
+        <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,.93fr)_minmax(0,1.07fr)]">
           {/* Colonna sinistra: Testo puro su dark background, senza box glassmorphism */}
           <motion.div
             initial={{ opacity: 0, x: -20 }}
@@ -95,7 +95,7 @@ export function Hero() {
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
             // Su mobile lasciamo spazio al pianeta condiviso, che è già
             // presente dal primo frame e continua lungo tutta la landing.
-            className="flex flex-col items-start text-left relative z-10 w-full lg:max-w-[640px] pt-[280px] pb-8 lg:pt-4 lg:pb-6"
+            className="lavorai-hero-copy flex flex-col items-start text-left relative z-10 w-full lg:max-w-[610px] pt-[280px] pb-8 lg:-translate-y-[7vh] lg:pt-4 lg:pb-6"
           >
             {/* Badge live — stats REALI dal DB via /api/public/stats.
                 Se il fetch fallisce o gli stats sono a zero, non renderizza
@@ -107,6 +107,7 @@ export function Hero() {
               transition={{ duration: 0.5 }}
               className="mb-3"
             >
+              <div aria-hidden className="mb-3 flex items-center gap-3 font-mono text-[9px] uppercase tracking-[0.22em] text-white/45"><span className="h-px w-8 bg-primary/75" /> Candidate intelligence</div>
               <LiveStatsBadge variant="hero" />
             </motion.div>
 
@@ -120,10 +121,10 @@ export function Hero() {
                 // Le righe precedenti sono in em per scalare in proporzione.
                 // Max ridotto da 7.5rem a 6rem così le 4 righe + content
                 // sotto stanno tutte nella section senza scroll/crop.
-                fontSize: "clamp(2.7rem, 5.35vw, 5.7rem)",
-                letterSpacing: "-0.055em",
-                lineHeight: 0.98,
-                fontWeight: 800,
+                fontSize: "clamp(2.7rem, 4.75vw, 5.15rem)",
+                letterSpacing: "-0.062em",
+                lineHeight: 0.94,
+                fontWeight: 760,
                 color: "#FFFFFF",
                 textShadow: "0 2px 24px rgba(0,5,20,0.5)",
               }}
@@ -197,13 +198,13 @@ export function Hero() {
                   asChild
                   className="group relative overflow-hidden bg-primary text-primary-foreground hover:bg-primary/90"
                   style={{
-                    minHeight: 64,
-                    minWidth: 304,
-                    paddingLeft: 30,
-                    paddingRight: 30,
-                    fontSize: 17,
-                    fontWeight: 600,
-                    borderRadius: 14,
+                    minHeight: 56,
+                    minWidth: 264,
+                    paddingLeft: 24,
+                    paddingRight: 24,
+                    fontSize: 15,
+                    fontWeight: 650,
+                    borderRadius: 4,
                   }}
                 >
                   <Link href="/signup" onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, { label: "signup" })}>
@@ -211,7 +212,7 @@ export function Hero() {
                   </Link>
                 </Button>
               </div>
-              <div className="grid grid-cols-3 gap-7 text-white/80" style={{ maxWidth: 440 }}>
+              <div className="lavorai-hero-proof grid grid-cols-3 gap-5 text-white/80" style={{ maxWidth: 462 }}>
                 {[
                   [FileText, t("featureA")],
                   [MapPin, t("featureB")],

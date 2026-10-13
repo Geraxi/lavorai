@@ -353,25 +353,37 @@ function LoginContent() {
         .lavorai-login {
           min-height: 100vh;
           display: grid;
-          grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
-          background: transparent;
+          grid-template-columns: minmax(420px, .72fr) minmax(0, 1.28fr);
+          background: #020611;
           color: var(--fg);
         }
         .lavorai-login-left {
-          padding: 40px 48px;
+          position: relative;
+          z-index: 2;
+          padding: 42px clamp(34px, 4vw, 72px);
           display: flex;
           flex-direction: column;
+          background: linear-gradient(160deg, #040914 0%, #020611 68%);
+          border-right: 1px solid rgba(160, 255, 221, .14);
         }
+        .lavorai-login-left::before { content: ""; position: absolute; inset: 0 0 auto; height: 1px; background: linear-gradient(90deg, transparent, rgba(87, 239, 193, .6), transparent); opacity: .7; }
+        .lavorai-login-left input { border-radius: 4px !important; }
+        .lavorai-login-left button { border-radius: 4px !important; }
         .lavorai-login-right {
           position: relative;
           overflow: hidden;
           background: #02060d url("/login-showcase-scene.jpg") center / cover no-repeat;
-          padding: 80px 56px;
+          padding: 64px;
           display: flex;
           flex-direction: column;
           justify-content: center;
           align-items: center;
-          border-left: 1px solid var(--border-ds);
+        }
+        .lavorai-login-right::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(2,6,13,.74), rgba(2,6,13,.08) 42%, rgba(2,6,13,.08)), linear-gradient(180deg, rgba(2,6,13,.15), rgba(2,6,13,.58)); }
+        .login-showcase-cue { position: relative; z-index: 1; align-self: flex-start; max-width: 330px; margin: auto 0 10vh 8%; padding-left: 17px; border-left: 1px solid rgba(87, 239, 193, .86); color: rgba(255,255,255,.86); }
+        .login-showcase-cue p { margin: 0 0 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: .15em; text-transform: uppercase; color: #60e9bf; }
+        .login-showcase-cue h2 { margin: 0; font-size: clamp(1.35rem, 2vw, 2.2rem); font-weight: 540; letter-spacing: -.045em; line-height: 1.02; }
+        .login-showcase-cue span { display: block; margin-top: 16px; font-size: 12px; line-height: 1.5; color: rgba(255,255,255,.58); }
         }
         @media (max-width: 1023px) {
           .lavorai-login { grid-template-columns: 1fr; }
@@ -421,6 +433,12 @@ function LoginShowcase() {
     <aside
       className="lavorai-login-right"
       aria-label="LavorAI trova opportunità e prepara candidature personalizzate"
-    />
+    >
+      <div className="login-showcase-cue" aria-hidden>
+        <p>Candidate intelligence / 24·7</p>
+        <h2>Tu scegli la direzione.<br />Noi rendiamo il lavoro continuo.</h2>
+        <span>Ricerca, adattamento e invio: ogni passo resta visibile e sotto il tuo controllo.</span>
+      </div>
+    </aside>
   );
 }

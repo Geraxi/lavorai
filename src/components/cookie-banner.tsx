@@ -60,17 +60,18 @@ export function CookieBanner() {
       <style>{`
         .lavorai-cookie-banner {
           position: fixed;
-          inset: auto 16px 16px;
+          inset: auto 28px 28px auto;
           z-index: 90;
-          max-width: 620px;
-          margin: 0 auto;
-          padding: 14px 18px;
+          max-width: 480px;
+          margin: 0;
+          padding: 12px 14px;
           display: flex;
           align-items: center;
           gap: 16px;
           border: 1px solid var(--border-ds);
-          border-radius: var(--radius);
-          background: var(--bg-elev);
+          border-radius: 4px;
+          background: rgba(4, 12, 21, .88);
+          backdrop-filter: blur(16px);
           box-shadow: var(--shadow-lg);
           color: var(--fg);
           font-size: 13px;

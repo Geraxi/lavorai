@@ -1,13 +1,25 @@
 .job-network-scene { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
 .job-network-globe { position:absolute; width:min(75vw,1040px); height:auto; right:-3vw; top:50%; transform:translateY(-45%); filter:drop-shadow(0 0 38px rgba(35,225,176,.32)); }
 .job-network-aura { position:absolute; inset:8% -5% 0 25%; background:radial-gradient(ellipse at 60% 48%,rgba(19,206,151,.17),transparent 55%); filter:blur(12px); }
-.job-network-card { position:absolute; z-index:2; display:flex; align-items:center; gap:10px; width:clamp(180px,17vw,254px); padding:10px 12px; color:#f7fbff; background:linear-gradient(120deg,rgba(3,14,23,.94),rgba(4,25,31,.76)); border:1px solid rgba(157,247,220,.3); border-radius:12px; box-shadow:0 18px 44px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.09); backdrop-filter:blur(10px); }
-.job-network-mark { display:grid; place-items:center; flex:none; width:31px; height:31px; border-radius:8px; color:#07100d; background:#f8fbff; font-size:17px; font-weight:900; box-shadow:0 0 0 1px rgba(255,255,255,.25); }
-.job-network-copy { min-width:0; display:grid; gap:1px; line-height:1.18; }.job-network-copy strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;}.job-network-copy small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:rgba(255,255,255,.62);font-size:9px;}.job-network-card>b{margin-left:auto;padding:5px 7px;border-radius:7px;background:rgba(7,208,142,.18);color:#66fac4;font-size:10px;white-space:nowrap}.job-network-card em{font-style:normal;font-size:8px;font-weight:600}.job-network-threads span{position:absolute;width:6px;height:6px;border-radius:99px;background:#58ffbf;box-shadow:0 0 14px #42f3ae;}
+/* Opportunity labels use the visual grammar of a live analyst terminal: thin
+   rules, almost-square corners, and controlled information density. */
+.job-network-card { position:absolute; z-index:2; display:flex; align-items:center; gap:9px; width:clamp(180px,17vw,254px); padding:9px 10px; color:#f7fbff; background:rgba(1,11,18,.74); border:1px solid rgba(157,247,220,.32); border-radius:3px; box-shadow:0 12px 34px rgba(0,0,0,.28); backdrop-filter:blur(7px); }
+.job-network-card::before { content:""; position:absolute; inset:0 auto 0 0; width:2px; background:#42e5ae; opacity:.72; }
+.job-network-mark { display:grid; place-items:center; flex:none; width:29px; height:29px; border-radius:3px; color:#07100d; background:#f8fbff; font-size:16px; font-weight:900; }
+.job-network-copy { min-width:0; display:grid; gap:1px; line-height:1.18; }.job-network-copy strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10.5px;font-weight:650;}.job-network-copy small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:rgba(255,255,255,.54);font-size:8.5px;}.job-network-card>b{margin-left:auto;padding:4px 6px;border-radius:2px;background:rgba(7,208,142,.16);color:#80f9cf;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;white-space:nowrap}.job-network-card em{font-style:normal;font-size:7px;font-weight:600}.job-network-threads span{position:absolute;width:6px;height:6px;border-radius:99px;background:#58ffbf;box-shadow:0 0 14px #42f3ae;}
 .job-network-scene.is-compact .job-network-globe{width:min(68vw,760px);right:-10%;top:52%;}.job-network-scene.is-compact .job-network-aura{inset:15% 0 5% 10%;}
 .job-network-scene.is-hero{z-index:4;}
 .job-network-scene.is-hero .job-network-globe{width:min(64vw,1000px,calc(100svh - 150px));right:-2.5vw;top:58%;transform:translateY(-50%);filter:drop-shadow(0 12px 42px rgba(35,225,176,.28));}
 .job-network-scene.is-hero .job-network-aura{inset:5% -5% 0 30%;background:radial-gradient(ellipse at 62% 54%,rgba(19,206,151,.18),transparent 58%);}
-.job-network-scene.is-hero .job-network-card{width:clamp(172px,14.8vw,238px);padding:9px 11px;border-radius:11px;background:linear-gradient(120deg,rgba(2,11,20,.95),rgba(4,27,32,.82));border-color:rgba(157,247,220,.36);box-shadow:0 18px 48px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.1);}
+.job-network-scene.is-hero .job-network-card{width:clamp(172px,14.2vw,228px);padding:8px 10px;border-radius:3px;background:rgba(1,11,18,.78);border-color:rgba(157,247,220,.34);box-shadow:0 16px 42px rgba(0,0,0,.32);}
 .job-network-scene.is-hero .job-network-mark{width:30px;height:30px;}.job-network-scene.is-hero .job-network-copy strong{font-size:10px;}.job-network-scene.is-hero .job-network-copy small{font-size:8.5px;}.job-network-scene.is-hero .job-network-card>b{font-size:9px;padding:5px 6px;}.job-network-scene.is-hero .job-network-card em{font-size:7px;}
-@media(max-width:1023px){.job-network-scene{display:none}} @media(prefers-reduced-motion:reduce){.job-network-card{transform:none!important}}
+.lavorai-hero-atmosphere { animation: lavorai-breathe 12s ease-in-out infinite; }
+.lavorai-hero-copy { isolation:isolate; }
+.lavorai-hero-copy::after { content:""; position:absolute; z-index:-1; width:clamp(260px,27vw,470px); height:1px; top:17%; left:calc(100% + 34px); background:linear-gradient(90deg,rgba(92,232,190,.56),rgba(92,232,190,0)); transform-origin:left; animation:lavorai-signal-line 1.2s .55s both cubic-bezier(.22,1,.36,1); }
+.lavorai-hero-copy .text-primary { color: #5ce8be; }
+.lavorai-hero-proof > div { position:relative; padding-left:12px; }
+.lavorai-hero-proof > div::before { content:""; position:absolute; left:0; top:2px; bottom:2px; width:1px; background:linear-gradient(to bottom,rgba(93,232,191,.85),rgba(93,232,191,.06)); }
+.lavorai-hero-proof svg { color:#5ce8be; }
+@keyframes lavorai-breathe { 0%,100%{opacity:.44} 50%{opacity:.78} }
+@keyframes lavorai-signal-line { from { transform:scaleX(0); opacity:0; } to { transform:scaleX(1); opacity:1; } }
+@media(max-width:1023px){.job-network-scene{display:none}.lavorai-hero-copy::after{display:none}} @media(prefers-reduced-motion:reduce){.job-network-card{transform:none!important}.lavorai-hero-atmosphere{animation:none}.lavorai-hero-copy::after{animation:none}}
