@@ -94,6 +94,7 @@ export function AppSidebar({
   const adminItems: NavItem[] = [
     { href: "/admin", label: "Panoramica", icon: "dashboard" },
     { href: "/admin/users", label: "Utenti", icon: "user" },
+    { href: "/admin/product", label: "Product", icon: "target" },
     { href: "/admin/traffic", label: "Traffico", icon: "chart" },
     { href: "/admin/delivery", label: "Consegna", icon: "send" },
     { href: "/admin/jobs", label: "Job pool", icon: "briefcase" },
