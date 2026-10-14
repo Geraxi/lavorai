@@ -1,22 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AppTopbar } from "@/components/design/topbar";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, ChevronDown, ChevronRight, CircleCheck, FileQuestion, LockKeyhole, Search, ShieldCheck, Sparkles, Users, Zap } from "lucide-react";
 import { displayOption, displayQuestion } from "@/lib/question-display-language";
 
-interface ApplicationExample { id: string; company: string; title: string; location?: string | null; description?: string | null }
+interface ApplicationExample { id: string; company: string; title: string; location?: string | null; description?: string | null; url?: string }
 interface Question {
   id: string;
   labelKey: string;
+  applicationId: string;
+  fingerprint: string;
+  requiresApplicationScope: boolean;
   label: string;
   kind: string;
   options?: string[];
   answer: string;
   source: string;
   suggestion?: string | null;
+  suggestionSource?: "cv" | "previous_user" | null;
   applications: ApplicationExample[];
 }
 type View = "pending" | "review" | "completed" | "focus";
@@ -31,6 +35,8 @@ const categories = [
 ];
 
 function categoryFor(label: string) { return categories.find((category) => category.pattern.test(label)) ?? categories[categories.length - 1]; }
+function questionWording(question: Question, locale: string) { return question.requiresApplicationScope ? { text: question.label, translated: false } : displayQuestion(question.label, locale); }
+function suggestionLabel(question: Question) { return question.suggestionSource === "cv" ? "Dal tuo CV" : "Risposta precedente, da confermare qui"; }
 function needsReview(question: Question) { return Boolean(question.suggestion || (question.answer.trim() && !["user", "cv"].includes(question.source))); }
 function isEnglishQuestion(label: string) { return /\b(the|and|with|for|from|this|that|are|you|your|will|have|working|office|role|position)\b/i.test(label); }
 function optionLanguage(question: Question, locale: string) { return locale === "it" && isEnglishQuestion(question.label) ? "en" : locale; }
@@ -44,7 +50,7 @@ function AnswerField({ question, value, onChange, locale }: { question: Question
   const options = question.kind === "checkbox" ? ["Yes", "No"] : (question.options ?? []).filter((option): option is string => typeof option === "string" && Boolean(option.trim()));
   const answersLocale = optionLanguage(question, locale);
   if (options.length > 0 && options.length <= 8) {
-    return <fieldset className="qa-options" aria-label={displayQuestion(question.label, locale).text}>
+    return <fieldset className="qa-options" aria-label={questionWording(question, locale).text}>
       {options.map((option) => {
         const id = `qa-answer-${question.id}-${option.replace(/[^a-z0-9]/gi, "-")}`;
         const selected = value === option;
@@ -55,8 +61,8 @@ function AnswerField({ question, value, onChange, locale }: { question: Question
       })}
     </fieldset>;
   }
-  if (question.kind === "textarea") return <textarea className="qa-input" rows={4} value={value} onChange={(event) => onChange(event.target.value)} placeholder="Scrivi la tua risposta…" aria-label={displayQuestion(question.label, locale).text} />;
-  return <><input className="qa-input" type="text" list={options.length ? `qa-options-${question.id}` : undefined} value={value} onChange={(event) => onChange(event.target.value)} placeholder="Scrivi o scegli una risposta…" aria-label={displayQuestion(question.label, locale).text} />{options.length ? <datalist id={`qa-options-${question.id}`}>{options.map((option) => <option key={option} value={option} label={displayOption(option, locale)} />)}</datalist> : null}</>;
+  if (question.kind === "textarea") return <textarea className="qa-input" rows={4} value={value} onChange={(event) => onChange(event.target.value)} placeholder="Scrivi la tua risposta…" aria-label={questionWording(question, locale).text} />;
+  return <><input className="qa-input" type="text" list={options.length ? `qa-options-${question.id}` : undefined} value={value} onChange={(event) => onChange(event.target.value)} placeholder="Scrivi o scegli una risposta…" aria-label={questionWording(question, locale).text} />{options.length ? <datalist id={`qa-options-${question.id}`}>{options.map((option) => <option key={option} value={option} label={displayOption(option, locale)} />)}</datalist> : null}</>;
 }
 
 export function QuestionsView() {
@@ -65,6 +71,7 @@ export function QuestionsView() {
   const [waiting, setWaiting] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const saveInFlight = useRef(false);
   const [view, setView] = useState<View>("pending");
   const [focusId, setFocusId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -80,7 +87,7 @@ export function QuestionsView() {
     const data: { questions?: Question[]; waitingApplications?: number; locale?: string } = await response.json();
     const rows = data.questions ?? [];
     setQuestions(rows);
-    setValues(Object.fromEntries(rows.map((question) => [question.labelKey, question.answer || question.suggestion || ""])));
+    setValues(Object.fromEntries(rows.map((question) => [question.id, question.answer || question.suggestion || ""])));
     setWaiting(data.waitingApplications ?? 0);
     setLocale(data.locale === "en" ? "en" : "it");
     if (rows.length && rows.every((question) => question.answer.trim() || question.suggestion) && rows.some(needsReview)) {
@@ -91,7 +98,7 @@ export function QuestionsView() {
 
   const pending = useMemo(() => questions.filter((question) => !question.answer.trim() && !question.suggestion).sort((a, b) => b.applications.length - a.applications.length), [questions]);
   const review = useMemo(() => questions.filter(needsReview), [questions]);
-  const cvSuggestions = review.filter((question) => question.suggestion && !question.answer.trim());
+  const cvSuggestions = review.filter((question) => question.suggestionSource === "cv" && question.suggestion && !question.answer.trim());
   const completed = useMemo(() => questions.filter((question) => question.answer.trim() && ["user", "cv"].includes(question.source)), [questions]);
   const activeList = view === "review" ? review : view === "completed" ? completed : pending;
   const filtered = activeList.filter((question) => `${question.label} ${categoryFor(question.label).label} ${question.applications.map((app) => app.company).join(" ")}`.toLocaleLowerCase("it-IT").includes(query.toLocaleLowerCase("it-IT")));
@@ -102,26 +109,28 @@ export function QuestionsView() {
   const progress = total ? Math.round(answeredCount / total * 100) : 100;
 
   async function save(selected: Question[]) {
-    const answers = selected.map((question) => ({ labelKey: question.labelKey, answer: (values[question.labelKey] ?? "").trim() })).filter((item) => item.answer);
+    if (saveInFlight.current) return false;
+    const selectedAnswers = selected.map((question) => ({ id: question.id, applicationId: question.applicationId, fingerprint: question.fingerprint, answer: (values[question.id] ?? "").trim() })).filter((item) => item.answer);
+    const answers = selectedAnswers.map(({ applicationId, fingerprint, answer }) => ({ applicationId, fingerprint, answer }));
     if (!answers.length) { setNotice("Seleziona o scrivi una risposta prima di salvare."); return false; }
-    setSaving(true); setNotice("");
+    saveInFlight.current = true; setSaving(true); setNotice("");
     try {
       const response = await fetch("/api/questions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ answers }) });
-      if (!response.ok) throw new Error("Salvataggio non riuscito. Riprova.");
+      if (!response.ok) throw new Error(response.status === 409 ? "Il form o le risposte sono cambiati. Ricarica le domande prima di riprovare." : "Risposta non salvata. Controlla la candidatura e le opzioni del form.");
       const result: { requeued?: number; remainingApplications?: number; saved?: number } = await response.json();
       // Aggiorna subito la UI con il valore che il server ha appena confermato.
       // Evita che una GET ancora in propagazione faccia sembrare la risposta
       // non salvata, soprattutto sui form sì/no.
-      const savedByKey = new Map(answers.map((answer) => [answer.labelKey, answer.answer]));
+      const savedByKey = new Map(selectedAnswers.map((answer) => [answer.id, answer.answer]));
       setQuestions((current) => current.map((question) => {
-        const answer = savedByKey.get(question.labelKey);
+        const answer = savedByKey.get(question.id);
         return answer == null ? question : { ...question, answer, source: "user" };
       }));
       setWaiting((current) => Math.max(0, current - (result.requeued ?? 0)));
       if (result.requeued) {
         setNotice(`Risposte salvate. ${result.requeued} ${result.requeued === 1 ? "candidatura ripartita" : "candidature ripartite"}.`);
       } else if (result.remainingApplications) {
-        setNotice(`Risposta salvata. Restano altre domande da completare per ${result.remainingApplications} ${result.remainingApplications === 1 ? "candidatura" : "candidature"} in attesa.`);
+        setNotice(`Risposta salvata. Verifica risposte, consensi e stato delle ${result.remainingApplications} ${result.remainingApplications === 1 ? "candidatura" : "candidature"} in attesa.`);
       } else {
         setNotice("Risposta salvata. Le candidature verranno aggiornate a breve.");
       }
@@ -129,7 +138,7 @@ export function QuestionsView() {
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Salvataggio non riuscito. Riprova.");
       return false;
-    } finally { setSaving(false); }
+    } finally { saveInFlight.current = false; setSaving(false); }
   }
 
   async function saveAndNext() {
@@ -142,7 +151,7 @@ export function QuestionsView() {
     <AppTopbar title="Domande" breadcrumb="Lavoro" />
     <main className="qa-page">
       <header className="qa-header">
-        <div><span className="qa-eyebrow">Il tuo profilo candidature</span><h1>{view === "focus" ? "Una risposta alla volta" : view === "review" ? "Verifica le tue risposte" : "Domande per le candidature"}</h1><p>I dati già presenti nel CV sono compilati automaticamente. Rispondi solo alle informazioni mancanti.</p></div>
+        <div><span className="qa-eyebrow">Il tuo profilo candidature</span><h1>{view === "focus" ? "Una risposta alla volta" : view === "review" ? "Verifica le tue risposte" : "Domande per le candidature"}</h1><p>Ogni risposta è salvata solo per la candidatura indicata. Consensi e dichiarazioni non vengono riutilizzati per altre aziende.</p></div>
         {waiting > 0 && <Link className="qa-waiting" href="/applications"><BriefcaseBusiness size={17} aria-hidden />{waiting} {waiting === 1 ? "candidatura in attesa" : "candidature in attesa"}<ChevronRight size={15} aria-hidden /></Link>}
       </header>
 
@@ -154,24 +163,25 @@ export function QuestionsView() {
             <div className="qa-impact"><Zap size={22} aria-hidden /><span>Questa risposta è richiesta da <strong>{focused.applications.length} {focused.applications.length === 1 ? "candidatura" : "candidature"}</strong></span></div>
             <div className="qa-progress-label"><span>{categoryFor(focused.label).label} · {focusedIndex + 1} di {pending.length}</span><strong>{progress}% completato</strong></div>
             <div className="qa-progress"><span style={{ width: `${progress}%` }} /></div>
-            <h2 title={focused.label}>{displayQuestion(focused.label, locale).text}</h2>
-            <AnswerField question={focused} locale={locale} value={values[focused.labelKey] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [focused.labelKey]: value }))} />
+            <h2 title={focused.label}>{questionWording(focused, locale).text}</h2>
+            <p className="qa-private">Solo per {focused.applications[0]?.company ?? "questa azienda"} · {focused.applications[0]?.title ?? "questa candidatura"}. Verifica il testo originale del form prima di confermare.</p>
+            <AnswerField question={focused} locale={locale} value={values[focused.id] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [focused.id]: value }))} />
             <div className="qa-focus-actions"><button type="button" className="qa-secondary" onClick={() => setView("pending")}>Continua più tardi</button><button type="button" className="qa-primary" disabled={saving} onClick={() => void saveAndNext()}>{saving ? "Salvataggio…" : "Salva e continua"}<ArrowRight size={16} aria-hidden /></button></div>
           </section>
-          <aside className="qa-focus-aside"><div className="qa-aside-heading"><FileQuestion size={20} aria-hidden /><h3>Dove verrà usata</h3></div><p>La risposta potrà essere usata per compilare automaticamente questi form di candidatura.</p>{focused.applications.length ? <div className="qa-related">{focused.applications.slice(0, 4).map((app) => <Link href={`/applications?id=${app.id}`} key={app.id}><CompanyLogo company={app.company} color={companyColor(app.company)} size={38} rounded={9} /><span><strong>{app.company}</strong><small>{applicationLabel(app)}</small></span><ChevronRight size={15} aria-hidden /></Link>)}{focused.applications.length > 4 && <small>e altre {focused.applications.length - 4}</small>}</div> : <p>Nessuna candidatura attualmente in attesa di questa domanda.</p>}<div className="qa-private"><ShieldCheck size={20} aria-hidden /><div><strong>La risposta resta nel tuo profilo</strong><p>Verrà inserita nei form delle candidature pertinenti. Non è pubblica.</p></div></div></aside>
+          <aside className="qa-focus-aside"><div className="qa-aside-heading"><FileQuestion size={20} aria-hidden /><h3>Dove verrà usata</h3></div><p>Questa risposta verrà usata esclusivamente nel form della candidatura indicata, con il testo e le opzioni mostrati qui.</p>{focused.applications.length ? <div className="qa-related">{focused.applications.slice(0, 4).map((app) => <Link href={`/applications?id=${app.id}`} key={app.id}><CompanyLogo company={app.company} color={companyColor(app.company)} size={38} rounded={9} /><span><strong>{app.company}</strong><small>{applicationLabel(app)}</small></span><ChevronRight size={15} aria-hidden /></Link>)}{focused.applications.length > 4 && <small>e altre {focused.applications.length - 4}</small>}</div> : <p>Nessuna candidatura attualmente in attesa di questa domanda.</p>}<div className="qa-private"><ShieldCheck size={20} aria-hidden /><div><strong>La risposta resta in questa candidatura</strong><p>Non autorizza dichiarazioni o accordi per altre aziende. Non è pubblica.</p></div></div></aside>
         </div> : <div className="qa-layout">
           <section className="qa-main">
             <div className="qa-overview"><div><strong>{answeredCount} di {total}</strong> risposte disponibili</div><span>{progress}%</span><div className="qa-progress"><span style={{ width: `${progress}%` }} /></div></div>
             <div className="qa-toolbar"><nav className="qa-tabs" aria-label="Stato domande">{([["pending", "Da rispondere", pending.length], ["review", "Da verificare", review.length], ["completed", "Completate", completed.length]] as const).map(([key, label, count]) => <button type="button" key={key} className={view === key ? "is-active" : ""} onClick={() => { setView(key); setExpandedId(null); }} aria-pressed={view === key}>{label}<span>{count}</span></button>)}</nav><label className="qa-search"><Search size={16} aria-hidden /><span className="sr-only">Cerca domande</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cerca domande o aziende" /></label></div>
             <div className="qa-list">{filtered.length ? filtered.map((question, index) => {
               const expanded = expandedId === question.id;
-              const wording = displayQuestion(question.label, locale);
-              return <article className={`qa-row ${expanded ? "is-expanded" : ""}`} key={question.id}><button type="button" className="qa-row-head" onClick={() => setExpandedId(expanded ? null : question.id)} aria-expanded={expanded}><span className="qa-number">{index + 1}</span><span className="qa-category">{categoryFor(question.label).label}</span><span className="qa-question" title={wording.translated ? question.label : undefined}>{wording.text}{question.suggestion && !question.answer ? <small>Dal tuo CV: {displayOption(question.suggestion, optionLanguage(question, locale))}</small> : question.answer && <small>{question.source === "cv" ? "Dal tuo CV · " : ""}{displayOption(question.answer, optionLanguage(question, locale))}</small>}</span><span className="qa-impact-count">{question.applications.length ? `${question.applications.length} in attesa` : ""}</span><ChevronDown size={16} aria-hidden /></button>{expanded && <div className="qa-row-body">{question.applications.length > 0 && <div className="qa-context"><span>Per queste candidature</span><div>{question.applications.slice(0, 3).map((app) => <Link href={`/applications?id=${app.id}`} key={app.id}><strong>{app.company}</strong><small>{applicationLabel(app)}</small>{view === "review" && applicationDescription(app) && <em>{applicationDescription(app)}</em>}</Link>)}{question.applications.length > 3 && <small>e altre {question.applications.length - 3}</small>}</div></div>}<AnswerField question={question} locale={locale} value={values[question.labelKey] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [question.labelKey]: value }))} /><div className="qa-row-actions">{view === "pending" && <button type="button" className="qa-secondary" onClick={() => { setFocusId(question.id); setView("focus"); }}>Apri a schermo intero</button>}<button type="button" className="qa-primary" disabled={saving} onClick={() => void save([question])}>{saving ? "Salvataggio…" : view === "review" ? "Conferma risposta" : "Salva risposta"}<ArrowRight size={15} aria-hidden /></button></div></div>}</article>;
+              const wording = questionWording(question, locale);
+              return <article className={`qa-row ${expanded ? "is-expanded" : ""}`} key={question.id}><button type="button" className="qa-row-head" onClick={() => setExpandedId(expanded ? null : question.id)} aria-expanded={expanded}><span className="qa-number">{index + 1}</span><span className="qa-category">{categoryFor(question.label).label}</span><span className="qa-question" title={wording.translated ? question.label : undefined}>{wording.text}<small>Solo per {question.applications[0]?.company ?? "questa azienda"} · {question.applications[0]?.title ?? "questa candidatura"}</small>{question.suggestion && !question.answer ? <small>{suggestionLabel(question)}: {displayOption(question.suggestion, optionLanguage(question, locale))}</small> : question.answer && <small>{question.source === "cv" ? "Dal tuo CV · " : ""}{displayOption(question.answer, optionLanguage(question, locale))}</small>}</span><span className="qa-impact-count">{question.applications.length ? `${question.applications.length} in attesa` : ""}</span><ChevronDown size={16} aria-hidden /></button>{expanded && <div className="qa-row-body">{question.applications.length > 0 && <div className="qa-context"><span>Solo per questa candidatura</span><div>{question.applications.slice(0, 3).map((app) => <Link href={`/applications?id=${app.id}`} key={app.id}><strong>{app.company}</strong><small>{applicationLabel(app)}</small>{view === "review" && applicationDescription(app) && <em>{applicationDescription(app)}</em>}</Link>)}{question.applications.length > 3 && <small>e altre {question.applications.length - 3}</small>}</div></div>}<AnswerField question={question} locale={locale} value={values[question.id] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [question.id]: value }))} /><div className="qa-row-actions">{view === "pending" && <button type="button" className="qa-secondary" onClick={() => { setFocusId(question.id); setView("focus"); }}>Apri a schermo intero</button>}<button type="button" className="qa-primary" disabled={saving} onClick={() => void save([question])}>{saving ? "Salvataggio…" : view === "review" ? "Conferma risposta" : "Salva risposta"}<ArrowRight size={15} aria-hidden /></button></div></div>}</article>;
             }) : <div className="qa-list-empty">{query ? "Nessuna domanda corrisponde alla ricerca." : view === "pending" ? "Hai risposto a tutte le domande in sospeso." : view === "review" ? "Nessuna risposta da verificare." : "Nessuna risposta completata."}</div>}</div>
             {view === "review" && cvSuggestions.length > 0 && <div className="qa-batch"><div><strong>{cvSuggestions.length} {cvSuggestions.length === 1 ? "risposta trovata" : "risposte trovate"} nel CV</strong><span>Controllale prima di usarle nelle candidature.</span></div><button type="button" className="qa-primary" disabled={saving} onClick={() => void save(cvSuggestions)}>{saving ? "Salvataggio…" : "Conferma quelle dal CV"}<ArrowRight size={15} aria-hidden /></button></div>}
             {pending.length > 0 && view === "pending" && <button type="button" className="qa-start" onClick={() => { setFocusId(pending[0].id); setView("focus"); }}>Rispondi una domanda alla volta <ArrowRight size={16} aria-hidden /></button>}
           </section>
-          <aside className="qa-aside"><div className="qa-aside-card"><div className="qa-aside-heading"><Sparkles size={19} aria-hidden /><h3>I tuoi progressi</h3></div><div className="qa-ring" style={{ background: `conic-gradient(#6cefd1 ${progress * 3.6}deg, #2b3943 0)` }}><span>{progress}%</span></div><p><strong>{answeredCount} di {total}</strong> risposte disponibili</p><div className="qa-aside-rule" /><p><strong>{waiting}</strong> {waiting === 1 ? "candidatura attende" : "candidature attendono"} una o più risposte.</p></div><div className="qa-aside-card"><div className="qa-aside-heading"><Users size={19} aria-hidden /><h3>Per categoria</h3></div>{categories.map((category) => { const rows = questions.filter((question) => categoryFor(question.label).key === category.key); if (!rows.length) return null; const count = rows.filter((question) => Boolean(question.answer.trim())).length; return <div className="qa-category-progress" key={category.key}><span>{category.label}</span><small>{count}/{rows.length}</small><div><i style={{ width: `${Math.round(count / rows.length * 100)}%` }} /></div></div>; })}</div><div className="qa-privacy"><LockKeyhole size={17} aria-hidden /> Le risposte vengono usate solo per compilare le tue candidature.</div></aside>
+          <aside className="qa-aside"><div className="qa-aside-card"><div className="qa-aside-heading"><Sparkles size={19} aria-hidden /><h3>I tuoi progressi</h3></div><div className="qa-ring" style={{ background: `conic-gradient(#6cefd1 ${progress * 3.6}deg, #2b3943 0)` }}><span>{progress}%</span></div><p><strong>{answeredCount} di {total}</strong> risposte disponibili</p><div className="qa-aside-rule" /><p><strong>{waiting}</strong> {waiting === 1 ? "candidatura attende" : "candidature attendono"} una o più risposte.</p></div><div className="qa-aside-card"><div className="qa-aside-heading"><Users size={19} aria-hidden /><h3>Per categoria</h3></div>{categories.map((category) => { const rows = questions.filter((question) => categoryFor(question.label).key === category.key); if (!rows.length) return null; const count = rows.filter((question) => Boolean(question.answer.trim())).length; return <div className="qa-category-progress" key={category.key}><span>{category.label}</span><small>{count}/{rows.length}</small><div><i style={{ width: `${Math.round(count / rows.length * 100)}%` }} /></div></div>; })}</div><div className="qa-privacy"><LockKeyhole size={17} aria-hidden /> Le risposte sono legate alla singola candidatura e alle opzioni esatte del form.</div></aside>
         </div>}
       </>}
     </main>

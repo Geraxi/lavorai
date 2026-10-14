@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -37,6 +38,10 @@ export async function POST(request: NextRequest) {
         { error: "unauthenticated", message: "Devi loggarti per candidarti." },
         { status: 401 },
       );
+    }
+
+    if (applicationsPaused()) {
+      return NextResponse.json({ error: "applications_paused", message: "Invii temporaneamente in pausa per manutenzione." }, { status: 503 });
     }
 
     if (requiresPaymentMethodBeforeApp(user)) {
@@ -91,10 +96,10 @@ export async function POST(request: NextRequest) {
     const [usedThisMonth, usedToday, cv, job, prefs, profileRow] =
       await Promise.all([
         prisma.application.count({
-          where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { not: "failed" } },
+          where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { notIn: ["failed", "diagnostic"] } },
         }),
         prisma.application.count({
-          where: { userId: user.id, createdAt: { gte: todayStart }, status: { not: "failed" } },
+          where: { userId: user.id, createdAt: { gte: todayStart }, status: { notIn: ["failed", "diagnostic"] } },
         }),
         prisma.cVDocument.findFirst({
           where: { userId: user.id },
@@ -209,6 +214,7 @@ export async function POST(request: NextRequest) {
         jobId,
         portal,
         status: initialStatus,
+        consentGrantedAt: initialStatus === "queued" ? new Date() : null,
         trackingToken: randomToken(),
         atsScore: score, // pre-stima; il worker la sovrascrive con score AI
         sessionId: session.id,
@@ -221,7 +227,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!needsConsent) {
-      await enqueueApplication(application.id);
+      await enqueueApplication(application.id, { preserveClaim: true });
     }
 
     return NextResponse.json({

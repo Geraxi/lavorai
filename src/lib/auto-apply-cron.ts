@@ -1,3 +1,5 @@
+import { applicationsPaused } from "@/lib/application-pause";
+import { autoApplyPreferenceMismatch, parsePreferenceList, isAvoidedCompany } from "@/lib/auto-apply-preferences";
 import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -35,114 +37,7 @@ function randomToken(): string {
     .join("");
 }
 
-/**
- * Espande una preferenza di location utente in un set di matcher case-
- * insensitive che applichiamo contro `job.location`. Logica:
- *   - "Milan" → ["milan", "milano"]
- *   - "Dubai/UAE" → ["dubai", "uae", "united arab emirates", "emirates"]
- *   - "Roma" → ["rome", "roma"]
- *   - "Remote" → ["remote", "remoto", "anywhere"]
- *   - "Italy" → ["italy", "italia", "milano", "roma", "torino", "milan", "rome"]
- *   - "EU" / "Europe" → ["europe", "eu", "united kingdom", "germany", ...] (broad)
- * Inoltre, qualsiasi job con `remote: true` qualifica sempre se la
- * lista preferenze contiene almeno una location "fisica" non-remote
- * — perché remote-friendly è una superset di qualunque città scelta.
- */
-export function expandLocationPref(loc: string): string[] {
-  // Normalizza: rimuove qualifier tra parentesi ("Remoto (IT)" → "remoto",
-  // "Remote (EU)" → "remote") così le preferenze remote si espandono davvero.
-  const k = loc
-    .trim()
-    .toLowerCase()
-    .replace(/\s*\(.*?\)\s*/g, "")
-    .trim();
-  const aliases: Record<string, string[]> = {
-    milan: ["milan", "milano", "lombardia"],
-    milano: ["milan", "milano", "lombardia"],
-    rome: ["rome", "roma", "lazio"],
-    roma: ["rome", "roma", "lazio"],
-    turin: ["turin", "torino", "piemonte"],
-    torino: ["turin", "torino", "piemonte"],
-    bologna: ["bologna", "emilia"],
-    naples: ["naples", "napoli", "campania"],
-    napoli: ["naples", "napoli", "campania"],
-    florence: ["florence", "firenze", "toscana"],
-    firenze: ["florence", "firenze", "toscana"],
-    italy: [
-      "italy", "italia", "milan", "milano", "rome", "roma",
-      "turin", "torino", "bologna", "naples", "napoli",
-      "florence", "firenze", "lombardia", "lazio", "veneto",
-    ],
-    italia: [
-      "italy", "italia", "milan", "milano", "rome", "roma",
-      "turin", "torino", "bologna", "naples", "napoli",
-      "florence", "firenze",
-    ],
-    dubai: ["dubai", "uae", "united arab emirates", "emirates", "abu dhabi"],
-    "dubai/uae": ["dubai", "uae", "united arab emirates", "emirates", "abu dhabi"],
-    uae: ["dubai", "uae", "united arab emirates", "emirates", "abu dhabi"],
-    remote: ["remote", "remoto", "anywhere", "worldwide", "fully remote"],
-    remoto: ["remote", "remoto", "anywhere", "fully remote"],
-    europe: [
-      "europe", "eu", "european union", "remote eu", "europe remote",
-      "berlin", "london", "amsterdam", "paris", "madrid", "barcelona",
-      "dublin", "lisbon", "warsaw", "prague",
-    ],
-    eu: [
-      "europe", "eu", "european union", "remote eu",
-      "berlin", "london", "amsterdam", "paris", "madrid",
-    ],
-  };
-  if (aliases[k]) return aliases[k];
-  // Fallback: ritorna la stringa così com'è (lowercase).
-  return [k];
-}
-
-/**
- * Test: l'utente accetta questo job in base alle sue location pref?
- *   - Nessuna pref impostata → true (back-compat, niente filtro)
- *   - `job.remote === true` → true (remote = superset di qualsiasi città)
- *   - `job.location` contiene almeno un alias di qualsiasi pref → true
- *   - Altrimenti false
- */
-export function jobMatchesLocationPrefs(
-  job: { location: string | null; remote: boolean },
-  prefs: string[],
-): boolean {
-  if (prefs.length === 0) return true;
-  // Job esplicitamente remoto: ok per qualunque preferenza fisica
-  // (a meno che l'utente abbia chiesto SOLO un'area specifica E
-  // marcato esplicitamente "no remote" — non supportato oggi).
-  if (job.remote) return true;
-  const haystack = (job.location ?? "").toLowerCase();
-  if (!haystack) {
-    // Location vuota (≈29% del pool, tipico dei job ATS che mettono la
-    // sede nella descrizione). Rifiutarli tutti perdeva centinaia di job
-    // buoni. Diamo il beneficio del dubbio SE l'utente è aperto a remote
-    // o a un'area ampia (nazione/continente) — chi cerca solo una città
-    // specifica resta filtrato.
-    const hasBroadPref = prefs.some((p) => {
-      const k = p.trim().toLowerCase().replace(/\s*\(.*?\)\s*/g, "").trim();
-      return (
-        k.includes("remot") ||
-        k.includes("remote") ||
-        k === "italy" ||
-        k === "italia" ||
-        k === "eu" ||
-        k === "europe" ||
-        k === "europa" ||
-        k === "anywhere"
-      );
-    });
-    return hasBroadPref;
-  }
-  for (const p of prefs) {
-    for (const alias of expandLocationPref(p)) {
-      if (haystack.includes(alias)) return true;
-    }
-  }
-  return false;
-}
+export { expandLocationPref, jobMatchesLocationPrefs, autoApplyPreferenceMismatch } from "@/lib/auto-apply-preferences";
 
 interface RunStats {
   usersProcessed: number;
@@ -160,9 +55,28 @@ interface RunStats {
   errors: number;
 }
 
+function emptyRunStats(): RunStats {
+  return {
+    usersProcessed: 0,
+    applicationsEnqueued: 0,
+    applicationsAwaitingConsent: 0,
+    skippedDailyCap: 0,
+    skippedMonthlyPaywall: 0,
+    skippedMatchThreshold: 0,
+    skippedRoleMismatch: 0,
+    skippedAlreadyApplied: 0,
+    skippedAvoidedCompany: 0,
+    skippedSessionPaused: 0,
+    skippedEmploymentMismatch: 0,
+    skippedLocationMismatch: 0,
+    errors: 0,
+  };
+}
+
 export async function runAutoApplyCron(): Promise<RunStats> {
+  if (applicationsPaused()) return emptyRunStats();
   // Self-heal PRIMA di processare gli utenti: archivia sessioni garbage,
-  // re-enqueue stuck apps, auto-lower matchMin per zero-throughput, alert
+  // re-enqueue safe stuck apps, preserve user matchMin, alert
   // admin su credit exhaustion. Idempotente, gira ogni tick (~30min).
   try {
     const heal = await runSelfHeal();
@@ -179,21 +93,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     console.error("[auto-apply-cron] self-heal crashed (non-fatal)", err);
   }
 
-  const stats: RunStats = {
-    usersProcessed: 0,
-    applicationsEnqueued: 0,
-    applicationsAwaitingConsent: 0,
-    skippedDailyCap: 0,
-    skippedMonthlyPaywall: 0,
-    skippedMatchThreshold: 0,
-    skippedRoleMismatch: 0,
-    skippedAlreadyApplied: 0,
-    skippedAvoidedCompany: 0,
-    skippedSessionPaused: 0,
-    skippedEmploymentMismatch: 0,
-    skippedLocationMismatch: 0,
-    errors: 0,
-  };
+  const stats = emptyRunStats();
 
   // Utenti in modalità auto O hybrid con CV + preferenze.
   // - "auto":   creiamo candidature "queued" e le mandiamo subito in coda.
@@ -284,21 +184,8 @@ export async function runAutoApplyCron(): Promise<RunStats> {
  * che mostra "N candidature accodate").
  */
 export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
-  const stats: RunStats = {
-    usersProcessed: 0,
-    applicationsEnqueued: 0,
-    applicationsAwaitingConsent: 0,
-    skippedDailyCap: 0,
-    skippedMonthlyPaywall: 0,
-    skippedMatchThreshold: 0,
-    skippedRoleMismatch: 0,
-    skippedAlreadyApplied: 0,
-    skippedAvoidedCompany: 0,
-    skippedSessionPaused: 0,
-    skippedEmploymentMismatch: 0,
-    skippedLocationMismatch: 0,
-    errors: 0,
-  };
+  if (applicationsPaused()) return emptyRunStats();
+  const stats = emptyRunStats();
   const user = await prisma.user.findUnique({
     where: {
       id: userId,
@@ -384,6 +271,7 @@ async function processUser(
   if (!user.preferences || !user.cvProfile) return;
   const prefs = user.preferences;
   const profile = rowToProfile(user.cvProfile);
+  if (!profile.title && !profile.summary && !profile.skills.length && !profile.experiences.length) return;
 
   // Modalità: "auto" candida direttamente (queued + enqueue), "hybrid"
   // prepara la candidatura e la lascia in "awaiting_consent" perché
@@ -453,28 +341,15 @@ async function processUser(
   const roles: string[] = Array.from(rolesSet.values());
   if (roles.length === 0) return;
 
-  // Parsing preferenze di location. Bug pre-fix: questo campo veniva
-  // letto in select ma MAI usato nel filtro → utente impostava "Milan,
-  // Dubai/UAE" e si vedeva candidato a job in Berlino o San Francisco.
-  // Ora applichiamo `jobMatchesLocationPrefs` nel loop per ogni job.
-  let locationPrefs: string[] = [];
-  try {
-    const arr = JSON.parse(prefs.locationsJson);
-    if (Array.isArray(arr)) {
-      locationPrefs = arr
-        .filter((l): l is string => typeof l === "string")
-        .map((l) => l.trim())
-        .filter(Boolean);
-    }
-  } catch {
-    /* noop — locationsJson malformato, niente filtro location */
-  }
+  // Malformed or missing geographic preferences require review, never a wider search.
+  const locationPrefs = parsePreferenceList(prefs.locationsJson);
+  if (!locationPrefs?.length) return;
 
   // Daily cap = quante già create oggi
   // Le candidature fallite (annuncio chiuso, form rotto, crediti) NON
   // consumano cap/quota: l'utente non ha ricevuto nulla.
   const todayCount = await prisma.application.count({
-    where: { userId: user.id, createdAt: { gte: todayStart }, status: { not: "failed" } },
+    where: { userId: user.id, createdAt: { gte: todayStart }, status: { notIn: ["failed", "diagnostic"] } },
   });
   if (isApplicationAccessPaused(user)) {
     stats.skippedMonthlyPaywall++;
@@ -498,7 +373,7 @@ async function processUser(
   const limits = getLimits(tier);
   if (limits.monthlyApplications !== Infinity) {
     const monthCount = await prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { not: "failed" } },
+      where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { notIn: ["failed", "diagnostic"] } },
     });
     const remainingMonth = Math.max(
       0,
@@ -514,12 +389,7 @@ async function processUser(
   // Cap globale per run
   remainingToday = Math.min(remainingToday, PER_USER_RUN_CAP);
 
-  const avoidSet = new Set(
-    (user.avoidCompanies ?? "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean),
-  );
+
 
   // Job candidati: match su titoli per ciascun ruolo, fonti Greenhouse/Lever
   // (quelli con URL ATS diretto — submit reale funziona). Adzuna è troppo
@@ -643,7 +513,7 @@ async function processUser(
   // così se la quota giornaliera si esaurisce non sprechiamo slot sui
   // match deboli. A parità di score prevalgono i tie-break aziende
   // meno contattate (diversificazione) e postedAt più recente.
-  const roleProfileForScore = scoreProfileForRoles(profile, roles);
+  const roleProfileForScore = profile;
   const scoreCache = new Map<string, number>();
   const scoreOf = (j: (typeof jobs)[number]): number => {
     let s = scoreCache.get(j.id);
@@ -764,18 +634,10 @@ async function processUser(
     }
     void cKey;
 
-    // Filtro location: skippa job fuori dalle aree preferite dall'utente.
-    // Remote-friendly job (job.remote === true) passano sempre. Vedi
-    // expandLocationPref per gli alias multi-lingua (Milan↔Milano,
-    // Dubai↔UAE, Italy → tutte le maggiori città italiane, ecc.).
-    if (
-      locationPrefs.length > 0 &&
-      !jobMatchesLocationPrefs(
-        { location: job.location, remote: job.remote },
-        locationPrefs,
-      )
-    ) {
-      stats.skippedLocationMismatch++;
+    const preferenceMismatch = autoApplyPreferenceMismatch(job, prefs, locationPrefs);
+    if (preferenceMismatch) {
+      if (preferenceMismatch.startsWith("location")) stats.skippedLocationMismatch++;
+      if (preferenceMismatch === "employment") stats.skippedEmploymentMismatch++;
       continue;
     }
 
@@ -788,7 +650,7 @@ async function processUser(
     }
 
     // Azienda esclusa esplicitamente?
-    if (job.company && avoidSet.has(job.company.toLowerCase())) {
+    if (isAvoidedCompany(job.company, user.avoidCompanies)) {
       stats.skippedAvoidedCompany++;
       continue;
     }
@@ -802,61 +664,14 @@ async function processUser(
       continue;
     }
 
-    // Filtro tipologia contratto (employee/piva/both).
-    // Usiamo il titolo + descrizione + contractType come segnali.
-    const emp = prefs.employmentType ?? "employee";
-    if (emp !== "both") {
-      const haystack =
-        `${job.title} ${job.contractType ?? ""} ${job.description ?? ""}`
-          .toLowerCase()
-          .slice(0, 1500);
-      const isFreelance =
-        /\b(freelance|freelancer|contract|contractor|p\.?\s?iva|partita\s?iva|consultant|consulente|project-based|ad hoc|short[-\s]?term|6\s?months?|12\s?months?)\b/.test(
-          haystack,
-        );
-      if (emp === "piva" && !isFreelance) {
-        stats.skippedEmploymentMismatch++;
-        continue;
-      }
-      if (emp === "employee" && isFreelance) {
-        stats.skippedEmploymentMismatch++;
-        continue;
-      }
-    }
-
-    // Match threshold. Arricchiamo il profilo con i ruoli dichiarati
-    // nelle preferenze (roles): così chi cerca "Product Designer" ma sul
-    // CV ha solo esperienze da studente vede comunque scattare il
-    // role-title boost.
-    const scoreProfile = {
-      ...profile,
-      experiences: [
-        ...(profile.experiences ?? []),
-        ...roles.map((r) => ({
-          role: r,
-          company: "",
-          location: "",
-          startDate: "",
-          endDate: "",
-          description: "",
-          bullets: [] as string[],
-        })),
-      ],
-    };
+    // Desired roles are search intent, not CV experience or evidence of fit.
     const score = quickMatchScore(
-      scoreProfile,
+      profile,
       `${job.title}\n${job.company ?? ""}\n${job.description}`,
     );
     if (prefs.matchMin > 0 && score < prefs.matchMin) {
       stats.skippedMatchThreshold++;
       continue;
-    }
-
-    // Salary filter (se impostato)
-    if (prefs.salaryMin > 0) {
-      const salaryCap = prefs.salaryMin * 1000;
-      const jobTop = job.salaryMax ?? job.salaryMin ?? 0;
-      if (jobTop > 0 && jobTop < salaryCap) continue;
     }
 
     // Trova la sessione (round) a cui appartiene questo job. Se è
@@ -946,10 +761,11 @@ async function processUser(
   if (enqueued < remainingToday) {
     for (const job of jobs) {
       if (enqueued >= remainingToday) break;
+      if (autoApplyPreferenceMismatch(job, prefs, locationPrefs)) continue;
       // Salta job già processati nel pass 1 (rate-limited per company)
       // — verifichiamo via "applications.some" come per gli altri filtri.
       if (!titleMatchesAnyRole(job.title, roles)) continue;
-      if (job.company && avoidSet.has(job.company.toLowerCase())) continue;
+      if (isAvoidedCompany(job.company, user.avoidCompanies)) continue;
       // Cap 30gg anche nel pass 2: senza questo, riprenderemmo le
       // company già viste pass 1.
       const cKey2 = (job.company ?? "").toLowerCase();
@@ -957,7 +773,7 @@ async function processUser(
         continue;
 
       const score = quickMatchScore(
-        scoreProfileForRoles(profile, roles),
+        profile,
         `${job.title}\n${job.company ?? ""}\n${job.description}`,
       );
       if (prefs.matchMin > 0 && score < prefs.matchMin) continue;
@@ -1022,31 +838,6 @@ async function processUser(
       }
     }
   }
-}
-
-/**
- * Pass2 helper — produce un profilo arricchito con i ruoli dichiarati
- * (stesso del primo passaggio, definito inline lì).
- */
-function scoreProfileForRoles(
-  profile: ReturnType<typeof rowToProfile>,
-  roles: string[],
-): Parameters<typeof quickMatchScore>[0] {
-  return {
-    ...profile,
-    experiences: [
-      ...(profile.experiences ?? []),
-      ...roles.map((r) => ({
-        role: r,
-        company: "",
-        location: "",
-        startDate: "",
-        endDate: "",
-        description: "",
-        bullets: [] as string[],
-      })),
-    ],
-  };
 }
 
 function portalOf(url: string): string {

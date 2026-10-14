@@ -1,44 +1,20 @@
 "use client";
 
-/** Small badge for inbox reply status on the applications list. */
-export function ReplyKindChip({
-  lastReplyKind,
-  replyCount = 0,
-}: {
+/** Stored classifications are heuristic; old counters can include automated mail. */
+export function ReplyKindChip({ lastReplyKind, replyCount = 0 }: {
   lastReplyKind?: string | null;
   replyCount?: number;
 }) {
-  const show =
-    (lastReplyKind && ["colloquio", "risposta", "rifiutata"].includes(lastReplyKind)) ||
-    replyCount > 0;
-  if (!show) return null;
-
-  const label =
-    lastReplyKind === "colloquio"
-      ? "Colloquio"
-      : lastReplyKind === "rifiutata"
-        ? "Rifiutata"
-        : "Risposta";
-
-  const background =
-    lastReplyKind === "colloquio"
-      ? "var(--primary-weak)"
-      : lastReplyKind === "rifiutata"
-        ? "hsl(0 70% 95%)"
-        : "var(--bg-sunken)";
-
-  const color =
-    lastReplyKind === "colloquio"
-      ? "hsl(var(--primary))"
-      : lastReplyKind === "rifiutata"
-        ? "var(--red, #b91c1c)"
-        : "var(--fg-muted)";
+  if (!lastReplyKind && replyCount <= 0) return null;
+  const label = ({
+    colloquio: "Possibile colloquio", risposta: "Possibile risposta", rifiutata: "Possibile rifiuto",
+    ricevuta: "Ricevuta automatica", auto: "Messaggio automatico", bounce: "Mancata consegna",
+  } as Record<string, string>)[lastReplyKind ?? ""] ?? "Messaggio ricevuto";
 
   return (
-    <span
-      className="ds-chip"
-      style={{ background, color, fontSize: 10.5, fontWeight: 600 }}
-    >
+    <span className="ds-chip"
+      title="Classificazione automatica. Il conteggio storico può includere messaggi automatici: verifica il contenuto nell'Inbox."
+      style={{ background: "var(--bg-sunken)", color: "var(--fg-muted)", fontSize: 10.5, fontWeight: 600 }}>
       {label}
     </span>
   );

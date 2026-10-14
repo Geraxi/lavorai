@@ -19,6 +19,7 @@ import { getAutoApplyReadiness } from "@/lib/auto-apply-readiness";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
 import { prisma } from "@/lib/db";
+import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -33,12 +34,16 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const delivered = { userId: user.id, status: "success", submittedVia: { not: null } } as const;
-  const [globe, onboarding, sentCount, viewedCount, offersCount, interviews] = await Promise.all([
+  const [globe, onboarding, deliveryCounts, responseCount, offersCount, interviews] = await Promise.all([
     getDashboardGlobeData(user.id),
     getOnboardingState(user.id),
-    prisma.application.count({ where: delivered }),
-    prisma.application.count({ where: { ...delivered, OR: [{ userStatus: "vista" }, { userStatus: null, viewedAt: { not: null } }, { lastReplyKind: "risposta" }] } }),
+    dashboardDeliveryCounts(user.id),
+    // Count applications with an actual recruiter-classified source row once,
+    // even when the same response is present in both connected mail channels.
+    prisma.application.count({ where: { userId: user.id, OR: [
+      { replies: { some: { isHuman: true, isSecurityCode: false, kind: { in: ["risposta", "colloquio", "rifiutata"] } } } },
+      { gmailMessages: { some: { userId: user.id, isHuman: true, kind: { in: ["risposta", "colloquio", "rifiutata"] } } } },
+    ] } }),
     prisma.application.count({ where: { userId: user.id, userStatus: "offerta" } }),
     prisma.application.findMany({
       where: { userId: user.id, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }, { interviewSessions: { some: {} } }] },
@@ -86,8 +91,8 @@ export default async function DashboardPage() {
 
         <aside className="dg-side">
           <div className="dg-summary" role="list">
-            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{sentCount}</span><small>Candidature inviate</small></Link>
-            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{viewedCount}</span><small>In valutazione</small></Link>
+            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{deliveryCounts.confirmed}</span><small>Invii confermati</small>{deliveryCounts.providerAccepted > 0 && <small>{deliveryCounts.providerAccepted} email accettate dal provider, consegna da confermare</small>}</Link>
+            <Link role="listitem" href="/inbox" className="dg-sum" title="Candidature con risposte classificate come recruiter. Aperture email e ricevute automatiche escluse."><span className="fit-num">{responseCount}</span><small>Con risposte recruiter</small></Link>
             <Link role="listitem" href="/interview" className="dg-sum"><span className="fit-num">{interviews.length}</span><small>Colloqui</small></Link>
             <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{offersCount}</span><small>Offerte</small></Link>
           </div>
@@ -158,6 +163,31 @@ export default async function DashboardPage() {
       </DashboardFocusProvider>
     </>
   );
+}
+
+/** Read bounded pages, rather than loading every attempt or trusting legacy
+ * status strings. Every page is owner-scoped and each application counts once.
+ */
+async function dashboardDeliveryCounts(userId: string): Promise<{ confirmed: number; providerAccepted: number }> {
+  let confirmed = 0; let providerAccepted = 0; let cursor: string | undefined;
+  while (true) {
+    const applications = await prisma.application.findMany({
+      where: { userId }, orderBy: { id: "asc" }, take: 200,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: { id: true, userId: true, status: true, submittedVia: true, submitConfirmation: true, submissionReceiptJson: true,
+        emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true, acceptedAt: true } },
+      },
+    });
+    for (const application of applications) {
+      if (application.userId !== userId) continue;
+      const evidence = deliveryEvidence(application);
+      if (isConfirmedDelivery(evidence)) confirmed++;
+      else if (evidence === "provider_accepted") providerAccepted++;
+    }
+    if (applications.length < 200) break;
+    cursor = applications[applications.length - 1].id;
+  }
+  return { confirmed, providerAccepted };
 }
 
 function Empty({ text, cta }: { text: string; cta?: { href: string; label: string } }) {

@@ -1,5 +1,5 @@
-import { collectInvalidFields } from "./validation-fields";
-import { extractApplicationSecurityCode, isGreenhouseSecurityMessage, SECURITY_CODE_FIELD, hasApplicationConfirmation } from "../application-security-code";
+import { observeSubmission } from "./submission-proof";
+import { extractApplicationSecurityCode, isGreenhouseSecurityMessage, SECURITY_CODE_FIELD } from "../application-security-code";
 import { findSubmitButton } from "./submit-button";
 import type {
   PortalAdapter,
@@ -8,7 +8,7 @@ import type {
   CanaryLog,
 } from "./types";
 import type { Page } from "playwright";
-import { detectBlockingCaptcha, challengeAppearedAfterSubmit } from "./captcha";
+import { detectBlockingCaptcha } from "./captcha";
 
 /**
  * Canary helper: scatta uno screenshot della page corrente e lo
@@ -360,23 +360,7 @@ export const greenhouseAdapter: PortalAdapter = {
         console.warn("[greenhouse] generic-fill failed", err);
       }
 
-      // GDPR/consenso + accetta termini (best-effort) — PRIMA dell'AI answerer
-      // così non vengono contati come "domande senza risposta".
-      for (const sel of [
-        'input[type="checkbox"][name*="privacy" i]',
-        'input[type="checkbox"][name*="gdpr" i]',
-        'input[type="checkbox"][name*="consent" i]',
-        'input[type="checkbox"][id*="privacy" i]',
-      ]) {
-        const cb = page.locator(sel);
-        if ((await cb.count()) > 0) {
-          await cb
-            .first()
-            .check({ timeout: 1500 })
-            .catch(() => void 0);
-        }
-      }
-
+      // Required consents and declarations need explicit user answers.
       // AI answerer: compila i campi OBBLIGATORI ancora vuoti (incl.
       // react-select custom) usando le risposte già date dall'utente +
       // SOLO i dati reali del candidato. Senza questo, i form Greenhouse con
@@ -386,49 +370,8 @@ export const greenhouseAdapter: PortalAdapter = {
       let aiDebug = "";
       try {
         const { answerRequiredFields } = await import("./ai-answer");
-        const p = input.profile;
-        const links = p.links ?? [];
-        const findLink = (re: RegExp) =>
-          links.find((l) => re.test(`${l.url} ${l.label}`))?.url;
-        const cvText = [
-          p.summary,
-          ...(p.experiences ?? []).map(
-            (e) =>
-              `${e.role} @ ${e.company} (${e.startDate}-${e.endDate || "Present"}): ${e.description || (e.bullets ?? []).join("; ")}`,
-          ),
-        ]
-          .filter(Boolean)
-          .join("\n");
-        const ai = await answerRequiredFields(page, {
-          firstName: p.firstName,
-          lastName: p.lastName,
-          email: p.email || input.userEmail,
-          phone: p.phone || input.userPhone,
-          city: input.answers?.city || p.city || input.preferredCity,
-          country: input.answers?.country,
-          linkedinUrl: input.answers?.linkedinUrl || findLink(/linkedin/i),
-          portfolioUrl:
-            input.answers?.portfolioUrl ||
-            findLink(/portfolio|dribbble|behance/i),
-          workAuth: input.answers?.workAuthEU,
-          salaryExpectationEur: input.answers?.salaryExpectationEur,
-          yearsExperience: input.answers?.yearsExperience ?? input.userYearsExperience,
-          englishLevel: input.answers?.englishLevel ?? input.userEnglishLevel,
-          languages: input.profile.languages,
-          noticePeriod: input.answers?.noticePeriod ?? input.userNoticePeriod,
-          highestEducation: input.answers?.highestEducation,
-          currentEmployer: p.experiences?.[0]?.company || null,
-          currentJobTitle: p.experiences?.[0]?.role || p.title || null,
-          school: p.education?.[0]?.school || null,
-          cvText,
-          jobTitle: input.jobTitle ?? p.title,
-          company: input.company ?? null,
-          jobDescription: input.jobDescription,
-          jobLocation: input.jobLocation,
-          protectedCategory: input.protectedCategory,
-          autonomous: input.autonomous === true,
-          storedAnswers: input.storedAnswers,
-        });
+        const { buildAnswerContext } = await import("./web-form");
+        const ai = await answerRequiredFields(page, buildAnswerContext(input));
         pendingQuestions = ai.unanswered;
         if (ai.given.length > 0) input.onAiAnswers?.(ai.given);
         aiDebug = `answered=${ai.answered} remaining=${ai.remainingRequired} | ${ai.details.join(" ; ")}`;
@@ -436,6 +379,7 @@ export const greenhouseAdapter: PortalAdapter = {
       } catch (err) {
         aiDebug = "ai-answer THREW: " + (err instanceof Error ? err.message : String(err));
         console.warn("[greenhouse] ai-answer failed", err);
+        pendingQuestions = [{ label: "Verifica dei campi obbligatori non disponibile: controlla il form prima di inviare.", kind: "text" }];
       }
 
       // Captcha: bloccante SOLO se interattivo (checkbox/challenge/hCaptcha/
@@ -515,88 +459,20 @@ export const greenhouseAdapter: PortalAdapter = {
           error: "Bottone submit non trovato.",
         };
       }
-      // ============================================================
-      // VERIFICA HARD: cattura la risposta HTTP della POST di submission
-      // ============================================================
-      // Greenhouse, quando clicchi submit, fa una POST a uno dei suoi
-      // endpoint interni (forms tipo /jobs/<id>/applications,
-      // /api/embed/job_application, /forms/jobs/<id>). Lo status code
-      // della risposta è la verità — il DOM è una conseguenza.
-      //
-      //   - 2xx (200/201) → submission ACCETTATA dal server
-      //   - 302/303 redirect a /thank_you o simili → ACCETTATA
-      //   - 4xx (400/422) → server ha rifiutato (validation, dup, ecc)
-      //   - 5xx → errore server, retry potenziale
-      //   - nessuna POST = la validazione client-side ha bloccato il
-      //     submit prima ancora di inviare → NON arrivata
-      const urlBeforeSubmit = page.url();
       const submittedAt = new Date();
-      const submissionResponsePromise = page
-        .waitForResponse(
-          (resp) => {
-            const u = resp.url().toLowerCase();
-            const m = resp.request().method().toUpperCase();
-            if (m !== "POST") return false;
-            // Endpoint Greenhouse di submission noti. Manteniamo larga
-            // la lista perché Greenhouse ha diverse forme:
-            //   - boards.greenhouse.io/embed/job_app/submit
-            //   - job-boards.greenhouse.io/api/.../job_applications
-            //   - boards.greenhouse.io/<co>/jobs/<id>/applications
-            // job-boards moderno: POST https://boards.greenhouse.io/embed/<co>/jobs/<id>
-            return (
-              u.includes("greenhouse.io") &&
-              (u.includes("/applications") ||
-                u.includes("/job_app") ||
-                u.includes("/submit") ||
-                u.includes("/job_application") ||
-                /\/jobs\/\d+/.test(u))
-            );
-          },
-          { timeout: 25_000 },
-        )
-        .catch(() => null);
-
       await submit.scrollIntoViewIfNeeded().catch(() => void 0);
-      await submit.click();
-
-      const submissionResponse = await submissionResponsePromise;
-
-      // Diamo comunque un po' di tempo al DOM di stabilizzarsi
-      await page
-        .waitForLoadState("networkidle", { timeout: 10_000 })
-        .catch(() => void 0);
-      await page.waitForTimeout(800);
-
+      const observed = await observeSubmission(page, "greenhouse", input.jobUrl,
+        () => submit.click({ timeout: 8_000 }), input.beforeSubmit);
+      const submitHttpStatus = observed.response?.status ?? null;
+      const submitHttpBody = observed.response?.body?.slice(0, 800).replace(/\s+/g, " ") ?? null;
       const finalUrl = page.url();
       const bodyText = await page.locator("body").innerText().catch(() => "");
-
-      // Estrai body HTTP della response submit (se presente) per canary.
-      let submitHttpBody: string | null = null;
-      let submitHttpStatus: number | null = null;
-      if (submissionResponse) {
-        submitHttpStatus = submissionResponse.status();
-        try {
-          const body = await submissionResponse.text();
-          submitHttpBody = body.slice(0, 800).replace(/\s+/g, " ");
-        } catch {
-          /* already consumed */
-        }
-      }
-
-      // Canary post-submit: screenshot + completa il payload con
-      // l'osservazione dopo il click. Helper centrale così OGNI return
-      // path porta indietro lo stesso payload.
       let canaryFull: CanaryLog | undefined;
       if (canaryEnabled && canaryPre) {
-        const postScreenshot = await uploadScreenshot(
-          page,
-          "post-submit",
-          input.applicationId,
-        );
         canaryFull = {
           resumeAttachedFilename: canaryPre.resumeAttachedFilename,
           preSubmitScreenshotUrl: canaryPre.preSubmitScreenshotUrl,
-          postSubmitScreenshotUrl: postScreenshot,
+          postSubmitScreenshotUrl: await uploadScreenshot(page, "post-submit", input.applicationId),
           fields: canaryPre.fields,
           submitHttpStatus,
           submitHttpBody,
@@ -605,108 +481,20 @@ export const greenhouseAdapter: PortalAdapter = {
           bodyTextAfterSubmit: bodyText.slice(0, 800).replace(/\s+/g, " "),
           capturedAt: canaryPre.capturedAt,
         };
-        console.log(
-          `[canary] post-submit — http=${submitHttpStatus ?? "none"} urlChanged=${finalUrl !== canaryPre.urlBeforeSubmit} screenshot=${postScreenshot ? "ok" : "skipped"}`,
-        );
       }
-
-      // A challenge can be rendered even with HTTP 200 or an endpoint we
-      // did not capture. Resolve it before interpreting any HTTP success.
+      if (!observed.outcome.ok && observed.outcome.status === "captcha") return { ...observed.outcome, canary: canaryFull };
+      // Verification is a pending application stage, never a delivery receipt.
       const codeRequested = await page.locator(SECURITY_CODE_FIELD).first().isVisible().catch(() => false);
       if (codeRequested || (submitHttpStatus === 428 && /captcha|security|verification/i.test(submitHttpBody ?? ""))) {
-        // OTP gate: richiede applicationId E che l'email sul form sia reply+<appId>@...
-        // (INBOUND_ROUTE_ATS_EMAIL !== false implica che input.userEmail è l'alias).
         const inboundEnabled = process.env.INBOUND_ROUTE_ATS_EMAIL !== "false";
         const hasInboundAlias = /^reply\+/i.test(input.userEmail);
         if (!input.applicationId || !inboundEnabled || !hasInboundAlias) {
-          return { ok: false, status: "missing_field", error: "Verifica email automatica non disponibile: configurare la ricezione email per le candidature (INBOUND_EMAIL_DOMAIN).", canary: canaryFull };
+          return { ok: false, status: "submission_unconfirmed", error: "Verifica email richiesta dal portale. Configurare la ricezione email o completare la verifica prima di un nuovo invio.", canary: canaryFull };
         }
-        const verified = await submitWithSecurityCode(page, input.applicationId, submittedAt);
+        const verified = await submitWithSecurityCode(page, input.applicationId, submittedAt, undefined, input.jobUrl, input.beforeSubmit);
         return { ...verified, canary: canaryFull };
       }
-
-      // ============================================================
-      // CASE A: catturata la POST → decide dallo status code
-      // ============================================================
-      if (submissionResponse) {
-        const status = submitHttpStatus ?? submissionResponse.status();
-        // 2xx o 3xx redirect → ACCETTATA dal server.
-        if (status >= 200 && status < 400) {
-          return {
-            ok: true,
-            status: "submitted",
-            confirmation: `DETECTED_HTTP_${status}`,
-            canary: canaryFull,
-          };
-        }
-        // 4xx → server rifiuta (validazione, duplicato, job chiuso).
-        if (status >= 400 && status < 500) {
-          return {
-            ok: false,
-            status: "validation_failed",
-            error: `Greenhouse ha rifiutato la submission (HTTP ${status}). Server response: "${submitHttpBody ?? "(empty)"}"`,
-            canary: canaryFull,
-          };
-        }
-        // 5xx → errore server. Caller retry.
-        return {
-          ok: false,
-          status: "unknown_error",
-          error: `Greenhouse ha risposto con HTTP ${status} — errore server, retry consigliato.`,
-          canary: canaryFull,
-        };
-      }
-
-      // ============================================================
-      // CASE B: nessuna POST catturata → validazione client-side ha
-      // bloccato il submit OPPURE l'endpoint non corrisponde al pattern
-      // ============================================================
-      const invalidFields = await collectInvalidFields(page);
-      if (invalidFields.length) {
-        return { ok: false, status: "needs_user_input", pendingQuestions: invalidFields,
-          error: "Il portale segnala campi mancanti o non validi. Correggi le risposte prima di riprovare.", canary: canaryFull };
-      }
-      const errorPatterns =
-        /(there\s+(was|were)\s+problems?|this\s+field\s+is\s+required|please\s+(correct|fix|enter)|invalid\s+(email|input|file)|errore|campo\s+obbligatorio|inserisci|file\s+too\s+large|select\s+a\s+(valid\s+)?file)/i;
-      if (errorPatterns.test(bodyText)) {
-        return {
-          ok: false,
-          status: "validation_failed",
-          error: `Validazione client-side ha bloccato il submit (nessuna POST partita). Body excerpt: "${bodyText.slice(0, 240).replace(/\s+/g, " ")}"`,
-          canary: canaryFull,
-        };
-      }
-
-      const strongConfirmRegex =
-        /(thank\s+you|application\s+(received|submitted|successful)|your\s+application\s+has\s+been|grazie\s+per|candidatura\s+(inviata|ricevuta)|we\s+received\s+your)/i;
-      const urlChanged = finalUrl !== urlBeforeSubmit;
-      const urlHasConfirm = /thank|confirm|received|success/i.test(finalUrl);
-      if (strongConfirmRegex.test(bodyText) || urlHasConfirm) {
-        return {
-          ok: true,
-          status: "submitted",
-          confirmation: "DETECTED_DOM",
-          canary: canaryFull,
-        };
-      }
-
-      // Dopo il click: se si è aperta una challenge reCAPTCHA (immagini) il
-      // captcha ha bloccato davvero → segnaliamo come captcha, non unknown.
-      if (await challengeAppearedAfterSubmit(page)) {
-        return {
-          ok: false,
-          status: "captcha",
-          error: "Dopo il click su Invia si è aperta una challenge reCAPTCHA: completa il captcha e invia manualmente (CV e risposte pronti).",
-          canary: canaryFull,
-        };
-      }
-
-      return {
-        ok: false,
-        status: "submission_unconfirmed",
-        error: `Submit cliccato ma niente è stato confermato (no POST HTTP catturata, no thank-you page, no error banner). URL ${urlChanged ? "cambiato" : "invariato"}: ${finalUrl}. Non ritentare automaticamente: verificare prima la ricezione per evitare duplicati.`,
-        canary: canaryFull,
-      };
+      return { ...observed.outcome, canary: canaryFull };
     } catch (err) {
       return {
         ok: false,
@@ -759,7 +547,7 @@ function buildApplyUrlCandidates(jobUrl: string): string[] {
  * 2. Poll ApplicationReply per max 150s (30 * 5s) aspettando l'email di Greenhouse
  * 3. Estrae il codice dall'email di verifica
  * 4. Compila il campo e clicca submit
- * 5. Verifica conferma (HTTP 2xx/3xx o thank-you page)
+ * 5. Verifica ricevuta della candidatura, mai il solo stato HTTP
  * 
  * Richiede che l'applicazione usi l'inbound email (reply+<appId>@domain) così
  * l'email di verifica arrivi al sistema invece che all'utente.
@@ -771,12 +559,14 @@ export async function submitWithSecurityCode(
   readReplies = async () => {
     const { prisma } = await import("@/lib/db");
     return prisma.applicationReply.findMany({
-      where: { applicationId, receivedAt: { gte: since } },
+      where: { applicationId, receivedAt: { gte: new Date(since.getTime() - 10_000) } },
       orderBy: { receivedAt: "desc" },
-      take: 10,
+      take: 15,
       select: { subject: true, bodyText: true, fromAddress: true },
     });
   },
+  jobUrl = page.url(),
+  beforeSubmit?: () => Promise<boolean>,
 ): Promise<ApplyOutcome> {
   console.log(`[greenhouse/otp] applicationId=${applicationId} waiting for security code field...`);
   
@@ -804,22 +594,8 @@ export async function submitWithSecurityCode(
   
   console.log(`[greenhouse/otp] ${applicationId} polling ApplicationReply for security code (max ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s, lookback ${LOOKBACK_BUFFER_MS / 1000}s)...`);
   
-  // Adjust since to include lookback buffer
-  const sinceWithBuffer = new Date(since.getTime() - LOOKBACK_BUFFER_MS);
-  
-  // Override readReplies to use buffered timestamp
-  const readRepliesWithBuffer = async () => {
-    const { prisma } = await import("@/lib/db");
-    return prisma.applicationReply.findMany({
-      where: { applicationId, receivedAt: { gte: sinceWithBuffer } },
-      orderBy: { receivedAt: "desc" },
-      take: 15, // Increased from 10 to handle more potential replies
-      select: { subject: true, bodyText: true, fromAddress: true },
-    });
-  };
-  
   for (let attempt = 1; attempt <= MAX_ATTEMPTS && !code; attempt++) {
-    const replies = await readRepliesWithBuffer();
+    const replies = await readReplies();
     
     for (const reply of replies) {
       if (!isGreenhouseSecurityMessage(reply)) continue;
@@ -827,7 +603,7 @@ export async function submitWithSecurityCode(
       const extracted = extractApplicationSecurityCode(reply.bodyText ?? "");
       if (extracted) {
         code = extracted;
-        console.log(`[greenhouse/otp] ${applicationId} code extracted from email (attempt ${attempt}/${MAX_ATTEMPTS}): ${code.slice(0, 2)}...`);
+        console.log(`[greenhouse/otp] ${applicationId} code extracted from email (attempt ${attempt}/${MAX_ATTEMPTS})`);
         break;
       }
     }
@@ -862,55 +638,7 @@ export async function submitWithSecurityCode(
     };
   }
   
-  const urlBeforeSubmit = page.url();
-  console.log(`[greenhouse/otp] ${applicationId} clicking submit after OTP fill...`);
-  
-  // Cattura la risposta POST per conferma HTTP
-  const responsePromise = page.waitForResponse(
-    (response) => 
-      response.request().method() === "POST" && 
-      /greenhouse\.io/.test(response.url()) && 
-      /\/jobs\/\d+|\/job_app|\/applications|\/submit/.test(response.url()), 
-    { timeout: 25_000 }
-  ).catch(() => null);
-  
-  await submit.click();
-  const response = await responsePromise;
-  
-  // 5. Attendi stabilizzazione pagina
-  await page.waitForLoadState("networkidle", { timeout: 10_000 }).catch(() => void 0);
-  
-  const finalUrl = page.url();
-  const text = await page.locator("body").innerText();
-  
-  // Verifica se il campo security code è ancora visibile (challenge fallito)
-  const challengeRemains = await field.isVisible().catch(() => false);
-  
-  // Conferma: challenge NON presente + (HTTP ok O conferma DOM)
-  const httpOk = response && response.status() >= 200 && response.status() < 400;
-  const domConfirmed = hasApplicationConfirmation(text, finalUrl);
-  
-  if (!challengeRemains && (httpOk || domConfirmed)) {
-    const confirmation = httpOk 
-      ? `DETECTED_HTTP_${response!.status()}_OTP` 
-      : "DETECTED_DOM_OTP";
-    
-    console.log(`[greenhouse/otp] ${applicationId} success: ${confirmation} (urlChanged=${finalUrl !== urlBeforeSubmit})`);
-    
-    return { 
-      ok: true, 
-      status: "submitted", 
-      confirmation 
-    };
-  }
-  
-  // Fallito: challenge ancora presente o nessuna conferma
-  const httpStatus = response?.status() ?? "none";
-  console.error(`[greenhouse/otp] ${applicationId} verification failed: challengeRemains=${challengeRemains} httpStatus=${httpStatus} domConfirmed=${domConfirmed}`);
-  
-  return { 
-    ok: false, 
-    status: "validation_failed", 
-    error: `Verifica Greenhouse non confermata dopo inserimento del codice. HTTP ${httpStatus}, challenge ancora visibile: ${challengeRemains}. Possibile codice errato o scaduto.` 
-  };
+  const observed = await observeSubmission(page, "greenhouse", jobUrl,
+    () => submit.click({ timeout: 8_000 }), beforeSubmit);
+  return observed.outcome;
 }

@@ -1,3 +1,4 @@
+import { observeSubmission } from "./submission-proof";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 
 /**
@@ -170,15 +171,10 @@ export const smartrecruitersAdapter: PortalAdapter = {
         console.warn("[smartrecruiters] generic-fill failed", err);
       }
 
-      // GDPR — SmartRecruiters spesso richiede consent EU obbligatorio
-      const consent = page.locator(
-        'input[type="checkbox"][name*="consent" i], input[type="checkbox"][name*="gdpr" i], input[type="checkbox"][name*="privacy" i], input[type="checkbox"][name*="terms" i]',
-      );
-      const cnt = await consent.count();
-      for (let i = 0; i < cnt; i++) {
-        await consent.nth(i).check({ timeout: 1500 }).catch(() => void 0);
-      }
-
+      // Required consents and declarations need explicit user answers.
+      const { prepareRequiredAnswers } = await import("./web-form");
+      const unanswered = await prepareRequiredAnswers(page, input);
+      if (unanswered) return unanswered;
       if (input.dryRun) {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
@@ -207,23 +203,8 @@ export const smartrecruitersAdapter: PortalAdapter = {
           error: "Bottone submit SmartRecruiters non trovato.",
         };
       }
-      await submit.first().click({ timeout: 5_000 });
-      await page
-        .waitForLoadState("networkidle", { timeout: 15_000 })
-        .catch(() => void 0);
-      const bodyText = await page
-        .locator("body")
-        .innerText()
-        .catch(() => "");
-      const confirmed =
-        /thank|applied|submitted|grazie|received|confirm|successfully/i.test(
-          bodyText,
-        ) || /thanks|confirm|success/i.test(page.url());
-      return {
-        ok: true,
-        status: "submitted",
-        confirmation: confirmed ? "DETECTED" : "UNCONFIRMED",
-      };
+      return (await observeSubmission(page, "smartrecruiters", input.jobUrl,
+        () => submit.first().click({ timeout: 5_000 }), input.beforeSubmit)).outcome;
     } catch (err) {
       return {
         ok: false,

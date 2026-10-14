@@ -12,7 +12,8 @@ const PIXEL = Buffer.from(
 /**
  * GET /api/track/open/[token]
  * Il pixel viene caricato nella mail al recruiter. Appena il client mail
- * lo fetch-a, marchiamo la candidatura come visualizzata (viewedAt + userStatus).
+ * lo fetch-a, salviamo solo un segnale tecnico (viewedAt). Proxy e bot possono
+ * aprirlo: non dimostra lettura umana, valutazione o risposta.
  * Sempre 200 PNG — anche token invalidi, così non rivelano info.
  */
 export async function GET(
@@ -20,29 +21,25 @@ export async function GET(
   { params }: { params: Promise<{ token: string }> },
 ) {
   const { token } = await params;
-  // Non bloccare il pixel aspettando la DB — fai update fire-and-forget
+  // Await the small durable write; do not rely on serverless fire-and-forget.
   if (token) {
-    (async () => {
-      try {
-        const app = await prisma.application.findUnique({
-          where: { trackingToken: token },
-          select: { id: true, viewedAt: true, userStatus: true },
+    try {
+      const app = await prisma.application.findUnique({
+        where: { trackingToken: token },
+        select: { id: true, viewedAt: true },
+      });
+      // Compare-and-set preserves the first signal under concurrent loads.
+      if (app && !app.viewedAt) {
+        await prisma.application.updateMany({
+          where: { id: app.id, viewedAt: null },
+          data: {
+            viewedAt: new Date(),
+          },
         });
-        if (!app) return;
-        // Idempotente: aggiorna solo se non già visualizzata
-        if (!app.viewedAt) {
-          await prisma.application.update({
-            where: { id: app.id },
-            data: {
-              viewedAt: new Date(),
-              userStatus: app.userStatus ?? "vista",
-            },
-          });
-        }
-      } catch (err) {
-        console.error("[track/open] update failed", err);
       }
-    })();
+    } catch {
+      console.error("[track/open] update failed");
+    }
   }
 
   return new Response(new Uint8Array(PIXEL), {

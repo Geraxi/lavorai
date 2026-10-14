@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -48,6 +49,10 @@ export async function POST(request: NextRequest) {
         { error: "unauthenticated", message: "Devi loggarti." },
         { status: 401 },
       );
+    }
+
+    if (applicationsPaused()) {
+      return NextResponse.json({ error: "applications_paused", message: "Invii temporaneamente in pausa per manutenzione." }, { status: 503 });
     }
 
     if (!user.emailVerified) {
@@ -113,10 +118,10 @@ export async function POST(request: NextRequest) {
     todayStart.setHours(0, 0, 0, 0);
     const [usedThisMonth, usedToday, prefs, profileRow] = await Promise.all([
       prisma.application.count({
-        where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { not: "failed" } },
+        where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { notIn: ["failed", "diagnostic"] } },
       }),
       prisma.application.count({
-        where: { userId: user.id, createdAt: { gte: todayStart }, status: { not: "failed" } },
+        where: { userId: user.id, createdAt: { gte: todayStart }, status: { notIn: ["failed", "diagnostic"] } },
       }),
       prisma.userPreferences.findUnique({
         where: { userId: user.id },
@@ -247,6 +252,7 @@ export async function POST(request: NextRequest) {
             jobId: job.id,
             portal,
             status: initialStatus,
+            consentGrantedAt: initialStatus === "queued" ? new Date() : null,
             trackingToken: randomToken(),
             atsScore: score,
             sessionId: session.id,
@@ -258,7 +264,7 @@ export async function POST(request: NextRequest) {
           dedupeKey: `application_created:${application.id}`,
         });
         if (initialStatus === "queued") {
-          await enqueueApplication(application.id);
+          await enqueueApplication(application.id, { preserveClaim: true });
           enqueued++;
         } else {
           awaitingConsent++;

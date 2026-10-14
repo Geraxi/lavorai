@@ -11,6 +11,8 @@ import { StatusChip } from "@/components/design/status-chip";
 import { DetailDrawer } from "@/components/design/detail-drawer";
 import { AutoApplyToggle } from "@/components/auto-apply-toggle";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { ReplyKindChip } from "@/components/reply-kind-chip";
+import type { DeliveryView } from "@/lib/application-delivery-view";
 
 interface ApiApplication {
   id: string;
@@ -33,6 +35,8 @@ interface ApiApplication {
   replyCount: number;
   lastReplyKind: string | null;
   submitConfirmation: string | null;
+  delivery: DeliveryView;
+  deliveryRecipient: string | null;
   job: {
     id: string;
     title: string;
@@ -72,6 +76,8 @@ interface Row {
   replyCount?: number;
   lastReplyKind?: string | null;
   ghostingDays?: number;
+  delivery?: DeliveryView;
+  deliveryRecipient?: string | null;
 }
 
 type Range = "today" | "week" | "month" | "all";
@@ -95,7 +101,7 @@ export default function ApplicationsPage() {
 
   const toRow = (a: ApiApplication): Row => {
     const ghostingDays =
-      a.status === "success" && a.submittedAt && !a.lastReplyAt
+      ["confirmed", "delivered"].includes(a.delivery?.phase) && a.submittedAt && !a.lastReplyAt
         ? Math.floor((Date.now() - new Date(a.submittedAt).getTime()) / (1000 * 60 * 60 * 24))
         : undefined;
     return {
@@ -113,7 +119,7 @@ export default function ApplicationsPage() {
         (a.viewedAt ? "vista" : backendToStatus(a.status)),
       match: a.atsScore ?? 80,
       source: a.job.source === "mock" ? "Demo" : cap(a.job.source),
-      stage: 1,
+      stage: a.userStatus === "offerta" ? 4 : a.userStatus === "colloquio" ? 3 : a.userStatus === "vista" ? 1 : 0,
       jobUrl: a.job.url,
       coverLetterText: a.coverLetterText,
       hasCvDocx: a.hasCvDocx,
@@ -128,6 +134,8 @@ export default function ApplicationsPage() {
       replyCount: a.replyCount,
       lastReplyKind: a.lastReplyKind,
       ghostingDays,
+      delivery: a.delivery,
+      deliveryRecipient: a.deliveryRecipient,
     };
   };
   const realRows: Row[] = data?.applications.map(toRow) ?? [];
@@ -150,6 +158,8 @@ export default function ApplicationsPage() {
   const awaitingCount =
     awaitingData?.applications.filter((a) => a.status === "awaiting_consent")
       .length ?? 0;
+
+  const pendingApplications = (awaitingData?.applications ?? []).filter((a) => a.status !== "success");
 
   const [consentConfirmOpen, setConsentConfirmOpen] = useState(false);
 
@@ -207,7 +217,7 @@ export default function ApplicationsPage() {
               {t("title")}
             </h1>
             <p style={{ fontSize: 15, color: "var(--fg-muted)", marginTop: 6 }}>
-              {t("totalSent", { count: allRows.length })}
+              {allRows.length} candidature registrate
               {" · "}
               {rangeLabel(range, t)}
             </p>
@@ -366,26 +376,12 @@ export default function ApplicationsPage() {
                           gap: 6,
                         }}
                       >
-                        <StatusChip status={a.status} />
-                        {(a.lastReplyKind === "colloquio" ||
-                          a.lastReplyKind === "risposta" ||
-                          a.lastReplyKind === "rifiutata" ||
-                          (a.replyCount ?? 0) > 0) && (
-                          <span
-                            className="ds-chip"
-                            style={{
-                              background: "var(--primary-weak)",
-                              color: "var(--primary-ds)",
-                              fontSize: 10.5,
-                            }}
-                          >
-                            {a.lastReplyKind === "colloquio"
-                              ? "Colloquio"
-                              : a.lastReplyKind === "rifiutata"
-                                ? "Risposta: no"
-                                : "Risposta"}
-                          </span>
-                        )}
+                        {a.delivery ? <span className="ds-chip" title={a.delivery.detail}
+                          style={{ color: a.delivery.tone === "warning" ? "var(--amber)" : undefined }}>
+                          {a.delivery.label}
+                        </span> : <StatusChip status={a.status} />}
+                        {["colloquio", "offerta", "rifiutata"].includes(a.status) && <StatusChip status={a.status} />}
+                        <ReplyKindChip lastReplyKind={a.lastReplyKind} replyCount={a.replyCount} />
                         {a.ghostingDays !== undefined && a.ghostingDays >= 7 && !a.lastReplyAt && (
                           <span
                             className="ds-chip"
@@ -455,6 +451,23 @@ export default function ApplicationsPage() {
             </tbody>
           </table>
         </div>
+        {pendingApplications.length > 0 && <section className="ds-section-card" style={{ marginTop: 20, padding: 18 }} aria-label="Candidature da completare">
+          <h2 style={{ fontSize: 17, marginBottom: 12 }}>Da completare o verificare ({pendingApplications.length})</h2>
+          <p style={{ fontSize: 13, color: "var(--fg-muted)", marginBottom: 14 }}>Queste candidature non hanno una conferma di invio. Un errore tecnico non è un rifiuto dell'azienda.</p>
+          {pendingApplications.slice(0, 50).map((a) => <div key={a.id} style={{ padding: "12px 0", borderTop: "1px solid var(--border-ds)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <strong>{a.job.title} · {a.job.company ?? "Azienda"}</strong>
+              <span className="ds-chip">{a.delivery.label}</span>
+            </div>
+            <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: "6px 0" }}>{a.errorMessage || a.delivery.detail}</p>
+            <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
+              <button className="ds-btn ds-btn-sm" onClick={() => setSelected(toRow(a))}>Vedi dettagli</button>
+              {a.status === "needs_answers" && <a href="/questions">Completa le risposte</a>}
+              {a.status === "awaiting_consent" && <button className="ds-btn ds-btn-sm" onClick={() => consentOne(a.id)}>Consenti invio</button>}
+            </div>
+          </div>)}
+          {pendingApplications.length > 50 && <p style={{ fontSize: 12 }}>Mostrate le 50 candidature più recenti da completare.</p>}
+        </section>}
       </div>
 
       <DetailDrawer app={selected} onClose={() => setSelected(null)} />
@@ -480,7 +493,7 @@ function exportCsv(rows: Row[]): void {
     r.role,
     r.location,
     r.mode,
-    r.status,
+    r.delivery?.label ?? r.status,
     String(r.match),
     r.applied,
   ]);

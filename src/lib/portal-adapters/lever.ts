@@ -1,3 +1,4 @@
+import { observeSubmission } from "./submission-proof";
 import { findSubmitButton } from "./submit-button";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 
@@ -142,17 +143,10 @@ export const leverAdapter: PortalAdapter = {
         console.warn("[lever] generic-fill failed", err);
       }
 
-      // Consenso privacy
-      const consent = page.locator(
-        'input[type="checkbox"][name*="consent" i], input[type="checkbox"][name*="gdpr" i], input[type="checkbox"][name*="privacy" i]',
-      );
-      if ((await consent.count()) > 0) {
-        await consent
-          .first()
-          .check({ timeout: 1500 })
-          .catch(() => void 0);
-      }
-
+      // Required consents and declarations need explicit user answers.
+      const { prepareRequiredAnswers } = await import("./web-form");
+      const unanswered = await prepareRequiredAnswers(page, input);
+      if (unanswered) return unanswered;
       if (input.dryRun) {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
@@ -181,17 +175,8 @@ export const leverAdapter: PortalAdapter = {
           error: "Bottone submit visibile non trovato (Lever).",
         };
       }
-      await submit.click({ timeout: 5_000 });
-      await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
-      const bodyText = await page.locator("body").innerText().catch(() => "");
-      const confirmed =
-        /thank|successful|submitted|grazie|received|confirm|applied|invi(at|o)/i.test(bodyText) ||
-        /thanks|confirmation/i.test(page.url());
-      return {
-        ok: true,
-        status: "submitted",
-        confirmation: confirmed ? "DETECTED" : "UNCONFIRMED",
-      };
+      return (await observeSubmission(page, "lever", input.jobUrl,
+        () => submit.click({ timeout: 5_000 }), input.beforeSubmit)).outcome;
     } catch (err) {
       return {
         ok: false,

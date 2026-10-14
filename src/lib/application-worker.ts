@@ -1,5 +1,6 @@
-import { reuseCvAnswers } from "@/lib/cv-answer-reuse";
-import { reserveTrialApplication } from "@/lib/trial-quota";
+import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
+import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
+import { beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { optimizeCV } from "@/lib/claude";
@@ -10,7 +11,7 @@ import {
 import { saveUserFile, readUserFile } from "@/lib/storage";
 import { decryptJson } from "@/lib/crypto";
 import { isPortalId, PORTALS } from "@/lib/portals";
-import { isJobUrlAlive, markJobClosed } from "@/lib/job-liveness";
+import { checkJobUrlLiveness, markJobClosed } from "@/lib/job-liveness";
 import {
   extractFullProfile,
   tailorProfileForJob,
@@ -23,8 +24,10 @@ import { sendWithinQuota } from "@/lib/email-quota";
 import { inboundReplyAddress } from "@/lib/email";
 import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { humanContext, launchBrowser } from "@/lib/browser";
-import { scrapeRecruiterEmail, isUsableRecruiterEmail } from "@/lib/recruiter-email";
+import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
+import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
 import { findPortalAdapter } from "@/lib/portal-adapters";
+import { receiptJobId, hasVerifiedSubmissionReceipt } from "@/lib/submission-receipt";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
 import {
   GREENHOUSE_COMPANIES,
@@ -35,7 +38,6 @@ import {
 } from "@/lib/scrapers/ats-companies";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
-import { isApplicationAccessPaused } from "@/lib/billing";
 
 // Set di nomi azienda con board ATS noto (normalizzati). Usato per evitare
 // il fallback email verso indirizzi scrapati quando esiste un portale
@@ -91,6 +93,7 @@ export async function processApplication(
   applicationId: string,
   opts?: { forceRealSubmit?: boolean },
 ): Promise<void> {
+  if (applicationsPaused()) return;
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -112,25 +115,15 @@ export async function processApplication(
     return;
   }
 
-  // Una candidatura può restare in coda mentre termina la prova. Da quel
-  // momento l'account resta accessibile, ma nessun CV o form può partire
-  // finché l'utente non attiva un piano a pagamento.
-  if (isApplicationAccessPaused(app.user)) {
-    await prisma.application.update({
-      where: { id: applicationId },
-      data: {
-        status: "cancelled",
-        completedAt: new Date(),
-        errorMessage:
-          "Prova Pro terminata: candidatura non inviata. Attiva Pro per riprendere l'auto-apply.",
-      },
-    });
-    return;
-  }
+  // Atomic admission rechecks the current account/round and reserves capacity.
+  // All queue backends, including direct invocations, pass through this guard.
+  const workToken = await reserveApplicationWork(applicationId);
+  if (!workToken) return;
+  if (!await ensureLiveJobForApplication(applicationId, workToken, app.job.id, app.job.url)) return;
 
   const cv = app.user.cvDocuments[0];
   if (!cv) {
-    await markFailed(applicationId, "CV utente mancante.");
+    await markFailed(applicationId, "CV utente mancante.", workToken);
     return;
   }
 
@@ -138,19 +131,12 @@ export async function processApplication(
   // avviate oggi, le altre restano in coda e vengono riprese tra 20 minuti
   // (o domani). Evita di bruciare crediti AI in una notte.
   const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
-  const startedToday = await prisma.application.count({ where: { startedAt: { gte: dayStart }, id: { not: applicationId } } });
+  // Queue/eligibility backoff timestamps are not AI work and must not consume the budget.
+  const startedToday = await prisma.application.count({ where: { startedAt: { gte: dayStart }, status: { not: "queued" }, id: { not: applicationId } } });
   const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 300);
   if (startedToday >= budget) {
-    await prisma.application.update({ where: { id: applicationId }, data: { status: "queued", startedAt: new Date() } });
+    await prisma.application.updateMany({ where: { id: applicationId, status: "optimizing", startedAt: workToken }, data: { status: "queued", startedAt: new Date() } });
     console.warn(`[worker] budget AI giornaliero raggiunto (${startedToday}/${budget}): ${applicationId} rimandata di 20 min (alza AI_DAILY_APP_BUDGET per cambiare)`);
-    return;
-  }
-
-  if (!await reserveTrialApplication(app.user.id, applicationId)) {
-    await prisma.application.update({ where: { id: applicationId }, data: {
-      status: "cancelled", completedAt: new Date(),
-      errorMessage: "Prova scaduta: candidatura non inviata. Attiva Pro per continuare.",
-    } });
     return;
   }
 
@@ -249,6 +235,7 @@ export async function processApplication(
       await markFailed(
         applicationId,
         "STORAGE SOSPESO: Vercel Blob non disponibile. Configura Supabase Storage nelle impostazioni. Candidatura in coda per retry automatico.",
+        workToken,
       );
       await alertFounder(
         "blob_suspended",
@@ -270,6 +257,7 @@ export async function processApplication(
       await markFailed(
         applicationId,
         "CREDITI AI ESAURITI: servizio temporaneamente non disponibile. Ricarica crediti OpenAI/Anthropic. Candidatura in coda per retry automatico.",
+        workToken,
       );
       await alertFounder(
         "ai_credits",
@@ -283,6 +271,7 @@ export async function processApplication(
     await markFailed(
       applicationId,
       err instanceof Error ? err.message : "Errore generazione CV",
+      workToken,
     );
     return;
   }
@@ -344,9 +333,9 @@ export async function processApplication(
     console.error(`[worker] ${applicationId} PDF tailoring failed`, err);
   }
 
-  // 4. Update status + salva paths + score + PDF
-  await prisma.application.update({
-    where: { id: applicationId },
+  // A recovered worker cannot overwrite a newer owner or reach delivery.
+  const prepared = await prisma.application.updateMany({
+    where: { id: applicationId, status: "optimizing", startedAt: workToken },
     data: {
       status: "ready_to_apply",
       atsScore: result.atsScore,
@@ -358,6 +347,8 @@ export async function processApplication(
       cvLanguage: jobLang,
     },
   });
+
+  if (prepared.count !== 1) return;
 
   // 5. (rimossa) Email "CV pronto" prematura — era fuorviante: usciva
   // PRIMA del tentativo di submit, dando all'utente l'impressione che
@@ -409,24 +400,8 @@ export async function processApplication(
       console.warn(`[worker] ${applicationId} URL resolve failed`, err);
     }
   }
-  // Annuncio ancora online? Un job chiuso (404 / "Job not found" / redirect
-  // alla lista del board) produceva form_not_found → failed o, in auto mode,
-  // awaiting_consent su un annuncio morto, bruciando cap giornaliero e quota
-  // Free. Qui lo chiudiamo nel pool e marchiamo l'application JOB_CLOSED.
-  if (!(await isJobUrlAlive(app.job.url))) {
-    console.warn(`[worker] ${applicationId} job non più online: ${app.job.url}`);
-    await markJobClosed(app.job.id);
-    await prisma.application.update({
-      where: { id: applicationId },
-      data: {
-        status: "failed",
-        submitConfirmation: "JOB_CLOSED",
-        errorMessage: "Annuncio non più online (chiuso dall'azienda). Nessun invio effettuato.",
-        completedAt: new Date(),
-      },
-    });
-    return;
-  }
+  // Recheck after document generation; a formerly live posting may close.
+  if (!await ensureLiveJobForApplication(applicationId, workToken, app.job.id, app.job.url)) return;
 
   // Prova il match sull'URL canonico (Job.url) PRIMA di quello risolto:
   // alcuni ATS (Greenhouse) redirigono a career page custom dove il form
@@ -439,86 +414,68 @@ export async function processApplication(
   }
 
   if (adapter) {
+    const canonicalJobId = receiptJobId(adapter.id, app.job.url);
+    if (!canonicalJobId || canonicalJobId !== receiptJobId(adapter.id, adapterUrl)) {
+      await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: "ready_to_apply" }, data: {
+        submitConfirmation: NOT_SUBMITTED,
+        errorMessage: "Destinazione ATS non correlabile con certezza a questo annuncio. Nessun invio effettuato: verifica il link ufficiale.",
+      } });
+      return;
+    }
     const { parseAnswers } = await import("@/lib/application-answers");
     const userAnswers = parseAnswers(
       (app.user.preferences as { applicationAnswersJson?: string } | null)
         ?.applicationAnswersJson ?? null,
     );
-    // Aspettativa salariale: se l'utente non l'ha scritta nelle risposte ATS,
-    // usiamo la RAL minima delle preferenze (in k€) → i campi numerici
-    // "salary expectation" non restano bloccanti.
-    const prefSalaryK = (app.user.preferences as { salaryMin?: number } | null)?.salaryMin ?? 0;
-    if (!userAnswers.salaryExpectationEur && prefSalaryK > 0) userAnswers.salaryExpectationEur = prefSalaryK * 1000;
-    // Risposte riutilizzabili già date dall'utente a domande di form
-    // precedenti — riempiono i campi custom senza ridisturbarlo.
-    await reuseCvAnswers(app.userId, app.user.yearsExperience);
-    const storedRows = await prisma.userAnswer.findMany({
-      where: { userId: app.userId, NOT: { answer: null } },
-      select: { label: true, answer: true, kind: true },
+    // A search salary floor is not the candidate's approved application answer.
+    // Explicit employer/form answers belong only to this application. Global
+    // answer history cannot authorize another employer's terms or declarations.
+    const answerRow = await prisma.application.findUnique({
+      where: { id: applicationId }, select: { userProvidedAnswersJson: true },
     });
-    const storedAnswers = storedRows
-      .filter((r) => r.answer && r.answer.trim())
-      .map((r) => ({ label: r.label, answer: r.answer as string, kind: r.kind }));
-    // Retry policy: tentiamo fino a 2 volte se l'errore è del tipo
-    // "potenzialmente transitorio" (unknown_error, network, server 5xx).
-    // NON retriamo su validation_failed o captcha — quelli sono motivi
-    // strutturali per cui il retry farebbe solo perdere tempo.
-    const RETRY_STATUSES = new Set(["unknown_error"]);
-    const MAX_ATTEMPTS = 2;
-    let outcome: Awaited<ReturnType<typeof attemptPortalAdapterSubmit>> = {
-      ok: false as const,
-      status: "unknown_error" as const,
-      error: "init",
-    };
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      outcome = await attemptPortalAdapterSubmit({
-        applicationId,
-        adapter,
-        jobUrl: adapterUrl,
-        cvPath,
-        clPath,
-        coverLetterText: result.coverLetter,
-        userId: app.userId,
-        userEmail: app.user.email,
-        answers: userAnswers,
-        storedAnswers,
-        userYearsExperience: app.user.yearsExperience,
-        userEnglishLevel: app.user.englishLevel,
-        userNoticePeriod: app.user.noticePeriod,
-        // Nessuna candidatura si ferma ad aspettare l'utente: in ogni
-        // modalità l'AI risponde a ciò che è onestamente rispondibile e per
-        // il resto usa default conservativi marcati "assumed" (vedi ai-answer).
-        autonomous: true,
-        preferredCity: firstPreferredCity(app.user.preferences?.locationsJson),
-        jobLocation: app.job.location,
-        protectedCategory: app.user.preferences?.protectedCategory ?? null,
-        jobTitle: app.job.title,
-        company: app.job.company,
-        jobDescription: app.job.description,
-        forceRealSubmit: opts?.forceRealSubmit === true,
-      }).catch((err) => {
-        console.error(
-          `[worker] ${applicationId} adapter ${adapter.id} attempt ${attempt} threw`,
-          err,
-        );
-        return {
-          ok: false as const,
-          status: "unknown_error" as const,
-          error: err instanceof Error ? err.message : "unknown",
-        };
-      });
+    const storedAnswers = parseScopedApplicationAnswers(answerRow?.userProvidedAnswersJson, applicationId);
+    // Unknown failures may follow an accepted submit. Never retry them or
+    // switch to another delivery channel without proof that nothing was sent.
+    const outcome = await attemptPortalAdapterSubmit({
+      applicationId,
+      workToken,
+      adapter,
+      jobUrl: adapterUrl,
+      cvPath,
+      clPath,
+      coverLetterText: result.coverLetter,
+      userId: app.userId,
+      userEmail: app.user.email,
+      answers: userAnswers,
+      storedAnswers,
+      userYearsExperience: app.user.yearsExperience,
+      userEnglishLevel: app.user.englishLevel,
+      userNoticePeriod: app.user.noticePeriod,
+      // Nessuna candidatura si ferma ad aspettare l'utente: in ogni
+      // modalità l'AI risponde a ciò che è onestamente rispondibile e per
+      // il resto usa default conservativi marcati "assumed" (vedi ai-answer).
+      autonomous: true,
+      preferredCity: firstPreferredCity(app.user.preferences?.locationsJson),
+      jobLocation: app.job.location,
+      protectedCategory: app.user.preferences?.protectedCategory ?? null,
+      jobTitle: app.job.title,
+      company: app.job.company,
+      jobDescription: app.job.description,
+      forceRealSubmit: opts?.forceRealSubmit === true,
+    }).catch((err) => {
+      console.error(
+        `[worker] ${applicationId} adapter ${adapter.id} threw`,
+        err,
+      );
+      return {
+        ok: false as const,
+        status: "unknown_error" as const,
+        error: err instanceof Error ? err.message : "unknown",
+      };
+    });
 
-      // Successo o errore non-retriable → break.
-      if (outcome.ok) break;
-      if (!RETRY_STATUSES.has(outcome.status)) break;
-      if (attempt < MAX_ATTEMPTS) {
-        const backoff = 2500 * attempt; // 2.5s, 5s
-        console.warn(
-          `[worker] ${applicationId} adapter ${adapter.id} attempt ${attempt} → ${outcome.status} (${outcome.error}). Retry in ${backoff}ms.`,
-        );
-        await new Promise((r) => setTimeout(r, backoff));
-      }
-    }
+
+    if (!outcome.ok && outcome.status === "worker_gate_blocked") return;
 
     if (outcome.ok) {
       const isDryRun =
@@ -540,51 +497,54 @@ export async function processApplication(
       const isConfirmed =
         !isDryRun &&
         typeof confState === "string" &&
-        confState.startsWith("DETECTED");
+        confState.startsWith("DETECTED") &&
+        !!outcome.receipt && outcome.receipt.provider === adapter.id;
       const isUnconfirmed = !isDryRun && !isConfirmed;
 
       console.log(
         `[worker] ${applicationId} adapter ${adapter.id} → submitted (${confState})${isUnconfirmed ? " [UNCONFIRMED — needs review]" : ""}`,
       );
       const now = new Date();
-      await prisma.application.update({
-        where: { id: applicationId },
-        data: {
-          // In dry-run non marchiamo come success.
-          // Se UNCONFIRMED, marchiamo come ready_to_apply con messaggio
-          // esplicito così l'utente può verificare manualmente.
-          status: isDryRun
+      const completionData = {
+        // In dry-run non marchiamo come success.
+        // Se UNCONFIRMED, marchiamo come ready_to_apply con messaggio
+        // esplicito così l'utente può verificare manualmente.
+        status: isDryRun
+          ? "ready_to_apply"
+          : isUnconfirmed
             ? "ready_to_apply"
-            : isUnconfirmed
-              ? "ready_to_apply"
-              : "success",
-          submittedVia:
-            isDryRun || isUnconfirmed ? null : `portal_${adapter.id}`,
-          completedAt: isDryRun || isUnconfirmed ? null : now,
-          // submittedAt REALE: popolato SOLO per invii confermati con prova HARD.
-          // Usato per contare giorni senza risposta (ghosting UX onesta).
-          submittedAt: !isDryRun && isConfirmed ? now : null,
-          // Persistiamo confState (DETECTED/UNCONFIRMED/DRY_RUN) per
-          // diagnosi successive — pre-fix non c'era e non possiamo
-          // sapere retroattivamente lo stato delle vecchie candidature.
-          submitConfirmation: confState,
-          // Persist canary log se l'adapter l'ha popolato (env CANARY_DEBUG=1).
-          // Non sovrascriviamo se outcome.canary è undefined (run normale).
-          ...("canary" in outcome && outcome.canary
-            ? { canaryLog: JSON.stringify(outcome.canary) }
-            : {}),
-          errorMessage: isDryRun
-            ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
-            : isUnconfirmed
-              ? `Submit cliccato ma non abbiamo rilevato la pagina di conferma di ${adapter.label}. La candidatura potrebbe non essere stata accettata (validazione silenziosa, captcha, errore modale). Verifica manualmente sul portale.`
-              : null,
-        },
-      });
+            : "success",
+        submittedVia:
+          isDryRun || isUnconfirmed ? null : `portal_${adapter.id}`,
+        completedAt: isDryRun || isUnconfirmed ? null : now,
+        // submittedAt REALE: popolato SOLO per invii confermati con prova HARD.
+        // Usato per contare giorni senza risposta (ghosting UX onesta).
+        submittedAt: !isDryRun && isConfirmed ? now : null,
+        // Persistiamo confState (DETECTED/UNCONFIRMED/DRY_RUN) per
+        // diagnosi successive — pre-fix non c'era e non possiamo
+        // sapere retroattivamente lo stato delle vecchie candidature.
+        submitConfirmation: isUnconfirmed ? "UNCONFIRMED" : confState,
+        submissionReceiptJson: isConfirmed ? JSON.stringify(outcome.receipt) : null,
+        // Persist canary log se l'adapter l'ha popolato (env CANARY_DEBUG=1).
+        // Non sovrascriviamo se outcome.canary è undefined (run normale).
+        ...("canary" in outcome && outcome.canary
+          ? { canaryLog: JSON.stringify(outcome.canary) }
+          : {}),
+        errorMessage: isDryRun
+          ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
+          : isUnconfirmed
+            ? `Submit cliccato ma non abbiamo rilevato la pagina di conferma di ${adapter.label}. La candidatura potrebbe non essere stata accettata (validazione silenziosa, captcha, errore modale). Verifica manualmente sul portale.`
+            : null,
+      };
+      if (isConfirmed) {
+        if (!await completeApplicationSubmission(applicationId, workToken, completionData)) return;
+      } else {
+        await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } }, data: completionData });
+      }
       // Solo confirmed (= conferma rilevata davvero) bumpa sessione e
       // manda l'email "candidatura inviata". UNCONFIRMED resta in coda
       // di review, niente email fuorviante.
       if (!isDryRun && !isUnconfirmed) {
-        await markSessionSentSuccess(applicationId);
         await notifyApplicationSent(applicationId).catch((err) =>
           console.error(`[worker] ${applicationId} notify email failed`, err),
         );
@@ -592,13 +552,19 @@ export async function processApplication(
       return; // fatto
     }
 
-    if (outcome.status === "submission_unconfirmed") {
-      await prisma.application.update({ where: { id: applicationId }, data: {
+    if (["submission_unconfirmed", "unknown_error", "validation_failed", "missing_field"].includes(outcome.status)) {
+      await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } }, data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
         errorMessage: outcome.error,
-        canaryLog: JSON.stringify(outcome.canary ?? { adapterFailure: outcome.status, error: outcome.error }),
+        canaryLog: JSON.stringify(("canary" in outcome ? outcome.canary : null) ?? { adapterFailure: outcome.status, error: outcome.error }),
       } });
       return; // A missing receipt is not permission to submit the same application again.
+    }
+
+    if (["needs_user_input", "form_not_found", "job_closed"].includes(outcome.status)) {
+      await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } }, data: {
+        status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED,
+      } });
     }
 
     // L'adapter ha trovato campi OBBLIGATORI che non sappiamo rispondere:
@@ -631,12 +597,12 @@ export async function processApplication(
             console.error(`[worker] upsert UserAnswer failed`, err),
           );
       }
-      await prisma.application.update({
-        where: { id: applicationId },
+      await prisma.application.updateMany({
+        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
         data: {
           status: "needs_answers",
           pendingQuestionsJson: JSON.stringify(questions),
-          errorMessage: `${questions.length} domande del form richiedono la tua risposta. Rispondi e ricandidiamo automaticamente.`,
+          errorMessage: `${questions.length} domande del form richiedono la tua risposta. Rispondi per completare questa candidatura dopo i controlli di consenso e validità.`,
           canaryLog:
             "canary" in outcome && outcome.canary
               ? JSON.stringify(outcome.canary)
@@ -664,8 +630,8 @@ export async function processApplication(
       // passare al fallback email (nessuna azienda da contattare).
       console.warn(`[worker] ${applicationId} job chiuso rilevato dall'adapter ${adapter.id}: ${app.job.url}`);
       await markJobClosed(app.job.id);
-      await prisma.application.update({
-        where: { id: applicationId },
+      await prisma.application.updateMany({
+        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
         data: {
           status: "failed",
           submitConfirmation: "JOB_CLOSED",
@@ -679,8 +645,8 @@ export async function processApplication(
     if (outcome.status === "captcha") {
       const mode = app.user.preferences?.autoApplyMode ?? "manual";
       const handoff = mode !== "auto"; // hybrid/manual = chiedi all'utente
-      await prisma.application.update({
-        where: { id: applicationId },
+      await prisma.application.updateMany({
+        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
         data: {
           status: "ready_to_apply",
           submitConfirmation: "CAPTCHA",
@@ -706,8 +672,8 @@ export async function processApplication(
     console.warn(
       `[worker] ${applicationId} adapter ${adapter.id} → ${outcome.status}: ${outcome.error}`,
     );
-    await prisma.application.update({
-      where: { id: applicationId },
+    await prisma.application.updateMany({
+      where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
       data: {
         errorMessage: `Portal ${adapter.label}: ${outcome.error}`,
         // Persisti SEMPRE il motivo del fallimento adapter in canaryLog (anche
@@ -739,13 +705,13 @@ export async function processApplication(
       // Questo job È GIÀ da sorgente ATS ma l'adapter non ha confermato il
       // submit (form cambiato, campo mancante, ecc.). NON mandiamo a email
       // scrapate: marchiamo failed così viene ritentato al ciclo successivo.
-      await prisma.application.update({
-        where: { id: applicationId },
+      await prisma.application.updateMany({
+        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
         data: {
           status: "failed",
           errorMessage:
             `Submit sul portale ${app.job.source} non confermato (form cambiato o campo mancante). ` +
-            `Verrà ritentato automaticamente.`,
+            `Esito da verificare prima di un altro tentativo.`,
           completedAt: new Date(),
         },
       });
@@ -758,6 +724,7 @@ export async function processApplication(
     const atsAlt = await prisma.job.findFirst({
       where: {
         company: app.job.company,
+        title: app.job.title,
         source: { in: ATS_SOURCES },
         id: { not: app.job.id },
       },
@@ -769,8 +736,8 @@ export async function processApplication(
     // la copia ATS diretta al prossimo ciclo. In hybrid/manual l'handoff ok.
     const mode = app.user.preferences?.autoApplyMode ?? "manual";
     const handoff = mode !== "auto";
-    await prisma.application.update({
-      where: { id: applicationId },
+    await prisma.application.updateMany({
+      where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
       data: {
         status: "ready_to_apply",
         submittedVia: null,
@@ -790,37 +757,10 @@ export async function processApplication(
     return;
   }
 
-  let recruiterEmail = app.job.recruiterEmail;
-  // L'email salvata sul Job (da ingestion) NON è passata dai nostri filtri:
-  // può essere una casella privacy/no-reply/generica. Validiamola con le
-  // stesse regole dello scraping prima di mandarci una candidatura, così non
-  // marchiamo "success" un invio finito in una casella sbagliata.
-  if (recruiterEmail && !(await isUsableRecruiterEmail(recruiterEmail, app.job.company))) {
-    console.warn(
-      `[worker] ${applicationId} recruiterEmail pre-esistente scartata (non idonea): ${recruiterEmail}`,
-    );
-    recruiterEmail = null;
-  }
-  if (!recruiterEmail) {
-    recruiterEmail = await scrapeRecruiterEmail(
-      resolvedUrl,
-      app.job.company,
-    );
-    if (recruiterEmail) {
-      await prisma.job.update({
-        where: { id: app.job.id },
-        data: {
-          recruiterEmail,
-          recruiterScrapedAt: new Date(),
-        },
-      });
-    } else {
-      await prisma.job.update({
-        where: { id: app.job.id },
-        data: { recruiterScrapedAt: new Date() },
-      });
-    }
-  }
+  // A cached address or DNS record is not provenance. Verify a fresh
+  // recruiting instruction on the employer's actual job page every time.
+  const verifiedRecruiter = await findVerifiedRecruiterEmail(resolvedUrl, app.job.company, app.job.recruiterEmail);
+  const recruiterEmail = verifiedRecruiter?.email ?? null;
 
   if (recruiterEmail) {
     const appRow = await prisma.application.findUnique({
@@ -828,8 +768,12 @@ export async function processApplication(
       select: { trackingToken: true },
     });
     const trackingToken = appRow?.trackingToken ?? null;
+    if (!await beginApplicationSubmission(applicationId, workToken)) return;
     const delivered = await deliverApplicationToRecruiter({
       applicationId,
+      attemptKey: `application-${applicationId}-${workToken.getTime()}`,
+      recipientProvenanceJson: JSON.stringify(verifiedRecruiter),
+      beforeSend: () => recheckBeforePortalSubmit(applicationId, workToken, resolvedUrl),
       to: recruiterEmail,
       replyTo: app.user.email,
       userName: app.user.name,
@@ -840,38 +784,41 @@ export async function processApplication(
       coverLetterText: result.coverLetter,
       trackingToken,
     }).catch((err) => {
-      console.error(`[worker] ${applicationId} recruiter delivery failed`, err);
-      return false;
+      console.error(`[worker] ${applicationId} recruiter delivery state unavailable`);
+      return { kind: "uncertain", attemptId: null } as RecruiterDeliveryResult;
     });
 
-    if (delivered) {
+    if (delivered.kind === "accepted") {
       const now = new Date();
-      await prisma.application.update({
-        where: { id: applicationId },
-        data: {
+      if (!await completeApplicationSubmission(applicationId, workToken, {
           status: "success",
           submittedVia: "email_recruiter",
           completedAt: now,
-          // submittedAt anche per email: abbiamo SMTP 250 OK, conta per tracking ghosting.
+          // API acceptance is recorded separately from delivery webhooks.
           submittedAt: now,
-          // EMAIL_SENT ≠ DETECTED_*. La SMTP ci ha detto 250 OK ma
-          // non abbiamo prova che il recruiter esista/legga. In /proof
-          // e negli aggregate contiamo solo DETECTED come "consegnata
-          // con prova" — l'email è "inviata" ma non "confermata".
           submitConfirmation: "EMAIL_SENT",
-        },
-      });
-      await markSessionSentSuccess(applicationId);
+      })) return;
       await notifyApplicationSent(applicationId).catch((err) =>
         console.error(`[worker] ${applicationId} notify email failed`, err),
       );
     } else {
-      await prisma.application.update({
-        where: { id: applicationId },
+      await prisma.application.updateMany({
+        where: { id: applicationId, startedAt: workToken,
+          ...(delivered.kind === "not_sent" ? {
+            // The final pre-send gate may already have held the row. This
+            // invocation proved it never crossed the provider boundary; only
+            // this exact token with no accepted email may release that fence.
+            status: { in: ["applying", "ready_to_apply"] },
+            submitConfirmation: { in: ["SUBMISSION_STARTED", "UNCONFIRMED"] },
+            emailAttempts: { none: { providerEmailId: { not: null } } },
+          } : { status: "applying", submitConfirmation: "SUBMISSION_STARTED" }),
+        },
         data: {
-          status: "failed",
-          errorMessage:
-            "Consegna email al recruiter fallita. Apri l'annuncio per candidarti manualmente.",
+          status: "ready_to_apply",
+          submitConfirmation: delivered.kind === "not_sent" ? NOT_SUBMITTED : "UNCONFIRMED",
+          errorMessage: delivered.kind === "not_sent"
+            ? "Email non inviata: canale non disponibile, quota o richiesta rifiutata. Nessun invio effettuato."
+            : "Esito email non confermato. Verifica la consegna prima di ritentare per evitare un doppio invio.",
           completedAt: new Date(),
         },
       });
@@ -883,6 +830,7 @@ export async function processApplication(
     if (process.env.AUTO_APPLY_ENABLED === "true") {
       await attemptAutoSubmit({
         applicationId,
+        workToken,
         portal: app.portal,
         jobUrl: app.job.url,
         userSessions: app.user.portalSessions,
@@ -901,8 +849,8 @@ export async function processApplication(
       //                     su cui agire, non solo un elenco muto.
       const userAutoMode = app.user.preferences?.autoApplyMode ?? "manual";
       const isAutoMode = userAutoMode === "auto";
-      await prisma.application.update({
-        where: { id: applicationId },
+      await prisma.application.updateMany({
+        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
         data: {
           status: isAutoMode ? "awaiting_consent" : "ready_to_apply",
           errorMessage: isAutoMode
@@ -924,51 +872,35 @@ export async function processApplication(
   }
 }
 
-/**
- * On success: bump sentCount sulla sessione collegata. Se raggiunge
- * targetCount, transition status="completed" così la dashboard mostra
- * il prompt "avvia un altro round?".
- */
-async function markSessionSentSuccess(applicationId: string): Promise<void> {
-  try {
-    const app = await prisma.application.findUnique({
-      where: { id: applicationId },
-      select: { sessionId: true },
-    });
-    if (!app?.sessionId) return;
-    const updated = await prisma.applicationSession.update({
-      where: { id: app.sessionId },
-      data: { sentCount: { increment: 1 } },
-      select: { sentCount: true, targetCount: true, status: true },
-    });
-    // Se ha appena toccato il target e non era già completed → mark completed
-    if (
-      updated.sentCount >= updated.targetCount &&
-      updated.status !== "completed" &&
-      updated.status !== "cancelled"
-    ) {
-      await prisma.applicationSession.update({
-        where: { id: app.sessionId },
-        data: { status: "completed", completedAt: new Date() },
-      });
-      console.log(
-        `[worker] session ${app.sessionId} → completed (${updated.sentCount}/${updated.targetCount})`,
-      );
-    }
-  } catch (err) {
-    console.warn("[worker] markSessionSentSuccess failed", err);
-  }
-}
-
-async function markFailed(id: string, message: string): Promise<void> {
-  await prisma.application.update({
-    where: { id },
+async function markFailed(id: string, message: string, workToken: Date): Promise<void> {
+  await prisma.application.updateMany({
+    where: { id, status: "optimizing", startedAt: workToken },
     data: {
       status: "failed",
       errorMessage: message,
       completedAt: new Date(),
     },
   });
+}
+
+async function ensureLiveJobForApplication(id: string, token: Date, jobId: string, url: string): Promise<boolean> {
+  const check = await checkJobUrlLiveness(url);
+  if (check.state === "live") return true;
+  if (check.state === "closed") await markJobClosed(jobId);
+  await prisma.application.updateMany({
+    where: { id, startedAt: token, status: { in: ["optimizing", "ready_to_apply"] },
+      OR: [{ submitConfirmation: null }, { submitConfirmation: { in: [NOT_SUBMITTED, "DRY_RUN", "JOB_CLOSED"] } }] },
+    data: {
+      status: check.state === "closed" ? "failed" : "queued",
+      submitConfirmation: check.state === "closed" ? "JOB_CLOSED" : NOT_SUBMITTED,
+      startedAt: new Date(),
+      completedAt: check.state === "closed" ? new Date() : null,
+      errorMessage: check.state === "closed"
+        ? "Annuncio chiuso dall'azienda. Nessun invio effettuato."
+        : "Disponibilità dell'annuncio non verificabile: invio sospeso, nuovo controllo più tardi.",
+    },
+  });
+  return false;
 }
 
 // ---------- Email delivery ----------
@@ -1069,6 +1001,7 @@ function escapeHtml(s: string): string {
 
 interface AutoSubmitInput {
   applicationId: string;
+  workToken: Date;
   portal: string;
   jobUrl: string;
   userSessions: Array<{
@@ -1082,6 +1015,7 @@ interface AutoSubmitInput {
 }
 
 async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
+  assertApplicationsRunning();
   const { applicationId, portal, jobUrl } = input;
 
   // Job mock/demo ESPLICITO: solo URL di sviluppo (example.com/org).
@@ -1090,18 +1024,12 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
   const isMockOrDemo =
     jobUrl.includes("example.com") || jobUrl.includes("example.org");
   if (isMockOrDemo) {
-    await new Promise((r) => setTimeout(r, 500));
-    await prisma.application.update({
-      where: { id: applicationId },
-      data: {
-        status: "success",
-        submittedVia: "mock_demo",
-        completedAt: new Date(),
-      },
-    });
-    await notifyApplicationSent(applicationId).catch((err) =>
-      console.error(`[worker] ${applicationId} notify email failed`, err),
-    );
+    await prisma.application.updateMany({ where: {
+      id: applicationId, startedAt: input.workToken, status: "ready_to_apply",
+    }, data: {
+      status: "ready_to_apply", submitConfirmation: "DRY_RUN",
+      errorMessage: "Demo: nessuna candidatura inviata.",
+    } });
     return;
   }
 
@@ -1109,8 +1037,8 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
   // lascio ready_to_apply con errorMessage esplicito. Niente email
   // "candidati a mano" se l'utente è in auto mode (vedi gate sotto).
   if (!isPortalId(portal)) {
-    await prisma.application.update({
-      where: { id: applicationId },
+    await prisma.application.updateMany({
+      where: { id: applicationId, startedAt: input.workToken, status: "ready_to_apply" },
       data: {
         status: "ready_to_apply",
         errorMessage:
@@ -1142,8 +1070,8 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
   const cfg = PORTALS[portal];
   const session = input.userSessions.find((s) => s.portal === portal);
   if (!session) {
-    await prisma.application.update({
-      where: { id: applicationId },
+    await prisma.application.updateMany({
+      where: { id: applicationId, startedAt: input.workToken, status: "ready_to_apply" },
       data: {
         status: "needs_session",
         errorMessage: `Collega prima il portale ${cfg.label}.`,
@@ -1153,11 +1081,7 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
     return;
   }
 
-  await prisma.application.update({
-    where: { id: applicationId },
-    data: { status: "applying" },
-  });
-
+  if (!await beginApplicationSubmission(applicationId, input.workToken)) return;
   let browser: import("playwright").Browser | undefined;
   try {
     browser = await launchBrowser();
@@ -1185,27 +1109,22 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
     const applied = await portalSubmitStrategy(portal, page, {
       localCvPath,
       jobUrl,
+      beforeSubmit: () => recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl),
     });
 
-    await prisma.application.update({
-      where: { id: applicationId },
-      data: {
-        status: applied.ok ? "success" : applied.status ?? "failed",
-        errorMessage: applied.ok ? null : applied.error ?? null,
-        completedAt: new Date(),
-      },
-    });
-    if (applied.ok) {
-      await notifyApplicationSent(applicationId).catch((err) =>
-        console.error(`[worker] ${applicationId} notify email failed`, err),
-      );
-    }
+    // The legacy strategy only reports a click, not a server receipt. It
+    // cannot release a slot as confirmed success or be retried automatically.
+    await prisma.application.updateMany({ where: { id: applicationId, startedAt: input.workToken, status: "applying", submitConfirmation: "SUBMISSION_STARTED" }, data: {
+      status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
+      errorMessage: applied.error ?? "Submit eseguito senza ricevuta verificata. Verifica sul portale prima di ritentare.",
+    } });
   } catch (err) {
     console.error(`[worker/${portal}] playwright error`, err);
-    await prisma.application.update({
-      where: { id: applicationId },
+    await prisma.application.updateMany({
+      where: { id: applicationId, startedAt: input.workToken, status: "applying", submitConfirmation: "SUBMISSION_STARTED" },
       data: {
-        status: "failed",
+        status: "ready_to_apply",
+        submitConfirmation: "UNCONFIRMED",
         errorMessage: err instanceof Error ? err.message : "Playwright errore",
         completedAt: new Date(),
       },
@@ -1233,10 +1152,30 @@ async function ensureLocalPath(
   return localPath;
 }
 
+async function recheckBeforePortalSubmit(applicationId: string, workToken: Date, jobUrl: string): Promise<boolean> {
+  const live = await checkJobUrlLiveness(jobUrl);
+  if (live.state !== "live") {
+    if (live.state === "closed") {
+      const row = await prisma.application.findUnique({ where: { id: applicationId }, select: { jobId: true } });
+      if (row) await markJobClosed(row.jobId);
+    }
+    await prisma.application.updateMany({ where: {
+      id: applicationId, startedAt: workToken, status: "applying", submitConfirmation: "SUBMISSION_STARTED",
+    }, data: {
+      status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
+      errorMessage: live.state === "closed"
+        ? "Annuncio chiuso durante la compilazione. Invio finale fermato; verifica eventuali dati già trasmessi prima di ritentare."
+        : "Disponibilità dell'annuncio non verificabile durante la compilazione. Invio finale fermato, senza nuovo tentativo automatico.",
+    } });
+    return false;
+  }
+  return recheckApplicationSubmission(applicationId, workToken);
+}
+
 async function portalSubmitStrategy(
   portal: string,
   page: import("playwright").Page,
-  input: { localCvPath: string; jobUrl: string },
+  input: { localCvPath: string; jobUrl: string; beforeSubmit: () => Promise<boolean> },
 ): Promise<{ ok: boolean; status?: string; error?: string }> {
   if (portal === "infojobs") {
     const applyButton = page.locator(
@@ -1248,6 +1187,8 @@ async function portalSubmitStrategy(
         error: "Bottone 'Candidati' non trovato — selector da aggiornare.",
       };
     }
+    // Some portals submit immediately on the first button, so guard both clicks.
+    if (!await input.beforeSubmit()) return { ok: false, error: "Invio fermato dai controlli attuali." };
     await applyButton.first().click();
     const fileInput = page.locator('input[type="file"]');
     if ((await fileInput.count()) > 0) {
@@ -1257,6 +1198,7 @@ async function portalSubmitStrategy(
       'button[type="submit"], button:has-text("Invia candidatura"), button:has-text("Invia")',
     );
     if ((await submitButton.count()) > 0) {
+      if (!await input.beforeSubmit()) return { ok: false, error: "Invio finale fermato dai controlli attuali." };
       await submitButton.first().click();
       await page.waitForTimeout(3000);
     }
@@ -1281,15 +1223,10 @@ type DeliveryLevel = "confirmed" | "portal" | "email";
 
 function deliveryLevelOf(
   submittedVia: string | null,
-  submitConfirmation: string | null,
+  submissionReceiptJson: string | null,
 ): DeliveryLevel {
   if (submittedVia === "email_recruiter") return "email";
-  // Conferma "hard": DETECTED esatto (legacy) oppure DETECTED_HTTP_2xx/3xx /
-  // DETECTED_DOM dai nuovi adapter HTTP-aware. Senza startsWith, ogni invio
-  // HTTP-confermato veniva declassato a "portal" (niente checkmark all'utente).
-  if (typeof submitConfirmation === "string" && submitConfirmation.startsWith("DETECTED"))
-    return "confirmed";
-  return "portal";
+  return hasVerifiedSubmissionReceipt(submissionReceiptJson, submittedVia) ? "confirmed" : "portal";
 }
 
 /**
@@ -1352,7 +1289,7 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
   const company = app.job.company ?? "l'azienda";
   const jobTitle = app.job.title;
   const jobUrl = app.job.url;
-  const level = deliveryLevelOf(app.submittedVia, app.submitConfirmation);
+  const level = deliveryLevelOf(app.submittedVia, app.submissionReceiptJson);
 
   if (!apiKey) {
     if (process.env.NODE_ENV !== "production") {
@@ -1378,8 +1315,8 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
         : `Candidatura inviata a ${company} ✓`
       : level === "portal"
         ? en
-          ? `Application submitted to ${company}`
-          : `Candidatura inviata a ${company}`
+          ? `Application outcome to verify: ${company}`
+          : `Esito candidatura da verificare: ${company}`
         : en
           ? `Application emailed to ${company}`
           : `Candidatura inviata via email a ${company}`;
@@ -1389,15 +1326,15 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
         level === "confirmed"
           ? `Your application for "${jobTitle}" was submitted to ${company} and we detected a confirmation.`
           : level === "portal"
-            ? `Your application for "${jobTitle}" was submitted to ${company}'s portal. We couldn't capture an explicit confirmation page — keep an eye out for ${company}'s own email.`
-            : `We emailed your application for "${jobTitle}" to ${company}'s recruiting address. Not all companies confirm by email — we recommend also applying on their official page if you don't hear back.`
+            ? `We could not verify the outcome of your application for "${jobTitle}" at ${company}. Check the portal or its email before submitting again.`
+            : `We emailed your application for "${jobTitle}" to ${company}'s recruiting address. Provider acceptance does not confirm delivery or a recruiter response. Track this application before considering another submission.`
       }\n\nJob link: ${jobUrl}\n\n— LavorAI`
     : `Ciao ${firstName},\n\n${
         level === "confirmed"
           ? `La tua candidatura per "${jobTitle}" è stata inviata a ${company} e abbiamo rilevato una conferma.`
           : level === "portal"
-            ? `La tua candidatura per "${jobTitle}" è stata inviata sul portale di ${company}. Non siamo riusciti a catturare una pagina di conferma esplicita — controlla anche l'email di ${company}.`
-            : `Abbiamo inviato la tua candidatura per "${jobTitle}" via email all'indirizzo di recruiting di ${company}. Non tutte le aziende confermano via email — se non ricevi risposta, ti consigliamo di candidarti anche sulla loro pagina ufficiale.`
+            ? `Non abbiamo potuto verificare l'esito della candidatura per "${jobTitle}" a ${company}. Controlla il portale o le sue email prima di inviare di nuovo.`
+            : `Abbiamo inviato la tua candidatura per "${jobTitle}" via email all'indirizzo di recruiting di ${company}. L'accettazione del provider non conferma la consegna o una risposta del recruiter. Controlla questo invio prima di candidarti di nuovo.`
       }\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`;
 
   await sendWithinQuota("application_sent", app.user.email, async () => {
@@ -1424,36 +1361,36 @@ function renderSentEmail(data: {
     data.locale === "en"
       ? {
           title: `${
-            data.level === "email" ? "Application emailed" : "Application submitted"
+            data.level === "email" ? "Application emailed" : data.level === "confirmed" ? "Application submitted" : "Application outcome to verify"
           }${data.firstName ? `, ${data.firstName}` : ""}${checkmark}`,
           delivered:
             data.level === "confirmed"
               ? "We submitted your application — confirmation detected:"
               : data.level === "portal"
-                ? "We submitted your application to the portal (confirmation not captured):"
+                ? "The portal outcome could not be verified:"
                 : "We emailed your application to the recruiting address:",
           updates:
             data.level === "email"
-              ? "Not all companies confirm emailed applications. If you don't hear back, consider applying on their official page too. Track everything from your dashboard."
-              : "We'll notify you as soon as there are updates (views, recruiter replies). Meanwhile you can track everything from your dashboard.",
+              ? "Track delivery and replies from your dashboard. Verify the existing application before submitting again to avoid duplicates."
+              : "Track verified delivery evidence and received replies in your dashboard. A recruiter response is never guaranteed.",
           openCta: "Open job →",
           dashboardHint: "View all your applications at lavorai.it/applications",
           questions: "Questions? Just reply to this email.",
         }
       : {
           title: `${
-            data.level === "email" ? "Candidatura inviata via email" : "Candidatura inviata"
+            data.level === "email" ? "Candidatura inviata via email" : data.level === "confirmed" ? "Candidatura inviata" : "Esito candidatura da verificare"
           }${data.firstName ? `, ${data.firstName}` : ""}${checkmark}`,
           delivered:
             data.level === "confirmed"
               ? "Abbiamo inviato la tua candidatura — conferma rilevata:"
               : data.level === "portal"
-                ? "Abbiamo inviato la candidatura sul portale (conferma non catturata):"
+                ? "L'esito sul portale non è verificato:"
                 : "Abbiamo inviato la candidatura via email all'indirizzo di recruiting:",
           updates:
             data.level === "email"
-              ? "Non tutte le aziende confermano le candidature via email. Se non ricevi risposta, valuta di candidarti anche sulla pagina ufficiale. Monitora tutto dalla dashboard."
-              : "Ti avviseremo non appena ci saranno novità (visualizzazioni, risposte dei recruiter). Nel frattempo puoi monitorare lo stato dalla tua dashboard.",
+              ? "Monitora consegna e risposte dalla dashboard. Verifica la candidatura esistente prima di inviarla di nuovo, per evitare duplicati."
+              : "Monitora le prove di invio e le risposte ricevute nella dashboard. La risposta di un recruiter non è garantita.",
           openCta: "Apri annuncio →",
           dashboardHint:
             "Vedrai tutte le candidature su lavorai.it/applications",
@@ -1667,6 +1604,9 @@ function renderManualEmail(data: {
 
 interface DeliverInput {
   applicationId: string;
+  beforeSend: () => Promise<boolean>;
+  attemptKey: string;
+  recipientProvenanceJson: string;
   to: string;
   replyTo: string;
   userName: string | null;
@@ -1680,20 +1620,19 @@ interface DeliverInput {
 
 async function deliverApplicationToRecruiter(
   input: DeliverInput,
-): Promise<boolean> {
+): Promise<RecruiterDeliveryResult> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     if (process.env.NODE_ENV !== "production") {
       console.log(
         `\n📨 [recruiter-delivery DEV] Avrei inviato a ${input.to} (reply-to ${input.replyTo}) — "${input.job.title}" @ ${input.job.company ?? "—"}\n`,
       );
-      return false; // in dev senza resend, non conta come delivered
+      return { kind: "not_sent", reason: "email_provider_not_configured" };
     }
     console.error("[worker] RESEND_API_KEY mancante — no delivery");
-    return false;
+    return { kind: "not_sent", reason: "email_provider_not_configured" };
   }
 
-  const resend = new Resend(apiKey);
   const from =
     process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
 
@@ -1713,7 +1652,7 @@ async function deliverApplicationToRecruiter(
       "EMAIL_FROM è sandbox — delivery bloccata",
       `L'app sta cercando di inviare candidature ai recruiter ma EMAIL_FROM punta ancora al sandbox Resend (${from}).\nResend accetta invii sandbox solo verso caselle interne all'account → NIENTE candidatura arriva ai recruiter esterni.\n\nFix: su Resend verifica un dominio (es. lavorai.it), poi setta EMAIL_FROM="LavorAI <candidature@lavorai.it>" (o simile) su Vercel.`,
     ).catch(() => void 0);
-    return false;
+    return { kind: "not_sent", reason: "email_provider_not_configured" };
   }
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
   const pixel = input.trackingToken
@@ -1731,15 +1670,15 @@ async function deliverApplicationToRecruiter(
   const inboundReply = inboundReplyAddress(input.applicationId);
   const effectiveReplyTo = inboundReply ?? input.replyTo;
 
-  // BCC opzionale al founder — prova esterna alla dashboard Resend che
-  // il messaggio è partito davvero (setta RECRUITER_DELIVERY_BCC su Vercel).
-  const bccFounder = process.env.RECRUITER_DELIVERY_BCC?.trim() || undefined;
-
-  const result = await sendWithinQuota("application_sent", input.to, async () => {
-    const resp = await resend.emails.send({
+  return sendRecruiterEmailOnce({
+    applicationId: input.applicationId,
+    attemptKey: input.attemptKey,
+    recipient: input.to,
+    recipientProvenanceJson: input.recipientProvenanceJson,
+    beforeSend: input.beforeSend,
+    payload: {
       from,
       to: input.to,
-      ...(bccFounder ? { bcc: bccFounder } : {}),
       replyTo: effectiveReplyTo,
       subject,
       html: renderRecruiterEmail({
@@ -1769,26 +1708,8 @@ async function deliverApplicationToRecruiter(
       headers: {
         "X-Lavorai-App-Id": input.applicationId,
       },
-    });
-    // Resend restituisce { data: { id }, error }. `error` viene dalla API
-    // (dominio non verificato, quota, indirizzo malformato) — NON viene
-    // lanciato come exception. Se non lo controlliamo, marchiamo "sent"
-    // ma nulla è partito davvero.
-    if (resp.error) {
-      const msg = `Resend rifiutato: ${resp.error.name ?? "error"} — ${resp.error.message ?? "no message"}`;
-      console.error(`[worker] ${input.applicationId} ${msg}`);
-      await alertFounder(
-        "resend_reject",
-        "Resend ha rifiutato una candidatura",
-        `App ${input.applicationId} — recruiter: ${input.to}\n${msg}\n\nCause tipiche: dominio EMAIL_FROM non verificato su Resend, quota superata, indirizzo destinatario malformato.`,
-      ).catch(() => void 0);
-      throw new Error(msg);
-    }
-    console.log(
-      `[worker] ${input.applicationId} recruiter delivered → resend.id=${resp.data?.id ?? "?"} to=${input.to}`,
-    );
+    },
   });
-  return result.sent;
 }
 
 function slugName(name: string): string {
@@ -1848,6 +1769,7 @@ function renderRecruiterEmail(d: {
 
 interface AdapterSubmitInput {
   applicationId: string;
+  workToken: Date;
   adapter: ReturnType<typeof import("@/lib/portal-adapters").findPortalAdapter> extends infer T
     ? T extends null
       ? never
@@ -1860,7 +1782,7 @@ interface AdapterSubmitInput {
   userId: string;
   userEmail: string;
   answers?: import("@/lib/application-answers").ApplicationAnswers;
-  storedAnswers?: Array<{ label: string; answer: string; kind?: string }>;
+  storedAnswers?: Array<{ label: string; answer: string; kind?: string; options?: string[]; fingerprint?: string }>;
   userYearsExperience?: number | null;
   userEnglishLevel?: string | null;
   userNoticePeriod?: string | null;
@@ -1879,14 +1801,10 @@ interface AdapterSubmitInput {
 }
 
 async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
-  import("@/lib/portal-adapters").ApplyOutcome
+  import("@/lib/portal-adapters").ApplyOutcome | { ok: false; status: "worker_gate_blocked"; error: string }
 > {
   const { applicationId, adapter, jobUrl, cvPath, clPath, userId } = input;
-
-  await prisma.application.update({
-    where: { id: applicationId },
-    data: { status: "applying" },
-  });
+  assertApplicationsRunning();
 
   // Profilo utente per compilare i campi del form
   const profileRow = await prisma.cVProfile.findUnique({
@@ -1944,8 +1862,12 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     browser = await launchBrowser();
     const context = await humanContext(browser);
     const page = await context.newPage();
+    if (!await beginApplicationSubmission(applicationId, input.workToken)) {
+      return { ok: false, status: "worker_gate_blocked", error: "Current worker gates blocked delivery." };
+    }
     const outcome = await adapter.apply(page, {
       profile,
+      beforeSubmit: () => recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl),
       userEmail: formEmail,
       cvLocalPath,
       clLocalPath,
@@ -1967,9 +1889,8 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       jobTitle: input.jobTitle,
       company: input.company,
       jobDescription: input.jobDescription,
-      // Risposte generate in modalità autonoma → UserAnswer (source ai/rule):
-      // riusate identiche nelle candidature successive e visibili all'utente
-      // in /questions per correggerle. Non sovrascrive risposte dell'utente.
+      // Audit of generated answers is separate from explicit application-bound
+      // permission. Historical values never authorize another form.
       onAiAnswers: (given) => {
         void persistAiAnswers(userId, applicationId, given).catch((err) =>
           console.error(`[worker] ${applicationId} persist AI answers failed`, err),

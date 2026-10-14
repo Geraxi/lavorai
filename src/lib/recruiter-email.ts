@@ -1,10 +1,12 @@
-import { complete } from "@/lib/ai-router";
+import { createHash } from "node:crypto";
+import { domainToASCII, domainToUnicode } from "node:url";
+import { parse as parseDomain } from "tldts";
 /**
  * Scraping opportunistico dell'email del recruiter dall'HTML del job posting.
  *
  * Non è garantito che l'email sia presente — dipende dal portale e
  * dall'annuncio. Quando la troviamo, la cachiamo su Job.recruiterEmail
- * così non scrape-iamo due volte lo stesso annuncio.
+ * La cache non autorizza invii: la pagina viene verificata nuovamente al momento dell’invio.
  */
 
 // Email consideriamo "non utili per candidatura"
@@ -229,7 +231,8 @@ async function hasMxRecord(domain: string): Promise<boolean> {
  * Serve perché Job.recruiterEmail può contenere caselle inadatte salvate a
  * monte: senza questa guardia il worker mandava la candidatura lì e la
  * marcava "success" (falsa conferma). Ritorna true solo se l'indirizzo è
- * plausibilmente in grado di ricevere una candidatura.
+ * plausibilmente in grado di ricevere posta. Non dimostra ownership né consenso
+ * a ricevere candidature: usare findVerifiedRecruiterEmail per la consegna.
  */
 export async function isUsableRecruiterEmail(
   email: string | null | undefined,
@@ -243,147 +246,172 @@ export async function isUsableRecruiterEmail(
   return hasMxRecord(normalized.split("@")[1] ?? "");
 }
 
-/**
- * Prende un URL di job posting e prova a estrarre l'email del recruiter.
- * Ritorna null se niente di utile trovato.
- */
-export async function scrapeRecruiterEmail(
-  jobUrl: string,
-  company: string | null,
-): Promise<string | null> {
-  try {
-    const res = await fetch(jobUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0 Safari/537.36",
-        "Accept-Language": "it-IT,it;q=0.9,en;q=0.8",
-      },
-      signal: AbortSignal.timeout(10_000),
-      redirect: "follow",
-    });
-    if (!res.ok) return null;
-    const html = await res.text();
+export type VerifiedRecruiterEmail = {
+  email: string;
+  provenance: {
+    version: 1;
+    sourceType: "employer_job_page";
+    requestedUrl: string;
+    sourceUrl: string;
+    observedAt: string;
+    pageSha256: string;
+    evidence: string;
+    company: string;
+    extraction: "visible_application_instruction";
+  };
+};
 
-    // Estrai tutti gli indirizzi email nel body
-    // (regex permissiva ma ragionevole)
-    const matches = Array.from(
-      html.matchAll(
-        /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g,
-      ),
-    ).map((m) => m[0].toLowerCase());
+// Do not truncate unsupported Unicode mailboxes/domains into a different ASCII
+// recipient (e.g. jobs@acme.com.évil.com must never become jobs@acme.com).
+const EMAIL_RE = /(?<![\p{L}\p{N}\p{M}._%+@-])[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?![\p{L}\p{N}\p{M}@_-]|\.[\p{L}\p{N}\p{M}.-])/gu;
+const ATS_HOSTS = ["greenhouse.io", "ashbyhq.com", "lever.co", "workable.com", "smartrecruiters.com", "recruitee.com", "teamtailor.com", "bamboohr.com", "breezy.hr", "pinpointhq.com", "personio.de", "personio.com"];
+const AGGREGATOR_HOSTS = ["indeed.com", "linkedin.com", "adzuna.com", "adzuna.it", "glassdoor.com", "jooble.org", "ziprecruiter.com"];
+const domainIs = (host: string, domain: string) => host === domain || host.endsWith(`.${domain}`);
+// Preserve Unicode letters: dropping non-ASCII characters can turn a different
+// IDN brand into an apparent ASCII match. Do not fold visual confusables.
+const compactIdentity = (value: string) => value.normalize("NFC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+const identity = (value: string) => compactIdentity(value.replace(/\b(incorporated|limited|inc|ltd|llc|srl|s\.r\.l|spa|gmbh)\.?$/i, ""));
 
-    const s = slug(company);
-    let best: string | null = null;
-    let bestScore = -Infinity;
-
-    if (matches.length > 0) {
-      const unique = Array.from(new Set(matches));
-      for (const e of unique) {
-        const sc = score(e, s);
-        if (sc > bestScore) {
-          bestScore = sc;
-          best = e;
-        }
-      }
-    }
-
-    // ── Claude AI fallback ─────────────────────────────────────────────
-    // Se regex + score non danno un buon candidato (nessun match, o tutti
-    // negativi per blacklist/generic), chiediamo al provider AI di estrarre
-    // un'email di recruiting dal testo pulito. Copre annunci italiani SMB
-    // dove l'email è dentro un blob "Come candidarsi:" o nel footer non
-    // strutturato che sfugge alla regex.
-    if (!best || bestScore < 0) {
-      const aiEmail = await extractEmailWithAi(html, company).catch(
-        (err) => {
-          console.warn("[recruiter-scrape] AI fallback failed:", err);
-          return null;
-        },
-      );
-      if (aiEmail) {
-        const sc = score(aiEmail, s);
-        // Accettiamo anche score 0 (email neutra) — il modello ha filtrato
-        // manualmente rispetto ai fake, ci fidiamo un po' di più.
-        if (sc > -1000 && !BLACKLIST_FULL.has(aiEmail)) {
-          best = aiEmail;
-        }
-      }
-    }
-
-    if (!best) return null;
-
-    // Sanity DNS: il dominio deve avere MX record reale (evita placeholder
-    // e domini sintetici che passerebbero comunque il blacklist).
-    const hasMx = await hasMxRecord(best.split("@")[1] ?? "");
-    if (!hasMx) {
-      console.warn(`[recruiter-scrape] domain senza MX: ${best} → scarto`);
-      return null;
-    }
-    return best;
-  } catch (err) {
-    console.warn("[recruiter-scrape]", jobUrl, err);
-    return null;
-  }
+function registrableIdentity(host: string): { domain: string; key: string } | null {
+  const ascii = domainToASCII(host).toLowerCase();
+  if (!ascii || ascii.endsWith(".")) return null;
+  // Include PRIVATE suffixes: acme.github.io and other.github.io are different
+  // tenants. Unlisted, special-use, IP and malformed hosts require review.
+  const parsed = parseDomain(ascii, { allowPrivateDomains: true, detectSpecialUse: true });
+  if ((!parsed.isIcann && !parsed.isPrivate) || parsed.isSpecialUse || parsed.isIp
+    || !parsed.domain || !parsed.domainWithoutSuffix) return null;
+  return { domain: parsed.domain, key: compactIdentity(domainToUnicode(parsed.domainWithoutSuffix)) };
 }
 
-/**
- * Fallback AI: chiede al provider configurato di estrarre l'email di recruiting
- * dal testo della pagina. Prompt strict: solo email VERE di contatto per
- * candidatura, mai placeholder o generic (info@, noreply@, ecc). Ritorna
- * null se il modello non ne trova una legittima.
- *
- * Costo: ~1 chiamata AI per RTA — vale la pena solo per il fallback
- * (regex NON trova o trova solo email pessime).
+/** Match only provider-defined tenant positions on approved posting layouts.
+ * A company word elsewhere in an ATS URL is never tenant attribution. These
+ * layouts mirror the existing portal adapters; unknown layouts require review.
  */
-async function extractEmailWithAi(
-  html: string,
-  company: string | null,
-): Promise<string | null> {
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) return null;
-
-  // Pulizia HTML → testo, cap 15k char per non esplodere sui token
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 15000);
-  if (text.length < 50) return null;
-
-  const prompt = `Sei un extractor. Cerca UNA email di recruiting/candidature nel testo di questo annuncio di lavoro${company ? ` di ${company}` : ""}.
-
-Rispondi ESCLUSIVAMENTE con:
-- una email valida (es. "hr@company.com") se ne trovi UNA legittima usata per ricevere candidature
-- la parola "NONE" (senza virgolette) se nessuna email è chiaramente di recruiting
-
-Regole rigide (RIFIUTA e rispondi "NONE" se):
-- Email non riconducibile chiaramente al recruiting (no info@, no noreply@, no privacy@, no gdpr@, no accessibility@, no legal@, no ufficio-stampa@)
-- Email placeholder (name@company.com, your.email@...)
-- Email di dipendenti citate solo di sfuggita
-- Se l'annuncio dice "candidati sul sito" o "clicca qui" senza email
-
-Testo:
-"""
-${text}
-"""
-
-Solo l'email o "NONE". Nient'altro.`;
-
-  try {
-    const ai = await complete({ task: "email_extract", system: "Estrai l'email del recruiter dal testo. Rispondi solo con l'email o NONE.", user: prompt, maxTokens: 60, temperature: 0 });
-    const raw = ai.text.trim().toLowerCase();
-    if (!raw || raw === "none") return null;
-    // Estrai la prima email dalla risposta (il modello potrebbe aggiungere
-    // rumore nonostante l'istruzione)
-    const emailMatch = raw.match(
-      /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/,
-    );
-    if (!emailMatch) return null;
-    console.log(`[recruiter-scrape] AI found: ${emailMatch[0]}`);
-    return emailMatch[0];
-  } catch (err) {
-    console.warn("[recruiter-scrape] AI call errored:", err);
-    return null;
+function approvedAtsTenant(url: URL): string | null {
+  const host = url.hostname;
+  const path = url.pathname;
+  const pathTenants: Array<{ hosts: string[]; posting: RegExp }> = [
+    { hosts: ["boards.greenhouse.io", "job-boards.greenhouse.io"], posting: /^\/([a-z0-9-]+)\/jobs\/[^/]+(?:\/apply)?\/?$/i },
+    { hosts: ["jobs.ashbyhq.com", "jobs.lever.co", "jobs.eu.lever.co"], posting: /^\/([a-z0-9-]+)\/[^/]+(?:\/application|\/apply)?\/?$/i },
+    { hosts: ["apply.workable.com"], posting: /^\/([a-z0-9-]+)\/j\/[^/]+(?:\/apply)?\/?$/i },
+    { hosts: ["jobs.smartrecruiters.com", "careers.smartrecruiters.com"], posting: /^\/([a-z0-9-]+)\/[^/]+\/?$/i },
+  ];
+  for (const entry of pathTenants) {
+    if (entry.hosts.includes(host)) return entry.posting.exec(path)?.[1] ?? null;
   }
+  const hostTenants: Array<{ host: RegExp; posting: RegExp }> = [
+    { host: /^([a-z0-9-]+)\.recruitee\.com$/i, posting: /^\/o\/[^/]+(?:\/c\/new)?\/?$/i },
+    { host: /^([a-z0-9-]+)\.teamtailor\.com$/i, posting: /^\/jobs\/[^/]+(?:\/applications\/new)?\/?$/i },
+    { host: /^([a-z0-9-]+)\.bamboohr\.com$/i, posting: /^\/careers\/[^/]+\/?$/i },
+    { host: /^([a-z0-9-]+)\.breezy\.hr$/i, posting: /^\/p\/[^/]+(?:\/apply)?\/?$/i },
+    { host: /^([a-z0-9-]+)\.pinpointhq\.com$/i, posting: /^\/(?:[a-z]{2}\/)?postings\/[^/]+(?:\/applications\/new)?\/?$/i },
+    { host: /^([a-z0-9-]+)\.jobs\.personio\.(?:de|com)$/i, posting: /^\/job\/[^/]+(?:\/apply|\/application)?\/?$/i },
+  ];
+  for (const entry of hostTenants) {
+    const tenant = entry.host.exec(host)?.[1];
+    if (tenant && entry.posting.test(path)) return tenant;
+  }
+  return null;
+}
+
+function attributedSource(url: URL, companyKey: string): { domain: string; ats: boolean } | null {
+  // Plain HTTP, credentials and nonstandard ports cannot establish a safe
+  // destination for a CV. They need a separately reviewed canonical HTTPS URL.
+  if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
+  if (AGGREGATOR_HOSTS.some((host) => domainIs(url.hostname, host))) return null;
+  const source = registrableIdentity(url.hostname);
+  if (!source) return null;
+  const ats = ATS_HOSTS.some((host) => domainIs(url.hostname, host));
+  if (ats) {
+    const tenant = approvedAtsTenant(url);
+    if (!tenant || compactIdentity(domainToUnicode(tenant)) !== companyKey) return null;
+  } else if (source.key !== companyKey) return null;
+  return { domain: source.domain, ats };
+}
+function decodeHtml(value: string): string {
+  return value.replace(/&#(?:x([0-9a-f]+)|(\d+));?/gi, (_match, hex, decimal) => {
+    const code = Number.parseInt(hex ?? decimal, hex ? 16 : 10);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : " ";
+  }).replace(/&commat;/gi, "@").replace(/&period;/gi, ".").replace(/&amp;/gi, "&").replace(/&(?:nbsp|quot|apos|lt|gt);/gi, " ");
+}
+
+/** Freshly fetch the selected employer posting every time. An old cache or DNS
+ * record is never evidence that an employer invited this application. We use no
+ * model-generated candidates: only literal addresses in visible application
+ * instructions can pass, with a source excerpt and page digest for the attempt.
+ */
+export async function findVerifiedRecruiterEmail(
+  jobUrl: string, company: string | null, cachedEmail?: string | null,
+): Promise<VerifiedRecruiterEmail | null> {
+  void cachedEmail; // deliberately not authority, nor a selection preference
+  if (!company?.trim()) return null;
+  try {
+    const requested = new URL(jobUrl);
+    const companyKey = identity(company);
+    if (companyKey.length < 3 || !attributedSource(requested, companyKey)) return null;
+    const response = await fetch(jobUrl, { headers: { "User-Agent": "Mozilla/5.0", accept: "text/html" }, signal: AbortSignal.timeout(10_000), redirect: "follow" });
+    if (!response.ok) return null;
+    const final = new URL(response.url || jobUrl);
+    // A redirect to another organization or a generic listing is not provenance
+    // for this posting. Resolve changed employer URLs separately, then recheck.
+    if (requested.origin !== final.origin || /^[\/]?$/.test(final.pathname)) return null;
+    const source = attributedSource(final, companyKey);
+    if (!source) return null;
+    if (/[?&]error=true(?:&|$)/i.test(final.search)) return null;
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) return null;
+    const html = (await response.text()).slice(0, 300_000);
+    // Registrable-domain/ATS attribution is source evidence, not cryptographic
+    // ownership. Unknown employer-brand mappings remain a manual-review case.
+    // Do not mine script bundles, analytics, placeholder inputs, footer contacts,
+    // privacy/accommodation text or navigation for application destinations.
+    const visibleHtml = html.replace(/<(script|style|nav|footer|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ");
+    const visible = decodeHtml(visibleHtml.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_all, attrs: string, body: string) => {
+      const mailto = attrs.match(/href\s*=\s*["']mailto:([^?"']+)/i)?.[1];
+      return `${body}${mailto ? ` ${decodeHtml(mailto)}` : ""}`;
+    }).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+    if (/job (?:was )?not found|this (?:job|position) is no longer|no longer accepting applications|annuncio scaduto|captcha|access denied/i.test(visible)) return null;
+    if (!identity(visible).includes(companyKey)) return null;
+    const candidates: Array<{ email: string; evidence: string; score: number }> = [];
+    for (const match of visible.matchAll(EMAIL_RE)) {
+      const email = match[0].toLowerCase();
+      const start = match.index ?? 0;
+      const context = visible.slice(Math.max(0, start - 180), start + email.length + 100);
+      const preceding = visible.slice(Math.max(0, start - 180), start).replace(EMAIL_RE, "[email]");
+      // An explicit application action before the address, or a dedicated
+      // recruiting-contact label, is required. Merely "we are hiring" elsewhere
+      // on the page cannot make a footer employee address an application inbox.
+      const invited = /(?:(?:send|submit|invia(?:re)?|manda(?:re)?)[^.!?]{0,60}(?:cv|resume|application|candidat(?:ura|ure))|(?:apply|candidati)\s+(?:by email|via email|to|at|scrivendo)|(?:applications?|recruit(?:ing|ment)|hiring|talent acquisition)(?:\s+(?:contact|email|inbox|team))?\s*[:–-])[^.!?]{0,100}$/i.test(preceding);
+      const excluded = /(?:do not|don't|non)[^.!?]{0,70}(?:send|submit|apply|invia|manda)|(?:accessibility|accommodation|privacy|disabilit|technical support)[^.!?]{0,100}$/i.test(preceding);
+      if (!invited || excluded) continue;
+      const candidateScore = score(email, slug(company));
+      if (candidateScore < 0) continue;
+      // Cross-employer addresses cannot piggyback on a real job page. An external
+      // recruiter with a different domain needs explicit review/verified mapping.
+      const emailDomain = email.split("@")[1];
+      const recipient = registrableIdentity(emailDomain);
+      if (!recipient || recipient.key !== companyKey) continue;
+      // For direct employer-page attribution, a same-brand domain on another TLD
+      // is an unverified affiliate. ATS pages use the checked tenant above and
+      // the literal employer-domain address in the application instruction.
+      if (!source.ats && recipient.domain !== source.domain) continue;
+      candidates.push({ email, evidence: context, score: candidateScore });
+    }
+    candidates.sort((a, b) => b.score - a.score);
+    for (const candidate of candidates) {
+      if (!await isUsableRecruiterEmail(candidate.email, company)) continue;
+      return { email: candidate.email, provenance: { version: 1, sourceType: "employer_job_page",
+        requestedUrl: jobUrl, sourceUrl: final.toString(), observedAt: new Date().toISOString(),
+        pageSha256: createHash("sha256").update(html).digest("hex"), evidence: candidate.evidence,
+        company, extraction: "visible_application_instruction" } };
+    }
+    return null;
+  } catch { return null; }
+}
+
+/** Compatibility for callers that need only the address. The worker must use
+ * findVerifiedRecruiterEmail and persist its provenance on the send attempt.
+ */
+export async function scrapeRecruiterEmail(jobUrl: string, company: string | null): Promise<string | null> {
+  return (await findVerifiedRecruiterEmail(jobUrl, company))?.email ?? null;
 }

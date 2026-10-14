@@ -9,7 +9,9 @@
  */
 
 import { prisma } from "@/lib/db";
-import { classifyReply } from "@/lib/reply-parser";
+import { isApplicationVerificationMessage } from "@/lib/reply-security-message";
+import { emailTransaction } from "@/lib/application-delivery";
+import { classifyReply, type ClassifiedReply } from "@/lib/reply-parser";
 import { applyReplyToApplication } from "@/lib/apply-reply-to-application";
 import { isLikelyJobMail, matchToApplication } from "@/lib/gmail-match";
 import { extractGmailBody, type GmailPart } from "@/lib/gmail-body";
@@ -63,7 +65,7 @@ export async function getGmailAccessToken(userId: string): Promise<string | null
     });
 
     if (!refreshResponse.ok) {
-      console.error("[gmail] Token refresh failed:", await refreshResponse.text());
+      console.error("[gmail] Token refresh failed:", refreshResponse.status);
       return null;
     }
 
@@ -79,7 +81,7 @@ export async function getGmailAccessToken(userId: string): Promise<string | null
 
     return newAccessToken;
   } catch (err) {
-    console.error("[gmail] Token refresh error:", err);
+    console.error("[gmail] Token refresh failed");
     return null;
   }
 }
@@ -99,7 +101,7 @@ async function fetchGmailMessages(
   });
 
   if (!response.ok) {
-    throw new Error(`Gmail API error: ${response.status} ${await response.text()}`);
+    throw new Error(`Gmail API error: ${response.status}`);
   }
 
   return response.json();
@@ -112,19 +114,20 @@ async function fetchGmailMessageById(accessToken: string, messageId: string): Pr
   });
 
   if (!response.ok) {
-    throw new Error(`Gmail API error: ${response.status} ${await response.text()}`);
+    throw new Error(`Gmail API error: ${response.status}`);
   }
 
   return response.json();
 }
 
-function parseGmailMessage(msg: GmailMessage): {
+export function parseGmailMessage(msg: GmailMessage): {
   from: string;
   to: string;
   subject: string;
   date: Date;
   bodyText: string;
   snippet: string;
+  ownForwardNotification?: boolean;
 } {
   const headers = msg.payload?.headers || [];
   const getHeader = (name: string) =>
@@ -134,18 +137,69 @@ function parseGmailMessage(msg: GmailMessage): {
   const to = getHeader("to");
   const subject = getHeader("subject");
   const dateStr = getHeader("date");
-  const date = dateStr ? new Date(dateStr) : new Date(parseInt(msg.internalDate || "0", 10));
+  const parsedDate = new Date(dateStr || Number(msg.internalDate || Date.now()));
+  const date = Number.isFinite(parsedDate.getTime()) ? parsedDate : new Date();
   const snippet = msg.snippet || "";
 
   const bodyText = extractGmailBody(msg.payload, snippet);
 
-  return { from, to, subject, date, bodyText: bodyText.slice(0, 5000), snippet };
+  // Detect our notification on the complete decoded MIME body. Its footer can
+  // follow an 8k recruiter reply, beyond the 5k content-retention limit.
+  const ownForwardNotification = isOwnForwardNotification(from, bodyText);
+  return { from, to, subject, date, bodyText: bodyText.slice(0, 5000), snippet, ownForwardNotification };
+}
+
+/** Our own forwarding notification is already in ApplicationReply. Importing it
+ * again through Gmail would double-count the same recruiter response.
+ */
+export function isOwnForwardNotification(from: string, bodyText: string): boolean {
+  const mailbox = (value: string): string | undefined => {
+    const clean = value.trim();
+    // Use the actual mailbox, never an address embedded in a display name.
+    return (clean.match(/^[^<>\r\n]*<([^\s<>@,]+@[a-z0-9.-]+)>$/i)?.[1]
+      ?? clean.match(/^([^\s<>@,]+@[a-z0-9.-]+)$/i)?.[1])?.toLowerCase();
+  };
+  const address = mailbox(from);
+  const override = mailbox(process.env.RESEND_FROM_OVERRIDE ?? "");
+  return !!address && (address === "noreply@lavorai.it" || address === override) && bodyText.includes("Inoltrato da LavorAI.");
+}
+
+/** Store source + application projection as one transaction. A provider replay
+ * or concurrent sync cannot increment twice, nor leave a stored-but-unapplied row.
+ */
+export async function storeGmailReply(input: {
+  userId: string;
+  gmailMessageId: string;
+  threadId: string;
+  parsed: ReturnType<typeof parseGmailMessage>;
+  classified: ClassifiedReply;
+  applicationId: string | null;
+  label: string | null;
+}): Promise<boolean> {
+  return emailTransaction(async (tx) => {
+    const identity = { userId: input.userId, gmailMessageId: input.gmailMessageId };
+    if (await tx.gmailMessage.findUnique({ where: { userId_gmailMessageId: identity } })) return false;
+    // Even a matcher bug must never update another account's application.
+    const app = input.applicationId ? await tx.application.findFirst({
+      where: { id: input.applicationId, userId: input.userId }, select: { id: true },
+    }) : null;
+    await tx.gmailMessage.create({ data: {
+      ...identity, threadId: input.threadId, fromAddress: input.parsed.from, toAddress: input.parsed.to,
+      subject: input.parsed.subject, snippet: input.parsed.snippet, bodyText: input.parsed.bodyText,
+      date: input.parsed.date, ...input.classified, applicationId: app?.id ?? null,
+      label: input.label, read: false, archived: false,
+    } });
+    if (app) await applyReplyToApplication({ applicationId: app.id, ...input.classified, receivedAt: input.parsed.date }, tx);
+    return true;
+  });
 }
 
 export async function syncGmailMessages(
   userId: string,
   maxMessages = 50,
 ): Promise<{ synced: number; skipped: number; error?: string }> {
+  let synced = 0;
+  let skipped = 0;
   try {
     const accessToken = await getGmailAccessToken(userId);
     if (!accessToken) {
@@ -156,9 +210,6 @@ export async function syncGmailMessages(
     if (!listResponse.messages || listResponse.messages.length === 0) {
       return { synced: 0, skipped: 0 };
     }
-
-    let synced = 0;
-    let skipped = 0;
 
     for (const msgRef of listResponse.messages) {
       const existing = await prisma.gmailMessage.findUnique({
@@ -172,7 +223,7 @@ export async function syncGmailMessages(
       const msg = await fetchGmailMessageById(accessToken, msgRef.id);
       const parsed = parseGmailMessage(msg);
 
-      if (!isLikelyJobMail(parsed.from, parsed.subject, parsed.bodyText)) {
+      if (isApplicationVerificationMessage({ fromAddress: parsed.from, subject: parsed.subject, bodyText: parsed.bodyText }) || parsed.ownForwardNotification || !isLikelyJobMail(parsed.from, parsed.subject, parsed.bodyText)) {
         skipped++;
         continue;
       }
@@ -200,41 +251,15 @@ export async function syncGmailMessages(
       };
       const label = labelMap[classified.kind] || null;
 
-      await prisma.gmailMessage.create({
-        data: {
-          userId,
-          gmailMessageId: msg.id,
-          threadId: msg.threadId,
-          fromAddress: parsed.from,
-          toAddress: parsed.to,
-          subject: parsed.subject,
-          snippet: parsed.snippet,
-          bodyText: parsed.bodyText,
-          date: parsed.date,
-          kind: classified.kind,
-          isHuman: classified.isHuman,
-          applicationId,
-          label,
-          read: false,
-          archived: false,
-        },
-      });
-
-      if (applicationId && (classified.isHuman || classified.kind === "ricevuta")) {
-        await applyReplyToApplication({
-          applicationId,
-          kind: classified.kind,
-          isHuman: classified.isHuman,
-        });
-      }
-
-      synced++;
+      const stored = await storeGmailReply({ userId, gmailMessageId: msg.id, threadId: msg.threadId,
+        parsed, classified, applicationId, label });
+      if (stored) synced++; else skipped++;
     }
 
     return { synced, skipped };
   } catch (err) {
-    console.error("[gmail] Sync error:", err);
-    return { synced: 0, skipped: 0, error: String(err) };
+    console.error("[gmail] Sync failed");
+    return { synced, skipped, error: "Gmail synchronization failed; please retry." };
   }
 }
 

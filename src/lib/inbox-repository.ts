@@ -1,0 +1,102 @@
+import { RELEASE_CANARY } from "@/lib/release-email-canary";
+import { prisma } from "@/lib/db";
+import { isApplicationVerificationMessage } from "@/lib/reply-security-message";
+import { formatInboxEmailText } from "@/lib/inbox-email-text";
+import { isLikelyJobMail } from "@/lib/gmail-match";
+import { inboxKindLabel, type InboxMessage } from "@/lib/inbox-message";
+
+function isSecurityMessage(message: { fromAddress: string; subject: string | null; bodyText: string | null; snippet?: string | null }): boolean {
+  return isApplicationVerificationMessage({
+    fromAddress: message.fromAddress,
+    subject: formatInboxEmailText(message.subject ?? ""),
+    bodyText: formatInboxEmailText(message.bodyText ?? message.snippet ?? ""),
+  });
+}
+
+/**
+ * The caller must authenticate first. Every query is scoped to that user; the
+ * inbound relationship is authoritative even when Gmail is not connected.
+ * Already synced Gmail is retained if the connection is later removed.
+ */
+export async function getInboxMessages(userId: string): Promise<InboxMessage[]> {
+  if (!userId) throw new Error("Inbox owner is required");
+  const [replies, gmailMessages] = await Promise.all([
+    prisma.applicationReply.findMany({
+      where: { application: { userId }, isSecurityCode: false },
+      orderBy: { receivedAt: "desc" },
+      take: 200,
+      select: {
+        id: true, applicationId: true, fromAddress: true, subject: true,
+        bodyText: true, receivedAt: true, kind: true, isSecurityCode: true,
+        application: {
+          select: { userId: true, userStatus: true, job: { select: { company: true, title: true } } },
+        },
+      },
+    }),
+    prisma.gmailMessage.findMany({
+      where: { userId, archived: false },
+      orderBy: { date: "desc" },
+      take: 200,
+      select: {
+        id: true, fromAddress: true, subject: true, snippet: true, bodyText: true,
+        date: true, kind: true, read: true, applicationId: true,
+        application: {
+          select: { userId: true, userStatus: true, job: { select: { company: true, title: true } } },
+        },
+      },
+    }),
+  ]);
+
+  const inbound: InboxMessage[] = replies
+    // Legacy security emails predate the explicit flag. Never display their code.
+    .filter((reply) => reply.application.userId === userId && !reply.isSecurityCode && !isSecurityMessage(reply))
+    .map((reply) => {
+      const bodyText = formatInboxEmailText(reply.bodyText ?? "");
+      return {
+        id: `application_reply:${reply.id}`,
+        source: "application_reply",
+        from: reply.fromAddress,
+        subject: reply.subject,
+        snippet: bodyText.slice(0, 200),
+        bodyText,
+        date: reply.receivedAt.toISOString(),
+        kind: reply.kind,
+        label: reply.applicationId === RELEASE_CANARY.applicationId ? "Test diagnostico" : inboxKindLabel(reply.kind),
+        read: null,
+        applicationId: reply.applicationId,
+        applicationStatus: reply.application.userStatus,
+        company: reply.application.job.company,
+        jobTitle: reply.application.job.title,
+        jobRelated: true,
+      };
+    });
+
+  const gmail: InboxMessage[] = gmailMessages
+    .filter((message) => !isSecurityMessage(message))
+    .map((message) => {
+      // A malformed/historical cross-user link must never expose the other
+      // owner's company, job, application ID, or status in this user's inbox.
+      const application = message.application?.userId === userId ? message.application : null;
+      const jobRelated = Boolean(application) || isLikelyJobMail(message.fromAddress, message.subject ?? "", message.bodyText ?? "");
+      const kind = jobRelated ? message.kind : "auto";
+      return {
+        id: `gmail:${message.id}`,
+        source: "gmail",
+        from: message.fromAddress,
+        subject: message.subject,
+        snippet: formatInboxEmailText(message.snippet ?? ""),
+        bodyText: formatInboxEmailText(message.bodyText ?? ""),
+        date: message.date.toISOString(),
+        kind,
+        label: jobRelated ? inboxKindLabel(kind) : "Other mail",
+        read: message.read,
+        applicationId: application ? message.applicationId : null,
+        applicationStatus: application?.userStatus ?? null,
+        company: application?.job.company ?? null,
+        jobTitle: application?.job.title ?? null,
+        jobRelated,
+      };
+    });
+
+  return [...inbound, ...gmail].sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
+}

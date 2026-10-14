@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 
 /**
@@ -74,6 +75,7 @@ export async function canSendEmail(): Promise<{
 }
 
 export type EmailKind =
+  | "release_canary"
   | "cv_ready"
   | "payment_failed"
   | "application_sent"
@@ -121,6 +123,9 @@ export async function sendWithinQuota(
   to: string,
   sendFn: () => Promise<void>,
 ): Promise<{ sent: boolean; reason: string | null }> {
+  if (applicationsPaused() && ["cv_ready", "application_sent", "application_manual", "application_no_reply_yet", "daily_summary"].includes(kind)) {
+    return { sent: false, reason: "applications_paused" };
+  }
   const q = await canSendEmail();
   if (!q.allowed) {
     console.warn(

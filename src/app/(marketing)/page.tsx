@@ -15,6 +15,7 @@ import { SectionAutomationBoundaries } from "@/components/sections/automation-bo
 import { SectionTrustBlock } from "@/components/sections/trust-block";
 import { SectionStats } from "@/components/sections/stats";
 import { prisma } from "@/lib/db";
+import { getPublicDeliveryProof } from "@/lib/public-delivery-proof";
 import type { SuccessMetric } from "@/lib/marketing-content";
 import { SectionPricing } from "@/components/sections/pricing";
 import {
@@ -44,29 +45,29 @@ import { getLocale } from "next-intl/server";
  * 14. Referral placeholder (lifecycle hook futuro)
  * 15. CTA finale
  */
-// Numeri live dal DB, rigenerati ogni ora: consegne confermate (prova
-// HTTP/DOM), offerte attive nel pool, aziende monitorate. Stesse query di /proof.
+// Live totals refreshed hourly: validated ATS receipts or email delivery
+// events, plus active jobs and companies. Evidence matches /proof.
 export const revalidate = 3600;
 
 async function liveMetrics(locale: string): Promise<SuccessMetric[]> {
   const fresh = new Date(Date.now() - 30 * 24 * 3600 * 1000);
   const [delivered, jobs, companies] = await Promise.all([
-    prisma.application.count({ where: { submitConfirmation: { startsWith: "DETECTED" } } }),
-    prisma.job.count({ where: { closedAt: null, cachedAt: { gte: fresh } } }),
-    prisma.job.findMany({ where: { closedAt: null, cachedAt: { gte: fresh }, company: { not: null } }, distinct: ["company"], select: { company: true } }).then((r) => r.length),
-  ]).catch(() => [0, 0, 0] as const);
-  const n = (v: number) => v.toLocaleString(locale === "en" ? "en-GB" : "it-IT");
+    getPublicDeliveryProof().then(proof => proof.confirmed).catch(() => null),
+    prisma.job.count({ where: { closedAt: null, cachedAt: { gte: fresh } } }).catch(() => null),
+    prisma.job.findMany({ where: { closedAt: null, cachedAt: { gte: fresh }, company: { not: null } }, distinct: ["company"], select: { company: true } }).then((r) => r.length).catch(() => null),
+  ]);
+  const n = (v: number | null) => v === null ? "—" : v.toLocaleString(locale === "en" ? "en-GB" : "it-IT");
   return locale === "en"
     ? [
-        { value: n(delivered), label: "applications delivered", caveat: "with delivery proof, listed on /proof" },
-        { value: `${n(jobs)}+`, label: "active jobs in the pool", caveat: "refreshed every 2 hours" },
-        { value: `${n(companies)}+`, label: "companies monitored", caveat: "career pages and European boards" },
+        { value: n(delivered), label: "verified submissions", caveat: "ATS receipts or recipient-server email delivery; details on /proof" },
+        { value: jobs === null ? "—" : `${n(jobs)}+`, label: "active jobs in the pool", caveat: "refreshed every 2 hours" },
+        { value: companies === null ? "—" : `${n(companies)}+`, label: "companies monitored", caveat: "career pages and European boards" },
         { value: "24h", label: "first application", caveat: "delivered within 24 hours or refunded" },
       ]
     : [
-        { value: n(delivered), label: "candidature consegnate", caveat: "con prova di consegna, elenco su /proof" },
-        { value: `${n(jobs)}+`, label: "offerte attive nel pool", caveat: "aggiornate ogni 2 ore" },
-        { value: `${n(companies)}+`, label: "aziende monitorate", caveat: "pagine carriera e board europee" },
+        { value: n(delivered), label: "invii con prova verificata", caveat: "ricevute ATS o consegna email al server; dettagli su /proof" },
+        { value: jobs === null ? "—" : `${n(jobs)}+`, label: "offerte attive nel pool", caveat: "aggiornate ogni 2 ore" },
+        { value: companies === null ? "—" : `${n(companies)}+`, label: "aziende monitorate", caveat: "pagine carriera e board europee" },
         { value: "24h", label: "prima candidatura", caveat: "consegnata entro 24 ore o rimborso" },
       ];
 }

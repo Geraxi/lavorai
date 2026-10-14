@@ -1,4 +1,5 @@
-import type { Page, Response } from "playwright";
+import { observeSubmission } from "./submission-proof";
+import type { Page } from "playwright";
 import type { ApplyInput, ApplyOutcome, PendingQuestion } from "./types";
 import { detectBlockingCaptcha } from "./captcha";
 import { answerRequiredFields, type CandidateContext } from "./ai-answer";
@@ -10,7 +11,7 @@ import { answerRequiredFields, type CandidateContext } from "./ai-answer";
  *
  * Ogni adapter fornisce solo selettori e regole; qui vive il flusso:
  * apri → (click "Candidati") → compila → CV → consensi → AI per i campi
- * obbligatori → captcha? → submit → prova HTTP (POST 2xx sul dominio ATS).
+ * obbligatori → captcha? → submit → ricevuta verificata per questo annuncio.
  */
 export interface WebFormConfig {
   id: string;
@@ -102,7 +103,7 @@ export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebF
     const cl = await firstVisible(page, cfg.fields.coverLetter ?? [], 800);
     if (cl && input.coverLetterText) await cl.fill(input.coverLetterText.slice(0, 4000)).catch(() => void 0);
 
-    await ensureConsents(page, T);
+    // Unknown consent/declaration boxes stay unanswered.
 
     // Campi obbligatori residui → AI (stessa logica di Greenhouse/Workable).
     let pending: PendingQuestion[] = [];
@@ -113,8 +114,9 @@ export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebF
       console.log(`${T} ai-answer: answered=${ai.answered} remaining=${ai.remainingRequired} | ${ai.details.join(" ; ")}`);
     } catch (err) {
       console.warn(`${T} ai-answer failed`, err);
+      pending = [{ label: "Verifica dei campi obbligatori non disponibile: controlla il form prima di inviare.", kind: "text" }];
     }
-    await ensureConsents(page, T);
+    // Unknown consent/declaration boxes stay unanswered.
 
     const captcha = await detectBlockingCaptcha(page);
     if (captcha.blocking) {
@@ -125,56 +127,15 @@ export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebF
     }
     if (input.dryRun) return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
 
-    // Submit + prova HTTP
+    // Submit once + verified receipt
     let submit = page.locator('button[type="submit"], input[type="submit"]').filter({ hasText: cfg.submitRe });
     if ((await submit.count()) === 0) submit = page.getByRole("button", { name: cfg.submitRe });
     if ((await submit.count()) === 0) submit = page.locator('form button[type="submit"], form input[type="submit"]');
     if ((await submit.count()) === 0) return { ok: false, status: "missing_field", error: `Bottone di invio ${cfg.id} non trovato.` };
 
-    const postLog: Array<{ url: string; status: number }> = [];
-    let detected: { status: number; url: string } | null = null;
-    const onResponse = (r: Response) => {
-      try {
-        const m = r.request().method();
-        if (m !== "POST" && m !== "PUT") return;
-        const u = r.url();
-        if (!cfg.hostRe.test(u)) return;
-        const s = r.status();
-        postLog.push({ url: u.slice(0, 120), status: s });
-        if (!detected && s >= 200 && s < 400 && /appl|candid|submit|job|offer|careers|recruit/i.test(u)) detected = { status: s, url: u };
-      } catch { /* ignore */ }
-    };
-    page.on("response", onResponse);
-    const urlBefore = page.url();
     await submit.first().scrollIntoViewIfNeeded().catch(() => void 0);
-    let clickError: string | null = null;
-    try {
-      await submit.first().click({ timeout: 8000 });
-    } catch (err) {
-      clickError = err instanceof Error ? err.message.split("\n")[0] : String(err);
-      await submit.first().click({ timeout: 5000, force: true }).catch(() => void 0);
-    }
-    await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
-    await page.waitForTimeout(1200);
-    page.off("response", onResponse);
-    console.log(`${T} post-submit: ${postLog.length} POST/PUT — ${postLog.slice(0, 4).map((x) => `${x.status} ${x.url.split("/").slice(2, 6).join("/")}`).join(" | ")}`);
-
-    if (detected) {
-      const d = detected as { status: number; url: string };
-      return { ok: true, status: "submitted", confirmation: `DETECTED_HTTP_${d.status}` };
-    }
-    const any2xx = postLog.find((x) => x.status >= 200 && x.status < 400);
-    if (any2xx) return { ok: true, status: "submitted", confirmation: `DETECTED_HTTP_${any2xx.status}` };
-
-    const clientErrors = (await page
-      .evaluate(`Array.from(document.querySelectorAll('[aria-invalid="true"], [role="alert"], [class*="error" i], [class*="invalid" i]')).map((e) => { const l = e.id ? document.querySelector('label[for="' + e.id + '"]') : null; return ((l && l.textContent) || e.getAttribute('aria-label') || e.textContent || e.getAttribute('name') || '').replace(/\\s+/g, ' ').trim().slice(0, 80); }).filter(Boolean).slice(0, 8)`)
-      .catch(() => [])) as string[];
-    if (postLog.length === 0 && (clientErrors.length > 0 || clickError)) {
-      return { ok: false, status: "validation_failed", error: `Submit ${cfg.id} senza POST: ${clickError ? `click fallito (${clickError}); ` : ""}${clientErrors.length ? `campi non validi: ${[...new Set(clientErrors)].join(" | ")}` : "validazione client-side"}` };
-    }
-    const bodyText = await page.locator("body").innerText().catch(() => "");
-    const soft = /thank|applied|submitted|grazie|received|confirm|invi(at|o)|application has been|candidatura (inviata|ricevuta)/i.test(bodyText) || /thank|confirm|success/i.test(page.url()) || page.url() !== urlBefore;
-    return { ok: true, status: "submitted", confirmation: soft ? "DETECTED" : "UNCONFIRMED" };
+    return (await observeSubmission(page, cfg.id, input.jobUrl,
+      () => submit.first().click({ timeout: 8_000 }), input.beforeSubmit)).outcome;
   } catch (err) {
     return { ok: false, status: "unknown_error", error: err instanceof Error ? err.message : `Errore imprevisto ${cfg.id}` };
   }
@@ -263,29 +224,11 @@ async function attachCv(page: Page, cvPath: string, T: string): Promise<boolean>
   return false;
 }
 
-async function ensureConsents(page: Page, T: string) {
-  const boxes = page.locator('input[type="checkbox"]');
-  const n = await boxes.count().catch(() => 0);
-  for (let i = 0; i < n; i++) {
-    const cb = boxes.nth(i);
-    const meta = `${await cb.getAttribute("name").catch(() => "")} ${await cb.getAttribute("id").catch(() => "")} ${await cb.getAttribute("aria-label").catch(() => "")}`.toLowerCase();
-    const required = (await cb.evaluate((e) => (e as HTMLInputElement).required || e.getAttribute("aria-required") === "true").catch(() => false)) as boolean;
-    const labelText = ((await cb.evaluate((e) => { const id = e.id; const l = id ? document.querySelector(`label[for="${id}"]`) : e.closest("label"); return (l?.textContent ?? "").toLowerCase(); }).catch(() => "")) as string);
-    const consentish = /privacy|gdpr|consent|terms|agree|accept|acconsent|autorizz|accett|trattamento|informativa/.test(`${meta} ${labelText}`);
-    // Non spuntiamo newsletter/marketing non obbligatori.
-    if (!required && (!consentish || /newsletter|marketing|updates|comunicazioni commerciali/.test(labelText))) continue;
-    if (!required && !consentish) continue;
-    if ((await cb.isChecked().catch(() => false)) as boolean) continue;
-    await cb.check({ timeout: 1500, force: true }).catch(async () => {
-      await cb.evaluate((e) => { const i = e as HTMLInputElement; i.checked = true; i.dispatchEvent(new Event("change", { bubbles: true })); i.dispatchEvent(new Event("input", { bubbles: true })); }).catch(() => void 0);
-    });
-  }
-  if (n > 0) console.log(`${T} consensi verificati (${n} checkbox)`);
-}
-
 /** Contesto per l'AI answerer, uguale a quello usato da Greenhouse/Workable. */
 export function buildAnswerContext(input: ApplyInput): CandidateContext {
   const p = input.profile;
+  const current = (p.experiences ?? []).find((experience) => /^(?:present|current|now|oggi|presente|attuale|in corso)?$/i.test((experience.endDate ?? "").trim()));
+  const recent = p.experiences?.[0];
   const links = p.links ?? [];
   const findLink = (re: RegExp) => links.find((l) => re.test(`${l.url} ${l.label}`))?.url;
   const cvText = [p.summary, ...(p.experiences ?? []).map((e) => `${e.role} @ ${e.company} (${e.startDate}-${e.endDate || "Present"}): ${e.description || (e.bullets ?? []).join("; ")}`)].filter(Boolean).join("\n");
@@ -294,10 +237,12 @@ export function buildAnswerContext(input: ApplyInput): CandidateContext {
     lastName: p.lastName,
     email: p.email || input.userEmail,
     phone: p.phone || input.userPhone,
-    city: input.answers?.city || p.city || input.preferredCity,
+    city: input.answers?.city || p.city,
     country: input.answers?.country,
-    currentEmployer: p.experiences?.[0]?.company || null,
-    currentJobTitle: p.experiences?.[0]?.role || p.title || null,
+    currentEmployer: current?.company || null,
+    mostRecentEmployer: recent?.company || null,
+    currentJobTitle: current?.role || null,
+    mostRecentJobTitle: recent?.role || null,
     school: p.education?.[0]?.school || null,
     linkedinUrl: input.answers?.linkedinUrl || findLink(/linkedin/i),
     portfolioUrl: input.answers?.portfolioUrl || findLink(/portfolio|dribbble|behance/i),
@@ -317,4 +262,19 @@ export function buildAnswerContext(input: ApplyInput): CandidateContext {
     autonomous: input.autonomous === true,
     storedAnswers: input.storedAnswers,
   };
+}
+
+/** Required unknown facts/consents stop before any final submission attempt. */
+export async function prepareRequiredAnswers(page: Page, input: ApplyInput): Promise<ApplyOutcome | null> {
+  try {
+    const result = await answerRequiredFields(page, buildAnswerContext(input));
+    if (result.given.length) input.onAiAnswers?.(result.given);
+    if (result.unanswered.length) return {
+      ok: false, status: "needs_user_input", pendingQuestions: result.unanswered,
+      error: `${result.unanswered.length} domande obbligatorie richiedono una risposta esplicita prima dell'invio.`,
+    };
+    return null;
+  } catch {
+    return { ok: false, status: "needs_user_input", pendingQuestions: [{ label: "Verifica dei campi obbligatori non disponibile: controlla il form prima di inviare.", kind: "text" }], error: "Impossibile verificare i campi obbligatori. Nessun invio eseguito." };
+  }
 }

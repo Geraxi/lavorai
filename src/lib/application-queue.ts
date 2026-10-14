@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { processApplication } from "@/lib/application-worker";
 
 /**
@@ -19,11 +20,19 @@ import { processApplication } from "@/lib/application-worker";
  * 5. Nessuno → in-process (solo dev / MVP).
  */
 
-export async function enqueueApplication(applicationId: string): Promise<void> {
+export async function enqueueApplication(
+  applicationId: string,
+  options?: { preserveClaim?: boolean },
+): Promise<void> {
+  if (applicationsPaused()) return;
   // La candidatura torna "prendibile": chi la elabora (worker Railway via
   // BullMQ o polling DB, oppure self-invoke Vercel) la prende con claim atomico.
-  const { resetClaim } = await import("@/lib/application-claim");
-  await resetClaim(applicationId);
+  // Atomic retry callers already made the row claimable. A poller may have
+  // started it since then, so those callers must not erase the new claim.
+  if (!options?.preserveClaim) {
+    const { resetClaim } = await import("@/lib/application-claim");
+    await resetClaim(applicationId);
+  }
 
   // Il polling DB è il default. Il worker Railway
   // fa polling su Postgres (status=queued, claim atomico) ogni 15s: non
@@ -135,6 +144,12 @@ export async function enqueueApplication(applicationId: string): Promise<void> {
   // Ultimo fallback: in-process (SOLO dev locale — in prod pericoloso
   // perché la function del caller morirà con TIMEOUT + tutti gli app
   // in-flight persi).
+  if (options?.preserveClaim) {
+    // This legacy fallback does not claim atomically. Retry callers leave the
+    // queued row to the DB poller instead of racing an already claimed worker.
+    console.log(`[queue] retry left for db-polling worker app=${applicationId}`);
+    return;
+  }
   console.warn(`[queue] enqueued via in-process app=${applicationId} (solo dev)`);
   void processApplication(applicationId).catch((err) => {
     console.error("[queue] in-process worker error", err);

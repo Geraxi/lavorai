@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -27,6 +28,7 @@ export async function POST(request: NextRequest) {
   if (!isAdmin(user?.email)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  if (applicationsPaused()) return NextResponse.json({ error: "applications_paused" }, { status: 503 });
 
   let body: { applicationId?: string; realSubmit?: boolean } = {};
   try {

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
 import { matchCity } from "@/lib/city-centroids";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile, type CVProfile } from "@/lib/cv-profile-types";
@@ -92,7 +93,7 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
   const since30 = new Date(now - 30 * 86400_000);
   const newSince = new Date(now - 48 * 3600_000);
 
-  const [openJobs, sentApps, savedApps, prefs, profileRow, analyzed] = await Promise.all([
+  const [openJobs, sentCandidates, savedApps, prefs, profileRow, analyzed] = await Promise.all([
     prisma.job.findMany({
       where: { closedAt: null, cachedAt: { gte: since30 } },
       select: { id: true, title: true, company: true, location: true, description: true, cachedAt: true },
@@ -100,8 +101,11 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
       take: 4000,
     }),
     prisma.application.findMany({
-      where: { userId, status: "success", submittedVia: { not: null } },
-      select: { id: true, createdAt: true, job: { select: { id: true, title: true, company: true, location: true } } },
+      where: { userId, OR: [{ status: "success" }, { emailAttempts: { some: { status: "delivered", providerEmailId: { not: null } } } }] },
+      select: { id: true, userId: true, status: true, submittedVia: true, submitConfirmation: true, submissionReceiptJson: true, createdAt: true,
+        emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true, acceptedAt: true } },
+        job: { select: { id: true, title: true, company: true, location: true } },
+      },
       orderBy: { createdAt: "desc" },
       take: 500,
     }),
@@ -152,7 +156,9 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
     if (g) marker(g).counts.open++;
   }
 
-  // 2) Candidature inviate (blu)
+  // 2) Only verified portal receipts or delivered email, never legacy success,
+  // provider acceptance, tracking pixels, mock runs or unresolved attempts.
+  const sentApps = sentCandidates.filter((application) => application.userId === userId && isConfirmedDelivery(deliveryEvidence(application)));
   for (const a of sentApps) {
     const g = geocode(a.job.location);
     if (!g) continue;

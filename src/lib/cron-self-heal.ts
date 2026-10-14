@@ -1,8 +1,9 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { extractFullProfile } from "@/lib/cv-profile-ai-full";
 import { profileToRow } from "@/lib/cv-profile-types";
-import { enqueueApplication, cancelApplication } from "@/lib/application-queue";
+import { recoverStuckApplications } from "@/lib/application-claim";
 
 /**
  * Cron self-heal step — girato PRIMA di runAutoApplyCron.
@@ -10,8 +11,8 @@ import { enqueueApplication, cancelApplication } from "@/lib/application-queue";
  *   1. Re-parsa i CVProfile vuoti/rotti (fallout modello 404 di ieri).
  *      Solo utenti reali con cvDocument caricato ma profile.firstName
  *      mancante. Cappato a 5 per run per non esplodere sui crediti AI.
- *   2. Unstucca le application ferme in queued/optimizing/applying da
- *      >30 min (worker offline, timeout, ecc). Reset a queued + re-enqueue.
+ *   2. Recover stale preparation only through evidence-aware, exact-token CAS.
+ *      In-flight or uncertain submissions are held for review, never replayed.
  *
  * Idempotente. Errori mai fatali: se un CV fallisce riparsing, passa
  * al prossimo. Se un enqueue fallisce, salta.
@@ -20,12 +21,12 @@ export interface SelfHealReport {
   cvReparsed: number;
   cvFailed: number;
   cvSkipped: number;
-  appsRequeued: number;
+  appsRequeued: number; // Legacy field; no blind requeue is performed.
+  appsRecoveredSafely: number;
   appsFailed: number;
 }
 
 const MAX_CV_REPARSE_PER_RUN = 5;
-const STUCK_MIN_AGE_MS = 30 * 60 * 1000;
 
 export async function runCronSelfHeal(): Promise<SelfHealReport> {
   const report: SelfHealReport = {
@@ -33,8 +34,11 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
     cvFailed: 0,
     cvSkipped: 0,
     appsRequeued: 0,
+    appsRecoveredSafely: 0,
     appsFailed: 0,
   };
+
+  if (applicationsPaused()) return report;
 
   // ---------- 1. Re-parse broken CV profiles ----------
   const brokenUsers = await prisma.user
@@ -92,41 +96,18 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
     }
   }
 
-  // ---------- 2. Unstuck applications in flight >30 min ----------
-  const cutoff = new Date(Date.now() - STUCK_MIN_AGE_MS);
-  const stuck = await prisma.application
-    .findMany({
-      where: {
-        status: { in: ["queued", "optimizing", "applying"] },
-        OR: [
-          { startedAt: { lt: cutoff } },
-          { startedAt: null, createdAt: { lt: cutoff } },
-        ],
-      },
-      select: { id: true },
-      take: 100,
-    })
-    .catch(() => []);
-
-  for (const app of stuck) {
-    try {
-      await cancelApplication(app.id); // remove stale BullMQ job (if any)
-      await prisma.application.update({
-        where: { id: app.id },
-        data: { status: "queued", startedAt: null, errorMessage: null },
-      });
-      await enqueueApplication(app.id);
-      report.appsRequeued++;
-    } catch (err) {
-      report.appsFailed++;
-      console.error(`[self-heal] requeue failed for ${app.id}:`, err);
-    }
+  // ---------- 2. Shared evidence-aware recovery ----------
+  try {
+    report.appsRecoveredSafely = await recoverStuckApplications();
+  } catch {
+    report.appsFailed++;
+    console.error("[self-heal] safe application recovery failed");
   }
 
   if (
     report.cvReparsed +
       report.cvFailed +
-      report.appsRequeued +
+      report.appsRecoveredSafely +
       report.appsFailed >
     0
   ) {

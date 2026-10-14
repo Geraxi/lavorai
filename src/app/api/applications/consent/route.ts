@@ -1,3 +1,4 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -22,6 +23,10 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
+
+  if (applicationsPaused()) {
+    return NextResponse.json({ error: "applications_paused", message: "Invii temporaneamente in pausa per manutenzione." }, { status: 503 });
+  }
   const body = await request.json().catch(() => ({}));
   const parsed = Schema.safeParse(body);
   if (!parsed.success) {
@@ -43,11 +48,12 @@ export async function POST(request: NextRequest) {
   let enqueued = 0;
   for (const a of apps) {
     try {
-      await prisma.application.update({
-        where: { id: a.id },
-        data: { status: "queued" },
+      const changed = await prisma.application.updateMany({
+        where: { id: a.id, userId: user.id, status: "awaiting_consent" },
+        data: { status: "queued", consentGrantedAt: new Date() },
       });
-      await enqueueApplication(a.id);
+      if (changed.count !== 1) continue;
+      await enqueueApplication(a.id, { preserveClaim: true });
       enqueued++;
     } catch (err) {
       console.error("[consent] enqueue failed for", a.id, err);

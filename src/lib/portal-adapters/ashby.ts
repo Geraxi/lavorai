@@ -1,6 +1,7 @@
+import { observeSubmission } from "./submission-proof";
 import { findSubmitButton } from "./submit-button";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
-import { detectBlockingCaptcha, challengeAppearedAfterSubmit } from "./captcha";
+import { detectBlockingCaptcha } from "./captcha";
 
 /**
  * Ashby ATS — `jobs.ashbyhq.com/<company>/<uuid>`.
@@ -222,15 +223,10 @@ export const ashbyAdapter: PortalAdapter = {
         console.warn("[ashby] generic-fill failed", err);
       }
 
-      // GDPR / consent checkbox (rare on Ashby ma presenti su EU companies)
-      const consent = page.locator(
-        'input[type="checkbox"][name*="consent" i], input[type="checkbox"][name*="gdpr" i], input[type="checkbox"][name*="privacy" i]',
-      );
-      const cnt = await consent.count();
-      for (let i = 0; i < cnt; i++) {
-        await consent.nth(i).check({ timeout: 1500 }).catch(() => void 0);
-      }
-
+      // Required consents and declarations need explicit user answers.
+      const { prepareRequiredAnswers } = await import("./web-form");
+      const unanswered = await prepareRequiredAnswers(page, input);
+      if (unanswered) return unanswered;
       // Captcha: bloccante SOLO se interattivo (vedi ./captcha.ts). Il badge
       // reCAPTCHA invisibile di Ashby non blocca l'invio.
       const captcha = await detectBlockingCaptcha(page);
@@ -257,114 +253,8 @@ export const ashbyAdapter: PortalAdapter = {
         };
       }
 
-      // ============================================================
-      // VERIFICA HARD: cattura la risposta HTTP della POST di submission.
-      // Ashby invia la candidatura via API (GraphQL `non-user-graphql` op
-      // ApplyToJobPosting, o endpoint REST). Lo status code è la verità; il
-      // DOM è una conseguenza. NOTA: il GraphQL risponde 200 ANCHE in caso di
-      // errore applicativo → dobbiamo ispezionare il body per `"errors"`.
-      // Nessuna POST catturata = la validazione client ha bloccato il submit.
-      // ============================================================
-      const urlBeforeSubmit = page.url();
-      const submissionResponsePromise = page
-        .waitForResponse(
-          (resp) => {
-            const u = resp.url().toLowerCase();
-            if (resp.request().method().toUpperCase() !== "POST") return false;
-            if (!u.includes("ashbyhq.com")) return false;
-            return (
-              u.includes("graphql") ||
-              u.includes("/apply") ||
-              u.includes("application") ||
-              u.includes("/submit")
-            );
-          },
-          { timeout: 25_000 },
-        )
-        .catch(() => null);
-
-      await submit.click({ timeout: 5_000 });
-
-      const submissionResponse = await submissionResponsePromise;
-      await page
-        .waitForLoadState("networkidle", { timeout: 12_000 })
-        .catch(() => void 0);
-      await page.waitForTimeout(800);
-
-      const finalUrl = page.url();
-      const bodyText = await page
-        .locator("body")
-        .innerText()
-        .catch(() => "");
-
-      // CASE A: POST catturata → decide da status + (per GraphQL) body.
-      if (submissionResponse) {
-        const status = submissionResponse.status();
-        let respBody = "";
-        try {
-          respBody = (await submissionResponse.text()).slice(0, 2000);
-        } catch {
-          /* body già consumato */
-        }
-        if (status >= 400) {
-          return {
-            ok: false,
-            status: status < 500 ? "validation_failed" : "unknown_error",
-            error: `Ashby ha rifiutato la submission (HTTP ${status}). Response: "${respBody.replace(/\s+/g, " ").slice(0, 240)}"`,
-          };
-        }
-        // 2xx/3xx: il GraphQL può avere errori applicativi in un body 200.
-        const hasGraphqlError = /"errors"\s*:\s*\[\s*\{/.test(respBody);
-        if (hasGraphqlError) {
-          return {
-            ok: false,
-            status: "validation_failed",
-            error: `Ashby GraphQL ha risposto 200 ma con errori applicativi: "${respBody.replace(/\s+/g, " ").slice(0, 240)}"`,
-          };
-        }
-        return {
-          ok: true,
-          status: "submitted",
-          confirmation: `DETECTED_HTTP_${status}`,
-        };
-      }
-
-      // CASE B: nessuna POST → validazione client o thank-you senza request
-      // intercettabile. Solo conferma DOM FORTE (no match su testo già
-      // presente nel form non inviato) o errore esplicito.
-      const errorPatterns =
-        /(this\s+field\s+is\s+required|please\s+(correct|fix|enter|complete)|invalid\s+(email|input|file)|campo\s+obbligatorio|inserisci|file\s+too\s+large)/i;
-      if (errorPatterns.test(bodyText)) {
-        return {
-          ok: false,
-          status: "validation_failed",
-          error: `Validazione client-side ha bloccato il submit Ashby (nessuna POST partita). Body: "${bodyText.slice(0, 200).replace(/\s+/g, " ")}"`,
-        };
-      }
-      const strongConfirmRegex =
-        /(thank\s+you\s+for\s+(applying|your)|application\s+(received|submitted|successful)|your\s+application\s+has\s+been|we['’]?ve\s+received\s+your|grazie\s+per\s+(la\s+)?candidatura|candidatura\s+(inviata|ricevuta))/i;
-      const urlHasConfirm = /thank|confirm|success|submitted/i.test(finalUrl);
-      if (strongConfirmRegex.test(bodyText) || urlHasConfirm) {
-        return {
-          ok: true,
-          status: "submitted",
-          confirmation: "DETECTED_DOM",
-        };
-      }
-
-      if (await challengeAppearedAfterSubmit(page)) {
-        return {
-          ok: false,
-          status: "captcha",
-          error: "Dopo il click su Invia si è aperta una challenge reCAPTCHA: completa il captcha e invia manualmente (CV e risposte pronti).",
-        };
-      }
-
-      return {
-        ok: false,
-        status: "unknown_error",
-        error: `Submit Ashby cliccato ma nessuna conferma rilevata (no POST HTTP, no thank-you, no error banner). URL ${finalUrl !== urlBeforeSubmit ? "cambiato" : "invariato"}: ${finalUrl}.`,
-      };
+      return (await observeSubmission(page, "ashby", input.jobUrl,
+        () => submit.click({ timeout: 5_000 }), input.beforeSubmit)).outcome;
     } catch (err) {
       return {
         ok: false,

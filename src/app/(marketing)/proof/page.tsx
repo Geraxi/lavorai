@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { prisma } from "@/lib/db";
+import { getPublicDeliveryProof } from "@/lib/public-delivery-proof";
 
 export const metadata: Metadata = {
   title: "Prova di consegna: candidature confermate",
   description:
-    "Numeri reali, non promesse. Ogni candidatura confermata via HTTP è una prova oggettiva di consegna.",
+    "Ricevute ATS verificate, consegne email, accettazioni del provider e dati storici non verificati, separati.",
   openGraph: {
     title: "Prova — LavorAI",
     description: "Numeri reali di consegna candidature.",
@@ -15,60 +15,16 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
-/**
- * Pagina pubblica /proof: i numeri VERI del prodotto.
- * Filosofia: meglio mostrare 3 consegne confermate che fingere 3000. La
- * trasparenza è il marketing — chi vede onestà sceglie LavorAI proprio
- * perché altri tool dichiarano numeri che non possono provare.
- *
- * Conta SOLO submitConfirmation che inizia con "DETECTED" (prova HTTP/DOM
- * hard di consegna). Mai gonfiato.
- */
+/** Public, aggregate-only evidence. Generic HTTP markers are not receipts. */
 export default async function ProofPage() {
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-  const [
-    detectedTotal,
-    detectedMonth,
-    repliesTotal,
-    repliesMonth,
-    recentDetected,
-    portalCounts,
-  ] = await Promise.all([
-    prisma.application.count({
-      where: { submitConfirmation: { startsWith: "DETECTED" } },
-    }),
-    prisma.application.count({
-      where: {
-        submitConfirmation: { startsWith: "DETECTED" },
-        completedAt: { gte: monthStart },
-      },
-    }),
-    prisma.application.count({ where: { lastReplyAt: { not: null } } }),
-    prisma.application.count({
-      where: { lastReplyAt: { gte: monthStart } },
-    }),
-    prisma.application.findMany({
-      where: { submitConfirmation: { startsWith: "DETECTED" } },
-      orderBy: { completedAt: "desc" },
-      take: 20,
-      select: {
-        completedAt: true,
-        submitConfirmation: true,
-        submittedVia: true,
-        job: { select: { company: true, title: true, location: true } },
-      },
-    }),
-    prisma.application.groupBy({
-      by: ["submittedVia"],
-      where: { submitConfirmation: { startsWith: "DETECTED" } },
-      _count: { _all: true },
-    }),
-  ]);
-
-  const responseRate =
-    detectedTotal > 0 ? Math.round((repliesTotal / detectedTotal) * 100) : 0;
+  const proof = await getPublicDeliveryProof(now);
+  const detectedTotal = proof.confirmed;
+  const detectedMonth = proof.confirmedMonth;
+  const repliesTotal = proof.replies;
+  const recentDetected = proof.recent;
+  const portalCounts = proof.portals;
+  const responseRate = detectedTotal > 0 ? Math.round(repliesTotal / detectedTotal * 100) : 0;
 
   return (
     <div
@@ -101,12 +57,18 @@ export default async function ProofPage() {
           lineHeight: 1.55,
         }}
       >
-        Ogni candidatura qui sotto è <strong style={{ color: "var(--fg)" }}>
-        confermata via HTTP</strong> dal server del portale ATS — non un &ldquo;sent&rdquo;
-        finto. Altri tool dichiarano numeri che non possono provare. Noi
-        contiamo solo quello che si misura.
+        Contiamo le candidature con una ricevuta ATS verificata e le email con
+        un evento di consegna al server destinatario. Un codice HTTP generico o
+        l’accettazione del provider email non dimostrano la consegna. La consegna
+        non prova che il recruiter abbia letto o valutato la candidatura.
       </p>
 
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginTop: 28 }}>
+        <Stat label="Accettate dal provider" value={proof.providerAccepted} sub="Email in attesa di consegna verificata" />
+        <Stat label="Storico non verificato" value={proof.legacyUnverified} sub="Conservato, escluso dai conteggi verificati" />
+        <Stat label="Problemi di consegna" value={proof.deliveryProblems} sub="Invii falliti, bounce o reclami" />
+        <Stat label="Esito da verificare" value={proof.pending} sub="Tentativi in corso o con esito incerto" />
+      </div>
       {detectedTotal > 0 ? (
         <>
           <div
@@ -117,13 +79,13 @@ export default async function ProofPage() {
               marginTop: 36,
             }}
           >
-            <Stat label="Consegne confermate" value={detectedTotal} sub="HTTP 2xx/3xx dal portale" />
+            <Stat label="Invii con prova verificata" value={detectedTotal} sub={`${proof.portalConfirmed} ricevute ATS · ${proof.emailDelivered} email consegnate`} />
             <Stat label="Questo mese" value={detectedMonth} sub={now.toLocaleDateString("it-IT", { month: "long" })} />
             {repliesTotal > 0 && (
-              <Stat label="Risposte recruiter" value={repliesTotal} sub="parsate da email inbound" />
+              <Stat label="Possibili risposte recruiter" value={repliesTotal} sub="Classificazione automatica, una per candidatura verificata" />
             )}
             {responseRate > 0 && (
-              <Stat label="Tasso risposta" value={`${responseRate}%`} sub="risposte / consegne" />
+              <Stat label="Tasso risposta" value={`${responseRate}%`} sub="Stessa coorte: candidature con risposta / invii verificati" />
             )}
           </div>
 
@@ -131,8 +93,7 @@ export default async function ProofPage() {
             <div style={{ marginTop: 38, fontSize: 13, color: "var(--fg-muted)" }}>
               Per portale:{" "}
               {portalCounts
-                .filter((p) => p.submittedVia)
-                .map((p) => `${p.submittedVia?.replace("portal_", "")} ${p._count._all}`)
+                .map((p) => `${p.source} ${p.count}`)
                 .join(" · ")}
             </div>
           )}
@@ -146,10 +107,10 @@ export default async function ProofPage() {
               marginBottom: 10,
             }}
           >
-            Ultime consegne confermate
+            Ultimi invii con prova verificata
           </h2>
           <p style={{ fontSize: 13.5, color: "var(--fg-muted)", marginBottom: 18 }}>
-            Anonimizzate per il candidato. Azienda, ruolo, data e prova HTTP sono pubblici.
+            Mostriamo solo canale, data e tipo di prova. Nessun dato del candidato o contenuto delle email.
           </p>
 
           <div
@@ -174,11 +135,10 @@ export default async function ProofPage() {
               >
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.job.company ?? "—"}
+                    {a.source}
                   </div>
                   <div style={{ fontSize: 12.5, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {a.job.title}
-                    {a.job.location ? ` · ${a.job.location}` : ""}
+                    {a.label}
                   </div>
                 </div>
                 <span
@@ -193,19 +153,17 @@ export default async function ProofPage() {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {a.submitConfirmation}
+                  Verificata
                 </span>
                 <span style={{ fontSize: 11.5, color: "var(--fg-subtle)", whiteSpace: "nowrap", fontFeatureSettings: '"tnum"' }}>
-                  {a.completedAt
-                    ? a.completedAt.toLocaleDateString("it-IT", { day: "2-digit", month: "short" })
-                    : "—"}
+                  {a.date.toLocaleDateString("it-IT", { day: "2-digit", month: "short", timeZone: "UTC" })}
                 </span>
               </div>
             ))}
           </div>
         </>
       ) : (
-        // Pre-traction: niente "0" imbarazzanti. Racconta il metodo + CTA.
+        // Keep the evidence boundary explicit even before the first verified receipt.
         <MethodologyPanel />
       )}
 
@@ -220,7 +178,7 @@ export default async function ProofPage() {
         }}
       >
         <div style={{ fontSize: 13, color: "var(--fg-muted)", marginBottom: 8 }}>
-          Vuoi che il tuo nome compaia qui?
+          Vuoi seguire lo stato delle tue candidature?
         </div>
         <div
           style={{
@@ -292,37 +250,32 @@ function Stat({ label, value, sub }: { label: string; value: number | string; su
   );
 }
 
-/**
- * Pre-traction: invece di mostrare "0" imbarazzanti, raccontiamo il METODO
- * — come verifichiamo ogni consegna. È il differenziatore: gli altri tool
- * dichiarano "X inviate", noi proviamo. Il counter arriverà appena le
- * consegne `DETECTED_*` iniziano ad accumularsi.
- */
+/** Explain the evidence required before an application is counted. */
 function MethodologyPanel() {
   const steps = [
     {
       n: "01",
       title: "Compiliamo il form vero",
       body:
-        "Niente scorciatoie via email: l'AI riempie i campi del portale ATS (Greenhouse, Workable, Lever, Ashby) come farebbe una persona.",
+        "Usiamo il form del portale supportato oppure un indirizzo recruiter verificato per l’invio email.",
     },
     {
       n: "02",
       title: "Clicchiamo Invia",
       body:
-        "Il browser headless preme il bottone di submit. Niente \"inviata\" finta: parte la POST HTTP vera al server del portale.",
+        "Registriamo il tentativo. Un click o una risposta HTTP generica non bastano per chiamarlo completato.",
     },
     {
       n: "03",
       title: "Catturiamo la risposta del server",
       body:
-        "Leggiamo lo status HTTP della POST. Solo 2xx/3xx vale come consegna confermata. Il numero che vedrai qui sopra contiene SOLO quelle.",
+        "Per i portali richiediamo una ricevuta strutturata legata alla candidatura. Per le email distinguiamo accettazione del provider e consegna al server destinatario.",
     },
     {
       n: "04",
       title: "Tracciamo le risposte vere",
       body:
-        "Le reply dei recruiter passano da un nostro indirizzo inbound, vengono classificate (colloquio / rifiutata / risposta) e contate qui — distinte dalle aperture email.",
+        "Riceviamo le risposte sull’indirizzo inbound e da Gmail, se collegato. Le classifichiamo automaticamente: possibili risposte, ricevute e bounce restano distinti. L’autore umano non è verificato.",
     },
   ];
   return (
@@ -346,8 +299,8 @@ function MethodologyPanel() {
           lineHeight: 1.6,
         }}
       >
-        Gli altri tool dichiarano numeri che non possono provare. Questo è il
-        nostro processo, end-to-end. Trasparente.
+        Non ci sono ancora invii con prova verificata da mostrare.
+        I tentativi storici restano conservati e separati dai conteggi confermati.
       </p>
       <div style={{ display: "grid", gap: 12 }}>
         {steps.map((s) => (

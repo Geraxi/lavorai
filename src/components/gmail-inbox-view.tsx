@@ -1,321 +1,228 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { Icon, type IconName } from "@/components/design/icon";
-import { CompanyLogo, companyColor } from "@/components/design/company-logo";
-import Link from "next/link";
-import { GmailConnectModal } from "@/components/gmail-connect-modal";
-import { toast } from "sonner";
-export interface GmailInboxMessage {
-id: string;
-from: string;
-subject: string | null;
-snippet: string | null;
-bodyText: string | null;
-date: string;
-kind: string;
-label: string | null;
-read: boolean;
-applicationId: string | null;
-company?: string | null;
-jobTitle?: string | null;
-jobRelated: boolean;
-}
-interface InboxViewProps {
-messages: GmailInboxMessage[];
-gmailConnected: boolean;
-userEmail: string | null;
-interviewCount: number;
-}
-type StatusOption = "not-this-time" | "interested" | "applied" | "interviewing" | null;
-type Filter = "inbox" | "unread" | "interviews" | "rejections" | "confirmations" | "other";
-const fmtDay = (iso: string) => {
-const d = new Date(iso);
-const now = new Date();
-const sameDay = d.toDateString() === now.toDateString();
-return sameDay
-? d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
-: d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
-};
-const fmtFull = (iso: string) =>
-new Date(iso).toLocaleString("en-US", {
-day: "numeric",
-month: "long",
-year: "numeric",
-hour: "2-digit",
-minute: "2-digit",
-hour12: false,
-});
-export function GmailInboxView({ messages, gmailConnected, userEmail, interviewCount }: InboxViewProps) {
-const router = useRouter();
-const searchParams = useSearchParams();
-const [filter, setFilter] = useState<Filter>("inbox");
-const [search, setSearch] = useState("");
-const [selected, setSelected] = useState<string | null>(messages[0]?.id ?? null);
-const [syncing, setSyncing] = useState(false);
-const [syncNotice, setSyncNotice] = useState<string | null>(null);
-const [showGmailModal, setShowGmailModal] = useState(false);
-const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-const [currentStatus, setCurrentStatus] = useState<StatusOption>(null);
-const [inboxFilter, setInboxFilter] = useState<"inbox" | "all">("inbox");
-const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
-const filtered = messages
-.filter((m) => {
-if (inboxFilter === "inbox") {
-if (!m.jobRelated) return false;
-const fromLower = m.from.toLowerCase();
-const isNoise =
-m.kind === "auto" &&
-!m.applicationId &&
-(fromLower.includes("jobalerts") ||
-fromLower.includes("linkedin") ||
-m.label === "Auto-reply");
-if (isNoise) return false;
-}
-if (filter === "unread" && m.read) return false;
-if (filter === "interviews" && m.kind !== "colloquio") return false;
-if (filter === "rejections" && m.kind !== "rifiutata") return false;
-if (filter === "confirmations" && m.kind !== "ricevuta") return false;
-if (filter === "other" && !["colloquio", "rifiutata", "ricevuta"].includes(m.kind)) return false;
-if (search) {
-const needle = search.toLowerCase();
-const haystack = `${m.from} ${m.subject} ${m.snippet}`.toLowerCase();
-if (!haystack.includes(needle)) return false;
-}
-return true;
-})
-.sort((a, b) => {
-const aTime = new Date(a.date).getTime();
-const bTime = new Date(b.date).getTime();
-return sortOrder === "newest" ? bTime - aTime : aTime - bTime;
-});
-const current = filtered.find((m) => m.id === selected) ?? null;
-useEffect(() => {
-if (!current && filtered.length > 0) {
-setSelected(filtered[0].id);
-}
-}, [filter, search, filtered, current]);
-const handleRefresh = async () => {
-setSyncing(true);
-setSyncNotice(null);
-try {
-const res = await fetch("/api/gmail/sync", { method: "POST" });
-const data = await res.json();
-if (res.ok) {
-setSyncNotice(`Sincronizzati ${data.synced} nuovi messaggi`);
-router.refresh();
-} else {
-setSyncNotice(data.error || "Sync fallita");
-}
-} catch (err) {
-setSyncNotice("Errore di rete");
-} finally {
-setSyncing(false);
-}
-};
-const handleMarkAllRead = async () => {
-// TODO: implement mark all read endpoint
-router.refresh();
-};
-const toggleSelectAll = () => {
-if (selectedIds.size === filtered.length && filtered.length > 0) {
-setSelectedIds(new Set());
-} else {
-setSelectedIds(new Set(filtered.map((m) => m.id)));
-}
-};
-const toggleSelect = (id: string) => {
-const newSet = new Set(selectedIds);
-if (newSet.has(id)) {
-newSet.delete(id);
-} else {
-newSet.add(id);
-}
-setSelectedIds(newSet);
-};
-const handleStatusChange = async (status: StatusOption) => {
-if (!current?.applicationId) return;
-const previous = currentStatus;
-setCurrentStatus(status);
-const mapped =
-status === "interested"
-? "risposta"
-: status === "applied"
-? "vista"
-: status === "interviewing"
-? "colloquio"
-: "rifiutata";
-try {
-const res = await fetch(`/api/applications/${current.applicationId}/status`, {
-method: "PUT",
-headers: { "Content-Type": "application/json" },
-body: JSON.stringify({ status: mapped }),
-});
-if (!res.ok) {
-const data = await res.json().catch(() => ({} as { error?: string }));
-setCurrentStatus(previous);
-toast.error(data.error || "Impossibile aggiornare lo stato");
-return;
-}
-toast.success("Stato aggiornato");
-} catch {
-setCurrentStatus(previous);
-toast.error("Errore di rete");
-}
-};
-useEffect(() => {
-const gmailParam = searchParams.get("gmail");
-const reasonParam = searchParams.get("reason");
-if (gmailParam === "linked") {
-setSyncNotice("Gmail collegato con successo! Le risposte dei recruiter appariranno qui.");
-const url = new URL(window.location.href);
-url.searchParams.delete("gmail");
-window.history.replaceState({}, "", url.toString());
-router.refresh();
-} else if (gmailParam === "error") {
-const errorMessages: Record<string, string> = {
-denied: "Collegamento annullato. Devi autorizzare l'accesso a Gmail per vedere le risposte dei recruiter.",
-email_mismatch: `L'email Google non corrisponde all'account LavorAI (${userEmail}). Usa lo stesso indirizzo email.`,
-account_already_linked: "Questo account Google è già collegato a un altro utente LavorAI.",
-state_expired: "Sessione scaduta. Riprova a collegare Gmail.",
-invalid_state: "Errore di sicurezza. Riprova a collegare Gmail.",
-token_exchange: "Errore durante lo scambio dei token con Google. Riprova.",
-userinfo_fetch: "Impossibile recuperare i dati del tuo account Google. Riprova.",
-server_config: "Errore di configurazione del server. Contatta il supporto.",
-db_error: "Errore durante il salvataggio. Riprova tra qualche minuto.",
-oauth_error: "Errore OAuth. Riprova a collegare Gmail.",
-missing_params: "Parametri OAuth mancanti. Riprova.",
-no_access_token: "Token di accesso non ricevuto da Google. Riprova.",
-userinfo_missing: "Email non trovata nell'account Google. Riprova.",
-user_not_found: "Utente non trovato. Effettua nuovamente il login.",
-};
-const message = reasonParam && errorMessages[reasonParam]
-? errorMessages[reasonParam]
-: "Errore durante il collegamento di Gmail. Riprova.";
-setSyncNotice(message);
-const url = new URL(window.location.href);
-url.searchParams.delete("gmail");
-url.searchParams.delete("reason");
-window.history.replaceState({}, "", url.toString());
-}
-}, [searchParams, router, userEmail]);
-const labelCls = (kind: string) => {
-switch (kind) {
-case "colloquio":
-return "ds-chip-green";
-case "rifiutata":
-return "ds-chip-red";
-case "ricevuta":
-return "ds-chip-blue";
-case "risposta":
-return "ds-chip-purple";
-default:
-return "";
-}
-};
 
-if (!gmailConnected) {
-return (
-<>
-<GmailConnectModal open={showGmailModal} onClose={() => setShowGmailModal(false)} />
-<div className="fit-page" style={{ placeItems: "center" }}>
-<div className="fit-card" style={{ maxWidth: 480, textAlign: "center", padding: 40, display: "grid", gap: 16 }}>
-<div style={{ fontSize: 48 }}>📧</div>
-<h2 style={{ fontSize: 22, fontWeight: 600 }}>Collega Gmail</h2>
-<p style={{ fontSize: 14, color: "var(--fg-muted)" }}>Connetti Gmail per vedere le risposte dei recruiter.</p>
-<button type="button" onClick={() => setShowGmailModal(true)} className="ds-btn ds-btn-primary">
-<Icon name="inbox" size={14} /> Collega Gmail
-</button>
-</div>
-</div>
-</>
-);
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { toast } from "sonner";
+import { Icon } from "@/components/design/icon";
+import { companyColor } from "@/components/design/company-logo";
+import { GmailConnectModal } from "@/components/gmail-connect-modal";
+import { filterInboxMessages, inboxSourceLabel, type InboxFilter, type InboxMessage } from "@/lib/inbox-message";
+
+export type GmailInboxMessage = InboxMessage;
+interface InboxViewProps {
+  messages: InboxMessage[];
+  gmailConnected: boolean;
+  userEmail: string | null;
 }
-return (
-<div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gridTemplateRows: "auto auto 1fr", height: "100%" }}>
-<div style={{ gridColumn: "1 / -1", padding: 16, borderBottom: "1px solid var(--border-ds)", display: "flex", gap: 12, alignItems: "center" }}>
-<h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Inbox</h1>
-{userEmail && <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{userEmail}</span>}
-{interviewCount > 0 && (
-<button type="button" onClick={() => setFilter("interviews")} className="ds-btn">
-{interviewCount} interview{interviewCount === 1 ? "" : "s"}
-</button>
-)}
-</div>
-<div style={{ gridColumn: "1 / -1", padding: 12, borderBottom: "1px solid var(--border-ds)", display: "flex", flexWrap: "wrap", gap: 8 }}>
-<select value={inboxFilter} onChange={(e) => setInboxFilter(e.target.value as "inbox" | "all")}>
-<option value="inbox">Inbox</option>
-<option value="all">All Mail</option>
-</select>
-<select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
-<option value="inbox">All Labels</option>
-<option value="interviews">Interviews</option>
-<option value="confirmations">Confirmations</option>
-<option value="rejections">Rejections</option>
-<option value="other">Other</option>
-</select>
-<select value={sortOrder} onChange={(e) => setSortOrder(e.target.value as "newest" | "oldest")}>
-<option value="newest">Newest</option>
-<option value="oldest">Oldest</option>
-</select>
-<input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." />
-<button type="button" onClick={handleRefresh} disabled={syncing}>Refresh</button>
-{syncNotice && <span style={{ fontSize: 12 }}>{syncNotice}</span>}
-</div>
-<div style={{ overflowY: "auto", borderRight: "1px solid var(--border-ds)" }}>
-{filtered.length === 0 ? (
-<div style={{ padding: 24, color: "var(--fg-muted)" }}>No messages</div>
-) : filtered.map((msg) => (
-<div key={msg.id} onClick={() => setSelected(msg.id)} style={{ padding: 12, borderBottom: "1px solid var(--border-ds)", background: msg.id === selected ? "var(--bg-sunken)" : undefined, cursor: "pointer" }}>
-<div style={{ fontWeight: msg.read ? 500 : 700 }}>{msg.from.split("<")[0].trim() || msg.from}</div>
-<div>{msg.subject || "(no subject)"}</div>
-<div style={{ fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{msg.snippet}</div>
-<span style={{ fontSize: 11 }}>{fmtDay(msg.date)}</span>
-</div>
-))}
-</div>
-<div style={{ display: "flex", flexDirection: "column" }}>
-{!current ? (
-<div style={{ margin: "auto", color: "var(--fg-muted)" }}>Select a message</div>
-) : (
-<>
-<div style={{ padding: 20, borderBottom: "1px solid var(--border-ds)" }}>
-<h2 style={{ fontSize: 18, fontWeight: 600 }}>{current.subject || "(no subject)"}</h2>
-<div style={{ fontSize: 13, margin: "8px 0 16px" }}>{current.from} · {fmtFull(current.date)}</div>
-<div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-{current.applicationId && (
-<Link href={`/applications?id=${current.applicationId}`} className="ds-btn ds-btn-primary">View Application</Link>
-)}
-<select
-value={currentStatus || ""}
-onChange={(e) => handleStatusChange((e.target.value || null) as StatusOption)}
-disabled={!current.applicationId}
->
-<option value="">Not this time</option>
-<option value="interested">Interested</option>
-<option value="applied">Applied</option>
-<option value="interviewing">Interviewing</option>
-</select>
-<button type="button" disabled title="Coming soon" style={{ opacity: 0.5, cursor: "not-allowed" }}>Reply</button>
-<button type="button" disabled title="Coming soon" style={{ opacity: 0.5, cursor: "not-allowed" }}>Forward</button>
-<button type="button" disabled title="Coming soon" style={{ opacity: 0.5, cursor: "not-allowed" }}>Delete</button>
-</div>
-</div>
-<div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: 20, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-{current.company && (
-<div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
-<CompanyLogo company={current.company} color={companyColor(current.company)} size={40} url="" />
-<div>
-<div style={{ fontWeight: 600 }}>{current.company}</div>
-<div style={{ fontSize: 13, color: "var(--fg-muted)" }}>{current.jobTitle || "Related application"}</div>
-</div>
-</div>
-)}
-{current.bodyText || current.snippet || "No content"}
-</div>
-</>
-)}
-</div>
-</div>
-);
+type ManualStatus = "inviata" | "vista" | "colloquio" | "offerta" | "rifiutata";
+const statusOptions: Array<[ManualStatus, string]> = [
+  ["inviata", "Applied"], ["vista", "Viewed"], ["colloquio", "Interviewing"],
+  ["offerta", "Offer"], ["rifiutata", "Not this time"],
+];
+const fmtDate = (iso: string) => new Date(iso).toLocaleString("en-GB", {
+  day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "UTC",
+}) + " UTC";
+
+export function GmailInboxView({ messages, gmailConnected, userEmail }: InboxViewProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [filter, setFilter] = useState<InboxFilter>("all");
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const syncInFlight = useRef(false);
+  const [refreshing, startRefresh] = useTransition();
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [showGmailModal, setShowGmailModal] = useState(false);
+  const [inboxFilter, setInboxFilter] = useState<"inbox" | "all">("inbox");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const [savedStatuses, setSavedStatuses] = useState<Record<string, ManualStatus>>({});
+  const [savingStatus, setSavingStatus] = useState(false);
+  const statusInFlight = useRef(false);
+
+  const filtered = useMemo(() => filterInboxMessages(messages, {
+    kind: filter, search, jobOnly: inboxFilter === "inbox", oldestFirst: sortOrder === "oldest",
+  }), [messages, filter, search, inboxFilter, sortOrder]);
+  const current = filtered.find((message) => message.id === selected) ?? filtered[0] ?? null;
+  const interviewCount = messages.filter((message) => message.jobRelated && message.kind === "colloquio").length;
+  const currentStatus = current?.applicationId
+    ? savedStatuses[current.applicationId] ?? current.applicationStatus ?? ""
+    : "";
+
+  // Refresh received webhooks without requiring Gmail sync or a page reload.
+  // This only reads the local inbox; Gmail sync remains a separate explicit action.
+  useEffect(() => {
+    const refreshVisible = () => {
+      if (!document.hidden) startRefresh(() => router.refresh());
+    };
+    const timer = window.setInterval(refreshVisible, 60_000);
+    window.addEventListener("focus", refreshVisible);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", refreshVisible); };
+  }, [router]);
+
+  const handleRefresh = () => startRefresh(() => router.refresh());
+  const handleSyncGmail = async () => {
+    if (!gmailConnected || syncInFlight.current) return;
+    syncInFlight.current = true;
+    setSyncing(true);
+    setSyncNotice(null);
+    try {
+      const response = await fetch("/api/gmail/sync", { method: "POST" });
+      const data = await response.json();
+      setSyncNotice(response.ok ? `Gmail sync complete: ${data.synced ?? 0} new messages.` : data.error || "Gmail sync failed.");
+      if (response.ok) handleRefresh();
+    } catch {
+      setSyncNotice("Couldn't sync Gmail. Try again.");
+    } finally {
+      syncInFlight.current = false;
+      setSyncing(false);
+    }
+  };
+
+  const handleStatusChange = async (status: ManualStatus) => {
+    const applicationId = current?.applicationId;
+    if (!applicationId || !status || statusInFlight.current) return;
+    statusInFlight.current = true;
+    setSavingStatus(true);
+    try {
+      const response = await fetch(`/api/applications/${encodeURIComponent(applicationId)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userStatus: status }),
+      });
+      if (!response.ok) {
+        toast.error("Couldn't update the application status.");
+        return;
+      }
+      // Key by application, so a late request cannot change another message's status.
+      setSavedStatuses((previous) => ({ ...previous, [applicationId]: status }));
+      toast.success("Application status updated.");
+    } catch {
+      toast.error("Network error. Try again.");
+    } finally {
+      statusInFlight.current = false;
+      setSavingStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    const gmailParam = searchParams.get("gmail");
+    if (gmailParam !== "linked" && gmailParam !== "error") return;
+    const reason = searchParams.get("reason");
+    if (gmailParam === "linked") {
+      setSyncNotice("Gmail connected. Use Sync Gmail to fetch messages from your account.");
+      router.refresh();
+    } else {
+      const errors: Record<string, string> = {
+        denied: "Gmail connection cancelled. Messages received by LavorAI are still available here.",
+        email_mismatch: `Use the same Google email as your LavorAI account (${userEmail ?? "your account"}).`,
+        account_already_linked: "This Google account is already linked to another LavorAI account.",
+        state_expired: "The connection request expired. Try connecting Gmail again.",
+        invalid_state: "The connection request could not be verified. Try again.",
+      };
+      setSyncNotice((reason && errors[reason]) || "Couldn't connect Gmail. Try again.");
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("gmail");
+    url.searchParams.delete("reason");
+    window.history.replaceState({}, "", url.toString());
+  }, [searchParams, router, userEmail]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+      <GmailConnectModal open={showGmailModal} onClose={() => setShowGmailModal(false)} />
+      <div style={{ padding: 16, borderBottom: "1px solid var(--border-ds)", display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Inbox</h1>
+        {userEmail && <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{userEmail}</span>}
+        {interviewCount > 0 && <button type="button" onClick={() => setFilter("colloquio")} className="ds-btn">{interviewCount} possible interview{interviewCount === 1 ? "" : "s"}</button>}
+        <button type="button" onClick={handleRefresh} disabled={refreshing} className="ds-btn">{refreshing ? "Refreshing…" : "Refresh inbox"}</button>
+        {gmailConnected ? (
+          <button type="button" onClick={handleSyncGmail} disabled={syncing} className="ds-btn">{syncing ? "Syncing Gmail…" : "Sync Gmail"}</button>
+        ) : (
+          <button type="button" onClick={() => setShowGmailModal(true)} className="ds-btn"><Icon name="inbox" size={14} /> Connect Gmail (optional)</button>
+        )}
+      </div>
+      <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border-ds)", fontSize: 12, color: "var(--fg-muted)" }}>
+        Replies sent to your LavorAI application address appear here without Gmail. Previously synced Gmail messages are also kept here.
+        <div>Labels are automatic estimates. An interview or reply label does not verify who wrote the message.</div>
+        {syncNotice && <div role="status" style={{ marginTop: 6 }}>{syncNotice}</div>}
+      </div>
+      <div style={{ padding: 12, borderBottom: "1px solid var(--border-ds)", display: "flex", flexWrap: "wrap", gap: 8 }}>
+        <select aria-label="Mailbox" value={inboxFilter} onChange={(event) => setInboxFilter(event.target.value as "inbox" | "all")}>
+          <option value="inbox">Application mail</option><option value="all">All saved mail</option>
+        </select>
+        <select aria-label="Message type" value={filter} onChange={(event) => setFilter(event.target.value as InboxFilter)}>
+          <option value="all">All labels</option><option value="colloquio">Possible interviews</option>
+          <option value="risposta">Possible recruiter replies</option><option value="ricevuta">Application receipts</option>
+          <option value="rifiutata">Possible rejections</option><option value="bounce">Delivery failures</option>
+          <option value="auto">Automated messages</option>
+        </select>
+        <select aria-label="Sort messages" value={sortOrder} onChange={(event) => setSortOrder(event.target.value as "newest" | "oldest")}>
+          <option value="newest">Newest</option><option value="oldest">Oldest</option>
+        </select>
+        <input aria-label="Search inbox" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search messages…" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-[340px_minmax(0,1fr)]" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
+        <div className="max-h-[36vh] md:max-h-none" style={{ overflowY: "auto", borderRight: "1px solid var(--border-ds)" }} aria-label="Messages">
+          {filtered.length === 0 ? (
+            <div style={{ padding: 24, color: "var(--fg-muted)" }}>
+              {messages.length ? "No messages match your filters." : "No replies yet. Messages received by LavorAI will appear here. You can also connect Gmail to import application emails sent to your personal address."}
+            </div>
+          ) : filtered.map((message) => (
+            <button key={message.id} type="button" onClick={() => setSelected(message.id)} aria-pressed={message.id === current?.id}
+              style={{ display: "block", width: "100%", textAlign: "left", padding: 12, borderBottom: "1px solid var(--border-ds)", background: message.id === current?.id ? "var(--bg-sunken)" : "transparent", cursor: "pointer", overflowWrap: "anywhere" }}>
+              <div style={{ fontWeight: message.read === false ? 700 : 500 }}>{message.from.split("<")[0].trim() || message.from}</div>
+              <div>{message.subject || "(no subject)"}</div>
+              <div style={{ fontSize: 12, color: "var(--fg-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{message.snippet}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6, fontSize: 11 }}>
+                <span className="ds-chip">{inboxSourceLabel(message.source)}</span><span className="ds-chip">{message.label}</span><span>{fmtDate(message.date)}</span>
+              </div>
+            </button>
+          ))}
+          {messages.length > 0 && <p style={{ padding: 12, fontSize: 11, color: "var(--fg-muted)" }}>Up to 200 recent messages per source. Security-code messages are hidden.</p>}
+        </div>
+        <section aria-label="Message details" style={{ display: "flex", flexDirection: "column", minWidth: 0, minHeight: 180, overflowY: "auto" }}>
+          {!current ? <div style={{ margin: "auto", padding: 24, color: "var(--fg-muted)" }}>Select a message</div> : (
+            <>
+              <div style={{ padding: 20, borderBottom: "1px solid var(--border-ds)", overflowWrap: "anywhere" }}>
+                <h2 style={{ fontSize: 18, fontWeight: 600 }}>{current.subject || "(no subject)"}</h2>
+                <div style={{ fontSize: 13, margin: "8px 0" }}>{current.from} · {fmtDate(current.date)}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                  <span className="ds-chip">{inboxSourceLabel(current.source)}</span><span className="ds-chip">{current.label}</span>
+                </div>
+                {current.applicationId && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    <Link href={`/applications?id=${encodeURIComponent(current.applicationId)}`} className="ds-btn ds-btn-primary">View application</Link>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                      Manual application status
+                      <select aria-label="Manual application status" value={statusOptions.some(([value]) => value === currentStatus) ? currentStatus : ""} disabled={savingStatus}
+                        onChange={(event) => handleStatusChange(event.target.value as ManualStatus)}>
+                        <option value="" disabled>Set status…</option>
+                        {statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                )}
+                <div style={{ marginTop: 12, fontSize: 12, color: "var(--fg-muted)" }}>
+                  {current.source === "application_reply"
+                    ? "Received directly by LavorAI. Read and archive state are not tracked for these messages."
+                    : "Saved from Gmail. Opening this copy does not mark it read or change your Gmail mailbox."}
+                  {" "}Sending replies from this inbox is not available.
+                </div>
+              </div>
+              <div style={{ flex: 1, minWidth: 0, padding: 20, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                {current.company && (
+                  <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>
+                    <span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 40, height: 40, flexShrink: 0, borderRadius: 6, color: "white", background: companyColor(current.company), fontWeight: 600 }}>{current.company.slice(0, 2)}</span>
+                    <div><div style={{ fontWeight: 600 }}>{current.company}</div><div style={{ fontSize: 13, color: "var(--fg-muted)" }}>{current.jobTitle || "Related application"}</div></div>
+                  </div>
+                )}
+                <div data-testid="message-body">{current.bodyText || current.snippet || "No content"}</div>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+    </div>
+  );
 }

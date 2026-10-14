@@ -9,7 +9,8 @@ export const runtime = "nodejs";
  *
  * Short-URL tracking link incluso nella cover letter (più varianti).
  * Quando il recruiter clicca QUALSIASI variante:
- *  - Logghiamo `viewedAt` + `userStatus="vista"` sulla Application
+ *  - Salviamo solo `viewedAt`: un bot o link scanner può aver aperto il link.
+ *    Non cambia userStatus e non dimostra lettura umana o valutazione.
  *  - Redirect alla destinazione corretta in base a `ref`
  *
  * Multi-superficie: più link → più chance di un click → più segnali.
@@ -34,7 +35,6 @@ export async function GET(
         select: {
           id: true,
           viewedAt: true,
-          userStatus: true,
           user: {
             select: {
               email: true,
@@ -48,11 +48,10 @@ export async function GET(
         // Logga la view solo al primo click — idempotente
         if (!app.viewedAt) {
           await prisma.application
-            .update({
-              where: { id: app.id },
+            .updateMany({
+              where: { id: app.id, viewedAt: null },
               data: {
                 viewedAt: new Date(),
-                userStatus: app.userStatus ?? "vista",
               },
             })
             .catch((err) => {

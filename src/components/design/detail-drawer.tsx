@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { CompanyLogo } from "@/components/design/company-logo";
 import { Icon } from "@/components/design/icon";
 import { toast } from "sonner";
+import type { DeliveryView } from "@/lib/application-delivery-view";
 
 export interface DrawerApp {
   id: string;
@@ -26,6 +27,8 @@ export interface DrawerApp {
   cvLanguage?: string | null;
   ghostingDays?: number;
   lastReplyAt?: string | null;
+  delivery?: DeliveryView;
+  deliveryRecipient?: string | null;
 }
 
 const PIPELINE = ["Applicata", "Vista", "Screening", "Colloquio", "Offerta"];
@@ -100,6 +103,11 @@ export function DetailDrawer({
               className="ds-scroll"
               style={{ flex: 1, overflow: "auto", padding: "22px 24px" }}
             >
+              {app.delivery && <section style={{ padding: 14, border: "1px solid var(--border-ds)", borderRadius: 8, marginBottom: 18 }}>
+                <strong>{app.delivery.label}</strong>
+                <p style={{ fontSize: 13, marginTop: 6 }}>{app.delivery.detail}</p>
+                {app.deliveryRecipient && <p style={{ fontSize: 12, marginTop: 6 }}>Destinatario: {app.deliveryRecipient}</p>}
+              </section>}
               {/* Mini stats */}
               <div
                 style={{
@@ -111,7 +119,7 @@ export function DetailDrawer({
               >
                 <MiniStat label="Match" value={`${app.match}%`} accent={app.match >= 85} />
                 <MiniStat label="RAL" value={app.salary} mono />
-                <MiniStat label="Inviata" value={app.applied} />
+                <MiniStat label="Registrata" value={app.applied} />
               </div>
 
               {/* Pipeline */}
@@ -122,7 +130,7 @@ export function DetailDrawer({
                     <div
                       key={p}
                       className={`ds-pipeline-step${
-                        i <= app.stage ? " done" : ""
+                        (!app.delivery || ["confirmed", "delivered", "manual"].includes(app.delivery.phase)) && i <= app.stage ? " done" : ""
                       }${i === app.stage ? " current" : ""}`}
                     >
                       <div className="ds-pipeline-step-label">
@@ -140,7 +148,7 @@ export function DetailDrawer({
                 <div className="ds-section-head">
                   <div className="ds-section-head-title">
                     <Icon name="file" size={13} />
-                    Materiali inviati
+                    Materiali della candidatura
                   </div>
                 </div>
                 <div className="ds-section-body flush">

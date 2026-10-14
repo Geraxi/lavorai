@@ -1,3 +1,5 @@
+import type { VerifiedSubmissionReceipt as SubmissionReceipt } from "../submission-receipt";
+export type { VerifiedSubmissionReceipt as SubmissionReceipt } from "../submission-receipt";
 import type { Browser, Page } from "playwright";
 import type { CVProfile } from "@/lib/cv-profile-types";
 import type { ApplicationAnswers } from "@/lib/application-answers";
@@ -32,13 +34,15 @@ export interface ApplyInput {
   jobUrl: string;
   /** "dryRun" → non preme submit, solo verifica che il form si compili */
   dryRun: boolean;
+  /** Fresh worker authorization immediately before the irreversible submission. */
+  beforeSubmit?: () => Promise<boolean>;
   /** Risposte standard pre-compilate dall'utente (work auth, salary,
    *  notice period, LinkedIn, EEO, ecc). L'adapter le inietta nei
    *  campi custom che riconosce via fuzzy-match label. */
   answers?: ApplicationAnswers;
   /** Risposte riutilizzabili già date dall'utente a domande di form
    *  precedenti (da UserAnswer). label→answer, match per label normalizzata. */
-  storedAnswers?: Array<{ label: string; answer: string; kind?: string }>;
+  storedAnswers?: Array<{ label: string; answer: string; kind?: string; options?: string[]; fingerprint?: string }>;
   /** Dati di profilo dell'utente per le risposte comuni nei form ATS. */
   userYearsExperience?: number | null;
   userEnglishLevel?: string | null;
@@ -51,8 +55,7 @@ export interface ApplyInput {
   /** true se l'utente è in auto-apply "auto": l'AI risponde da sola alle
    *  domande del form (vedi ai-answer.ts, modalità autonoma). */
   autonomous?: boolean;
-  /** Prima località desiderata dalle preferenze: fallback per "City" quando
-   *  il CV non riporta la città. */
+  /** Desired job location only; never a fallback for current residence. */
   preferredCity?: string | null;
   /** Dati dell'annuncio per le domande aperte ("perché noi?"). */
   jobTitle?: string | null;
@@ -108,6 +111,7 @@ export type ApplyOutcome =
       ok: true;
       status: "submitted";
       confirmation?: string;
+      receipt?: SubmissionReceipt;
       canary?: CanaryLog;
     }
   | {

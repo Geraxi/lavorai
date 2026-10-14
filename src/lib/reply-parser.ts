@@ -1,3 +1,5 @@
+import { isApplicationVerificationMessage } from "@/lib/reply-security-message";
+
 /**
  * Classificatore di risposte inbound alle candidature.
  *
@@ -85,7 +87,7 @@ const BOUNCE_SUBJECT = [
 /**
  * Conferma di ricezione ("abbiamo ricevuto la tua candidatura"): non è una
  * risposta umana, ma è la prova che la candidatura è arrivata. Va in Inbox
- * e conta come risposta ricevuta. Controllata PRIMA degli auto-reply perché
+ * come ricevuta, separata dalle risposte umane. Controllata PRIMA degli auto-reply perché
  * spesso contiene "do not reply".
  */
 const ACKNOWLEDGEMENT = [
@@ -232,11 +234,11 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
 
   // 2. Security challenges are automated messages, not delivery failures or
   //    application receipts, even if their template thanks the applicant.
-  if (/\b(security code|verification code|one[- ]time (?:code|password)|codice di (?:sicurezza|verifica))\b/i.test(subjectBody)) {
+  if (isApplicationVerificationMessage(input)) {
     return { kind: "auto", isHuman: false };
   }
 
-  // 3. Conferma di ricezione → in Inbox, conta come risposta ricevuta,
+  // 3. Conferma di ricezione → in Inbox, separata dalle risposte umane,
   //    ma non cambia lo stato (non è un umano che ha letto il CV).
   //    Un umano che scrive "grazie per la candidatura, ci sentiamo domani?"
   //    non è una conferma automatica: se c'è una domanda, o manca ogni

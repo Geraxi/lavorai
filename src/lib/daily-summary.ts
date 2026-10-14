@@ -2,302 +2,152 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { isTestAccount } from "@/lib/admin";
+import { deliveryEvidence, type DeliveryEvidenceInput } from "@/lib/application-evidence";
 
-/**
- * Daily activity summary — LavorAI dice all'utente cosa ha fatto per lui
- * nelle ultime 24h. Copre il gap "auto mode + 0 success" dove oggi
- * l'utente non riceveva NIENTE anche se il motore aveva processato N
- * candidature (perché in auto mode l'email per RTA è silenziata).
- *
- * Copy ONESTA: distingue "inviate" (success, con o senza conferma) da
- * "preparate" (ready_to_apply, servono submit manuale). Non finge.
- *
- * Cooldown: 1 email/utente/24h.
- * Requisito: almeno 1 candidatura processata nelle 24h.
- */
-
+/** Report observed application states; neither legacy labels nor API acceptance
+ * prove employer delivery. One notification per user per 24 hours. */
 const COOLDOWN_MS = 24 * 60 * 60 * 1000;
-
 export interface DailySummaryResult {
+  /** Notification accepted by our email provider; not a delivery/read receipt. */
   sent: number;
   skipped: number;
   errors: number;
   details: Array<{ email: string; status: string; counts?: string }>;
 }
-
-interface UserActivity {
-  /** DETECTED_* : submit ATS con prova hard (2xx / DOM di conferma) */
-  atsConfirmedCount: number;
-  /** EMAIL_SENT : email consegnata al recruiter (SMTP 250 OK, no conferma lettura) */
-  emailSentCount: number;
-  /** Somma dei due sopra — usata dove non serve distinguere */
-  successCount: number;
-  rtaCount: number;
-  failedCount: number;
-  atsConfirmedJobs: Array<{ title: string; company: string | null; url: string }>;
-  emailSentJobs: Array<{ title: string; company: string | null; url: string }>;
-  rtaJobs: Array<{ title: string; company: string | null; url: string }>;
+type SummaryKind = "portal" | "delivered" | "accepted" | "pending" | "problems" | "unverified" | "prepared";
+interface Job { title: string; company: string | null; url: string }
+type UserActivity = Record<SummaryKind, { count: number; jobs: Job[] }>;
+const KINDS: SummaryKind[] = ["portal", "delivered", "accepted", "pending", "problems", "unverified", "prepared"];
+function summaryKind(application: DeliveryEvidenceInput): SummaryKind | null {
+  if (application.submittedVia === "mock_demo" || application.submitConfirmation === "DRY_RUN") return null;
+  const evidence = deliveryEvidence(application);
+  switch (evidence) {
+    case "confirmed_portal": return "portal";
+    case "confirmed_email": return "delivered";
+    case "provider_accepted": return "accepted";
+    case "delivery_problem": return "problems";
+    case "legacy_unverified": return "unverified";
+    case "pending": return "pending";
+    case "excluded":
+      if (application.status === "failed") return "problems";
+      if (application.status === "success" || ["UNCONFIRMED", "SUBMISSION_STARTED"].includes(application.submitConfirmation ?? "")) return "unverified";
+      return application.status === "ready_to_apply" ? "prepared" : null;
+  }
 }
 
-export async function runDailySummary(opts?: {
-  onlyEmail?: string;
-  dryRun?: boolean;
-}): Promise<DailySummaryResult> {
-  const now = Date.now();
-  const since = new Date(now - COOLDOWN_MS);
-
-  // Utenti con almeno 1 candidatura processata nelle ultime 24h
-  // (raggruppate per user)
+export async function runDailySummary(opts?: { onlyEmail?: string; dryRun?: boolean }): Promise<DailySummaryResult> {
+  const since = new Date(Date.now() - COOLDOWN_MS);
+  // A delivery/bounce event can arrive days after processing finished. Include
+  // recent attempt updates and classify only the newest attempt per application.
+  const recentActivity = { OR: [
+    { completedAt: { gte: since } },
+    { emailAttempts: { some: { updatedAt: { gte: since } } } },
+  ] };
   const active = await prisma.application.groupBy({
     by: ["userId"],
-    where: {
-      completedAt: { gte: since },
-      status: { in: ["success", "ready_to_apply", "failed"] },
-      ...(opts?.onlyEmail
-        ? { user: { email: opts.onlyEmail } }
-        : {}),
-    },
+    where: { ...recentActivity, ...(opts?.onlyEmail ? { user: { email: opts.onlyEmail } } : {}) },
     _count: { _all: true },
   });
-
-  const details: DailySummaryResult["details"] = [];
-  let sent = 0,
-    skipped = 0,
-    errors = 0;
+  const result: DailySummaryResult = { sent: 0, skipped: 0, errors: 0, details: [] };
   const apiKey = process.env.RESEND_API_KEY;
-
-  for (const g of active) {
-    const user = await prisma.user.findUnique({
-      where: { id: g.userId },
-      select: { id: true, email: true, name: true, locale: true, tier: true },
-    });
-    if (!user) {
-      details.push({ email: "?", status: "user_not_found" });
-      skipped++;
-      continue;
+  for (const group of active) {
+    const user = await prisma.user.findUnique({ where: { id: group.userId }, select: { id: true, email: true, name: true, locale: true } });
+    if (!user || isTestAccount(user.email)) {
+      result.details.push({ email: user?.email ?? "?", status: user ? "test_skip" : "user_not_found" });
+      result.skipped++; continue;
     }
-    if (isTestAccount(user.email)) {
-      details.push({ email: user.email, status: "test_skip" });
-      skipped++;
-      continue;
-    }
-
-    // Cooldown: se già inviato daily_summary nelle 24h → skip
-    const recent = await prisma.emailLog.count({
-      where: {
-        kind: "daily_summary",
-        to: user.email,
-        createdAt: { gte: since },
-      },
-    });
-    if (recent > 0) {
-      details.push({ email: user.email, status: "cooldown" });
-      skipped++;
-      continue;
-    }
-
-    // Raccogli l'attività
+    const recent = await prisma.emailLog.count({ where: { kind: "daily_summary", to: user.email, createdAt: { gte: since } } });
+    if (recent > 0) { result.details.push({ email: user.email, status: "cooldown" }); result.skipped++; continue; }
     const apps = await prisma.application.findMany({
-      where: {
-        userId: user.id,
-        completedAt: { gte: since },
-        status: { in: ["success", "ready_to_apply", "failed"] },
-      },
+      where: { userId: user.id, ...recentActivity },
       select: {
-        status: true,
-        submitConfirmation: true,
-        submittedVia: true,
+        status: true, submitConfirmation: true, submittedVia: true, submissionReceiptJson: true,
+        emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true } },
         job: { select: { title: true, company: true, url: true } },
       },
       orderBy: { completedAt: "desc" },
     });
-
-    const successApps = apps.filter((a) => a.status === "success");
-    const atsApps = successApps.filter(
-      (a) => (a.submitConfirmation ?? "").startsWith("DETECTED"),
-    );
-    const emailApps = successApps.filter(
-      (a) => a.submitConfirmation === "EMAIL_SENT" || a.submittedVia === "email_recruiter",
-    );
-
-    const mapJob = (a: (typeof apps)[number]) => ({
-      title: a.job?.title ?? "?",
-      company: a.job?.company ?? null,
-      url: a.job?.url ?? "#",
-    });
-
     const activity: UserActivity = {
-      atsConfirmedCount: atsApps.length,
-      emailSentCount: emailApps.length,
-      successCount: successApps.length,
-      rtaCount: apps.filter((a) => a.status === "ready_to_apply").length,
-      failedCount: apps.filter((a) => a.status === "failed").length,
-      atsConfirmedJobs: atsApps.slice(0, 8).map(mapJob),
-      emailSentJobs: emailApps.slice(0, 8).map(mapJob),
-      rtaJobs: apps
-        .filter((a) => a.status === "ready_to_apply")
-        .slice(0, 8)
-        .map(mapJob),
+      portal: { count: 0, jobs: [] }, delivered: { count: 0, jobs: [] },
+      accepted: { count: 0, jobs: [] }, pending: { count: 0, jobs: [] },
+      problems: { count: 0, jobs: [] }, unverified: { count: 0, jobs: [] },
+      prepared: { count: 0, jobs: [] },
     };
-
-    const total = activity.successCount + activity.rtaCount + activity.failedCount;
-    if (total === 0) {
-      details.push({ email: user.email, status: "no_activity" });
-      skipped++;
-      continue;
+    for (const app of apps) {
+      const kind = summaryKind(app);
+      if (!kind) continue;
+      activity[kind].count++;
+      if (activity[kind].jobs.length < 8) activity[kind].jobs.push({ title: app.job?.title ?? "?", company: app.job?.company ?? null, url: app.job?.url ?? "#" });
     }
-
-    const counts = `${activity.successCount}s+${activity.rtaCount}r+${activity.failedCount}f`;
-
-    if (opts?.dryRun) {
-      details.push({ email: user.email, status: "dry_run", counts });
-      continue;
+    if (!KINDS.some((kind) => activity[kind].count > 0)) {
+      result.details.push({ email: user.email, status: "no_activity" }); result.skipped++; continue;
     }
-    if (!apiKey) {
-      details.push({ email: user.email, status: "no_resend_key", counts });
-      skipped++;
-      continue;
-    }
-
+    const counts = KINDS.map((kind) => `${kind}=${activity[kind].count}`).join(",");
+    if (opts?.dryRun) { result.details.push({ email: user.email, status: "dry_run", counts }); continue; }
+    if (!apiKey) { result.details.push({ email: user.email, status: "no_resend_key", counts }); result.skipped++; continue; }
     try {
       const { subject, html, text } = renderSummary(user, activity);
-      await sendWithinQuota("daily_summary", user.email, async () => {
-        const resend = new Resend(apiKey);
-        const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
-        await resend.emails.send({ from, to: user.email, subject, html, text });
+      const notification = await sendWithinQuota("daily_summary", user.email, async () => {
+        const response = await new Resend(apiKey).emails.send({
+          from: process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>", to: user.email, subject, html, text,
+        });
+        if (response.error || !response.data?.id) throw new Error("Daily summary was not accepted by the email provider.");
       });
-      details.push({ email: user.email, status: "sent", counts });
-      sent++;
-    } catch (err) {
-      details.push({
-        email: user.email,
-        status: "error: " + (err instanceof Error ? err.message.slice(0, 80) : "?"),
-      });
-      errors++;
+      if (!notification.sent) {
+        result.details.push({ email: user.email, status: "quota_blocked", counts }); result.skipped++; continue;
+      }
+      result.details.push({ email: user.email, status: "accepted", counts }); result.sent++;
+    } catch (error) {
+      result.details.push({ email: user.email, status: "error: " + (error instanceof Error ? error.message.slice(0, 80) : "Provider request failed") });
+      result.errors++;
     }
   }
-
-  return { sent, skipped, errors, details };
+  return result;
 }
 
-// ---------- Email content ----------
-
-function renderSummary(
-  user: { email: string; name: string | null; locale: string | null },
-  a: UserActivity,
-): { subject: string; html: string; text: string } {
+function renderSummary(user: { email: string; name: string | null; locale: string | null }, activity: UserActivity): { subject: string; html: string; text: string } {
   const en = user.locale === "en";
-  const first = user.name?.trim().split(/\s+/)[0] ?? null;
-  const greet = first ? (en ? `Hi ${first},` : `Ciao ${first},`) : en ? "Hi," : "Ciao,";
-  const total = a.successCount + a.rtaCount + a.failedCount;
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
-
-  const subject = en
-    ? `Today: ${total} applications processed for you`
-    : `Oggi: ${total} candidature processate per te`;
-
-  const introHtml = en
-    ? `<p style="font-size:15px;line-height:1.6;color:#334155;margin:0 0 16px;">Here's what LavorAI did for you in the last 24 hours:</p>`
-    : `<p style="font-size:15px;line-height:1.6;color:#334155;margin:0 0 16px;">Ecco cosa ha fatto LavorAI per te nelle ultime 24 ore:</p>`;
-
-  const summaryBoxHtml = `<div style="padding:14px 16px;background:#F1F5F9;border-radius:8px;margin-bottom:20px;font-size:14px;line-height:1.7;color:#0F172A;">
-    ${a.atsConfirmedCount > 0 ? `<div><strong style="color:#16A34A;">✓ ${a.atsConfirmedCount}</strong> ${en ? "delivered to ATS with confirmation" : "consegnate su portale ATS con conferma"}</div>` : ""}
-    ${a.emailSentCount > 0 ? `<div><strong style="color:#3B82F6;">✉ ${a.emailSentCount}</strong> ${en ? "sent to recruiter by email (no delivery confirmation from their side)" : "inviate al recruiter via email (nessuna conferma di lettura dalla loro parte)"}</div>` : ""}
-    <div><strong style="color:#EAB308;">◐ ${a.rtaCount}</strong> ${en ? "prepared — need your 1-click approval" : "preparate — servono ancora la tua approvazione (1-click)"}</div>
-    ${a.failedCount > 0 ? `<div><strong style="color:#94A3B8;">✕ ${a.failedCount}</strong> ${en ? "failed (auto-retry)" : "fallite (retry automatico)"}</div>` : ""}
-  </div>`;
-
-  const listBlock = (title: string, jobs: UserActivity["atsConfirmedJobs"]) => {
-    if (jobs.length === 0) return "";
-    const items = jobs
-      .map(
-        (j) =>
-          `<li style="margin:6px 0;font-size:13.5px;line-height:1.5;"><a href="${escapeHtml(j.url)}" style="color:#0F172A;text-decoration:none;"><strong>${escapeHtml(j.title)}</strong>${j.company ? ` · <span style="color:#64748B;">${escapeHtml(j.company)}</span>` : ""}</a></li>`,
-      )
-      .join("");
-    return `<div style="margin-bottom:16px;"><div style="font-size:12px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">${title}</div><ul style="margin:0;padding:0 0 0 18px;">${items}</ul></div>`;
+  const first = user.name?.trim().split(/\s+/)[0];
+  const greeting = first ? (en ? `Hi ${first},` : `Ciao ${first},`) : en ? "Hi," : "Ciao,";
+  const labels: Record<SummaryKind, string> = en ? {
+    portal: "Portal submissions with a verified application receipt",
+    delivered: "Email delivery confirmed by the provider; no proof of reading",
+    accepted: "Emails accepted by the provider; delivery still pending",
+    pending: "Email attempts awaiting a verifiable outcome",
+    problems: "Failed applications, bounced emails or other delivery problems",
+    unverified: "Applications with unverified submission or historical records without delivery proof",
+    prepared: "Prepared applications that still need your review or completion",
+  } : {
+    portal: "Candidature su portale con ricevuta verificata",
+    delivered: "Email con consegna confermata dal provider; lettura non verificata",
+    accepted: "Email accettate dal provider; consegna ancora in attesa",
+    pending: "Tentativi email in attesa di un esito verificabile",
+    problems: "Candidature fallite, email respinte o altri problemi di consegna",
+    unverified: "Candidature non confermate o storico senza prova di consegna",
+    prepared: "Candidature preparate che richiedono ancora verifica o completamento",
   };
-
-  const rtaBlock = a.rtaJobs.length
-    ? listBlock(en ? "Ready for your approval" : "Pronte per la tua approvazione", a.rtaJobs)
-    : "";
-  const atsBlock = a.atsConfirmedJobs.length
-    ? listBlock(en ? "Delivered to ATS (confirmed)" : "Consegnate su ATS (con conferma)", a.atsConfirmedJobs)
-    : "";
-  const emailBlock = a.emailSentJobs.length
-    ? listBlock(en ? "Sent by email to recruiter" : "Inviate al recruiter via email", a.emailSentJobs)
-    : "";
-
-  const ctaText = en ? "Review & approve on your dashboard" : "Rivedile e approva dal dashboard";
-  const ctaUrl = `${siteUrl}/applications`;
-
-  const footer = en
-    ? "You get this daily summary because you have auto-apply on. Manage in Settings."
-    : "Ricevi questo report giornaliero perché hai l'auto-apply attivo. Gestisci nelle Impostazioni.";
-
-  const html = `<!doctype html><html lang="${en ? "en" : "it"}"><body style="margin:0;padding:0;background:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;color:#0F172A;">
-  <div style="max-width:600px;margin:0 auto;padding:32px 20px;">
-    <div style="font-size:22px;font-weight:700;letter-spacing:-0.01em;margin-bottom:24px;">Lavor<span style="color:#16A34A;">AI</span></div>
-    <p style="font-size:15px;line-height:1.6;color:#334155;margin:0 0 8px;">${greet}</p>
-    ${introHtml}
-    ${summaryBoxHtml}
-    ${atsBlock}
-    ${emailBlock}
-    ${rtaBlock}
-    ${a.rtaCount > 0 ? `<div style="text-align:center;margin:24px 0;"><a href="${ctaUrl}" style="display:inline-block;background:#16A34A;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">${ctaText} →</a></div>` : ""}
-    <hr style="border:none;border-top:1px solid #E2E8F0;margin:28px 0 16px;" />
-    <p style="font-size:11.5px;color:#94A3B8;line-height:1.6;margin:0;">${footer}<br/>© 2026 LavorAI</p>
-  </div>
-</body></html>`;
-
-  const textLines = [
-    greet,
-    "",
-    en
-      ? `Today LavorAI processed ${total} applications for you:`
-      : `Oggi LavorAI ha processato ${total} candidature per te:`,
-    en ? `- ${a.atsConfirmedCount} delivered to ATS (confirmed)` : `- ${a.atsConfirmedCount} consegnate su ATS (con conferma)`,
-    en ? `- ${a.emailSentCount} sent to recruiter by email` : `- ${a.emailSentCount} inviate al recruiter via email`,
-    en
-      ? `- ${a.rtaCount} prepared, awaiting your 1-click approval`
-      : `- ${a.rtaCount} preparate, in attesa della tua approvazione (1-click)`,
-    ...(a.failedCount > 0
-      ? [en ? `- ${a.failedCount} failed (auto-retry)` : `- ${a.failedCount} fallite (retry automatico)`]
-      : []),
-    "",
-    ...(a.rtaJobs.length > 0
-      ? [
-          en ? "Ready for your approval:" : "Pronte per la tua approvazione:",
-          ...a.rtaJobs.map((j) => `  - ${j.title}${j.company ? ` @ ${j.company}` : ""} — ${j.url}`),
-          "",
-        ]
-      : []),
-    ...(a.atsConfirmedJobs.length > 0
-      ? [
-          en ? "Delivered to ATS (confirmed):" : "Consegnate su ATS (con conferma):",
-          ...a.atsConfirmedJobs.map((j) => `  - ${j.title}${j.company ? ` @ ${j.company}` : ""}`),
-          "",
-        ]
-      : []),
-    ...(a.emailSentJobs.length > 0
-      ? [
-          en ? "Sent to recruiter by email:" : "Inviate al recruiter via email:",
-          ...a.emailSentJobs.map((j) => `  - ${j.title}${j.company ? ` @ ${j.company}` : ""}`),
-          "",
-        ]
-      : []),
-    ctaUrl,
-    "",
-    "— LavorAI",
-  ];
-
-  return { subject, html, text: textLines.join("\n") };
+  const total = KINDS.reduce((sum, kind) => sum + activity[kind].count, 0);
+  const subject = en ? `Application update: ${total} recent records` : `Aggiornamento candidature: ${total} attività recenti`;
+  const intro = en ? "Here are the latest observed states for applications with activity in the last 24 hours." : "Ecco gli ultimi stati verificabili delle candidature con attività nelle ultime 24 ore.";
+  const caution = en ? "A submission or delivery receipt does not mean a recruiter has read or answered your application. Check unverified outcomes before sending again to avoid duplicates." : "Una ricevuta di invio o consegna non significa che il recruiter abbia letto o risposto. Verifica gli esiti incerti prima di inviare di nuovo, per evitare duplicati.";
+  const url = `${(process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it").replace(/\/$/, "")}/applications`;
+  const groups = KINDS.filter((kind) => activity[kind].count > 0);
+  const blocks = groups.map((kind) => {
+    const bucket = activity[kind];
+    const items = bucket.jobs.map((job) => `<li><a href="${escapeHtml(safeJobUrl(job.url))}">${escapeHtml(job.title)}</a>${job.company ? ` · ${escapeHtml(job.company)}` : ""}</li>`).join("");
+    return `<section style="margin:20px 0"><p><strong>${bucket.count}</strong> ${escapeHtml(labels[kind])}</p><ul>${items}</ul></section>`;
+  }).join("");
+  const cta = en ? "Review application details" : "Controlla i dettagli delle candidature";
+  const html = `<!doctype html><html lang="${en ? "en" : "it"}"><body style="font-family:Arial,sans-serif;color:#0F172A;background:#F8FAFC"><main style="max-width:600px;margin:auto;padding:24px"><h1>LavorAI</h1><p>${escapeHtml(greeting)}</p><p>${escapeHtml(intro)}</p>${blocks}<p>${escapeHtml(caution)}</p><p><a href="${escapeHtml(url)}">${cta}</a></p></main></body></html>`;
+  const text = [greeting, "", intro, "", ...groups.flatMap((kind) => [
+    `${activity[kind].count}: ${labels[kind]}`,
+    ...activity[kind].jobs.map((job) => `  - ${job.title}${job.company ? ` @ ${job.company}` : ""}`), "",
+  ]), caution, "", `${cta}: ${url}`, "", "LavorAI"].join("\n");
+  return { subject, html, text };
 }
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function safeJobUrl(raw: string): string {
+  try { const url = new URL(raw); return ["https:", "http:"].includes(url.protocol) ? url.href : "#"; } catch { return "#"; }
+}
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }

@@ -1,3 +1,4 @@
+import { verifySubmissionResponse } from "./submission-proof";
 import { readFile } from "node:fs/promises";
 import type { PortalAdapter, ApplyInput, ApplyOutcome, PendingQuestion } from "./types";
 
@@ -27,6 +28,7 @@ export const recruiteeAdapter: PortalAdapter = {
     let slug = "";
     try {
       const u = new URL(input.jobUrl);
+      if (u.protocol !== "https:") return { ok: false, status: "form_not_found", error: "Il portale Recruitee richiede un URL HTTPS verificabile." };
       origin = u.origin;
       slug = u.pathname.match(OFFER_RE)?.[1] ?? "";
     } catch { /* below */ }
@@ -38,8 +40,10 @@ export const recruiteeAdapter: PortalAdapter = {
     try {
       const r = await fetch(`${origin}/api/offers/${encodeURIComponent(slug)}`, { headers, signal: AbortSignal.timeout(15_000) });
       if (r.status === 404) return { ok: false, status: "job_closed", error: "Annuncio non più online (Recruitee 404)." };
+      if (!r.ok) return { ok: false, status: "unknown_error", error: `Verifica annuncio Recruitee non riuscita (HTTP ${r.status}). Nessun invio eseguito.` };
       if (r.ok) {
         const j = (await r.json()) as { offer?: { status?: string; open_questions?: OpenQuestion[] } };
+        if (!j.offer || typeof j.offer !== "object") return { ok: false, status: "form_not_found", error: "Offerta Recruitee non riconosciuta. Nessun invio eseguito." };
         if (j.offer?.status && j.offer.status !== "published") return { ok: false, status: "job_closed", error: `Annuncio Recruitee in stato ${j.offer.status}.` };
         questions = j.offer?.open_questions ?? [];
       }
@@ -56,7 +60,7 @@ export const recruiteeAdapter: PortalAdapter = {
       const kind = (q.kind ?? "").toLowerCase();
       const label = (q.body ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
       const options = kind === "boolean" ? ["Yes", "No"] : q.open_question_options?.map((o) => o.body);
-      const fkind: "text" | "textarea" | "select" | "checkbox" = kind === "boolean" ? "checkbox" : kind.includes("choice") ? "select" : kind === "text" ? "textarea" : "text";
+      const fkind: "text" | "textarea" | "select" | "radio" = kind === "boolean" ? "radio" : kind.includes("choice") ? "select" : kind === "text" ? "textarea" : "text";
       return { idx, label, kind: fkind, options, q };
     });
     const { answerOffline } = await import("./ai-answer");
@@ -96,14 +100,17 @@ export const recruiteeAdapter: PortalAdapter = {
     });
 
     try {
-      const r = await fetch(`${origin}/api/offers/${encodeURIComponent(slug)}/candidates`, { method: "POST", headers, body: fd, signal: AbortSignal.timeout(30_000) });
-      const text = await r.text().catch(() => "");
-      if (r.ok) return { ok: true, status: "submitted", confirmation: `DETECTED_HTTP_${r.status}` };
-      if (r.status === 422) return { ok: false, status: "validation_failed", error: `Recruitee ha rifiutato la candidatura: ${text.slice(0, 300)}` };
-      if (r.status === 404) return { ok: false, status: "job_closed", error: "Annuncio non più online (Recruitee 404)." };
-      return { ok: false, status: "unknown_error", error: `Recruitee ${r.status}: ${text.slice(0, 300)}` };
+      if (input.beforeSubmit && !(await input.beforeSubmit().catch(() => false))) {
+        return { ok: false, status: "submission_unconfirmed", error: "Invio bloccato: condizioni o autorizzazioni cambiate. Nessun nuovo invio eseguito." };
+      }
+      const endpoint = `${origin}/api/offers/${encodeURIComponent(slug)}/candidates`;
+      const r = await fetch(endpoint, { method: "POST", headers, body: fd, redirect: "error", signal: AbortSignal.timeout(30_000) });
+      const body = await r.text().catch(() => null);
+      const proof = verifySubmissionResponse("recruitee", input.jobUrl, { url: endpoint, method: "POST", postData: null, status: r.status, body });
+      if (proof.receipt) return { ok: true, status: "submitted", confirmation: `DETECTED_HTTP_${r.status}`, receipt: proof.receipt };
+      return { ok: false, status: "submission_unconfirmed", error: `Ricezione Recruitee non confermata (HTTP ${r.status}). Verificare prima di un nuovo invio per evitare duplicati.` };
     } catch (err) {
-      return { ok: false, status: "unknown_error", error: `Recruitee submit fallito: ${err instanceof Error ? err.message : err}` };
+      return { ok: false, status: "submission_unconfirmed", error: `Ricezione Recruitee non confermata: ${err instanceof Error ? err.message : err}` };
     }
   },
 };

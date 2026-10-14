@@ -14,6 +14,12 @@ import { applyReplyToApplication } from "../src/lib/apply-reply-to-application";
 import { classifyReply } from "../src/lib/reply-parser";
 import { prisma } from "../src/lib/db";
 
+// This legacy integration harness must never target an ambient production DB.
+const testDatabase = new URL(process.env.DATABASE_URL ?? "http://not-configured.invalid");
+if (!["127.0.0.1", "localhost", "[::1]"].includes(testDatabase.hostname)) {
+  throw new Error("apply-reply integration tests require an explicitly configured localhost sandbox database");
+}
+
 async function setup() {
   // Create test user
   const user = await prisma.user.upsert({
@@ -104,12 +110,12 @@ async function testOtpSkipped() {
       select: { lastReplyAt: true, lastReplyKind: true, replyCount: true },
     });
 
-    // Auto/bounce messages do increment replyCount but don't set lastReplyKind/lastReplyAt for human replies
-    if (updated && updated.replyCount === 1 && !updated.lastReplyKind) {
-      console.log("✅ PASSED: OTP classified as auto, replyCount incremented but no human reply fields set");
+    // Automated technical messages are never human replies.
+    if (updated && updated.replyCount === 0 && !updated.lastReplyKind) {
+      console.log("✅ PASSED: OTP classified as auto with no human reply counters or timestamps");
       return true;
     } else {
-      console.log(`❌ FAILED: Expected replyCount=1 with no lastReplyKind, got:`, updated);
+      console.log(`❌ FAILED: Expected replyCount=0 with no lastReplyKind, got:`, updated);
       return false;
     }
   } finally {

@@ -41,8 +41,9 @@ function getFromAddress(): string {
  * catch-all sul dominio cattura tutte le reply a prescindere dal tag.
  */
 export function inboundReplyAddress(applicationId: string): string | null {
-  const domain = process.env.INBOUND_EMAIL_DOMAIN;
-  if (!domain) return null;
+  const domain = process.env.INBOUND_EMAIL_DOMAIN?.trim().toLowerCase();
+  if (!domain || !/^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/i.test(domain)
+    || !/^[a-z0-9_-]+$/i.test(applicationId)) return null;
   return `reply+${applicationId}@${domain}`;
 }
 
@@ -50,10 +51,10 @@ export function inboundReplyAddress(applicationId: string): string | null {
 export function applicationIdFromInboundAddress(
   address: string | undefined | null,
 ): string | null {
-  if (!address) return null;
-  // gestisce "Name <reply+abc@dom>" o "reply+abc@dom"
-  const m = address.match(/reply\+([^@\s>]+)@/i);
-  return m?.[1] ?? null;
+  const domain = process.env.INBOUND_EMAIL_DOMAIN?.trim().toLowerCase();
+  if (!address || !domain || /[\r\n]/.test(address)) return null;
+  const m = address.match(/(?:^|<)reply\+([a-z0-9_-]+)@([a-z0-9.-]+)(?:>|$)/i);
+  return m && m[2].toLowerCase() === domain ? m[1] : null;
 }
 
 /**
@@ -69,8 +70,11 @@ export async function forwardReplyToUser(input: {
   subject: string | null;
   bodyText: string | null;
   kind: string;
-}): Promise<void> {
+}, options: { idempotencyKey?: string } = {}): Promise<string> {
   const client = getClient();
+  // Treat mail content as untrusted data; never put line breaks in headers.
+  const replyTo = input.recruiterFrom.replace(/[\r\n]/g, " ").trim();
+  const safeSubject = (input.subject ?? "").replace(/[\r\n]/g, " ").slice(0, 500);
   const kindLabel: Record<string, string> = {
     colloquio: "📅 Possibile colloquio",
     rifiutata: "❌ Esito negativo",
@@ -83,11 +87,11 @@ export async function forwardReplyToUser(input: {
   const ctx = `${input.jobTitle}${input.company ? ` · ${input.company}` : ""}`;
   const safeBody = escapeHtml(input.bodyText ?? "").replace(/\n/g, "<br/>");
 
-  await client.emails.send({
+  const result = await client.emails.send({
     from: getFromAddress(),
     to: input.userEmail,
-    replyTo: input.recruiterFrom,
-    subject: `[${label}] ${input.subject ?? ctx}`,
+    replyTo,
+    subject: `[${label}] ${safeSubject || ctx}`,
     text:
       `${label} alla tua candidatura "${ctx}"\n` +
       `Da: ${input.recruiterFrom}\n\n` +
@@ -109,7 +113,11 @@ export async function forwardReplyToUser(input: {
     </p>
   </div>
 </body></html>`,
-  });
+  }, options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined);
+  if (result.error || !result.data?.id) {
+    throw new Error(`Reply forwarding not accepted (${result.error?.name ?? "missing_provider_id"})`);
+  }
+  return result.data.id;
 }
 
 type Locale = "it" | "en";

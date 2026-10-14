@@ -1,7 +1,6 @@
+import { questionKey, exactOption, isTotalExperienceQuestion, isAnnualEurExpectation, isNarrativeQuestion, matchingScopedAnswer } from "./answer-safety";
 import type { Page } from "playwright";
 import { complete } from "@/lib/ai-router";
-import { matchCity } from "@/lib/city-centroids";
-import { isProtectedCategoryQuestion } from "@/lib/protected-category";
 
 /**
  * AI answerer per i campi OBBLIGATORI di un form ATS che il fill
@@ -10,7 +9,7 @@ import { isProtectedCategoryQuestion } from "@/lib/protected-category";
  * Filosofia (coerente col resto del prodotto): MAI inventare. Il modello può
  * rispondere SOLO usando i dati reali del candidato (profilo + CV). Se una
  * domanda richiede info che non abbiamo, ritorna null → il campo resta
- * vuoto → il submit resterà UNCONFIRMED e l'utente finisce a mano. Meglio
+ * vuoto → needs_user_input prima del submit. Meglio
  * onesti che fabbricare credenziali (es. "sì, ho diritto al lavoro UK").
  *
  * Gestisce: input text/url/tel/email/number, textarea, <select> nativi e
@@ -43,30 +42,22 @@ export interface CandidateContext {
   /** Ultimo datore di lavoro / ruolo / scuola dal CV (domande "current or previous employer"). */
   currentEmployer?: string | null;
   currentJobTitle?: string | null;
+  mostRecentEmployer?: string | null;
+  mostRecentJobTitle?: string | null;
   school?: string | null;
   /** Estratto del CV (testo) per rispondere a domande tipo "hai esperienza con X?". */
   cvText?: string | null;
   jobTitle?: string | null;
   company?: string | null;
   /** Risposte già date dall'utente a domande precedenti (riutilizzabili). */
-  storedAnswers?: Array<{ label: string; answer: string; kind?: string }>;
-  /**
-   * Modalità AUTONOMA (utente in auto-apply "auto"): l'utente ha chiesto
-   * zero coinvolgimento, quindi rispondiamo noi a tutto ciò che si può
-   * rispondere onestamente (domande aperte dal CV, EEO "preferisco non
-   * dire", "come ci hai conosciuto", consensi, stipendio "da concordare").
-   * Restano all'utente SOLO le domande legali/fattuali che non conosciamo
-   * (diritto al lavoro fuori UE, clearance, precedenti penali, certificazioni
-   * specifiche, referenze).
-   */
+  storedAnswers?: Array<{ label: string; answer: string; kind?: string; options?: string[]; fingerprint?: string }>;
+  /** Autonomous mode never permits guessed facts or commitments. */
   autonomous?: boolean;
   /** Descrizione dell'annuncio, per le domande aperte ("perché noi?"). */
   jobDescription?: string | null;
-  /** Iscrizione alle categorie protette (L. 68/99): risposta alla domanda nei form. */
+  /** Search preference only; never evidence or permission for a form disclosure. */
   protectedCategory?: boolean | null;
-  /** Località dell'annuncio (es. "Berlin, Germany", "Remote - US"): serve
-   *  per dedurre il paese e rispondere onestamente a diritto al lavoro /
-   *  sponsorship quando la domanda non nomina il paese. */
+  /** Job location is role context, never evidence of work authorization. */
   jobLocation?: string | null;
 }
 
@@ -76,8 +67,8 @@ export interface GivenAnswer {
   kind: string;
   answer: string;
   /** "user" = risposta data dall'utente in /questions, "profile" = dal profilo,
-   *  "rule" = regola deterministica, "ai" = provider AI, "assumed" = default
-   *  conservativo dedotto (ultima risorsa, l'utente può correggerlo in /inbox). */
+   *  "rule" = explicit fact mapping, "ai" = CV-grounded narrative.
+   *  "assumed" remains only for compatibility with historical records. */
   source: "user" | "profile" | "ai" | "rule" | "assumed";
 }
 
@@ -134,7 +125,7 @@ export async function answerRequiredFields(
     pending = await collectRequiredEmptyFields(page);
   } catch (err) {
     console.warn("[ai-answer] collect failed", err);
-    return { answered: 0, remainingRequired: 0, details: ["collect_failed"], unanswered: [], given };
+    return { answered: 0, remainingRequired: 1, details: ["collect_failed"], unanswered: [{ label: "Verifica dei campi obbligatori non disponibile: controlla il form prima di inviare.", kind: "text" }], given };
   }
   if (pending.length === 0) {
     return { answered: 0, remainingRequired: 0, details: ["no_required_empty"], unanswered: [], given };
@@ -150,32 +141,25 @@ export async function answerRequiredFields(
 
   let answered = 0;
 
-  // 3. Riempi PRIMA dalle risposte già date dall'utente (riutilizzabili),
-  //    match per label normalizzata. Niente AI per queste.
-  const stored = new Map(
-    (ctx.storedAnswers ?? [])
-      .filter((s) => s.answer && s.answer.trim())
-      .map((s) => [normalizeLabel(s.label), s.answer]),
-  );
+  // Reuse only answers bound to this exact application question. The worker
+  // validates applicationId; fingerprint validation here protects changed forms.
   const filledIdx = new Set<number>();
-  if (stored.size > 0) {
-    for (const f of pending) {
-      const v = stored.get(normalizeLabel(f.label));
-      if (v == null) continue;
-      const ok = await fillField(page, f, v).catch(() => false);
-      if (ok) {
-        answered++;
-        filledIdx.add(f.idx);
-        details.push(`stored:"${f.label.slice(0, 36)}"`);
-        given.push({ label: f.label, kind: f.kind, answer: v, source: "user" });
-      }
+  for (const f of pending) {
+    const value = matchingScopedAnswer(ctx.storedAnswers, f);
+    if (value == null) continue;
+    const ok = await fillField(page, f, value).catch(() => false);
+    if (ok) {
+      answered++;
+      filledIdx.add(f.idx);
+      details.push(`stored:"${f.label.slice(0, 36)}"`);
+      given.push({ label: f.label, kind: f.kind, answer: value, source: "user" });
     }
   }
 
   // 3b. Riempi i campi noti dal PROFILO (country/city/phone/link) anche se
   //     sono react-select searchable (le cui opzioni l'AI non vedrebbe).
   for (const f of pending) {
-    if (filledIdx.has(f.idx)) continue;
+    if (filledIdx.has(f.idx) || f.kind === "checkbox") continue;
     const pv = profileValueForLabel(f.label, ctx);
     if (!pv) continue;
     const ok = await fillField(page, f, pv).catch(() => false);
@@ -184,25 +168,6 @@ export async function answerRequiredFields(
       filledIdx.add(f.idx);
       details.push(`profile:"${f.label.slice(0, 32)}"`);
       given.push({ label: f.label, kind: f.kind, answer: pv, source: "profile" });
-    }
-  }
-
-  // 3c. Regole deterministiche per le domande "di rito" che non richiedono
-  //     giudizio (EEO "preferisco non dire", "come ci hai conosciuto",
-  //     consensi). In modalità autonoma anche stipendio/disponibilità/
-  //     modalità di lavoro a testo libero. Niente AI, niente invenzioni.
-  {
-    for (const f of pending) {
-      if (filledIdx.has(f.idx)) continue;
-      const rv = ruleAnswerForField(f, ctx, ctx.autonomous === true);
-      if (!rv) continue;
-      const ok = await fillField(page, f, rv).catch(() => false);
-      if (ok) {
-        answered++;
-        filledIdx.add(f.idx);
-        details.push(`rule:"${f.label.slice(0, 32)}"=${rv.slice(0, 24)}`);
-        given.push({ label: f.label, kind: f.kind, answer: rv, source: "rule" });
-      }
     }
   }
 
@@ -232,27 +197,6 @@ export async function answerRequiredFields(
     }
   }
 
-  // 4b. Ultima risorsa (modalità autonoma): nessuna candidatura deve
-  //     fermarsi ad aspettare l'utente. Per i campi ancora vuoti diamo la
-  //     risposta onesta e conservativa deducibile dal profilo (diritto al
-  //     lavoro da cittadinanza + paese dell'annuncio, "No" a clearance e
-  //     simili, opzione neutra nei select, "N/A" nei testi). Marcate
-  //     "assumed": l'utente le vede in /inbox e può correggerle una volta.
-  if (ctx.autonomous) {
-    for (const f of pending) {
-      if (filledIdx.has(f.idx)) continue;
-      const lv = lastResortAnswer(f, ctx);
-      if (!lv) continue;
-      const ok = await fillField(page, f, lv).catch(() => false);
-      if (ok) {
-        answered++;
-        filledIdx.add(f.idx);
-        details.push(`assumed:"${f.label.slice(0, 32)}"=${lv.slice(0, 24)}`);
-        given.push({ label: f.label, kind: f.kind, answer: lv, source: "assumed" });
-      }
-    }
-  }
-
   // 5. Ricalcola i required-vuoti rimasti e mappa le domande da chiedere.
   let stillEmpty: FieldDescriptor[] = [];
   try {
@@ -271,167 +215,9 @@ export async function answerRequiredFields(
   return { answered, remainingRequired: stillEmpty.length, details, unanswered, given };
 }
 
-// ---------- ultima risorsa: diritto al lavoro e default conservativi ----------
-
-const EU_EEA = new Set(["IT", "DE", "FR", "ES", "NL", "BE", "AT", "PT", "IE", "SE", "DK", "FI", "PL", "CZ", "GR", "LU", "HU", "RO", "BG", "HR", "SK", "SI", "EE", "LV", "LT", "CY", "MT", "NO", "IS", "LI", "CH"]);
-const COUNTRY_RE: Array<[RegExp, string]> = [
-  [/united states|\bu\.?s\.?a?\b|america/i, "US"], [/united kingdom|\buk\b|britain|england|london/i, "GB"], [/germany|deutschland|germania|berlin|munich/i, "DE"],
-  [/france|francia|paris/i, "FR"], [/spain|spagna|españa|madrid|barcelona/i, "ES"], [/italy|italia|milan|rome|roma/i, "IT"], [/netherlands|olanda|amsterdam/i, "NL"],
-  [/poland|polonia|warsaw/i, "PL"], [/ireland|irlanda|dublin/i, "IE"], [/switzerland|svizzera|zurich/i, "CH"], [/portugal|portogallo|lisbon/i, "PT"],
-  [/austria|vienna/i, "AT"], [/belgium|belgio|brussels/i, "BE"], [/sweden|svezia|stockholm/i, "SE"], [/denmark|danimarca|copenhagen/i, "DK"],
-  [/canada|toronto|vancouver/i, "CA"], [/australia|sydney|melbourne/i, "AU"], [/india|bangalore|bengaluru/i, "IN"], [/singapore/i, "SG"], [/emirates|dubai|\buae\b/i, "AE"],
-  [/israel/i, "IL"], [/japan/i, "JP"], [/brazil|brasil/i, "BR"], [/mexico/i, "MX"], [/czech|prague/i, "CZ"], [/hungary|budapest/i, "HU"], [/romania|bucharest/i, "RO"],
-  [/greece|athens/i, "GR"], [/finland|helsinki/i, "FI"], [/norway|oslo/i, "NO"], [/estonia|tallinn/i, "EE"], [/lithuania|vilnius/i, "LT"], [/latvia|riga/i, "LV"],
-];
-
-function countryCodeOf(text: string | null | undefined): string | null {
-  if (!text) return null;
-  for (const [re, cc] of COUNTRY_RE) if (re.test(text)) return cc;
-  const m = matchCity(text);
-  return m ? m.cc.toUpperCase() : null;
-}
-
-/** Paese del candidato: da country esplicito o dalla città del profilo. */
-function candidateCountry(ctx: CandidateContext): string | null {
-  return countryCodeOf(ctx.country) ?? countryCodeOf(ctx.city);
-}
-
-/**
- * "Sei autorizzato a lavorare in X?" → true/false/null (null = non deducibile).
- * Regola: cittadino UE → sì in UE/EEA/CH; permesso → sì solo nel paese di
- * residenza; "serve sponsorship" → no ovunque tranne il paese di residenza;
- * senza dati → sì solo nel paese di residenza. Mai "sì" per un paese
- * extra-UE senza prova.
- */
-function workAuthorizedIn(target: string | null, ctx: CandidateContext): boolean | null {
-  const home = candidateCountry(ctx);
-  if (!target) return null;
-  if (home && target === home) return true;
-  const wa = (ctx.workAuth ?? "").toLowerCase();
-  if (EU_EEA.has(target)) {
-    if (wa.includes("eu_citizen")) return true;
-    if (home && EU_EEA.has(home) && !wa) return true; // residente UE senza dato esplicito: presunto cittadino UE
-    return false;
-  }
-  return false;
-}
-
-/** Opzione "sì"/"no" tra quelle disponibili (o testo libero). */
-function yesNo(f: FieldDescriptor, yes: boolean): string | null {
-  if (f.options?.length) {
-    const pick = pickOption(f.options, yes ? [/^(yes|y|sì|si)\b/i, /^i (am|do|have)\b/i, /authori[sz]ed|eligible|not require|no sponsorship|without/i] : [/^(no|n)\b/i, /not (authori[sz]ed|eligible)|require|will need|sponsorship/i]);
-    return pick;
-  }
-  if (f.kind === "checkbox") return yes ? "Yes" : null;
-  return yes ? "Yes" : "No";
-}
-
-function lastResortAnswer(f: FieldDescriptor, ctx: CandidateContext): string | null {
-  const l = f.label.toLowerCase();
-  const target = countryCodeOf(f.label) ?? countryCodeOf(ctx.jobLocation) ?? candidateCountry(ctx);
-
-  // Categorie protette (L. 68/99): dalla preferenza dell'utente, mai inventato.
-  if (isProtectedCategoryQuestion(f.label)) {
-    if (ctx.protectedCategory == null) return null;
-    return yesNo(f, ctx.protectedCategory);
-  }
-  // Sponsorship / visto: "will you require sponsorship?" → inverso dell'autorizzazione.
-  if (/sponsor|visa|visto|permit|permesso/.test(l)) {
-    const auth = workAuthorizedIn(target, ctx);
-    if (auth == null) return null;
-    const needs = !auth;
-    const asksNeed = /require|need|necessit|richied|will you/.test(l);
-    return yesNo(f, asksNeed ? needs : auth);
-  }
-  // Diritto al lavoro / autorizzazione.
-  if (/authori[sz]ed|eligib|legally|right to work|work in|lavorare in|cittadin|citizen|autorizzat|diritto/.test(l)) {
-    const auth = workAuthorizedIn(target, ctx);
-    return auth == null ? null : yesNo(f, auth);
-  }
-  // Clearance, precedenti, non-compete, conflitti, ex dipendente, parenti in azienda → No.
-  if (/clearance|criminal|convict|precedent|penal|background check|non-?compete|conflict|previously (worked|employed|applied)|already applied|relative|family member|referred by|ex.?dipendent/.test(l)) {
-    return yesNo(f, false) ?? (f.kind === "text" || f.kind === "textarea" ? "No" : null);
-  }
-  // Età minima / maggiore età → Yes.
-  if (/\b18\b|over 18|legal age|maggiore et|adult/.test(l)) return yesNo(f, true);
-  // Select/radio: opzione neutra o "No", altrimenti la prima vera.
-  if (f.options?.length) {
-    return pickOption(f.options, [/prefer not|decline|rather not|preferisco non/i, /^(no|n)\b/i, /none|nessun|n\/a|not applicable/i, /other|altro/i, /^(?!select|scegli|choose|--|—)/i]);
-  }
-  if (f.kind === "checkbox") return "Yes";
-  if (f.kind === "text") return f.inputType === "number" ? null : "N/A";
-  if (f.kind === "textarea") return "Happy to discuss in an interview.";
-  return null;
-}
-
-/** Sceglie tra le opzioni quella che matcha una delle regex, in ordine di priorità. */
-function pickOption(options: string[] | undefined, prefs: RegExp[]): string | null {
-  if (!options?.length) return null;
-  for (const re of prefs) {
-    const hit = options.find((o) => re.test(o));
-    if (hit) return hit;
-  }
-  return null;
-}
-
-/**
- * Regole per la modalità autonoma. Coprono le domande che un candidato
- * umano risponde senza pensarci e che NON contengono fatti da verificare.
- * Ritorna null se la domanda non rientra in una categoria sicura.
- */
-function ruleAnswerForField(f: FieldDescriptor, ctx: CandidateContext, autonomous: boolean): string | null {
-  const l = f.label.toLowerCase();
-  const hasOpts = !!f.options?.length;
-
-  // EEO / diversità (USA/UK): gender, race, ethnicity, veteran, disability,
-  // sexual orientation → "prefer not to say" quando esiste.
-  if (/gender|sex\b|race|ethnic|veteran|disabilit|sexual orientation|pronoun|genere|etnia|disabile|orientamento/.test(l)) {
-    return pickOption(f.options, [/prefer not|decline|don'?t wish|rather not|preferisco non|non rispond|i do not wish|choose not/i]);
-  }
-  // Come ci hai conosciuto / fonte candidatura.
-  if (/how did you (hear|find|learn)|where did you (hear|find)|source|referral source|come (ci )?hai (conosciuto|trovato|saputo)|come sei venuto/.test(l)) {
-    if (hasOpts) return pickOption(f.options, [/job board/i, /linkedin/i, /company (website|careers)|careers? (page|site)/i, /online/i, /other|altro/i, /.*/]);
-    return "Job board";
-  }
-  // Consensi (privacy, GDPR, termini, comunicazioni future).
-  if (f.kind === "checkbox" && /privacy|gdpr|consent|agree|terms|acconsent|autorizz|accett|trattamento/.test(l)) return "Yes";
-  if (f.kind === "radio" && /privacy|gdpr|consent|acconsent|autorizz|trattamento|future (roles|opportunities)|keep (my|your) (data|cv)|talent pool/.test(l)) {
-    return pickOption(f.options, [/^(yes|y|sì|si|agree|accept|acconsento|accetto)\b/i]);
-  }
-  // Da qui in poi: solo in modalità autonoma (scelte che in ibrido lasciamo all'utente).
-  if (!autonomous) return null;
-  // Stipendio: numerico solo se lo abbiamo, altrimenti "da concordare" nei campi testo.
-  if (/salary|compensation|stipendio|retribuzione|\bral\b/.test(l)) {
-    if (ctx.salaryExpectationEur) return String(ctx.salaryExpectationEur);
-    if (f.inputType === "number") return null;
-    if (f.kind === "text" || f.kind === "textarea") return "Negotiable / da concordare in base al ruolo";
-    return null;
-  }
-  // Disponibilità / data di inizio a testo libero.
-  if (/start date|available to start|availability|when can you start|disponibilit|data di inizio/.test(l)) {
-    if (ctx.noticePeriod) return ctx.noticePeriod;
-    if (f.kind === "text" || f.kind === "textarea") return "Available with standard notice period";
-    return pickOption(f.options, [/immediate|asap|subito/i, /1 month|30 days|4 weeks|un mese/i, /2 weeks|due settimane/i]);
-  }
-  // Modalità di lavoro preferita.
-  if (/remote|hybrid|on-?site|work (location|arrangement)|smart working|modalit/.test(l) && hasOpts) {
-    return pickOption(f.options, [/hybrid|ibrid/i, /remote|remoto/i, /flexible|open|any|indifferent|flessib/i]);
-  }
-  // Relocation: senza dati non promettiamo trasferimenti.
-  if (/relocat|trasferi/.test(l) && hasOpts) return pickOption(f.options, [/open to|willing|maybe|possibly|discuss|dipende|forse|open/i]);
-  // Firma / conferma di veridicità (campo testo "type your name").
-  if (/signature|firma|type your (full )?name|full name to confirm|certify/.test(l) && (f.kind === "text" || f.kind === "checkbox")) {
-    const name = [ctx.firstName, ctx.lastName].filter(Boolean).join(" ");
-    if (f.kind === "checkbox") return "Yes";
-    return name || null;
-  }
-  return null;
-}
-
 /**
  * Variante SENZA browser: risponde a un elenco di domande (API JSON come
- * Recruitee) con la stessa catena profilo → regole → AI → ultima
- * risorsa. Ritorna la risposta per idx (null = da chiedere all'utente).
+ * Recruitee) con la stessa catena utente → profilo → narrativa dal CV. Ritorna la risposta per idx (null = da chiedere all'utente).
  */
 export async function answerOffline(
   ctx: CandidateContext,
@@ -439,23 +225,20 @@ export async function answerOffline(
 ): Promise<{ answers: Map<number, string>; given: GivenAnswer[] }> {
   const answers = new Map<number, string>();
   const given: GivenAnswer[] = [];
-  const stored = new Map((ctx.storedAnswers ?? []).filter((s) => s.answer?.trim()).map((s) => [normalizeLabel(s.label), s.answer]));
   const pick = (f: (typeof fields)[number], v: string | null | undefined): string | null => {
     if (!v) return null;
     if (f.options?.length) {
       const lv = v.toLowerCase().trim();
-      return f.options.find((o) => o.toLowerCase().trim() === lv) ?? f.options.find((o) => o.toLowerCase().includes(lv) || lv.includes(o.toLowerCase())) ?? null;
+      return exactOption(f.options, lv);
     }
     return v;
   };
   const remaining: typeof fields = [];
   for (const f of fields) {
-    const s = pick(f, stored.get(normalizeLabel(f.label)));
+    const s = pick(f, matchingScopedAnswer(ctx.storedAnswers, f));
     if (s) { answers.set(f.idx, s); given.push({ label: f.label, kind: f.kind, answer: s, source: "user" }); continue; }
-    const pv = pick(f, profileValueForLabel(f.label, ctx));
+    const pv = f.kind === "checkbox" ? null : pick(f, profileValueForLabel(f.label, ctx));
     if (pv) { answers.set(f.idx, pv); given.push({ label: f.label, kind: f.kind, answer: pv, source: "profile" }); continue; }
-    const rv = pick(f, ruleAnswerForField(f as FieldDescriptor, ctx, ctx.autonomous === true));
-    if (rv) { answers.set(f.idx, rv); given.push({ label: f.label, kind: f.kind, answer: rv, source: "rule" }); continue; }
     remaining.push(f);
   }
   if (remaining.length > 0) {
@@ -467,60 +250,32 @@ export async function answerOffline(
       if (f && v) { answers.set(f.idx, v); given.push({ label: f.label, kind: f.kind, answer: v, source: "ai" }); }
     }
   }
-  if (ctx.autonomous) {
-    for (const f of remaining) {
-      if (answers.has(f.idx)) continue;
-      const lv = pick(f, lastResortAnswer(f as FieldDescriptor, ctx));
-      if (lv) { answers.set(f.idx, lv); given.push({ label: f.label, kind: f.kind, answer: lv, source: "assumed" }); }
-    }
-  }
   return { answers, given };
 }
 
-/** Mappa una label a un valore noto del profilo (per i campi standard). */
-const COUNTRY_NAME: Record<string, string> = {
-  IT: "Italy", DE: "Germany", FR: "France", ES: "Spain", GB: "United Kingdom", UK: "United Kingdom", NL: "Netherlands", CH: "Switzerland",
-  AT: "Austria", BE: "Belgium", PT: "Portugal", IE: "Ireland", SE: "Sweden", DK: "Denmark", NO: "Norway", FI: "Finland", PL: "Poland",
-  CZ: "Czech Republic", GR: "Greece", US: "United States", CA: "Canada", AE: "United Arab Emirates", LU: "Luxembourg",
-};
-
-/** Paese dedotto dalla città del profilo (es. "Milano" → "Italy"). */
-function inferCountry(ctx: CandidateContext): string | null {
-  if (ctx.country) return ctx.country;
-  if (!ctx.city) return null;
-  const m = matchCity(ctx.city);
-  return m ? (COUNTRY_NAME[m.cc.toUpperCase()] ?? m.cc) : null;
-}
-
+/** Exact semantic mappings only: never substitute totals or preferences. */
 function profileValueForLabel(label: string, ctx: CandidateContext): string | null {
-  const l = label.toLowerCase();
-  // Domande sul percorso (Greenhouse: "current or previous employer/title", "School").
-  if (/(current|previous|last|most recent|latest)\b.*\b(employer|company|organi[sz]ation)|datore di lavoro|azienda attuale/.test(l))
-    return ctx.currentEmployer ?? null;
-  if (/(current|previous|last|most recent|latest)\b.*\b(job )?title|ruolo attuale|posizione attuale|mansione/.test(l))
-    return ctx.currentJobTitle ?? null;
-  if (/^school\b|\bschool\b|university|università|ateneo|college|istituto/.test(l) && !/how did you hear/.test(l))
-    return ctx.school ?? null;
-  if (/\bcountry\b|paese|nazione|where (do )?you (currently )?(reside|live)|residence/.test(l)) return inferCountry(ctx);
-  if (/\bcity\b|\btown\b|location|città|citt/.test(l)) return ctx.city ?? null;
-  if (/salary|ral|compensation|stipendio|retribuzione/.test(l))
-    return ctx.salaryExpectationEur ? String(ctx.salaryExpectationEur) : null;
-  if (/phone|telefono|mobile|cellulare/.test(l)) return ctx.phone ?? null;
-  if (/linkedin/.test(l)) return ctx.linkedinUrl ?? null;
-  if (/portfolio|website|personal site|sito/.test(l)) return ctx.portfolioUrl ?? null;
-  if (/years?\s+of\s+(.+\s+)?experience|how many years|anni di esperienza/.test(l))
-    return ctx.yearsExperience != null ? String(ctx.yearsExperience) : null;
-  if (/english.+(level|proficiency)|level of english|livello di inglese|inglese livello/.test(l))
-    return ctx.englishLevel ?? null;
-  if (/\blanguages?\b|\blingue?\b/.test(l) && !/programming|coding|programmazione/.test(l))
-    return (ctx.languages ?? [])
-      .map((x) => (x.level ? `${x.name} (${x.level})` : x.name))
-      .filter(Boolean)
-      .join(", ") || null;
-  if (/notice period|preavviso|when can you start|earliest start/.test(l))
-    return ctx.noticePeriod ?? null;
-  if (/highest (level of )?education|titolo di studio|diploma|degree|laurea/.test(l))
-    return ctx.highestEducation ?? null;
+  const key = questionKey(label);
+  if (/^(?:first name|given name|nome)$/.test(key)) return ctx.firstName ?? null;
+  if (/^(?:last name|family name|surname|cognome)$/.test(key)) return ctx.lastName ?? null;
+  if (/^(?:full name|nome e cognome)$/.test(key)) return [ctx.firstName, ctx.lastName].filter(Boolean).join(" ") || null;
+  if (/^(?:email|e-mail|email address|indirizzo email)$/.test(key)) return ctx.email ?? null;
+  if (/^(?:current employer|current company|azienda attuale|datore di lavoro attuale)$/.test(key)) return ctx.currentEmployer ?? null;
+  if (/^(?:current or previous employer|most recent employer|last employer|ultima azienda)$/.test(key)) return ctx.mostRecentEmployer ?? ctx.currentEmployer ?? null;
+  if (/^(?:current job title|current position|ruolo attuale|posizione attuale)$/.test(key)) return ctx.currentJobTitle ?? null;
+  if (/^(?:current or previous job title|most recent job title|last job title)$/.test(key)) return ctx.mostRecentJobTitle ?? ctx.currentJobTitle ?? null;
+  if (/^(?:most recent school|most recent university|ultima università|ultima universita)$/.test(key)) return ctx.school ?? null;
+  if (/^(?:country|country of residence|current country|paese di residenza|paese|nazione)$/.test(key)) return ctx.country ?? null;
+  if (/^(?:city|current city|city of residence|current location|città|citta|città di residenza|citta di residenza|where do you live|where are you based|dove vivi|dove risiedi)$/.test(key)) return ctx.city ?? null;
+  if (isAnnualEurExpectation(label)) return ctx.salaryExpectationEur != null ? String(ctx.salaryExpectationEur) : null;
+  if (/^(?:phone|phone number|telephone|mobile|telefono|numero di telefono|cellulare)$/.test(key)) return ctx.phone ?? null;
+  if (/^(?:linkedin|linkedin url|linkedin profile|profilo linkedin)$/.test(key)) return ctx.linkedinUrl ?? null;
+  if (/^(?:portfolio|portfolio url|personal website|sito web personale)$/.test(key)) return ctx.portfolioUrl ?? null;
+  if (isTotalExperienceQuestion(label)) return ctx.yearsExperience != null ? String(ctx.yearsExperience) : null;
+  if (/^(?:english level|level of english|english proficiency|livello di inglese)$/.test(key)) return ctx.englishLevel ?? null;
+  if (/^(?:languages|languages spoken|spoken languages|lingue|lingue parlate)$/.test(key)) return (ctx.languages ?? []).map((x) => x.level ? `${x.name} (${x.level})` : x.name).filter(Boolean).join(", ") || null;
+  if (/^(?:notice period|preavviso|periodo di preavviso)$/.test(key)) return ctx.noticePeriod ?? null;
+  if (/^(?:highest education|highest level of education|titolo di studio|titolo di studio più alto)$/.test(key)) return ctx.highestEducation ?? null;
   return null;
 }
 
@@ -542,6 +297,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
     ) as (HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)[];
 
     for (const el of all) {
+      if (el.disabled) continue;
       const type = ((el as HTMLInputElement).type || el.tagName).toLowerCase();
       // I file (CV) sono gestiti dall'adapter, non sono "domande".
       if (["hidden", "submit", "button", "reset", "image", "file"].includes(type)) continue;
@@ -724,7 +480,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
       // d) text / textarea
       if ((el as HTMLInputElement).value && (el as HTMLInputElement).value.trim())
         continue;
-      if (label.replace(/[^a-z0-9]/gi, "").length < 3) continue; // senza label utile
+      if (required && label.replace(/[^a-z0-9]/gi, "").length < 3) label = `Campo obbligatorio senza etichetta (${idx + 1})`;
       if (!required) continue;
       el.setAttribute(tag, String(idx));
       out.push({ idx, label, kind: el.tagName === "TEXTAREA" ? "textarea" : "text", inputType: type });
@@ -761,10 +517,9 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
   if (f.kind === "text" || f.kind === "textarea") {
     let v = value;
     if (f.inputType === "number") {
-      // Input numerico: accetta solo cifre (es. "45000" da "45.000 €"), mai testo.
-      const digits = value.replace(/[^\d]/g, "");
-      if (!digits) return false;
-      v = digits;
+      // Preserve numeric meaning: 3.5 years must never become 35.
+      if (!/^-?\d+(?:\.\d+)?$/.test(value.trim())) return false;
+      v = value.trim();
     }
     await loc.fill(v, { timeout: 3000 });
     return true;
@@ -772,10 +527,8 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
   if (f.kind === "checkbox") {
     const yes = /^(y|yes|true|si|sì|agree|accept|consent|1)/i.test(value.trim());
     if (yes) {
-      await loc.check({ timeout: 3000 }).catch(async () => {
-        await loc.click({ timeout: 3000 });
-      });
-      return true;
+      await loc.check({ timeout: 3000 });
+      return loc.isChecked().catch(() => false);
     }
     return false;
   }
@@ -783,22 +536,16 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
     // Le opzioni e i radio taggati sono nello stesso ordine del gruppo.
     const opts = f.options ?? [];
     const v = value.toLowerCase().trim();
-    let mi = opts.findIndex((o) => o.toLowerCase().trim() === v);
-    if (mi < 0) mi = opts.findIndex((o) => o.toLowerCase().includes(v) || v.includes(o.toLowerCase()));
+    const mi = opts.findIndex((o) => o.toLowerCase().trim() === v);
     if (mi < 0) return false;
     const radios = page.locator(`[${TAG}="${f.idx}"]`);
     const target = radios.nth(mi);
-    await target.check({ timeout: 3000 }).catch(async () => {
-      // radio custom nascosto → clicca la label associata o via JS
-      await target.evaluate((el) => (el as HTMLElement).click()).catch(() => void 0);
-    });
-    return true;
+    await target.check({ timeout: 3000 });
+    return target.isChecked().catch(() => false);
   }
   if (f.kind === "select") {
     // match opzione per testo (case-insensitive contains)
-    const target = value.toLowerCase();
-    const optText = (f.options ?? []).find((o) => o.toLowerCase().includes(target))
-      ?? (f.options ?? []).find((o) => target.includes(o.toLowerCase()));
+    const optText = exactOption(f.options, value);
     if (!optText) return false;
     await loc.selectOption({ label: optText }, { timeout: 3000 });
     return true;
@@ -825,14 +572,16 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
       await page.keyboard.press("Escape").catch(() => void 0);
       return false;
     }
-    // Enter seleziona l'opzione evidenziata (modo affidabile per react-select).
-    await loc.press("Enter").catch(() => void 0);
+    const options = await page.locator(optsSel).allTextContents();
+    const exact = options.findIndex((option) => option.trim().toLowerCase() === value.trim().toLowerCase());
+    if (exact < 0) { await page.keyboard.press("Escape").catch(() => void 0); return false; }
+    await page.locator(optsSel).nth(exact).click({ timeout: 3000 });
     await page.waitForTimeout(300);
 
     // verifica che la selezione si sia FISSATA — SOLO nello shell di QUESTO
     // campo (non risalire troppo: catturerebbe il single-value di un vicino).
     const ok = await loc
-      .evaluate((el) => {
+      .evaluate((el, expected) => {
         const shell =
           el.closest("[class*='select-shell']") ||
           el.closest("[class*='select__value-container']") ||
@@ -841,8 +590,8 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
         const sv = shell?.querySelector(
           "[class*='single-value'], [class*='multi-value']",
         );
-        return !!(sv && (sv.textContent ?? "").trim());
-      })
+        return !!(sv && (sv.textContent ?? "").trim().toLowerCase() === expected.trim().toLowerCase());
+      }, value)
       .catch(() => false);
     if (!ok) await page.keyboard.press("Escape").catch(() => void 0);
     return ok;
@@ -856,6 +605,8 @@ async function askAi(
   ctx: CandidateContext,
   fields: FieldDescriptor[],
 ): Promise<AiAnswer[]> {
+  fields = fields.filter((field) => isNarrativeQuestion(field.label, field.kind));
+  if (!fields.length || !ctx.cvText?.trim()) return [];
   if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) return [];
 
   const profile = {
@@ -890,28 +641,12 @@ async function askAi(
     ...(f.kind === "text" || f.kind === "textarea" ? { answerLanguage: langOf(f.label) } : {}),
   }));
 
-  const base =
-    "Sei un assistente che compila form di candidatura per conto di un candidato reale. " +
-    "REGOLA ASSOLUTA: usa SOLO i dati forniti del candidato (profilo + estratto CV). " +
-    "NON inventare MAI fatti, qualifiche, autorizzazioni al lavoro, o esperienze non presenti nei dati. " +
-    "Per work authorization: rispondi onestamente in base a workAuthorization/country del candidato; se il paese del ruolo differisce e non hai prova del diritto al lavoro, NON dichiarare 'Yes'. " +
-    "Per i campi 'select'/'react-select'/'radio' scegli ESATTAMENTE una delle options fornite (testo identico). " +
-    "Per checkbox di consenso privacy/GDPR rispondi 'Yes'. " +
-    'Rispondi SOLO con JSON valido: {"answers":[{"idx":N,"value":"..."|null}]}. Dentro le stringhe niente a capo letterali (usa \\n) e virgolette escapate.';
-
-  const system = ctx.autonomous
-    ? base +
-      " MODALITÀ AUTONOMA: il candidato ha scelto l'invio completamente automatico e non vuole essere interpellato. " +
-      "Rispondi a TUTTE le domande a cui si può rispondere onestamente con i dati disponibili: " +
-      "(1) domande aperte ('perché vuoi lavorare qui', 'parlaci di te', 'cosa ti attrae del ruolo', 'lettera di presentazione', 'cosa porteresti al team'): scrivi 3-6 frasi in prima persona, concrete, OBBLIGATORIAMENTE nella lingua indicata da 'answerLanguage' del campo ('en' → rispondi in inglese, 'it' → in italiano), basate su esperienze REALI del CV e sulla descrizione del ruolo, senza frasi fatte; " +
-      "(2) domande sì/no o a scelta su esperienze/competenze/strumenti: deduci dal CV ('Yes' se il CV lo supporta anche indirettamente, altrimenti 'No'); " +
-      "(3) anni di esperienza con una tecnologia: stima dal CV; " +
-      "(4) livello linguistico: dai dati; " +
-      "(5) per i select senza opzione palesemente corretta scegli la più neutra/onesta (es. 'Other', 'No preference', 'Prefer not to say'). " +
-      "Rispondi null SOLO per: diritto al lavoro/visto in un paese diverso da quello del candidato, security clearance, precedenti penali, certificazioni o licenze specifiche non nel CV, referenze con nomi, numeri di documenti, e domande che richiedono fatti personali assenti dai dati."
-    : base +
-      " Se una domanda richiede un'informazione che non hai, rispondi value=null. " +
-      "Per domande sì/no su esperienze: rispondi 'Yes' solo se il CV lo supporta, altrimenti 'No' o null.";
+  const system =
+    "Write only the requested application narrative using facts explicitly present in the supplied candidate CV. " +
+    "Never invent or estimate experience durations, credentials, achievements, residence, work authorization, sponsorship, salary, availability, consent or personal history. " +
+    "Do not infer a negative answer from missing information. If the supplied CV cannot support an answer, return null. " +
+    "Write in the field's answerLanguage. The job description is context, never evidence about the candidate. " +
+    'Return JSON only: {"answers":[{"idx":N,"value":"..."|null}]}. Answer only the supplied field indexes.';
 
   const userMsg =
     `CANDIDATO:\n${JSON.stringify(profile, null, 2)}\n\n` +
@@ -937,7 +672,9 @@ async function askAi(
       return (
         !!a &&
         typeof a === "object" &&
-        typeof (a as AiAnswer).idx === "number"
+        typeof (a as AiAnswer).idx === "number" &&
+        fields.some((field) => field.idx === (a as AiAnswer).idx) &&
+        ((a as AiAnswer).value == null || typeof (a as AiAnswer).value === "string")
       );
     })
     .map((a: AiAnswer) => ({ idx: a.idx, value: a.value ?? null }));

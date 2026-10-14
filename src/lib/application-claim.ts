@@ -1,4 +1,6 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
+import { hasPotentialSubmission } from "@/lib/application-worker-gates";
 
 /**
  * Presa in carico atomica di una candidatura in coda, indipendente da Redis.
@@ -15,6 +17,7 @@ import { prisma } from "@/lib/db";
 export const STALE_CLAIM_MS = 20 * 60_000;
 
 export async function claimApplication(applicationId: string): Promise<boolean> {
+  if (applicationsPaused()) return false;
   const stale = new Date(Date.now() - STALE_CLAIM_MS);
   const r = await prisma.application.updateMany({
     where: { id: applicationId, status: "queued", OR: [{ startedAt: null }, { startedAt: { lt: stale } }] },
@@ -26,37 +29,46 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
 /**
  * Recupera candidature bloccate in `optimizing` o `applying` da troppo tempo.
  * Un worker crash, timeout AI, o Playwright hang lasciano la candidatura in
- * uno stato intermedio senza completedAt. Dopo STALE_CLAIM_MS le riportiamo
- * in `queued` così il prossimo worker le riprende.
+ * uno stato intermedio senza completedAt. Solo optimizing senza prove di invio
+ * torna queued; applying resta riservata per verifica, senza replay automatico.
  */
 export async function recoverStuckApplications(): Promise<number> {
+  if (applicationsPaused()) return 0;
   const stale = new Date(Date.now() - STALE_CLAIM_MS);
   const stuck = await prisma.application.findMany({
     where: {
-      status: { in: ["optimizing", "applying"] },
-      startedAt: { lt: stale },
+      status: { in: ["optimizing", "applying", "submitting"] },
+      OR: [{ startedAt: { lt: stale } }, { startedAt: null, createdAt: { lt: stale } }],
       completedAt: null,
     },
-    select: { id: true, status: true },
+    select: { id: true, status: true, startedAt: true, submittedAt: true,
+      submittedVia: true, submitConfirmation: true, canaryLog: true, answersUsedJson: true,
+      viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true },
     take: 50,
   });
   let recovered = 0;
   for (const app of stuck) {
-    await prisma.application.update({
-      where: { id: app.id },
-      data: {
-        status: "queued",
-        startedAt: null,
-        errorMessage: `Riavviato: bloccato in ${app.status} per più di ${STALE_CLAIM_MS / 60_000} minuti (worker crash/timeout). Nessun dato perso.`,
+    // A timed-out applying worker may already have delivered. Never replay it.
+    // Even pre-marker legacy applying rows require manual outcome verification.
+    const ambiguous = ["applying", "submitting"].includes(app.status) || hasPotentialSubmission(app);
+    const changed = await prisma.application.updateMany({
+      where: { id: app.id, status: app.status, startedAt: app.startedAt, completedAt: null },
+      data: ambiguous ? {
+        status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
+        errorMessage: "Invio interrotto con esito non verificato. Verifica prima di ritentare per evitare un doppio invio.",
+      } : {
+        status: "queued", startedAt: null,
+        errorMessage: `Riavviato: preparazione bloccata per più di ${STALE_CLAIM_MS / 60_000} minuti. Nessun invio iniziato.`,
       },
     });
-    recovered++;
+    recovered += changed.count;
   }
   return recovered;
 }
 
 /** Candidature in coda prendibili, dalla più vecchia. Richiama recovery prima. */
 export async function findClaimableQueued(limit: number): Promise<string[]> {
+  if (applicationsPaused()) return [];
   // Recupera candidature stuck PRIMA di prendere le queued (così se ne libera qualcuna)
   await recoverStuckApplications().catch((err) =>
     console.warn("[claim] recovery failed", err),
@@ -73,6 +85,7 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
 
 /** Rimette una candidatura in stato prendibile (da chiamare all'enqueue). */
 export async function resetClaim(applicationId: string): Promise<void> {
+  if (applicationsPaused()) return ;
   await prisma.application
     .updateMany({ where: { id: applicationId, status: "queued" }, data: { startedAt: null } })
     .catch(() => void 0);

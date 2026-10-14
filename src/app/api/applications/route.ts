@@ -1,15 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
+import { applicationDeliveryView } from "@/lib/application-delivery-view";
 
 export const runtime = "nodejs";
 
 /**
  * GET /api/applications?range=today|week|month|all&includeAll=1
  *
- * Default: SOLO candidature realmente inviate (status=success) — le
+ * Default: storico candidature marcate success; delivery distingue le prove — le
  * altre (ready_to_apply, applying, failed, awaiting_consent, queued, ecc.)
- * non sono state consegnate al recruiter. Per vedere l'intero pipeline
+ * possono essere non inviate o con esito ambiguo. Per vedere l'intero pipeline
  * passare `includeAll=1` (usato dalla vista awaiting-consent).
  */
 export async function GET(request: NextRequest) {
@@ -44,6 +45,8 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: "desc" },
     take: 500, // safety upper bound
     include: {
+      emailAttempts: { orderBy: { createdAt: "desc" }, take: 1,
+        select: { status: true, providerEmailId: true, acceptedAt: true, recipient: true } },
       job: {
         select: {
           id: true,
@@ -83,6 +86,8 @@ export async function GET(request: NextRequest) {
       replyCount: a.replyCount,
       lastReplyKind: a.lastReplyKind,
       submitConfirmation: a.submitConfirmation,
+      delivery: applicationDeliveryView(a),
+      deliveryRecipient: a.emailAttempts[0]?.recipient ?? null,
       job: a.job,
     })),
   });

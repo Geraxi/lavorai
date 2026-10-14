@@ -7,11 +7,17 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "echo 'next lint removed in Next 16; typecheck is the CI gate' && exit 0",
-    "test": "npx tsx scripts/test-application-security-code.ts && npx tsx scripts/test-otp-auto-complete.ts && npx tsx scripts/test-auth-hardening.ts && npx tsx scripts/test-registration-trial.ts && npx tsx scripts/test-growth-lifecycle.ts && npx tsx scripts/test-auth-schema-compatibility.ts",
+    "test": "npx tsx scripts/test-application-security-code.ts && npx tsx scripts/test-otp-auto-complete.ts && npx tsx scripts/test-auth-hardening.ts && npx tsx scripts/test-registration-trial.ts && npx tsx scripts/test-growth-lifecycle.ts && npx tsx scripts/test-auth-schema-compatibility.ts && npm run test:credit-retry && npm run test:worker-gates && npm run test:auto-apply-quality && npm run test:send-reply && npm run test:release-controls",
     "test:mcp": "node --import tsx scripts/test-mcp.ts",
     "worker": "tsx worker.ts",
     "worker:dev": "REDIS_URL=redis://localhost:6379 tsx watch worker.ts",
-    "seed:test-user": "tsx scripts/seed-test-user.ts"
+    "seed:test-user": "tsx scripts/seed-test-user.ts",
+    "test:credit-retry": "node --import tsx scripts/test-credit-failure-retry.ts",
+    "test:worker-gates": "node --import tsx scripts/test-application-worker-gates.ts",
+    "test:auto-apply-quality": "node --import tsx scripts/test-auto-apply-quality.ts",
+    "test:send-reply": "node --import tsx scripts/test-ats-submission-proof.ts && node --import tsx scripts/test-ats-answer-truthfulness.ts && node --import tsx scripts/test-delivery-replies.ts && node --import tsx scripts/test-gmail-reply-persistence.ts && node --import tsx scripts/test-inbound-inbox.ts && node --import tsx scripts/test-job-liveness.ts && node --import tsx scripts/test-public-delivery-proof.ts && node --import tsx scripts/test-analytics-performance.ts && node --import tsx scripts/test-send-flow.ts && node --import tsx scripts/test-question-resume.ts && node --import tsx scripts/test-dashboard-tracking-evidence.ts && node --import tsx scripts/test-daily-delivery-summary.ts",
+    "test:send-reply-postgres": "node --import tsx scripts/test-send-receive-postgres.ts",
+    "test:release-controls": "node --import tsx scripts/test-release-health.ts && node --import tsx scripts/test-application-pause.ts && node --import tsx scripts/test-release-email-canary.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
@@ -60,6 +66,7 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.185.1",
+    "tldts": "7.4.18",
     "zod": "^4.3.6"
   },
   "devDependencies": {

@@ -1,15 +1,7 @@
-// LavorAI — production schema.
-//
-// PER LA MIGRAZIONE A POSTGRES (prod Supabase):
-//   1. Cambia provider da "sqlite" a "postgresql" sotto
-//   2. Imposta DATABASE_URL alla connection string Supabase (pooled)
-//   3. npx prisma migrate reset  (cancella le migrazioni SQLite)
-//   4. npx prisma migrate dev --name initial_postgres
-//   5. Commit migrations/ aggiornate
-//   6. In prod (Vercel): npx prisma migrate deploy durante il build
-//
-// Le migrations SQLite attuali contengono SQL-lite-specific e NON
-// funzionano su Postgres. Serve un reset pulito.
+// LavorAI — production PostgreSQL schema.
+// Apply reviewed additive migrations only. This repository previously had no
+// migration baseline; see prisma/migrations/README.md before deploying.
+// Never reset a populated production database to initialize migration history.
 
 generator client {
   provider = "prisma-client-js"
@@ -561,6 +553,12 @@ model Application {
   ///   null          = candidatura via fallback email, o pre-instrumentation
   /// Persistito dal worker a partire dal fix false-success (vedi changelog).
   submitConfirmation String?
+  /// Compact verified ATS response evidence; never raw form/credential data.
+  submissionReceiptJson String? @db.Text
+  /// Explicit application-bound answers; never infer permission from global history.
+  userProvidedAnswersJson String? @db.Text
+  /// Explicit user approval for a manual/hybrid application; no legacy backfill.
+  consentGrantedAt DateTime?
   /// Canary debug snapshot: JSON con stato form pre-submit, screenshot
   /// URL Vercel Blob, HTTP response, post-submit URL/body excerpt.
   /// Popolato solo quando env CANARY_DEBUG=1 — diagnostica integrità
@@ -614,6 +612,7 @@ model Application {
   interviewSessions InterviewSession[]
   replies           ApplicationReply[]
   gmailMessages     GmailMessage[]
+  emailAttempts     ApplicationEmailAttempt[]
 
   @@index([userId, createdAt])
   @@index([sessionId])
@@ -637,10 +636,69 @@ model ApplicationReply {
   /// true se è una risposta umana reale (non auto/bounce) → conta come "risposta".
   isHuman       Boolean  @default(true)
   receivedAt    DateTime @default(now())
+  /// Provider identity deduplicates redelivery independently of webhook event IDs.
+  provider          String?
+  providerMessageId String?
+  providerEventId   String? @unique
+  isSecurityCode    Boolean @default(false)
+  processingAppliedAt DateTime?
+  /// Durable notification outbox. Message remains visible even if forwarding fails.
+  forwardStatus         String @default("skipped")
+  forwardPayloadJson    String? @db.Text
+  forwardIdempotencyKey String? @unique
+  forwardStartedAt      DateTime?
+  forwardLeaseUntil     DateTime?
+  forwardLeaseToken     String?
+  forwardedAt           DateTime?
+  forwardProviderId     String?
+  forwardError          String?
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@index([applicationId, receivedAt])
+  @@unique([provider, providerMessageId])
+  @@index([forwardStatus, forwardLeaseUntil])
+}
+
+/// One immutable recipient + idempotency key per external submission attempt.
+/// Accepted means API acceptance, delivered means recipient-server delivery.
+model ApplicationEmailAttempt {
+  id              String @id @default(cuid())
+  applicationId   String
+  attemptKey      String @unique
+  recipient       String
+  recipientProvenanceJson String? @db.Text
+  providerEmailId String? @unique
+  status          String @default("sending")
+  acceptedAt      DateTime?
+  lastEventAt     DateTime?
+  lastEventType   String?
+  failureReason   String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  events EmailProviderEvent[]
+
+  @@index([applicationId, createdAt])
+}
+
+/// Provider event journal: survives duplicates, out-of-order delivery and events
+/// that race API acceptance. Contains routing/status only, never message bodies.
+model EmailProviderEvent {
+  id              String @id @default(cuid())
+  providerEventId String @unique
+  providerEmailId String
+  type            String
+  occurredAt      DateTime
+  attemptId       String?
+  processedAt     DateTime?
+  failureReason   String?
+  createdAt       DateTime @default(now())
+
+  attempt ApplicationEmailAttempt? @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+
+  @@index([providerEmailId, occurredAt])
 }
 
 /// Messaggio Gmail sincronizzato: email ricevute dall'account Gmail dell'utente,

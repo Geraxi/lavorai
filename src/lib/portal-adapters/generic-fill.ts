@@ -1,25 +1,13 @@
+import { questionKey, exactOption, isAnnualEurExpectation } from "./answer-safety";
 import type { Page, Locator } from "playwright";
 import {
-  FIELD_HINTS,
   NOTICE_LABEL,
-  WORK_AUTH_LABEL,
   HOW_HEARD_LABEL,
   type ApplicationAnswers,
 } from "@/lib/application-answers";
 
-/**
- * Best-effort fill di campi custom delle form ATS.
- *
- * Strategia: per ogni input/select/textarea visibile non già compilato,
- * leggiamo l'etichetta (label associata, aria-label, placeholder, name).
- * Fuzzy-match contro FIELD_HINTS per scoprire quale ApplicationAnswers
- * key corrisponde, e compiliamo.
- *
- * Per i select: cerchiamo l'opzione il cui testo matcha la nostra
- * answer (es. "yes_eu_citizen" → opzione che contiene "yes" / "eu").
- *
- * Best-effort = se non sappiamo cosa fare, lasciamo vuoto. Mai
- * inventare risposte sbagliate (es. dichiarare di essere veterano).
+/** Fill only supplied answers with an exact, scope-preserving question match.
+ * Unknown fields remain empty; dropdown labels must match exactly.
  */
 export async function fillCustomQuestions(
   page: Page,
@@ -136,26 +124,28 @@ function cssEscape(s: string): string {
   return s.replace(/(["\\#.:[\]])/g, "\\$1");
 }
 
-/**
- * Trova la chiave ApplicationAnswers che meglio matcha l'etichetta.
- * Restituisce la chiave più specifica (più long pattern wins).
- */
-function matchAnswerKey(label: string): keyof ApplicationAnswers | null {
-  if (!label) return null;
-  let bestKey: keyof ApplicationAnswers | null = null;
-  let bestLen = 0;
-  for (const [key, hints] of Object.entries(FIELD_HINTS) as [
-    keyof ApplicationAnswers,
-    string[],
-  ][]) {
-    for (const h of hints) {
-      if (label.includes(h) && h.length > bestLen) {
-        bestKey = key;
-        bestLen = h.length;
-      }
-    }
-  }
-  return bestKey;
+export function matchAnswerKey(label: string): keyof ApplicationAnswers | null {
+  const key = questionKey(label);
+  if (isAnnualEurExpectation(label)) return "salaryExpectationEur";
+  const mappings: Array<[RegExp, keyof ApplicationAnswers]> = [
+    [/^(?:linkedin|linkedin url|linkedin profile|profilo linkedin)$/, "linkedinUrl"],
+    [/^(?:github|github url|github profile)$/, "githubUrl"],
+    [/^(?:portfolio|portfolio url)$/, "portfolioUrl"],
+    [/^(?:website|personal website|sito web personale)$/, "websiteUrl"],
+    [/^(?:city|current city|city of residence|città|citta|città di residenza)$/, "city"],
+    [/^(?:country|current country|country of residence|paese|paese di residenza|nazione)$/, "country"],
+    [/^(?:pronouns|pronoun|pronomi)$/, "pronouns"],
+    [/^(?:notice period|preavviso|periodo di preavviso)$/, "noticePeriod"],
+    [/^(?:are you willing to relocate|willing to relocate|disponibile a trasferirti)$/, "relocate"],
+    [/^(?:how did you hear about us|where did you hear about us|come ci hai conosciuto)$/, "howHeard"],
+    [/^(?:gender|genere)$/, "eeoGender"],
+    [/^(?:veteran status|are you a veteran)$/, "eeoVeteran"],
+    [/^(?:disability status|do you have a disability)$/, "eeoDisability"],
+    [/^(?:why are you interested in this role|why this role|perché sei interessato a questo ruolo|motivazione)$/, "whyInterested"],
+  ];
+  // No country-specific authorization/sponsorship answer can be derived from
+  // the coarse workAuthEU setting. The exact user answer must be requested.
+  return mappings.find(([pattern]) => pattern.test(key))?.[1] ?? null;
 }
 
 function renderValueForText(
@@ -191,10 +181,6 @@ function renderValueForSelect(
   a: ApplicationAnswers,
 ): string | null {
   switch (key) {
-    case "workAuthEU":
-      return a.workAuthEU
-        ? selectKeyword(a.workAuthEU)
-        : null;
     case "noticePeriod":
       return a.noticePeriod ? NOTICE_LABEL[a.noticePeriod] : null;
     case "relocate":
@@ -226,36 +212,19 @@ function renderValueForSelect(
   }
 }
 
-function selectKeyword(workAuth: NonNullable<ApplicationAnswers["workAuthEU"]>): string {
-  if (workAuth === "yes_eu_citizen") return "yes";
-  if (workAuth === "yes_permit") return "yes";
-  if (workAuth === "no_needs_sponsorship") return "no";
-  // safety
-  return WORK_AUTH_LABEL[workAuth] ?? "";
-}
-
 /**
  * Tra le opzioni di un <select>, ritorna il testo dell'opzione il cui
- * label contiene la nostra "target answer" (case-insensitive).
+ * label corrisponde esattamente alla risposta (case-insensitive).
  */
 async function pickBestOptionText(
   sel: Locator,
   target: string,
 ): Promise<string | null> {
-  const targetLower = target.toLowerCase();
   const opts = await sel.locator("option").all();
-  let best: string | null = null;
-  let bestScore = 0;
-  for (const o of opts) {
-    const txt = (await o.textContent().catch(() => null))?.trim() ?? "";
-    if (!txt || txt.toLowerCase().includes("select") || txt === "") continue;
-    if (txt.toLowerCase().includes(targetLower)) {
-      const score = targetLower.length;
-      if (score > bestScore) {
-        bestScore = score;
-        best = txt;
-      }
-    }
+  const labels: string[] = [];
+  for (const option of opts) {
+    const label = (await option.textContent().catch(() => null))?.trim();
+    if (label) labels.push(label);
   }
-  return best;
+  return exactOption(labels, target);
 }

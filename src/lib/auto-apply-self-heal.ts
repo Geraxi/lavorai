@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { enqueueApplication } from "@/lib/application-queue";
 import { Resend } from "resend";
+import { recoverStuckApplications } from "@/lib/application-claim";
 
 /**
  * Self-healing automatico per l'auto-apply cron.
@@ -13,8 +14,7 @@ import { Resend } from "resend";
  *      → archiviate (inquinano roleTerms in quickMatchScore)
  *   2. Application bloccate `queued`/`optimizing`/`applying` da > 30 min
  *      → re-enqueuate (worker probabilmente crashato durante deploy)
- *   3. Utente con 0 candidature in 48h MA con sessioni attive e job
- *      pool > 50 → matchMin auto-abbassato a 25 (overshoot in prefs)
+ *   3. User match thresholds are preserved, including during low throughput.
  *   4. Application failed in massa per crediti/quota AI esauriti
  *      → admin alert email (richiede intervento sul billing provider)
  *
@@ -59,6 +59,12 @@ const TRANSIENT_ERROR_KEYWORDS = [
   "page closed",
   "page.closed",
 ];
+// Only failures before any form/delivery evidence are automatically replayable.
+const NO_PRIOR_DELIVERY = {
+  submittedAt: null, submittedVia: null, submitConfirmation: null,
+  canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null,
+  replyCount: 0, userStatus: null, cvDocxPath: null, cvPdfPath: null, coverLetterPath: null,
+} as const;
 const RETRY_MAX = 1;
 const RETRY_MIN_AGE_MS = 30 * 60 * 1000; // aspetta almeno 30 min prima di ritentare
 
@@ -66,9 +72,6 @@ const DELIVERY_ALERT_THRESHOLD = 0.6; // <60% DETECTED → alert
 const DELIVERY_ALERT_MIN_SAMPLE = 20; // richiede almeno 20 success in 7g
 
 const STUCK_THRESHOLD_MS = 30 * 60 * 1000; // 30 min
-const ZERO_THROUGHPUT_HOURS = 48;
-const MIN_JOB_POOL_FOR_AUTO_TUNE = 50;
-const MATCH_MIN_AUTO_FLOOR = 25;
 
 export async function runSelfHeal(): Promise<SelfHealReport> {
   const report: SelfHealReport = {
@@ -95,17 +98,20 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
     const candidates = await prisma.application.findMany({
       where: {
         status: "failed",
+        ...NO_PRIOR_DELIVERY,
         retryCount: { lt: RETRY_MAX },
         completedAt: { lt: retryAgeCutoff },
         OR: patternOr,
       },
-      select: { id: true, retryCount: true },
+      select: { id: true, retryCount: true, startedAt: true, completedAt: true, errorMessage: true },
       take: 50,
     });
     for (const c of candidates) {
       try {
-        await prisma.application.update({
-          where: { id: c.id },
+        const changed = await prisma.application.updateMany({
+          where: { id: c.id, status: "failed", retryCount: c.retryCount,
+            startedAt: c.startedAt, completedAt: c.completedAt, errorMessage: c.errorMessage,
+            ...NO_PRIOR_DELIVERY },
           data: {
             status: "queued",
             startedAt: null,
@@ -114,7 +120,8 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
             retryCount: c.retryCount + 1,
           },
         });
-        await enqueueApplication(c.id);
+        if (changed.count !== 1) continue;
+        await enqueueApplication(c.id, { preserveClaim: true });
         report.transientFailuresRetried++;
       } catch (err) {
         console.error(`[self-heal] retry ${c.id} failed`, err);
@@ -147,25 +154,30 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
 
   // ── 2. Re-enqueue stuck applications ───────────────────────────────
   try {
+    // Use the same no-replay recovery as the worker. In particular, legacy
+    // applying/submitting attempts retain their owner and require verification.
+    await recoverStuckApplications();
     const stuckCutoff = new Date(Date.now() - STUCK_THRESHOLD_MS);
     const stuck = await prisma.application.findMany({
       where: {
-        status: { in: ["queued", "optimizing", "applying", "submitting"] },
+        status: "queued",
+        ...NO_PRIOR_DELIVERY,
         OR: [
           { startedAt: { lt: stuckCutoff } },
           { startedAt: null, createdAt: { lt: stuckCutoff } },
         ],
       },
-      select: { id: true },
+      select: { id: true, startedAt: true },
       take: 100,
     });
     for (const app of stuck) {
       try {
-        await prisma.application.update({
-          where: { id: app.id },
-          data: { status: "queued", startedAt: null, errorMessage: null },
+        const changed = await prisma.application.updateMany({
+          where: { id: app.id, status: "queued", startedAt: app.startedAt, ...NO_PRIOR_DELIVERY },
+          data: { startedAt: null },
         });
-        await enqueueApplication(app.id);
+        if (changed.count !== 1) continue;
+        await enqueueApplication(app.id, { preserveClaim: true });
         report.stuckAppsRequeued++;
       } catch (err) {
         console.error(`[self-heal] requeue ${app.id} failed`, err);
@@ -177,56 +189,8 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
     console.error("[self-heal] stuck app sweep failed", err);
   }
 
-  // ── 3. Auto-tune matchMin for zero-throughput users ────────────────
-  try {
-    const cutoff = new Date(Date.now() - ZERO_THROUGHPUT_HOURS * 3600 * 1000);
-    const users = await prisma.user.findMany({
-      where: {
-        preferences: { autoApplyMode: "auto", matchMin: { gt: MATCH_MIN_AUTO_FLOOR } },
-        applicationSessions: {
-          some: {
-            status: { in: ["active", "auto"] },
-            sentCount: { lt: 1000 }, // not full
-          },
-        },
-      },
-      select: {
-        id: true,
-        email: true,
-        preferences: { select: { matchMin: true } },
-        _count: {
-          select: {
-            applications: { where: { createdAt: { gte: cutoff } } },
-          },
-        },
-      },
-    });
-
-    for (const u of users) {
-      if (u._count.applications > 0) continue; // ha candidature recenti
-      // Verifica che ci sia pool job sufficiente (>50 in 24h)
-      const recentPool = await prisma.job.count({
-        where: { cachedAt: { gte: new Date(Date.now() - 24 * 3600 * 1000) } },
-      });
-      if (recentPool < MIN_JOB_POOL_FOR_AUTO_TUNE) continue;
-
-      const from = u.preferences?.matchMin ?? 50;
-      await prisma.userPreferences.update({
-        where: { userId: u.id },
-        data: { matchMin: MATCH_MIN_AUTO_FLOOR },
-      });
-      report.matchMinAutoLowered.push({
-        userId: u.id,
-        from,
-        to: MATCH_MIN_AUTO_FLOOR,
-      });
-      console.log(
-        `[self-heal] user ${u.email}: matchMin ${from} → ${MATCH_MIN_AUTO_FLOOR} (0 apps in ${ZERO_THROUGHPUT_HOURS}h)`,
-      );
-    }
-  } catch (err) {
-    console.error("[self-heal] matchMin auto-tune failed", err);
-  }
+  // matchMin is a user preference. Low throughput is not permission to relax it.
+  // Keep the report field for callers, but never mutate the threshold here.
 
   // ── 4. Detect credit exhaustion → admin alert ──────────────────────
   try {

@@ -1,21 +1,17 @@
+import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { enqueueApplication, cancelApplication } from "@/lib/application-queue";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
+import { creditRetryRequest, retryCreditFailures, verifyCreditRetryWorkerSchema } from "@/lib/credit-failure-retry";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-/**
- * Ri-accoda le candidature fallite per "credit balance" (crediti AI
- * esauriti). Quando i crediti erano finiti il worker marcava failed; ora
- * che ci sono di nuovo, le rimettiamo in coda.
- *
- * Auth: header X-Admin-Key == ADMIN_SYNC_KEY (script) OPPURE sessione
- * admin loggata (bottone founder).
- *
- * Body opzionale: { days?: number, limit?: number }
+/** Preview by default. Live: exact preview IDs + versions, canary=1 / batch<=10.
+ * Worker schema is checked read-only; live requests also require an explicit
+ * operator confirmation of fresh polling/AI health (see runbook).
  */
 async function authorized(req: NextRequest): Promise<boolean> {
   const headerKey = req.headers.get("x-admin-key");
@@ -29,53 +25,22 @@ export async function POST(req: NextRequest) {
   if (!(await authorized(req))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  if (applicationsPaused()) return NextResponse.json({ error: "applications_paused" }, { status: 503 });
 
-  const body = await req.json().catch(() => ({}));
-  const days = Math.max(1, Math.min(30, Number(body?.days) || 14));
-  const limit = Math.max(1, Math.min(200, Number(body?.limit) || 100));
-  const since = new Date(Date.now() - days * 86_400_000);
-
-  const failed = await prisma.application.findMany({
-    where: {
-      status: "failed",
-      OR: [
-        { errorMessage: { contains: "credit balance", mode: "insensitive" } },
-        { errorMessage: { contains: "crediti esauriti", mode: "insensitive" } },
-        { errorMessage: { contains: "insufficient", mode: "insensitive" } },
-        { errorMessage: { contains: "quota exceeded", mode: "insensitive" } },
-        { errorMessage: { contains: "Streaming is required", mode: "insensitive" } },
-        { errorMessage: { contains: "troncata", mode: "insensitive" } },
-        { errorMessage: { contains: "captcha-failed", mode: "insensitive" } },
-        { canaryLog: { contains: "captcha-failed" } },
-      ],
-      createdAt: { gte: since },
-    },
-    select: { id: true },
-    orderBy: { createdAt: "asc" },
-    take: limit,
-  });
-
-  let requeued = 0;
-  for (const app of failed) {
-    try {
-      // Rimuovi l'eventuale job BullMQ vecchio (stesso jobId) così il
-      // re-enqueue non viene deduplicato e silenziosamente ignorato.
-      await cancelApplication(app.id);
-      await prisma.application.update({
-        where: { id: app.id },
-        data: { status: "queued", startedAt: null, errorMessage: null },
-      });
-      await enqueueApplication(app.id);
-      requeued++;
-    } catch (err) {
-      console.error(`[retry-credit-failures] ${app.id} failed`, err);
-    }
+  const parsed = creditRetryRequest.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "validation", issues: parsed.error.issues }, { status: 400 });
   }
-
-  return NextResponse.json({
-    ok: true,
-    found: failed.length,
-    requeued,
-    days,
-  });
+  if (!parsed.data.dryRun) {
+    try { await verifyCreditRetryWorkerSchema(prisma); }
+    catch { return NextResponse.json({ error: "worker_schema_not_ready" }, { status: 503 }); }
+  }
+  try {
+    const result = await retryCreditFailures(parsed.data, {
+      db: prisma, cancel: cancelApplication, enqueue: enqueueApplication,
+    });
+    return NextResponse.json(result);
+  } catch {
+    return NextResponse.json({ error: "credit_retry_read_failed" }, { status: 503 });
+  }
 }

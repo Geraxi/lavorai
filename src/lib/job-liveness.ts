@@ -1,157 +1,111 @@
 import { prisma } from "@/lib/db";
 
-const ATS_RE = /greenhouse\.io|ashbyhq\.com|lever\.co|workable\.com|smartrecruiters\.com|recruitee\.com|jobs\.personio\.|teamtailor\.com|bamboohr\.com|breezy\.hr|pinpointhq\.com/i;
+export type JobLivenessState = "live" | "closed" | "unknown";
+export type JobLivenessResult = {
+  state: JobLivenessState;
+  reason: string;
+  checkedAt: Date;
+  finalUrl?: string;
+};
+const BROWSER_HEADERS = { "user-agent": "Mozilla/5.0", accept: "text/html,application/json" };
+const domainIs = (host: string, domain: string) => host === domain || host.endsWith(`.${domain}`);
+const ATS_DOMAINS = ["greenhouse.io", "ashbyhq.com", "lever.co", "workable.com", "smartrecruiters.com", "recruitee.com", "teamtailor.com", "bamboohr.com", "breezy.hr", "pinpointhq.com"];
 
-/**
- * Verifica leggera che l'annuncio sia ancora online: segue i redirect e
- * considera "chiuso" un 404/410, un redirect alla lista generica del board
- * (Greenhouse ?error=true, /<slug> senza id), un redirect fuori dall'ATS
- * (career page custom: l'adapter non troverà il form) o un body "Job not
- * found" (Ashby risponde 200 con quella pagina).
- * In caso di rete/timeout NON escludiamo (lo scoprirà l'adapter).
+/** Only conclusive removal evidence can close a shared vacancy. Failures,
+ * challenges and unrecognised pages remain unknown, which cannot auto-send.
  */
-export async function isJobUrlAlive(url: string): Promise<boolean> {
-  // 1) API ufficiali degli ATS: risposta certa (le pagine sono SPA e il
-  //    server HTML non contiene "Job not found" → il check HTML non basta).
-  const viaApi = await checkViaAtsApi(url);
-  if (viaApi !== null) return viaApi;
-  // 2) Fallback: HTTP + redirect + body.
+export async function checkJobUrlLiveness(url: string): Promise<JobLivenessResult> {
+  const checkedAt = new Date();
+  const result = (state: JobLivenessState, reason: string, finalUrl?: string): JobLivenessResult => ({ state, reason, checkedAt, finalUrl });
+  let original: URL;
+  try { original = new URL(url); } catch { return result("unknown", "invalid_url"); }
+  if (!["https:", "http:"].includes(original.protocol) || original.username || original.password) return result("unknown", "invalid_url");
+  const api = await checkViaAtsApi(original);
+  if (api) return result(api.state, api.reason, url);
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(url, {
-      redirect: "follow",
-      signal: ctrl.signal,
-      headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122.0 Safari/537.36", accept: "text/html,*/*" },
-    });
-    clearTimeout(t);
-    if (res.status === 404 || res.status === 410) return false;
-    const final = res.url || url;
-    if (/[?&]error=true/i.test(final)) return false;
-    if (ATS_RE.test(url)) {
-      if (!ATS_RE.test(final)) return false;
-      if (/greenhouse\.io\/[^/?#]+\/?(\?.*)?$/i.test(final)) return false;
-      if (/ashbyhq\.com\/[^/?#]+\/?(\?.*)?$/i.test(final)) return false;
-    }
-    if (!res.ok) return res.status < 400;
-    const ct = res.headers.get("content-type") ?? "";
-    if (ct.includes("text/html")) {
-      const html = (await res.text()).slice(0, 200_000);
-      if (/job (was )?not found|this job is no longer|position (has been )?(filled|closed)|no longer accepting applications|questa posizione non è più|annuncio (non è più|scaduto)/i.test(html)) return false;
-    }
-    return true;
-  } catch {
-    return true;
-  }
+    const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(8000), headers: BROWSER_HEADERS });
+    const finalUrl = response.url || url;
+    if (response.status === 404 || response.status === 410) return result("closed", `http_${response.status}`, finalUrl);
+    if (!response.ok) return result("unknown", `http_${response.status}`, finalUrl);
+    const final = new URL(finalUrl);
+    if (/[?&]error=true(?:&|$)/i.test(final.search)) return result("closed", "job_error_redirect", finalUrl);
+    if (ATS_DOMAINS.some((domain) => domainIs(original.hostname, domain))) {
+      if (original.hostname !== final.hostname) return result("unknown", "changed_posting_host", finalUrl);
+      if (["greenhouse.io", "ashbyhq.com", "lever.co"].some((domain) => domainIs(final.hostname, domain))
+        && /^\/[^/]+\/?$/.test(final.pathname)) return result("closed", "redirected_to_job_board", finalUrl);
+    } else if (original.hostname !== final.hostname) return result("unknown", "changed_posting_host", finalUrl);
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) return result("unknown", "unexpected_content_type", finalUrl);
+    const html = (await response.text()).slice(0, 300_000);
+    const visible = html.replace(/<(script|style|nav|footer)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    if (/job (?:was )?not found|this (?:job|position) is no longer|(?:this|the) position (?:has been |is )(?:filled|closed)|no longer accepting applications|questa posizione non è più|annuncio (?:non è più|scaduto)/i.test(visible)
+      || /"posting"\s*:\s*null/.test(html)) return result("closed", "posting_closed_message", finalUrl);
+    if (/captcha|verify (?:you are|that you are) human|access denied|just a moment|sign in to continue/i.test(visible)) return result("unknown", "challenge_or_login", finalUrl);
+    // A 200 status alone is not proof: login pages, empty SPA shells and generic
+    // career pages cannot safely stand in for an actual application posting.
+    const posting = /["']@type["']\s*:\s*["']JobPosting["']|"posting"\s*:\s*\{|<h1\b/i.test(html);
+    const application = /\b(apply (?:now|for|to)|submit (?:your )?application|send (?:your )?(?:cv|resume)|candidati|invia(?:re)? (?:il |la |una )?(?:cv|candidatura)|application form)\b/i.test(visible)
+      || /<form\b[^>]*(?:application|apply)|href=["'][^"']*\/(?:apply|application)(?:[/?#"'])/i.test(html);
+    return posting && application ? result("live", "posting_with_application_context", finalUrl) : result("unknown", "posting_not_verified", finalUrl);
+  } catch { return result("unknown", "network_or_timeout"); }
 }
 
-/** Marca il job come chiuso (idempotente). */
+/** Compatibility for read-only callers. Never use false to mark a job closed;
+ * consumers that persist closure must inspect checkJobUrlLiveness().state.
+ */
+export async function isJobUrlAlive(url: string): Promise<boolean> {
+  return (await checkJobUrlLiveness(url)).state === "live";
+}
+
 export async function markJobClosed(jobId: string): Promise<void> {
   await prisma.job.update({ where: { id: jobId }, data: { closedAt: new Date() } }).catch(() => void 0);
 }
 
-
-async function getText(url: string, timeoutMs = 8000): Promise<string | null> {
+type ApiVerdict = Pick<JobLivenessResult, "state" | "reason">;
+async function getJson(url: string): Promise<{ status: number; json: unknown } | null> {
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(url, { signal: ctrl.signal, headers: { "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36", accept: "text/html" } });
-    clearTimeout(t);
-    return await res.text();
-  } catch {
-    return null;
-  }
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { accept: "application/json", "user-agent": "LavorAI/1.0" } });
+    return { status: response.status, json: await response.json().catch(() => null) };
+  } catch { return null; }
 }
-
-async function getJson(url: string, timeoutMs = 8000): Promise<{ status: number; json: unknown } | null> {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), timeoutMs);
-    const res = await fetch(url, { signal: ctrl.signal, headers: { accept: "application/json", "user-agent": "LavorAI/1.0 (+https://lavorai.it)" } });
-    clearTimeout(t);
-    let json: unknown = null;
-    try { json = await res.json(); } catch { json = null; }
-    return { status: res.status, json };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * true/false se l'API dell'ATS dà una risposta certa, null se non applicabile
- * o non raggiungibile (→ si passa al fallback HTML).
- */
-async function checkViaAtsApi(url: string): Promise<boolean | null> {
-  let u: URL;
-  try { u = new URL(url); } catch { return null; }
-  const host = u.hostname.toLowerCase();
-  const parts = u.pathname.split("/").filter(Boolean);
-
-  // Greenhouse: boards|job-boards.greenhouse.io/<slug>/jobs/<id> | embed/job_app?for=<slug>&token=<id>
-  if (host.endsWith("greenhouse.io")) {
-    let slug: string | null = null; let id: string | null = null;
-    const m = u.pathname.match(/^\/([^/]+)\/jobs\/(\d+)/);
-    if (m) { slug = m[1]; id = m[2]; }
-    else if (u.pathname.startsWith("/embed/job_app")) { slug = u.searchParams.get("for"); id = u.searchParams.get("token"); }
-    if (!slug || !id) return null;
-    const r = await getJson(`https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs/${id}`);
-    if (!r) return null;
-    if (r.status === 404) return false;
-    if (r.status === 200) return true;
-    return null;
-  }
-
-  // Ashby: jobs.ashbyhq.com/<slug>/<uuid>[/application]
-  if (host.endsWith("ashbyhq.com")) {
-    const slug = parts[0]; const uuid = parts[1];
+const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
+async function checkViaAtsApi(url: URL): Promise<ApiVerdict | null> {
+  const host = url.hostname.toLowerCase();
+  const parts = url.pathname.split("/").filter(Boolean);
+  let apiUrl: string | null = null;
+  let id: string | null = null;
+  if (domainIs(host, "greenhouse.io")) {
+    const match = url.pathname.match(/^\/([^/]+)\/jobs\/(\d+)/);
+    const slug = match?.[1] ?? (url.pathname === "/embed/job_app" ? url.searchParams.get("for") : null);
+    id = match?.[2] ?? (url.pathname === "/embed/job_app" ? url.searchParams.get("token") : null);
+    if (slug && id && /^\d+$/.test(id)) apiUrl = `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs/${id}`;
+  } else if (domainIs(host, "ashbyhq.com")) {
+    const [slug, uuid] = parts;
     if (!slug || !uuid || !/^[0-9a-f-]{20,}$/i.test(uuid)) return null;
-    const r = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}`);
-    const jobs = r && r.status === 200 ? (r.json as { jobs?: Array<{ id?: string; jobUrl?: string }> } | null)?.jobs : undefined;
-    if (Array.isArray(jobs) && jobs.length > 0) {
-      return jobs.some((j) => (j.id ?? "").toLowerCase() === uuid.toLowerCase() || (j.jobUrl ?? "").toLowerCase().includes(uuid.toLowerCase()));
-    }
-    // Board vuoto o API non disponibile: la pagina SPA di Ashby incorpora
-    // window.__appData con "posting":null quando l'annuncio non esiste più.
-    const html = await getText(`https://jobs.ashbyhq.com/${encodeURIComponent(slug)}/${encodeURIComponent(uuid)}`);
-    if (html == null) return null;
-    if (/"posting":null/.test(html)) return false;
-    if (/"posting":\{/.test(html)) return true;
-    return null;
+    const response = await getJson(`https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}`);
+    if (response?.status !== 200 || !object(response.json) || !Array.isArray(response.json.jobs)) return null;
+    const jobs = response.json.jobs;
+    if (jobs.some((job) => !object(job) || typeof job.id !== "string")) return null;
+    return jobs.some((job) => object(job) && (job.id as string).toLowerCase() === uuid.toLowerCase())
+      ? { state: "live", reason: "ats_api_posting_present" } : { state: "closed", reason: "ats_api_posting_removed" };
+  } else if (domainIs(host, "lever.co")) {
+    if (parts[0] && parts[1]) { id = parts[1]; apiUrl = `https://api.lever.co/v0/postings/${encodeURIComponent(parts[0])}/${encodeURIComponent(id)}`; }
+  } else if (domainIs(host, "workable.com")) {
+    const match = url.pathname.match(/^\/([^/]+)\/j\/([A-Za-z0-9]+)/);
+    if (match) { id = match[2]; apiUrl = `https://apply.workable.com/api/v2/accounts/${encodeURIComponent(match[1])}/jobs/${encodeURIComponent(id)}`; }
+  } else if (domainIs(host, "smartrecruiters.com") && parts[0] && parts[1]) {
+    id = parts[1].split("-")[0]; apiUrl = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(parts[0])}/postings/${encodeURIComponent(id)}`;
   }
-
-  // Lever: jobs.lever.co/<slug>/<uuid>[/apply]
-  if (host.endsWith("lever.co")) {
-    const slug = parts[0]; const id = parts[1];
-    if (!slug || !id) return null;
-    const r = await getJson(`https://api.lever.co/v0/postings/${encodeURIComponent(slug)}/${encodeURIComponent(id)}`);
-    if (!r) return null;
-    if (r.status === 404) return false;
-    if (r.status === 200) return true;
-    return null;
-  }
-
-  // Workable: apply.workable.com/<slug>/j/<code>
-  if (host.endsWith("workable.com")) {
-    const m = u.pathname.match(/^\/([^/]+)\/j\/([A-Za-z0-9]+)/);
-    if (!m) return null;
-    const r = await getJson(`https://apply.workable.com/api/v2/accounts/${encodeURIComponent(m[1])}/jobs/${encodeURIComponent(m[2])}`);
-    if (!r) return null;
-    if (r.status === 404) return false;
-    if (r.status === 200) return true;
-    return null;
-  }
-
-  // SmartRecruiters: jobs.smartrecruiters.com/<company>/<id>[-slug]
-  if (host.endsWith("smartrecruiters.com")) {
-    const company = parts[0]; const idPart = parts[1];
-    if (!company || !idPart) return null;
-    const id = idPart.split("-")[0];
-    const r = await getJson(`https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(company)}/postings/${encodeURIComponent(id)}`);
-    if (!r) return null;
-    if (r.status === 404) return false;
-    if (r.status === 200) return true;
-    return null;
-  }
-
-  return null;
+  if (!apiUrl || !id) return null;
+  const response = await getJson(apiUrl);
+  if (!response) return null;
+  if ([404, 410].includes(response.status)) return { state: "closed", reason: `ats_api_${response.status}` };
+  if (response.status !== 200 || !object(response.json)) return null;
+  const body = response.json;
+  const responseId = body.id ?? body.shortcode;
+  // Validate the response shape/id; an API returning a 200 login/error payload
+  // must never override an unknown or closed HTML page.
+  if (String(responseId ?? "").toLowerCase() !== id.toLowerCase() || typeof (body.title ?? body.text ?? body.name) !== "string") return null;
+  if (body.state === "closed" || body.isPublished === false) return { state: "closed", reason: "ats_api_posting_closed" };
+  return { state: "live", reason: "ats_api_posting_present" };
 }
