@@ -3,8 +3,11 @@ import { readFileSync } from "node:fs";
 import { currentWorkerIneligibility, hasPotentialSubmission, NOT_SUBMITTED, SUBMISSION_STARTED, type WorkerGateRow } from "../src/lib/application-worker-gates";
 
 const now = new Date();
+process.env.APPLICATION_ROLLOUT_MODE = "manual_only";
+process.env.APPLICATION_ROLLOUT_START_AT = new Date(+now - 60000).toISOString();
+process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";
 const base = {
-  id: "app", userId: "user", jobId: "job", sessionId: "round", status: "queued", startedAt: null, consentGrantedAt: null,
+  id: "app", userId: "user", jobId: "job", sessionId: "round", status: "queued", startedAt: null, consentGrantedAt: now, createdAt: now, retryCount: 0,
   cvDocxPath: null, submittedAt: null, submittedVia: null, submitConfirmation: null,
   canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
   job: { closedAt: null, url: "https://boards.greenhouse.io/acme/jobs/123", title: "Product Designer", company: "Acme", description: "Product Designer", location: "Milano", remote: false, contractType: "employee", salaryMin: 60000, salaryMax: 70000 }, session: { id: "round", userId: "user", status: "active", sentCount: 27, targetCount: 30, title: "Product Designer", label: "Design" },
@@ -29,13 +32,13 @@ assert.equal(currentWorkerIneligibility({ ...base, job: { ...base.job, closedAt:
 assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, avoidCompanies: "  ACME  " } }), "company_avoided");
 for (const mode of ["manual", "hybrid"]) {
   const row = { ...base, user: { ...base.user, preferences: { ...base.user.preferences, autoApplyMode: mode, matchMin: 100, locationsJson: '["Berlin"]' } } };
-  assert.equal(currentWorkerIneligibility(row), "auto_apply_not_enabled");
+  assert.equal(currentWorkerIneligibility({ ...row, consentGrantedAt: null }), "rollout_explicit_consent_required");
   assert.equal(currentWorkerIneligibility({ ...row, consentGrantedAt: now }), null);
 }
 assert.equal(currentWorkerIneligibility({ ...base, consentGrantedAt: now, user: { ...base.user, preferences: { ...base.user.preferences, autoApplyMode: "off" } } }), "auto_apply_not_enabled");
-assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, locationsJson: '["Berlin"]' } } }), "preference_location");
-assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, locationsJson: "broken" } } }), "preferences_unverified");
-assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, matchMin: 100 } } }), "preference_match_threshold");
+assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, locationsJson: '["Berlin"]' } } }), null, "Explicit job consent overrides search preferences");
+assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, locationsJson: "broken" } } }), null, "Explicit job consent overrides search preferences");
+assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, matchMin: 100 } } }), null, "Explicit job consent overrides search preferences");
 assert.equal(hasPotentialSubmission(base), false);
 for (const patch of [{ submitConfirmation: SUBMISSION_STARTED }, { submitConfirmation: "UNCONFIRMED" },
   { submittedAt: now }, { submittedVia: "email_recruiter" }, { canaryLog: "{}" },

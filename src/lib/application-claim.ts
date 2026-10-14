@@ -1,3 +1,4 @@
+import { applicationRolloutConfig, automaticApplicationsBlocked, rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { hasPotentialSubmission } from "@/lib/application-worker-gates";
@@ -11,16 +12,26 @@ import { hasPotentialSubmission } from "@/lib/application-worker-gates";
  * altri ricevono false e non fanno nulla → mai due elaborazioni in parallelo.
  *
  * Una candidatura è "prendibile" se è `queued` e non è stata presa da nessuno
- * (`startedAt` null) oppure se la presa è vecchia (processo morto a metà).
+ * (`startedAt` null), nuova nel rollout e confermata esplicitamente.
+ * Le prese vecchie restano ferme: nessun recupero automatico nel rollout.
  */
 
 export const STALE_CLAIM_MS = 20 * 60_000;
 
+/** One fresh, unclaimed, explicitly confirmed application. Never steal a stale claim. */
 export async function claimApplication(applicationId: string): Promise<boolean> {
-  if (applicationsPaused()) return false;
-  const stale = new Date(Date.now() - STALE_CLAIM_MS);
+  if (applicationsPaused() || rolloutCreationBlocked()) return false;
+  const app = await prisma.application.findUnique({
+    where: { id: applicationId },
+    select: { createdAt: true, consentGrantedAt: true, retryCount: true },
+  });
+  if (!app || rolloutApplicationIneligibility(app)) return false;
   const r = await prisma.application.updateMany({
-    where: { id: applicationId, status: "queued", OR: [{ startedAt: null }, { startedAt: { lt: stale } }] },
+    where: { id: applicationId, status: "queued", startedAt: null, completedAt: null,
+      createdAt: app.createdAt, consentGrantedAt: app.consentGrantedAt, retryCount: 0,
+      submittedAt: null, submittedVia: null, submitConfirmation: null,
+      canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+    },
     data: { startedAt: new Date() },
   });
   return r.count === 1;
@@ -33,7 +44,7 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
  * torna queued; applying resta riservata per verifica, senza replay automatico.
  */
 export async function recoverStuckApplications(): Promise<number> {
-  if (applicationsPaused()) return 0;
+  if (applicationsPaused() || automaticApplicationsBlocked()) return 0;
   const stale = new Date(Date.now() - STALE_CLAIM_MS);
   const stuck = await prisma.application.findMany({
     where: {
@@ -66,26 +77,30 @@ export async function recoverStuckApplications(): Promise<number> {
   return recovered;
 }
 
-/** Candidature in coda prendibili, dalla più vecchia. Richiama recovery prima. */
+/** Read-only polling. Historical rows, stale claims and automatic recovery stay frozen. */
 export async function findClaimableQueued(limit: number): Promise<string[]> {
-  if (applicationsPaused()) return [];
-  // Recupera candidature stuck PRIMA di prendere le queued (così se ne libera qualcuna)
-  await recoverStuckApplications().catch((err) =>
-    console.warn("[claim] recovery failed", err),
-  );
-  const stale = new Date(Date.now() - STALE_CLAIM_MS);
+  if (applicationsPaused() || rolloutCreationBlocked()) return [];
+  const config = applicationRolloutConfig();
+  if (!config.enabled || !config.startedAt) return [];
+  const now = new Date();
   const rows = await prisma.application.findMany({
-    where: { status: "queued", OR: [{ startedAt: null }, { startedAt: { lt: stale } }] },
+    where: { status: "queued", startedAt: null, completedAt: null, retryCount: 0,
+      createdAt: { gt: config.startedAt, lte: now },
+      consentGrantedAt: { gt: config.startedAt, lte: now },
+      submittedAt: null, submittedVia: null, submitConfirmation: null,
+      canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+    },
     orderBy: { createdAt: "asc" },
     take: limit,
-    select: { id: true },
+    select: { id: true, createdAt: true, consentGrantedAt: true, retryCount: true },
   });
-  return rows.map((r) => r.id);
+  return rows.filter(row => !rolloutApplicationIneligibility(row, now)).map(row => row.id);
 }
 
 /** Rimette una candidatura in stato prendibile (da chiamare all'enqueue). */
 export async function resetClaim(applicationId: string): Promise<void> {
-  if (applicationsPaused()) return ;
+  // Queue publication must not clear ownership, including stale historical claims.
+  if (applicationsPaused() || automaticApplicationsBlocked()) return;
   await prisma.application
     .updateMany({ where: { id: applicationId, status: "queued" }, data: { startedAt: null } })
     .catch(() => void 0);

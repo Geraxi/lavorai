@@ -1,3 +1,4 @@
+import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -42,6 +43,10 @@ export async function POST(request: NextRequest) {
 
     if (applicationsPaused()) {
       return NextResponse.json({ error: "applications_paused", message: "Invii temporaneamente in pausa per manutenzione." }, { status: 503 });
+    }
+
+    if (rolloutCreationBlocked()) {
+      return NextResponse.json({ error: "application_rollout_closed", message: "Invii temporaneamente sospesi." }, { status: 503 });
     }
 
     if (requiresPaymentMethodBeforeApp(user)) {
@@ -93,7 +98,7 @@ export async function POST(request: NextRequest) {
     // The worker checks sessions only when the selected portal needs one.
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const [usedThisMonth, usedToday, cv, job, prefs, profileRow] =
+    const [usedThisMonth, usedToday, cv, job, prefs, profileRow, previousApplication] =
       await Promise.all([
         prisma.application.count({
           where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { notIn: ["failed", "diagnostic"] } },
@@ -111,7 +116,12 @@ export async function POST(request: NextRequest) {
           select: { autoApplyMode: true, matchMin: true, dailyCap: true },
         }),
         prisma.cVProfile.findUnique({ where: { userId: user.id } }),
+        prisma.application.findFirst({ where: { userId: user.id, jobId }, select: { id: true } }),
       ]);
+
+    if (previousApplication) {
+      return NextResponse.json({ error: "prior_application_exists", message: "Esiste già una candidatura per questo annuncio. I tentativi precedenti restano sospesi." }, { status: 409 });
+    }
 
     // --- Guardrail checks (dopo il batch, sfrutta gli stessi dati) ---
     if (usedThisMonth >= limits.monthlyApplications) {
@@ -208,13 +218,17 @@ export async function POST(request: NextRequest) {
     // Eccezione: sessione in pausa → rispettiamo la pausa.
     const needsConsent = session.status === "paused";
     const initialStatus = needsConsent ? "awaiting_consent" : "queued";
+    // Recheck immediately before creation, including each selected batch job.
+    if (rolloutCreationBlocked()) return NextResponse.json({ error: "application_rollout_closed" }, { status: 503 });
+    const createdAt = new Date();
     const application = await prisma.application.create({
       data: {
         userId: user.id,
         jobId,
         portal,
         status: initialStatus,
-        consentGrantedAt: initialStatus === "queued" ? new Date() : null,
+        createdAt,
+        consentGrantedAt: initialStatus === "queued" ? createdAt : null,
         trackingToken: randomToken(),
         atsScore: score, // pre-stima; il worker la sovrascrive con score AI
         sessionId: session.id,

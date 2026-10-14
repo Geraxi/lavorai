@@ -177,6 +177,11 @@ async function main() {
     const { reconcileAcceptedApplicationEmails } = await import("../src/lib/application-email-reconciliation");
     const raceSession = await db.applicationSession.create({ data: { userId: user.id, key: "race", label: "race", targetCount: 10 } });
     const raceApp = await db.application.create({ data: { userId: user.id, jobId: job.id, sessionId: raceSession.id, portal: "email", status: "applying", submitConfirmation: "SUBMISSION_STARTED", startedAt: now } });
+    const { submissionSubjectKey } = await import("../src/lib/application-submission-budget");
+    await db.applicationSubmissionReservation.create({ data: {
+      applicationId: raceApp.id, subjectKey: submissionSubjectKey(user.id, job.id), attemptStartedAt: now,
+      channel: "email_recruiter", rolloutStartedAt: new Date(+now - 1000), budgetDay: new Date(`${now.toISOString().slice(0, 10)}T00:00:00Z`),
+    } });
     const raceAttempt = await delivery.createApplicationEmailAttempt({ applicationId: raceApp.id, attemptKey: `application-${raceApp.id}-${now.getTime()}`, recipient: submission.recipient });
     await delivery.recordApplicationEmailAccepted(raceAttempt.id, "provider-race");
     assert.equal((await reconcileAcceptedApplicationEmails()).reconciled, 1);
@@ -203,6 +208,12 @@ async function main() {
     await executeFailure.runInNewContext({ prisma: db, applicationId: raceApp.id, workToken: now, delivered: { kind: "not_sent", reason: "current_gate_blocked" }, NOT_SUBMITTED: "NOT_SUBMITTED", Date });
     assert.equal((await db.application.findUniqueOrThrow({ where: { id: raceApp.id } })).status, "success", "Known no-send cannot overwrite another accepted attempt");
     console.log("PASS PostgreSQL: final email gate denial remains proven NOT_SUBMITTED without erasing accepted or uncertain outcomes.");
+
+    const unreserved = await db.application.create({ data: { userId: user.id, jobId: job.id, portal: "email", status: "applying", submitConfirmation: "SUBMISSION_STARTED", startedAt: now } });
+    const unreservedAttempt = await delivery.createApplicationEmailAttempt({ applicationId: unreserved.id, attemptKey: `application-${unreserved.id}-${now.getTime()}`, recipient: submission.recipient });
+    await delivery.recordApplicationEmailAccepted(unreservedAttempt.id, "provider-unreserved-historical");
+    assert.equal((await reconcileAcceptedApplicationEmails()).reconciled, 0, "A historical unreserved attempt is not rewritten by rollout reconciliation");
+    assert.equal((await db.application.findUniqueOrThrow({ where: { id: unreserved.id } })).status, "applying");
 
 
     console.log("ALL SEND/RECEIVE POSTGRES CHECKS PASSED. Local synthetic database/provider only; zero external application or email transmission.");

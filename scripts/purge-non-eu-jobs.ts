@@ -3,6 +3,7 @@
  * Da eseguire dopo aver aggiornato gli scraper con il geo filter.
  */
 import { prisma } from "../src/lib/db";
+import { automaticApplicationsBlocked } from "../src/lib/application-rollout";
 
 function isEu(loc: string, desc: string): boolean {
   const s = `${loc ?? ""} ${(desc ?? "").slice(0, 400)}`.toLowerCase();
@@ -26,6 +27,7 @@ function isEu(loc: string, desc: string): boolean {
 }
 
 async function main() {
+  if (automaticApplicationsBlocked()) throw new Error("historical_application_retries_blocked");
   // Solo Greenhouse/Lever (Adzuna è già Italia per endpoint IT)
   const rows = await prisma.job.findMany({
     where: { source: { in: ["greenhouse", "lever"] } },

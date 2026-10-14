@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { reuseCvAnswers } from "@/lib/cv-answer-reuse";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
@@ -67,6 +68,7 @@ type SubmittedAnswer = { applicationId: string; fingerprint: string; answer: str
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (automaticApplicationsBlocked()) return NextResponse.json({ error: "historical_application_retries_blocked" }, { status: 503 });
   let body: { reuseCvOnly?: boolean; answers?: SubmittedAnswer[] };
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); }

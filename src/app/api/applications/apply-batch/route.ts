@@ -1,3 +1,4 @@
+import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -53,6 +54,10 @@ export async function POST(request: NextRequest) {
 
     if (applicationsPaused()) {
       return NextResponse.json({ error: "applications_paused", message: "Invii temporaneamente in pausa per manutenzione." }, { status: 503 });
+    }
+
+    if (rolloutCreationBlocked()) {
+      return NextResponse.json({ error: "application_rollout_closed", message: "Invii temporaneamente sospesi." }, { status: 503 });
     }
 
     if (!user.emailVerified) {
@@ -246,13 +251,17 @@ export async function POST(request: NextRequest) {
         }
 
         const portal = portalOf(job.url);
+        // Recheck immediately before creation, including each selected batch job.
+        if (rolloutCreationBlocked()) break;
+        const createdAt = new Date();
         const application = await prisma.application.create({
           data: {
             userId: user.id,
             jobId: job.id,
             portal,
             status: initialStatus,
-            consentGrantedAt: initialStatus === "queued" ? new Date() : null,
+            createdAt,
+            consentGrantedAt: initialStatus === "queued" ? createdAt : null,
             trackingToken: randomToken(),
             atsScore: score,
             sessionId: session.id,

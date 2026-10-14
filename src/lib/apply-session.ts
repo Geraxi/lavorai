@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { prisma } from "@/lib/db";
 
 /**
@@ -53,6 +54,22 @@ export async function resolveSession(
   job: { title: string; category: string | null },
 ): Promise<{ id: string; status: string; label: string; key: string }> {
   const { key, label } = sessionKeyForJob(job);
+  if (automaticApplicationsBlocked()) {
+    const where = { userId_key: { userId, key } };
+    const select = { id: true, status: true, label: true, key: true } as const;
+    const existing = await prisma.applicationSession.findUnique({ where, select });
+    if (existing) return existing; // Preserve historical label and updatedAt.
+    try {
+      return await prisma.applicationSession.create({ data: { userId, key, label }, select });
+    } catch (error) {
+      // Two explicit requests can resolve the same new round concurrently.
+      // The losing creator may read the winner, never update it as a fallback.
+      if ((error as { code?: string })?.code !== "P2002") throw error;
+      const concurrent = await prisma.applicationSession.findUnique({ where, select });
+      if (!concurrent) throw error;
+      return concurrent;
+    }
+  }
   const row = await prisma.applicationSession.upsert({
     where: { userId_key: { userId, key } },
     create: { userId, key, label },

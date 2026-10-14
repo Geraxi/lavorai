@@ -80,14 +80,14 @@ async function main() {
   };
   try {
     const results = await Promise.all(Array.from({ length: 25 }, (_, i) => reserveTrialApplication(active.id, `app-${i}`)));
-    assert.equal(results.filter(Boolean).length, 25, "The worker does not impose a separate all-time trial quota");
-    assert.equal(await reserveTrialApplication(active.id, "app-0"), true, "Retry remains processable during the active trial");
-    assert.equal(await reserveTrialApplication(active.id, "app-25"), true, "The daily cap is applied when applications are created");
+    assert.equal(results.filter(Boolean).length, 0, "The legacy reservation/reset helper is blocked during the temporary rollout");
+    assert.equal(await reserveTrialApplication(active.id, "app-0"), false, "An active trial never enables historical retries");
+    assert.equal(await reserveTrialApplication(active.id, "app-25"), false, "New work uses the rollout worker admission and its global budget");
     currentUser = expired;
     assert.equal(await reserveTrialApplication(active.id, "app-0"), false, "Queued work is blocked after expiry");
     currentUser = { ...expired, tier: "pro" };
-    assert.equal(await reserveTrialApplication(active.id, "paid-app"), true, "Payment unlocks worker");
+    assert.equal(await reserveTrialApplication(active.id, "paid-app"), false, "Payment does not unlock a legacy reset path");
   } finally { prisma.$transaction = original; }
-  console.log("PASS: signup trial, 7-day boundary, five-per-day cap, expiry gates, worker reservations and payment unlock");
+  console.log("PASS: signup trial, 7-day boundary, five-per-day cap, expiry gates, legacy reset paths remain suspended");
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });

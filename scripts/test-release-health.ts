@@ -85,6 +85,28 @@ async function main() {
     assert.equal(healthBody.applicationsPaused, true); assert.equal(healthBody.deploymentCommit, commit);
     assert.equal(healthBody.repairVersion, RELEASE_REPAIR_VERSION); assert.equal(healthBody.nonce, nonce);
     assert(Math.abs(healthBody.observedAt - originalNow()) < 5_000);
+    const savedRollout = { mode: process.env.APPLICATION_ROLLOUT_MODE, start: process.env.APPLICATION_ROLLOUT_START_AT, cap: process.env.APPLICATION_ROLLOUT_DAILY_CAP };
+    try {
+      delete process.env.APPLICATION_ROLLOUT_MODE;
+      const closed = await GET(request());
+      assert.equal(closed.headers.get("x-lavorai-rollout-mode"), "closed");
+      assert.equal(closed.headers.get("x-lavorai-rollout-cap"), "0");
+      assert.equal(closed.headers.get("x-lavorai-rollout-start"), "unavailable");
+      process.env.APPLICATION_ROLLOUT_MODE = "manual_only";
+      process.env.APPLICATION_ROLLOUT_START_AT = new Date(originalNow() - 60000).toISOString();
+      process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";
+      const configured = await GET(request());
+      assert.equal(configured.headers.get("x-lavorai-rollout-mode"), "manual_only");
+      assert.equal(configured.headers.get("x-lavorai-rollout-cap"), "10");
+      assert.equal(configured.headers.get("x-lavorai-rollout-start"), process.env.APPLICATION_ROLLOUT_START_AT);
+      assert.equal(configured.headers.get("x-lavorai-automatic-producers"), "blocked");
+      process.env.APPLICATION_ROLLOUT_DAILY_CAP = "11";
+      assert.equal((await GET(request())).headers.get("x-lavorai-rollout-mode"), "closed");
+    } finally {
+      for (const [key, value] of Object.entries({ APPLICATION_ROLLOUT_MODE: savedRollout.mode, APPLICATION_ROLLOUT_START_AT: savedRollout.start, APPLICATION_ROLLOUT_DAILY_CAP: savedRollout.cap })) {
+        if (value === undefined) delete process.env[key]; else process.env[key] = value;
+      }
+    }
     process.env.APPLICATIONS_PAUSED = "false";
     assert.equal((await (await GET(request())).json()).applicationsPaused, false);
     delete process.env.VERCEL_GIT_COMMIT_SHA;

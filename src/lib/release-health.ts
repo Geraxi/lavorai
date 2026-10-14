@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 /** Public build identity only. Never grants permission to submit an application. */
-export const RELEASE_REPAIR_VERSION = "delivery-replies-20261014-v1";
+export const RELEASE_REPAIR_VERSION = "delivery-replies-manual-rollout-20261014-v2";
 export const RELEASE_HEALTH_URL = "https://lavorai.it/api/health/application-pause";
 export const RELEASE_COMMIT_PATTERN = /^[a-f0-9]{40}$/;
 export const RELEASE_NONCE_PATTERN = /^[a-f0-9]{32}$/;

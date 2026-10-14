@@ -1,3 +1,5 @@
+import { rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/application-rollout";
+import { prisma } from "@/lib/db";
 import { applicationsPaused } from "@/lib/application-pause";
 import { processApplication } from "@/lib/application-worker";
 
@@ -24,7 +26,21 @@ export async function enqueueApplication(
   applicationId: string,
   options?: { preserveClaim?: boolean },
 ): Promise<void> {
-  if (applicationsPaused()) return;
+  if (applicationsPaused() || rolloutCreationBlocked()) return;
+  // Notification backends are not an authorization boundary: check the durable
+  // fresh-consent cohort here too, before touching claims, Redis or HTTP.
+  const app = await prisma.application.findUnique({
+    where: { id: applicationId },
+    select: { createdAt: true, consentGrantedAt: true, retryCount: true,
+      status: true, startedAt: true, completedAt: true, submittedAt: true, submittedVia: true,
+      submitConfirmation: true, canaryLog: true, answersUsedJson: true,
+      viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true },
+  });
+  if (!app || rolloutApplicationIneligibility(app) || app.status !== "queued"
+    || app.startedAt !== null || app.completedAt !== null || app.submittedAt !== null
+    || app.submittedVia !== null || app.submitConfirmation !== null || app.canaryLog !== null
+    || app.answersUsedJson !== null || app.viewedAt !== null || app.lastReplyAt !== null
+    || app.replyCount !== 0 || app.userStatus !== null) return;
   // La candidatura torna "prendibile": chi la elabora (worker Railway via
   // BullMQ o polling DB, oppure self-invoke Vercel) la prende con claim atomico.
   // Atomic retry callers already made the row claimable. A poller may have

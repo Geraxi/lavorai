@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
@@ -164,6 +165,7 @@ async function assess(
 }
 
 export async function retryCreditFailures(input: z.infer<typeof creditRetryRequest>, deps: Dependencies) {
+  if (!input.dryRun && automaticApplicationsBlocked()) throw new Error("historical_application_retries_blocked");
   const since = new Date(Date.now() - input.days * 86_400_000);
   const where: Prisma.ApplicationWhereInput = input.applicationIds
     ? { id: { in: input.applicationIds } }

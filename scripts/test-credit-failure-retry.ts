@@ -1,10 +1,30 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import ts from "typescript";
+import { createHash } from "node:crypto";
+import { z } from "zod";
+import * as billing from "../src/lib/billing";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import {
   creditRetryRequest, creditRetryEligibility, creditRetryVersion, hasPriorAttemptEvidence,
-  isAiCreditFailure, retryCreditFailures, verifyCreditRetryWorkerSchema, type CreditRetryRow,
+  isAiCreditFailure, retryCreditFailures as rolloutRetryCreditFailures, verifyCreditRetryWorkerSchema, type CreditRetryRow,
 } from "../src/lib/credit-failure-retry";
+
+
+// Retain the historical retry algorithm's regression tests under an isolated
+// mock gate. The exported production function must always reject live retries.
+const legacyModule = { exports: {} as Record<string, any> };
+const legacyDependencies: Record<string, unknown> = {
+  "@/lib/application-rollout": { automaticApplicationsBlocked: () => false },
+  "@/lib/billing": billing, "node:crypto": { createHash }, "@prisma/client": { Prisma }, zod: { z },
+};
+new Function("require", "module", "exports", ts.transpileModule(readFileSync("src/lib/credit-failure-retry.ts", "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText)(
+  (id: string) => { assert.ok(id in legacyDependencies, `Unexpected dependency ${id}`); return legacyDependencies[id]; },
+  legacyModule, legacyModule.exports,
+);
+const retryCreditFailures: typeof rolloutRetryCreditFailures = legacyModule.exports.retryCreditFailures;
 
 const now = Date.now();
 const ago = (days: number) => new Date(now - days * 86_400_000);
@@ -109,6 +129,9 @@ const live = (rows: CreditRetryRow[], extra = {}) => creditRetryRequest.parse({
 });
 
 async function main() {
+  const blockedFixture = harness([row()]);
+  await assert.rejects(rolloutRetryCreditFailures(live([row()]), blockedFixture.deps), /historical_application_retries_blocked/);
+  assert.deepEqual(blockedFixture.counters(), { writes: 0, cancelCalls: 0, enqueueCalls: 0 });
   for (const text of [message, "crediti ai esauriti: outage", "400 Your credit balance is too low to access the Anthropic API", '{"code":"insufficient_quota"}', "You exceeded your current quota, please check your plan and billing details."]) assert.ok(isAiCreditFailure(text));
   for (const text of [null, "insufficient permissions", "quota exceeded", "Resend quota exceeded", "Streaming is required", "risposta troncata", "captcha-failed", "billing address invalid", "crediti esauriti", "CREDITI AI ESAURITI IN A USER MESSAGE"]) assert.equal(isAiCreditFailure(text), false);
   assert.equal(creditRetryRequest.parse({}).dryRun, true);
@@ -239,7 +262,7 @@ async function main() {
     assert.equal((await POST(request("{"))).status, 400);
     assert.equal((await POST(request(JSON.stringify({ dryRun: false })))).status, 400);
     const blocked = await POST(request(JSON.stringify(live([a]))));
-    assert.equal(blocked.status, 503); assert.equal((await blocked.json()).error, "worker_schema_not_ready");
+    assert.equal(blocked.status, 503); assert.equal((await blocked.json()).error, "historical_application_retries_blocked");
   } finally {
     globalThis.fetch = originalFetch;
     for (const key of Object.keys(process.env)) if (!(key in originalEnv)) delete process.env[key];
@@ -250,6 +273,6 @@ async function main() {
   const ui = readFileSync("src/components/admin-retry-credit-button.tsx", "utf8");
   assert.match(ui, /useState\(14\)/); assert.match(ui, /option value=\{30\}/); assert.match(ui, /dryRun: true/);
   assert.match(readFileSync("src/app/(app)/admin/_retry-button.tsx", "utf8"), /AdminRetryCreditButton as RetryCreditFailuresButton/);
-  console.log("Credit retry checks passed: precise match; preview/input guards; eligibility/evidence; dedup; round capacity; stale/CAS/concurrent retries; queue claim preservation; missing-worker-schema gate; both admin entry points. Mock DB, no external operations.");
+  console.log("Credit retry checks passed: precise match; preview/input guards; eligibility/evidence; dedup; round capacity; stale/CAS/concurrent retries; queue claim preservation; live rollout retry block; worker-schema checker; both admin entry points. Mock DB, no external operations.");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

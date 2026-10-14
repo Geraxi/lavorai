@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   if (applicationsPaused()) return NextResponse.json({ error: "applications_paused" }, { status: 503 });
+  if (automaticApplicationsBlocked()) return NextResponse.json({ error: "historical_application_retries_blocked" }, { status: 503 });
 
   let body: { applicationId?: string; realSubmit?: boolean } = {};
   try {

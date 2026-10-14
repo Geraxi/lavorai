@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "../src/lib/application-rollout";
 /**
  * Reset candidature "inviate" a email placeholder (tua.email@email.com,
  * nome.cognome@azienda.it, ecc.). Queste email NON sono arrivate a
@@ -42,6 +43,7 @@ const PLACEHOLDER_LOCALS = [
 ];
 
 async function main() {
+  if (automaticApplicationsBlocked()) throw new Error("historical_application_retries_blocked");
   const jobs = await prisma.job.findMany({
     where: { recruiterEmail: { not: null } },
     select: { id: true, recruiterEmail: true, title: true, company: true },

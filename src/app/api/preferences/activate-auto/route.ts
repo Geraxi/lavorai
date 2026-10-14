@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyOneClick } from "@/lib/one-click-token";
@@ -17,6 +18,8 @@ export async function GET(req: NextRequest) {
 
   const user = await prisma.user.findUnique({ where: { id: v.userId }, select: { id: true, suspendedAt: true } });
   if (!user || user.suspendedAt) return NextResponse.redirect(`${site}/login`);
+
+  if (automaticApplicationsBlocked()) return NextResponse.redirect(`${site}/preferences?auto=suspended`);
 
   await prisma.userPreferences.upsert({
     where: { userId: user.id },

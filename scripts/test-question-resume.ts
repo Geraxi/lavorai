@@ -72,6 +72,8 @@ function setup(options: {
     cVProfile: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return structuredClone(profile); } },
   };
   const dependencies: Record<string, unknown> = {
+    // Legacy scoped-answer safety remains tested; the real rollout blocks this POST.
+    "@/lib/application-rollout": { automaticApplicationsBlocked: () => false },
     "next/server": { NextResponse: { json: (body: unknown, options?: { status: number }) => ({ status: options?.status ?? 200, body }) } },
     "@/lib/db": { prisma },
     "@/lib/session": { getCurrentUser: async () => options.authenticated === false ? null : { id: "owner", yearsExperience: 7, locale: "en" } },

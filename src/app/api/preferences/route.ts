@@ -1,3 +1,5 @@
+import { applicationsPaused } from "@/lib/application-pause";
+import { applicationRolloutConfig, automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -66,9 +68,15 @@ export async function GET() {
     where: { userId: user.id },
     select: { autoApplyMode: true, matchMin: true },
   });
+  const rollout = applicationRolloutConfig();
   return NextResponse.json({
     autoApplyMode: prefs?.autoApplyMode ?? "manual",
     matchMin: prefs?.matchMin ?? 75,
+    applicationService: {
+      automaticBlocked: automaticApplicationsBlocked(),
+      submissionsPaused: applicationsPaused() || !rollout.enabled,
+      dailyCap: rollout.dailyCap,
+    },
   });
 }
 

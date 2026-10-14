@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
@@ -38,7 +39,7 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
     appsFailed: 0,
   };
 
-  if (applicationsPaused()) return report;
+  if (applicationsPaused() || automaticApplicationsBlocked()) return report;
 
   // ---------- 1. Re-parse broken CV profiles ----------
   const brokenUsers = await prisma.user

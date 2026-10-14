@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
@@ -30,6 +31,9 @@ export async function POST(req: NextRequest) {
   const parsed = creditRetryRequest.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "validation", issues: parsed.error.issues }, { status: 400 });
+  }
+  if (!parsed.data.dryRun && automaticApplicationsBlocked()) {
+    return NextResponse.json({ error: "historical_application_retries_blocked" }, { status: 503 });
   }
   if (!parsed.data.dryRun) {
     try { await verifyCreditRetryWorkerSchema(prisma); }

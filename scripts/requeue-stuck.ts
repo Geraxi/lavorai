@@ -1,7 +1,9 @@
+import { automaticApplicationsBlocked } from "../src/lib/application-rollout";
 import { prisma } from "../src/lib/db";
 import { enqueueApplication } from "../src/lib/application-queue";
 
 async function main() {
+  if (automaticApplicationsBlocked()) throw new Error("historical_application_retries_blocked");
   const u = await prisma.user.findUniqueOrThrow({
     where: { email: "umbertogeraci0@gmail.com" },
   });

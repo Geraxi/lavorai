@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "../src/lib/application-rollout";
 /**
  * (a) Re-sync Greenhouse + Lever così tutti i job hanno canonical URL +
  *     sourceSlug salvato.
@@ -9,6 +10,7 @@ import { prisma } from "../src/lib/db";
 import { syncAtsJobs } from "../src/lib/scrapers/sync-jobs";
 
 async function main() {
+  if (automaticApplicationsBlocked()) throw new Error("historical_application_retries_blocked");
   console.log("Re-sync Greenhouse + Lever...");
   const r = await syncAtsJobs();
   console.log("sync done:", r);

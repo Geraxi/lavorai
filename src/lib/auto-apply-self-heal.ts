@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { prisma } from "@/lib/db";
 import { enqueueApplication } from "@/lib/application-queue";
 import { Resend } from "resend";
@@ -84,6 +85,9 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
     detectedSampleSize: 0,
     transientFailuresRetried: 0,
   };
+
+  // Temporary manual-only rollout never rewrites or replays historical work.
+  if (automaticApplicationsBlocked()) return report;
 
   // ── 0. Retry transient portal failures ─────────────────────────────
   // Prende candidature failed per errori di rete/5xx/session e le

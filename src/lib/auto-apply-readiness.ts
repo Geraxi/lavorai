@@ -1,3 +1,5 @@
+import { applicationsPaused } from "@/lib/application-pause";
+import { applicationRolloutConfig, automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { prisma } from "@/lib/db";
 
 export interface AutoApplyReadiness {
@@ -11,6 +13,17 @@ export interface AutoApplyReadiness {
 
 /** A concise, user-facing explanation of why applications are or are not moving. */
 export async function getAutoApplyReadiness(userId: string, matchingJobs: number): Promise<AutoApplyReadiness> {
+  const rollout = applicationRolloutConfig();
+  if (applicationsPaused() || !rollout.enabled) return {
+    tone: "paused", eyebrow: "Candidature", title: "Invii in pausa",
+    detail: "Gli invii sono temporaneamente sospesi. Le tue preferenze e lo storico sono conservati.",
+    cta: "Vedi candidature", href: "/applications",
+  };
+  if (automaticApplicationsBlocked()) return {
+    tone: "action", eyebrow: "Candidature", title: "Solo candidature confermate",
+    detail: `L'invio automatico è sospeso. Il servizio accetta soltanto nuove candidature confermate esplicitamente, con un limite complessivo di ${rollout.dailyCap} invii al giorno (UTC). Le tue preferenze restano salvate.`,
+    cta: "Vedi le offerte", href: "/jobs",
+  };
   const [preferences, cvCount, sent, needsAnswers, waitingForConsent] = await Promise.all([
     prisma.userPreferences.findUnique({ where: { userId }, select: { autoApplyMode: true, rolesJson: true, locationsJson: true } }),
     prisma.cVDocument.count({ where: { userId } }),

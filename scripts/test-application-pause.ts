@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+import * as rollout from "../src/lib/application-rollout";
 import { applicationsPaused, assertApplicationsRunning } from "../src/lib/application-pause";
 
 function load(path: string, extra: Record<string, any> = {}): any {
@@ -9,6 +10,7 @@ function load(path: string, extra: Record<string, any> = {}): any {
   const unavailable = new Proxy({}, { get: () => { throw new Error("Paused code accessed an external dependency"); } });
   const mocks: Record<string, any> = {
     "@/lib/application-pause": { applicationsPaused, assertApplicationsRunning },
+    "@/lib/application-rollout": rollout,
     "@/lib/db": { prisma: unavailable },
     "@/lib/scrapers/ats-companies": { GREENHOUSE_COMPANIES: [], LEVER_COMPANIES: [], ASHBY_COMPANIES: [], WORKABLE_COMPANIES: [], SMARTRECRUITERS_COMPANIES: [] },
     ...extra,
@@ -63,7 +65,7 @@ async function main() {
         assert.equal((await api.POST({ headers: new Headers({ authorization: `Bearer ${process.env.CRON_SECRET}` }) })).status, 503);
       }
     } finally { if (previousCron === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = previousCron; }
-    // After unpause, the nudges repair must use the same safe CAS/evidence fence.
+    // Removing the broad pause never implicitly re-enables historical recovery.
     if (readFileSync("src/lib/cron-self-heal.ts", "utf8").includes("appsRecoveredSafely")) {
       process.env.APPLICATIONS_PAUSED = "false";
       let safeRecoveryCalls = 0;
@@ -71,8 +73,8 @@ async function main() {
         "@/lib/db": { prisma: { user: { findMany: async () => [] } } },
         "@/lib/application-claim": { recoverStuckApplications: async () => { safeRecoveryCalls++; return 2; } },
       });
-      assert.equal((await heal.runCronSelfHeal()).appsRecoveredSafely, 2);
-      assert.equal(safeRecoveryCalls, 1);
+      assert.equal((await heal.runCronSelfHeal()).appsRecoveredSafely, 0);
+      assert.equal(safeRecoveryCalls, 0);
       assert(!readFileSync("src/lib/cron-self-heal.ts", "utf8").includes("prisma.application.update"));
       process.env.APPLICATIONS_PAUSED = "true";
     }

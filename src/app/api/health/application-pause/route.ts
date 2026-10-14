@@ -1,4 +1,5 @@
 import { applicationsPaused } from "@/lib/application-pause";
+import { applicationRolloutConfig } from "@/lib/application-rollout";
 import { RELEASE_COMMIT_PATTERN, RELEASE_NONCE_PATTERN, RELEASE_REPAIR_VERSION } from "@/lib/release-health";
 
 export const dynamic = "force-dynamic";
@@ -21,11 +22,18 @@ export async function GET(request: Request): Promise<Response> {
   if (!commit || !RELEASE_COMMIT_PATTERN.test(commit)) {
     return Response.json({ error: "build_identity_unavailable" }, { status: 503, headers });
   }
+  const rollout = applicationRolloutConfig();
   return Response.json({
     applicationsPaused: applicationsPaused(),
     repairVersion: RELEASE_REPAIR_VERSION,
     deploymentCommit: commit,
     nonce,
     observedAt: Date.now(),
-  }, { headers });
+  }, { headers: {
+    ...headers,
+    "X-Lavorai-Rollout-Mode": rollout.enabled ? "manual_only" : "closed",
+    "X-Lavorai-Rollout-Cap": rollout.dailyCap?.toString() ?? "0",
+    "X-Lavorai-Rollout-Start": rollout.startedAt?.toISOString() ?? "unavailable",
+    "X-Lavorai-Automatic-Producers": "blocked",
+  } });
 }

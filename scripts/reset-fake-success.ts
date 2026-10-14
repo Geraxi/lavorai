@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "../src/lib/application-rollout";
 /**
  * Reset delle candidature finite in "success" fake (prima del fix 69f61ef).
  * Criterio: status=success MA submittedVia IS NULL → sono proprio quelle del
@@ -9,6 +10,7 @@
 import { prisma } from "../src/lib/db";
 
 async function main() {
+  if (automaticApplicationsBlocked()) throw new Error("historical_application_retries_blocked");
   const fake = await prisma.application.findMany({
     where: {
       status: "success",

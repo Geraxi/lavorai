@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { autoApplyPreferenceMismatch, parsePreferenceList, isAvoidedCompany } from "@/lib/auto-apply-preferences";
 import { prisma } from "@/lib/db";
@@ -74,7 +75,7 @@ function emptyRunStats(): RunStats {
 }
 
 export async function runAutoApplyCron(): Promise<RunStats> {
-  if (applicationsPaused()) return emptyRunStats();
+  if (applicationsPaused() || automaticApplicationsBlocked()) return emptyRunStats();
   // Self-heal PRIMA di processare gli utenti: archivia sessioni garbage,
   // re-enqueue safe stuck apps, preserve user matchMin, alert
   // admin su credit exhaustion. Idempotente, gira ogni tick (~30min).
@@ -184,7 +185,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
  * che mostra "N candidature accodate").
  */
 export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
-  if (applicationsPaused()) return emptyRunStats();
+  if (applicationsPaused() || automaticApplicationsBlocked()) return emptyRunStats();
   const stats = emptyRunStats();
   const user = await prisma.user.findUnique({
     where: {

@@ -6,11 +6,16 @@ import { toast } from "sonner";
 import { Icon } from "@/components/design/icon";
 
 type Mode = "off" | "manual" | "hybrid" | "auto";
+type ApplicationService = {
+  automaticBlocked: boolean;
+  submissionsPaused: boolean;
+  dailyCap: number | null;
+};
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
 export function AutoApplyToggle() {
-  const { data, mutate } = useSWR<{ autoApplyMode: Mode }>(
+  const { data, mutate } = useSWR<{ autoApplyMode: Mode; applicationService?: ApplicationService }>(
     "/api/preferences",
     fetcher,
   );
@@ -18,6 +23,18 @@ export function AutoApplyToggle() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const mode = (data?.autoApplyMode ?? "manual") as Mode;
+  const service = data?.applicationService;
+  // Missing service metadata must never advertise an active automatic sender.
+  const automaticBlocked = service?.automaticBlocked !== false;
+  const submissionsPaused = service?.submissionsPaused !== false;
+  const controlsDisabled = automaticBlocked || submissionsPaused;
+  const serviceLabel = !service ? "Stato invii non disponibile"
+    : submissionsPaused ? "Invii in pausa"
+      : automaticBlocked ? "Solo candidature confermate" : null;
+  const serviceDetail = !service ? "In attesa dello stato del servizio."
+    : submissionsPaused ? "Gli invii sono temporaneamente sospesi. Le preferenze restano salvate."
+      : automaticBlocked ? `Invio automatico sospeso. Solo nuove candidature confermate; limite complessivo ${service.dailyCap} al giorno (UTC). Le preferenze restano salvate.`
+        : undefined;
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -31,7 +48,7 @@ export function AutoApplyToggle() {
 
   async function changeMode(nextMode: Mode) {
     setOpen(false);
-    if (nextMode === mode) return;
+    if (controlsDisabled || nextMode === mode) return;
     setBusy(true);
     try {
       const res = await fetch("/api/preferences/mode", {
@@ -71,12 +88,14 @@ export function AutoApplyToggle() {
       <button
         type="button"
         className="ds-btn ds-btn-ghost"
-        onClick={() => setOpen(!open)}
-        disabled={busy || !data}
+        onClick={() => { if (!controlsDisabled) setOpen(!open); }}
+        disabled={busy || !data || controlsDisabled}
+        title={serviceDetail}
+        aria-label={serviceLabel ? `${serviceLabel}. ${serviceDetail}` : undefined}
         style={{
           background: "var(--bg-sunken)",
           borderColor: "var(--border-ds)",
-          color: mode === "off" ? "var(--fg-muted)" : "var(--primary-ds)",
+          color: submissionsPaused || mode === "off" ? "var(--fg-muted)" : "var(--primary-ds)",
           fontWeight: mode !== "off" ? 600 : 400,
           display: "flex",
           alignItems: "center",
@@ -91,11 +110,11 @@ export function AutoApplyToggle() {
           {busy ? (
             <Icon name="refresh" size={14} className="animate-spin" />
           ) : (
-            <Icon name={currentOption.icon as any} size={14} />
+            <Icon name={(serviceLabel ? submissionsPaused ? "pause-circle" : "eye" : currentOption.icon) as any} size={14} />
           )}
-          {currentOption.label.split(" (")[0]}
+          {serviceLabel ?? currentOption.label.split(" (")[0]}
         </span>
-        <Icon
+        {!controlsDisabled && <Icon
           name="chevron-down"
           size={14}
           style={{
@@ -103,10 +122,10 @@ export function AutoApplyToggle() {
             transform: open ? "rotate(180deg)" : "none",
             transition: "transform 0.2s",
           }}
-        />
+        />}
       </button>
 
-      {open && (
+      {open && !controlsDisabled && (
         <div
           className="ds-glass"
           style={{

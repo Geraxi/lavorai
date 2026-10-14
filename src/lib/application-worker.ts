@@ -768,12 +768,12 @@ export async function processApplication(
       select: { trackingToken: true },
     });
     const trackingToken = appRow?.trackingToken ?? null;
-    if (!await beginApplicationSubmission(applicationId, workToken)) return;
+    if (!await beginApplicationSubmission(applicationId, workToken, undefined, "email_recruiter")) return;
     const delivered = await deliverApplicationToRecruiter({
       applicationId,
       attemptKey: `application-${applicationId}-${workToken.getTime()}`,
       recipientProvenanceJson: JSON.stringify(verifiedRecruiter),
-      beforeSend: () => recheckBeforePortalSubmit(applicationId, workToken, resolvedUrl),
+      beforeSend: () => recheckBeforePortalSubmit(applicationId, workToken, resolvedUrl, "email_recruiter"),
       to: recruiterEmail,
       replyTo: app.user.email,
       userName: app.user.name,
@@ -1081,7 +1081,7 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
     return;
   }
 
-  if (!await beginApplicationSubmission(applicationId, input.workToken)) return;
+  if (!await beginApplicationSubmission(applicationId, input.workToken, undefined, "playwright_portal")) return;
   let browser: import("playwright").Browser | undefined;
   try {
     browser = await launchBrowser();
@@ -1109,7 +1109,7 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
     const applied = await portalSubmitStrategy(portal, page, {
       localCvPath,
       jobUrl,
-      beforeSubmit: () => recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl),
+      beforeSubmit: () => recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, "playwright_portal"),
     });
 
     // The legacy strategy only reports a click, not a server receipt. It
@@ -1152,7 +1152,7 @@ async function ensureLocalPath(
   return localPath;
 }
 
-async function recheckBeforePortalSubmit(applicationId: string, workToken: Date, jobUrl: string): Promise<boolean> {
+async function recheckBeforePortalSubmit(applicationId: string, workToken: Date, jobUrl: string, channel: string): Promise<boolean> {
   const live = await checkJobUrlLiveness(jobUrl);
   if (live.state !== "live") {
     if (live.state === "closed") {
@@ -1169,7 +1169,7 @@ async function recheckBeforePortalSubmit(applicationId: string, workToken: Date,
     } });
     return false;
   }
-  return recheckApplicationSubmission(applicationId, workToken);
+  return recheckApplicationSubmission(applicationId, workToken, undefined, channel);
 }
 
 async function portalSubmitStrategy(
@@ -1862,12 +1862,12 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     browser = await launchBrowser();
     const context = await humanContext(browser);
     const page = await context.newPage();
-    if (!await beginApplicationSubmission(applicationId, input.workToken)) {
+    if (!await beginApplicationSubmission(applicationId, input.workToken, undefined, `portal_${adapter.id}`)) {
       return { ok: false, status: "worker_gate_blocked", error: "Current worker gates blocked delivery." };
     }
     const outcome = await adapter.apply(page, {
       profile,
-      beforeSubmit: () => recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl),
+      beforeSubmit: () => recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, `portal_${adapter.id}`),
       userEmail: formEmail,
       cvLocalPath,
       clLocalPath,

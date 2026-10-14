@@ -1,4 +1,5 @@
 import { hasVerifiedSubmissionReceipt } from "@/lib/submission-receipt";
+import { ROLLOUT_BUDGET_HELD_MESSAGE } from "@/lib/application-rollout";
 
 export interface DeliveryView {
   phase: "confirmed" | "accepted" | "delivered" | "failed" | "unconfirmed" | "pending" | "manual";
@@ -11,6 +12,7 @@ export function applicationDeliveryView(app: {
   submittedVia: string | null;
   submitConfirmation: string | null;
   submissionReceiptJson?: string | null;
+  errorMessage?: string | null;
   emailAttempts?: Array<{ status: string; acceptedAt?: Date | string | null; providerEmailId?: string | null }>;
 }): DeliveryView {
   const email = app.emailAttempts?.[0];
@@ -39,6 +41,9 @@ export function applicationDeliveryView(app: {
   }
   if (app.status === "failed" || app.status === "cancelled" || app.submitConfirmation === "JOB_CLOSED") {
     return { phase: "failed", label: "Non inviata", tone: "warning", detail: "La preparazione o l'invio è stato fermato. Non è un rifiuto da parte dell'azienda." };
+  }
+  if (app.status === "ready_to_apply" && app.submitConfirmation === "NOT_SUBMITTED" && app.errorMessage === ROLLOUT_BUDGET_HELD_MESSAGE) {
+    return { phase: "pending", label: "In attesa: limite giornaliero", tone: "warning", detail: ROLLOUT_BUDGET_HELD_MESSAGE };
   }
   const labels: Record<string, string> = {
     queued: "In coda", optimizing: "In preparazione", applying: "Invio in corso", submitting: "Invio in corso",

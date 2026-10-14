@@ -1,4 +1,6 @@
 import { applicationsPaused } from "@/lib/application-pause";
+import { rolloutApplicationIneligibility, ROLLOUT_BUDGET_HELD_MESSAGE } from "@/lib/application-rollout";
+import { reserveSubmissionBudget, submissionSubjectKey } from "@/lib/application-submission-budget";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { autoApplyPreferenceMismatch, parsePreferenceList, isAvoidedCompany } from "@/lib/auto-apply-preferences";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -19,6 +21,7 @@ const evidenceSelect = {
 } as const;
 export const workerGateSelect = {
   id: true, userId: true, jobId: true, sessionId: true, status: true, startedAt: true, consentGrantedAt: true,
+  createdAt: true, retryCount: true,
   cvDocxPath: true, ...evidenceSelect,
   job: { select: { closedAt: true, url: true, company: true, title: true, description: true, location: true,
     remote: true, contractType: true, salaryMin: true, salaryMax: true } },
@@ -45,6 +48,8 @@ export function hasPotentialSubmission(row: Pick<WorkerGateRow, keyof typeof evi
 
 export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date()): string | null {
   if (applicationsPaused()) return "applications_paused";
+  const rolloutReason = rolloutApplicationIneligibility(row, now);
+  if (rolloutReason) return rolloutReason;
   const user = row.user;
   if (user.suspendedAt) return "user_suspended";
   if (!user.emailVerified || !user.privacyConsentAt) return "consent_or_verification_missing";
@@ -140,6 +145,12 @@ function heldMessage(reason: string): string {
 export async function reserveApplicationWork(id: string, db: DB = prisma): Promise<Date | null> {
   return withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.status !== "queued") return null;
+    if (rolloutApplicationIneligibility(row)) return null;
+    // An immutable budget record survives every ordinary status/reset path.
+    // A previous attempt is never eligible for preparation/replay in this mode.
+    if (await tx.applicationSubmissionReservation.findFirst({ where: { OR: [
+      { applicationId: id }, { subjectKey: submissionSubjectKey(row.userId, row.jobId) },
+    ] }, select: { id: true } })) return null;
     if (hasPotentialSubmission(row) || (row.cvDocxPath && ![NOT_SUBMITTED, "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation ?? ""))) {
       await tx.application.update({ where: { id }, data: {
         status: "ready_to_apply",
@@ -158,8 +169,9 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
       where: { userId: row.userId, jobId: row.jobId, id: { not: id } },
       select: { status: true, cvDocxPath: true, ...evidenceSelect },
     });
-    if (siblings.some((other) => other.status === "success" || WORK_RESERVED_STATUSES.includes(other.status)
-      || hasPotentialSubmission(other) || (other.status === "failed" && other.cvDocxPath))) {
+    // Temporary rollout excludes retries through a newly-created duplicate as
+    // well as resets of an old row, even if the predecessor proved no send.
+    if (siblings.length) {
       await tx.application.update({ where: { id }, data: {
         startedAt: new Date(),
         errorMessage: "Invio in attesa: esiste un'altra candidatura per questa offerta, già inviata o da verificare. Questa elaborazione non ha effettuato nuovi invii.",
@@ -177,15 +189,26 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
 /** Recheck fresh gates immediately before form/data transmission or email.
  * This marker must never be reset by recovery or ordinary queue publication.
  */
-export async function beginApplicationSubmission(id: string, token: Date, db: DB = prisma): Promise<boolean> {
+export async function beginApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = ""): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || !["optimizing", "ready_to_apply"].includes(row.status) || hasPotentialSubmission(row)) return false;
+    if (rolloutApplicationIneligibility(row)) return false;
     const reason = currentWorkerIneligibility(row);
     if (reason || !await capacityAvailable(tx, row)) {
       await tx.application.update({ where: { id }, data: {
         status: "queued", startedAt: new Date(), submitConfirmation: NOT_SUBMITTED,
         errorMessage: heldMessage(reason ?? "session_capacity_reached"),
+      } });
+      return false;
+    }
+    const budgetReason = await reserveSubmissionBudget(tx, { applicationId: id,
+      subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: token, channel }, "begin");
+    if (budgetReason) {
+      await tx.application.update({ where: { id }, data: {
+        status: "ready_to_apply",
+        submitConfirmation: budgetReason === "rollout_daily_budget_reached" ? NOT_SUBMITTED : "UNCONFIRMED",
+        errorMessage: budgetReason === "rollout_daily_budget_reached" ? ROLLOUT_BUDGET_HELD_MESSAGE : heldMessage(budgetReason),
       } });
       return false;
     }
@@ -198,11 +221,13 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
  * stopped attempt may already have transmitted uploads; retain its reservation
  * and uncertainty rather than permitting an automatic replay.
  */
-export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma): Promise<boolean> {
+export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = ""): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || row.status !== "applying" || row.submitConfirmation !== SUBMISSION_STARTED) return false;
-    const reason = currentWorkerIneligibility(row);
+    const reason = currentWorkerIneligibility(row)
+      ?? await reserveSubmissionBudget(tx, { applicationId: id,
+        subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: token, channel }, "recheck");
     if (reason || !await capacityAvailable(tx, row)) {
       await tx.application.update({ where: { id }, data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
@@ -228,6 +253,11 @@ export async function completeApplicationSubmission(
     const inFlight = row.status === "applying" && row.submitConfirmation === SUBMISSION_STARTED;
     const recovered = row.status === "ready_to_apply" && row.submitConfirmation === "UNCONFIRMED";
     if (!inFlight && !recovered) return false;
+    const reservation = await tx.applicationSubmissionReservation.findFirst({ where: {
+      applicationId: id, subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: token,
+      channel: typeof data.submittedVia === "string" ? data.submittedVia : "",
+    }, select: { id: true } });
+    if (!reservation) return false;
     if (data.submittedVia === "email_recruiter" && data.submitConfirmation === "EMAIL_SENT") {
       const attempt = await tx.applicationEmailAttempt.findUnique({
         where: { attemptKey: `application-${id}-${token.getTime()}` },

@@ -618,6 +618,24 @@ model Application {
   @@index([sessionId])
 }
 
+model ApplicationSubmissionReservation {
+  id               String   @id @default(cuid())
+  applicationId    String
+  subjectKey       String
+  attemptStartedAt DateTime
+  channel          String
+  rolloutStartedAt DateTime
+  budgetDay        DateTime @db.Date
+  reservedAt       DateTime @default(now())
+
+  // Deliberately no cascading FK: deleting a customer/application must not
+  // refund a possible external attempt or erase the day's safety budget.
+  // Contains only an opaque application ID, channel and timing, never a CV.
+  @@unique([applicationId, budgetDay])
+  @@unique([subjectKey, budgetDay])
+  @@index([budgetDay])
+}
+
 /// Risposta inbound a una candidatura inviata via email_recruiter.
 /// Una riga per ogni email ricevuta dall'indirizzo reply+<appId>@inbound.
 /// Conserviamo il contenuto per mostrarlo all'utente nella dashboard e per

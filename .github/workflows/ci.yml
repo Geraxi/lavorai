@@ -47,6 +47,17 @@ jobs:
       - name: Auto-apply quality regressions
         run: npm run test:auto-apply-quality
 
+      - name: Manual-only rollout and producer regressions
+        run: npm run test:manual-rollout
+
+      - name: Atomic global submission budget PostgreSQL integration
+        env:
+          PGPASSWORD: ci_password
+          MANUAL_ROLLOUT_TEST_DATABASE_URL: "postgresql://ci_user:ci_password@127.0.0.1:5432/lavorai_manual_rollout_test?connection_limit=24"
+        run: |
+          psql -h 127.0.0.1 -U ci_user -d ci_db -c 'CREATE DATABASE lavorai_manual_rollout_test'
+          npm run test:manual-rollout-postgres
+
       - name: Send and reply safety regressions
         run: npm run test:send-reply
 

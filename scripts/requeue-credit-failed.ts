@@ -1,3 +1,4 @@
+import { automaticApplicationsBlocked } from "../src/lib/application-rollout";
 /**
  * Riaccoda tutte le Application status=failed il cui errorMessage contiene
  * "credit balance is too low" (errore Anthropic 400 da credito esaurito).
@@ -12,6 +13,7 @@ import { enqueueApplication } from "../src/lib/application-queue";
 const APPLY = process.argv.includes("--apply");
 
 async function main() {
+  if (APPLY && automaticApplicationsBlocked()) throw new Error("historical_application_retries_blocked");
   const failed = await prisma.application.findMany({
     where: {
       status: "failed",
