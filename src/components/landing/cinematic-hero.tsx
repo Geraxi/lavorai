@@ -17,8 +17,8 @@ const instrumentSerif = localFont({
   display: "swap",
 });
 
-const VIDEO_URL = "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260314_131748_f2ca2a28-fed7-44c8-b9a9-bd9acdd5ec31.mp4";
-const POSTER_URL = "/lavorai-cinematic-poster.jpg";
+const VIDEO_URL = "/lavorai-hero-starry-sky.mp4";
+const POSTER_URL = "/lavorai-hero-starry-sky-poster.jpg";
 
 /** Decorative video: respect reduced motion before loading it and keep a
  * locally hosted still visible when autoplay or the remote video is unavailable. */

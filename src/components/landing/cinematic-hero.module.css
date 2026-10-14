@@ -101,6 +101,7 @@
 }
 @media (max-width: 639px) {
   .hero { min-height: 100svh; }
+  .video, .poster { object-position: 30% center; }
   .header { padding: 20px; gap: 16px; }
   .brand { font-size: 25px; }
   .navActions { gap: 10px; }
