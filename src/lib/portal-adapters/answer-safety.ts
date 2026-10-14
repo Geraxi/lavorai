@@ -1,8 +1,8 @@
-import { questionFingerprint, permitsQuestionAnswer } from "../application-question-answers";
+import { resolveScopedQuestionAnswer } from "../application-question-answers";
 
 /** Normalize a question without discarding its factual scope (country, skill, units). */
 export function questionKey(label: string): string {
-  return label.split(" | ")[0].toLowerCase().replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim()
+  return label.toLowerCase().replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim()
     .replace(/^(?:what is|please enter|please provide|enter|provide) (?:your )?/, "").replace(/^your /, "");
 }
 export function exactOption(options: string[] | undefined, answer: string): string | null {
@@ -33,13 +33,6 @@ export function matchingScopedAnswer(
   stored: Array<{ label: string; answer: string; kind?: string; options?: string[]; fingerprint?: string }> | undefined,
   field: { label: string; kind: string; options?: string[] },
 ): string | null {
-  const question = { label: field.label.trim(), kind: field.kind, options: field.options ?? [] };
-  const fingerprint = questionFingerprint(question);
-  const matches = (stored ?? []).filter((answer) => {
-    if (!answer.fingerprint || answer.fingerprint !== fingerprint || !answer.kind) return false;
-    const savedQuestion = { label: answer.label.trim(), kind: answer.kind, options: answer.options ?? [] };
-    return questionFingerprint(savedQuestion) === fingerprint && permitsQuestionAnswer(question, answer.answer);
-  });
-  const values = new Set(matches.map((answer) => answer.answer));
-  return values.size === 1 ? matches[0].answer : null;
+  return resolveScopedQuestionAnswer(stored, field).answer;
 }
+export { resolveScopedQuestionAnswer };

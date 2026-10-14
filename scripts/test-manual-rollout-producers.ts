@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { z } from "zod";
+import * as continuation from "../src/lib/application-answer-continuation";
 import * as rollout from "../src/lib/application-rollout";
 
 // Execute actual production sources with hermetic DB/queue/provider boundaries.
@@ -13,6 +14,8 @@ const json = (body: unknown, options?: { status?: number }) => ({ body, status: 
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-rollout": rollout,
+    "./application-answer-continuation": continuation,
+    "@/lib/application-answer-continuation": continuation,
     "@/lib/application-pause": { applicationsPaused: () => false },
     "@/lib/db": { prisma: noAccess },
     "@/lib/session": { getCurrentUser: async () => ({ id: "owner", emailVerified: new Date() }) },
@@ -44,7 +47,7 @@ function enable() {
 }
 function row(id: string, overrides: Record<string, any> = {}) {
   return { id, userId: "owner", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
-    retryCount: 0, startedAt: null, completedAt: null, submittedAt: null, submittedVia: null,
+    answerContinuationJson: null, retryCount: 0, startedAt: null, completedAt: null, submittedAt: null, submittedVia: null,
     submitConfirmation: null, canaryLog: null, answersUsedJson: null, viewedAt: null,
     lastReplyAt: null, replyCount: 0, userStatus: null, ...overrides };
 }
@@ -95,7 +98,7 @@ async function testBlockedEntrypoints() {
       assert.equal(response.status, 503, `${path} must block before DB or provider access`);
     }
     const questions = load("src/app/api/questions/route.ts");
-    assert.equal((await questions.POST(request)).status, 503);
+    assert.equal((await questions.POST({ json: async () => ({ answers: [{}] }) })).status, 400);
     const credit = load("src/lib/credit-failure-retry.ts");
     await assert.rejects(credit.retryCreditFailures({ dryRun: false }, noAccess), /historical_application_retries_blocked/);
     const creditRoute = load("src/app/api/admin/retry-credit-failures/route.ts", {

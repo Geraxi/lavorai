@@ -5,7 +5,7 @@ import type { CVProfile } from "../src/lib/cv-profile-types";
 const cv: CVProfile = {
   firstName: "Umberto", lastName: "Geraci", email: "u@example.com", phone: "+39 123 456 7890", city: "Milano",
   title: "Software Engineer", summary: "", skills: [{ name: "React" }], languages: [{ name: "English", level: "C1" }], education: [],
-  experiences: [{ role: "Engineer", company: "Current Co", location: "Milano", startDate: "2023", endDate: "", description: "", bullets: [] }],
+  experiences: [{ role: "Engineer", company: "Current Co", location: "Milano", startDate: "2023", endDate: "Present", description: "", bullets: [] }],
   links: [{ label: "LinkedIn", url: "https://linkedin.com/in/example" }],
 };
 
@@ -34,3 +34,5 @@ console.log("CV answer reuse: wording, current roles, option matching and sensit
 assert.equal(suggestAnswerFromCv("What is your current or previous job title?", "text", undefined, cv), "Engineer");
 assert.equal(suggestAnswerFromCv("Who is your current or previous employer?", "text", undefined, cv), "Current Co");
 assert.equal(suggestAnswerFromCv("Location (City)", "text", undefined, cv), "Milano");
+
+assert.equal(suggestAnswerFromCv("Current employer", "text", undefined, { ...cv, experiences: [{ ...cv.experiences[0], endDate: "" }] }), null, "Missing end date is ambiguous");

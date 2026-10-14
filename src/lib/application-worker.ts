@@ -1,6 +1,6 @@
 import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
-import { beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
+import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { optimizeCV } from "@/lib/claude";
@@ -434,6 +434,7 @@ export async function processApplication(
       where: { id: applicationId }, select: { userProvidedAnswersJson: true },
     });
     const storedAnswers = parseScopedApplicationAnswers(answerRow?.userProvidedAnswersJson, applicationId);
+    const reusableAnswers = await prisma.userAnswer.findMany({ where: { userId: app.userId, source: "user", answeredAt: { not: null } }, select: { label: true, kind: true, answer: true, source: true, answeredAt: true, optionsJson: true } });
     // Unknown failures may follow an accepted submit. Never retry them or
     // switch to another delivery channel without proof that nothing was sent.
     const outcome = await attemptPortalAdapterSubmit({
@@ -448,12 +449,11 @@ export async function processApplication(
       userEmail: app.user.email,
       answers: userAnswers,
       storedAnswers,
+      reusableAnswers,
       userYearsExperience: app.user.yearsExperience,
       userEnglishLevel: app.user.englishLevel,
       userNoticePeriod: app.user.noticePeriod,
-      // Nessuna candidatura si ferma ad aspettare l'utente: in ogni
-      // modalità l'AI risponde a ciò che è onestamente rispondibile e per
-      // il resto usa default conservativi marcati "assumed" (vedi ai-answer).
+      // Unknown facts and declarations always wait for the candidate.
       autonomous: true,
       preferredCity: firstPreferredCity(app.user.preferences?.locationsJson),
       jobLocation: app.job.location,
@@ -586,19 +586,14 @@ export async function processApplication(
               kind: q.kind,
               optionsJson: q.options ? JSON.stringify(q.options) : null,
             },
-            update: {
-              // aggiorna metadati (opzioni possono cambiare), NON la risposta
-              label: q.label,
-              kind: q.kind,
-              optionsJson: q.options ? JSON.stringify(q.options) : null,
-            },
+            update: {}, // preserve the wording/options originally answered by the user
           })
           .catch((err) =>
             console.error(`[worker] upsert UserAnswer failed`, err),
           );
       }
       await prisma.application.updateMany({
-        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply", "needs_answers"] } },
         data: {
           status: "needs_answers",
           pendingQuestionsJson: JSON.stringify(questions),
@@ -1535,7 +1530,7 @@ async function notifyNeedsAnswers(applicationId: string): Promise<void> {
   <div style="font-size:20px;font-weight:700;margin-bottom:20px;">Lavor<span style="color:#16A34A;">AI</span></div>
   <h1 style="font-size:20px;margin:0 0 10px;">${locale === "en" ? "A few quick questions" : "Poche domande veloci"}</h1>
   <p style="font-size:15px;line-height:1.6;color:#334155;">${locale === "en" ? `The application for <strong>${escapeHtml(jobTitle)}</strong> at <strong>${escapeHtml(company)}</strong> has required questions only you can answer.` : `La candidatura per <strong>${escapeHtml(jobTitle)}</strong> presso <strong>${escapeHtml(company)}</strong> ha domande obbligatorie a cui solo tu puoi rispondere.`}</p>
-  <p style="font-size:15px;line-height:1.6;color:#334155;">${locale === "en" ? "Answer once — we reuse them next time and submit automatically." : "Rispondi una volta — le riusiamo la prossima volta e inviamo in automatico."}</p>
+  <p style="font-size:15px;line-height:1.6;color:#334155;">${locale === "en" ? "We reuse explicit facts when they agree. Review declarations for this application. Saving does not send it: confirm continuation separately when a safe pre-submission pause is verified." : "Riutilizziamo i fatti espliciti quando concordano. Verifica le dichiarazioni per questa candidatura. Salvare non invia: conferma la ripresa separatamente quando la pausa prima dell’invio è verificata."}</p>
   <div style="text-align:center;margin:28px 0;"><a href="${url}" style="display:inline-block;background:#16A34A;color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:600;">${locale === "en" ? "Answer the questions" : "Rispondi alle domande"}</a></div>
 </body></html>`,
     });
@@ -1782,6 +1777,7 @@ interface AdapterSubmitInput {
   userId: string;
   userEmail: string;
   answers?: import("@/lib/application-answers").ApplicationAnswers;
+  reusableAnswers?: import("@/lib/candidate-facts").SavedFactAnswer[];
   storedAnswers?: Array<{ label: string; answer: string; kind?: string; options?: string[]; fingerprint?: string }>;
   userYearsExperience?: number | null;
   userEnglishLevel?: string | null;
@@ -1865,9 +1861,14 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     if (!await beginApplicationSubmission(applicationId, input.workToken, undefined, `portal_${adapter.id}`)) {
       return { ok: false, status: "worker_gate_blocked", error: "Current worker gates blocked delivery." };
     }
+    let finalBoundaryEntered = false;
+    const audit: import("@/lib/portal-adapters/ai-answer").GivenAnswer[] = [];
     const outcome = await adapter.apply(page, {
       profile,
-      beforeSubmit: () => recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, `portal_${adapter.id}`),
+      beforeSubmit: () => {
+        finalBoundaryEntered = true;
+        return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, `portal_${adapter.id}`);
+      },
       userEmail: formEmail,
       cvLocalPath,
       clLocalPath,
@@ -1878,6 +1879,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
         : process.env.PORTAL_SUBMIT_DRY_RUN === "true",
       answers: input.answers,
       storedAnswers: input.storedAnswers,
+      reusableAnswers: input.reusableAnswers,
       userYearsExperience: input.userYearsExperience,
       userEnglishLevel: input.userEnglishLevel,
       userNoticePeriod: input.userNoticePeriod,
@@ -1891,12 +1893,14 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       jobDescription: input.jobDescription,
       // Audit of generated answers is separate from explicit application-bound
       // permission. Historical values never authorize another form.
-      onAiAnswers: (given) => {
-        void persistAiAnswers(userId, applicationId, given).catch((err) =>
-          console.error(`[worker] ${applicationId} persist AI answers failed`, err),
-        );
-      },
+      onAiAnswers: (given) => { audit.push(...given); },
     });
+    if (audit.length) await persistAiAnswers(userId, applicationId, input.workToken, audit);
+    // Only Recruitee's audited sequence has no candidate-data transmission
+    // before needs_user_input. Browser uploads/autosave cannot prove that.
+    if (adapter.id === "recruitee" && !finalBoundaryEntered && !outcome.ok && outcome.status === "needs_user_input") {
+      await attestAnswerPause(applicationId, input.workToken, "portal_recruitee", JSON.stringify(outcome.pendingQuestions), jobUrl);
+    }
     return outcome;
   } finally {
     if (browser) await browser.close().catch(() => void 0);
@@ -1915,38 +1919,14 @@ function firstPreferredCity(locationsJson: string | null | undefined): string | 
   }
 }
 
-/**
- * Salva le risposte date da AI/regole come UserAnswer riutilizzabili.
- * Una risposta data dall'utente (source "user") non viene mai sovrascritta.
- */
-async function persistAiAnswers(
-  userId: string,
-  applicationId: string,
-  given: Array<{ label: string; kind: string; answer: string; source: "user" | "profile" | "ai" | "rule" | "assumed" }>,
-): Promise<void> {
-  const { normalizeLabel } = await import("@/lib/portal-adapters/ai-answer");
-  // Tutte le risposte usate in QUESTA candidatura → visibili in /inbox.
-  await prisma.application
-    .update({
-      where: { id: applicationId },
-      data: { answersUsedJson: JSON.stringify(given.map((g) => ({ label: g.label, answer: g.answer, source: g.source }))) },
-    })
-    .catch(() => void 0);
-  for (const g of given) {
-    if (g.source !== "ai" && g.source !== "rule" && g.source !== "assumed") continue;
-    const labelKey = normalizeLabel(g.label);
-    if (!labelKey || !g.answer.trim()) continue;
-    const existing = await prisma.userAnswer.findUnique({
-      where: { userId_labelKey: { userId, labelKey } },
-      select: { answer: true, source: true },
-    });
-    if (existing?.answer && existing.source === "user") continue;
-    await prisma.userAnswer.upsert({
-      where: { userId_labelKey: { userId, labelKey } },
-      create: { userId, labelKey, label: g.label, kind: g.kind, answer: g.answer, source: g.source, answeredAt: new Date() },
-      update: { answer: g.answer, source: g.source, answeredAt: new Date() },
-    });
-  }
+/** Generated answers remain an application audit, never user facts. Awaited and
+ * fenced by the worker token so an old callback cannot overwrite a continuation. */
+async function persistAiAnswers(userId: string, applicationId: string, token: Date,
+  given: import("@/lib/portal-adapters/ai-answer").GivenAnswer[]): Promise<void> {
+  await prisma.application.updateMany({
+    where: { id: applicationId, userId, startedAt: token, status: "applying" },
+    data: { answersUsedJson: JSON.stringify(given) },
+  });
 }
 
 // ---------- Adzuna URL resolver via Playwright ----------

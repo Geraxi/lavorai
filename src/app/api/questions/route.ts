@@ -1,14 +1,16 @@
-import { automaticApplicationsBlocked } from "@/lib/application-rollout";
+import { answerContinuationIneligibility, answerConfirmationDigest, continuationSelect } from "@/lib/application-answer-continuation";
+import { queueAnswerContinuation } from "@/lib/application-worker-gates";
+import { candidateFacts, resolveCandidateFact } from "@/lib/candidate-facts";
+import { parseAnswers } from "@/lib/application-answers";
 import { reuseCvAnswers } from "@/lib/cv-answer-reuse";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
 import { rowToProfile } from "@/lib/cv-profile-types";
-import { suggestAnswerFromCv } from "@/lib/cv-question-suggestions";
 import {
   completesApplicationQuestion, encodeExplicitApplicationAnswers, isReusableProfileQuestion,
-  matchingExplicitApplicationAnswer, normalizeQuestionLabel, parseApplicationQuestion,
+  resolveExplicitApplicationAnswer, normalizeQuestionLabel, parseApplicationQuestion,
   parseScopedApplicationAnswers, permitsQuestionAnswer, questionFingerprint,
   type ExplicitApplicationAnswer,
 } from "@/lib/application-question-answers";
@@ -20,16 +22,19 @@ export const runtime = "nodejs";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const [waiting, globalAnswers, profileRow] = await Promise.all([
+  const [waiting, globalAnswers, profileRow, preferences, userFacts] = await Promise.all([
     prisma.application.findMany({
       where: { userId: user.id, status: "needs_answers" },
-      select: { id: true, pendingQuestionsJson: true, userProvidedAnswersJson: true,
+      select: { ...continuationSelect,
         job: { select: { company: true, title: true, location: true, description: true, url: true } } },
     }),
-    prisma.userAnswer.findMany({ where: { userId: user.id, source: "user" }, select: { label: true, kind: true, answer: true } }),
+    prisma.userAnswer.findMany({ where: { userId: user.id, source: "user" }, select: { label: true, kind: true, answer: true, source: true, answeredAt: true, optionsJson: true } }),
     prisma.cVProfile.findUnique({ where: { userId: user.id } }),
+    prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { applicationAnswersJson: true } }),
+    prisma.user.findUnique({ where: { id: user.id }, select: { email: true, yearsExperience: true, englishLevel: true, noticePeriod: true } }),
   ]);
   const profile = profileRow ? rowToProfile(profileRow) : null;
+  const facts = candidateFacts(profile, userFacts ?? user, parseAnswers(preferences?.applicationAnswersJson), globalAnswers);
   const questions = waiting.flatMap(app => {
     const values = safeParse(app.pendingQuestionsJson ?? "[]");
     if (!Array.isArray(values)) return [];
@@ -40,24 +45,29 @@ export async function GET() {
       const fingerprint = questionFingerprint(question);
       if (seen.has(fingerprint)) return [];
       seen.add(fingerprint);
-      const explicit = matchingExplicitApplicationAnswer(app.userProvidedAnswersJson, app.id, question);
-      const cv = explicit ? null : suggestAnswerFromCv(question.label, question.kind, question.options, profile, user.yearsExperience);
-      const global = isReusableProfileQuestion(question) ? globalAnswers.find(answer =>
-        normalizeQuestionLabel(answer.label) === normalizeQuestionLabel(question.label)
-        && isReusableProfileQuestion(answer) && answer.answer && permitsQuestionAnswer(question, answer.answer))?.answer : null;
-      const suggestion = explicit ? null : cv ?? global ?? null;
+      const explicit = resolveExplicitApplicationAnswer(app.userProvidedAnswersJson, app.id, question);
+      const resolved = explicit.answer || explicit.conflict ? null : resolveCandidateFact(question, { facts });
+      const suggestion = resolved?.answer ?? null;
       return [{
         id: `${app.id}:${fingerprint}`, applicationId: app.id, fingerprint,
         labelKey: normalizeQuestionLabel(question.label), ...question,
-        answer: explicit?.answer ?? "", source: explicit ? "user" : "pending",
-        suggestion, suggestionSource: cv ? "cv" : global ? "previous_user" : null,
+        answer: explicit.answer ?? "", source: explicit.answer ? "user" : "pending",
+        suggestion, suggestionSource: resolved?.provenance[0]?.source ?? null,
+        provenance: resolved?.provenance ?? [], conflict: explicit.conflict || resolved?.conflict || false,
         requiresApplicationScope: !isReusableProfileQuestion(question),
         applications: [{ id: app.id, company: app.job.company ?? "Azienda", title: app.job.title,
           location: app.job.location, description: app.job.description, url: app.job.url }],
       }];
     });
   });
-  return NextResponse.json({ locale: user.locale, questions, waitingApplications: waiting.length });
+  const continuations = waiting.map(app => {
+    const appQuestions = questions.filter(question => question.applicationId === app.id);
+    const complete = appQuestions.length > 0 && appQuestions.every(question => completesApplicationQuestion(question, question.answer || question.suggestion || ""));
+    const reason = answerContinuationIneligibility(app, "paused", app.job.url) ?? (complete ? null : "answers_incomplete");
+    return { applicationId: app.id, company: app.job.company, title: app.job.title, canResume: !reason, reason,
+      proofDigest: !reason && app.answerContinuationJson ? answerConfirmationDigest(app.answerContinuationJson, app.userProvidedAnswersJson, facts) : null };
+  });
+  return NextResponse.json({ locale: user.locale, questions, continuations, waitingApplications: waiting.length });
 }
 
 type SubmittedAnswer = { applicationId: string; fingerprint: string; answer: string };
@@ -68,8 +78,7 @@ type SubmittedAnswer = { applicationId: string; fingerprint: string; answer: str
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (automaticApplicationsBlocked()) return NextResponse.json({ error: "historical_application_retries_blocked" }, { status: 503 });
-  let body: { reuseCvOnly?: boolean; answers?: SubmittedAnswer[] };
+  let body: { reuseCvOnly?: boolean; answers?: SubmittedAnswer[]; resumeApplications?: Array<{ applicationId: string; proofDigest: string }> };
   try { body = await request.json(); }
   catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); }
   if (!body || typeof body !== "object" || Array.isArray(body)
@@ -79,6 +88,9 @@ export async function POST(request: NextRequest) {
         || typeof answer.answer !== "string" || answer.answer.length > 2000)))) {
     return NextResponse.json({ error: "invalid_answers" }, { status: 400 });
   }
+  if (body.resumeApplications != null && (!Array.isArray(body.resumeApplications) || body.resumeApplications.length > 100
+    || body.resumeApplications.some(item => !item || typeof item.applicationId !== "string" || !item.applicationId
+      || typeof item.proofDigest !== "string" || !/^[a-f0-9]{64}$/.test(item.proofDigest)))) return NextResponse.json({ error: "invalid_confirmation" }, { status: 400 });
   if (body.reuseCvOnly === true) {
     await reuseCvAnswers(user.id, user.yearsExperience);
     return NextResponse.json({ ok: true });
@@ -86,9 +98,7 @@ export async function POST(request: NextRequest) {
 
   const waiting = await prisma.application.findMany({
     where: { userId: user.id, status: "needs_answers" },
-    select: { id: true, pendingQuestionsJson: true, userProvidedAnswersJson: true,
-      submitConfirmation: true, consentGrantedAt: true, startedAt: true, submittedAt: true, submittedVia: true,
-      user: { select: { preferences: { select: { autoApplyMode: true } } } } },
+    select: { ...continuationSelect },
   });
   const appById = new Map(waiting.map(app => [app.id, app]));
   const changes = new Map<string, Map<string, ExplicitApplicationAnswer>>();
@@ -100,6 +110,8 @@ export async function POST(request: NextRequest) {
     if (!answer) continue;
     const app = appById.get(item.applicationId);
     if (!app) return NextResponse.json({ error: "application_not_found" }, { status: 404 });
+    if (app.submitConfirmation !== "NOT_SUBMITTED" || app.submittedAt || app.submittedVia || app.submissionReceiptJson || app.completedAt)
+      return NextResponse.json({ error: "application_outcome_uncertain" }, { status: 409 });
     const pending = safeParse(app.pendingQuestionsJson ?? "[]");
     const question = Array.isArray(pending) ? pending.map(parseApplicationQuestion)
       .find(value => value && questionFingerprint(value) === item.fingerprint) : null;
@@ -116,10 +128,9 @@ export async function POST(request: NextRequest) {
   const prepared = new Map<string, string>();
   for (const [applicationId, edits] of changes) {
     const app = appById.get(applicationId)!;
-    const merged = new Map(parseScopedApplicationAnswers(app.userProvidedAnswersJson, app.id).map(answer => [answer.fingerprint, answer]));
-    for (const [fingerprint, answer] of edits) merged.set(fingerprint, answer);
-    if (merged.size > 100) return NextResponse.json({ error: "too_many_answers" }, { status: 400 });
-    const json = encodeExplicitApplicationAnswers(applicationId, [...merged.values()]);
+    const merged = [...parseScopedApplicationAnswers(app.userProvidedAnswersJson, app.id).filter(answer => !edits.has(answer.fingerprint)), ...edits.values()];
+    if (merged.length > 100) return NextResponse.json({ error: "too_many_answers" }, { status: 400 });
+    const json = encodeExplicitApplicationAnswers(applicationId, merged);
     if (json.length > 1_000_000) return NextResponse.json({ error: "answers_too_large" }, { status: 400 });
     prepared.set(applicationId, json);
   }
@@ -128,7 +139,9 @@ export async function POST(request: NextRequest) {
     const changed = await prisma.application.updateMany({
       where: { id: app.id, userId: user.id, status: "needs_answers", startedAt: app.startedAt,
         pendingQuestionsJson: app.pendingQuestionsJson, userProvidedAnswersJson: app.userProvidedAnswersJson,
-        submitConfirmation: app.submitConfirmation, submittedAt: app.submittedAt, submittedVia: app.submittedVia },
+        submitConfirmation: "NOT_SUBMITTED", submittedAt: null, submittedVia: null,
+        submissionReceiptJson: null, completedAt: null, consentGrantedAt: app.consentGrantedAt,
+        answerContinuationJson: app.answerContinuationJson },
       data: { userProvidedAnswersJson: json },
     });
     if (changed.count !== 1) return NextResponse.json({ error: "questions_changed_reload" }, { status: 409 });
@@ -136,49 +149,21 @@ export async function POST(request: NextRequest) {
     saved += changes.get(applicationId)!.size;
   }
 
-  const profileRow = await prisma.cVProfile.findUnique({ where: { userId: user.id } });
-  const profile = profileRow ? rowToProfile(profileRow) : null;
   let requeued = 0;
-  for (const app of waiting) {
-    const pending = safeParse(app.pendingQuestionsJson ?? "[]");
-    if (!Array.isArray(pending) || !pending.length || app.submitConfirmation !== "NOT_SUBMITTED" || app.submittedAt || app.submittedVia) continue;
-    const questions = pending.map(parseApplicationQuestion);
-    if (questions.some(question => question === null)) continue;
-    const mode = app.user.preferences?.autoApplyMode;
-    if (mode !== "auto" && (!app.consentGrantedAt || !["manual", "hybrid"].includes(mode ?? ""))) continue;
-    let usedCv = false;
-    const allAnswered = questions.every(question => {
-      if (!question) return false;
-      const explicit = matchingExplicitApplicationAnswer(app.userProvidedAnswersJson, app.id, question);
-      if (explicit) return completesApplicationQuestion(question, explicit.answer);
-      // CV facts never imply a declaration, agreement or legal permission.
-      if (!isReusableProfileQuestion(question)) return false;
-      const answer = suggestAnswerFromCv(question.label, question.kind, question.options, profile, user.yearsExperience);
-      if (!answer || !completesApplicationQuestion(question, answer)) return false;
-      usedCv = true;
-      return true;
-    });
-    if (!allAnswered) continue;
-    const changed = await prisma.application.updateMany({
-      where: {
-        id: app.id, userId: user.id, status: "needs_answers", submitConfirmation: "NOT_SUBMITTED",
-        submittedAt: null, submittedVia: null, startedAt: app.startedAt,
-        pendingQuestionsJson: app.pendingQuestionsJson, userProvidedAnswersJson: app.userProvidedAnswersJson,
-        consentGrantedAt: app.consentGrantedAt,
-        user: { is: { preferences: { is: { autoApplyMode: mode } },
-          ...(usedCv && profileRow ? { cvProfile: { is: { id: profileRow.id, updatedAt: profileRow.updatedAt } }, yearsExperience: user.yearsExperience ?? null } : {}),
-        } },
-      },
-      data: { status: "queued", startedAt: null, errorMessage: null, pendingQuestionsJson: null },
-    });
-    if (changed.count !== 1) continue;
+  const held: Array<{ applicationId: string; reason: string }> = [];
+  for (const item of body.resumeApplications ?? []) {
+    const app = appById.get(item.applicationId);
+    if (!app) { held.push({ applicationId: item.applicationId, reason: "application_not_found" }); continue; }
+    const result = await queueAnswerContinuation({ applicationId: app.id, userId: user.id,
+      proofDigest: item.proofDigest, expectedAnswersJson: app.userProvidedAnswersJson });
+    if (result !== "queued") { held.push({ applicationId: app.id, reason: result ?? "continuation_held" }); continue; }
     await enqueueApplication(app.id, { preserveClaim: true }).catch(error =>
-      console.error(`[questions] queue notification ${app.id} failed; durable queue retained`, error),
-    );
+      console.error(`[questions] queue notification ${app.id} failed; durable queue retained`, error));
     requeued++;
   }
-  return NextResponse.json({ ok: true, requeued, saved, remainingApplications: waiting.length - requeued });
+  return NextResponse.json({ ok: true, requeued, saved, held, remainingApplications: waiting.length - requeued });
 }
+
 function safeParse(value: string): unknown {
   try { return JSON.parse(value); } catch { return null; }
 }

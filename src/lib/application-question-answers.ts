@@ -1,3 +1,4 @@
+import { reusableFactKey } from "./candidate-facts";
 import { createHash } from "node:crypto";
 
 export type ApplicationQuestion = { label: string; kind: string; options: string[] };
@@ -37,8 +38,7 @@ export function completesApplicationQuestion(question: ApplicationQuestion, answ
  * an answer for the exact application, even if an older global answer exists. */
 export function isReusableProfileQuestion(input: { label: string; kind?: string }): boolean {
   if (input.kind === "checkbox") return false;
-  const key = normalizeQuestionLabel(input.label);
-  return /^(first name|given name|nome|last name|family name|surname|cognome|full name|nome e cognome|email|e mail|email address|indirizzo email|phone|phone number|telephone|mobile|telefono|numero di telefono|cellulare|city|current city|city of residence|current location|citt|citta|citt di residenza|citta di residenza|where do you live|where are you based|dove vivi|dove risiedi|current employer|current company|azienda attuale|datore di lavoro attuale|current or previous employer|most recent employer|last employer|ultima azienda|current job title|current position|ruolo attuale|posizione attuale|current or previous job title|most recent job title|last job title|most recent school|most recent university|ultima universit|ultima universita|linkedin|linkedin url|linkedin profile|profilo linkedin|portfolio|portfolio url|personal website|sito web personale|years of experience|years of professional experience|how many years of professional experience do you have|anni di esperienza|anni di esperienza professionale|quanti anni di esperienza professionale hai|english level|level of english|english proficiency|livello di inglese|highest education|highest level of education|titolo di studio|titolo di studio pi alto)$/.test(key);
+  return reusableFactKey(input.label) !== null;
 }
 
 export function parseExplicitApplicationAnswers(json: string | null | undefined, applicationId: string): ExplicitApplicationAnswer[] {
@@ -59,9 +59,24 @@ export function parseExplicitApplicationAnswers(json: string | null | undefined,
 export function encodeExplicitApplicationAnswers(applicationId: string, answers: ExplicitApplicationAnswer[]): string {
   return JSON.stringify({ version: 1, applicationId, answers });
 }
-export function matchingExplicitApplicationAnswer(json: string | null | undefined, applicationId: string, question: ApplicationQuestion): ExplicitApplicationAnswer | null {
+export function resolveScopedQuestionAnswer(
+  stored: Array<{ label: string; answer: string; kind?: string; options?: string[]; fingerprint?: string }> | undefined,
+  field: { label: string; kind: string; options?: string[] },
+): { answer: string | null; conflict: boolean } {
+  const question = { label: field.label.trim(), kind: field.kind, options: field.options ?? [] };
   const fingerprint = questionFingerprint(question);
-  return parseExplicitApplicationAnswers(json, applicationId).find(answer => answer.fingerprint === fingerprint) ?? null;
+  const matches = (stored ?? []).filter(answer => answer.fingerprint === fingerprint && answer.kind
+    && questionFingerprint({ label: answer.label.trim(), kind: answer.kind, options: answer.options ?? [] }) === fingerprint
+    && permitsQuestionAnswer(question, answer.answer));
+  const values = new Set(matches.map(answer => answer.answer));
+  return { answer: values.size === 1 ? matches[0].answer : null, conflict: values.size > 1 };
+}
+export function resolveExplicitApplicationAnswer(json: string | null | undefined, applicationId: string, question: ApplicationQuestion) {
+  return resolveScopedQuestionAnswer(parseExplicitApplicationAnswers(json, applicationId), question);
+}
+export function matchingExplicitApplicationAnswer(json: string | null | undefined, applicationId: string, question: ApplicationQuestion): ExplicitApplicationAnswer | null {
+  const resolved = resolveExplicitApplicationAnswer(json, applicationId, question);
+  return resolved.answer === null ? null : parseExplicitApplicationAnswers(json, applicationId).find(answer => answer.fingerprint === questionFingerprint(question) && answer.answer === resolved.answer) ?? null;
 }
 
 /** Worker/adapter contract: retain fingerprint and options through to field fill. */

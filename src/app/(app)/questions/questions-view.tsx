@@ -20,9 +20,11 @@ interface Question {
   answer: string;
   source: string;
   suggestion?: string | null;
-  suggestionSource?: "cv" | "previous_user" | null;
+  suggestionSource?: "cv" | "profile" | "preferences" | "previous_user" | null;
+  conflict?: boolean;
   applications: ApplicationExample[];
 }
+type Continuation = { applicationId: string; company: string; title: string; canResume: boolean; proofDigest: string | null; reason: string | null };
 type View = "pending" | "review" | "completed" | "focus";
 
 const categories = [
@@ -36,7 +38,7 @@ const categories = [
 
 function categoryFor(label: string) { return categories.find((category) => category.pattern.test(label)) ?? categories[categories.length - 1]; }
 function questionWording(question: Question, locale: string) { return question.requiresApplicationScope ? { text: question.label, translated: false } : displayQuestion(question.label, locale); }
-function suggestionLabel(question: Question) { return question.suggestionSource === "cv" ? "Dal tuo CV" : "Risposta precedente, da confermare qui"; }
+function suggestionLabel(question: Question) { return question.suggestionSource === "cv" ? "Dal tuo CV" : question.suggestionSource === "preferences" ? "Dalle tue preferenze" : question.suggestionSource === "profile" ? "Dal tuo profilo" : "Risposta esplicita precedente"; }
 function needsReview(question: Question) { return Boolean(question.suggestion || (question.answer.trim() && !["user", "cv"].includes(question.source))); }
 function isEnglishQuestion(label: string) { return /\b(the|and|with|for|from|this|that|are|you|your|will|have|working|office|role|position)\b/i.test(label); }
 function optionLanguage(question: Question, locale: string) { return locale === "it" && isEnglishQuestion(question.label) ? "en" : locale; }
@@ -69,6 +71,7 @@ export function QuestionsView() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [waiting, setWaiting] = useState(0);
+  const [continuations, setContinuations] = useState<Continuation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const saveInFlight = useRef(false);
@@ -80,13 +83,12 @@ export function QuestionsView() {
   const [locale, setLocale] = useState("it");
 
   async function load() {
-    const reused = await fetch("/api/questions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reuseCvOnly: true }) });
-    if (!reused.ok) throw new Error("Impossibile recuperare le risposte dal CV.");
     const response = await fetch("/api/questions", { cache: "no-store" });
     if (!response.ok) throw new Error("Impossibile caricare le domande.");
-    const data: { questions?: Question[]; waitingApplications?: number; locale?: string } = await response.json();
+    const data: { questions?: Question[]; continuations?: Continuation[]; waitingApplications?: number; locale?: string } = await response.json();
     const rows = data.questions ?? [];
     setQuestions(rows);
+    setContinuations(data.continuations ?? []);
     setValues(Object.fromEntries(rows.map((question) => [question.id, question.answer || question.suggestion || ""])));
     setWaiting(data.waitingApplications ?? 0);
     setLocale(data.locale === "en" ? "en" : "it");
@@ -132,13 +134,33 @@ export function QuestionsView() {
       } else if (result.remainingApplications) {
         setNotice(`Risposta salvata. Verifica risposte, consensi e stato delle ${result.remainingApplications} ${result.remainingApplications === 1 ? "candidatura" : "candidature"} in attesa.`);
       } else {
-        setNotice("Risposta salvata. Le candidature verranno aggiornate a breve.");
+        setNotice("Risposta salvata. Nessuna candidatura inviata.");
       }
+      await load();
       return true;
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Salvataggio non riuscito. Riprova.");
       return false;
     } finally { saveInFlight.current = false; setSaving(false); }
+  }
+
+  function hasUnsavedAnswers(applicationId: string) {
+    return questions.some(question => question.applicationId === applicationId
+      && (values[question.id] ?? "") !== (question.answer || question.suggestion || ""));
+  }
+  async function confirmResume(application: Continuation) {
+    if (saveInFlight.current || !application.proofDigest || hasUnsavedAnswers(application.applicationId)) return;
+    saveInFlight.current = true; setSaving(true);
+    try {
+      const response = await fetch("/api/questions", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeApplications: [{ applicationId: application.applicationId, proofDigest: application.proofDigest }] }) });
+      if (!response.ok) throw new Error("Conferma non riuscita. Ricarica le domande.");
+      const result: { requeued?: number } = await response.json();
+      setNotice(result.requeued ? "Ripresa confermata e in coda. L’invio resta soggetto ai controlli e al limite giornaliero; non è ancora avvenuto."
+        : "Candidatura ancora in attesa: risposte, consenso o prova di mancato invio non sono più verificabili. Nessun nuovo invio avviato.");
+      await load();
+    } catch (error) { setNotice(error instanceof Error ? error.message : "Conferma non riuscita."); }
+    finally { saveInFlight.current = false; setSaving(false); }
   }
 
   async function saveAndNext() {
@@ -151,11 +173,18 @@ export function QuestionsView() {
     <AppTopbar title="Domande" breadcrumb="Lavoro" />
     <main className="qa-page">
       <header className="qa-header">
-        <div><span className="qa-eyebrow">Il tuo profilo candidature</span><h1>{view === "focus" ? "Una risposta alla volta" : view === "review" ? "Verifica le tue risposte" : "Domande per le candidature"}</h1><p>Ogni risposta è salvata solo per la candidatura indicata. Consensi e dichiarazioni non vengono riutilizzati per altre aziende.</p></div>
+        <div><span className="qa-eyebrow">Il tuo profilo candidature</span><h1>{view === "focus" ? "Una risposta alla volta" : view === "review" ? "Verifica le tue risposte" : "Domande per le candidature"}</h1><p>Riutilizziamo i fatti espliciti da CV, profilo, preferenze e risposte verificate. I dati discordanti richiedono conferma. Consensi e dichiarazioni restano legati alla candidatura indicata. Salvare non avvia l’invio.</p></div>
         {waiting > 0 && <Link className="qa-waiting" href="/applications"><BriefcaseBusiness size={17} aria-hidden />{waiting} {waiting === 1 ? "candidatura in attesa" : "candidature in attesa"}<ChevronRight size={15} aria-hidden /></Link>}
       </header>
 
       {notice && <div className="qa-notice" role="status">{notice}<button type="button" onClick={() => setNotice("")} aria-label="Chiudi avviso">×</button></div>}
+      {!loading && continuations.map(application => <div className="qa-notice" key={application.applicationId}>
+        <span><strong>{application.company} · {application.title}</strong><br />{application.canResume
+          ? hasUnsavedAnswers(application.applicationId) ? "Salva le risposte modificate prima di confermare la ripresa." : "Le risposte sono disponibili e la pausa prima dell’invio è verificata. Conferma per rimettere questa candidatura in coda."
+          : application.reason === "answers_incomplete" ? "Completa o chiarisci le risposte prima di confermare la ripresa."
+          : "Risposte salvabili. Ripresa bloccata: manca una prova verificabile della pausa prima dell’invio oppure la candidatura non è idonea. Non verrà ritentata automaticamente."}</span>
+        {application.canResume && <button type="button" disabled={saving || hasUnsavedAnswers(application.applicationId)} onClick={() => void confirmResume(application)}>Conferma ripresa di questa candidatura</button>}
+      </div>)}
       {loading ? <div className="qa-empty">Caricamento delle domande…</div> : total === 0 ? <div className="qa-empty"><CircleCheck size={35} aria-hidden /><h2>Nessuna domanda in sospeso</h2><p>Quando una candidatura richiederà una risposta, la troverai qui.</p><Link href="/applications">Vai alle candidature <ArrowRight size={16} aria-hidden /></Link></div> : <>
         {view === "focus" && focused ? <div className="qa-focus-layout">
           <section className="qa-focus-main">
@@ -176,7 +205,7 @@ export function QuestionsView() {
             <div className="qa-list">{filtered.length ? filtered.map((question, index) => {
               const expanded = expandedId === question.id;
               const wording = questionWording(question, locale);
-              return <article className={`qa-row ${expanded ? "is-expanded" : ""}`} key={question.id}><button type="button" className="qa-row-head" onClick={() => setExpandedId(expanded ? null : question.id)} aria-expanded={expanded}><span className="qa-number">{index + 1}</span><span className="qa-category">{categoryFor(question.label).label}</span><span className="qa-question" title={wording.translated ? question.label : undefined}>{wording.text}<small>Solo per {question.applications[0]?.company ?? "questa azienda"} · {question.applications[0]?.title ?? "questa candidatura"}</small>{question.suggestion && !question.answer ? <small>{suggestionLabel(question)}: {displayOption(question.suggestion, optionLanguage(question, locale))}</small> : question.answer && <small>{question.source === "cv" ? "Dal tuo CV · " : ""}{displayOption(question.answer, optionLanguage(question, locale))}</small>}</span><span className="qa-impact-count">{question.applications.length ? `${question.applications.length} in attesa` : ""}</span><ChevronDown size={16} aria-hidden /></button>{expanded && <div className="qa-row-body">{question.applications.length > 0 && <div className="qa-context"><span>Solo per questa candidatura</span><div>{question.applications.slice(0, 3).map((app) => <Link href={`/applications?id=${app.id}`} key={app.id}><strong>{app.company}</strong><small>{applicationLabel(app)}</small>{view === "review" && applicationDescription(app) && <em>{applicationDescription(app)}</em>}</Link>)}{question.applications.length > 3 && <small>e altre {question.applications.length - 3}</small>}</div></div>}<AnswerField question={question} locale={locale} value={values[question.id] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [question.id]: value }))} /><div className="qa-row-actions">{view === "pending" && <button type="button" className="qa-secondary" onClick={() => { setFocusId(question.id); setView("focus"); }}>Apri a schermo intero</button>}<button type="button" className="qa-primary" disabled={saving} onClick={() => void save([question])}>{saving ? "Salvataggio…" : view === "review" ? "Conferma risposta" : "Salva risposta"}<ArrowRight size={15} aria-hidden /></button></div></div>}</article>;
+              return <article className={`qa-row ${expanded ? "is-expanded" : ""}`} key={question.id}><button type="button" className="qa-row-head" onClick={() => setExpandedId(expanded ? null : question.id)} aria-expanded={expanded}><span className="qa-number">{index + 1}</span><span className="qa-category">{categoryFor(question.label).label}</span><span className="qa-question" title={wording.translated ? question.label : undefined}>{wording.text}<small>Solo per {question.applications[0]?.company ?? "questa azienda"} · {question.applications[0]?.title ?? "questa candidatura"}</small>{question.conflict && !question.answer && <small>Dati discordanti: verifica e conferma il valore corretto per questa candidatura.</small>}{question.suggestion && !question.answer ? <small>{suggestionLabel(question)}: {displayOption(question.suggestion, optionLanguage(question, locale))}</small> : question.answer && <small>{question.source === "cv" ? "Dal tuo CV · " : ""}{displayOption(question.answer, optionLanguage(question, locale))}</small>}</span><span className="qa-impact-count">{question.applications.length ? `${question.applications.length} in attesa` : ""}</span><ChevronDown size={16} aria-hidden /></button>{expanded && <div className="qa-row-body">{question.applications.length > 0 && <div className="qa-context"><span>Solo per questa candidatura</span><div>{question.applications.slice(0, 3).map((app) => <Link href={`/applications?id=${app.id}`} key={app.id}><strong>{app.company}</strong><small>{applicationLabel(app)}</small>{view === "review" && applicationDescription(app) && <em>{applicationDescription(app)}</em>}</Link>)}{question.applications.length > 3 && <small>e altre {question.applications.length - 3}</small>}</div></div>}<AnswerField question={question} locale={locale} value={values[question.id] ?? ""} onChange={(value) => setValues((current) => ({ ...current, [question.id]: value }))} /><div className="qa-row-actions">{view === "pending" && <button type="button" className="qa-secondary" onClick={() => { setFocusId(question.id); setView("focus"); }}>Apri a schermo intero</button>}<button type="button" className="qa-primary" disabled={saving} onClick={() => void save([question])}>{saving ? "Salvataggio…" : view === "review" ? "Conferma risposta" : "Salva risposta"}<ArrowRight size={15} aria-hidden /></button></div></div>}</article>;
             }) : <div className="qa-list-empty">{query ? "Nessuna domanda corrisponde alla ricerca." : view === "pending" ? "Hai risposto a tutte le domande in sospeso." : view === "review" ? "Nessuna risposta da verificare." : "Nessuna risposta completata."}</div>}</div>
             {view === "review" && cvSuggestions.length > 0 && <div className="qa-batch"><div><strong>{cvSuggestions.length} {cvSuggestions.length === 1 ? "risposta trovata" : "risposte trovate"} nel CV</strong><span>Controllale prima di usarle nelle candidature.</span></div><button type="button" className="qa-primary" disabled={saving} onClick={() => void save(cvSuggestions)}>{saving ? "Salvataggio…" : "Conferma quelle dal CV"}<ArrowRight size={15} aria-hidden /></button></div>}
             {pending.length > 0 && view === "pending" && <button type="button" className="qa-start" onClick={() => { setFocusId(pending[0].id); setView("focus"); }}>Rispondi una domanda alla volta <ArrowRight size={16} aria-hidden /></button>}

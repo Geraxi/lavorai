@@ -52,7 +52,7 @@ export const recruiteeAdapter: PortalAdapter = {
     }
 
     // 2. Domande obbligatorie: stessa catena degli altri adapter (risposte
-    //    salvate → profilo → regole → AI → default prudente in autonomo).
+    //    risposte esplicite della candidatura → fatti verificabili → narrativa CV).
     const answers: Array<{ open_question_id: number; content?: string; flag?: boolean }> = [];
     const pending: PendingQuestion[] = [];
     const req = questions.filter((q) => q.required && (q.kind ?? "") !== "infobox");

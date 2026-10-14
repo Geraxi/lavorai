@@ -350,7 +350,8 @@ export const greenhouseAdapter: PortalAdapter = {
       // non bloccano i campi vuoti.
       try {
         const { fillCustomQuestions } = await import("./generic-fill");
-        const r = await fillCustomQuestions(page, input.answers);
+        const { buildAnswerContext } = await import("./web-form");
+        const r = await fillCustomQuestions(page, input.answers, { context: buildAnswerContext(input) });
         if (r.filled > 0) {
           console.log(
             `[greenhouse] custom questions filled: ${r.filled} (${r.matched.slice(0, 4).join(", ")})`,

@@ -1,8 +1,7 @@
-import { questionKey, exactOption, isAnnualEurExpectation } from "./answer-safety";
+import { candidateFacts, resolveCandidateFact, type FactContext } from "../candidate-facts";
+import { questionKey, isAnnualEurExpectation, resolveScopedQuestionAnswer } from "./answer-safety";
 import type { Page, Locator } from "playwright";
 import {
-  NOTICE_LABEL,
-  HOW_HEARD_LABEL,
   type ApplicationAnswers,
 } from "@/lib/application-answers";
 
@@ -12,9 +11,10 @@ import {
 export async function fillCustomQuestions(
   page: Page,
   answers: ApplicationAnswers | undefined,
-  options: { rootSelector?: string } = {},
+  options: { rootSelector?: string; context?: FactContext } = {},
 ): Promise<{ filled: number; matched: string[] }> {
-  if (!answers) return { filled: 0, matched: [] };
+  if (!answers && !options.context) return { filled: 0, matched: [] };
+  const context = options.context ?? { facts: candidateFacts(null, {}, answers) };
 
   const root = options.rootSelector ?? "form, [data-form], main";
   const matched: string[] = [];
@@ -29,9 +29,8 @@ export async function fillCustomQuestions(
   for (const inp of textInputs) {
     if (!(await isVisibleAndEmpty(inp))) continue;
     const labelTxt = await readLabel(inp);
-    const key = matchAnswerKey(labelTxt);
-    if (!key) continue;
-    const v = renderValueForText(key, answers);
+    const key = matchAnswerKey(labelTxt) ?? "fact";
+    const v = resolveFillAnswer({ label: labelTxt, kind: "text" }, context);
     if (v == null) continue;
     try {
       await inp.fill(String(v));
@@ -47,9 +46,8 @@ export async function fillCustomQuestions(
   for (const ta of textareas) {
     if (!(await isVisibleAndEmpty(ta))) continue;
     const labelTxt = await readLabel(ta);
-    const key = matchAnswerKey(labelTxt);
-    if (!key) continue;
-    const v = renderValueForText(key, answers);
+    const key = matchAnswerKey(labelTxt) ?? "fact";
+    const v = resolveFillAnswer({ label: labelTxt, kind: "text" }, context);
     if (typeof v !== "string" || !v.trim()) continue;
     try {
       await ta.fill(v);
@@ -67,11 +65,9 @@ export async function fillCustomQuestions(
     const cur = await sel.inputValue().catch(() => "");
     if (cur && cur.trim() !== "") continue; // già scelto
     const labelTxt = await readLabel(sel);
-    const key = matchAnswerKey(labelTxt);
-    if (!key) continue;
-    const targetText = renderValueForSelect(key, answers);
-    if (!targetText) continue;
-    const optionText = await pickBestOptionText(sel, targetText);
+    const key = matchAnswerKey(labelTxt) ?? "fact";
+    const labels = await sel.locator("option").allTextContents();
+    const optionText = resolveFillAnswer({ label: labelTxt, kind: "select", options: labels }, context);
     if (!optionText) continue;
     try {
       await sel.selectOption({ label: optionText });
@@ -86,6 +82,11 @@ export async function fillCustomQuestions(
 }
 
 // ---------- helpers ----------
+function resolveFillAnswer(field: { label: string; kind: string; options?: string[] }, context: FactContext) {
+  const scoped = resolveScopedQuestionAnswer(context.storedAnswers, field);
+  return scoped.conflict ? null : scoped.answer ?? resolveCandidateFact(field, context).answer;
+}
+
 
 async function isVisibleAndEmpty(loc: Locator): Promise<boolean> {
   if (!(await loc.isVisible().catch(() => false))) return false;
@@ -94,8 +95,7 @@ async function isVisibleAndEmpty(loc: Locator): Promise<boolean> {
 }
 
 /**
- * Estrae label associato + aria-label + placeholder + name in un'unica
- * stringa lowercase per il match.
+ * Usa la prima etichetta visibile, senza concatenare metadati alla domanda.
  */
 async function readLabel(loc: Locator): Promise<string> {
   const parts: string[] = [];
@@ -117,7 +117,7 @@ async function readLabel(loc: Locator): Promise<string> {
     const v = await loc.getAttribute(attr).catch(() => null);
     if (v) parts.push(v);
   }
-  return parts.join(" | ").toLowerCase();
+  return parts[0]?.trim() ?? "";
 }
 
 function cssEscape(s: string): string {
@@ -146,85 +146,4 @@ export function matchAnswerKey(label: string): keyof ApplicationAnswers | null {
   // No country-specific authorization/sponsorship answer can be derived from
   // the coarse workAuthEU setting. The exact user answer must be requested.
   return mappings.find(([pattern]) => pattern.test(key))?.[1] ?? null;
-}
-
-function renderValueForText(
-  key: keyof ApplicationAnswers,
-  a: ApplicationAnswers,
-): string | number | null {
-  switch (key) {
-    case "salaryExpectationEur":
-      return a.salaryExpectationEur ?? null;
-    case "linkedinUrl":
-      return a.linkedinUrl ?? null;
-    case "githubUrl":
-      return a.githubUrl ?? null;
-    case "portfolioUrl":
-      return a.portfolioUrl ?? null;
-    case "websiteUrl":
-      return a.websiteUrl ?? null;
-    case "city":
-      return a.city ?? null;
-    case "country":
-      return a.country ?? null;
-    case "pronouns":
-      return a.pronouns ?? null;
-    case "whyInterested":
-      return a.whyInterested ?? null;
-    default:
-      return null;
-  }
-}
-
-function renderValueForSelect(
-  key: keyof ApplicationAnswers,
-  a: ApplicationAnswers,
-): string | null {
-  switch (key) {
-    case "noticePeriod":
-      return a.noticePeriod ? NOTICE_LABEL[a.noticePeriod] : null;
-    case "relocate":
-      return a.relocate === undefined
-        ? null
-        : a.relocate
-          ? "yes"
-          : "no";
-    case "howHeard":
-      return a.howHeard ? HOW_HEARD_LABEL[a.howHeard] : null;
-    case "eeoGender":
-      return a.eeoGender
-        ? a.eeoGender === "prefer_not"
-          ? "prefer not"
-          : a.eeoGender === "non_binary"
-            ? "non-binary"
-            : a.eeoGender
-        : null;
-    case "eeoVeteran":
-      return a.eeoVeteran === "prefer_not"
-        ? "prefer not"
-        : a.eeoVeteran ?? null;
-    case "eeoDisability":
-      return a.eeoDisability === "prefer_not"
-        ? "prefer not"
-        : a.eeoDisability ?? null;
-    default:
-      return null;
-  }
-}
-
-/**
- * Tra le opzioni di un <select>, ritorna il testo dell'opzione il cui
- * label corrisponde esattamente alla risposta (case-insensitive).
- */
-async function pickBestOptionText(
-  sel: Locator,
-  target: string,
-): Promise<string | null> {
-  const opts = await sel.locator("option").all();
-  const labels: string[] = [];
-  for (const option of opts) {
-    const label = (await option.textContent().catch(() => null))?.trim();
-    if (label) labels.push(label);
-  }
-  return exactOption(labels, target);
 }

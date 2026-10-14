@@ -1,3 +1,4 @@
+import { candidateFacts, resolveCandidateFact } from "../candidate-facts";
 import { observeSubmission } from "./submission-proof";
 import type { Page } from "playwright";
 import type { ApplyInput, ApplyOutcome, PendingQuestion } from "./types";
@@ -227,32 +228,31 @@ async function attachCv(page: Page, cvPath: string, T: string): Promise<boolean>
 /** Contesto per l'AI answerer, uguale a quello usato da Greenhouse/Workable. */
 export function buildAnswerContext(input: ApplyInput): CandidateContext {
   const p = input.profile;
-  const current = (p.experiences ?? []).find((experience) => /^(?:present|current|now|oggi|presente|attuale|in corso)?$/i.test((experience.endDate ?? "").trim()));
-  const recent = p.experiences?.[0];
-  const links = p.links ?? [];
-  const findLink = (re: RegExp) => links.find((l) => re.test(`${l.url} ${l.label}`))?.url;
-  const cvText = [p.summary, ...(p.experiences ?? []).map((e) => `${e.role} @ ${e.company} (${e.startDate}-${e.endDate || "Present"}): ${e.description || (e.bullets ?? []).join("; ")}`)].filter(Boolean).join("\n");
+  const facts = candidateFacts(p, { email: input.userEmail, yearsExperience: input.userYearsExperience, englishLevel: input.userEnglishLevel, noticePeriod: input.userNoticePeriod }, input.answers, input.reusableAnswers);
+  const value = (label: string) => resolveCandidateFact({ label, kind: "text" }, { facts }).answer;
+  const cvText = [p.summary, ...(p.experiences ?? []).map((e) => `${e.role} @ ${e.company} (${e.startDate}-${e.endDate || "end date unspecified"}): ${e.description || (e.bullets ?? []).join("; ")}`)].filter(Boolean).join("\n");
   return {
-    firstName: p.firstName,
-    lastName: p.lastName,
-    email: p.email || input.userEmail,
-    phone: p.phone || input.userPhone,
-    city: input.answers?.city || p.city,
-    country: input.answers?.country,
-    currentEmployer: current?.company || null,
-    mostRecentEmployer: recent?.company || null,
-    currentJobTitle: current?.role || null,
-    mostRecentJobTitle: recent?.role || null,
-    school: p.education?.[0]?.school || null,
-    linkedinUrl: input.answers?.linkedinUrl || findLink(/linkedin/i),
-    portfolioUrl: input.answers?.portfolioUrl || findLink(/portfolio|dribbble|behance/i),
+    facts,
+    firstName: value("First name"),
+    lastName: value("Last name"),
+    email: value("Email"),
+    phone: value("Phone"),
+    city: value("City"),
+    country: value("Country of residence"),
+    currentEmployer: value("Current employer"),
+    mostRecentEmployer: value("Most recent employer"),
+    currentJobTitle: value("Current job title"),
+    mostRecentJobTitle: value("Most recent job title"),
+    school: value("Most recent school"),
+    linkedinUrl: value("LinkedIn"),
+    portfolioUrl: value("Portfolio"),
     workAuth: input.answers?.workAuthEU,
     salaryExpectationEur: input.answers?.salaryExpectationEur,
     yearsExperience: input.answers?.yearsExperience ?? input.userYearsExperience,
-    englishLevel: input.answers?.englishLevel ?? input.userEnglishLevel,
+    englishLevel: value("English level"),
     languages: p.languages,
-    noticePeriod: input.answers?.noticePeriod ?? input.userNoticePeriod,
-    highestEducation: input.answers?.highestEducation,
+    noticePeriod: value("Notice period"),
+    highestEducation: value("Highest education"),
     cvText,
     jobTitle: input.jobTitle ?? p.title,
     company: input.company ?? null,

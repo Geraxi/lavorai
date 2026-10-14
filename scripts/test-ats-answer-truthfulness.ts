@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { questionFingerprint } from "../src/lib/application-question-answers";
+import * as facts from "../src/lib/candidate-facts";
 import * as safety from "../src/lib/portal-adapters/answer-safety";
 import * as answerConstants from "../src/lib/application-answers";
 import * as protectedCategory from "../src/lib/protected-category";
@@ -28,7 +29,7 @@ const scopedAnswer = (label: string, answer: string, kind = "text", options: str
 let aiCalls = 0;
 let lastPrompt = "";
 const answerer = load("ai-answer", {
-  "./answer-safety": safety,
+  "./answer-safety": safety, "../candidate-facts": facts,
   "@/lib/protected-category": protectedCategory,
   "@/lib/ai-router": { complete: async ({ user }: { user: string }) => {
     aiCalls++; lastPrompt = user;
@@ -142,6 +143,11 @@ async function testScopedAnswers() {
   const mismatchedOptions = scopedAnswer(optionField.label, "Yes", "select", ["No", "Yes"]);
   assert.equal((await answerer.answerOffline({ storedAnswers: [mismatchedOptions] }, [optionField])).answers.size, 0);
   assert.equal((await answerer.answerOffline({ storedAnswers: [saved, { ...saved, answer: "No" }] }, [field])).answers.size, 0, "Conflicting answers are ambiguous");
+  const city = { idx: 6, label: "City", kind: "text" };
+  const conflictingCity = { city: "Milano", storedAnswers: [scopedAnswer("City", "Roma"), scopedAnswer("City", "Milano")] };
+  assert.equal((await answerer.answerOffline(conflictingCity, [city])).answers.size, 0, "A factual source cannot bypass conflicting explicit answers");
+  const conflictingBrowser = await answerer.answerRequiredFields({ evaluate: async () => [city] }, conflictingCity);
+  assert.equal(conflictingBrowser.answered, 0); assert.equal(conflictingBrowser.remainingRequired, 1);
   let checked = false;
   const page = {
     evaluate: async () => checked ? [] : [field],
@@ -187,27 +193,49 @@ async function testBrowserAnswering() {
   assert.equal(filled, "3.5"); assert.equal(decimal.answered, 1);
   console.log("Browser handler blocks unknown/scan failures and preserves fractional numeric facts.");
 }
+async function testAsyncOptions() {
+  for (const optionsEventuallyMatch of [true, false]) {
+    let selected = "", typed = "", polls = 0;
+    const field = { idx: 0, label: "Location (City)", kind: "react-select", options: [] };
+    const locator = {
+      click: async () => {}, fill: async (value: string) => { typed = value; },
+      getAttribute: async () => "city-list", evaluate: async () => selected === "Milano",
+    };
+    const page = {
+      evaluate: async () => selected ? [] : [field], keyboard: { press: async () => {} }, waitForTimeout: async () => {},
+      locator: (selector: string) => selector.includes("role='option'") ? {
+        allTextContents: async () => { polls++; return optionsEventuallyMatch && polls >= 4 ? ["Roma", "Milano"] : ["Roma"]; },
+        nth: (index: number) => ({ click: async () => { assert.equal(index, 1); selected = "Milano"; } }),
+      } : { first: () => locator },
+    };
+    const result = await answerer.answerRequiredFields(page, { city: "Milano" });
+    assert.equal(typed, "Milano"); assert.ok(polls >= 4);
+    assert.equal(result.answered, optionsEventuallyMatch ? 1 : 0);
+    assert.equal(result.remainingRequired, optionsEventuallyMatch ? 0 : 1);
+  }
+  console.log("Async widgets wait for the exact current option; unrelated/stale options never get selected.");
+}
 function testGenericAndContext() {
-  const generic = load("generic-fill", { "./answer-safety": safety, "@/lib/application-answers": answerConstants });
+  const generic = load("generic-fill", { "./answer-safety": safety, "../candidate-facts": facts, "@/lib/application-answers": answerConstants });
   for (const label of ["Work authorization in the USA", "Visa sponsorship", "EU citizen", "Authorized to work", "Expected monthly salary (USD)", "Current salary", "Country where you want to work", "How many years of Python experience?"]) {
     assert.equal(generic.matchAnswerKey(label), null, label);
   }
   assert.equal(generic.matchAnswerKey("Appartieni alle categorie protette?"), null);
   assert.equal(generic.matchAnswerKey("Disability status"), "eeoDisability", "Explicit separately supplied EEO answers remain supported");
-  assert.equal(generic.matchAnswerKey("Country of residence | country"), "country");
+  assert.equal(generic.matchAnswerKey("Country of residence | country"), null, "Never discard a qualifier after a separator");
   assert.equal(generic.matchAnswerKey("Expected annual salary (EUR)"), "salaryExpectationEur");
   const web = load("web-form", {
-    "./submission-proof": {}, "./captcha": {}, "./ai-answer": answerer,
+    "../candidate-facts": facts, "./submission-proof": {}, "./captcha": {}, "./ai-answer": answerer,
   });
   const input = { profile: { experiences: [{ company: "Old", role: "Designer", endDate: "2020" }], links: [], education: [] }, preferredCity: "Berlin", userEmail: "alex@example.test" };
   const built = web.buildAnswerContext(input);
-  assert.equal(built.city, undefined, "Desired location is not present residence");
+  assert.equal(built.city, null, "Desired location is not present residence");
   assert.equal(built.currentEmployer, null);
   assert.equal(built.mostRecentEmployer, "Old");
   assert.equal(built.currentJobTitle, null);
 }
 async function main() {
-  await testUnknownFacts(); await testActualFactsAndUserAnswers(); await testScopedAnswers(); await testNarrativeOnlyAi(); await testBrowserAnswering(); testGenericAndContext();
+  await testUnknownFacts(); await testActualFactsAndUserAnswers(); await testScopedAnswers(); await testNarrativeOnlyAi(); await testBrowserAnswering(); await testAsyncOptions(); testGenericAndContext();
   console.log("ATS factual-answer regression suite passed with fully isolated AI/browser boundaries.");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

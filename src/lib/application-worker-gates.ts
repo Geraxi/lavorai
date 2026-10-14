@@ -1,5 +1,9 @@
+import { answerContinuationIneligibility, answerConfirmationDigest, continuationDigest, continuationSelect, parseAnswerContinuation, type AnswerContinuation } from "./application-answer-continuation";
+import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
+import { parseAnswers } from "./application-answers";
+import { completesApplicationQuestion, resolveExplicitApplicationAnswer, parseApplicationQuestion } from "./application-question-answers";
 import { applicationsPaused } from "@/lib/application-pause";
-import { rolloutApplicationIneligibility, ROLLOUT_BUDGET_HELD_MESSAGE } from "@/lib/application-rollout";
+import { applicationRolloutConfig, rolloutApplicationIneligibility, ROLLOUT_BUDGET_HELD_MESSAGE } from "@/lib/application-rollout";
 import { reserveSubmissionBudget, submissionSubjectKey } from "@/lib/application-submission-budget";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { autoApplyPreferenceMismatch, parsePreferenceList, isAvoidedCompany } from "@/lib/auto-apply-preferences";
@@ -14,26 +18,24 @@ import { isApplicationAccessPaused, isLifetimeProPlus, requiresPaymentMethodBefo
 // this reservation: only a proved no-send outcome or an atomic success does.
 export const SUBMISSION_STARTED = "SUBMISSION_STARTED";
 export const NOT_SUBMITTED = "NOT_SUBMITTED";
-export const WORK_RESERVED_STATUSES = ["optimizing", "applying", "submitting", "ready_to_apply", "awaiting_consent", "needs_answers", "needs_session"];
+export const WORK_RESERVED_STATUSES = ["optimizing", "applying", "submitting", "ready_to_apply", "awaiting_consent", "needs_answers", "needs_session", "answers_claimed"];
 const evidenceSelect = {
   submittedAt: true, submittedVia: true, submitConfirmation: true, canaryLog: true,
   answersUsedJson: true, viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
 } as const;
 export const workerGateSelect = {
-  id: true, userId: true, jobId: true, sessionId: true, status: true, startedAt: true, consentGrantedAt: true,
-  createdAt: true, retryCount: true,
-  cvDocxPath: true, ...evidenceSelect,
+  sessionId: true, cvDocxPath: true, ...evidenceSelect, ...continuationSelect,
   job: { select: { closedAt: true, url: true, company: true, title: true, description: true, location: true,
     remote: true, contractType: true, salaryMin: true, salaryMax: true } },
   session: { select: { id: true, userId: true, status: true, sentCount: true, targetCount: true, title: true, label: true } },
   user: { select: {
-    email: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
+    email: true, yearsExperience: true, englishLevel: true, noticePeriod: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
     subscriptionStatus: true, currentPeriodEnd: true, pausedUntil: true, suspendedAt: true,
     emailVerified: true, privacyConsentAt: true, avoidCompanies: true,
     cvProfile: { select: { firstName: true, lastName: true, email: true, phone: true, city: true, title: true, summary: true,
       experiencesJson: true, educationJson: true, skillsJson: true, languagesJson: true, linksJson: true } },
     preferences: { select: { autoApplyMode: true, rolesJson: true, locationsJson: true,
-      employmentType: true, salaryMin: true, matchMin: true } },
+      applicationAnswersJson: true, employmentType: true, salaryMin: true, matchMin: true } },
   } },
 } satisfies Prisma.ApplicationSelect;
 export type WorkerGateRow = Prisma.ApplicationGetPayload<{ select: typeof workerGateSelect }>;
@@ -86,7 +88,7 @@ export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date())
 }
 
 async function withLockedApplication<T>(id: string, db: DB, operation: (tx: Prisma.TransactionClient, row: WorkerGateRow | null) => Promise<T>): Promise<T | null> {
-  const identity = await db.application.findUnique({ where: { id }, select: { userId: true, sessionId: true } });
+  const identity = await db.application.findUnique({ where: { id }, select: { userId: true, sessionId: true, jobId: true } });
   if (!identity) return null;
   return db.$transaction(async (tx) => {
     // Shared with retry admission and all worker delivery paths. Row locks also
@@ -95,10 +97,11 @@ async function withLockedApplication<T>(id: string, db: DB, operation: (tx: Pris
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${identity.userId} FOR UPDATE`;
     if (identity.sessionId) await tx.$queryRaw`SELECT id FROM "ApplicationSession" WHERE id = ${identity.sessionId} FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM "UserPreferences" WHERE "userId" = ${identity.userId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM "Job" WHERE id = ${identity.jobId} FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM "Application" WHERE id = ${id} FOR UPDATE`;
     const row = await tx.application.findUnique({ where: { id }, select: workerGateSelect });
     // Changing ownership/round while admission waits needs a fresh invocation.
-    if (row && (row.userId !== identity.userId || row.sessionId !== identity.sessionId)) return null;
+    if (row && (row.userId !== identity.userId || row.sessionId !== identity.sessionId || row.jobId !== identity.jobId)) return null;
     return operation(tx, row);
   });
 }
@@ -144,7 +147,19 @@ function heldMessage(reason: string): string {
  */
 export async function reserveApplicationWork(id: string, db: DB = prisma): Promise<Date | null> {
   return withLockedApplication(id, db, async (tx, row) => {
-    if (!row || row.status !== "queued") return null;
+    if (!row || !["queued", "answers_claimed"].includes(row.status)) return null;
+    const continuation = parseAnswerContinuation(row.answerContinuationJson);
+    if (row.answerContinuationJson) {
+      if (answerContinuationIneligibility(row, "queued", row.job.url) || currentWorkerIneligibility(row)
+        || !await capacityAvailable(tx, row) || !await continuationReservationMatches(tx, row, continuation!)) return null;
+      const token = new Date(Math.max(Date.now(), +row.startedAt! + 1));
+      await tx.application.update({ where: { id }, data: {
+        status: "optimizing", startedAt: token, errorMessage: null,
+        answerContinuationJson: JSON.stringify({ ...continuation, phase: "running", workToken: token.toISOString() }),
+      } });
+      return token;
+    }
+    if (row.status !== "queued") return null;
     if (rolloutApplicationIneligibility(row)) return null;
     // An immutable budget record survives every ordinary status/reset path.
     // A previous attempt is never eligible for preparation/replay in this mode.
@@ -202,8 +217,11 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
       } });
       return false;
     }
+    const continuation = parseAnswerContinuation(row.answerContinuationJson);
+    if (row.answerContinuationJson && (!continuation || answerContinuationIneligibility(row, "running", row.job.url)
+      || continuation.channel !== channel || !await continuationReservationMatches(tx, row, continuation))) return false;
     const budgetReason = await reserveSubmissionBudget(tx, { applicationId: id,
-      subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: token, channel }, "begin");
+      subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, continuation ? "recheck" : "begin");
     if (budgetReason) {
       await tx.application.update({ where: { id }, data: {
         status: "ready_to_apply",
@@ -225,9 +243,13 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || row.status !== "applying" || row.submitConfirmation !== SUBMISSION_STARTED) return false;
+    const continuation = parseAnswerContinuation(row.answerContinuationJson);
+    if (row.answerContinuationJson && (!continuation || continuation.channel !== channel
+      || answerContinuationIneligibility({ ...row, status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED }, "running", row.job.url)
+      || !await continuationReservationMatches(tx, row, continuation))) return false;
     const reason = currentWorkerIneligibility(row)
       ?? await reserveSubmissionBudget(tx, { applicationId: id,
-        subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: token, channel }, "recheck");
+        subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, "recheck");
     if (reason || !await capacityAvailable(tx, row)) {
       await tx.application.update({ where: { id }, data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
@@ -235,6 +257,9 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
       } });
       return false;
     }
+    if (continuation) await tx.application.update({ where: { id }, data: {
+      answerContinuationJson: JSON.stringify({ ...continuation, finalSubmitStarted: true }),
+    } });
     return true;
   })) === true;
 }
@@ -253,8 +278,10 @@ export async function completeApplicationSubmission(
     const inFlight = row.status === "applying" && row.submitConfirmation === SUBMISSION_STARTED;
     const recovered = row.status === "ready_to_apply" && row.submitConfirmation === "UNCONFIRMED";
     if (!inFlight && !recovered) return false;
+    const continuation = parseAnswerContinuation(row.answerContinuationJson);
+    if (row.answerContinuationJson && (!continuation || continuation.workToken !== token.toISOString() || !continuation.finalSubmitStarted)) return false;
     const reservation = await tx.applicationSubmissionReservation.findFirst({ where: {
-      applicationId: id, subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: token,
+      applicationId: id, subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token,
       channel: typeof data.submittedVia === "string" ? data.submittedVia : "",
     }, select: { id: true } });
     if (!reservation) return false;
@@ -287,4 +314,91 @@ export async function completeApplicationSubmission(
     }
     return true;
   })) === true;
+}
+
+
+/** Read-only validation never refunds, replaces or deletes a reservation. */
+async function continuationReservationMatches(tx: Prisma.TransactionClient, row: WorkerGateRow, proof: AnswerContinuation): Promise<boolean> {
+  if (proof.channel !== "portal_recruitee") return false; // only audited pre-transmission adapter
+  const subjectKey = submissionSubjectKey(row.userId, row.jobId);
+  const reservations = await tx.applicationSubmissionReservation.findMany({ where: { OR: [{ applicationId: row.id }, { subjectKey }] } });
+  if (!reservations.length || reservations.some(r => r.applicationId !== row.id || r.subjectKey !== subjectKey
+    || r.channel !== proof.channel || r.attemptStartedAt.toISOString() !== proof.attemptStartedAt
+    || r.rolloutStartedAt.toISOString() !== applicationRolloutConfig().startedAt?.toISOString())) return false;
+  if (await tx.applicationEmailAttempt.findFirst({ where: { applicationId: row.id }, select: { id: true } })) return false;
+  if (await tx.application.findFirst({ where: { userId: row.userId, jobId: row.jobId, id: { not: row.id } }, select: { id: true } })) return false;
+  // Duplicate imported Job rows can target the same ATS posting. Compare the
+  // provider, host and posting ID, rather than trusting only internal jobId.
+  const others = await tx.application.findMany({ where: { userId: row.userId, id: { not: row.id } }, select: { job: { select: { url: true } } } });
+  const destination = (url: string) => { try { const posting = receiptJobId("recruitee", url); return posting ? `${new URL(url).origin}/o/${posting}` : null; } catch { return null; } };
+  const target = destination(proof.jobUrl);
+  if (!target || others.some(other => destination(other.job.url) === target)) return false;
+  const importedJobs = await tx.job.findMany({ where: { url: { startsWith: new URL(proof.jobUrl).origin } }, select: { id: true, url: true } });
+  const duplicateSubjects = importedJobs.filter(job => job.id !== row.jobId && destination(job.url) === target).map(job => submissionSubjectKey(row.userId, job.id));
+  return !duplicateSubjects.length || !await tx.applicationSubmissionReservation.findFirst({ where: { subjectKey: { in: duplicateSubjects } }, select: { id: true } });
+}
+
+/** Called only by the audited adapter wrapper after it returned before its sole
+ * candidate POST. Browser adapters and old NOT_SUBMITTED rows get no attestation. */
+export async function attestAnswerPause(id: string, token: Date, channel: string, pendingQuestionsJson: string, jobUrl: string, db: DB = prisma): Promise<boolean> {
+  if (channel !== "portal_recruitee") return false;
+  return (await withLockedApplication(id, db, async (tx, row) => {
+    if (!row || row.job.url !== jobUrl || row.status !== "applying" || row.startedAt?.getTime() !== +token
+      || row.submitConfirmation !== SUBMISSION_STARTED || rolloutApplicationIneligibility(row)
+      || row.submittedAt || row.submittedVia || row.submissionReceiptJson || row.completedAt
+      || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) return false;
+    let pending: unknown;
+    try { pending = JSON.parse(pendingQuestionsJson); } catch { return false; }
+    if (!Array.isArray(pending) || !pending.length || pending.length > 100 || pending.some(value => !parseApplicationQuestion(value))) return false;
+    const previous = parseAnswerContinuation(row.answerContinuationJson);
+    if (row.answerContinuationJson && (!previous || previous.phase !== "running" || previous.finalSubmitStarted || previous.workToken !== token.toISOString())) return false;
+    const proof: AnswerContinuation = {
+      version: 1, applicationId: id, userId: row.userId, jobId: row.jobId, jobUrl: row.job.url,
+      attemptStartedAt: previous?.attemptStartedAt ?? token.toISOString(), workToken: token.toISOString(), channel,
+      consentGrantedAt: row.consentGrantedAt!.toISOString(), pendingHash: continuationDigest(pendingQuestionsJson),
+      pausedAt: new Date().toISOString(), phase: "paused", confirmedAt: null, finalSubmitStarted: false,
+    };
+    if (!await continuationReservationMatches(tx, row, proof)) return false;
+    await tx.application.update({ where: { id }, data: {
+      status: "needs_answers", submitConfirmation: NOT_SUBMITTED, pendingQuestionsJson,
+      answerContinuationJson: JSON.stringify(proof),
+    } });
+    return true;
+  })) === true;
+}
+
+/** Authenticated, candidate-confirmed continuation of the same reserved attempt.
+ * Only this transition can publish a continuation. No implicit resume on save. */
+export async function queueAnswerContinuation(input: {
+  applicationId: string; userId: string; proofDigest: string; expectedAnswersJson: string | null;
+}, db: DB = prisma): Promise<string> {
+  return (await withLockedApplication(input.applicationId, db, async (tx, row) => {
+    if (!row || row.userId !== input.userId) return "application_not_found";
+    if (!row.answerContinuationJson || row.userProvidedAnswersJson !== input.expectedAnswersJson) return "questions_changed_reload";
+    const reason = answerContinuationIneligibility(row, "paused", row.job.url) ?? currentWorkerIneligibility(row);
+    if (reason) return reason;
+    const proof = parseAnswerContinuation(row.answerContinuationJson)!;
+    if (!await continuationReservationMatches(tx, row, proof)) return "continuation_reservation_mismatch";
+    if (!await capacityAvailable(tx, row)) return "session_capacity_reached";
+    let pending: unknown;
+    try { pending = JSON.parse(row.pendingQuestionsJson!); } catch { return "questions_invalid"; }
+    if (!Array.isArray(pending) || !pending.length) return "questions_invalid";
+    const saved = await tx.userAnswer.findMany({ where: { userId: row.userId, source: "user", answeredAt: { not: null } } });
+    const facts = candidateFacts(row.user.cvProfile ? rowToProfile(row.user.cvProfile) : null, row.user, parseAnswers(row.user.preferences?.applicationAnswersJson), saved);
+    if (answerConfirmationDigest(row.answerContinuationJson, row.userProvidedAnswersJson, facts) !== input.proofDigest) return "questions_changed_reload";
+    for (const value of pending) {
+      const question = parseApplicationQuestion(value);
+      if (!question) return "questions_invalid";
+      const explicit = resolveExplicitApplicationAnswer(row.userProvidedAnswersJson, row.id, question);
+      if (explicit.conflict) return "answer_conflict";
+      const fact = explicit.answer ? null : resolveCandidateFact(question, { facts });
+      const answer = explicit.answer ?? fact?.answer;
+      if (!answer || !completesApplicationQuestion(question, answer)) return fact?.conflict ? "answer_conflict" : "answers_incomplete";
+    }
+    await tx.application.update({ where: { id: row.id }, data: {
+      status: "queued", errorMessage: null,
+      answerContinuationJson: JSON.stringify({ ...proof, phase: "queued", confirmedAt: new Date().toISOString() }),
+    } });
+    return "queued";
+  })) ?? "application_not_found";
 }

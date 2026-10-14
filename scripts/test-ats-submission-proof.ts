@@ -281,7 +281,7 @@ async function testRealAshbyAndOtp() {
 }
 
 async function testRecruiteeBoundary() {
-  for (const scenario of ["receipt", "boolean-no", "error", "empty", "rejected", "timeout", "paused", "gate-error", "lookup-error", "not-an-offer"]) {
+  for (const scenario of ["receipt", "boolean-no", "unanswered", "error", "empty", "rejected", "timeout", "paused", "gate-error", "lookup-error", "not-an-offer"]) {
     let posts = 0;
     const formValues = new Map<string, unknown>();
     const { recruiteeAdapter } = loadAdapter("recruitee", {
@@ -300,7 +300,7 @@ async function testRecruiteeBoundary() {
         if (options.method !== "POST") return {
           status: scenario === "lookup-error" ? 500 : 200,
           ok: scenario !== "lookup-error",
-          json: async () => scenario === "not-an-offer" ? {} : { offer: { status: "published", open_questions: scenario === "boolean-no" ? [{ id: 17, kind: "boolean", body: "Do you need visa sponsorship?", required: true }] : [] } },
+          json: async () => scenario === "not-an-offer" ? {} : { offer: { status: "published", open_questions: ["boolean-no", "unanswered"].includes(scenario) ? [{ id: 17, kind: "boolean", body: "Do you need visa sponsorship?", required: true }] : [] } },
         };
         posts++;
         assert.equal(options.redirect, "error");
@@ -320,8 +320,9 @@ async function testRecruiteeBoundary() {
       },
     });
     assert.equal(outcome.ok, ["receipt", "boolean-no"].includes(scenario), scenario);
+    if (scenario === "unanswered") { assert.equal(outcome.status, "needs_user_input"); assert.equal(formValues.size, 0, "No candidate payload constructed before the missing-answer return"); }
     if (scenario === "boolean-no") assert.equal(formValues.get("candidate[open_question_answers_attributes][0][flag]"), "false", "An explicit No must stay false for required API booleans");
-    assert.equal(posts, ["paused", "gate-error", "lookup-error", "not-an-offer"].includes(scenario) ? 0 : 1, scenario);
+    assert.equal(posts, ["unanswered", "paused", "gate-error", "lookup-error", "not-an-offer"].includes(scenario) ? 0 : 1, scenario);
     if (outcome.ok) assert.equal(outcome.receipt.receiptId, "recruitee-receipt");
   }
   console.log("Real Recruitee adapter: receipt/error/empty/timeout and final-gate paths passed with isolated HTTP/files.");

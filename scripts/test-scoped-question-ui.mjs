@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 import serverChromium from '@sparticuz/chromium';
-const out = join(tmpdir(), 'lavorai-scoped-question-preview');
+const out = join(process.cwd(), 'output/playwright/question-continuation');
 await mkdir(out, { recursive: true });
 const fingerprint = (label, kind, options) => createHash('sha256').update(JSON.stringify([label, kind, options])).digest('hex');
 const card = (applicationId, company, title, label, kind, options) => {
@@ -29,13 +29,15 @@ const stub = {
 };
 await build({
   stdin: { contents: `import React from 'react'; import { createRoot } from 'react-dom/client'; import { QuestionsView } from './src/app/(app)/questions/questions-view';
-  window.__requests = []; window.__fail = false; window.__cards = ${JSON.stringify(cards)};
+  window.__requests = []; window.__fail = false; window.__resumed = false; window.__cards = ${JSON.stringify(cards)};
   window.fetch = async (url, options) => { window.__requests.push({url, options});
-    if (!options?.method) return { ok: true, json: async () => ({ questions: window.__cards, waitingApplications: 4, locale: 'en' }) };
+    if (!options?.method) return { ok: true, json: async () => ({ questions: window.__cards, waitingApplications: 4, locale: 'en', continuations: [{ applicationId: 'alpha', company: 'Alpha Studio', title: 'Product Designer', canResume: !window.__resumed && window.__cards[0].answer === 'Yes', reason: 'answers_incomplete', proofDigest: 'a'.repeat(64) }, { applicationId: 'beta', company: 'Beta Company', title: 'UX Researcher', canResume: false, reason: 'continuation_proof_missing', proofDigest: null }] }) };
     const body = JSON.parse(options.body);
     if (body.reuseCvOnly) return {ok:true,json:async()=>({ok:true})};
     if(window.__fail) return {ok:false,status:409,json:async()=>({error:'questions_changed_reload'})};
-    return {ok:true,json:async()=>({saved:body.answers.length,requeued:body.answers[0].answer==='No'?0:1,remainingApplications:3})};
+    if (body.resumeApplications) { window.__resumed = true; return {ok:true,json:async()=>({requeued:1})}; }
+    for (const answer of body.answers) { const card = window.__cards.find(card => card.applicationId === answer.applicationId && card.fingerprint === answer.fingerprint); card.answer = answer.answer; card.source = 'user'; }
+    return {ok:true,json:async()=>({saved:body.answers.length,requeued:0,remainingApplications:4})};
   };
   createRoot(document.getElementById('root')).render(<QuestionsView />);`, resolveDir: process.cwd(), loader: 'tsx' },
   bundle: true, platform: 'browser', format: 'iife', jsx: 'automatic', outfile: join(out, 'questions.js'),
@@ -56,7 +58,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const port = server.address().port;
 let browser;
 try {
-  browser = await chromium.launch({ executablePath: await serverChromium.executablePath(), args: serverChromium.args, headless: true });
+  browser = await chromium.launch(process.platform === 'darwin' ? { channel: 'chrome', headless: true } : { executablePath: await serverChromium.executablePath(), args: serverChromium.args, headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   const errors = [], external = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -76,9 +78,23 @@ try {
   assert.equal(await alpha.locator('input:checked').count(), 0, 'Generic legal consent must not be preselected');
   await alpha.locator('input[value="Yes"]').locator('..').click();
   await alpha.getByRole('button', { name: 'Salva risposta', exact: true }).click();
-  await page.getByRole('status').filter({ hasText: 'candidatura ripartita' }).waitFor();
+  await page.getByRole('status').filter({ hasText: 'Risposta salvata' }).waitFor();
   let submissions = await page.evaluate(() => window.__requests.filter(request => request.options?.body && JSON.parse(request.options.body).answers).map(request => JSON.parse(request.options.body)));
   assert.deepEqual(submissions[0].answers, [{ applicationId: 'alpha', fingerprint: cards[0].fingerprint, answer: 'Yes' }]);
+  assert.equal(await page.evaluate(() => window.__requests.filter(request => request.options?.body && JSON.parse(request.options.body).resumeApplications).length), 0, 'Save must not confirm continuation');
+  const confirmation = page.getByRole('button', { name: 'Conferma ripresa di questa candidatura' });
+  await page.getByRole('button', { name: /Completate/ }).click();
+  await alpha.locator('.qa-row-head').click();
+  await alpha.locator('input[value="No"]').locator('..').click();
+  assert.equal(await confirmation.isDisabled(), true, 'Unsaved edits cannot confirm the old answer');
+  await alpha.locator('input[value="Yes"]').locator('..').click();
+  assert.equal(await confirmation.isDisabled(), false);
+  await confirmation.click();
+  await page.getByRole('status').filter({ hasText: 'Ripresa confermata e in coda' }).waitFor();
+  const confirmed = await page.evaluate(() => window.__requests.filter(request => request.options?.body && JSON.parse(request.options.body).resumeApplications).map(request => JSON.parse(request.options.body)));
+  assert.deepEqual(confirmed, [{ resumeApplications: [{ applicationId: 'alpha', proofDigest: 'a'.repeat(64) }] }]);
+  assert.match(await page.locator('.qa-notice').filter({ hasText: 'Beta Company' }).innerText(), /Ripresa bloccata/);
+  await page.getByRole('button', { name: /Da rispondere/ }).click();
   await beta.locator('.qa-row-head').click();
   assert.equal(await beta.locator('input:checked').count(), 0, 'Saving Alpha consent must not select Beta consent');
   await beta.locator('input[value="No"]').locator('..').click();

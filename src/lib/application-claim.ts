@@ -1,3 +1,4 @@
+import { answerContinuationIneligibility, continuationSelect } from "./application-answer-continuation";
 import { applicationRolloutConfig, automaticApplicationsBlocked, rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
@@ -23,9 +24,19 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
   if (applicationsPaused() || rolloutCreationBlocked()) return false;
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
-    select: { createdAt: true, consentGrantedAt: true, retryCount: true },
+    select: { ...continuationSelect },
   });
   if (!app || rolloutApplicationIneligibility(app)) return false;
+  if (app.answerContinuationJson) {
+    if (app.status !== "queued" || answerContinuationIneligibility(app, "queued")) return false;
+    const result = await prisma.application.updateMany({ where: {
+      id: applicationId, status: "queued", startedAt: app.startedAt,
+      answerContinuationJson: app.answerContinuationJson, consentGrantedAt: app.consentGrantedAt,
+      submitConfirmation: "NOT_SUBMITTED", completedAt: null, submittedAt: null, submittedVia: null,
+      submissionReceiptJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+    }, data: { status: "answers_claimed" } });
+    return result.count === 1;
+  }
   const r = await prisma.application.updateMany({
     where: { id: applicationId, status: "queued", startedAt: null, completedAt: null,
       createdAt: app.createdAt, consentGrantedAt: app.consentGrantedAt, retryCount: 0,
@@ -94,7 +105,14 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
     take: limit,
     select: { id: true, createdAt: true, consentGrantedAt: true, retryCount: true },
   });
-  return rows.filter(row => !rolloutApplicationIneligibility(row, now)).map(row => row.id);
+  const continuations = await prisma.application.findMany({
+    where: { status: "queued", answerContinuationJson: { not: null }, retryCount: 0,
+      createdAt: { gt: config.startedAt, lte: now }, consentGrantedAt: { gt: config.startedAt, lte: now },
+      submitConfirmation: "NOT_SUBMITTED", completedAt: null, submittedAt: null, submittedVia: null,
+    }, select: continuationSelect, orderBy: { createdAt: "asc" }, take: limit,
+  });
+  return [...rows.filter(row => !rolloutApplicationIneligibility(row, now)).map(row => row.id),
+    ...continuations.filter(row => !answerContinuationIneligibility(row, "queued", undefined, now)).map(row => row.id)].slice(0, limit);
 }
 
 /** Rimette una candidatura in stato prendibile (da chiamare all'enqueue). */

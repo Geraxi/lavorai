@@ -42,6 +42,7 @@ export interface ApplyInput {
   answers?: ApplicationAnswers;
   /** Risposte riutilizzabili già date dall'utente a domande di form
    *  precedenti (da UserAnswer). label→answer, match per label normalizzata. */
+  reusableAnswers?: import("../candidate-facts").SavedFactAnswer[];
   storedAnswers?: Array<{ label: string; answer: string; kind?: string; options?: string[]; fingerprint?: string }>;
   /** Dati di profilo dell'utente per le risposte comuni nei form ATS. */
   userYearsExperience?: number | null;

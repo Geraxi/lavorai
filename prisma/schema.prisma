@@ -557,6 +557,8 @@ model Application {
   submissionReceiptJson String? @db.Text
   /// Explicit application-bound answers; never infer permission from global history.
   userProvidedAnswersJson String? @db.Text
+  /// Server evidence for a candidate-confirmed continuation before any final submit. No legacy backfill.
+  answerContinuationJson String? @db.Text
   /// Explicit user approval for a manual/hybrid application; no legacy backfill.
   consentGrantedAt DateTime?
   /// Canary debug snapshot: JSON con stato form pre-submit, screenshot

@@ -1,4 +1,5 @@
-import { questionKey, exactOption, isTotalExperienceQuestion, isAnnualEurExpectation, isNarrativeQuestion, matchingScopedAnswer } from "./answer-safety";
+import { resolveCandidateFact, matchFactOption, type Fact, type FactContext } from "../candidate-facts";
+import { exactOption, isNarrativeQuestion, matchingScopedAnswer, resolveScopedQuestionAnswer } from "./answer-safety";
 import type { Page } from "playwright";
 import { complete } from "@/lib/ai-router";
 
@@ -17,7 +18,7 @@ import { complete } from "@/lib/ai-router";
  * consenso. Tutto best-effort: ogni step in try/catch, non lancia mai.
  */
 
-export interface CandidateContext {
+export interface CandidateContext extends FactContext {
   firstName?: string | null;
   lastName?: string | null;
   email?: string | null;
@@ -70,6 +71,7 @@ export interface GivenAnswer {
    *  "rule" = explicit fact mapping, "ai" = CV-grounded narrative.
    *  "assumed" remains only for compatibility with historical records. */
   source: "user" | "profile" | "ai" | "rule" | "assumed";
+  provenance?: Fact[];
 }
 
 export type AnswerSource = GivenAnswer["source"];
@@ -159,20 +161,21 @@ export async function answerRequiredFields(
   // 3b. Riempi i campi noti dal PROFILO (country/city/phone/link) anche se
   //     sono react-select searchable (le cui opzioni l'AI non vedrebbe).
   for (const f of pending) {
-    if (filledIdx.has(f.idx) || f.kind === "checkbox") continue;
-    const pv = profileValueForLabel(f.label, ctx);
+    if (filledIdx.has(f.idx) || f.kind === "checkbox" || resolveScopedQuestionAnswer(ctx.storedAnswers, f).conflict) continue;
+    const fact = resolveCandidateFact(f, ctx, true);
+    const pv = fact.answer;
     if (!pv) continue;
     const ok = await fillField(page, f, pv).catch(() => false);
     if (ok) {
       answered++;
       filledIdx.add(f.idx);
       details.push(`profile:"${f.label.slice(0, 32)}"`);
-      given.push({ label: f.label, kind: f.kind, answer: pv, source: "profile" });
+      given.push({ label: f.label, kind: f.kind, answer: pv, source: "profile", provenance: fact.provenance });
     }
   }
 
   // 4. Per il resto, chiedi al provider AI (solo dai dati reali).
-  const remaining = pending.filter((f) => !filledIdx.has(f.idx));
+  const remaining = pending.filter((f) => !filledIdx.has(f.idx) && !resolveScopedQuestionAnswer(ctx.storedAnswers, f).conflict);
   let answers: AiAnswer[] = [];
   if (remaining.length > 0) {
     try {
@@ -191,8 +194,7 @@ export async function answerRequiredFields(
       answered++;
       filledIdx.add(f.idx);
       details.push(`ai:"${f.label.slice(0, 36)}"=${String(val).slice(0, 24)}`);
-      // Riportata al chiamante: mostrata all'utente in /inbox e, in modalità
-      // autonoma, salvata come UserAnswer per coerenza tra candidature.
+      // Application audit only: generated narrative is never a user fact.
       given.push({ label: f.label, kind: f.kind, answer: String(val), source: "ai" });
     }
   }
@@ -235,10 +237,13 @@ export async function answerOffline(
   };
   const remaining: typeof fields = [];
   for (const f of fields) {
-    const s = pick(f, matchingScopedAnswer(ctx.storedAnswers, f));
+    const scoped = resolveScopedQuestionAnswer(ctx.storedAnswers, f);
+    if (scoped.conflict) continue;
+    const s = pick(f, scoped.answer);
     if (s) { answers.set(f.idx, s); given.push({ label: f.label, kind: f.kind, answer: s, source: "user" }); continue; }
-    const pv = f.kind === "checkbox" ? null : pick(f, profileValueForLabel(f.label, ctx));
-    if (pv) { answers.set(f.idx, pv); given.push({ label: f.label, kind: f.kind, answer: pv, source: "profile" }); continue; }
+    const fact = resolveCandidateFact(f, ctx);
+    const pv = fact.answer;
+    if (pv) { answers.set(f.idx, pv); given.push({ label: f.label, kind: f.kind, answer: pv, source: "profile", provenance: fact.provenance }); continue; }
     remaining.push(f);
   }
   if (remaining.length > 0) {
@@ -251,32 +256,6 @@ export async function answerOffline(
     }
   }
   return { answers, given };
-}
-
-/** Exact semantic mappings only: never substitute totals or preferences. */
-function profileValueForLabel(label: string, ctx: CandidateContext): string | null {
-  const key = questionKey(label);
-  if (/^(?:first name|given name|nome)$/.test(key)) return ctx.firstName ?? null;
-  if (/^(?:last name|family name|surname|cognome)$/.test(key)) return ctx.lastName ?? null;
-  if (/^(?:full name|nome e cognome)$/.test(key)) return [ctx.firstName, ctx.lastName].filter(Boolean).join(" ") || null;
-  if (/^(?:email|e-mail|email address|indirizzo email)$/.test(key)) return ctx.email ?? null;
-  if (/^(?:current employer|current company|azienda attuale|datore di lavoro attuale)$/.test(key)) return ctx.currentEmployer ?? null;
-  if (/^(?:current or previous employer|most recent employer|last employer|ultima azienda)$/.test(key)) return ctx.mostRecentEmployer ?? ctx.currentEmployer ?? null;
-  if (/^(?:current job title|current position|ruolo attuale|posizione attuale)$/.test(key)) return ctx.currentJobTitle ?? null;
-  if (/^(?:current or previous job title|most recent job title|last job title)$/.test(key)) return ctx.mostRecentJobTitle ?? ctx.currentJobTitle ?? null;
-  if (/^(?:most recent school|most recent university|ultima università|ultima universita)$/.test(key)) return ctx.school ?? null;
-  if (/^(?:country|country of residence|current country|paese di residenza|paese|nazione)$/.test(key)) return ctx.country ?? null;
-  if (/^(?:city|current city|city of residence|current location|città|citta|città di residenza|citta di residenza|where do you live|where are you based|dove vivi|dove risiedi)$/.test(key)) return ctx.city ?? null;
-  if (isAnnualEurExpectation(label)) return ctx.salaryExpectationEur != null ? String(ctx.salaryExpectationEur) : null;
-  if (/^(?:phone|phone number|telephone|mobile|telefono|numero di telefono|cellulare)$/.test(key)) return ctx.phone ?? null;
-  if (/^(?:linkedin|linkedin url|linkedin profile|profilo linkedin)$/.test(key)) return ctx.linkedinUrl ?? null;
-  if (/^(?:portfolio|portfolio url|personal website|sito web personale)$/.test(key)) return ctx.portfolioUrl ?? null;
-  if (isTotalExperienceQuestion(label)) return ctx.yearsExperience != null ? String(ctx.yearsExperience) : null;
-  if (/^(?:english level|level of english|english proficiency|livello di inglese)$/.test(key)) return ctx.englishLevel ?? null;
-  if (/^(?:languages|languages spoken|spoken languages|lingue|lingue parlate)$/.test(key)) return (ctx.languages ?? []).map((x) => x.level ? `${x.name} (${x.level})` : x.name).filter(Boolean).join(", ") || null;
-  if (/^(?:notice period|preavviso|periodo di preavviso)$/.test(key)) return ctx.noticePeriod ?? null;
-  if (/^(?:highest education|highest level of education|titolo di studio|titolo di studio più alto)$/.test(key)) return ctx.highestEducation ?? null;
-  return null;
 }
 
 // ---------- enumerazione campi ----------
@@ -333,6 +312,10 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
         .split(/\s*\+\d{1,4}[A-Z]/)[0]
         .replace(/\s+/g, " ")
         .trim();
+
+      const phoneContainer = el.closest("[class*='phone'], [class*='Phone'], [class*='tel-input']");
+      if (/country|dial|prefix/i.test(`${el.id} ${el.getAttribute("name") || ""} ${label}`)
+        && (phoneContainer || /phone|calling|dial|prefix/i.test(`${el.id} ${el.getAttribute("name") || ""}`))) label = "Phone country code";
 
       // --- required (inline) ---
       const required =
@@ -498,13 +481,15 @@ async function readReactSelectOptions(page: Page, idx: number): Promise<string[]
   try {
     await control.click({ timeout: 2000 });
     await page.waitForTimeout(350);
-    const opts = await page
-      .locator("[class*='select__option']")
-      .allTextContents();
+    const controlled = await control.getAttribute("aria-controls").catch(() => null);
+    const selector = controlled && /^[a-zA-Z0-9_-]+$/.test(controlled)
+      ? `#${controlled} [role='option'], #${controlled} [class*='select__option']`
+      : "[role='listbox'] [role='option'], [class*='select__option']";
+    const opts = await page.locator(selector).allTextContents();
     // chiudi il menu
     await page.keyboard.press("Escape").catch(() => void 0);
     const clean = opts.map((o) => o.replace(/\s+/g, " ").trim()).filter(Boolean);
-    return clean.length ? clean.slice(0, 60) : undefined;
+    return clean.length ? clean.slice(0, 500) : undefined;
   } catch {
     return undefined;
   }
@@ -554,28 +539,24 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
     // react-select (Greenhouse): NON basta cliccare l'opzione (il click non
     // registra l'onChange). Il modo affidabile: apri → digita per filtrare →
     // premi Enter (seleziona l'opzione evidenziata) → verifica single-value.
-    const optsSel = "[class*='select__option']";
+    const controlled = await loc.getAttribute("aria-controls").catch(() => null);
+    const optsSel = controlled && /^[a-zA-Z0-9_-]+$/.test(controlled)
+      ? `#${controlled} [role='option'], #${controlled} [class*='select__option']`
+      : "[role='listbox'] [role='option'], [class*='select__option']";
     await loc.click({ timeout: 3000 });
     await page.waitForTimeout(350);
-    // digita per filtrare (NON usare fill(""): chiuderebbe il menu)
-    await loc.pressSequentially(value.slice(0, 40), { delay: 22 }).catch(() => void 0);
-    // Attendi il caricamento opzioni (alcuni select cercano async: città,
-    // paese). Poll fino a ~2.5s invece di un wait fisso troppo corto.
-    let optCount = 0;
-    for (let i = 0; i < 10; i++) {
+    await loc.fill(value).catch(() => void 0);
+    let selected: string | null = null;
+    for (let i = 0; i < 12; i++) {
       await page.waitForTimeout(250);
-      optCount = await page.locator(optsSel).count();
-      if (optCount > 0) break;
+      const options = (await page.locator(optsSel).allTextContents()).map(option => option.trim());
+      selected = exactOption(options, value) ?? matchFactOption({ ...f, options }, value);
+      if (selected) {
+        await page.locator(optsSel).nth(options.indexOf(selected)).click({ timeout: 3000 });
+        break;
+      }
     }
-    if (optCount === 0) {
-      // nessuna opzione corrisponde al valore: non inventiamo, chiudiamo.
-      await page.keyboard.press("Escape").catch(() => void 0);
-      return false;
-    }
-    const options = await page.locator(optsSel).allTextContents();
-    const exact = options.findIndex((option) => option.trim().toLowerCase() === value.trim().toLowerCase());
-    if (exact < 0) { await page.keyboard.press("Escape").catch(() => void 0); return false; }
-    await page.locator(optsSel).nth(exact).click({ timeout: 3000 });
+    if (!selected) { await page.keyboard.press("Escape").catch(() => void 0); return false; }
     await page.waitForTimeout(300);
 
     // verifica che la selezione si sia FISSATA — SOLO nello shell di QUESTO
@@ -591,7 +572,7 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
           "[class*='single-value'], [class*='multi-value']",
         );
         return !!(sv && (sv.textContent ?? "").trim().toLowerCase() === expected.trim().toLowerCase());
-      }, value)
+      }, selected)
       .catch(() => false);
     if (!ok) await page.keyboard.press("Escape").catch(() => void 0);
     return ok;

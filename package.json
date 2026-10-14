@@ -19,7 +19,10 @@
     "test:send-reply-postgres": "node --import tsx scripts/test-send-receive-postgres.ts",
     "test:release-controls": "node --import tsx scripts/test-release-health.ts && node --import tsx scripts/test-application-pause.ts && node --import tsx scripts/test-release-email-canary.ts",
     "test:manual-rollout": "node --import tsx scripts/test-manual-submission-budget.ts && node --import tsx scripts/test-manual-rollout-producers.ts && node --import tsx scripts/test-manual-rollout-visibility.ts",
-    "test:manual-rollout-postgres": "node --import tsx scripts/test-manual-submission-budget-postgres.ts"
+    "test:manual-rollout-postgres": "node --import tsx scripts/test-manual-submission-budget-postgres.ts",
+    "test:answers": "node --import tsx scripts/test-candidate-facts.ts && node --import tsx scripts/test-cv-question-suggestions.ts && node --import tsx scripts/test-question-resume.ts && node --import tsx scripts/test-ats-answer-truthfulness.ts",
+    "test:answer-continuation-postgres": "node --import tsx scripts/test-answer-continuation-postgres.ts",
+    "test:answers-browser": "node --import tsx scripts/test-ats-answer-browser.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
