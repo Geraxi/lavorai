@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import localFont from "next/font/local";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocale } from "next-intl";
 import {
   ArrowDownToLine, ArrowRight, BriefcaseBusiness,
@@ -18,6 +18,32 @@ import styles from "./landing-homepage.module.css";
 const displayFont = localFont({ src: "./fonts/InstrumentSerif-Regular.ttf", weight: "400", style: "normal", display: "swap", variable: "--font-landing-display" });
 
 type Label = (italian: string, english: string) => string;
+
+const NEW_LOOK_NOTICE_KEY = "lavorai:new-look:2026-10:dismissed";
+const NEW_LOOK_NOTICE_EXPIRES = Date.parse("2026-10-28T22:59:59Z");
+
+function NewLookAnnouncement({ l }: { l: Label }) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const remaining = NEW_LOOK_NOTICE_EXPIRES - Date.now();
+    if (remaining <= 0) return;
+    try { if (window.localStorage.getItem(NEW_LOOK_NOTICE_KEY) === "1") return; } catch { /* Storage may be unavailable in private browsing. */ }
+    setVisible(true);
+    const expiry = window.setTimeout(() => setVisible(false), remaining);
+    return () => window.clearTimeout(expiry);
+  }, []);
+  function dismiss() {
+    setVisible(false);
+    try { window.localStorage.setItem(NEW_LOOK_NOTICE_KEY, "1"); } catch { /* Dismiss for this visit even if storage is blocked. */ }
+  }
+  if (!visible) return null;
+  return <aside className={styles.newLookNotice} aria-labelledby="new-look-title">
+    <div className={styles.newLookInner}>
+      <p><strong id="new-look-title">{l("LavorAI ha un nuovo look.", "LavorAI has a new look.")}</strong><span>{l("Abbiamo aggiornato il sito, le pagine di accesso e l’anteprima del CV.", "We’ve updated the website, sign-in pages and CV preview.")}</span></p>
+      <button type="button" onClick={dismiss} aria-label={l("Chiudi l’avviso sul nuovo look", "Dismiss the new-look announcement")}><X size={17} aria-hidden="true" /></button>
+    </div>
+  </aside>;
+}
 
 function Brand({ large = false }: { large?: boolean }) {
   return <span className={large ? styles.brandLarge : styles.brand}>Lavor<span>AI</span></span>;
@@ -73,13 +99,41 @@ function JobPreview({ l }: { l: Label }) {
 }
 
 function CvPreview({ l }: { l: Label }) {
-  return <div className={styles.cvStack} aria-label={l("Anteprima illustrativa di un CV", "Illustrative CV preview")}>
-    <div className={styles.cvSheet}>
-      <div className={styles.cvTop}><FileText size={18} /><span>{l("Il tuo nome", "Your name")}</span><span className={styles.cvDot} /></div>
-      <h3>{l("Il tuo profilo professionale", "Your professional profile")}</h3>
-      {[l("PROFILO", "PROFILE"), l("ESPERIENZE", "EXPERIENCE"), l("COMPETENZE", "SKILLS"), l("FORMAZIONE", "EDUCATION")].map((title, i) => <div className={styles.cvBlock} key={title}><b>{title}</b><i /><i /><i className={i === 1 ? styles.highlightLine : ""} /></div>)}
-      <span className={styles.cvFoot}>{l("Le tue esperienze, messe a fuoco.", "Your experience, brought into focus.")}</span>
-    </div>
+  return <div className={styles.cvStack} aria-label={l("CV di esempio · profilo fittizio", "Sample CV · fictional profile")}>
+    <article className={styles.cvSheet}>
+      <span className={styles.cvExample}>{l("ESEMPIO · PROFILO FITTIZIO", "SAMPLE · FICTIONAL PROFILE")}</span>
+      <div className={styles.cvIdentity}>
+        <div className={styles.cvTop}>Giulia Rossi</div>
+        <h3>Product Designer</h3>
+        <p>{l("Milano, Italia", "Milan, Italy")}</p>
+      </div>
+      <section className={styles.cvSection}>
+        <h4>{l("PROFILO", "PROFILE")}</h4>
+        <p>{l("Progetto esperienze digitali chiare e accessibili. Unisco ricerca utente, prototipazione e cura dei dettagli per trasformare bisogni complessi in interfacce semplici.", "I design clear, accessible digital experiences. I combine user research, prototyping and attention to detail to turn complex needs into straightforward interfaces.")}</p>
+      </section>
+      <section className={styles.cvSection}>
+        <h4>{l("ESPERIENZE", "EXPERIENCE")}</h4>
+        <div className={styles.cvExperience}>
+          <div><strong>Product Designer</strong><span>{l("2023 – oggi", "2023 – present")}</span></div>
+          <em>Studio Linea</em>
+          <p>{l("Flussi di onboarding e prototipi per un servizio digitale. Interviste agli utenti e collaborazione con gli sviluppatori per il rilascio delle interfacce.", "Onboarding flows and prototypes for a digital service. User interviews and collaboration with developers to ship interface designs.")}</p>
+        </div>
+        <div className={styles.cvExperience}>
+          <div><strong>Junior UX Designer</strong><span>2021 – 2023</span></div>
+          <em>Atelier Digitale</em>
+          <p>{l("Wireframe, test di usabilità e componenti di un design system. Documentazione dei pattern e verifica dei requisiti di accessibilità.", "Wireframes, usability testing and design system components. Pattern documentation and accessibility requirements reviews.")}</p>
+        </div>
+      </section>
+      <section className={styles.cvSection}>
+        <h4>{l("COMPETENZE", "SKILLS")}</h4>
+        <div className={styles.cvSkills}>{["Figma", l("Prototipazione", "Prototyping"), l("Ricerca utente", "User research"), l("Accessibilità", "Accessibility")].map(skill => <span key={skill}>{skill}</span>)}</div>
+      </section>
+      <section className={styles.cvSection}>
+        <h4>{l("FORMAZIONE", "EDUCATION")}</h4>
+        <p><strong>{l("Laurea in Design della comunicazione", "BA in Communication Design")}</strong><br />{l("Percorso universitario · 2021", "University studies · 2021")}</p>
+      </section>
+      <p className={styles.cvSampleNote}>{l("Nome, aziende ed esperienze sono inventati a scopo illustrativo.", "Name, companies and experience are fictional and for illustration only.")}</p>
+    </article>
   </div>;
 }
 
@@ -115,6 +169,7 @@ export function LandingHomepage() {
 
   return <div className={`${styles.home} ${displayFont.variable}`}>
     <a className={styles.skipLink} href="#main-content">{l("Vai al contenuto", "Skip to content")}</a>
+    <NewLookAnnouncement l={l} />
     <main id="main-content">
       <CinematicHero />
 
