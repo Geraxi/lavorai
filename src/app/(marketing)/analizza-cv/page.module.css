@@ -1,0 +1,49 @@
+.page { --foreground: 205 45% 96%; --muted-foreground: 205 28% 81%; --card: 202 60% 19%; --border: 202 30% 48%; min-height: 100vh; color: #f3f8fb; background: #002b42 url('/lavorai-starlit-sky.jpg') repeat center top / 1280px 600px; }
+.page * { box-sizing: border-box; }
+.page a { text-decoration: none; }
+.page a:focus-visible, .page button:focus-visible { outline: 3px solid #bcecff; outline-offset: 5px; }
+.header, .hero, .stepsSection, .final, .footer { width: min(1120px, calc(100% - 80px)); margin-inline: auto; }
+.header { display: flex; align-items: center; justify-content: space-between; min-height: 100px; gap: 24px; border-bottom: 1px solid #d1eaf226; }
+.brand { color: white; font-size: 27px; font-weight: 600; letter-spacing: -1.2px; white-space: nowrap; }
+.brand span { font-weight: 300; }
+.nav { display: flex; align-items: center; gap: 30px; font-size: 13px; }
+.nav a { color: #d8e7ef; }
+.login { border: 1px solid #c4ddeb8c; border-radius: 99px; padding: 12px 22px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, .8fr); align-items: center; gap: 90px; padding-block: 90px 100px; }
+.eyebrow { display: flex; align-items: center; gap: 8px; color: #cee2ed; font-size: 11px; letter-spacing: .13em; text-transform: uppercase; }
+.intro h1, .sectionHeading h2, .final h2, .uploadPanel h2 { font-family: var(--font-cv-display), Georgia, serif; font-weight: 400; }
+.intro h1 { font-size: clamp(48px, 5.8vw, 76px); line-height: 1.03; letter-spacing: -.025em; margin-top: 24px; text-wrap: balance; }
+.intro h1 span { display: block; color: #bed6e3; }
+.lead { font-size: 16px; line-height: 1.75; color: #d2e0e8; margin-top: 26px; max-width: 490px; }
+.textLink { display: inline-flex; align-items: center; gap: 12px; color: #e6f3f9; font-size: 13px; margin-top: 26px; padding-block: 12px; }
+.uploadPanel { padding: 32px; background: rgba(10,54,79,.76); border: 1px solid #c7e6f680; border-radius: 20px; backdrop-filter: blur(8px); box-shadow: inset 0 1px 1px #ffffff26, 0 20px 60px #00182726; }
+.uploadPanel h2 { font-size: 38px; line-height: 1.05; }
+.uploadCard { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 18px; margin-top: 26px; padding: 30px 18px 22px; border: 1px solid #bbd9ed80; border-radius: 16px; background: #113e5890; }
+.uploadCard > svg { color: #e5f0f7; }
+.fileName { font-size: 22px; font-weight: 500; }
+.uploadCard p { color: #d4e2eb; font-size: 13px; line-height: 1.6; max-width: 220px; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 48px; border: 1px solid #c4ddeb8c; border-radius: 99px; color: white; background: #ffffff08; padding: 13px 22px; font-size: 13px; line-height: 1.5; text-align: center; transition: background .2s; }
+.uploadCard .button { width: 100%; margin-top: 5px; }
+.button:hover, .login:hover { background: #ffffff18; }
+.caption { font-size: 11px; line-height: 1.6; color: #c0d1de; text-align: center; margin-top: 19px; }
+.stepsSection { padding-block: 68px 80px; border-top: 1px solid #d1eaf230; }
+.sectionHeading { text-align: center; max-width: 680px; margin-inline: auto; }
+.sectionHeading .eyebrow { justify-content: center; }
+.sectionHeading h2, .final h2 { font-size: clamp(36px, 4vw, 52px); line-height: 1.1; margin-top: 16px; }
+.sectionHeading > p:last-child { color: #d2e0e8; line-height: 1.7; font-size: 15px; margin-top: 18px; }
+.steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; padding: 0; margin: 42px 0 0; list-style: none; }
+.steps li { padding: 28px; background: #0d374db3; border: 1px solid #cce8f64d; border-radius: 18px; backdrop-filter: blur(8px); }
+.stepTop { display: flex; justify-content: space-between; align-items: center; color: #c5deeb; }
+.stepTop span { font-size: 11px; letter-spacing: .1em; }
+.steps h3 { margin-top: 24px; font-size: 17px; font-weight: 500; }
+.steps p { margin-top: 12px; color: #cadde8; font-size: 14px; line-height: 1.75; }
+.final { text-align: center; padding: 46px 24px; margin-bottom: 80px; background: #0d374da3; border: 1px solid #cce8f64d; border-radius: 20px; }
+.final h2 { margin: 0; }
+.final .button { margin-top: 26px; }
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-block: 32px; border-top: 1px solid #d1eaf230; }
+.footer > div { display: flex; gap: 24px; font-size: 12px; color: #cadde8; }
+.skip { position: absolute; top: 12px; left: 20px; z-index: 50; transform: translateY(-200%); background: #f3f8fb; color: #002b42; border-radius: 8px; padding: 12px; }
+.skip:focus { transform: translateY(0); }
+@media (max-width: 900px) { .hero { gap: 36px; } .nav { gap: 16px; } .desktopLink { display: none; } .uploadPanel { padding: 24px; } .steps li { padding: 22px; } }
+@media (max-width: 680px) { .header, .hero, .stepsSection, .final, .footer { width: calc(100% - 40px); } .header { min-height: 82px; gap: 12px; } .brand { font-size: 24px; } .nav { gap: 12px; } .login { padding: 10px 14px; } .hero { grid-template-columns: 1fr; padding-block: 52px 64px; gap: 36px; } .intro h1 { font-size: clamp(44px, 10vw, 62px); } .uploadPanel { max-width: 430px; width: 100%; margin-inline: auto; } .stepsSection { padding-block: 50px; } .steps { grid-template-columns: 1fr; gap: 14px; margin-top: 30px; } .steps h3 { margin-top: 18px; } .final { margin-bottom: 50px; } .footer { align-items: flex-start; flex-direction: column; } .footer > div { gap: 20px; flex-wrap: wrap; } }
+@media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { transition: none !important; scroll-behavior: auto !important; } }
