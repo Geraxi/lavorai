@@ -1,15 +1,14 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useLocale } from "next-intl";
 import {
-  ArrowDown, ArrowDownToLine, ArrowRight, ArrowUpRight, BarChart3, BriefcaseBusiness,
+  ArrowDown, ArrowDownToLine, ArrowRight, ArrowUpRight, BriefcaseBusiness,
   Check, CheckCircle2, ChevronRight, Circle, FileText, Fingerprint, Layers,
-  MapPin, Menu, MessageSquare, Pause, Plus, ShieldCheck, Sparkles, Trash2, Users, X, Zap,
+  MapPin, MessageSquare, Pause, Plus, ShieldCheck, Trash2, Users, X, Zap,
 } from "lucide-react";
-import { LanguageSwitcher } from "@/components/language-switcher";
+import { CinematicHero } from "./cinematic-hero";
 import { SectionLeadMagnet } from "@/components/sections/lead-magnet-banner";
 import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 import { TIERS } from "@/lib/billing";
@@ -101,7 +100,6 @@ function ControlPreview({ l }: { l: Label }) {
 export function LandingHomepage() {
   const en = useLocale() === "en";
   const l: Label = (it, english) => en ? english : it;
-  const [menuOpen, setMenuOpen] = useState(false);
   const faq = [
     [l("Posso rivedere prima di inviare?", "Can I review before sending?"), l("Sì. Con la modalità con conferma puoi controllare l’offerta e i materiali prima di autorizzare l’invio. Se mancano informazioni, la candidatura deve attendere la tua risposta. Puoi mettere in pausa i nuovi invii dalle preferenze.", "Yes. Confirmation mode lets you review the job and application materials before authorizing submission. If information is missing, the application must wait for your answer. You can pause new submissions in preferences.")],
     [l("Su quali portali funziona?", "Which portals are supported?"), l("La disponibilità dipende dal portale e dall’offerta. LavorAI integra gli ATS supportati e i canali email verificati. Un annuncio trovato su LinkedIn o Indeed non significa che l’invio su quel sito sia disponibile. Non promettiamo un invio riuscito senza una prova verificabile.", "Availability depends on the portal and job. LavorAI integrates supported ATS platforms and verified email channels. A listing found on LinkedIn or Indeed does not mean submission on that site is available. We do not claim a successful submission without verifiable evidence.")],
@@ -114,47 +112,12 @@ export function LandingHomepage() {
     { name: TIERS.pro.name, price: TIERS.pro.priceDisplay.replace(".", en ? "." : ","), suffix: l("/ mese", "/ month"), subtitle: l("Per dare ritmo alla tua ricerca.", "Build momentum in your search."), items: [l("50 candidature al mese", "50 applications a month"), l("CV e lettera su misura", "Tailored CV and cover letter"), l("Portali e canali supportati", "Supported portals and channels"), l("Statistiche di base", "Basic analytics")], cta: l("Scegli Pro", "Choose Pro"), href: "/signup?plan=pro", id: "pro" },
     { name: TIERS.pro_plus.name, price: TIERS.pro_plus.priceDisplay.replace(".", en ? "." : ","), suffix: l("/ mese", "/ month"), subtitle: l("Più strumenti per il prossimo passo.", "More tools for your next step."), items: [l("Candidature illimitate nel piano*", "Unlimited applications in the plan*"), l("CV e lettera su misura", "Tailored CV and cover letter"), l("Analisi avanzate", "Advanced analytics"), "Founder Interview Coach"], cta: l("Scegli Pro+", "Choose Pro+"), href: "/signup?plan=pro_plus", id: "pro_plus" },
   ];
-  const nav = [
-    { href: "#come-funziona", label: l("Come funziona", "How it works") },
-    { href: "/lavoro", label: l("Offerte", "Jobs") },
-    { href: "#prezzi", label: l("Prezzi", "Pricing") },
-  ];
+
 
   return <div className={styles.home}>
     <a className={styles.skipLink} href="#main-content">{l("Vai al contenuto", "Skip to content")}</a>
-    <header className={styles.header} onKeyDown={event => { if (event.key === "Escape") setMenuOpen(false); }}>
-      <div className={styles.navInner}>
-        <Link href="/" aria-label="LavorAI home"><Brand /></Link>
-        <nav className={styles.desktopNav} aria-label={l("Navigazione principale", "Main navigation")}>
-          {nav.map(link => <Link key={link.href} href={link.href}>{link.label}</Link>)}
-          <Link href="/login" onClick={() => trackEvent(AnalyticsEvent.NAV_LOGIN)}>{l("Accedi", "Log in")}</Link>
-        </nav>
-        <div className={styles.navActions}><LanguageSwitcher /><Cta event={AnalyticsEvent.NAV_SIGNUP}>{l("Crea account", "Get started")}</Cta><button className={styles.menuButton} type="button" aria-expanded={menuOpen} aria-controls="landing-mobile-nav" aria-label={l(menuOpen ? "Chiudi menu" : "Apri menu", menuOpen ? "Close menu" : "Open menu")} onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button></div>
-      </div>
-      {menuOpen && <nav id="landing-mobile-nav" className={styles.mobileNav} aria-label={l("Navigazione mobile", "Mobile navigation")}>{[...nav, { href: "/login", label: l("Accedi", "Log in") }].map(link => <Link key={link.href} href={link.href} onClick={() => setMenuOpen(false)}>{link.label}<ArrowUpRight size={18} /></Link>)}</nav>}
-    </header>
-
     <main id="main-content">
-      <section className={styles.hero} aria-labelledby="hero-title">
-        <Image className={styles.heroImage} src="/lavorai-hero-space.jpg" alt="" fill priority sizes="100vw" quality={90} />
-        <div className={styles.heroScrim} />
-        <div className={`${styles.container} ${styles.heroInner}`}>
-          <div className={styles.heroCopy}>
-            <p className={styles.heroEyebrow}><span />{l("Il futuro ha il tuo nome.", "Your future has your name on it.")}</p>
-            <h1 id="hero-title">{l("Tu rilassati.", "Take a breath.")}</h1>
-            <p className={styles.heroSubtitle}>{l("Alle candidature pensa", "Meet your job-search copilot,")} <Brand />.</p>
-            <p className={styles.heroDescription}>{l("Carica il CV. Scegli cosa cerchi.", "Upload your CV. Choose your direction.")}<br />{l("LavorAI prepara il prossimo passo.", "LavorAI prepares your next step.")}<br />{l("Tu decidi quando inviare.", "You decide when to send.")}</p>
-            <div className={styles.heroCta}><Cta>{l("Crea account", "Get started")}</Cta><Link href="#lead-magnet" onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_SECONDARY)}>{l("Prima, prova il tuo CV", "Try your CV first")}<ArrowDown size={16} /></Link></div>
-          </div>
-          <div className={styles.orbitCards} aria-hidden="true">
-            <div className={`${styles.orbitCard} ${styles.orbitOne}`}><Fingerprint /><div>Product Designer<small><MapPin />Milano</small></div></div>
-            <div className={`${styles.orbitCard} ${styles.orbitTwo}`}><Sparkles /><div>AI Engineer<small><MapPin />{l("Londra", "London")}</small></div></div>
-            <div className={`${styles.orbitCard} ${styles.orbitThree}`}><BarChart3 /><div>Data Analyst<small><MapPin />Roma</small></div></div>
-            <div className={`${styles.orbitCard} ${styles.orbitFour}`}><Layers /><div>Product Manager<small><MapPin />{l("Remoto", "Remote")}</small></div></div>
-          </div>
-          <p className={styles.heroOutline} aria-hidden="true">{l("Il tuo prossimo passo.", "Your next chapter.")}</p>
-        </div>
-      </section>
+      <CinematicHero />
 
       <section id="come-funziona" className={`${styles.light} ${styles.workflow}`}>
         <div className={`${styles.container} ${styles.twoColumns}`}>
