@@ -20,7 +20,8 @@ function isSecurityMessage(message: { fromAddress: string; subject: string | nul
  */
 const inboundSelect = {
   id: true, applicationId: true, fromAddress: true, subject: true,
-  bodyText: true, receivedAt: true, kind: true, isSecurityCode: true,
+  bodyText: true, receivedAt: true, kind: true, isHuman: true, isSecurityCode: true,
+  attentionTrackedAt: true, readAt: true, handledAt: true, remindAt: true,
   application: {
     select: { userId: true, userStatus: true, job: { select: { company: true, title: true, location: true, remote: true, salaryMin: true, salaryMax: true } } },
   },
@@ -41,7 +42,7 @@ export async function getInboxMessages(userId: string, savedReplyParents: string
       take: 200,
       select: {
         id: true, fromAddress: true, subject: true, snippet: true, bodyText: true, threadId: true, gmailMessageId: true,
-        date: true, kind: true, read: true, applicationId: true,
+        date: true, kind: true, isHuman: true, read: true, handledAt: true, remindAt: true, applicationId: true,
         application: {
           select: { userId: true, userStatus: true, job: { select: { company: true, title: true, location: true, remote: true, salaryMin: true, salaryMax: true } } },
         },
@@ -71,7 +72,8 @@ export async function getInboxMessages(userId: string, savedReplyParents: string
         date: reply.receivedAt.toISOString(),
         kind: reply.kind,
         label: reply.applicationId === RELEASE_CANARY.applicationId ? "Test diagnostico" : inboxKindLabel(reply.kind),
-        read: null,
+        read: reply.readAt ? true : reply.attentionTrackedAt ? false : null,
+        isHuman: reply.isHuman, handledAt: reply.handledAt?.toISOString() ?? null, remindAt: reply.remindAt?.toISOString() ?? null,
         applicationId: reply.applicationId,
         applicationStatus: reply.application.userStatus,
         company: reply.application.job.company,
@@ -101,6 +103,7 @@ export async function getInboxMessages(userId: string, savedReplyParents: string
         kind,
         label: jobRelated ? inboxKindLabel(kind) : "Other mail",
         read: message.read,
+        isHuman: message.isHuman, handledAt: message.handledAt?.toISOString() ?? null, remindAt: message.remindAt?.toISOString() ?? null,
         applicationId: application ? message.applicationId : null,
         applicationStatus: application?.userStatus ?? null,
         company: application?.job.company ?? null,

@@ -89,3 +89,9 @@
 .product-workspace .performance-header h1 { font-size: 24px; }
 .product-workspace .performance-header > div > p { font-size: 13px; }
 @media (min-width: 1024px) { .product-workspace .performance-page { flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; } }
+.activation-evidence-table { overflow-x:auto; }
+.activation-evidence-table table { width:100%; border-collapse:collapse; font-size:13px; }
+.activation-evidence-table th,.activation-evidence-table td { text-align:left; padding:10px; border-bottom:1px solid var(--border-ds); }
+.activation-observations { display:flex; flex-wrap:wrap; gap:18px; padding:16px 0; }
+.activation-observations > div { flex:1; min-width:170px; }
+.activation-observations span,.activation-observations strong { display:block; }

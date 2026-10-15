@@ -1,3 +1,5 @@
+import { AttentionQueue } from "@/components/attention-queue";
+import { getAttentionQueue } from "@/lib/attention-repository";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -36,7 +38,7 @@ export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [globe, onboarding, deliveryCounts, responseCount, offersCount, interviews] = await Promise.all([
+  const [globe, onboarding, deliveryCounts, responseCount, offersCount, interviews, attention] = await Promise.all([
     getDashboardGlobeData(user.id),
     getOnboardingState(user.id),
     dashboardDeliveryCounts(user.id),
@@ -53,6 +55,7 @@ export default async function DashboardPage() {
       take: 3,
       select: { id: true, createdAt: true, lastReplyAt: true, job: { select: { title: true, company: true } }, interviewSessions: { select: { startedAt: true }, orderBy: { createdAt: "desc" }, take: 1 } },
     }),
+    getAttentionQueue(user.id, locale).catch(() => null),
   ]);
 
   // Opportunità consigliate: migliori annunci aperti per match, una per azienda.
@@ -69,7 +72,6 @@ export default async function DashboardPage() {
 
   const greetingName = (user.name ?? user.email.split("@")[0]).split(/\s+/)[0];
   const showWelcome = !user.welcomeSeenAt;
-  const allDone = onboarding.hasUploadedCv && onboarding.hasSetPreferences && onboarding.hasFirstApplication;
   const readiness = await getAutoApplyReadiness(user.id, globe.stats.counts.open);
 
   const countryCounts = new Map<string, number>();
@@ -100,7 +102,8 @@ export default async function DashboardPage() {
           </div>
           <div className="workspace-dashboard-grid">
             <div className="workspace-stack dashboard-primary">
-              <section className="workspace-panel dashboard-overview">
+              <AttentionQueue queue={attention} state={onboarding} locale={locale} />
+<details className="dashboard-map-disclosure"><summary>{tr("Mappa delle opportunità", "Opportunity map")}</summary>              <section className="workspace-panel dashboard-overview">
                 <div className="fit-card-head">
                   <h2><Icon name="globe" size={14} /> {tr("Panoramica globale", "Global overview")}</h2>
                   <div className="dashboard-overview-actions"><AutoApplyToggle locale={locale} /><Link href="/discover" className="workspace-chip">{globe.stats.counts.open} {tr("opportunità sulla mappa", "mapped opportunities")}</Link></div>
@@ -125,13 +128,14 @@ export default async function DashboardPage() {
                   <DashboardRegionPanel markers={globe.markers} />
                 </div></div>
               </section>
+</details>
               <section className="workspace-panel dashboard-opportunities">
                 <div className="fit-card-head">
                   <h2>{tr("Opportunità selezionate", "Selected opportunities")}</h2>
                   <Link href="/jobs" className="fit-link">{tr("Vedi tutte", "View all")} <Icon name="arrow-right" size={12} /></Link>
                 </div>
                 {recommended.length === 0 ? <Empty text={tr("Completa profilo e preferenze per trovare annunci compatibili.", "Complete your profile and preferences to find matching jobs.")} cta={{ href: "/preferences", label: tr("Imposta le preferenze", "Set preferences") }} />
-                  : recommended.slice(0, 3).map((j) => {
+                  : recommended.slice(0, 1).map((j) => {
                     const company = j.company ?? tr("Azienda", "Company");
                     return <Link key={j.id} href={j.href} className="fit-row" style={{ gridTemplateColumns: "36px minmax(0,1fr) auto", textDecoration: "none", color: "inherit" }}>
                       <CompanyLogo company={company} color={companyColor(company)} size={32} rounded={8} />
@@ -142,6 +146,7 @@ export default async function DashboardPage() {
               </section>
             </div>
             <aside className="workspace-stack dashboard-rail">
+              <OnboardingChecklist state={onboarding} locale={locale} />
               <section className="workspace-panel">
                 <div className="workspace-eyebrow">{tr("Preparati al prossimo passo", "Prepare your next step")}</div>
                 <h2>{tr("Attività colloqui", "Interview activity")}</h2>
@@ -153,15 +158,10 @@ export default async function DashboardPage() {
                     <small className="workspace-muted">{when.toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short" })}</small>
                   </Link>;
                 })}
-                <Link href="/interview" className="ds-btn ds-btn-primary" style={{ marginTop: 14 }}><Icon name="sparkles" size={13} /> {tr("Prepara un colloquio", "Practice an interview")}</Link>
+                <Link href="/interview" className="ds-btn" style={{ marginTop: 14 }}><Icon name="sparkles" size={13} /> {tr("Prepara un colloquio", "Practice an interview")}</Link>
               </section>
               <AutoApplyReadinessCard readiness={readiness} locale={locale} />
-              {!allDone && <OnboardingChecklist state={onboarding} locale={locale} />}
-              <section className="workspace-panel">
-                <h2>{tr("Risposte e aggiornamenti", "Replies and updates")}</h2>
-                <p className="workspace-muted">{tr("Leggi i messaggi ricevuti e aggiorna lo stato delle tue candidature.", "Read received messages and update your application status.")}</p>
-                <Link href="/inbox" className="ds-btn" style={{ marginTop: 14 }}><Icon name="inbox" size={13} /> {tr("Apri inbox", "Open inbox")}</Link>
-              </section>
+
             </aside>
           </div>
         </div>

@@ -213,6 +213,7 @@ async function main() {
   assert.equal(user.tier, "free");
   assert.equal((await finish()).status, 402);
   assert.match(html(await membership({ searchParams: Promise.resolve({}) })), /Attendiamo la conferma/);
+  assert.equal(conversions.includes("card_setup_confirmed"), false, "Pending setup is not card evidence");
   // A raw payment-method ID or a card belonging to someone else is not verified.
   for (const method of ["pm_unexpanded", { type: "sepa_debit", customer: "cus_fixture" }, { type: "card", customer: "cus_other" }]) {
     assert.equal(card.subscriptionAccessStatus({ ...sub, default_payment_method: method }), "pending_payment_method");
@@ -221,9 +222,12 @@ async function main() {
   sub.pending_setup_intent = { status: "requires_action" };
   assert.equal(card.subscriptionAccessStatus(sub), "pending_payment_method", "SCA must finish before access");
   sub.pending_setup_intent = { status: "succeeded" };
+  linkedUserLookup = true;
   // Out-of-order payload has no card; handler must use current retrieved state.
   assert.equal((await sendEvent("customer.subscription.updated", { ...sub, default_payment_method: null })).status, 200);
   assert.equal(user.subscriptionStatus, "trialing"); assert.equal(user.tier, "pro");
+  assert.ok(conversions.includes("card_setup_confirmed"), "Verified server card produces an observation");
+  linkedUserLookup = false;
   assert.equal(user.trialEndsAt.getTime(), initialDeadline, "Webhook never rewrites trial clock");
   await redirects(() => membership({ searchParams: Promise.resolve({ subscribed: "1" }) }), "/onboarding");
   assert.match(html(await onboarding()), /CV setup/);

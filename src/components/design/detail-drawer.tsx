@@ -1,10 +1,13 @@
 "use client";
 
+import useSWR from "swr";
 import { useEffect, useRef, useState } from "react";
 import { CompanyLogo } from "@/components/design/company-logo";
 import { Icon } from "@/components/design/icon";
 import { toast } from "sonner";
 import { applicationLabel } from "@/lib/application-presentation";
+import { EvidenceTimeline } from "@/components/evidence-timeline";
+import type { EvidenceStep } from "@/lib/application-timeline";
 import type { DeliveryView } from "@/lib/application-delivery-view";
 
 export interface DrawerApp {
@@ -43,6 +46,11 @@ export function DetailDrawer({
   onClose: () => void;
 }) {
   const open = !!app;
+  const { data: evidence, error: evidenceError, mutate: retryEvidence } = useSWR<{ steps: EvidenceStep[] }>(
+    app ? `/api/applications/${encodeURIComponent(app.id)}/evidence` : null,
+    async (url: string) => { const response = await fetch(url); if (!response.ok) throw new Error("evidence_unavailable"); return response.json(); },
+    { shouldRetryOnError: false, revalidateOnFocus: false },
+  );
   const drawerRef = useRef<HTMLElement>(null);
   const tr = (it: string, en: string) => locale === "en" ? en : it;
 
@@ -114,6 +122,7 @@ export function DetailDrawer({
               className="ds-scroll"
               style={{ flex: 1, overflow: "auto", padding: "22px 24px" }}
             >
+              {evidenceError ? <p role="status">{tr("Prove non disponibili.", "Evidence unavailable.")} <button type="button" className="ds-btn ds-btn-sm" onClick={() => retryEvidence()}>{tr("Riprova", "Retry")}</button></p> : evidence?.steps ? <EvidenceTimeline steps={evidence.steps} locale={locale} /> : <p role="status">{tr("Caricamento prove…", "Loading evidence…")}</p>}
               {app.delivery && <section style={{ padding: 14, border: "1px solid var(--border-ds)", borderRadius: 8, marginBottom: 18 }}>
                 <strong>{app.delivery.label}</strong>
                 <p style={{ fontSize: 13, marginTop: 6 }}>{app.delivery.detail}</p>

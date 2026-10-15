@@ -1,8 +1,9 @@
+import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { TIERS } from "@/lib/billing";
 
-export type AdminPeriod = { days: number; since: Date; previousSince: Date; previousUntil: Date; label: string };
+export type AdminPeriod = { days: number; since: Date; until?: Date; previousSince: Date; previousUntil: Date; label: string };
 
 export function adminPeriod(input: { range?: string; from?: string; to?: string }): AdminPeriod {
   const now = new Date();
@@ -13,10 +14,10 @@ export function adminPeriod(input: { range?: string; from?: string; to?: string 
     const to = new Date(`${input.to}T23:59:59.999Z`);
     const diff = Math.ceil((to.getTime() - from.getTime()) / 86_400_000);
     if (!Number.isNaN(diff) && diff >= 1 && diff <= 365) {
-      return { days: diff, since: from, previousSince: new Date(from.getTime() - diff * 86_400_000), previousUntil: from, label: `${input.from} → ${input.to}` };
+      return { days: diff, since: from, until: to, previousSince: new Date(from.getTime() - diff * 86_400_000), previousUntil: from, label: `${input.from} → ${input.to}` };
     }
   }
-  return { days, since: new Date(now.getTime() - days * 86_400_000), previousSince: new Date(now.getTime() - days * 2 * 86_400_000), previousUntil: new Date(now.getTime() - days * 86_400_000), label: `ultimi ${days} giorni` };
+  return { days, until: now, since: new Date(now.getTime() - days * 86_400_000), previousSince: new Date(now.getTime() - days * 2 * 86_400_000), previousUntil: new Date(now.getTime() - days * 86_400_000), label: `ultimi ${days} giorni` };
 }
 
 type MetricUser = {
@@ -33,7 +34,7 @@ const paid = (u: MetricUser) => (u.tier === "pro" || u.tier === "pro_plus") && u
 const hasCv = (u: MetricUser) => u._count.cvDocuments > 0 || Boolean(u.cvProfile);
 
 export async function loadAdminGrowthMetrics(period: AdminPeriod) {
-  const [rawUsers, events, views, previousUsers, applications] = await Promise.all([
+  const [rawUsers, events, views, previousUsers, rawApplications] = await Promise.all([
     prisma.user.findMany({
       select: {
         id: true, email: true, createdAt: true, emailVerified: true, onboardedAt: true, tier: true, subscriptionStatus: true,
@@ -41,13 +42,15 @@ export async function loadAdminGrowthMetrics(period: AdminPeriod) {
         _count: { select: { applications: true, cvDocuments: true } }, cvProfile: { select: { id: true } },
       },
     }),
-    prisma.conversionEvent.findMany({ where: { createdAt: { gte: period.since } }, select: { name: true, userId: true, sessionId: true, source: true, plan: true, createdAt: true } }).catch(() => []),
-    prisma.pageView.findMany({ where: { ts: { gte: period.since } }, select: { sessionId: true, path: true, ts: true, userId: true } }).catch(() => []),
+    prisma.conversionEvent.findMany({ where: { createdAt: { gte: period.since, lte: period.until ?? new Date() } }, select: { name: true, userId: true, sessionId: true, source: true, plan: true, createdAt: true } }).catch(() => []),
+    prisma.pageView.findMany({ where: { ts: { gte: period.since, lte: period.until ?? new Date() } }, select: { sessionId: true, path: true, ts: true, userId: true } }).catch(() => []),
     prisma.user.findMany({ where: { createdAt: { gte: period.previousSince, lt: period.previousUntil } }, select: { email: true } }),
-    prisma.application.findMany({ where: { createdAt: { gte: period.since } }, select: { id: true, userId: true, status: true, createdAt: true, submittedAt: true, submitConfirmation: true, pendingQuestionsJson: true } }),
+    prisma.application.findMany({ where: { createdAt: { gte: period.since, lte: period.until ?? new Date() } }, select: { id: true, userId: true, status: true, createdAt: true, submittedAt: true, submitConfirmation: true, submittedVia: true, submissionReceiptJson: true, emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true } }, pendingQuestionsJson: true } }),
   ]);
   const users = rawUsers.filter((user) => !isTestAccount(user.email)) as MetricUser[];
-  const currentUsers = users.filter((u) => u.createdAt >= period.since);
+  const realUserIds = new Set(users.map(u => u.id));
+  const applications = rawApplications.filter(a => realUserIds.has(a.userId) && a.status !== "diagnostic");
+  const currentUsers = users.filter((u) => u.createdAt >= period.since && u.createdAt <= (period.until ?? new Date()));
   const previousSignups = previousUsers.filter((u) => !isTestAccount(u.email)).length;
   const unique = (values: Array<string | null | undefined>) => new Set(values.filter(Boolean) as string[]).size;
   const usersFor = (predicate: (u: MetricUser) => boolean) => currentUsers.filter(predicate).length;
@@ -91,8 +94,8 @@ export async function loadAdminGrowthMetrics(period: AdminPeriod) {
   }).filter((u) => u.score >= 30).sort((a, b) => b.score - a.score).slice(0, 25);
   const appByStatus = new Map<string, number>();
   for (const app of applications) appByStatus.set(app.status, (appByStatus.get(app.status) ?? 0) + 1);
-  const delivered = applications.filter((app) => app.status === "success").length;
-  const confirmed = applications.filter((app) => app.submitConfirmation?.startsWith("DETECTED")).length;
+  const delivered = applications.filter((app) => isConfirmedDelivery(deliveryEvidence(app))).length;
+  const confirmed = applications.filter((app) => deliveryEvidence(app) === "confirmed_portal").length;
   return {
     period, users, currentUsers, activePaid, mrr, previousSignups, events, views, applications, sourceRows, landingRows, funnel, drops,
     activationUsers, activationRate: currentUsers.length ? (activationUsers.length / currentUsers.length) * 100 : 0,

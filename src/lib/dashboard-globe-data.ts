@@ -95,7 +95,7 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
 
   const [openJobs, sentCandidates, savedApps, prefs, profileRow, analyzed] = await Promise.all([
     prisma.job.findMany({
-      where: { closedAt: null, cachedAt: { gte: since30 } },
+      where: { closedAt: null, cachedAt: { gte: since30 }, dismissals: { none: { userId } } },
       select: { id: true, title: true, company: true, location: true, description: true, cachedAt: true },
       orderBy: { cachedAt: "desc" },
       take: 4000,

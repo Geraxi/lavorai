@@ -18,17 +18,19 @@ export function applicationDeliveryView(app: {
   const email = app.emailAttempts?.[0];
   if (app.status === "diagnostic") return { phase: "pending", label: "Test diagnostico", tone: "neutral",
     detail: `Dati fittizi, esclusi da quote e risultati. Stato provider: ${email?.status ?? "non inviato"}.` };
+  if (app.submittedVia === "mock_demo" || app.submitConfirmation === "DRY_RUN") return { phase: "pending", label: "Anteprima, non inviata", tone: "neutral", detail: "Materiali dimostrativi, senza invio a un'azienda." };
+  if (app.submitConfirmation === "UNCONFIRMED") return { phase: "unconfirmed", label: "Esito da verificare", tone: "warning", detail: "Manca una prova verificabile. Controlla il portale prima di un altro tentativo." };
   if (email && ["failed", "bounced", "complained"].includes(email.status)) {
     return { phase: "failed", label: email.status === "complained" ? "Email segnalata" : "Email non consegnata", tone: "warning",
       detail: "Il provider ha segnalato un problema. Non effettuiamo un altro invio automatico." };
   }
-  if (email?.status === "delivered") return { phase: "delivered", label: "Email consegnata", tone: "positive",
+  if (email?.status === "delivered" && email.providerEmailId) return { phase: "delivered", label: "Email consegnata", tone: "positive",
     detail: "Il server email destinatario ha accettato il messaggio. Questo non prova una lettura o una risposta del recruiter." };
   if (email && ["accepted", "delayed"].includes(email.status) && email.providerEmailId) {
     return { phase: "accepted", label: email.status === "delayed" ? "Consegna email in ritardo" : "Email accettata dal provider", tone: "neutral",
       detail: "L'invio è registrato dal provider; la consegna al destinatario non è ancora confermata." };
   }
-  if (hasVerifiedSubmissionReceipt(app.submissionReceiptJson, app.submittedVia)) {
+  if (app.status === "success" && hasVerifiedSubmissionReceipt(app.submissionReceiptJson, app.submittedVia)) {
     return { phase: "confirmed", label: "Ricevuta ATS verificata", tone: "positive",
       detail: "Il portale ha confermato la ricezione della candidatura. L'azienda decide se e quando rispondere." };
   }

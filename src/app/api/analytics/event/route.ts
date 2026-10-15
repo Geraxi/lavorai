@@ -7,7 +7,9 @@ import { analyticsLimiter } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
-const ALLOWED = new Set<string>(Object.values(AnalyticsEvent));
+// Server receipts must never be forgeable through the public event collector.
+const SERVER_ONLY = new Set<string>([AnalyticsEvent.CARD_SETUP_CONFIRMED, AnalyticsEvent.FIRST_APPLICATION_DELIVERED, AnalyticsEvent.SUBSCRIPTION_STARTED, AnalyticsEvent.PURCHASE_COMPLETED]);
+const ALLOWED = new Set<string>(Object.values(AnalyticsEvent).filter(name => !SERVER_ONLY.has(name)));
 
 export async function POST(request: NextRequest) {
   try {

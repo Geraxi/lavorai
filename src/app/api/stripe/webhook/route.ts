@@ -139,6 +139,11 @@ export async function POST(request: NextRequest) {
           ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
           : await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
         if (convertedUser && (liveStatus === "active" || liveStatus === "trialing")) {
+          // Verify the current expanded card without retained-entitlement shortcuts.
+          // This is an observation from now on, never a historical card backfill.
+          if (synced && sub.metadata.cardRequired === "onboarding_v1" && ["active", "trialing"].includes(subscriptionAccessStatus(sub))) {
+            await recordConversionEvent(AnalyticsEvent.CARD_SETUP_CONFIRMED, { userId: convertedUser.id, source: "stripe_verified", dedupeKey: `card_setup_confirmed:${sub.id}` });
+          }
           await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
             userId: convertedUser.id,
             plan: tier,
@@ -250,6 +255,11 @@ export async function POST(request: NextRequest) {
           select: { id: true },
         });
         if (convertedUser && (liveStatus === "active" || liveStatus === "trialing")) {
+          // Verify the current expanded card without retained-entitlement shortcuts.
+          // This is an observation from now on, never a historical card backfill.
+          if (synced && sub.metadata.cardRequired === "onboarding_v1" && ["active", "trialing"].includes(subscriptionAccessStatus(sub))) {
+            await recordConversionEvent(AnalyticsEvent.CARD_SETUP_CONFIRMED, { userId: convertedUser.id, source: "stripe_verified", dedupeKey: `card_setup_confirmed:${sub.id}` });
+          }
           await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
             userId: convertedUser.id,
             plan: tier,
