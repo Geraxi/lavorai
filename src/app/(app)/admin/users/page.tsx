@@ -43,7 +43,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
     take: 500,
     select: {
       id: true, email: true, name: true, tier: true, emailVerified: true, onboardedAt: true, createdAt: true, lastLoginAt: true,
-      subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true, stripePriceId: true, suspendedAt: true,
+      cardSetupAt: true, subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true, stripePriceId: true, suspendedAt: true,
       referralCode: true, referredById: true, signupReferrer: true, signupUtmSource: true,
       preferences: { select: { autoApplyMode: true, dailyCap: true, matchMin: true, rolesJson: true, locationsJson: true } },
       cvProfile: { select: { id: true } },

@@ -136,11 +136,11 @@ export default function TerminiPage() {
           <section>
             <h2 className="text-xl font-semibold">5. Piani e pagamento</h2>
             <p>
-              La finestra di prova Pro termina 7 giorni dopo la creazione dell&apos;account.
-              Per accedere alla prova e completare il profilo è obbligatorio aggiungere una carta tramite Stripe.
-              La configurazione del pagamento non riavvia né prolunga la finestra di prova.
-              Alla scadenza si rinnova il piano scelto, salvo disdetta: Pro (€19,99/mese,
-              50 candidature) o Pro+ (€39,99/mese, candidature illimitate).
+              Free include 5 candidature totali senza scadenza: è obbligatoria una carta,
+              salvata tramite Stripe senza addebiti e senza abbonamento automatico.
+              Pro (€19,99/mese, 50 candidature) e Pro+ (€39,99/mese, candidature illimitate)
+              prevedono un abbonamento con pagamento immediato, senza prova.
+              Le prove già attive mantengono la scadenza esistente.
               Stripe mostra prezzo, scadenza e condizioni prima della conferma;
               puoi gestire o cancellare l&apos;abbonamento dal portale Stripe.
             </p>

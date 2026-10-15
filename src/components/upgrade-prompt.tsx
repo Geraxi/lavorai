@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Ban, Rocket, Zap } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { effectiveTier, getLimits, trialState } from "@/lib/billing";
+import { effectiveTier, getLimits } from "@/lib/billing";
 import { CompanyLogo } from "@/components/design/company-logo";
 import { pickMatches } from "@/lib/weekly-digest";
 
@@ -31,26 +31,17 @@ export async function UpgradePrompt({
   const tier = effectiveTier(user);
   if (tier !== "free") return null;
 
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const usedThisMonth = await prisma.application.count({
-    where: {
-      userId: user.id,
-      createdAt: { gte: monthStart },
-      // conta solo le candidature che hanno consumato il "credito" mensile
-      status: { in: ["success", "queued", "optimizing", "applying", "ready_to_apply"] },
-    },
-  });
+  const usedLifetime = user.freeApplicationsUsed;
 
   const limits = getLimits(tier);
   const cap = limits.monthlyApplications;
-  const remaining = Math.max(0, cap - usedThisMonth);
-  const ratio = cap > 0 ? usedThisMonth / cap : 0;
+  const remaining = Math.max(0, cap - usedLifetime);
+  const ratio = cap > 0 ? usedLifetime / cap : 0;
 
   const state: "cold" | "warning" | "blocked" =
     remaining === 0 ? "blocked" : ratio >= 0.5 ? "warning" : "cold";
 
-  const trial = trialState(user);
-  const copy = trial.status === "ended" ? COPY.trialEnded : cap === 0 ? COPY.viewOnly : COPY[state];
+  const copy = COPY[state];
   const isCompact = variant === "compact";
 
   // Upgrade "al momento del valore": quando è bloccato o quasi, mostra le
@@ -135,7 +126,7 @@ export async function UpgradePrompt({
             lineHeight: 1.35,
           }}
         >
-          {copy.title(usedThisMonth, cap)}
+          {copy.title(usedLifetime, cap)}
         </div>
         <div
           style={{
@@ -190,28 +181,18 @@ const COPY = {
   cold: {
     title: (_used: number, _cap: number) =>
       "Trova lavoro fino a 17× più veloce con Pro",
-    body: "Prova Pro: 7 giorni dalla registrazione, fino a 5 candidature al giorno, con carta richiesta. Poi 50 candidature/mese, priorità sui portali supportati e cover letter personalizzata a €19,99/mese. Disdici quando vuoi.",
-    cta: "Prova Pro gratis",
+    body: "Free include 5 candidature totali con carta richiesta e nessun addebito. Pro include 50 candidature/mese con CV e lettera personalizzati a €19,99/mese. Disdici quando vuoi.",
+    cta: "Passa a Pro, EUR 19,99/mese",
   },
   warning: {
     title: (used: number, cap: number) =>
-      `Hai usato ${used}/${cap} candidature del mese — stai per finire`,
+      `Hai usato ${used}/${cap} candidature Free totali — stai per finire`,
     body: "Ogni candidatura in più conta: più profili raggiunti = più colloqui. Con Pro passi a 50/mese e nessuna interruzione fino alla firma.",
     cta: "Attiva Pro",
   },
-  viewOnly: {
-    title: (_used: number, _cap: number) => "Free trial expired",
-    body: "La prova è terminata. Attiva Pro a €19,99/mese per riattivare le funzionalità.",
-    cta: "Attiva Pro",
-  },
-  trialEnded: {
-    title: (_used: number, _cap: number) => "La prova Pro è finita: le candidature sono in pausa",
-    body: "Attiva Pro per tornare a utilizzare le funzionalità: €19,99/mese, disdici quando vuoi.",
-    cta: "Riparti con Pro",
-  },
   blocked: {
     title: (_used: number, cap: number) =>
-      `Limite Free raggiunto (${cap}/mese) — pipeline in pausa`,
+      `Limite Free raggiunto (${cap} totali) — passa a Pro`,
     body: "Attiva Pro per continuare con 50 candidature al mese.",
     cta: "Attiva Pro",
   },

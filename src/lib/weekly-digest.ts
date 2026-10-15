@@ -10,7 +10,7 @@ import { esc, renderBrandEmail } from "@/lib/email-brand";
  *
  * Ogni lunedì: per ogni utente Free con ruoli nelle preferenze, cerca le
  * offerte entrate nel pool negli ultimi 7 giorni che matchano i ruoli e
- * manda le prime 5 con CTA alla prova Pro di 7 giorni. Chi non ha ruoli
+ * manda le prime 5 con CTA al piano Free. Chi non ha ruoli
  * riceve un nudge a completare le preferenze. Max 1 email ogni 6 giorni
  * (guard su EmailLog kind="weekly_digest").
  */
@@ -173,7 +173,7 @@ function renderDigest(
     rawBlock: noRoles ? undefined : `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 22px;border-bottom:1px solid #EEECE6;">${rows}</table>`,
     cta: noRoles
       ? { label: en ? "Set my preferences" : "Imposta le preferenze", url: `${site}/preferences` }
-      : { label: en ? "Try Pro free for 7 days" : "Prova Pro gratis per 7 giorni", url: `${site}/settings#billing` },
+      : { label: en ? "Start with Free" : "Inizia con Free", url: `${site}/settings#billing` },
     secondary: noRoles ? undefined : { label: en ? "Or apply one by one from Jobs" : "Oppure candidati una per una da Offerte", url: `${site}/jobs` },
     footnote: en ? "You receive this weekly digest because you have a view-only account. Manage it from Preferences." : "Ricevi questo riepilogo settimanale perché hai un account in sola visualizzazione. Gestiscilo dalle Preferenze.",
   });

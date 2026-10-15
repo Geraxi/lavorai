@@ -32,7 +32,7 @@
     "subtitle": "LavorAI è il copilota che si carica il peso ripetitivo: trova le offerte giuste, riscrive il CV per ognuna, compila i form. Tu torni a fare colloqui, non a riempire campi.",
     "cta": "Provalo, vedi se ti capisce",
     "ctaSecondary": "Prima fai vedere il mio CV",
-    "ctaCaption": "7 giorni di Pro gratis · niente carta · pausa quando vuoi",
+    "ctaCaption": "5 candidature gratuite totali · carta richiesta · nessun addebito automatico",
     "check1": "<strong>Submit reale</strong> sui form ATS (Greenhouse, Lever, Ashby), niente login ai tuoi account",
     "check2": "CV e cover letter <strong>specifici per ogni annuncio</strong>, in italiano o inglese nativo",
     "check3": "<strong>Tu decidi</strong>: auto, ibrido (consenso prima dell'invio) o off, in 1 click",
@@ -53,7 +53,7 @@
     "guaranteeText": "se in 24h dall'upgrade Pro non ricevi almeno 1 candidatura consegnata, rimborso integrale — senza domande.",
     "ctaPrimaryV2": "Inizia gratis",
     "ctaSecondaryV2": "Prima fai vedere il mio CV →",
-    "checkA": "La prova parte dalla registrazione",
+    "checkA": "5 candidature Free totali",
     "checkB": "Rinnovo salvo disdetta",
     "checkC": "Pausa quando vuoi",
     "featureA": "Candidature\nin 1 click",
@@ -237,10 +237,10 @@
     "eyebrow": "Prezzi",
     "title1": "Trasparenti,",
     "title2": "senza sorprese.",
-    "subtitle": "Prova il servizio per 7 giorni dalla registrazione, fino a 5 candidature al giorno. Carta richiesta; rinnovo al termine salvo disdetta.",
+    "subtitle": "Scegli Free con 5 candidature totali e carta richiesta, senza addebiti. Pro costa €19,99/mese, Pro+ €39,99/mese, senza prova.",
     "footnote": "IVA inclusa. Cancelli in 1 click da Stripe, senza email, senza attese. Nessun vincolo.",
-    "riskReducer1": "La prova parte dalla registrazione",
-    "riskReducer2": "Rinnovo al termine salvo disdetta",
+    "riskReducer1": "5 candidature Free totali",
+    "riskReducer2": "Free senza addebiti automatici",
     "riskReducer3": "Abbonamento disdettabile in un clic"
   },
   "faq": {
@@ -402,9 +402,9 @@
     "stepShareTitle": "Condividi il tuo link",
     "stepShareBody": "Il link personale associa l’iscrizione al tuo account.",
     "stepJoinTitle": "L’amico prova LavorAI",
-    "stepJoinBody": "Può completare la prova gratuita senza alcun addebito.",
+    "stepJoinBody": "Può usare Free: 5 candidature totali con carta, senza addebiti.",
     "stepRewardTitle": "Il credito viene confermato",
-    "stepRewardBody": "Scatta al primo pagamento riuscito, dopo la prova.",
+    "stepRewardBody": "Scatta al primo pagamento riuscito di un abbonamento.",
     "footnote": "Se sei già abbonato, il credito si applica automaticamente al prossimo rinnovo. Altrimenti resta disponibile per il tuo prossimo upgrade.",
     "cta": "Apri il programma"
   },
@@ -418,7 +418,7 @@
     "step2Text": "Scrivi il ruolo che cerchi e la città. Puoi aggiungere filtri: solo remote, solo startup, solo big tech.",
     "step3Title": "Da qui non tocchi più nulla",
     "step3Text": "Da qui LavorAI gira da solo. Ogni 2 ore cerca nuovi annunci, riscrive il CV su misura, compila il form ATS e invia. Tu ricevi solo gli inviti ai colloqui.",
-    "cta": "Inizia gratis. 7 giorni di Pro"
+    "cta": "Inizia con Free. 5 candidature totali"
   },
   "invisibleWork": {
     "_locale": "it",
@@ -559,7 +559,7 @@
     "sourceSkip": "Salta per ora",
     "loginBenefit1": "Candidati in automatico su portali italiani e internazionali",
     "loginBenefit2": "CV e cover letter adattati ad ogni annuncio",
-    "loginBenefit3": "7 giorni di Pro gratis per provare — carta richiesta",
+    "loginBenefit3": "5 candidature Free totali — carta richiesta",
     "loginFooterPre": "Continuando accetti i nostri ",
     "loginFooterTerms": "termini",
     "loginFooterMid": " e la ",

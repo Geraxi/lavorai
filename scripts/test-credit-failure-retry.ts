@@ -152,7 +152,6 @@ async function main() {
     ["auto_apply_not_enabled", (r) => { r.user.preferences = { autoApplyMode: "off" }; }],
     ["subscription_paused", (r) => { r.user.pausedUntil = ago(-1); }],
     ["subscription_paused", (r) => { r.user.subscriptionStatus = "paused"; }],
-    ["billing_ineligible", (r) => { r.user.tier = "free"; }],
     ["billing_ineligible", (r) => { r.user.tier = "free"; r.user.createdAt = ago(1); r.user.subscriptionStatus = null; }],
     ["billing_ineligible", (r) => { r.user.subscriptionStatus = "past_due"; }],
     ["billing_ineligible", (r) => { r.user.subscriptionStatus = null; }],

@@ -119,7 +119,7 @@ model User {
   /// Legacy cohort marker only; billing.ts fixes the final early-user deadline. No rolling grace.
   trialGraceEndsAt DateTime?
   /// Durata della prova dalla creazione dell’account (7 giorni).
-  trialDurationDays Int      @default(7)
+  trialDurationDays Int      @default(0)
   /// Mesi gratis maturati dal referral, da applicare al prossimo checkout.
   referralCredits  Int       @default(0)
   /// Il referral è già stato premiato (per questo utente "invitato").
@@ -128,6 +128,11 @@ model User {
   signupSource     String?
   /// "Reset crediti" admin: il contatore mensile riparte da questa data.
   quotaResetAt     DateTime?
+
+  /// Verified by the setup-mode Stripe webhook, never by the return URL.
+  cardSetupAt DateTime?
+  /// Durable lifetime count; survives application deletion and monthly resets.
+  freeApplicationsUsed Int @default(0)
 
   // Onboarding / lifecycle
   welcomeSeenAt    DateTime?
@@ -158,6 +163,7 @@ model User {
   sessions       Session[]
   portalSessions PortalSession[]
   applications   Application[]
+  applicationPreviews ApplicationPreview[]
   cvDocuments    CVDocument[]
   preferences         UserPreferences?
   cvProfile           CVProfile?
@@ -481,6 +487,7 @@ model Job {
   @@unique([externalId, source])
   @@index([closedAt])
   @@index([protectedCategory, postedAt])
+  applicationPreviews ApplicationPreview[]
 }
 
 /// Application Session: raggruppa candidature simili (stesso ruolo + settore)
@@ -530,6 +537,10 @@ model ApplicationSession {
 }
 
 model Application {
+  /// Server-generated, position-specific preview reused verbatim by the worker.
+  previewResultJson String?
+  previewApprovedAt DateTime?
+
   id              String    @id @default(cuid())
   userId          String
   jobId           String
@@ -861,4 +872,16 @@ model SubscriptionEvent {
 
   @@index([userId, createdAt])
   @@index([action, createdAt])
+}
+
+/// Short-lived server-owned previews. No send happens during generation.
+model ApplicationPreview {
+  id String @id @default(cuid())
+  userId String
+  jobId String
+  resultJson String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([userId, jobId])
 }

@@ -46,24 +46,24 @@ import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 
 const EN_TIER_COPY: Record<TierConfig["id"], Pick<TierConfig, "tagline" | "features" | "cta" | "badge" | "priceSuffix">> = {
   free: {
-    tagline: "7 days of Pro from signup, up to 5 applications a day. Card required. Renews at the end unless canceled.",
+    tagline: "5 lifetime applications. Card required, no charge or automatic subscription.",
     priceSuffix: "",
     badge: undefined,
-    cta: "Try Pro free for 7 days",
+    cta: "Start with Free",
     features: [
-      "Your trial starts at signup",
-      "Up to 5 applications a day during the trial",
-      "Matching jobs during the trial",
+      "5 applications total, without expiry",
+      "CV and cover letter tailored to each position",
+      "Preview the tailored CV and letter before sending",
       "Recruiter replies in your Inbox",
       "ATS analysis of your CV",
-      "No automatic applications after the trial",
+      "No automatic charges or subscription",
     ],
   },
   pro: {
-    tagline: "50 applications a month with a tailored CV and letter. 7 free days if you have not used the trial.",
+    tagline: "50 applications a month with a tailored CV and cover letter. No trial.",
     priceSuffix: "/ month",
     badge: undefined,
-    cta: "Try 7 days free",
+    cta: "Choose plan",
     features: [
       "50 applications per month",
       "Automatic applications on supported portals",
@@ -78,7 +78,7 @@ const EN_TIER_COPY: Record<TierConfig["id"], Pick<TierConfig, "tagline" | "featu
     tagline: "Unlimited applications, every supported portal and Founder Coach. Cancel anytime.",
     priceSuffix: "/ month",
     badge: "Recommended",
-    cta: "Try 7 days free",
+    cta: "Choose plan",
     features: [
       "[target] Founder Interview Coach (opportunity, equity and vocabulary)",
       "Unlimited applications",

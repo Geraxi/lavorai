@@ -1,9 +1,10 @@
+import type { Tier } from "@/lib/billing";
 import type Stripe from "stripe";
 import type { Prisma } from "@prisma/client";
 
 export const CARD_REQUIRED_CHECKOUT = "onboarding_v1";
 
-type ExistingAccess = { stripeSubscriptionId: string | null; subscriptionStatus: string | null } | null;
+type ExistingAccess = { stripeSubscriptionId: string | null; subscriptionStatus: string | null; tier?: string; stripePriceId?: string | null } | null;
 
 /** Called only with the current subscription retrieved from Stripe on the server. */
 export function subscriptionAccessStatus(sub: Stripe.Subscription, existing: ExistingAccess = null): string {
@@ -37,4 +38,12 @@ export function subscriptionAccessWriteGuard(existing: ExistingAccess): Prisma.U
     stripeSubscriptionId: existing?.stripeSubscriptionId ?? null,
     subscriptionStatus: existing?.subscriptionStatus ?? null,
   };
+}
+
+/** Rotating the current Pro Price must not revoke an existing subscription or trial. */
+export function subscriptionTier(priceId: string | undefined, mapped: Tier | null, subscriptionId: string, existing: ExistingAccess): Tier {
+  if (mapped) return mapped;
+  if (priceId && existing?.stripeSubscriptionId === subscriptionId && existing.stripePriceId === priceId
+    && (existing.tier === "pro" || existing.tier === "pro_plus")) return existing.tier;
+  return "free";
 }

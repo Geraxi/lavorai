@@ -17,12 +17,12 @@ export const metadata: Metadata = {
   title:
     "Auto candidatura lavoro: invia CV automaticamente",
   description:
-    "Cerchi un software per candidarti automaticamente ai lavori? LavorAI invia CV + lettera motivazionale AI a 50 offerte/mese al posto tuo. 7 giorni di Pro gratis, con carta richiesta. Provalo in 2 minuti.",
+    "Cerchi un software per candidarti automaticamente ai lavori? LavorAI invia CV + lettera motivazionale AI a 50 offerte/mese al posto tuo. 5 candidature Free totali, con carta richiesta e senza addebiti. Provalo in 2 minuti.",
   alternates: { canonical: "/auto-candidatura" },
   openGraph: {
     title: "Auto candidatura lavoro — LavorAI",
     description:
-      "Il primo software italiano che invia CV in automatico a 50 lavori al mese. 7 giorni di Pro gratis, con carta richiesta.",
+      "Il primo software italiano che invia CV in automatico a 50 lavori al mese. 5 candidature Free totali, con carta richiesta e senza addebiti.",
     url: "/auto-candidatura",
   },
 };
@@ -124,7 +124,7 @@ export default function AutoCandidaturaPage() {
               marginTop: 14,
             }}
           >
-            ✓ Pro completo per 7 giorni · ✓ Fino a 5 candidature al giorno · ✓ La prova parte dalla registrazione
+            ✓ 5 candidature Free totali · ✓ CV e lettera su misura · ✓ Carta richiesta, nessun addebito
           </p>
         </section>
 
@@ -276,7 +276,7 @@ export default function AutoCandidaturaPage() {
             },
             {
               q: "Quanto costa?",
-              a: "La prova Pro dura 7 giorni dalla registrazione, con carta richiesta e rinnovo al termine salvo disdetta. Poi Pro costa €19,99/mese per 50 candidature e Pro+ €39,99/mese per candidature illimitate, coda prioritaria e Founder Coach. Disdici quando vuoi.",
+              a: "Free include 5 candidature totali, con carta richiesta e nessun addebito. Pro costa €19,99/mese per 50 candidature e Pro+ €39,99/mese per candidature illimitate, coda prioritaria e Founder Coach. Disdici quando vuoi.",
             },
             {
               q: "Cosa succede se voglio candidarmi solo ad alcuni annunci?",
@@ -343,8 +343,8 @@ export default function AutoCandidaturaPage() {
               marginBottom: 28,
             }}
           >
-            7 giorni di Pro completo dalla registrazione, con carta richiesta.
-            Rinnovo al termine salvo disdetta.
+            5 candidature Free totali, con carta richiesta e nessun addebito.
+            Free senza addebiti automatici.
           </p>
           <Link
             href="/signup"

@@ -7,59 +7,27 @@ import { trialState } from "@/lib/billing";
 import { isTestAccount } from "@/lib/admin";
 import { trialLifecycleStage } from "@/lib/lifecycle-cadence";
 
-/**
- * Finestra di prova dalla registrazione; accesso dopo conferma della carta.
- *
- *   - startTrial(userId): imposta trialEndsAt (grant admin per utenti esistenti)
- *   - sendTrialStartedEmail: giorno 0
- *   - runTrialNudges (cron giornaliero): "finisce tra 2 giorni" e
- *     "è finita" — una volta sola per utente (EmailLog)
- */
-
-export const TRIAL_DAYS = 7;
+/** Welcome for new plans and reminders only for pre-existing stored trials. */
 const site = () => process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 const from = () => process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>";
-
-export async function startTrial(userId: string, days = TRIAL_DAYS): Promise<Date> {
-  const ends = new Date(Date.now() + days * 86400_000);
-  await prisma.user.update({ where: { id: userId }, data: { trialEndsAt: ends } });
-  return ends;
-}
 
 const fmt = (d: Date, en: boolean) => d.toLocaleDateString(en ? "en-GB" : "it-IT", { weekday: "long", day: "numeric", month: "long" });
 const first = (name: string | null | undefined) => name?.trim().split(/\s+/)[0] || null;
 
-export async function sendTrialStartedEmail(u: { id: string; email: string; name: string | null; locale: string | null; trialEndsAt: Date | null }, opts?: { granted?: boolean }) {
+/** Welcome for new Free/paid signup. Historical trials are handled by runTrialNudges only. */
+export async function sendPlanWelcomeEmail(u: { id: string; email: string; name: string | null; locale: string | null }) {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey || !u.trialEndsAt) return { sent: false, reason: "no_key_or_trial" };
+  if (!apiKey) return { sent: false, reason: "no_key" };
   const en = u.locale === "en";
-  const f = first(u.name);
-  const ends = fmt(u.trialEndsAt, en);
-  const { html, text } = renderBrandEmail({
-    locale: u.locale,
-    eyebrow: en ? "Complete your activation" : "Completa l’attivazione",
-    preheader: en ? `Your trial window ends on ${ends}. Card setup is required.` : `La finestra di prova termina il ${ends}. È richiesta una carta.`,
-    title: en ? "Your account is ready to set up" : "Il tuo account è pronto per il setup",
-    greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
-    paragraphs: en
-      ? [`Your trial window ends on <strong>${ends}</strong>, 7 days after signup. Add a card through Stripe before completing your profile and accessing Pro. Setup does not restart the trial.`, "Your selected plan renews at the end of the trial unless you cancel. Stripe shows the exact date and price before confirmation."]
-      : [`La finestra di prova termina il <strong>${ends}</strong>, 7 giorni dopo la registrazione. Aggiungi una carta tramite Stripe prima di completare il profilo e accedere a Pro. Il setup non riavvia la prova.`, "Il piano scelto si rinnova al termine della prova salvo disdetta. Stripe mostra la data e il prezzo esatti prima della conferma."],
-    bullets: en
-      ? ["<strong>Add your card</strong> and wait for Stripe confirmation.", "<strong>Complete your CV and preferences</strong>, then review your tailored preview."]
-      : ["<strong>Aggiungi la carta</strong> e attendi la conferma di Stripe.", "<strong>Completa CV e preferenze</strong>, poi controlla l’anteprima personalizzata."],
-    highlights: [
-      { label: en ? "Plan" : "Piano", value: "Pro" },
-      { label: en ? "Ends" : "Scade", value: ends },
-      { label: en ? "Card" : "Carta", value: en ? "Required" : "Obbligatoria" },
-    ],
-    cta: opts?.granted
-      ? { label: en ? "Complete setup" : "Completa il setup", url: `${site()}/onboarding` }
-      : { label: en ? "Open LavorAI" : "Apri LavorAI", url: `${site()}/dashboard` },
-    secondary: { label: en ? "What Pro includes" : "Cosa include Pro", url: `${site()}/pricing` },
-    footnote: en ? "When the trial ends, platform features are locked until you activate a subscription." : "Alla fine della prova le funzionalità sono bloccate finché non attivi un abbonamento.",
+  const { html, text } = renderBrandEmail({ locale: u.locale,
+    title: en ? "Choose your LavorAI plan" : "Scegli il tuo piano LavorAI",
+    paragraphs: en ? ["Free includes 5 lifetime applications. A card is required, with no charge or automatic subscription. Pro is EUR 19.99/month; Pro+ is EUR 39.99/month, without a trial.", "LavorAI writes a tailored CV and cover letter for each position. Preview both before sending."]
+      : ["Free include 5 candidature totali, senza scadenza. La carta è obbligatoria, senza addebiti né abbonamento automatico. Pro costa €19,99/mese; Pro+ €39,99/mese, senza prova.", "LavorAI scrive un CV e una lettera su misura per ogni posizione. Controlla entrambi prima di inviare."],
+    cta: { label: en ? "Choose your plan" : "Scegli il piano", url: `${site()}/start-membership` },
   });
-  return sendWithinQuota(opts?.granted ? "trial_granted" : "trial_started", u.email, async () => {
-    const { error } = await new Resend(apiKey).emails.send({ from: from(), to: u.email, subject: opts?.granted ? (en ? "Pro is on for you, 7 days" : "Pro attivo per te, 7 giorni") : en ? "Your 7 days of Pro start now" : "I tuoi 7 giorni di Pro iniziano adesso", html, text });
+  return sendWithinQuota("welcome", u.email, async () => {
+    const { error } = await new Resend(apiKey).emails.send({ from: from(), to: u.email,
+      subject: en ? "Welcome to LavorAI" : "Benvenuto su LavorAI", html, text });
     if (error) throw new Error(JSON.stringify(error));
   });
 }
@@ -121,8 +89,8 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
           title: en ? "Your Pro trial is nearly over" : "La tua prova Pro sta per finire",
           greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
           paragraphs: en
-            ? [`On <strong>${fmt(u.trialEndsAt, en)}</strong> your trial expires and platform features are locked until you subscribe.`, sent > 0 ? `So far LavorAI has sent <strong>${sent} ${sent === 1 ? "application" : "applications"}</strong> on your behalf. Keeping that running is €19.99 a month, cancel any time.` : "Keeping the engine running is €19.99 a month, cancel any time from Settings."]
-            : [`Il <strong>${fmt(u.trialEndsAt, en)}</strong> la prova scade e le funzionalità vengono bloccate finché non attivi un abbonamento.`, sent > 0 ? `Finora LavorAI ha inviato <strong>${sent} ${sent === 1 ? "candidatura" : "candidature"}</strong> a tuo nome. Continuare costa €19,99 al mese, disdici quando vuoi.` : "Continuare costa €19,99 al mese, disdici quando vuoi dalle Impostazioni."],
+            ? [`On <strong>${fmt(u.trialEndsAt, en)}</strong> your existing Pro trial ends. Free remains available with 5 lifetime applications; Pro is an optional subscription.`, sent > 0 ? `So far LavorAI has sent <strong>${sent} ${sent === 1 ? "application" : "applications"}</strong> on your behalf. Keeping that running is €19.99 a month, cancel any time.` : "Keeping the engine running is €19.99 a month, cancel any time from Settings."]
+            : [`Il <strong>${fmt(u.trialEndsAt, en)}</strong> la prova esistente termina. Free resta disponibile con 5 candidature totali; Pro è un abbonamento facoltativo.`, sent > 0 ? `Finora LavorAI ha inviato <strong>${sent} ${sent === 1 ? "candidatura" : "candidature"}</strong> a tuo nome. Continuare costa €19,99 al mese, disdici quando vuoi.` : "Continuare costa €19,99 al mese, disdici quando vuoi dalle Impostazioni."],
           cta: { label: en ? "Continue with Pro" : "Continua con Pro", url: pricing },
           secondary: { label: en ? "See what was sent" : "Vedi cosa è stato inviato", url: `${site()}/inbox` },
         })
@@ -133,8 +101,8 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
           title: en ? "Your Pro trial has ended" : "La tua prova Pro è finita",
           greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
           paragraphs: en
-            ? ["Your free trial has expired. Subscribe to resume using LavorAI.", sent > 0 ? `During the trial LavorAI sent <strong>${sent} ${sent === 1 ? "application" : "applications"}</strong> for you. Pro picks up exactly where it left off.` : "Pro picks up exactly where the trial left off: 50 applications a month, CV and cover letter tailored to each one."]
-            : ["La tua prova gratuita è scaduta. Attiva un abbonamento per tornare a utilizzare LavorAI.", sent > 0 ? `Durante la prova LavorAI ha inviato <strong>${sent} ${sent === 1 ? "candidatura" : "candidature"}</strong> per te. Con Pro riparte esattamente da dove si è fermato.` : "Con Pro riparte esattamente da dove si è fermato: 50 candidature al mese, CV e lettera su misura per ognuna."],
+            ? ["Your existing trial has ended. Free includes 5 lifetime applications without automatic charges. Choose Pro for more applications.", sent > 0 ? `During the trial LavorAI sent <strong>${sent} ${sent === 1 ? "application" : "applications"}</strong> for you. Pro picks up exactly where it left off.` : "Pro picks up exactly where the trial left off: 50 applications a month, CV and cover letter tailored to each one."]
+            : ["La tua prova esistente è terminata. Free include 5 candidature totali, senza addebiti automatici. Scegli Pro per continuare con più candidature.", sent > 0 ? `Durante la prova LavorAI ha inviato <strong>${sent} ${sent === 1 ? "candidatura" : "candidature"}</strong> per te. Con Pro riparte esattamente da dove si è fermato.` : "Con Pro riparte esattamente da dove si è fermato: 50 candidature al mese, CV e lettera su misura per ognuna."],
           highlights: [
             { label: "Pro", value: en ? "€19.99 / month" : "€19,99 / mese" },
             { label: en ? "Cancel" : "Disdetta", value: en ? "Any time, one click" : "Quando vuoi, un clic" },

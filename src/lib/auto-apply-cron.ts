@@ -7,7 +7,7 @@ import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
-import { dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { usesFreeQuota, dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { runSelfHeal } from "@/lib/auto-apply-self-heal";
 import { recordConversionEvent } from "@/lib/conversion-events";
@@ -345,6 +345,8 @@ async function processUser(
   // Malformed or missing geographic preferences require review, never a wider search.
   const locationPrefs = parsePreferenceList(prefs.locationsJson);
   if (!locationPrefs?.length) return;
+
+  if (usesFreeQuota(user)) return; // Free applications require a reviewed position-specific preview.
 
   // Daily cap = quante già create oggi
   // Le candidature fallite (annuncio chiuso, form rotto, crediti) NON

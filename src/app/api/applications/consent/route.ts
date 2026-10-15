@@ -1,3 +1,5 @@
+import { freePlanBlock } from "@/lib/free-plan";
+import { requiresPaymentMethodBeforeApp, usesFreeQuota } from "@/lib/billing";
 import { applicationRolloutConfig, rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
@@ -31,6 +33,9 @@ export async function POST(request: NextRequest) {
   if (rolloutCreationBlocked()) {
     return NextResponse.json({ error: "application_rollout_closed" }, { status: 503 });
   }
+  if (requiresPaymentMethodBeforeApp(user)) return NextResponse.json({ error: "payment_method_required", redirect: "/start-membership" }, { status: 402 });
+  const quota = await freePlanBlock(user);
+  if (quota) return NextResponse.json(quota, { status: 402 });
   const config = applicationRolloutConfig();
   if (!config.enabled || !config.startedAt) return NextResponse.json({ error: "application_rollout_closed" }, { status: 503 });
   const cohort = {
@@ -52,6 +57,7 @@ export async function POST(request: NextRequest) {
     where: {
       userId: user.id,
       status: "awaiting_consent",
+      ...(usesFreeQuota(user) ? { previewApprovedAt: { not: null }, previewResultJson: { not: null } } : {}),
       ...cohort,
       ...(parsed.data.ids ? { id: { in: parsed.data.ids } } : {}),
     },

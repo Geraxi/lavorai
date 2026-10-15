@@ -12,7 +12,7 @@ import { quickMatchScore } from "@/lib/match-score";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { parseVerifiedSubmissionReceipt, receiptJobId } from "@/lib/submission-receipt";
 import { prisma } from "@/lib/db";
-import { isApplicationAccessPaused, isLifetimeProPlus, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { isApplicationAccessPaused, isLifetimeProPlus, requiresPaymentMethodBeforeApp, usesFreeQuota, FREE_APPLICATION_LIMIT } from "@/lib/billing";
 
 // Persisted before crossing a delivery boundary. A crash/timeout never releases
 // this reservation: only a proved no-send outcome or an atomic success does.
@@ -24,13 +24,13 @@ const evidenceSelect = {
   answersUsedJson: true, viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
 } as const;
 export const workerGateSelect = {
-  sessionId: true, cvDocxPath: true, ...evidenceSelect, ...continuationSelect,
+  sessionId: true, cvDocxPath: true, previewApprovedAt: true, previewResultJson: true, ...evidenceSelect, ...continuationSelect,
   job: { select: { closedAt: true, url: true, company: true, title: true, description: true, location: true,
     remote: true, contractType: true, salaryMin: true, salaryMax: true } },
   session: { select: { id: true, userId: true, status: true, sentCount: true, targetCount: true, title: true, label: true } },
   user: { select: {
     email: true, yearsExperience: true, englishLevel: true, noticePeriod: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
-    subscriptionStatus: true, currentPeriodEnd: true, pausedUntil: true, suspendedAt: true,
+    cardSetupAt: true, freeApplicationsUsed: true, subscriptionStatus: true, currentPeriodEnd: true, pausedUntil: true, suspendedAt: true,
     emailVerified: true, privacyConsentAt: true, avoidCompanies: true,
     cvProfile: { select: { firstName: true, lastName: true, email: true, phone: true, city: true, title: true, summary: true,
       experiencesJson: true, educationJson: true, skillsJson: true, languagesJson: true, linksJson: true } },
@@ -59,8 +59,10 @@ export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date())
   if (mode === "off" || !mode || (mode !== "auto" && !(["manual", "hybrid"].includes(mode) && row.consentGrantedAt))) return "auto_apply_not_enabled";
   if (user.subscriptionStatus === "paused" || (user.pausedUntil && user.pausedUntil > now)) return "subscription_paused";
   if (!isLifetimeProPlus(user.email) && (isApplicationAccessPaused(user)
-    || requiresPaymentMethodBeforeApp(user) || !["active", "trialing"].includes(user.subscriptionStatus ?? "")
-    || (user.currentPeriodEnd !== null && user.currentPeriodEnd <= now))) return "billing_ineligible";
+    || requiresPaymentMethodBeforeApp(user) || (!usesFreeQuota(user) && !["active", "trialing"].includes(user.subscriptionStatus ?? ""))
+    || (!usesFreeQuota(user) && user.currentPeriodEnd !== null && user.currentPeriodEnd <= now))) return "billing_ineligible";
+  if (usesFreeQuota(user) && user.freeApplicationsUsed >= FREE_APPLICATION_LIMIT) return "free_quota_exhausted";
+  if (usesFreeQuota(user) && (!row.previewApprovedAt || !row.previewResultJson)) return "preview_required";
   if (row.job.closedAt) return "job_closed";
   if (isAvoidedCompany(row.job.company, user.avoidCompanies)) return "company_avoided";
   if (row.sessionId && (!row.session || row.session.userId !== row.userId
@@ -107,6 +109,16 @@ async function withLockedApplication<T>(id: string, db: DB, operation: (tx: Pris
 }
 
 async function capacityAvailable(tx: Prisma.TransactionClient, row: WorkerGateRow): Promise<boolean> {
+  if (usesFreeQuota(row.user)) {
+    // Same user advisory lock as begin/recheck/complete. Only deliveries consume
+    // lifetime usage; in-flight/uncertain sends hold slots until proved no-send.
+    const held = await tx.application.count({ where: { userId: row.userId, id: { not: row.id },
+      status: { not: "success" }, OR: [
+        { status: "applying" }, { submitConfirmation: { in: [SUBMISSION_STARTED, "UNCONFIRMED"] } },
+      ] } });
+    if (row.user.freeApplicationsUsed + held >= FREE_APPLICATION_LIMIT) return false;
+  }
+
   if (!row.session) return true;
   const others = await tx.application.findMany({
     where: { sessionId: row.session.id, id: { not: row.id } },
@@ -127,6 +139,8 @@ function heldMessage(reason: string): string {
     consent_or_verification_missing: "Verifica email o consenso privacy da completare",
     subscription_paused: "Abbonamento in pausa",
     billing_ineligible: "Abbonamento non attivo o scaduto",
+    free_quota_exhausted: "5 candidature Free esaurite. Passa a Pro, EUR 19,99/mese",
+    preview_required: "Controlla e approva CV e lettera per questa posizione prima di inviare",
     job_closed: "Annuncio chiuso",
     company_avoided: "Azienda esclusa dalle preferenze correnti",
     preferences_unverified: "Preferenze correnti incomplete o non verificabili",
@@ -303,6 +317,8 @@ export async function completeApplicationSubmission(
       id, startedAt: token, status: row.status, submitConfirmation: row.submitConfirmation,
     }, data: { ...data, status: "success" } });
     if (changed.count !== 1) return false;
+    if (usesFreeQuota(row.user)) await tx.user.update({ where: { id: row.userId },
+      data: { freeApplicationsUsed: { increment: 1 } } });
     if (row.session) {
       const successes = await tx.application.count({ where: { sessionId: row.session.id, status: "success" } });
       const sentCount = Math.max(row.session.sentCount + 1, successes);

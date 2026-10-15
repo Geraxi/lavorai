@@ -177,6 +177,7 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
       })
         .then(async (res) => {
           const body = await res.json().catch(() => ({}));
+          if (res.status === 409 && body?.error === "preview_required") { router.push(`/jobs/${job.id}`); return; }
           if (res.status === 409 && body?.error === "missing_cv") {
             toast.error(t("uploadCvFirst"));
             router.push("/onboarding");

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { authLimiter } from "@/lib/rate-limit";
 import { checkOrigin } from "@/lib/csrf";
-import { sendTrialStartedEmail } from "@/lib/trial";
+import { sendPlanWelcomeEmail } from "@/lib/trial";
 
 export const runtime = "nodejs";
 
@@ -73,11 +73,11 @@ export async function POST(request: NextRequest) {
     // cannot be sent twice through this flow. It never blocks verification.
     const user = await prisma.user.findUnique({
       where: { id: record.userId },
-      select: { id: true, email: true, name: true, locale: true, trialEndsAt: true },
+      select: { id: true, email: true, name: true, locale: true },
     });
     if (user) {
-      await sendTrialStartedEmail(user).catch((err) =>
-        console.error("[/api/auth/verify-email/confirm] trial email", err),
+      await sendPlanWelcomeEmail(user).catch((err) =>
+        console.error("[/api/auth/verify-email/confirm] welcome email", err),
       );
     }
 

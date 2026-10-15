@@ -175,7 +175,7 @@ export async function processApplication(
         prefs?.vatNumber != null ||
         prefs?.portfolioUrl != null);
 
-    result = await optimizeCV({
+    result = app.previewResultJson ? JSON.parse(app.previewResultJson) : await optimizeCV({
       cvText: cv.extractedText,
       jobPosting,
       coverLetterHints,
@@ -278,7 +278,7 @@ export async function processApplication(
 
   // 3b. PDF tailoring (structured CVProfile → tailored → ATS PDF). Non-fatal.
   let cvPdfPath: string | null = null;
-  try {
+  if (!app.previewApprovedAt) try {
     let profileRow = await prisma.cVProfile.findUnique({
       where: { userId: app.userId },
     });

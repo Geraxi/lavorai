@@ -11,6 +11,7 @@ import {
   SectionBody,
   SectionCard,
 } from "@/components/design/section-card";
+import { BatchApplicationPreview } from "@/components/batch-application-preview";
 import { PaywallDialog } from "@/components/paywall-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
@@ -46,6 +47,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
   const t = useTranslations("jobsList");
   const router = useRouter();
   const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [previewBatchIds, setPreviewBatchIds] = useState<string[] | null>(null);
   const [batchLoading, setBatchLoading] = useState(false);
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -67,6 +69,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
       });
       const body = await res.json().catch(() => ({}));
 
+      if (res.status === 409 && body?.error === "preview_required") { setPreviewBatchIds([job.id]); return; }
       if (res.status === 409 && body?.error === "missing_cv") {
         toast.error(t("uploadCvFirst"));
         router.push("/onboarding");
@@ -130,6 +133,10 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
         });
         const body = await res.json().catch(() => ({}));
 
+        if (res.status === 409 && body?.error === "preview_required") {
+          setPreviewBatchIds(chunk.slice(0, body.remaining ?? 5));
+          return;
+        }
         if (res.status === 409 && body?.error === "missing_cv") {
           toast.error(t("uploadCvFirst"));
           router.push("/onboarding");
@@ -203,6 +210,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
 
   return (
     <>
+      {previewBatchIds && <BatchApplicationPreview jobIds={previewBatchIds} onClose={() => setPreviewBatchIds(null)} onComplete={() => { setPreviewBatchIds(null); router.push("/applications"); }} onPaywall={message => { setPaywallMessage(message); setPaywallOpen(true); }} />}
       {/* Batch action bar */}
       <div
         className="mb-4 flex items-center justify-between rounded-lg border p-3"
@@ -337,6 +345,7 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
                   >
                     {j.description}
                   </p>
+                  <p className="mt-2 text-xs text-primary">CV e lettera su misura · anteprima prima dell’invio</p>
                 </Link>
                 <button
                   type="button"

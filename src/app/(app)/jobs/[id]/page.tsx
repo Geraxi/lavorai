@@ -1,3 +1,5 @@
+import { getCurrentUser } from "@/lib/session";
+import { usesFreeQuota } from "@/lib/billing";
 import { jobSourceLabel } from "@/lib/job-source-label";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -32,6 +34,8 @@ export default async function JobDetailPage({ params }: { params: Params }) {
   const { id } = await params;
   const job = await getJobById(id);
   if (!job) notFound();
+
+  const user = await getCurrentUser();
 
   const color = companyColor(job.company ?? job.title);
   // Determina il portale (usato come tag informativo + per l'old attemptAutoSubmit
@@ -159,14 +163,11 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                   marginBottom: 12,
                 }}
               >
-                LavorAI ottimizza il tuo CV per questo annuncio e invia la
-                candidatura su{" "}
-                <span style={{ color: "var(--fg)" }}>
-                  {portal === "linkedin" ? "LinkedIn" : portal === "indeed" ? "Indeed" : "InfoJobs"}
-                </span>
-                .
+                LavorAI scrive un CV e una lettera su misura per questa posizione.
+                Con Free controlli l’anteprima di entrambi prima di inviare la candidatura.
+
               </p>
-              <ApplyButton jobId={job.id} portal={portal} />
+              <ApplyButton jobId={job.id} portal={portal} requirePreview={!!user && usesFreeQuota(user)} />
               <div
                 className="mt-4 flex flex-col gap-1.5"
                 style={{

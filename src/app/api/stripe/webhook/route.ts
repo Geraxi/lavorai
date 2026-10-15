@@ -5,7 +5,7 @@ import { prisma } from "@/lib/db";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { TIERS } from "@/lib/billing";
-import { CARD_VERIFICATION_EXPAND, subscriptionAccessStatus, subscriptionAccessWriteGuard } from "@/lib/stripe-subscription-access";
+import { CARD_REQUIRED_CHECKOUT, CARD_VERIFICATION_EXPAND, subscriptionAccessStatus, subscriptionAccessWriteGuard, subscriptionTier } from "@/lib/stripe-subscription-access";
 
 export const runtime = "nodejs";
 
@@ -60,12 +60,38 @@ export async function POST(request: NextRequest) {
 
   try {
     switch (event.type) {
+      case "checkout.session.async_payment_succeeded":
       case "checkout.session.completed": {
         // Belt-and-suspenders: fires appena il pagamento va a buon fine,
         // PRIMA di customer.subscription.created. Se per qualche motivo
         // (endpoint config incompleta, race, filtro eventi) l'evento
         // subscription non arriva, questo garantisce comunque l'upgrade.
         const sess = event.data.object as Stripe.Checkout.Session;
+        if (sess.mode === "setup") {
+          // Retrieve current Stripe state: signed events can be replayed/out of order.
+          const live = await stripe().checkout.sessions.retrieve(sess.id, { expand: ["setup_intent.payment_method"] });
+          const customerId = typeof live.customer === "string" ? live.customer : live.customer?.id;
+          const setup = live.setup_intent;
+          if (live.status !== "complete" || live.metadata?.tier !== "free"
+            || live.metadata.cardRequired !== CARD_REQUIRED_CHECKOUT || !customerId || !live.client_reference_id || live.metadata.userId !== live.client_reference_id
+            || !setup || typeof setup === "string" || setup.status !== "succeeded") break;
+          const method = setup.payment_method;
+          const owner = method && typeof method !== "string"
+            ? typeof method.customer === "string" ? method.customer : method.customer?.id : null;
+          const setupOwner = typeof setup.customer === "string" ? setup.customer : setup.customer?.id;
+          if (!method || typeof method === "string" || method.type !== "card"
+            || owner !== customerId || setupOwner !== customerId) break;
+          const linked = await prisma.user.findFirst({ where: { id: live.client_reference_id, stripeCustomerId: customerId } });
+          if (!linked) throw new Error("setup_customer_not_linked");
+          if (linked.cardSetupAt) break; // Replay must not replace a subsequently updated card.
+          // Set the saved card for a later, explicitly requested subscription.
+          await stripe().customers.update(customerId, { invoice_settings: { default_payment_method: method.id } });
+          // Never overwrite an intervening paid upgrade, trial or cancellation.
+          await prisma.user.updateMany({ where: { id: linked.id, stripeCustomerId: customerId, cardSetupAt: null },
+            data: { cardSetupAt: new Date() } });
+          break;
+        }
+
         // Con una prova gratuita Stripe non addebita nulla oggi e segnala
         // correttamente `no_payment_required`, pur avendo già raccolto il
         // metodo di pagamento. Trattarlo come un checkout fallito lasciava
@@ -84,7 +110,7 @@ export async function POST(request: NextRequest) {
         // Recupera la subscription per leggere price/status/period_end.
         const existingAccess = await prisma.user.findUnique({
           where: { stripeCustomerId: customerId },
-          select: { stripeSubscriptionId: true, subscriptionStatus: true },
+          select: { stripeSubscriptionId: true, subscriptionStatus: true, stripePriceId: true, tier: true },
         });
         const sub = await stripe().subscriptions.retrieve(subscriptionId, { expand: CARD_VERIFICATION_EXPAND });
         const liveStatus = subscriptionAccessStatus(sub, existingAccess);
@@ -102,7 +128,7 @@ export async function POST(request: NextRequest) {
         // Never cancel another subscription as a side effect of card setup or
         // webhook replay. Checkout already refuses an existing live subscription.
         const priceId = item?.price.id;
-        const tier = priceId ? priceIdToTier(priceId) ?? "free" : "free";
+        const tier = subscriptionTier(priceId, priceId ? priceIdToTier(priceId) : null, sub.id, existingAccess);
         const anyItem = item as unknown as { current_period_end?: number };
         const anySub = sub as unknown as { current_period_end?: number };
         const periodEndTs = anyItem?.current_period_end ?? anySub.current_period_end;
@@ -169,12 +195,12 @@ export async function POST(request: NextRequest) {
         const customerId = typeof eventSub.customer === "string" ? eventSub.customer : eventSub.customer.id;
         const existingAccess = await prisma.user.findUnique({
           where: { stripeCustomerId: customerId },
-          select: { stripeSubscriptionId: true, subscriptionStatus: true },
+          select: { stripeSubscriptionId: true, subscriptionStatus: true, stripePriceId: true, tier: true },
         });
         const sub = await stripe().subscriptions.retrieve(eventSub.id, { expand: CARD_VERIFICATION_EXPAND });
         const item = sub.items.data[0];
         const priceId = item?.price.id;
-        const tier = priceId ? priceIdToTier(priceId) ?? "free" : "free";
+        const tier = subscriptionTier(priceId, priceId ? priceIdToTier(priceId) : null, sub.id, existingAccess);
         const anyItem = item as unknown as { current_period_end?: number };
         const anySub = sub as unknown as { current_period_end?: number };
         const periodEndTs = anyItem?.current_period_end ?? anySub.current_period_end;
@@ -301,7 +327,7 @@ export async function POST(request: NextRequest) {
         if (customerId && subscriptionId) {
           const existingAccess = await prisma.user.findUnique({
             where: { stripeCustomerId: customerId },
-            select: { stripeSubscriptionId: true, subscriptionStatus: true },
+            select: { stripeSubscriptionId: true, subscriptionStatus: true, stripePriceId: true, tier: true },
           });
           if (existingAccess?.stripeSubscriptionId !== subscriptionId) break;
           const current = await stripe().subscriptions.retrieve(subscriptionId, { expand: CARD_VERIFICATION_EXPAND });

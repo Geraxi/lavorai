@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { TIERS, trialEnd, type Tier } from "@/lib/billing";
+import { TIERS, type Tier } from "@/lib/billing";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { CARD_REQUIRED_CHECKOUT } from "@/lib/stripe-subscription-access";
@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 
 const schema = z.object({
-  tier: z.enum(["pro", "pro_plus"]),
+  tier: z.enum(["free", "pro", "pro_plus"]),
   // The expired-trial screen must return to itself on cancellation so the
   // user does not lose the exact recovery action they just chose.
   returnTo: z.literal("trial_expired").optional(),
@@ -41,8 +41,12 @@ export async function POST(request: NextRequest) {
     );
   }
   const { tier, returnTo } = parsed.data as { tier: Tier; returnTo?: "trial_expired" };
+  // Use a Dashboard configuration with Cards enabled and non-card methods disabled.
+  const cardConfiguration = process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION;
+  if (!cardConfiguration) return NextResponse.json({ error: "card_checkout_not_configured",
+    message: "Il checkout è temporaneamente non disponibile. Riprova tra poco." }, { status: 503 });
   const priceId = tierToPriceId(tier);
-  if (!priceId) {
+  if (tier !== "free" && !priceId) {
     // Log dettagliato lato server per debugging (non esposto all'utente).
     console.error(
       `[stripe/checkout] STRIPE_PRICE_ID_${tier.toUpperCase()} mancante. Configuralo in Vercel env vars.`,
@@ -95,43 +99,28 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Stripe raccoglie il metodo ora; se la prova dalla registrazione è ancora
-    // attiva, il primo addebito avviene alla sua scadenza.
+    const free = tier === "free";
     const fresh = await prisma.user.findUnique({ where: { id: user.id }, select: { referralCredits: true } });
-    const referralCoupon = (fresh?.referralCredits ?? 0) > 0 ? await ensureReferralCoupon(s) : null;
-    const registrationTrialEndsAt = trialEnd(user);
-    const hasRemainingTrial = Boolean(
-      user.tier === "free"
-      && registrationTrialEndsAt
-      && registrationTrialEndsAt.getTime() > Date.now(),
-    );
-
+    const referralCoupon = !free && (fresh?.referralCredits ?? 0) > 0 ? await ensureReferralCoupon(s) : null;
+    const metadata = { userId: user.id, cardRequired: CARD_REQUIRED_CHECKOUT, tier };
     const session = await s.checkout.sessions.create({
       customer: customerId,
-      mode: "subscription",
-      payment_method_types: ["card"],
-      payment_method_collection: "always",
-      line_items: [{ price: priceId, quantity: 1 }],
-      ...(referralCoupon ? { discounts: [{ coupon: referralCoupon }] } : {}),
-      success_url: `${siteUrl}${returnTo === "trial_expired" ? "/trial-expired" : "/start-membership"}?subscribed=1`,
-      cancel_url:
-        returnTo === "trial_expired"
-          ? `${siteUrl}/trial-expired?canceled=1`
-          : `${siteUrl}/start-membership?canceled=1`,
-      ...(referralCoupon ? {} : { allow_promotion_codes: true }),
-      client_reference_id: user.id, // fallback per webhook checkout.session.completed
-      subscription_data: {
-        metadata: {
-          userId: user.id,
-          cardRequired: CARD_REQUIRED_CHECKOUT,
-          tier,
-          trial: hasRemainingTrial ? "registration_trial_with_payment_method" : "none",
-          referralCredit: referralCoupon ? "1" : "0",
-        },
-        ...(hasRemainingTrial && registrationTrialEndsAt
-          ? { trial_end: Math.floor(registrationTrialEndsAt.getTime() / 1000) }
-          : {}),
-      },
+      payment_method_configuration: cardConfiguration,
+      client_reference_id: user.id,
+      metadata,
+      success_url: `${siteUrl}/start-membership?subscribed=1`,
+      cancel_url: `${siteUrl}${returnTo === "trial_expired" ? "/trial-expired" : "/start-membership"}?canceled=1`,
+      ...(free ? {
+        mode: "setup" as const,
+        currency: "eur",
+        setup_intent_data: { metadata },
+      } : {
+        mode: "subscription" as const,
+        payment_method_collection: "always" as const,
+        line_items: [{ price: priceId!, quantity: 1 }],
+        ...(referralCoupon ? { discounts: [{ coupon: referralCoupon }] } : { allow_promotion_codes: true }),
+        subscription_data: { metadata: { ...metadata, referralCredit: referralCoupon ? "1" : "0" } },
+      }),
       locale: "it",
     });
 

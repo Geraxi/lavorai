@@ -44,9 +44,9 @@ export function PaywallDialog({
 
   if (!open) return null;
 
-  const tiers = [TIERS.free, TIERS.pro, TIERS.pro_plus];
+  const tiers = variant === "limit" ? [TIERS.pro, TIERS.pro_plus] : [TIERS.free, TIERS.pro, TIERS.pro_plus];
   const defaultHeadline =
-    variant === "limit" ? "Hai raggiunto il limite Free" : "Scegli il tuo piano";
+    variant === "limit" ? "Passa a Pro, EUR 19,99/mese" : "Scegli il tuo piano";
   const defaultSub =
     variant === "limit"
       ? "Passa a Pro per continuare a candidarti automaticamente."
@@ -165,7 +165,7 @@ export function PaywallDialog({
             }}
           >
             <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
-              La prova gratuita parte dalla registrazione. Quando scegli un piano, il pagamento parte subito · Disdici in un clic dalle Impostazioni
+              Carta richiesta per tutti i piani. Free non prevede addebiti automatici. Pro e Pro+ partono subito, senza prova.
             </div>
             <button
               type="button"
@@ -197,10 +197,6 @@ function TierCard({
   const isHighlighted = tier === "pro";
 
   async function onSelect() {
-    if (isFree) {
-      onClose();
-      return;
-    }
     if (variant === "signup") {
       // L'utente non è ancora loggato: salviamo l'intent e dopo il verify
       // email + login lo reindirizziamo a Stripe.
@@ -233,7 +229,7 @@ function TierCard({
       try {
         const { trackConversion } = await import("@/components/tracking-pixels");
         trackConversion("InitiateCheckout", {
-          value: tier === "pro_plus" ? 39.99 : 19.99,
+          value: cfg.price,
           currency: "EUR",
           content_name: tier,
         });
@@ -344,7 +340,7 @@ function TierCard({
         ) : isFree ? (
           "Continua gratis"
         ) : (
-          cfg.cta
+          variant === "limit" && tier === "pro" ? "Passa a Pro, EUR 19,99/mese" : cfg.cta
         )}
       </button>
     </div>

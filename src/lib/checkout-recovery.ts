@@ -63,8 +63,8 @@ export async function runCheckoutRecovery(opts?: { dryRun?: boolean }): Promise<
       title: en ? "Continue where you left off" : "Riprendi da dove avevi lasciato",
       greeting: name ? (en ? `Hi ${name},` : `Ciao ${name},`) : undefined,
       paragraphs: en
-        ? ["You were one step away from continuing with Pro. Your trial remains unchanged; when you are ready, return to Settings to choose your plan and complete payment securely with Stripe."]
-        : ["Eri a un passo dal continuare con Pro. La tua prova resta invariata; quando vuoi, torna nelle Impostazioni per scegliere il piano e completare il pagamento in modo sicuro con Stripe."],
+        ? ["You were one step away from continuing with Pro. Free has no automatic charges; when you are ready, return to Settings to choose your plan and complete payment securely with Stripe."]
+        : ["Eri a un passo dal continuare con Pro. Free non prevede addebiti automatici; quando vuoi, torna nelle Impostazioni per scegliere il piano e completare il pagamento in modo sicuro con Stripe."],
       cta: { label: en ? "Continue with Pro" : "Continua con Pro", url: `${site()}/settings#billing` },
       secondary: { label: en ? "Review your applications" : "Rivedi le tue candidature", url: `${site()}/applications` },
       footnote: en ? "No payment details are stored by LavorAI." : "LavorAI non conserva i dati di pagamento.",

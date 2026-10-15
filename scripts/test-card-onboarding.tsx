@@ -34,9 +34,10 @@ function loadModule(path: string, deps: Record<string, unknown>) {
 }
 const fresh = () => ({
   id: "fixture-card-user", email: "card-user@example.org", name: "Fixture user", tier: "free",
-  createdAt: new Date(), trialEndsAt: billing.registrationTrialEnd(new Date()), trialGraceEndsAt: null,
+  createdAt: new Date(), trialEndsAt: new Date(Date.now() + 7 * 86400000), trialGraceEndsAt: null,
   emailVerified: new Date(), onboardedAt: null as Date | null, subscriptionStatus: null as string | null,
   stripeCustomerId: null as string | null, stripeSubscriptionId: null as string | null,
+  cardSetupAt: null as Date | null, freeApplicationsUsed: 0,
   demoGeneratedAt: new Date(), demoCompletedAt: null, referralCredits: 0,
 });
 let user: ReturnType<typeof fresh> | null = fresh();
@@ -63,7 +64,7 @@ let transactionTail = Promise.resolve();
 const db = {
   user: {
     findUnique: async ({ where }: any) => { reads++; return matches(where) ? { ...user } : null; },
-    findFirst: async (query: any) => linkedUserLookup && !query.where.referredById ? { id: user!.id } : null,
+    findFirst: async (query: any) => query.where.id && matches(query.where) ? { ...user } : linkedUserLookup && !query.where.referredById ? { id: user!.id } : null,
     update: async ({ data }: any) => { writes.push(data); Object.assign(user!, data); return user; },
     updateMany: async ({ where, data }: any) => {
       if (beforeWrite) { const change = beforeWrite; beforeWrite = null; change(); }
@@ -124,6 +125,7 @@ async function redirects(fn: () => Promise<unknown>, path: string) { await asser
 function html(tree: React.ReactNode) { return renderToStaticMarkup(tree); }
 
 async function main() {
+  process.env.STRIPE_CARD_PAYMENT_METHOD_CONFIGURATION = "pmc_card_only_fixture";
   // Fresh signup, verification, query spoofing, customer-only and canceled checkout.
   user = { ...fresh(), emailVerified: null as any };
   await redirects(onboarding, "/login?verify=required");
@@ -167,16 +169,18 @@ async function main() {
   };
   let retrieveFailure = false;
   let subscriptionUpdates = 0;
+  let setupSession: any = null;
+  let defaultCardWrites = 0;
   const stripeService = {
     webhooks: stripeWebhooks,
-    customers: { create: async () => ({ id: "cus_fixture" }) },
+    customers: { create: async () => ({ id: "cus_fixture" }), update: async () => { defaultCardWrites++; } },
     subscriptions: { list: async () => ({ data: live }), retrieve: async (_id: string, opts: any) => {
       assert.equal(JSON.stringify(opts.expand), JSON.stringify(card.CARD_VERIFICATION_EXPAND));
       if (retrieveFailure) throw new Error("fixture Stripe unavailable");
       return sub;
     }, update: async () => { subscriptionUpdates++; return sub; } },
     billingPortal: { sessions: { create: async () => ({ url: "https://fixture.invalid/portal" }) } },
-    checkout: { sessions: { create: async (payload: any) => { checkoutPayload = payload; return { id: "cs_fixture", url: "https://fixture.invalid/checkout" }; } } },
+    checkout: { sessions: { retrieve: async () => setupSession, create: async (payload: any) => { checkoutPayload = payload; return { id: "cs_fixture", url: "https://fixture.invalid/checkout" }; } } },
   };
   const stripeDeps = { stripe: () => stripeService, tierToPriceId: () => "price_fixture", priceIdToTier: () => "pro", ensureReferralCoupon: () => { throw new Error("No coupon allowed in this fixture"); } };
   const checkout = loadModule("src/app/api/stripe/checkout/route.ts", { ...common, "@/lib/stripe": stripeDeps }).POST;
@@ -186,10 +190,11 @@ async function main() {
   user = fresh(); ready = false;
   assert.equal((await checkout(request())).status, 200);
   const createdCheckout = checkoutPayload as any;
+  assert.equal(createdCheckout.payment_method_configuration, "pmc_card_only_fixture");
   assert.equal(createdCheckout.payment_method_collection, "always");
-  assert.deepEqual(Array.from(createdCheckout.payment_method_types), ["card"]);
+  assert.equal(createdCheckout.payment_method_types, undefined);
   assert.equal(createdCheckout.subscription_data.metadata.cardRequired, card.CARD_REQUIRED_CHECKOUT);
-  assert.equal(createdCheckout.subscription_data.trial_end, Math.floor(billing.trialEnd(user)!.getTime() / 1000));
+  assert.equal(createdCheckout.subscription_data.trial_end, undefined, "New paid Checkout never starts a trial");
   assert.match(createdCheckout.success_url, /\/start-membership\?subscribed=1$/);
   assert.match(createdCheckout.cancel_url, /\/start-membership\?canceled=1$/);
   const initialDeadline = user.trialEndsAt.getTime();
@@ -352,8 +357,8 @@ async function main() {
   await redirects(onboarding, "/start-membership");
   assert.equal((await finish()).status, 402);
   user.createdAt = new Date(Date.now() - 8 * 86400_000);
-  await redirects(onboarding, "/trial-expired");
-  await redirects(() => membership({ searchParams: Promise.resolve({}) }), "/trial-expired");
+  await redirects(onboarding, "/start-membership");
+  assert.match(html(await membership({ searchParams: Promise.resolve({}) })), /Carta richiesta/);
   assert.equal((await finish()).status, 402);
 
   // Exercise actual proxy with signed session and exact minimal DB select.
@@ -376,6 +381,48 @@ async function main() {
   user = { ...fresh(), tier: "pro", subscriptionStatus: "trialing" };
   assert.equal((await proxy(req("/onboarding"))).status, 200);
   assert.equal((await proxy(req("/api/applications/apply"))).status, 200);
+
+  assert.equal(card.subscriptionTier("price_retired", null, "sub_existing", {
+    stripeSubscriptionId: "sub_existing", subscriptionStatus: "trialing", tier: "pro", stripePriceId: "price_retired",
+  }), "pro", "Rotating Pro pricing never revokes a linked existing trial");
+  assert.equal(card.subscriptionTier("price_unknown", null, "sub_foreign", {
+    stripeSubscriptionId: "sub_existing", subscriptionStatus: "active", tier: "pro", stripePriceId: "price_retired",
+  }), "free", "Unknown subscriptions cannot inherit another subscription's tier");
+
+  // New Free setup uses no price, invoice, subscription or trial.
+  user = { ...fresh(), trialEndsAt: null as any };
+  live = [];
+  const freeRequest = () => new NextRequest("https://fixture.invalid/api/stripe/checkout", { method: "POST", body: JSON.stringify({ tier: "free" }) });
+  assert.equal((await checkout(freeRequest())).status, 200);
+  const setupPayload = checkoutPayload as any;
+  assert.equal(setupPayload.mode, "setup");
+  for (const key of ["line_items", "subscription_data", "discounts", "payment_method_collection"]) assert.equal(setupPayload[key], undefined, key);
+  assert.equal(setupPayload.customer, "cus_fixture");
+  setupSession = { id: "cs_free", status: "complete", mode: "setup", customer: "cus_fixture", client_reference_id: user.id,
+    metadata: { userId: user.id, tier: "free", cardRequired: card.CARD_REQUIRED_CHECKOUT },
+    setup_intent: { status: "succeeded", customer: "cus_fixture", payment_method: { id: "pm_free", type: "card", customer: "cus_fixture" } } };
+  assert.equal((await sendEvent("checkout.session.completed", { id: "cs_free", mode: "setup" })).status, 200);
+  assert(user.cardSetupAt);
+  assert.equal(user.tier, "free"); assert.equal(user.stripeSubscriptionId, null);
+  assert.equal(billing.requiresPaymentMethodBeforeApp(user), false);
+  assert.equal(defaultCardWrites, 1);
+  await sendEvent("checkout.session.completed", { id: "cs_free", mode: "setup" });
+  assert.equal(defaultCardWrites, 1, "Replay cannot overwrite a newer card");
+  await redirects(() => membership({ searchParams: Promise.resolve({}) }), "/onboarding");
+  for (const method of [{ id: "pm_other", type: "card", customer: "cus_other" }, { id: "pm_bank", type: "sepa_debit", customer: "cus_fixture" }]) {
+    user.cardSetupAt = null;
+    setupSession.setup_intent.payment_method = method;
+    await sendEvent("checkout.session.completed", { id: "cs_free", mode: "setup" });
+    assert.equal(user.cardSetupAt, null, "An unowned or non-card method cannot activate Free");
+  }
+  setupSession.setup_intent.payment_method = { id: "pm_free", type: "card", customer: "cus_fixture" };
+  setupSession.setup_intent.status = "processing";
+  await sendEvent("checkout.session.completed", { id: "cs_free", mode: "setup" });
+  assert.equal(user.cardSetupAt, null, "SCA pending is not a verified card");
+  setupSession.setup_intent.status = "succeeded";
+  user = { ...fresh(), tier: "pro", subscriptionStatus: "active", stripeCustomerId: "cus_fixture", stripeSubscriptionId: "sub_newer" };
+  await sendEvent("checkout.session.completed", { id: "cs_free", mode: "setup" });
+  assert.equal(user.tier, "pro"); assert.equal(user.stripeSubscriptionId, "sub_newer", "A delayed Free event cannot downgrade paid access");
 
   // Real server-rendered membership/admin components, with synthetic data only.
   mkdirSync("output/playwright", { recursive: true });

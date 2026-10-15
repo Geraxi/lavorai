@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
   }
   if (!account || account.demoGeneratedAt) {
     return NextResponse.json(
-      { error: "demo_already_generated", message: "La tua anteprima è già pronta. Continua per attivare la prova." },
+      { error: "demo_already_generated", message: "La tua anteprima è già pronta. Continua con il tuo piano." },
       { status: 409 },
     );
   }

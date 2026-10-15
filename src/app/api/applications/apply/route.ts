@@ -1,3 +1,4 @@
+import { freePlanBlock, approvedPreview } from "@/lib/free-plan";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
@@ -6,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
-import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { usesFreeQuota, dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
 import { applyLimiter } from "@/lib/rate-limit";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -29,6 +30,7 @@ function randomToken(): string {
 const bodySchema = z.object({
   jobId: z.string().min(1),
   portal: z.string().min(1),
+  previewId: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -56,6 +58,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const freeBlock = await freePlanBlock(user);
+    if (freeBlock) return NextResponse.json(freeBlock, { status: 402 });
+
     // Rate limit globale anti-abuso
     const rl = await applyLimiter.limit(`user:${user.id}`);
     if (!rl.success) {
@@ -79,6 +84,8 @@ export async function POST(request: NextRequest) {
       );
     }
     const { jobId, portal } = parsed.data;
+    const preview = await approvedPreview(user.id, jobId, parsed.data.previewId);
+    if (usesFreeQuota(user) && !preview) return NextResponse.json({ error: "preview_required", message: "Controlla CV e lettera per questa posizione prima di inviare." }, { status: 409 });
 
     const readiness = await getActivationReadiness(user.id);
     if (!readiness.ready) {
@@ -124,7 +131,7 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Guardrail checks (dopo il batch, sfrutta gli stessi dati) ---
-    if (usedThisMonth >= limits.monthlyApplications) {
+    if (!usesFreeQuota(user) && usedThisMonth >= limits.monthlyApplications) {
       return NextResponse.json(
         {
           error: "paywall",
@@ -140,14 +147,14 @@ export async function POST(request: NextRequest) {
       );
     }
     const dailyLimit = dailyApplicationLimit(user, prefs?.dailyCap);
-    if (usedToday >= dailyLimit) {
+    if (!usesFreeQuota(user) && usedToday >= dailyLimit) {
       return NextResponse.json(
         {
           error: dailyLimit === 0 ? "paywall" : "daily_limit",
           message:
             dailyLimit === 0
               ? "La prova è terminata: il tuo account è in pausa. Scegli Pro per continuare a inviare candidature."
-              : `Hai raggiunto il limite di ${dailyLimit} candidature per oggi. Torna domani oppure passa a Pro per continuare senza la pausa della prova.`,
+              : `Hai raggiunto il limite di ${dailyLimit} candidature per oggi. Torna domani oppure passa a Pro per continuare.`,
           limit: dailyLimit,
         },
         { status: dailyLimit === 0 ? 402 : 429 },
@@ -224,6 +231,8 @@ export async function POST(request: NextRequest) {
     const application = await prisma.application.create({
       data: {
         userId: user.id,
+        previewResultJson: preview?.resultJson,
+        previewApprovedAt: preview ? new Date() : null,
         jobId,
         portal,
         status: initialStatus,

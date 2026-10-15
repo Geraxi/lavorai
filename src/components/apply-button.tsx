@@ -4,26 +4,37 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/design/icon";
+import { ApplicationPreview, type PositionPreview } from "@/components/application-preview";
 import { PaywallDialog } from "@/components/paywall-dialog";
 
 interface ApplyButtonProps {
   jobId: string;
   portal: string;
+  requirePreview?: boolean;
 }
 
-export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
+export function ApplyButton({ jobId, portal, requirePreview = false }: ApplyButtonProps) {
   const router = useRouter();
+  const [preview, setPreview] = useState<PositionPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
 
-  async function onClick() {
+  async function onClick(previewId?: string) {
     setLoading(true);
     try {
+      if (requirePreview && !previewId) {
+        const response = await fetch("/api/applications/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId }) });
+        const data = await response.json();
+        if (response.status === 402) { setPaywallMessage(data.message); setPaywallOpen(true); return; }
+        if (!response.ok) { toast.error(data.message ?? "Anteprima non disponibile."); return; }
+        setPreview(data);
+        return;
+      }
       const res = await fetch("/api/applications/apply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, portal }),
+        body: JSON.stringify({ jobId, portal, previewId }),
       });
       const body = await res.json().catch(() => ({}));
 
@@ -58,22 +69,23 @@ export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
     <>
       <button
         type="button"
-        onClick={onClick}
+        onClick={() => onClick()}
         disabled={loading}
         className="ds-btn ds-btn-accent w-full"
         style={{ padding: "11px 18px", fontSize: 14 }}
       >
         {loading ? (
           <>
-            <Icon name="refresh" size={14} /> Invio in corso...
+            <Icon name="refresh" size={14} /> Preparazione in corso...
           </>
         ) : (
           <>
-            <Icon name="sparkles" size={14} /> Applica con LavorAI{" "}
+            <Icon name="sparkles" size={14} /> {requirePreview ? "Anteprima CV e lettera" : "Applica con LavorAI"}{" "}
             <Icon name="arrow-right" size={14} />
           </>
         )}
       </button>
+      {preview && <ApplicationPreview preview={preview} busy={loading} onCancel={() => setPreview(null)} onConfirm={() => onClick(preview.previewId)} />}
       <PaywallDialog
         open={paywallOpen}
         onClose={() => setPaywallOpen(false)}

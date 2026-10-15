@@ -137,12 +137,12 @@ function FormCard({
       <CardContent className="p-6 md:p-8">
         <div className="space-y-2">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Inizia gratis — 7 giorni di Pro
+            Inizia con Free — 5 candidature totali
           </h1>
           <p className="text-sm text-muted-foreground">
             Carica il CV e inserisci l&apos;email. Ti invieremo un magic link:
             dopo il login completi il setup e scegli quando attivare l'auto-apply.
-            I tuoi 7 giorni di Pro partono dalla registrazione, con carta richiesta e rinnovo al termine salvo disdetta.
+            Free include 5 candidature totali, con carta richiesta e nessun addebito automatico.
           </p>
         </div>
 
@@ -248,7 +248,7 @@ function FormCard({
         </form>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          7 giorni di Pro gratis, poi €19.99/mese. Carta richiesta per
+          Free include 5 candidature totali, senza addebiti automatici. Carta richiesta per
           iniziare; rinnovo al termine salvo disdetta.
         </p>
       </CardContent>

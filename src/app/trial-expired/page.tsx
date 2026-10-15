@@ -21,7 +21,7 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
         <div className="border-b border-border bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,.16),transparent_44%)] px-8 py-8 sm:px-10">
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-400">La tua ricerca, in pausa</p>
           <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Riprendi da dove eri arrivato.</h1>
-          <p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">La prova Pro di 7 giorni è terminata. Attiva Pro per far ripartire la ricerca, le candidature su misura e il monitoraggio delle risposte.</p>
+          <p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">Scegli Pro a €19,99/mese per continuare con le candidature su misura. Free include 5 invii totali, senza addebiti automatici.</p>
         </div>
         <div className="grid gap-6 px-8 py-7 sm:grid-cols-[1fr_auto] sm:px-10">
           <div>

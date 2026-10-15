@@ -9,6 +9,7 @@ async function main() {
   // A legacy fixture has only the explicitly consumed columns. Queries must
   // never implicitly read the whole generated User model.
   const row = {
+    cardSetupAt: null, freeApplicationsUsed: 0,
     id: "schema-compat-user", email: "schema-compat@example.com", name: "Test",
     tier: "pro", createdAt: new Date(), trialEndsAt: null, trialGraceEndsAt: null,
     emailVerified: null, subscriptionStatus: "active", stripeCustomerId: null,
@@ -53,13 +54,13 @@ async function main() {
       headers: signedIn ? { cookie: `authjs.session-token=${token}` } : {},
     });
     assert.equal((await proxy(request("/dashboard"))).headers.get("x-middleware-next"), "1");
-    const expired = { ...row, tier: "free", createdAt: new Date("2020-01-01") };
-    assert.equal(isApplicationAccessPaused(expired), true);
+    const expired = { ...row, tier: "free", subscriptionStatus: null, createdAt: new Date("2020-01-01") };
+    assert.equal(isApplicationAccessPaused(expired), false);
     assert.equal(isApplicationAccessPaused(row), false);
     assert.equal(requiresPaymentMethodBeforeApp({ ...row, tier: "free", subscriptionStatus: null }), true);
     assert.equal(requiresPaymentMethodBeforeApp({ ...row, tier: "free", subscriptionStatus: "trialing" }), false);
     Object.assign(row, expired);
-    assert.equal((await proxy(request("/dashboard"))).headers.get("location"), "https://lavorai.it/trial-expired");
+    assert.equal((await proxy(request("/dashboard"))).headers.get("location"), "https://lavorai.it/start-membership");
     assert.equal((await proxy(request("/api/applications"))).status, 402);
     row.email = "schema-admin@example.com";
     assert.equal((await proxy(request("/dashboard"))).headers.get("x-middleware-next"), "1");

@@ -10,6 +10,7 @@ export const accessUserSelect = {
   trialEndsAt: true,
   trialGraceEndsAt: true,
   subscriptionStatus: true,
+  cardSetupAt: true,
 } satisfies Prisma.UserSelect;
 
 // Fields used by current getCurrentUser consumers. Feature-specific data belongs
@@ -17,6 +18,7 @@ export const accessUserSelect = {
 export const sessionUserSelect = {
   ...accessUserSelect,
   id: true,
+  freeApplicationsUsed: true,
   name: true,
   emailVerified: true,
   subscriptionStatus: true,

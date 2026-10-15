@@ -8,7 +8,7 @@ import { Resend } from "resend";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { moveFile } from "@/lib/storage";
-import { effectiveTier, registrationTrialEnd, type Tier } from "@/lib/billing";
+import { effectiveTier, type Tier } from "@/lib/billing";
 import { CredentialsSignin } from "next-auth";
 import { createHash } from "node:crypto";
 
@@ -57,9 +57,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const normalizedData = {
         ...data,
         email: typeof data.email === "string" ? data.email.trim().toLowerCase() : data.email,
-        trialDurationDays: 7,
-        trialEndsAt: registrationTrialEnd(new Date()),
-        proTrialUsedAt: new Date(),
+        trialDurationDays: 0,
+        trialEndsAt: null,
+        proTrialUsedAt: null,
       };
       return prisma.user.create({ data: normalizedData });
     },
@@ -300,10 +300,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   events: {
     async createUser({ user }) {
-      if (user.id) await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
-        userId: user.id, plan: "pro", path: "/signup", valueCents: 0,
-        properties: { days: 7, applicationLimit: 5 }, dedupeKey: `trial_started:${user.id}`,
-      });
       // Primo signup → welcome email
       if (!user.email) return;
       try {
@@ -458,7 +454,7 @@ function renderWelcomeEmail(siteUrl: string): string {
         Vai alla dashboard →
       </a>
       <p style="font-size:12.5px;color:#8A8C90;margin:32px 0 0;line-height:1.5;">
-        Hai 7 giorni di Pro gratis per provare, con carta richiesta. Il piano Pro parte da €19.99/mese e lo puoi cancellare con un click.
+        Free include 5 candidature totali con carta richiesta, senza addebiti automatici. Pro costa €19,99/mese e puoi disdire quando vuoi.
       </p>
       <hr style="border:none;border-top:1px solid #E6E4DD;margin:32px 0 16px;"/>
       <p style="font-size:11px;color:#8A8C90;line-height:1.5;margin:0;">

@@ -1,12 +1,12 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
-import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd } from "@/lib/billing";
+import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
 import { StartMembershipActions } from "./start-membership-actions";
 import { UserPopup } from "@/components/user-popup";
 
 export const metadata = {
-  title: "Attiva la prova Pro | LavorAI",
+  title: "Scegli il tuo piano | LavorAI",
   robots: { index: false, follow: false },
 };
 
@@ -23,8 +23,6 @@ export default async function StartMembershipPage({
   if (isApplicationAccessPaused(user)) redirect("/trial-expired");
   if (!requiresPaymentMethodBeforeApp(user)) redirect(user.onboardedAt ? "/dashboard" : "/onboarding");
 
-  const endsAt = trialEnd(user);
-  const date = endsAt?.toLocaleDateString("it-IT", { day: "numeric", month: "long" }) ?? "tra 7 giorni";
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#030712] px-5 py-7 text-white sm:px-8 sm:py-10">
@@ -37,16 +35,16 @@ export default async function StartMembershipPage({
           </a>
           <p className="mt-16 text-xs font-bold uppercase tracking-[.22em] text-emerald-300">Prima di iniziare</p>
           <h1 className="mt-4 text-4xl font-semibold leading-[1.02] tracking-[-.045em] sm:text-6xl">
-            Attiva la tua prova.<br />
-            <span className="text-emerald-400">Nessun addebito oggi.</span>
+            Scegli Free, Pro o Pro+.<br />
+            <span className="text-emerald-400">La carta è obbligatoria.</span>
           </h1>
           <p className="mt-6 max-w-lg text-base leading-7 text-slate-300 sm:text-lg">
-            Aggiungi una carta per continuare con CV e preferenze. La prova termina il {date}, 7 giorni dopo la registrazione; il primo addebito avverrà alla fine della prova, salvo disdetta.
+            Free salva la carta senza addebiti e include 5 candidature totali, senza scadenza. Pro e Pro+ sono abbonamenti con pagamento immediato, senza periodo di prova. LavorAI prepara un CV e una lettera su misura per ogni posizione: puoi vederli prima di inviare.
           </p>
           <div className="mt-10 grid max-w-md grid-cols-3 gap-0 border-y border-white/10 text-sm text-slate-300">
             <div className="py-4 pr-4"><span className="block font-mono text-xs text-emerald-300">01 · OGGI</span><span className="mt-1 block">Metodo sicuro</span></div>
             <div className="border-l border-white/10 py-4 pl-4"><span className="block font-mono text-xs text-emerald-300">02 · PROFILO</span><span className="mt-1 block">CV e preferenze</span></div>
-            <div className="border-l border-white/10 py-4 pl-4"><span className="block font-mono text-xs text-emerald-300">03 · POI</span><span className="mt-1 block">€19,99/mese</span></div>
+            <div className="border-l border-white/10 py-4 pl-4"><span className="block font-mono text-xs text-emerald-300">03 · SCEGLI</span><span className="mt-1 block">Free, Pro o Pro+</span></div>
           </div>
         </div>
         <div className="rounded-[28px] border border-white/12 bg-slate-950/70 p-5 shadow-2xl shadow-emerald-950/40 backdrop-blur sm:p-8">

@@ -1,3 +1,4 @@
+import { freePlanBlock, approvedPreview } from "@/lib/free-plan";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
@@ -6,7 +7,7 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
-import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { usesFreeQuota, dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { resolveSession } from "@/lib/apply-session";
@@ -29,6 +30,7 @@ const bodySchema = z.object({
   // 500 max per request — abbastanza per la job board del giorno;
   // batch più grandi vanno chunkati lato client.
   jobIds: z.array(z.string().min(1)).min(1).max(500),
+  previewIds: z.record(z.string(), z.string()).optional(),
 });
 
 function portalOf(url: string): string {
@@ -74,6 +76,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const freeBlock = await freePlanBlock(user);
+    if (freeBlock) return NextResponse.json(freeBlock, { status: 402 });
+
     // Rate limit globale (conta una sola chiamata, il limite reale è monthly)
     const rl = await applyBatchLimiter.limit(`user:${user.id}:batch`);
     if (!rl.success) {
@@ -103,6 +108,14 @@ export async function POST(request: NextRequest) {
       );
     }
     const { jobIds } = parsed.data;
+    const previews = new Map<string, Awaited<ReturnType<typeof approvedPreview>>>();
+    if (usesFreeQuota(user)) {
+      for (const jobId of new Set(jobIds)) {
+        const preview = await approvedPreview(user.id, jobId, parsed.data.previewIds?.[jobId]);
+        if (!preview) return NextResponse.json({ error: "preview_required", message: "Controlla CV e lettera per ogni posizione prima di inviare.", remaining: Math.max(0, 5 - user.freeApplicationsUsed), jobId }, { status: 409 });
+        previews.set(jobId, preview);
+      }
+    }
 
     // --- CV check ---
     const cv = await prisma.cVDocument.findFirst({
@@ -135,7 +148,7 @@ export async function POST(request: NextRequest) {
       prisma.cVProfile.findUnique({ where: { userId: user.id } }),
     ]);
     const remainingQuota =
-      limits.monthlyApplications === Infinity
+      usesFreeQuota(user) ? Math.max(0, 5 - user.freeApplicationsUsed) : limits.monthlyApplications === Infinity
         ? Infinity
         : Math.max(0, limits.monthlyApplications - usedThisMonth);
 
@@ -153,7 +166,7 @@ export async function POST(request: NextRequest) {
       );
     }
     const dailyLimit = dailyApplicationLimit(user, prefs?.dailyCap);
-    const remainingToday = Math.max(0, dailyLimit - usedToday);
+    const remainingToday = usesFreeQuota(user) ? remainingQuota : Math.max(0, dailyLimit - usedToday);
     if (remainingToday === 0) {
       return NextResponse.json(
         {
@@ -257,6 +270,8 @@ export async function POST(request: NextRequest) {
         const application = await prisma.application.create({
           data: {
             userId: user.id,
+            previewResultJson: previews.get(job.id)?.resultJson,
+            previewApprovedAt: previews.get(job.id) ? new Date() : null,
             jobId: job.id,
             portal,
             status: initialStatus,

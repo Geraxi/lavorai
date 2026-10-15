@@ -61,6 +61,7 @@ export function JobCard({
         {job.description}
       </p>
 
+      <p className="mt-3 text-xs text-primary">CV e lettera su misura per questa posizione · anteprima prima dell’invio</p>
       <div className="mt-4 flex items-center justify-between text-xs">
         <span className="text-muted-foreground/70">{posted}</span>
         <span className="font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">

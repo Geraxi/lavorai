@@ -1515,7 +1515,7 @@ function StepConfirm({
       <p style={stepLead}>
         {demo
           ? "Abbiamo adattato il tuo profilo a una posizione concreta e preparato una lettera coerente. Questa è solo un’anteprima: non è stata inviata alcuna candidatura."
-          : "Creiamo una piccola anteprima personale: un CV migliorato e una lettera di presentazione per un ruolo compatibile con le tue preferenze."}
+          : "LavorAI scrive un CV e una lettera su misura per ogni posizione. Con Free hai 5 candidature totali: controlla entrambi i documenti prima di ogni invio, senza addebiti automatici."}
       </p>
       {demo && (
         <div

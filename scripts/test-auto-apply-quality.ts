@@ -80,7 +80,7 @@ async function testCronBothPasses() {
     "@/lib/application-queue": { enqueueApplication: async (id: string) => queued.push(id) },
     "@/lib/apply-session": { resolveSession: async () => ({ id: "session-test", status: "active" }) },
     "@/lib/billing": {
-      dailyApplicationLimit: () => 5, effectiveTier: () => "pro",
+      usesFreeQuota: () => false, dailyApplicationLimit: () => 5, effectiveTier: () => "pro",
       getLimits: () => ({ monthlyApplications: 100 }),
       isApplicationAccessPaused: () => false, requiresPaymentMethodBeforeApp: () => false,
     },

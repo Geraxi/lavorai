@@ -46,30 +46,30 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 0,
     priceDisplay: "€0",
     priceSuffix: "",
-    tagline: "7 giorni di Pro dalla registrazione, fino a 5 candidature al giorno. Carta richiesta. Rinnovo al termine salvo disdetta.",
-    monthlyApplications: 0,
-    portals: 0,
+    tagline: "5 candidature gratuite totali, senza scadenza. Carta richiesta, nessun addebito automatico.",
+    monthlyApplications: 5,
+    portals: 1,
     coverLetter: "basic",
     analytics: "none",
     prioritySupport: false,
     hasFounderCoach: false,
     hasInterviewCopilot: false,
     features: [
-      "La prova parte dalla registrazione",
-      "Fino a 5 candidature al giorno durante la prova",
-      "Offerte compatibili durante la prova",
+      "5 candidature totali, senza scadenza",
+      "CV e lettera su misura per ogni posizione",
+      "Anteprima di CV e lettera prima dell’invio",
       "Risposte dei recruiter nella Inbox",
       "Analisi ATS del CV",
-      "Dopo la prova: account in pausa finché non attivi Pro",
+      "Carta obbligatoria, nessun abbonamento automatico",
     ],
     stripePriceIdEnv: null,
-    cta: "Prova Pro 7 giorni gratis",
+    cta: "Inizia con Free",
   },
   pro: {
     id: "pro",
     name: "Pro",
     price: 19.99,
-    priceDisplay: "€19.99",
+    priceDisplay: "€19,99",
     priceSuffix: "/ mese",
     tagline: "50 candidature al mese con CV e lettera su misura.",
     monthlyApplications: 50,
@@ -129,16 +129,11 @@ export const TIERS: Record<Tier, TierConfig> = {
 
 export const TIER_LIST: TierConfig[] = [TIERS.free, TIERS.pro, TIERS.pro_plus];
 
-/**
- * Gli account in prova restano sul tier tecnico `free`. Questo cap consente
- * loro di vedere valore ogni giorno senza trasformare la prova in consumo AI
- * senza guardrail.
- */
-export const FREE_TRIAL_DAYS = 7;
-export const FREE_TRIAL_DAILY_APPLICATION_LIMIT = 5;
-
-export function registrationTrialEnd(createdAt: Date | string): Date {
-  return new Date(new Date(createdAt).getTime() + FREE_TRIAL_DAYS * 86400_000);
+/** Free quota is lifetime; historical trial dates are read, never created. */
+export const FREE_APPLICATION_LIMIT = 5;
+export const FREE_UPGRADE_MESSAGE = "Passa a Pro, EUR 19,99/mese";
+export function usesFreeQuota(user: Parameters<typeof effectiveTier>[0]): boolean {
+  return effectiveTier(user) === "free";
 }
 
 // One-time transition explicitly requested on 23 September 2026. These are
@@ -154,7 +149,7 @@ export function trialEnd(user: { createdAt?: Date | string; trialGraceEndsAt?: D
       && user.trialGraceEndsAt && Number.isFinite(new Date(user.trialGraceEndsAt).getTime())) {
     return new Date(EARLY_USER_TRIAL_FINAL_END);
   }
-  return createdAt ? registrationTrialEnd(createdAt) : user.trialEndsAt ? new Date(user.trialEndsAt) : null;
+  return user.trialEndsAt ? new Date(user.trialEndsAt) : null;
 }
 
 /**
@@ -239,7 +234,7 @@ export function effectiveTier(user: {
 }): Tier {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
   const base = normalizeTier(user.tier);
-  // Prova Pro con carta richiesta (dalla registrazione): Free → Pro fino a scadenza.
+  // Only explicitly stored, existing trials grant Pro until their original expiry.
   if (base === "free" && (trialEnd(user)?.getTime() ?? 0) > Date.now()) return "pro";
   return base;
 }
@@ -259,7 +254,7 @@ export function trialState(user: { tier?: string | null; createdAt?: Date | stri
 
 /**
  * Cap giornaliero effettivo. Le preferenze controllano Pro/Pro+, mentre Free
- * è limitato a 5 candidature al giorno durante la prova e a zero alla scadenza.
+ * mantiene il cap storico; il nuovo piano Free usa anche il limite lifetime al momento dell’invio.
  */
 export function dailyApplicationLimit(
   user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
@@ -268,25 +263,21 @@ export function dailyApplicationLimit(
 ): number {
   if (isLifetimeProPlus(user.email)) return Math.max(1, Math.min(100, preferredCap ?? 100));
   if (normalizeTier(user.tier) === "free") {
-    return trialState(user).status === "active" ? FREE_TRIAL_DAILY_APPLICATION_LIMIT : 0;
+    return FREE_APPLICATION_LIMIT;
   }
   return Math.max(1, Math.min(100, preferredCap ?? 10));
 }
 
-/** Un account Free fuori dalla prova deve passare dalla schermata di pagamento. */
+/** Free pages remain accessible after quota exhaustion; sending has its own gate. */
 export function isApplicationAccessPaused(
   user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
   trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
 ): boolean {
-  return !isLifetimeProPlus(user.email) && normalizeTier(user.tier) === "free" && trialState(user).status !== "active";
+  return false; // Free remains accessible after quota exhaustion; only sending is gated.
 }
 
-/**
- * Per le nuove prove un Customer Stripe non basta: può derivare da un
- * checkout abbandonato. L'app si apre soltanto dopo che il webhook ha
- * registrato una subscription `trialing` o `active`, cioè con un metodo
- * di pagamento effettivamente raccolto da Stripe Checkout.
- */
+/** A customer ID or checkout return URL is insufficient: require server-verified
+ * setup completion for Free, or an existing verified paid/trial subscription. */
 export function requiresPaymentMethodBeforeApp(
   user: {
     tier?: string | null;
@@ -295,11 +286,12 @@ export function requiresPaymentMethodBeforeApp(
     trialGraceEndsAt?: Date | string | null;
     trialEndsAt?: Date | string | null;
     subscriptionStatus?: string | null;
+    cardSetupAt?: Date | string | null;
   },
 ): boolean {
   if (isLifetimeProPlus(user.email) || normalizeTier(user.tier) !== "free") return false;
   if (user.subscriptionStatus === "active" || user.subscriptionStatus === "trialing") return false;
-  return trialState(user).status === "active";
+  return !user.cardSetupAt;
 }
 
 /**

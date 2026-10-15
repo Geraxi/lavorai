@@ -9,11 +9,11 @@ process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";
 const base = {
   id: "app", userId: "user", jobId: "job", sessionId: "round", status: "queued", startedAt: null, consentGrantedAt: now, createdAt: now, retryCount: 0,
   submissionReceiptJson: null, userProvidedAnswersJson: null, answerContinuationJson: null, pendingQuestionsJson: null, completedAt: null,
-  cvDocxPath: null, submittedAt: null, submittedVia: null, submitConfirmation: null,
+  previewResultJson: null, previewApprovedAt: null, cvDocxPath: null, submittedAt: null, submittedVia: null, submitConfirmation: null,
   canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
   job: { closedAt: null, url: "https://boards.greenhouse.io/acme/jobs/123", title: "Product Designer", company: "Acme", description: "Product Designer", location: "Milano", remote: false, contractType: "employee", salaryMin: 60000, salaryMax: 70000 }, session: { id: "round", userId: "user", status: "active", sentCount: 27, targetCount: 30, title: "Product Designer", label: "Design" },
   user: { email: "synthetic@example.invalid", yearsExperience: null, englishLevel: null, noticePeriod: null, tier: "pro", createdAt: now, trialEndsAt: null, trialGraceEndsAt: null,
-    subscriptionStatus: "active", currentPeriodEnd: new Date(+now + 86400000), pausedUntil: null, suspendedAt: null,
+    cardSetupAt: null, freeApplicationsUsed: 0, subscriptionStatus: "active", currentPeriodEnd: new Date(+now + 86400000), pausedUntil: null, suspendedAt: null,
     emailVerified: now, privacyConsentAt: now, avoidCompanies: null,
     cvProfile: { firstName: "", lastName: "", email: "", phone: "", city: "", title: "Product Designer", summary: "",
       experiencesJson: "[]", educationJson: "[]", skillsJson: "[]", languagesJson: "[]", linksJson: "[]" },
@@ -49,7 +49,7 @@ for (const patch of [{ submitConfirmation: SUBMISSION_STARTED }, { submitConfirm
 assert.equal(hasPotentialSubmission({ ...base, submitConfirmation: NOT_SUBMITTED, canaryLog: "{}" }), false);
 assert.equal(hasPotentialSubmission({ ...base, submitConfirmation: NOT_SUBMITTED, submittedAt: now }), true);
 const worker = readFileSync(new URL("../src/lib/application-worker.ts", import.meta.url), "utf8");
-assert(worker.indexOf("reserveApplicationWork(applicationId)") < worker.indexOf("result = await optimizeCV("));
+assert(worker.indexOf("reserveApplicationWork(applicationId)") < worker.indexOf("result = app.previewResultJson"));
 assert(worker.includes("if (prepared.count !== 1) return;"));
 assert(worker.includes('status: "optimizing", startedAt: workToken'));
 assert(!worker.includes("MAX_ATTEMPTS"), "Unknown portal outcomes must not be retried");

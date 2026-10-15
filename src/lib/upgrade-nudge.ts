@@ -1,5 +1,5 @@
 import { Resend } from "resend";
-import { trialState } from "@/lib/billing";
+import { FREE_APPLICATION_LIMIT, trialState } from "@/lib/billing";
 import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { isTestAccount } from "@/lib/admin";
@@ -45,7 +45,7 @@ export interface UpgradeCandidate {
  * in lib/billing.ts. Duplicato qui per evitare ciclo di dipendenza sulle
  * env di stripe che billing.ts richiede.
  */
-const FREE_MONTHLY_CAP = 3; // storico: usato solo nei testi; i candidati in prova attiva vengono esclusi (vedi sotto)
+const FREE_LIFETIME_CAP = FREE_APPLICATION_LIMIT;
 
 export async function findUpgradeCandidates(opts?: {
   onlyEmail?: string;
@@ -77,23 +77,10 @@ export async function findUpgradeCandidates(opts?: {
       createdAt: true,
       trialEndsAt: true,
       trialGraceEndsAt: true,
+      freeApplicationsUsed: true,
       _count: { select: { applications: true } },
     },
   });
-
-  // Conteggio candidature del mese corrente per identificare i limit-hit.
-  // Un'unica group-by su tutti i free users evita N+1 sulla DB.
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const monthByUser = await prisma.application.groupBy({
-    by: ["userId"],
-    where: {
-      userId: { in: users.map((u) => u.id) },
-      createdAt: { gte: monthStart },
-      status: { in: ["success", "queued", "optimizing", "applying", "ready_to_apply"] },
-    },
-    _count: { _all: true },
-  });
-  const monthlyUsed = new Map(monthByUser.map((r) => [r.userId, r._count._all]));
 
   const cooldownSince = new Date(now - COOLDOWN_DAYS * 86_400_000);
   const out: UpgradeCandidate[] = [];
@@ -103,8 +90,8 @@ export async function findUpgradeCandidates(opts?: {
     if (trialState(u).status === "active") continue;
     if (isTestAccount(u.email)) continue;
 
-    const usedThisMonth = monthlyUsed.get(u.id) ?? 0;
-    const limitHit = usedThisMonth >= FREE_MONTHLY_CAP;
+    const usedLifetime = u.freeApplicationsUsed;
+    const limitHit = usedLifetime >= FREE_LIFETIME_CAP;
     const noApps = u._count.applications === 0;
     const withinValueWindow = u.createdAt.getTime() >= maxAge.getTime();
 
@@ -241,13 +228,13 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
   const COPY = {
     it: {
       subject: isLimitHit
-        ? `Hai finito le ${FREE_MONTHLY_CAP} candidature del mese — sblocca ora`
+        ? `Hai finito le ${FREE_LIFETIME_CAP} candidature gratuite totali — sblocca ora`
         : isNoApps
           ? "Nessuna candidatura ancora — proviamo con Pro"
           : "Sblocca l'auto-apply 24/7 — passa a Pro",
       greet: greetName ? `Ciao ${greetName},` : "Ciao,",
       lead: isLimitHit
-        ? `Hai raggiunto il tetto Free di ${FREE_MONTHLY_CAP} candidature/mese. Il motore ha trovato nuovi annunci compatibili col tuo profilo ma non puo' candidarti finche' il piano non riparte a inizio mese.`
+        ? `Hai raggiunto il tetto Free di ${FREE_LIFETIME_CAP} candidature totali. Passa a Pro a €19,99/mese per continuare: Free non si rinnova e non prevede addebiti automatici.`
         : isNoApps
           ? `Sei con noi da ${c.daysSinceSignup} giorni ma il motore non ha ancora candidato per te. Cause tipiche: verticale poco coperto dalle fonti Free, matching stretto, oppure ATS custom. Pro sblocca piu' fonti e priorità sui portali diretti — se non parte niente entro 24h, rimborso integrale.`
           : c.applicationsCount > 1
@@ -273,13 +260,13 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
     },
     en: {
       subject: isLimitHit
-        ? `You hit your ${FREE_MONTHLY_CAP}-application monthly cap — unlock now`
+        ? `You hit your ${FREE_LIFETIME_CAP}-application lifetime cap — unlock now`
         : isNoApps
           ? "No applications yet — let's try with Pro"
           : "Unlock 24/7 auto-apply — upgrade to Pro",
       greet: greetName ? `Hi ${greetName},` : "Hi,",
       lead: isLimitHit
-        ? `You've hit the Free tier cap of ${FREE_MONTHLY_CAP} applications this month. The engine found new matches for you but can't submit them until the plan resets on the 1st.`
+        ? `You've hit the Free tier cap of ${FREE_LIFETIME_CAP} lifetime applications. Upgrade to Pro at EUR 19.99/month to continue. Free never resets or charges automatically.`
         : isNoApps
           ? `You've been with us ${c.daysSinceSignup} days but the engine hasn't applied for you yet. Common causes: your vertical isn't well covered by Free sources, tight matching, or custom ATS. Pro unlocks more sources and priority on direct portals — if nothing lands within 24h, full refund.`
           : c.applicationsCount > 1

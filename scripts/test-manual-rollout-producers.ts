@@ -14,6 +14,8 @@ const json = (body: unknown, options?: { status?: number }) => ({ body, status: 
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-rollout": rollout,
+    "@/lib/free-plan": { freePlanBlock: async () => null, approvedPreview: async () => null },
+    "@/lib/billing": { usesFreeQuota: () => false, requiresPaymentMethodBeforeApp: () => false },
     "./application-answer-continuation": continuation,
     "@/lib/application-answer-continuation": continuation,
     "@/lib/application-pause": { applicationsPaused: () => false },
@@ -187,7 +189,7 @@ async function testExplicitCreation() {
       };
       const route = load(`src/app/api/applications/${routeName}/route.ts`, {
         "@/lib/db": { prisma }, "@/lib/admin-user-actions": { monthlyQuotaSince: () => start },
-        "@/lib/billing": { requiresPaymentMethodBeforeApp: () => false, effectiveTier: () => "pro", getLimits: () => ({ monthlyApplications: 100 }), dailyApplicationLimit: () => 10 },
+        "@/lib/billing": { usesFreeQuota: () => false, requiresPaymentMethodBeforeApp: () => false, effectiveTier: () => "pro", getLimits: () => ({ monthlyApplications: 100 }), dailyApplicationLimit: () => 10 },
         "@/lib/rate-limit": { applyLimiter: { limit: async () => ({ success: true }) }, applyBatchLimiter: { limit: async () => ({ success: true }) } },
         "@/lib/activation-readiness": { getActivationReadiness: async () => ({ ready: true }) },
         "@/lib/apply-session": { resolveSession: async () => ({ id: "round", status: "active" }) },

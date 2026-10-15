@@ -25,6 +25,7 @@ export function stripe(): Stripe {
  */
 export function priceIdToTier(priceId: string): Tier | null {
   if (priceId === process.env.STRIPE_PRICE_ID_PRO) return "pro";
+  if (process.env.STRIPE_LEGACY_PRICE_IDS_PRO?.split(",").map(id => id.trim()).includes(priceId)) return "pro";
   if (priceId === process.env.STRIPE_PRICE_ID_PRO_PLUS) return "pro_plus";
   return null;
 }

@@ -1,3 +1,5 @@
+import { usesFreeQuota, FREE_APPLICATION_LIMIT } from "@/lib/billing";
+import { FreePlanStatus } from "@/components/free-plan-status";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
@@ -73,6 +75,7 @@ export default async function DashboardPage() {
   const greeting = (
     <>
       <h1 className="fit-h1">{t("greeting", { name: greetingName })}</h1>
+      {usesFreeQuota(user) && <FreePlanStatus remaining={Math.max(0, FREE_APPLICATION_LIMIT - user.freeApplicationsUsed)} />}
       <p className="dg-head-lead">LavorAI sta cercando opportunità per te in tutto il mondo.</p>
       <p className="dg-head-sub">Esplora dove stiamo trovando le migliori opportunità per il tuo profilo.</p>
     </>

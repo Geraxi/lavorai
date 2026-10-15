@@ -85,6 +85,8 @@ async function main() {
   } };
   const element = (type: unknown, props: unknown) => ({ type, props });
   const dependencies: Record<string, unknown> = {
+    "@/lib/billing": { usesFreeQuota: () => false, FREE_APPLICATION_LIMIT: 5 },
+    "@/components/free-plan-status": { FreePlanStatus: "FreePlanStatus" },
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },
     "next/link": { default: "Link" }, "next-intl/server": { getTranslations: async () => (key: string) => key },
     "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence,
