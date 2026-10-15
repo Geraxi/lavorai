@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
     await processApplication(parsed.data.applicationId);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    await captureApiException(err, "/api/applications/process");
     console.error("[/api/applications/process]", err);
     return NextResponse.json(
       { error: "internal", message: err instanceof Error ? err.message : "errore" },

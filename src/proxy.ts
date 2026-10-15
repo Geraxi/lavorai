@@ -35,6 +35,7 @@ const PROTECTED_PREFIXES = [
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  if (pathname === "/ingest" || pathname.startsWith("/ingest/")) return NextResponse.next();
 
   // Un solo dominio canonico. Ha effetto non appena www.lavorai.it viene
   // assegnato a questo progetto Vercel (oggi punta ancora al vecchio sito).

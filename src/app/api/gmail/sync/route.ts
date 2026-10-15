@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { syncGmailMessages } from "@/lib/gmail-client";
@@ -33,6 +34,7 @@ export async function POST() {
       skipped: result.skipped,
     });
   } catch (error) {
+    await captureApiException(error, "/api/gmail/sync");
     console.error("[api/gmail/sync] Error:", error);
     return NextResponse.json(
       { error: "Gmail sync failed. Please try again." },

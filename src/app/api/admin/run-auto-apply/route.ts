@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { runAutoApplyCron } from "@/lib/auto-apply-cron";
 import { getCurrentUser } from "@/lib/session";
@@ -31,6 +32,7 @@ async function handle(request: NextRequest) {
     const stats = await runAutoApplyCron();
     return NextResponse.json({ ok: true, ms: Date.now() - t0, ...stats });
   } catch (err) {
+    await captureApiException(err, "/api/admin/run-auto-apply");
     console.error("[api/admin/run-auto-apply]", err);
     return NextResponse.json(
       { error: "internal", message: err instanceof Error ? err.message : "Errore" },

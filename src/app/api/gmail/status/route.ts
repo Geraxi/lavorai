@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { hasGmailConnected } from "@/lib/gmail-client";
@@ -18,6 +19,7 @@ export async function GET() {
 
     return NextResponse.json({ connected });
   } catch (error) {
+    await captureApiException(error, "/api/gmail/status");
     console.error("[api/gmail/status] Error:", error);
     return NextResponse.json(
       { error: "Failed to check Gmail status" },

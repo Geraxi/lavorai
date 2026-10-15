@@ -1,3 +1,5 @@
+import { captureServerEvent, rememberAnalyticsConsent, captureApiException } from "@/lib/posthog/server";
+import { CONSENT_COOKIE } from "@/lib/posthog/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
@@ -124,6 +126,9 @@ export async function POST(request: NextRequest) {
       locale: "it",
     });
 
+    await rememberAnalyticsConsent(user.id, request.cookies.get(CONSENT_COOKIE)?.value === "accepted");
+    await captureServerEvent(user.id, "card_setup_started", { plan: tier }, `card_setup_started:${session.id}`);
+
     await recordConversionEvent(AnalyticsEvent.CHECKOUT_STARTED, {
       userId: user.id,
       plan: tier,
@@ -135,6 +140,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ url: session.url });
   } catch (err) {
+    await captureApiException(err, "/api/stripe/checkout");
     console.error("[/api/stripe/checkout]", err);
     return NextResponse.json(
       {

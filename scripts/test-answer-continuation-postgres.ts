@@ -1,3 +1,4 @@
+import { posthogMocks } from "./helpers/posthog-mocks";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
@@ -52,6 +53,7 @@ async function main() {
 
     let signedIn: string | null = null, publicationFailure = false;
     const load = async (path: string, dependencies: Record<string, any>, append = "") => {
+      dependencies = { ...posthogMocks, ...dependencies };
       const module = { exports: {} as any };
       const code = ts.transpileModule(await readFile(path, "utf8") + append, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
       vm.runInNewContext(code, { module, exports: module.exports, Date, Map, Set, URL, Buffer, process: { env: process.env }, console: { log() {}, warn() {}, error() {} },

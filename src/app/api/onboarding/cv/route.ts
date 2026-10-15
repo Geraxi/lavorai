@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
@@ -113,6 +114,7 @@ export async function POST(request: NextRequest) {
       chars: text.length,
     });
   } catch (err) {
+    await captureApiException(err, "/api/onboarding/cv");
     console.error("[/api/onboarding/cv]", err);
     return NextResponse.json(
       {

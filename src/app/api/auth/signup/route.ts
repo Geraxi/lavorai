@@ -1,3 +1,5 @@
+import { rememberAnalyticsConsent, captureServerEvent, captureApiException } from "@/lib/posthog/server";
+import { CONSENT_COOKIE } from "@/lib/posthog/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -147,6 +149,9 @@ export async function POST(request: NextRequest) {
       select: { id: true, email: true, locale: true, name: true },
     });
 
+    await rememberAnalyticsConsent(user.id, request.cookies.get(CONSENT_COOKIE)?.value === "accepted");
+    await captureServerEvent(user.id, "signup_completed", { plan: parsed.data.plan ?? "free" }, `signup_completed:${user.id}`);
+
     await recordConversionEvent(AnalyticsEvent.SIGNUP_SUCCESS, {
       userId: user.id,
       sessionId: request.cookies.get("lv_sid")?.value ?? null,
@@ -165,6 +170,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, verifyRequired: true });
   } catch (err) {
+    await captureApiException(err, "/api/auth/signup");
     console.error("[/api/auth/signup]", err);
     return NextResponse.json(
       { error: "internal", message: "Errore interno. Riprova." },

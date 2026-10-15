@@ -1,9 +1,11 @@
+import { posthogMocks } from "./helpers/posthog-mocks";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 
 function load(path: string, dependencies: Record<string, unknown>) {
+  dependencies = { ...posthogMocks, ...dependencies };
   const module = { exports: {} as Record<string, any> };
   const output = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,

@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { getCurrentUser } from "@/lib/session";
 import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse, type NextRequest } from "next/server";
@@ -85,6 +86,7 @@ export async function POST(
 
     return NextResponse.json({ ok: true, portal: cfg.id, cookies: cookies.length });
   } catch (err) {
+    await captureApiException(err, "/api/onboarding/[portal]/link");
     console.error(`[onboarding/${portal}/link]`, err);
     const message =
       err instanceof Error && err.message.includes("Timeout")

@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -76,13 +77,14 @@ export async function POST(request: NextRequest) {
       select: { id: true, email: true, name: true, locale: true },
     });
     if (user) {
-      await sendPlanWelcomeEmail(user).catch((err) =>
-        console.error("[/api/auth/verify-email/confirm] welcome email", err),
+      await sendPlanWelcomeEmail(user).catch(async (err) =>
+        (await captureApiException(err, "/api/auth/verify-email/confirm"), console.error("[/api/auth/verify-email/confirm] welcome email", err)),
       );
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
+    await captureApiException(err, "/api/auth/verify-email/confirm");
     console.error("[/api/auth/verify-email/confirm]", err);
     return NextResponse.json(
       { error: "internal", message: "Errore interno. Riprova." },

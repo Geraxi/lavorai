@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
       await enqueueApplication(app.id);
       requeued++;
     } catch (err) {
+      await captureApiException(err, "/api/admin/requeue-stuck");
       console.error(`[requeue-stuck] ${app.id} failed`, err);
     }
   }

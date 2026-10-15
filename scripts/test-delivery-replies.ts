@@ -1,3 +1,4 @@
+import { posthogMocks } from "./helpers/posthog-mocks";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -7,6 +8,7 @@ import ts from "typescript";
 // Real production modules with hermetic database/provider boundaries. No service,
 // external email, production credential or live application is reachable.
 function load(path: string, dependencies: Record<string, unknown>, globals: Record<string, unknown> = {}) {
+  dependencies = { ...posthogMocks, ...dependencies };
   const output = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true,
   } }).outputText;

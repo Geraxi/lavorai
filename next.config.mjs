@@ -43,6 +43,14 @@ const nextConfig = {
   outputFileTracingIncludes: {
     "/api/**": ["./node_modules/@sparticuz/chromium/**"],
   },
+  skipTrailingSlashRedirect: true,
+  async rewrites() {
+    const host = (process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com").replace(/\/$/, "");
+    return [
+      { source: "/ingest/static/:path*", destination: "https://eu-assets.i.posthog.com/static/:path*" },
+      { source: "/ingest/:path*", destination: `${host}/:path*` },
+    ];
+  },
   async headers() {
     return [
       {

@@ -1,5 +1,6 @@
 "use client";
 
+import { captureFunnel } from "@/lib/posthog/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -26,6 +27,7 @@ export function StartMembershipActions({ confirming, canceled }: { confirming: b
   }, [confirming, router]);
 
   async function beginCheckout(tier: Plan) {
+    captureFunnel("plan_selected", { plan: tier });
     try { localStorage.removeItem("lavorai.selectedPlan"); } catch { /* optional browser storage */ }
     setBusy(tier);
     setError("");

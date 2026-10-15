@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { syncPostHogConsent } from "@/lib/posthog/client";
 import Link from "next/link";
 import { useLocale } from "next-intl";
 
@@ -20,6 +21,7 @@ export function CookieBanner() {
 
   function choose(value: "accepted" | "essential") {
     localStorage.setItem(KEY, value);
+    syncPostHogConsent();
     window.dispatchEvent(new CustomEvent("lavorai-consent-changed", { detail: value }));
     setVisible(false);
   }

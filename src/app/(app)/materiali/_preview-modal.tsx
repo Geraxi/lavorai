@@ -49,6 +49,8 @@ export function CvPreviewModal() {
 
   return (
     <div
+      data-ph-mask
+      className="ph-no-capture"
       role="dialog"
       aria-modal="true"
       aria-label={`Anteprima CV per ${state.title}`}

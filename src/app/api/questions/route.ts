@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { answerContinuationIneligibility, answerConfirmationDigest, continuationSelect } from "@/lib/application-answer-continuation";
 import { queueAnswerContinuation } from "@/lib/application-worker-gates";
 import { candidateFacts, resolveCandidateFact } from "@/lib/candidate-facts";
@@ -157,8 +158,10 @@ export async function POST(request: NextRequest) {
     const result = await queueAnswerContinuation({ applicationId: app.id, userId: user.id,
       proofDigest: item.proofDigest, expectedAnswersJson: app.userProvidedAnswersJson });
     if (result !== "queued") { held.push({ applicationId: app.id, reason: result ?? "continuation_held" }); continue; }
-    await enqueueApplication(app.id, { preserveClaim: true }).catch(error =>
-      console.error(`[questions] queue notification ${app.id} failed; durable queue retained`, error));
+    await enqueueApplication(app.id, { preserveClaim: true }).catch(async error => {
+      await captureApiException(error, "/api/questions");
+      console.error(`[questions] queue notification ${app.id} failed; durable queue retained`, error);
+    });
     requeued++;
   }
   return NextResponse.json({ ok: true, requeued, saved, held, remainingApplications: waiting.length - requeued });

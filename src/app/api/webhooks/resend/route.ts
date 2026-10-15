@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { createHash } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyResendWebhook } from "@/lib/resend-webhook-signature";
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
   } catch {
     // Do not swallow errors: 2xx here would permanently lose a message or retry.
     // Never log body, sender, provider response or security-code content.
+    await captureApiException(undefined, "/api/webhooks/resend");
     console.error("[webhook/resend] durable_processing_failed");
     return NextResponse.json({ error: "processing_retry_required" }, { status: 500 });
   }

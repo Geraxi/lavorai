@@ -1,3 +1,4 @@
+import { posthogMocks } from "./helpers/posthog-mocks";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import vm from "node:vm";
@@ -22,6 +23,7 @@ import { AnalyticsEvent } from "../src/lib/analytics";
 // Compile the actual handlers/pages with explicit in-memory service boundaries.
 // No auth provider, database, Stripe network, email, storage or AI is contacted.
 function loadModule(path: string, deps: Record<string, unknown>) {
+  deps = { ...posthogMocks, ...deps };
   const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
   } }).outputText;

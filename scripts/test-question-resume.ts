@@ -1,3 +1,4 @@
+import { posthogMocks } from "./helpers/posthog-mocks";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -39,6 +40,7 @@ function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; 
     userPreferences: { findUnique: async () => ({ applicationAnswersJson: '{}' }) },
   };
   const dependencies: Record<string, unknown> = {
+    ...posthogMocks,
     "@/lib/application-answer-continuation": continuation,
     "@/lib/application-worker-gates": { queueAnswerContinuation: async (input: any) => { resumes++; assert.equal(input.userId, "owner"); return "continuation_proof_missing"; } },
     "@/lib/candidate-facts": facts, "@/lib/application-answers": answers,

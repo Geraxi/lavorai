@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { syncAtsJobs } from "@/lib/scrapers/sync-jobs";
 import { getCurrentUser } from "@/lib/session";
@@ -31,6 +32,7 @@ async function handle(request: NextRequest) {
     const result = await syncAtsJobs();
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
+    await captureApiException(err, "/api/admin/sync-jobs");
     console.error("[api/admin/sync-jobs]", err);
     return NextResponse.json(
       { error: "internal", message: err instanceof Error ? err.message : "Errore" },

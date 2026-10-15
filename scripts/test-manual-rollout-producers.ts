@@ -1,3 +1,4 @@
+import { posthogMocks } from "./helpers/posthog-mocks";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -28,6 +29,7 @@ function load(path: string, extra: Record<string, any> = {}) {
     zod: { z }, ...extra,
   };
   const module = { exports: {} as Record<string, any> };
+  Object.assign(dependencies, posthogMocks);
   const code = ts.transpileModule(readFileSync(path, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
   }).outputText;

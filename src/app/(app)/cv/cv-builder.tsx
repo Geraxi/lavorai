@@ -97,7 +97,7 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
   }
 
   return (
-    <>
+    <div data-ph-mask className="ph-no-capture contents">
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.022em", margin: 0 }}>
@@ -230,7 +230,7 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
           <LinksSection profile={profile} update={update} />
         </div>
       )}
-    </>
+    </div>
   );
 }
 

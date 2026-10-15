@@ -1,3 +1,4 @@
+import { posthogMocks } from "./helpers/posthog-mocks";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import vm from "node:vm";
@@ -10,6 +11,7 @@ import { ADMIN_ROLE_TAXONOMY, classifyAdminRole, normalizeAdminRole } from "../s
 import { isAdmin, isTestAccount } from "../src/lib/admin";
 
 function loadModule(path: string, dependencies: Record<string, unknown>) {
+  dependencies = { ...posthogMocks, ...dependencies };
   const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
   } }).outputText;

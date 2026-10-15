@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncGmailMessages, hasGmailConnected } from "@/lib/gmail-client";
@@ -90,6 +91,7 @@ export async function GET(request: NextRequest) {
         // So we need at least 1 second between users
         await new Promise((resolve) => setTimeout(resolve, 1100));
       } catch (err) {
+        await captureApiException(err, "/api/cron/gmail-sync");
         console.error(`[cron/gmail-sync] Error syncing user ${account.userId}:`, err);
         stats.errors.push({
           userId: account.userId,
@@ -108,6 +110,7 @@ export async function GET(request: NextRequest) {
       ...stats,
     });
   } catch (err) {
+    await captureApiException(err, "/api/cron/gmail-sync");
     console.error("[cron/gmail-sync] Fatal error:", err);
     return NextResponse.json(
       {

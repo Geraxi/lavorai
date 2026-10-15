@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { isAdmin } from "@/lib/admin";
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       });
       return NextResponse.json({ ok: true, article });
     } catch (error) {
+      await captureApiException(error, "/api/admin/editorial");
       console.error("[admin/editorial] generate", error);
       return NextResponse.json({ error: "generation_failed", message: error instanceof Error ? error.message : "Impossibile generare la bozza." }, { status: 500 });
     }

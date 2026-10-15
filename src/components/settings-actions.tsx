@@ -1,5 +1,6 @@
 "use client";
 
+import { captureFunnel } from "@/lib/posthog/client";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/design/icon";
@@ -15,6 +16,8 @@ export function SubscriptionActions({
   const [loading, setLoading] = useState<string | null>(null);
 
   async function upgrade(target: "pro" | "pro_plus") {
+    captureFunnel("upgrade_clicked", { target_plan: target });
+    captureFunnel("plan_selected", { plan: target });
     setLoading(target);
     try {
       const res = await fetch("/api/stripe/checkout", {

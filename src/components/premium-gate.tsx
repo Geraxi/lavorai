@@ -1,3 +1,4 @@
+import { AnalyticsUpgradeWall } from "@/components/analytics-upgrade-wall";
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { FEATURE_LABELS, TIERS, type PremiumFeature } from "@/lib/billing";
@@ -27,6 +28,7 @@ export function PremiumGate({
         textAlign: "center",
       }}
     >
+      <AnalyticsUpgradeWall target="pro_plus" />
       <div
         style={{
           display: "inline-block",
@@ -138,6 +140,7 @@ export function PremiumGate({
 
       <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
         <Link
+          data-analytics-upgrade="pro_plus"
           href={isLoggedIn ? "/pricing?upgrade=pro_plus" : "/signup?plan=pro_plus"}
           className="ds-btn ds-btn-primary"
           style={{ padding: "13px 26px", fontSize: 14.5 }}

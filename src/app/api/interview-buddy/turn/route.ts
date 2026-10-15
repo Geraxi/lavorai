@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import {
@@ -115,6 +116,7 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (err) {
+    await captureApiException(err, "/api/interview-buddy/turn");
     console.error("[/api/interview-buddy/turn]", err);
     return NextResponse.json(
       {

@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
 import { z } from "zod";
@@ -94,6 +95,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
+    await captureApiException(err, "/api/auth/password-reset/confirm");
     console.error("[/api/auth/password-reset/confirm]", err);
     return NextResponse.json(
       { error: "internal", message: "Errore interno. Riprova." },

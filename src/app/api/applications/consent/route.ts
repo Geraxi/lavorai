@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { freePlanBlock } from "@/lib/free-plan";
 import { requiresPaymentMethodBeforeApp, usesFreeQuota } from "@/lib/billing";
 import { applicationRolloutConfig, rolloutCreationBlocked } from "@/lib/application-rollout";
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
       await enqueueApplication(a.id, { preserveClaim: true });
       enqueued++;
     } catch (err) {
+      await captureApiException(err, "/api/applications/consent");
       console.error("[consent] enqueue failed for", a.id, err);
     }
   }

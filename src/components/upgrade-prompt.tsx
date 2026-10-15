@@ -1,3 +1,4 @@
+import { AnalyticsUpgradeWall } from "@/components/analytics-upgrade-wall";
 import Link from "next/link";
 import { Ban, Rocket, Zap } from "lucide-react";
 import { prisma } from "@/lib/db";
@@ -95,6 +96,7 @@ export async function UpgradePrompt({
         }`,
       }}
     >
+      <AnalyticsUpgradeWall target="pro" />
       <div
         aria-hidden
         style={{
@@ -158,6 +160,7 @@ export async function UpgradePrompt({
       </div>
 
       <Link
+        data-analytics-upgrade="pro"
         href="/settings#billing"
         style={{
           flexShrink: 0,

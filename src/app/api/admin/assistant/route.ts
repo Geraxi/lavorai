@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import OpenAI from "openai";
 import { prisma } from "@/lib/db";
@@ -79,6 +80,7 @@ ${snapshot}
 
     return NextResponse.json({ ok: true, reply, provider: "openai", model: MODEL });
   } catch (error) {
+    await captureApiException(error, "/api/admin/assistant");
     console.error("[admin/assistant]", error);
     return NextResponse.json(
       { error: "ai_error", message: error instanceof Error ? error.message : "AI failure" },

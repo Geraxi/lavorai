@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import OpenAI from "openai";
 import { prisma } from "@/lib/db";
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
     });
     text = (result.text ?? "").trim();
   } catch (err) {
+    await captureApiException(err, "/api/interview/transcribe");
     console.error("[transcribe] Whisper failed", err);
     return NextResponse.json(
       {
