@@ -192,7 +192,7 @@ export default function ApplicationsPage() {
         toast.error(body?.message ?? t("genericError"));
         return;
       }
-      toast.success(`${body.enqueued} candidature accodate`);
+      toast.success(tr(`${body.enqueued} candidature accodate`, `${body.enqueued} applications queued`));
     } catch {
       toast.error(t("networkError"));
     }
@@ -268,7 +268,7 @@ export default function ApplicationsPage() {
               className="ds-btn"
               type="button"
               disabled={allRows.length === 0}
-              onClick={() => exportCsv(allRows)}
+              onClick={() => exportCsv(allRows, en)}
             >
               <Icon name="download" size={13} /> {t("exportCsv")}
             </button>
@@ -411,13 +411,13 @@ export default function ApplicationsPage() {
                         {a.delivery ? <span className="ds-chip" title={a.delivery.detail}
                           style={{ color: a.delivery.tone === "warning" ? "var(--amber)" : undefined }}>
                           {a.delivery.label}
-                        </span> : <StatusChip status={a.status} />}
-                        {["colloquio", "offerta", "rifiutata"].includes(a.status) && <StatusChip status={a.status} />}
-                        <ReplyKindChip lastReplyKind={a.lastReplyKind} replyCount={a.replyCount} />
+                        </span> : <StatusChip status={a.status} locale={en ? "en" : "it"} />}
+                        {["colloquio", "offerta", "rifiutata"].includes(a.status) && <StatusChip status={a.status} locale={en ? "en" : "it"} />}
+                        <ReplyKindChip locale={en ? "en" : "it"} lastReplyKind={a.lastReplyKind} replyCount={a.replyCount} />
                         {a.ghostingDays !== undefined && a.ghostingDays >= 7 && !a.lastReplyAt && (
                           <span
                             className="ds-chip"
-                            title={`Nessuna risposta dopo ${a.ghostingDays} giorni. Normale per molti ATS — considera di inviare un follow-up.`}
+                            title={tr(`Nessuna risposta dopo ${a.ghostingDays} giorni. Normale per molti ATS — considera di inviare un follow-up.`, `No reply after ${a.ghostingDays} days. Common with many ATS portals — consider a follow-up.`)}
                             style={{
                               background: "var(--bg-sunken)",
                               color: "var(--fg-muted)",
@@ -425,13 +425,13 @@ export default function ApplicationsPage() {
                               cursor: "help",
                             }}
                           >
-                            {a.ghostingDays}g senza risposta
+                            {tr(`${a.ghostingDays}g senza risposta`, `${a.ghostingDays}d without a reply`)}
                           </span>
                         )}
                         {a.submittedVia?.startsWith("portal_") &&
                           a.status === "inviata" && (
                             <span
-                              title="Submit diretto sul form ATS dell'azienda. Apertura email non tracciabile — riceverai conferme sul tuo Gmail."
+                              title={tr("Submit diretto sul form ATS dell'azienda. Apertura email non tracciabile — riceverai conferme sul tuo Gmail.", "Submitted through the company’s ATS form. Email opens are not tracked; check your inbox for confirmations.")}
                               style={{
                                 fontSize: 10,
                                 color: "var(--fg-subtle)",
@@ -450,7 +450,7 @@ export default function ApplicationsPage() {
                       <a
                         href={`/api/applications/${a.id}/document?kind=${a.hasCvPdf ? "pdf" : "cv"}`}
                         download
-                        title={`Scarica CV${a.hasCvPdf ? " PDF" : " DOCX"} ottimizzato per ${a.role}`}
+                        title={tr(`Scarica CV${a.hasCvPdf ? " PDF" : " DOCX"} ottimizzato per ${a.role}`, `Download tailored ${a.hasCvPdf ? "PDF" : "DOCX"} CV for ${a.role}`)}
                         className="ds-btn ds-btn-sm ds-btn-ghost"
                         style={{ padding: "3px 8px", fontSize: 11, display: "inline-flex", alignItems: "center", gap: 4 }}
                       >
@@ -517,15 +517,15 @@ export default function ApplicationsPage() {
   );
 }
 
-function exportCsv(rows: Row[]): void {
+function exportCsv(rows: Row[], en: boolean): void {
   if (rows.length === 0) return;
-  const header = ["Azienda", "Ruolo", "Luogo", "Modalità", "Stato", "Match", "Inviata"];
+  const header = en ? ["Company", "Role", "Location", "Work mode", "Status", "Match", "Recorded"] : ["Azienda", "Ruolo", "Luogo", "Modalità", "Stato", "Match", "Registrata"];
   const body = rows.map((r) => [
     r.company,
     r.role,
     r.location,
     r.mode,
-    r.delivery?.label ?? r.status,
+    r.delivery?.label ?? applicationLabel(r.status, en ? "en" : "it"),
     r.match == null ? "" : String(r.match),
     r.applied,
   ]);

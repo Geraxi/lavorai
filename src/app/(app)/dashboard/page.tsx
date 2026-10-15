@@ -142,7 +142,7 @@ export default async function DashboardPage() {
                 <Link href="/interview" className="ds-btn ds-btn-primary" style={{ marginTop: 14 }}><Icon name="sparkles" size={13} /> {tr("Prepara un colloquio", "Practice an interview")}</Link>
               </section>
               <AutoApplyReadinessCard readiness={readiness} locale={locale} />
-              {!allDone && <OnboardingChecklist state={onboarding} />}
+              {!allDone && <OnboardingChecklist state={onboarding} locale={locale} />}
               <section className="workspace-panel">
                 <h2>{tr("Risposte e aggiornamenti", "Replies and updates")}</h2>
                 <p className="workspace-muted">{tr("Leggi i messaggi ricevuti e aggiorna lo stato delle tue candidature.", "Read received messages and update your application status.")}</p>

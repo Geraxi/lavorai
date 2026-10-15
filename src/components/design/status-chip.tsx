@@ -38,7 +38,13 @@ const MAP: Record<ApplicationStatus, { label: string; className: string }> = {
   needs_session: { label: "Ri-login", className: "ds-chip ds-chip-amber" },
 };
 
-export function StatusChip({ status }: { status: ApplicationStatus | string }) {
+const ENGLISH: Record<ApplicationStatus, string> = {
+  pronta: "CV ready", inviata: "Submitted", vista: "Viewed", colloquio: "Interview", offerta: "Offer", rifiutata: "Rejected",
+  queued: "Queued", optimizing: "Optimizing…", ready_to_apply: "CV ready", applying: "Submitting…",
+  success: "Submitted", failed: "Error", needs_2fa: "2FA", needs_session: "Sign in again",
+};
+
+export function StatusChip({ status, locale = "it" }: { status: ApplicationStatus | string; locale?: string }) {
   const def = (MAP as Record<string, (typeof MAP)[ApplicationStatus]>)[status] ?? MAP.inviata;
-  return <span className={cn(def.className)}>{def.label}</span>;
+  return <span className={cn(def.className)}>{locale === "en" ? ENGLISH[status as ApplicationStatus] ?? ENGLISH.inviata : def.label}</span>;
 }

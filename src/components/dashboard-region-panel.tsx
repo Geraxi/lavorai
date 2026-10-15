@@ -12,6 +12,7 @@ import Link from "next/link";
 import { Icon } from "@/components/design/icon";
 import { REGIONS, type RegionInfo } from "@/lib/city-centroids";
 import { angularDistance, type CityMarker, type GlobeJob, type PinKind } from "@/lib/dashboard-globe-data";
+import { regionDisplayName } from "@/lib/globe-presentation";
 import { PIN_COLORS } from "./dashboard-globe";
 import { useDashboardFocus } from "./dashboard-focus";
 
@@ -47,12 +48,12 @@ export function DashboardRegionPanel({ markers }: { markers: CityMarker[] }) {
         <option value="">{tr("Tutto il mondo", "Worldwide")}</option>
         {groups.map((g) => (
           <optgroup key={g} label={en ? ({ Italia: "Italy", Paesi: "Countries", Aree: "Areas" }[g]) : g}>
-            {REGIONS.filter((r) => r.group === g).map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}
+            {REGIONS.filter((r) => r.group === g).map((r) => <option key={r.key} value={r.key}>{regionDisplayName(r, en ? "en" : "it")}</option>)}
           </optgroup>
         ))}
       </select>
       <div className="dg-region-quick">
-        {QUICK.map((k) => { const r = REGIONS.find((x) => x.key === k)!; return <button key={k} type="button" className={`dg-pill${region?.key === k ? " is-active" : ""}`} onClick={() => setRegionKey(region?.key === k ? null : k)}>{r.name}</button>; })}
+        {QUICK.map((k) => { const r = REGIONS.find((x) => x.key === k)!; return <button key={k} type="button" className={`dg-pill${region?.key === k ? " is-active" : ""}`} onClick={() => setRegionKey(region?.key === k ? null : k)}>{regionDisplayName(r, en ? "en" : "it")}</button>; })}
       </div>
       {region && stats && (
         <div className="fit-body fit-scroll dg-region-body">
@@ -63,7 +64,7 @@ export function DashboardRegionPanel({ markers }: { markers: CityMarker[] }) {
             <span><b>{stats.cities}</b> {tr("città", stats.cities === 1 ? "city" : "cities")}</span>
           </div>
           {stats.jobs.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--fg-muted)", padding: "6px 0" }}>{tr("Nessuna opportunità trovata in", "No opportunities found in")} {region.name} {tr("per ora.", "yet.")}</div>
+            <div style={{ fontSize: 12, color: "var(--fg-muted)", padding: "6px 0" }}>{tr("Nessuna opportunità trovata in", "No opportunities found in")} {regionDisplayName(region, en ? "en" : "it")} {tr("per ora.", "yet.")}</div>
           ) : (
             stats.jobs.map((j) => (
               <Link key={`${j.kind}-${j.id}`} href={j.href} className="fit-row" style={{ gridTemplateColumns: "8px 1fr auto", textDecoration: "none", color: "inherit", padding: "6px 0" }}>
@@ -76,7 +77,7 @@ export function DashboardRegionPanel({ markers }: { markers: CityMarker[] }) {
               </Link>
             ))
           )}
-          <Link href={`/jobs?where=${encodeURIComponent(region.name)}`} className="fit-link" style={{ marginTop: 6 }}>{tr("Tutte le posizioni in", "All roles in")} {region.name} <Icon name="arrow-right" size={12} /></Link>
+          <Link href={`/jobs?where=${encodeURIComponent(region.name)}`} className="fit-link" style={{ marginTop: 6 }}>{tr("Tutte le posizioni in", "All roles in")} {regionDisplayName(region, en ? "en" : "it")} <Icon name="arrow-right" size={12} /></Link>
         </div>
       )}
     </div>

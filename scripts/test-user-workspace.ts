@@ -1,4 +1,9 @@
 import assert from "node:assert/strict";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { StatusChip } from "../src/components/design/status-chip";
+import { ReplyKindChip } from "../src/components/reply-kind-chip";
+import { globeCopy, regionDisplayName } from "../src/lib/globe-presentation";
 import { pipelineLane } from "../src/lib/application-pipeline";
 import { discoverMatchScore } from "../src/lib/discover-match-score";
 import { deliveryCopy } from "../src/lib/application-presentation";
@@ -31,3 +36,15 @@ assert.ok(score != null && score < 100 && score > 0);
 assert.equal(deliveryCopy(delivery("unconfirmed"), "en")?.label, "Outcome unverified");
 assert.equal(deliveryCopy(delivery("unconfirmed"), "it")?.label, "Esito da verificare");
 console.log("PASS pipeline evidence, manual vs automatic outcomes, material sent counts, missing CV scores and localized delivery presentation.");
+
+for (const [status, english, italian] of [["colloquio", "Interview", "Colloquio"], ["offerta", "Offer", "Offerta"], ["rifiutata", "Rejected", "Rifiutata"], ["needs_session", "Sign in again", "Ri-login"]]) {
+  assert.ok(renderToStaticMarkup(createElement(StatusChip, { status, locale: "en" })).includes(english));
+  assert.ok(renderToStaticMarkup(createElement(StatusChip, { status, locale: "it" })).includes(italian));
+}
+assert.match(renderToStaticMarkup(createElement(ReplyKindChip, { lastReplyKind: "rifiutata", locale: "en" })), /Possible rejection/);
+assert.match(renderToStaticMarkup(createElement(ReplyKindChip, { lastReplyKind: "rifiutata", locale: "it" })), /Possibile rifiuto/);
+assert.equal(renderToStaticMarkup(createElement(ReplyKindChip, { replyCount: 0, locale: "en" })), "");
+assert.equal(globeCopy("en").cta.saved, "Approve and submit");
+assert.equal(globeCopy("it").cta.saved, "Approva e invia");
+assert.equal(regionDisplayName({ key: "regno-unito", name: "Regno Unito" }, "en"), "United Kingdom");
+console.log("PASS shared status chips preserve heuristic qualifiers and support English/Italian; globe copy is localized.");

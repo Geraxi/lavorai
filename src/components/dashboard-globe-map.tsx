@@ -14,11 +14,17 @@ import Link from "next/link";
 import type { CityMarker, GlobeStats, PinKind } from "@/lib/dashboard-globe-data";
 import { PIN_COLORS, buildPins, JobCard, type GlobeFilter, type GlobePin } from "./dashboard-globe";
 import { useDashboardFocus } from "./dashboard-focus";
+import { globeCopy, regionDisplayName } from "@/lib/globe-presentation";
 import { regionAltitude } from "@/lib/city-centroids";
+
+function GlobeLoading() {
+  const locale = useLocale();
+  return <div className="dg-fallback"><div className="dg-fallback-earth" /><span>{globeCopy(locale).loading}</span></div>;
+}
 
 const DashboardGlobe = dynamic(() => import("./dashboard-globe").then((m) => m.DashboardGlobe), {
   ssr: false,
-  loading: () => <div className="dg-fallback"><div className="dg-fallback-earth" /><span>Carico il mondo…</span></div>,
+  loading: () => <GlobeLoading />,
 });
 
 const FILTERS: Array<{ key: GlobeFilter; label: string }> = [
@@ -71,7 +77,7 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
         <div className="dg-status-title"><span className="dg-live" /> {tr("Opportunità registrate", "Recorded opportunities")}</div>
         <div className="dg-status-line"><b>{stats.analyzed.toLocaleString(en ? "en-GB" : "it-IT")}</b> {tr("nel catalogo", "in the catalog")} · <b>{stats.compatible.toLocaleString(en ? "en-GB" : "it-IT")}</b> {tr("compatibili", "matching")} · <b>{stats.newOpportunities.toLocaleString(en ? "en-GB" : "it-IT")}</b> {tr("nuove", "new")}</div>
         <div className="dg-status-searching">{tr("Dati aggiornati al caricamento", "Data as of page load")}</div>
-        {region && <button type="button" className="dg-zone" onClick={() => setRegionKey(null)}>{tr("Zona", "Area")}: <b>{region.name}</b> <span aria-hidden="true">×</span></button>}
+        {region && <button type="button" className="dg-zone" onClick={() => setRegionKey(null)}>{tr("Zona", "Area")}: <b>{regionDisplayName(region, en ? "en" : "it")}</b> <span aria-hidden="true">×</span></button>}
       </div>
 
       <div className="dg-legend" aria-label={tr("Legenda", "Legend")}>

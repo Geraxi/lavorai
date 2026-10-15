@@ -53,6 +53,10 @@ const applications = window.__empty ? [] : phases.map((phase,i) => ({ id:'app-'+
 const messages = window.__empty ? [] : applications.slice(0,4).map((a,i)=> ({id:'application_reply:'+i, source:i===3?'gmail':'application_reply', from:'Recruiter '+i+' <recruiter@example.test>', subject:['Interview availability','Application received','Delivery failed','Role update'][i], snippet:'Thank you for your interest in this position.', bodyText:'Hello Alex,\\n\\nThank you for your interest. Can we arrange a conversation next week?\\n\\nThis is a synthetic message for browser QA.\\n<img src="https://tracker.invalid/pixel"><script>alert(1)</script>', date:now, kind:['colloquio','ricevuta','bounce','risposta'][i], label:['Possible interview','Application receipt','Delivery failure','Possible recruiter reply'][i], read:i===3?false:null, applicationId:a.id, applicationStatus:a.userStatus, company:a.job.company, jobTitle:a.job.title, jobRelated:true}));
 const materials = applications.map(a => ({id:a.id,title:a.job.title,company:a.job.company,location:a.job.location,jobUrl:a.job.url,createdAt:a.createdAt,completedAt:null,status:a.status,submittedVia:a.submittedVia,delivery:a.delivery,hasPdf:false,hasDocx:true,hasLetter:a.hasCoverLetterDocx,letterText:a.coverLetterText,language:a.cvLanguage,match:a.atsScore,lastReplyAt:a.lastReplyAt,lastReplyKind:a.lastReplyKind}));
 window.__globe = { markers: window.__empty ? [] : [{ key:'milan', name:'Milano', country:'IT', lat:45.46,lng:9.19,counts:{open:4,sent:0,desired:0,saved:0},jobs:jobs.map(j=>({...j,href:'/jobs/'+j.id,match:j.matchScore,kind:'open',isNew:false})),isNew:false}], stats:{analyzed:window.__empty?0:4,compatible:window.__empty?0:4,newOpportunities:0,counts:{open:window.__empty?0:4,sent:0,desired:0,saved:0}}, featuredKeys:[] };
+if(new URLSearchParams(location.search).has('globeLabels')) {
+  const counts={open:1,sent:1,desired:1,saved:1}; window.__globe.markers[0].counts=counts; window.__globe.stats.counts=counts;
+  window.__globe.markers[0].jobs.forEach((job,i)=>job.kind=['open','sent','desired','saved'][i]);
+}
 window.fetch = async (url, options={}) => {
   window.__requests.push({url:String(url),method:options.method||'GET',body:options.body});
   if(String(url).includes('/api/applications/apply')) return new Response(JSON.stringify({message:'Synthetic blocked submission'}),{status:403});
@@ -110,34 +114,65 @@ try {
       if(route==='applications') await page.locator('.pipeline-card').first().waitFor();
       if(route==='dashboard') { await page.locator('.dg-globe canvas').waitFor(); if(locale==='en') await page.getByText('Automatic submissions are paused.',{exact:false}).waitFor(); }
       await page.mouse.move(0,0);
-      await page.screenshot({path:join(out,route+'-'+locale+'-desktop.png'),fullPage:true,animations:'disabled'});
+      await page.screenshot({path:join(out,route+'-'+locale+'-desktop.png'),fullPage:false,animations:'disabled'});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,route+' desktop overflow');
       await page.setViewportSize({width:390,height:844});
-      await page.screenshot({path:join(out,route+'-'+locale+'-mobile.png'),fullPage:true,animations:'disabled'});
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      await page.screenshot({path:join(out,route+'-'+locale+'-mobile.png'),fullPage:false,animations:'disabled'});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,route+' mobile overflow');
       await page.locator('.lavorai-main').evaluate(el=>{el.scrollTop=el.scrollHeight});
-      await page.screenshot({path:join(out,route+'-'+locale+'-mobile-bottom.png'),fullPage:true,animations:'disabled'});
+      await page.screenshot({path:join(out,route+'-'+locale+'-mobile-bottom.png'),fullPage:false,animations:'disabled'});
+      if(route==='applications' && locale==='en') {
+        await page.locator('.pipeline-board').evaluate(el=>{ const main=el.closest('.lavorai-main'); main.scrollTop += el.getBoundingClientRect().top - 66; });
+        await page.screenshot({path:join(out,'applications-en-mobile-board.png'),fullPage:false,animations:'disabled'});
+      }
       await page.setViewportSize({width:1440,height:1000});
     }
+  }
+  for(const locale of ['en','it']) {
+    await page.goto(base+'/dashboard?locale='+locale+'&globeLabels=1');
+    await page.locator('.dg-globe canvas').waitFor();
+    const kinds=locale==='en' ? [['Opportunity','Apply'],['Submitted','View application'],['Preferred','Search here'],['Saved','Approve and submit']] : [['Opportunità','Invia candidatura'],['Inviata','Vedi candidatura'],['Desiderata','Cerca qui'],['Salvata','Approva e invia']];
+    for(let index=0;index<kinds.length;index++) {
+      const [label,action]=kinds[index];
+      await page.locator('.dg-filters [role=tab]').nth(index+1).click();
+      await page.waitForFunction(expected => document.querySelector('.dg-globe .dg-pin-body')?.getAttribute('aria-label')?.endsWith(expected.toLowerCase()),label);
+      await page.locator('.dg-globe .dg-pin-body').first().evaluate(el=>el.click());
+      const webgl=page.locator('.dg-globe .dg-card-cta').first();
+      await page.waitForFunction(expected => document.querySelector('.dg-globe .dg-card-cta')?.textContent?.includes(expected),action);
+      assert.ok((await webgl.textContent()).includes(action),'WebGL '+locale+' '+action);
+      assert.equal(await page.locator('.dg-globe .dg-card .dg-chip').first().textContent(),label);
+      assert.equal(await page.locator('.dg-mobile-cards .dg-card .dg-chip').first().textContent(),label);
+      assert.ok((await page.locator('.dg-mobile-cards .dg-card-cta').first().textContent()).includes(action),'React card '+locale+' '+action);
+    }
+    const select=page.locator('.dg-region-select');
+    await select.selectOption('regno-unito');
+    assert.equal(await select.locator('option:checked').textContent(),locale==='en'?'United Kingdom':'Regno Unito');
+    await page.goto(base+'/dashboard?locale='+locale);
+    await page.locator('.dg-globe .dg-pin-body').first().waitFor({state:'attached'});
+    await page.locator('.dg-globe .dg-pin-body').first().evaluate(el=>el.click());
+    await page.waitForFunction(expected => document.querySelector('.dg-globe .dg-card-more')?.textContent?.includes(expected),locale==='en'?'4 opportunities':'4 opportunità');
   }
   await page.setViewportSize({width:390,height:844});
   await page.goto(base+'/inbox?locale=en');
   await page.getByRole('button',{name:'Open all sections'}).click();
   await page.locator('.lavorai-sidebar-drawer').waitFor();
   assert.equal(await page.locator('.lavorai-sidebar-drawer').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'Mobile navigation overflow');
-  await page.screenshot({path:join(out,'sidebar-mobile.png'),fullPage:true,animations:'disabled'});
+  await page.screenshot({path:join(out,'sidebar-mobile.png'),fullPage:false,animations:'disabled'});
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('.lavorai-sidebar-drawer').count(),0);
   await page.setViewportSize({width:1440,height:1000});
   await page.goto(base+'/applications?locale=en');
   await page.getByRole('button',{name:'Table',exact:true}).click();
+  await page.locator('table').getByText('Interview',{exact:true}).waitFor();
+  await page.locator('table').getByText('Possible interview',{exact:true}).waitFor();
   await page.locator('table tbody tr').first().focus(); await page.keyboard.press('Enter');
   await page.locator('.ds-drawer.open').waitFor();
   await page.getByText('No status reported.',{exact:true}).waitFor();
-  await page.screenshot({path:join(out,'application-details.png'),fullPage:true,animations:'disabled'});
+  await page.screenshot({path:join(out,'application-details.png'),fullPage:false,animations:'disabled'});
   await page.setViewportSize({width:390,height:844});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile drawer overflow');
-  await page.screenshot({path:join(out,'application-details-mobile.png'),fullPage:true,animations:'disabled'});
+  await page.screenshot({path:join(out,'application-details-mobile.png'),fullPage:false,animations:'disabled'});
   await page.setViewportSize({width:1440,height:1000});
   await page.getByRole('link',{name:'Open listing',exact:true}).focus();
   await page.keyboard.press('Shift+Tab');
@@ -150,10 +185,10 @@ try {
   assert.equal(await page.locator('.pipeline-card').count(),0);
   await page.goto(base+'/applications?locale=en&empty=1');
   await page.getByText('No applications recorded yet.',{exact:false}).waitFor();
-  await page.screenshot({path:join(out,'applications-empty.png'),fullPage:true,animations:'disabled'});
+  await page.screenshot({path:join(out,'applications-empty.png'),fullPage:false,animations:'disabled'});
   await page.goto(base+'/applications?locale=en&error=1');
   await page.getByRole('alert').waitFor();
-  await page.screenshot({path:join(out,'applications-error.png'),fullPage:true,animations:'disabled'});
+  await page.screenshot({path:join(out,'applications-error.png'),fullPage:false,animations:'disabled'});
   await page.goto(base+'/inbox?locale=en');
   await page.getByLabel('Message type',{exact:true}).selectOption('bounce');
   assert.equal(await page.locator('[aria-label="Messages"] button').count(),1);
@@ -183,7 +218,7 @@ try {
   for(const route of ['dashboard','discover','inbox','materiali']) {
     await page.goto(base+'/'+route+'?locale=en&empty=1');
     await page.locator('.lavorai-main').waitFor();
-    await page.screenshot({path:join(out,route+'-empty.png'),fullPage:true,animations:'disabled'});
+    await page.screenshot({path:join(out,route+'-empty.png'),fullPage:false,animations:'disabled'});
   }
   await page.goto(base+'/discover?locale=en');
   await page.locator('.discover-card').waitFor();
@@ -191,8 +226,8 @@ try {
   assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
   await page.getByRole('button',{name:'Dark theme',exact:true}).first().waitFor();
   assert.equal(await page.locator('.workspace-topbar').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)','Light topbar must contrast with dark text');
-  await page.screenshot({path:join(out,'discover-light.png'),fullPage:true,animations:'disabled'});
+  await page.screenshot({path:join(out,'discover-light.png'),fullPage:false,animations:'disabled'});
   assert.deepEqual(errors,[]); assert.deepEqual(external,[]);
-  console.log('PASS: five real views, Italian/English desktop/mobile, empty/error states, filters, safe email text, status update, keyboard save without application, tabs and light theme. No production requests.');
-  await writeFile(join(out,'qa-result.json'),JSON.stringify({passed:true,errors,external,screenshots:40,base},null,2));
+  console.log('PASS: five real views, Italian/English desktop/mobile, empty/error states, filters, safe email text, status update, keyboard save without application, tabs, light theme and English/Italian WebGL/React globe/status labels. No production requests.');
+  await writeFile(join(out,'qa-result.json'),JSON.stringify({passed:true,errors,external,screenshots:41,base},null,2));
 } finally { if(browser) await browser.close(); await new Promise(resolve=>server.close(resolve)); }

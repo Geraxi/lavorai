@@ -59,19 +59,19 @@ export function AutoApplyToggle({ compact = false, locale = "it" }: { compact?: 
         body: JSON.stringify({ autoApplyMode: nextMode }),
       });
       if (!res.ok) {
-        toast.error("Impossibile aggiornare l'auto-apply");
+        toast.error(tr("Impossibile aggiornare l'auto-apply", "Unable to update auto-apply"));
         return;
       }
       toast.success(
         nextMode === "off"
-          ? "Auto-apply in pausa"
+          ? tr("Auto-apply in pausa", "Auto-apply paused")
           : nextMode === "hybrid"
-            ? "Modalità: Approva prima"
-            : "Modalità: 100% Automatica",
+            ? tr("Modalità: Approva prima", "Mode: Approve first")
+            : tr("Modalità: 100% Automatica", "Mode: Fully automatic"),
       );
       mutate();
     } catch {
-      toast.error("Errore di rete");
+      toast.error(tr("Errore di rete", "Network error"));
     } finally {
       setBusy(false);
     }

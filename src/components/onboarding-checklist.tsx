@@ -8,7 +8,8 @@ export interface ChecklistState {
   hasFirstApplication: boolean;
 }
 
-export function OnboardingChecklist({ state }: { state: ChecklistState }) {
+export function OnboardingChecklist({ state, locale = "it" }: { state: ChecklistState; locale?: string }) {
+  const tr = (it: string, en: string) => locale === "en" ? en : it;
   const items: {
     key: keyof ChecklistState;
     label: string;
@@ -17,27 +18,27 @@ export function OnboardingChecklist({ state }: { state: ChecklistState }) {
   }[] = [
     {
       key: "hasUploadedCv",
-      label: "Carica il tuo CV",
-      cta: { href: "/onboarding", text: "Carica" },
+      label: tr("Carica il tuo CV", "Upload your CV"),
+      cta: { href: "/onboarding", text: tr("Carica", "Upload") },
       active: !state.hasUploadedCv,
     },
     {
       key: "hasSetPreferences",
-      label: "Imposta preferenze (ruoli, città, RAL)",
-      cta: { href: "/preferences", text: "Configura" },
+      label: tr("Imposta preferenze (ruoli, città, RAL)", "Set preferences (roles, locations, salary)"),
+      cta: { href: "/preferences", text: tr("Configura", "Configure") },
       active: state.hasUploadedCv && !state.hasSetPreferences,
     },
     {
       key: "hasBrowsedJobs",
-      label: "Sfoglia il job board",
-      cta: { href: "/jobs", text: "Apri" },
+      label: tr("Sfoglia il job board", "Browse the job board"),
+      cta: { href: "/jobs", text: tr("Apri", "Open") },
       active:
         state.hasUploadedCv && state.hasSetPreferences && !state.hasBrowsedJobs,
     },
     {
       key: "hasFirstApplication",
-      label: "Invia la prima candidatura con LavorAI",
-      cta: { href: "/jobs", text: "Candidati" },
+      label: tr("Invia la prima candidatura con LavorAI", "Submit your first application with LavorAI"),
+      cta: { href: "/jobs", text: tr("Candidati", "Apply") },
       active: false,
     },
   ];
@@ -71,7 +72,7 @@ export function OnboardingChecklist({ state }: { state: ChecklistState }) {
           >
             <Icon name="sparkles" size={13} />
           </div>
-          Iniziamo insieme
+          {tr("Iniziamo insieme", "Let’s get started")}
         </div>
         <div
           className="mono"

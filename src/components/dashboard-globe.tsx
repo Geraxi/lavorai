@@ -13,13 +13,14 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocale } from "next-intl";
+import { globeCopy, globePinLabel } from "@/lib/globe-presentation";
 import Globe, { type GlobeMethods } from "react-globe.gl";
 import { AmbientLight, DirectionalLight, Mesh, MeshPhongMaterial, SphereGeometry, TextureLoader } from "three";
 import type { CityMarker, GlobeJob, PinKind } from "@/lib/dashboard-globe-data";
 import { angularDistance } from "@/lib/dashboard-globe-data";
 
 export const PIN_COLORS: Record<PinKind, string> = { open: "#2ED69A", sent: "#3B82F6", desired: "#9B5CFF", saved: "#F6B73C" };
-export const PIN_LABELS: Record<PinKind, string> = { open: "Opportunità", sent: "Inviata", desired: "Desiderata", saved: "Salvata" };
 export type GlobeFilter = "all" | PinKind;
 
 const KIND_PRIORITY: PinKind[] = ["sent", "saved", "desired", "open"];
@@ -101,19 +102,21 @@ export function pickFeatured(pins: GlobePin[], visible: (p: GlobePin) => boolean
   return out.map((p) => p.key);
 }
 
-function cardCopy(pin: GlobePin) {
+function cardCopy(pin: GlobePin, locale: string) {
   const j = pin.job;
+  const copy = globeCopy(locale);
   return {
-    company: j?.company ?? (pin.kind === "desired" ? "Località desiderata" : "Azienda"),
-    role: j?.title ?? (pin.kind === "desired" ? "Cerchiamo opportunità qui" : "Nessun annuncio"),
-    cta: pin.kind === "sent" ? "Vedi candidatura" : pin.kind === "saved" ? "Approva e invia" : pin.kind === "desired" ? "Cerca qui" : "Invia candidatura",
+    company: j?.company ?? (pin.kind === "desired" ? copy.desiredLocation : copy.company),
+    role: j?.title ?? (pin.kind === "desired" ? copy.lookingHere : copy.noJobs),
+    cta: copy.cta[pin.kind],
     href: j?.href ?? `/jobs?q=${encodeURIComponent(pin.name)}`,
   };
 }
 
 /** Job card React (mobile / liste). */
 export function JobCard({ pin, selected, compact, onMore }: { pin: GlobePin; selected?: boolean; compact?: boolean; onMore?: (pin: GlobePin) => void }) {
-  const { company, role, cta, href } = cardCopy(pin);
+  const locale = useLocale();
+  const { company, role, cta, href } = cardCopy(pin, locale);
   const color = PIN_COLORS[pin.kind];
   return (
     <div className={`dg-card${selected ? " is-selected" : ""}${compact ? " is-compact" : ""}`} style={{ ["--c" as string]: color }}>
@@ -126,26 +129,26 @@ export function JobCard({ pin, selected, compact, onMore }: { pin: GlobePin; sel
         </div>
       </div>
       <div className="dg-card-chips">
-        <span className="dg-chip" style={{ ["--c" as string]: color }}>{PIN_LABELS[pin.kind]}</span>
+        <span className="dg-chip" style={{ ["--c" as string]: color }}>{globePinLabel(pin.kind, locale)}</span>
         {pin.job?.match != null && <span className="dg-chip" style={{ ["--c" as string]: PIN_COLORS.open }}>{Math.round(pin.job.match)}% match</span>}
       </div>
-      {pin.total > 1 && <button type="button" className="dg-card-more" onClick={(e) => { e.stopPropagation(); onMore?.(pin); }}>{pin.name} · {pin.total} opportunità →</button>}
+      {pin.total > 1 && <button type="button" className="dg-card-more" onClick={(e) => { e.stopPropagation(); onMore?.(pin); }}>{pin.name} · {pin.total} {globeCopy(locale).opportunities} →</button>}
       <a href={href} className="dg-card-cta" onClick={(e) => e.stopPropagation()}>{cta} <span aria-hidden="true">→</span></a>
     </div>
   );
 }
 
 /** Stessa card in HTML (per il layer HTML di three.js). */
-function jobCardHtml(pin: GlobePin, selected: boolean): string {
-  const { company, role, cta, href } = cardCopy(pin);
+function jobCardHtml(pin: GlobePin, selected: boolean, locale: string): string {
+  const { company, role, cta, href } = cardCopy(pin, locale);
   const color = PIN_COLORS[pin.kind];
   return `<div class="dg-card${selected ? " is-selected" : ""}" style="--c:${color}">
     <div class="dg-card-head">
       <span class="dg-logo" style="background:hsl(${hue(company)} 45% 22%);color:hsl(${hue(company)} 70% 78%)">${esc(initials(company))}</span>
       <div class="dg-card-txt"><div class="dg-card-co">${esc(company)}</div><div class="dg-card-role">${esc(role)}</div><div class="dg-card-loc">${esc(pin.name)}${pin.country ? `, ${esc(pin.country)}` : ""}</div></div>
     </div>
-    <div class="dg-card-chips"><span class="dg-chip" style="--c:${color}">${esc(PIN_LABELS[pin.kind])}</span>${pin.job?.match != null ? `<span class="dg-chip" style="--c:${PIN_COLORS.open}">${Math.round(pin.job.match)}% match</span>` : ""}</div>
-    ${pin.total > 1 ? `<button type="button" class="dg-card-more" data-more="1">${esc(pin.name)} · ${pin.total} opportunità →</button>` : ""}
+    <div class="dg-card-chips"><span class="dg-chip" style="--c:${color}">${esc(globePinLabel(pin.kind, locale))}</span>${pin.job?.match != null ? `<span class="dg-chip" style="--c:${PIN_COLORS.open}">${Math.round(pin.job.match)}% match</span>` : ""}</div>
+    ${pin.total > 1 ? `<button type="button" class="dg-card-more" data-more="1">${esc(pin.name)} · ${pin.total} ${esc(globeCopy(locale).opportunities)} →</button>` : ""}
     <a href="${esc(href)}" class="dg-card-cta">${cta} <span aria-hidden="true">→</span></a>
   </div>`;
 }
@@ -163,6 +166,7 @@ export function DashboardGlobe({
   /** Zona a fuoco (regione/paese/area): il globo ci zooma sopra. */
   focus?: GlobeFocus | null;
 }) {
+  const locale = useLocale();
   const ref = useRef<HTMLDivElement>(null);
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -301,7 +305,7 @@ export function DashboardGlobe({
   type Item = { type: "pin"; lat: number; lng: number; pin: GlobePin; card: boolean; selected: boolean };
   const items = useMemo<Item[]>(() => [
     ...pins.map((p): Item => { const selected = p.key === selectedKey; return { type: "pin", lat: p.lat, lng: p.lng, pin: p, selected, card: selected || (selectedKey == null && featured.includes(p.key)) }; }),
-  ], [pins, featured, selectedKey]);
+  ], [pins, featured, selectedKey, locale]);
 
   const makeEl = (d: object) => {
     const item = d as Item;
@@ -312,15 +316,15 @@ export function DashboardGlobe({
     el.style.setProperty("--c", color);
     const tip = p.job
       ? `<b>${esc(p.job.company ?? p.name)}</b><span>${esc(p.job.title)}</span>${p.job.match != null ? `<em>${Math.round(p.job.match)}% match</em>` : ""}`
-      : `<b>${esc(p.name)}</b><span>${esc(PIN_LABELS[p.kind])}</span>`;
+      : `<b>${esc(p.name)}</b><span>${esc(globePinLabel(p.kind, locale))}</span>`;
     el.innerHTML = `
-      <button type="button" class="dg-pin-body" aria-pressed="${selected ? "true" : "false"}" aria-label="${esc(p.name)}: ${p.total} ${esc(PIN_LABELS[p.kind].toLowerCase())}">
+      <button type="button" class="dg-pin-body" aria-pressed="${selected ? "true" : "false"}" aria-label="${esc(p.name)}: ${p.total} ${esc(globePinLabel(p.kind, locale).toLowerCase())}">
         <span class="dg-pin-glow"></span>
         <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 22s7-7.1 7-12.5A7 7 0 0 0 5 9.5C5 14.9 12 22 12 22z" fill="${color}" stroke="rgba(255,255,255,.85)" stroke-width="1.3"/><circle cx="12" cy="9.5" r="2.7" fill="#fff"/></svg>
         ${p.total > 1 ? `<span class="dg-pin-count">${p.total}</span>` : ""}
         ${card ? "" : `<div class="dg-tip">${tip}</div>`}
       </button>
-      ${card ? `<div class="dg-card-anchor">${jobCardHtml(p, selected)}</div>` : ""}`;
+      ${card ? `<div class="dg-card-anchor">${jobCardHtml(p, selected, locale)}</div>` : ""}`;
     const stop = (e: Event) => e.stopPropagation();
     el.addEventListener("pointerdown", stop);
     el.addEventListener("mousedown", stop);
