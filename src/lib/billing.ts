@@ -46,7 +46,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 0,
     priceDisplay: "€0",
     priceSuffix: "",
-    tagline: "7 giorni di Pro dalla registrazione, fino a 5 candidature al giorno. Senza carta né rinnovo automatico.",
+    tagline: "7 giorni di Pro dalla registrazione, fino a 5 candidature al giorno. Carta richiesta. Rinnovo al termine salvo disdetta.",
     monthlyApplications: 0,
     portals: 0,
     coverLetter: "basic",
@@ -239,7 +239,7 @@ export function effectiveTier(user: {
 }): Tier {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
   const base = normalizeTier(user.tier);
-  // Prova Pro senza carta (dalla registrazione): Free → Pro fino a scadenza.
+  // Prova Pro con carta richiesta (dalla registrazione): Free → Pro fino a scadenza.
   if (base === "free" && (trialEnd(user)?.getTime() ?? 0) > Date.now()) return "pro";
   return base;
 }

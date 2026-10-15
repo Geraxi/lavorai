@@ -3,10 +3,10 @@ import { z } from "zod";
 import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { TIERS, trialEnd, requiresPaymentMethodBeforeApp, type Tier } from "@/lib/billing";
+import { TIERS, trialEnd, type Tier } from "@/lib/billing";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
-import { ACTIVATION_MESSAGES, getActivationReadiness } from "@/lib/activation-readiness";
+import { CARD_REQUIRED_CHECKOUT } from "@/lib/stripe-subscription-access";
 
 export const runtime = "nodejs";
 
@@ -27,21 +27,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Require setup before activating a new trial. Expired users must still
-  // be able to resubscribe because onboarding is blocked after expiry.
-  if (requiresPaymentMethodBeforeApp(user)) {
-    const readiness = await getActivationReadiness(user.id, { requireDemo: true });
-    if (!readiness.ready) {
-      return NextResponse.json(
-        {
-          error: "activation_incomplete",
-          issue: readiness.issue,
-          message: ACTIVATION_MESSAGES[readiness.issue!],
-          redirect: "/onboarding",
-        },
-        { status: 409 },
-      );
-    }
+  // Card setup precedes profile onboarding. Email ownership is still required.
+  if (!user.emailVerified) {
+    return NextResponse.json({ error: "email_verification_required", message: "Verifica prima la tua email.", redirect: "/login?verify=required" }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);
@@ -135,6 +123,7 @@ export async function POST(request: NextRequest) {
       subscription_data: {
         metadata: {
           userId: user.id,
+          cardRequired: CARD_REQUIRED_CHECKOUT,
           tier,
           trial: hasRemainingTrial ? "registration_trial_with_payment_method" : "none",
           referralCredit: referralCoupon ? "1" : "0",

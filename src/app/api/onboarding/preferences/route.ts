@@ -1,3 +1,4 @@
+import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { OnboardingPreferencesSchema as Schema } from "@/lib/onboarding-preferences";
 import { prisma } from "@/lib/db";
@@ -12,6 +13,9 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
+
+  const block = onboardingAccessBlock(user);
+  if (block) return NextResponse.json(block, { status: block.status });
 
   const beforePreferences = await prisma.user.findUnique({
     where: { id: user.id },

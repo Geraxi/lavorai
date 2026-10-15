@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd } from "@/lib/billing";
-import { getActivationReadiness } from "@/lib/activation-readiness";
 import { StartMembershipActions } from "./start-membership-actions";
 import { UserPopup } from "@/components/user-popup";
 
@@ -20,10 +19,9 @@ export default async function StartMembershipPage({
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (isAdmin(user.email)) redirect("/dashboard");
+  if (!user.emailVerified) redirect("/login?verify=required");
   if (isApplicationAccessPaused(user)) redirect("/trial-expired");
-  if (!requiresPaymentMethodBeforeApp(user)) redirect("/dashboard");
-  const readiness = await getActivationReadiness(user.id, { requireDemo: true });
-  if (!readiness.ready) redirect("/onboarding");
+  if (!requiresPaymentMethodBeforeApp(user)) redirect(user.onboardedAt ? "/dashboard" : "/onboarding");
 
   const endsAt = trialEnd(user);
   const date = endsAt?.toLocaleDateString("it-IT", { day: "numeric", month: "long" }) ?? "tra 7 giorni";
@@ -43,20 +41,20 @@ export default async function StartMembershipPage({
             <span className="text-emerald-400">Nessun addebito oggi.</span>
           </h1>
           <p className="mt-6 max-w-lg text-base leading-7 text-slate-300 sm:text-lg">
-            Aggiungi un metodo di pagamento per entrare in LavorAI. Userai Pro fino al {date}; il primo addebito avverrà solo alla fine della prova, salvo disdetta.
+            Aggiungi una carta per continuare con CV e preferenze. La prova termina il {date}, 7 giorni dopo la registrazione; il primo addebito avverrà alla fine della prova, salvo disdetta.
           </p>
           <div className="mt-10 grid max-w-md grid-cols-3 gap-0 border-y border-white/10 text-sm text-slate-300">
             <div className="py-4 pr-4"><span className="block font-mono text-xs text-emerald-300">01 · OGGI</span><span className="mt-1 block">Metodo sicuro</span></div>
-            <div className="border-l border-white/10 py-4 pl-4"><span className="block font-mono text-xs text-emerald-300">02 · PROVA</span><span className="mt-1 block">7 giorni di Pro</span></div>
+            <div className="border-l border-white/10 py-4 pl-4"><span className="block font-mono text-xs text-emerald-300">02 · PROFILO</span><span className="mt-1 block">CV e preferenze</span></div>
             <div className="border-l border-white/10 py-4 pl-4"><span className="block font-mono text-xs text-emerald-300">03 · POI</span><span className="mt-1 block">€19,99/mese</span></div>
           </div>
         </div>
         <div className="rounded-[28px] border border-white/12 bg-slate-950/70 p-5 shadow-2xl shadow-emerald-950/40 backdrop-blur sm:p-8">
           <div className="flex items-start justify-between gap-4">
-            <div><p className="text-sm font-medium text-emerald-300">Accesso protetto</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Scegli come continuare</h2></div>
-            <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">7 giorni gratis</span>
+            <div><p className="text-sm font-medium text-emerald-300">Passaggio obbligatorio</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Aggiungi la tua carta</h2></div>
+            <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">Carta richiesta</span>
           </div>
-          <StartMembershipActions confirming={params.subscribed === "1"} canceled={params.canceled === "1"} />
+          <StartMembershipActions confirming={params.subscribed === "1" || user.subscriptionStatus === "pending_payment_method"} canceled={params.canceled === "1"} />
           <p className="mt-5 text-center text-xs leading-5 text-slate-400">Il pagamento viene gestito da Stripe. Apple Pay e Google Pay compaiono quando sono disponibili sul tuo dispositivo.</p>
         </div>
       </section>

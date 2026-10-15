@@ -8,7 +8,7 @@ import { isTestAccount } from "@/lib/admin";
 import { trialLifecycleStage } from "@/lib/lifecycle-cadence";
 
 /**
- * Prova Pro gratuita senza carta: parte alla registrazione.
+ * Finestra di prova dalla registrazione; accesso dopo conferma della carta.
  *
  *   - startTrial(userId): imposta trialEndsAt (grant admin per utenti esistenti)
  *   - sendTrialStartedEmail: giorno 0
@@ -37,30 +37,20 @@ export async function sendTrialStartedEmail(u: { id: string; email: string; name
   const ends = fmt(u.trialEndsAt, en);
   const { html, text } = renderBrandEmail({
     locale: u.locale,
-    eyebrow: en ? "Pro trial · day 1" : "Prova Pro · giorno 1",
-    preheader: en ? `Up to 5 applications per day during the trial until ${ends}. No card needed.` : `Fino a 5 candidature al giorno nella prova fino al ${ends}. Nessuna carta richiesta.`,
-    title: opts?.granted
-      ? en ? "We turned on Pro for you, for 7 days" : "Ti abbiamo attivato Pro per 7 giorni"
-      : en ? "Your 7 days of Pro start now" : "I tuoi 7 giorni di Pro iniziano adesso",
+    eyebrow: en ? "Complete your activation" : "Completa l’attivazione",
+    preheader: en ? `Your trial window ends on ${ends}. Card setup is required.` : `La finestra di prova termina il ${ends}. È richiesta una carta.`,
+    title: en ? "Your account is ready to set up" : "Il tuo account è pronto per il setup",
     greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
-    paragraphs: opts?.granted
-      ? en
-        ? [`You signed up when LavorAI still had a limited free plan. From today, and until <strong>${ends}</strong>, your account has Pro access with up to <strong>5 applications per day during the trial</strong>. Complete your CV and preferences to start receiving matching jobs, tailored applications, and replies in your Inbox.`, "No card and no automatic renewal. When the trial ends, you can choose whether to continue with Pro."]
-        : [`Ti sei iscritto quando LavorAI aveva ancora un piano gratuito limitato. Da oggi, e fino a <strong>${ends}</strong>, il tuo account ha accesso Pro con fino a <strong>5 candidature al giorno nella prova</strong>. Completa CV e preferenze per iniziare a ricevere offerte compatibili, candidature su misura e risposte nella tua Inbox.`, "Nessuna carta e nessun rinnovo automatico. Alla fine della prova potrai scegliere se continuare con Pro."]
-      : en
-        ? [`Until <strong>${ends}</strong> your account has Pro access: LavorAI finds jobs matching your profile, adapts your CV and cover letter, and applies for you — up to <strong>5 applications per day during the trial</strong>. No card needed.`, "To get the most out of it, do these two things today:"]
-        : [`Fino a <strong>${ends}</strong> il tuo account ha accesso Pro: LavorAI trova le offerte compatibili con il tuo profilo, adatta CV e lettera, e si candida per te — fino a <strong>5 candidature al giorno nella prova</strong>. Nessuna carta richiesta.`, "Per sfruttarla al massimo, fai queste due cose oggi:"],
-    bullets: opts?.granted
-      ? en
-        ? ["<strong>Complete your setup</strong>: upload your CV and choose 1 to 3 roles and a city.", "<strong>Then let LavorAI work</strong>: it finds matching jobs, tailors your documents, and submits applications on supported public forms."]
-        : ["<strong>Completa il setup</strong>: carica il CV e scegli 1-3 ruoli e una città.", "<strong>Poi lascia lavorare LavorAI</strong>: trova offerte compatibili, adatta i documenti e invia candidature sui moduli pubblici supportati."]
-      : en
-        ? ["<strong>Upload your CV</strong>, even a rough one: we rewrite it for every job.", "<strong>Set 1 to 3 roles and a city</strong> in Preferences. Everything else is automatic."]
-        : ["<strong>Carica il CV</strong>, anche grezzo: lo riscriviamo per ogni annuncio.", "<strong>Imposta 1-3 ruoli e una città</strong> nelle Preferenze. Il resto è automatico."],
+    paragraphs: en
+      ? [`Your trial window ends on <strong>${ends}</strong>, 7 days after signup. Add a card through Stripe before completing your profile and accessing Pro. Setup does not restart the trial.`, "Your selected plan renews at the end of the trial unless you cancel. Stripe shows the exact date and price before confirmation."]
+      : [`La finestra di prova termina il <strong>${ends}</strong>, 7 giorni dopo la registrazione. Aggiungi una carta tramite Stripe prima di completare il profilo e accedere a Pro. Il setup non riavvia la prova.`, "Il piano scelto si rinnova al termine della prova salvo disdetta. Stripe mostra la data e il prezzo esatti prima della conferma."],
+    bullets: en
+      ? ["<strong>Add your card</strong> and wait for Stripe confirmation.", "<strong>Complete your CV and preferences</strong>, then review your tailored preview."]
+      : ["<strong>Aggiungi la carta</strong> e attendi la conferma di Stripe.", "<strong>Completa CV e preferenze</strong>, poi controlla l’anteprima personalizzata."],
     highlights: [
       { label: en ? "Plan" : "Piano", value: "Pro" },
       { label: en ? "Ends" : "Scade", value: ends },
-      { label: en ? "Card" : "Carta", value: en ? "Not required" : "Non richiesta" },
+      { label: en ? "Card" : "Carta", value: en ? "Required" : "Obbligatoria" },
     ],
     cta: opts?.granted
       ? { label: en ? "Complete setup" : "Completa il setup", url: `${site()}/onboarding` }

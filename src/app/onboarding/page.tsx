@@ -3,8 +3,7 @@ import { prisma } from "@/lib/db";
 import { extractProfile, type ExtractedProfile } from "@/lib/cv-profile";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
-import { isAdmin } from "@/lib/admin";
-import { isApplicationAccessPaused } from "@/lib/billing";
+import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import OnboardingClient from "./onboarding-client";
 
 export const dynamic = "force-dynamic";
@@ -16,13 +15,10 @@ export default async function OnboardingPage() {
     return null;
   }
 
-  // Onboarding viene prima della raccolta del metodo di pagamento: l'utente
-  // deve poter caricare il CV e definire la ricerca prima di arrivare a
-  // Stripe. L'app vera e propria resta comunque bloccata dal gate in `(app)`.
   const user = await getCurrentUser();
-  if (user && !isAdmin(user.email)) {
-    if (isApplicationAccessPaused(user)) redirect("/trial-expired");
-  }
+  if (!user) redirect("/login");
+  const block = onboardingAccessBlock(user);
+  if (block) redirect(block.redirect);
 
   const cv = await prisma.cVDocument.findFirst({
     where: { userId: session.user.id },

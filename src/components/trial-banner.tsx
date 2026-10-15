@@ -4,7 +4,7 @@ import { trialState } from "@/lib/billing";
 import { Icon } from "@/components/design/icon";
 
 /**
- * Striscia discreta sotto la topbar durante la prova Pro senza carta.
+ * Striscia discreta sotto la topbar durante la prova Pro con carta richiesta.
  * Tono premium, niente allarme: "Pro attivo · 5 giorni" + progress bar +
  * link a Impostazioni. Sparisce quando l'utente paga o la prova finisce
  * (in quel caso parla UpgradePrompt).
@@ -58,7 +58,7 @@ export async function TrialBanner() {
             {last ? `Prova Pro: ${t.daysLeft === 1 ? "ultimo giorno" : "ultimi 2 giorni"}` : needsSetup ? `La tua prova Pro è attiva · ${t.daysLeft} giorni` : `Prova Pro attiva · ${t.daysLeft} giorni`}
           </strong>
           <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-            {last ? `Scade il ${ends}. Poi il tuo account resta in pausa finché non scegli Pro.` : needsSetup ? `Completa CV e preferenze per iniziare: fino a 5 candidature al giorno nella prova, attiva fino al ${ends}.` : `Fino al ${ends} LavorAI invia fino a 5 candidature al giorno. Nessuna carta richiesta.`}
+            {last ? `Scade il ${ends}. Poi il tuo account resta in pausa finché non scegli Pro.` : needsSetup ? `Completa CV e preferenze per iniziare: fino a 5 candidature al giorno nella prova, attiva fino al ${ends}.` : `Fino al ${ends} LavorAI invia fino a 5 candidature al giorno. Carta richiesta prima di iniziare; rinnovo al termine salvo disdetta.`}
           </span>
         </div>
         <div style={{ height: 3, borderRadius: 999, background: "var(--border-ds)", overflow: "hidden" }}>

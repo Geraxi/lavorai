@@ -1,3 +1,4 @@
+import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -13,6 +14,9 @@ export async function POST() {
   if (!user) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
+
+  const block = onboardingAccessBlock(user);
+  if (block) return NextResponse.json(block, { status: block.status });
   await prisma.user.update({
     where: { id: user.id },
     data: { welcomeSeenAt: new Date() },

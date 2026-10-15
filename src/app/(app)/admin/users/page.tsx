@@ -1,3 +1,4 @@
+import { adminBillingReadiness, type BillingReadinessUser } from "@/lib/admin-billing-readiness";
 import { AdminRepairApplications } from "@/components/admin-repair-applications";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -183,14 +184,14 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
           </div>
 
           <div className="adm-th" style={{ gridTemplateColumns: "20px minmax(200px,2.4fr) minmax(88px,0.9fr) 60px minmax(80px,0.8fr) 64px 60px minmax(92px,1fr) minmax(64px,0.7fr) 20px" }}>
-            <Box /><div>Utente</div><div>Stato</div><div>Piano</div><div>Onboarding</div><div title="Auto-apply">Auto</div><div title="Tutte le candidature: inviate, in coda, in attesa e fallite">Tot.</div><div title="Ultimo accesso">Accesso</div><div title="Sorgente">Fonte</div><div />
+            <Box /><div>Utente</div><div>Stato</div><div>Piano</div><div>Profilo / Billing</div><div title="Auto-apply">Auto</div><div title="Tutte le candidature: inviate, in coda, in attesa e fallite">Tot.</div><div title="Ultimo accesso">Accesso</div><div title="Sorgente">Fonte</div><div />
           </div>
 
           <div className="adm-card-body scroll">
             {pageUsers.length === 0 && <div style={{ padding: 20, fontSize: 12, color: "var(--fg-subtle)" }}>Nessun utente</div>}
             {pageUsers.map((u) => {
               const sel = u.id === selected?.id;
-              const step = onboarding(u);
+              const step = profileProgress(u);
               return (
                 <Link key={u.id} href={qs({ sel: u.id })} className="adm-tr" style={{ gridTemplateColumns: "20px minmax(200px,2.4fr) minmax(88px,0.9fr) 60px minmax(80px,0.8fr) 64px 60px minmax(92px,1fr) minmax(64px,0.7fr) 20px", padding: "9px 6px", textDecoration: "none", color: "inherit", background: sel ? "hsl(var(--primary)/0.07)" : "transparent", borderRadius: 8, margin: "0 -6px" }}>
                   <Box />
@@ -203,7 +204,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                   </div>
                   <span className={`adm-pill ${u.emailVerified ? "good" : "warn"}`} style={{ padding: "3px 9px", fontSize: 10.5, justifySelf: "start" }}><span className="dot" />{u.emailVerified ? "Verificata" : "In attesa"}</span>
                   <div><TierChip tier={u.tier} /></div>
-                  <Onboarding step={step} />
+                  <div style={{ display: "grid", gap: 5 }}><ProfileProgress step={step} /><BillingReadiness user={u} /></div>
                   <Toggle on={!!u.preferences && u.preferences.autoApplyMode !== "off"} />
                   <div className="adm-num" style={{ color: "var(--fg)", fontWeight: 600, textAlign: "center" }}>{u._count.applications}</div>
                   <div className="adm-num" style={{ color: "var(--fg-muted)", fontSize: 11.5, lineHeight: 1.3 }}>{fmt2(u.lastLoginAt)}</div>
@@ -254,7 +255,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
                 <KV k="Verificato" v={fmt2(selected.emailVerified)} />
                 <KV k="Ultimo accesso" v={fmt2(selected.lastLoginAt)} />
                 <KV k="Piano" v={<span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><TierChip tier={selected.tier} /></span>} />
-                <KV k="Abbonamento" v={<span className={`adm-pill ${hasLiveSubscription(selected) ? "good" : selected.subscriptionStatus ? "warn" : "neutral"}`} style={{ padding: "2px 8px", fontSize: 10.5 }}><span className="dot" />{selected.subscriptionStatus ?? "nessuno"}</span>} />
+                <KV k="Abbonamento" v={<span className={`adm-pill ${hasLiveSubscription(selected) ? "good" : selected.subscriptionStatus ? "warn" : "neutral"}`} style={{ padding: "2px 8px", fontSize: 10.5 }}><span className="dot" />{selected.subscriptionStatus ?? "non verificato"}</span>} />
                 <KV k="Stripe" v={selected.stripeCustomerId ? <a href={`https://dashboard.stripe.com/customers/${selected.stripeCustomerId}`} target="_blank" rel="noreferrer" className="adm-link" style={{ fontSize: 11.5 }}>{selected.stripeCustomerId} ↗</a> : "—"} />
                 <KV k="Sorgente" v={source(selected.signupReferrer, selected.signupUtmSource)} />
                 <KV k="Codice referral" v={selected.referralCode ?? "—"} />
@@ -298,7 +299,10 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               {tab === "overview" && (<>
               <AutoApplyReadiness user={selected} />
               <PSection title="Stato e attività">
-                <KV k="Onboarding" v={<Onboarding step={onboarding(selected)} wide />} />
+                <KV k="Profilo" v={<ProfileProgress step={profileProgress(selected)} wide />} />
+                <KV k="Onboarding concluso" v={selected.onboardedAt ? fmt2(selected.onboardedAt) : "Non completato"} />
+                <KV k="Accesso / abbonamento" v={<BillingReadiness user={selected} />} />
+                <KV k="Carta" wrap v="Non verificata separatamente qui. Controlla Stripe: i dati locali non provano l’assenza di carte." />
                 <KV k="Preferenze CV" v={selected.preferences ? "Sì" : "No"} />
                 <KV k="Auto-apply" v={selected.preferences ? `${selected.preferences.autoApplyMode !== "off" ? "ON" : "OFF"} · ${selected.preferences.autoApplyMode} · cap ${selected.preferences.dailyCap}/g` : "—"} />
                 <KV k="Match min" v={selected.preferences ? `${selected.preferences.matchMin}%` : "—"} />
@@ -326,15 +330,19 @@ function Avatar({ email, name, size = 30 }: { email: string; name?: string | nul
   const c = colors[h % colors.length];
   return <div style={{ width: size, height: size, borderRadius: 999, background: `color-mix(in srgb, ${c} 28%, transparent)`, color: "#fff", display: "grid", placeItems: "center", fontSize: size * 0.34, fontWeight: 700, flexShrink: 0 }}>{ini}</div>;
 }
-function Onboarding({ step, wide }: { step: number; wide?: boolean }) {
+function ProfileProgress({ step, wide }: { step: number; wide?: boolean }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, width: wide ? "100%" : undefined }}>
+    <div title="Profilo: email verificata, CV e preferenze. Non misura carta, abbonamento o completamento onboarding." style={{ display: "flex", alignItems: "center", gap: 8, width: wide ? "100%" : undefined }}>
       <div style={{ flex: 1, height: 5, background: "var(--bg-sunken)", borderRadius: 3, overflow: "hidden", minWidth: 40 }}>
-        <div style={{ width: `${(step / 4) * 100}%`, height: "100%", background: "hsl(var(--primary))" }} />
+        <div style={{ width: `${(step / 3) * 100}%`, height: "100%", background: "hsl(var(--primary))" }} />
       </div>
-      <span className="adm-num" style={{ fontSize: 11, color: "var(--fg-muted)" }}>{step}/4</span>
+      <span className="adm-num" style={{ fontSize: 11, color: "var(--fg-muted)" }}>{step}/3</span>
     </div>
   );
+}
+function BillingReadiness({ user }: { user: BillingReadinessUser }) {
+  const state = adminBillingReadiness(user);
+  return <span title={state.detail} className={`adm-pill ${state.tone}`} style={{ padding: "2px 6px", fontSize: 10 }}>{state.label}</span>;
 }
 function Toggle({ on }: { on: boolean }) {
   return <span className={`adm-pill ${on ? "good" : "neutral"}`} style={{ padding: "3px 9px", fontSize: 10.5, justifySelf: "start" }}><span className="dot" />{on ? "ON" : "OFF"}</span>;
@@ -349,11 +357,11 @@ function PSection({ title, children }: { title: string; children: React.ReactNod
     </div>
   );
 }
-function KV({ k, v }: { k: string; v: React.ReactNode }) {
+function KV({ k, v, wrap = false }: { k: string; v: React.ReactNode; wrap?: boolean }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 8, fontSize: 11.5, alignItems: "center" }}>
       <span style={{ color: "var(--fg-subtle)" }}>{k}</span>
-      <span className="adm-ellipsis" style={{ color: "var(--fg)" }}>{v}</span>
+      <span className={wrap ? undefined : "adm-ellipsis"} style={{ color: "var(--fg)", ...(wrap ? { whiteSpace: "normal", overflowWrap: "anywhere", lineHeight: 1.5 } as const : {}) }}>{v}</span>
     </div>
   );
 }
@@ -379,8 +387,8 @@ function fmt2(d: Date | null | undefined): string {
   if (!d) return "—";
   return `${d.toLocaleDateString("it-IT", { timeZone: "Europe/Rome", day: "2-digit", month: "2-digit", year: "2-digit" })} ${d.toLocaleTimeString("it-IT", { timeZone: "Europe/Rome", hour: "2-digit", minute: "2-digit" })}`;
 }
-function onboarding(u: { emailVerified: Date | null; preferences: { autoApplyMode: string } | null; _count: { cvDocuments: number } }): number {
-  return (u.emailVerified ? 1 : 0) + (u._count.cvDocuments > 0 ? 1 : 0) + (u.preferences ? 1 : 0) + (u.preferences && u.preferences.autoApplyMode !== "off" ? 1 : 0);
+function profileProgress(u: { emailVerified: Date | null; preferences: { autoApplyMode: string } | null; _count: { cvDocuments: number } }): number {
+  return (u.emailVerified ? 1 : 0) + (u._count.cvDocuments > 0 ? 1 : 0) + (u.preferences ? 1 : 0);
 }
 
 function ApplicationStatusSummary({ counts }: { counts: Array<{ status: string; _count: { _all: number } }> }) {
@@ -400,17 +408,20 @@ function ApplicationStatusSummary({ counts }: { counts: Array<{ status: string; 
   );
 }
 
-function AutoApplyReadiness({ user }: { user: { suspendedAt: Date | null; preferences: { autoApplyMode: string; rolesJson: string | null } | null; cvProfile: { id: string } | null; _count: { cvDocuments: number } } }) {
-  let text = "Pronto: l'auto-apply può elaborare nuove opportunità.";
+function AutoApplyReadiness({ user }: { user: BillingReadinessUser & { emailVerified: Date | null; onboardedAt: Date | null; suspendedAt: Date | null; preferences: { autoApplyMode: string; rolesJson: string | null } | null; cvProfile: { id: string } | null; _count: { cvDocuments: number } } }) {
+  let text = "Profilo pronto. Gli invii restano soggetti ai controlli di consenso, billing e limiti del worker.";
   let tone = "good";
   if (user.suspendedAt) { text = "In pausa: l'account è sospeso."; tone = "bad"; }
+  else if (!user.emailVerified) { text = "In attesa: email da verificare."; tone = "warn"; }
+  else if (!adminBillingReadiness(user).confirmed) { text = adminBillingReadiness(user).detail; tone = "warn"; }
+  else if (!user.onboardedAt) { text = "In attesa: onboarding non completato."; tone = "warn"; }
   else if (!user.preferences) { text = "In attesa: mancano le preferenze di candidatura."; tone = "warn"; }
   else if (user.preferences.autoApplyMode === "off") { text = "In pausa: l'utente ha disattivato l'auto-apply."; tone = "neutral"; }
   else if (!user.cvProfile && user._count.cvDocuments === 0) { text = "In attesa: manca il CV da usare per le candidature."; tone = "warn"; }
   else if (arr(user.preferences.rolesJson).length === 0) { text = "In attesa: manca almeno un ruolo desiderato."; tone = "warn"; }
   return (
     <PSection title="Prontezza auto-apply">
-      <span className={`adm-pill ${tone}`} style={{ width: "fit-content", padding: "4px 8px", fontSize: 10.5 }}><span className="dot" />{text}</span>
+      <span className={`adm-pill ${tone}`} style={{ width: "fit-content", maxWidth: "100%", whiteSpace: "normal", lineHeight: 1.5, padding: "4px 8px", fontSize: 10.5 }}><span className="dot" />{text}</span>
     </PSection>
   );
 }

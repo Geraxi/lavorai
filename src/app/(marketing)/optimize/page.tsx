@@ -142,7 +142,7 @@ function FormCard({
           <p className="text-sm text-muted-foreground">
             Carica il CV e inserisci l&apos;email. Ti invieremo un magic link:
             dopo il login completi il setup e scegli quando attivare l'auto-apply.
-            I tuoi 7 giorni di Pro partono dalla registrazione, senza carta e senza rinnovo automatico.
+            I tuoi 7 giorni di Pro partono dalla registrazione, con carta richiesta e rinnovo al termine salvo disdetta.
           </p>
         </div>
 
@@ -248,8 +248,8 @@ function FormCard({
         </form>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          7 giorni di Pro gratis, poi €19.99/mese. Nessuna carta richiesta per
-          iniziare.
+          7 giorni di Pro gratis, poi €19.99/mese. Carta richiesta per
+          iniziare; rinnovo al termine salvo disdetta.
         </p>
       </CardContent>
     </Card>

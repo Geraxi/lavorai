@@ -306,15 +306,12 @@ export default function OnboardingClient({
       return;
     }
 
-    // L'utente ha visto il risultato: ora chiediamo il metodo di pagamento.
+    // Carta già confermata: completa il profilo dopo l’anteprima.
     await fetch("/api/onboarding/welcome-seen", { method: "POST" }).catch(
       () => null,
     );
     await updateSession().catch(() => null);
-    // Il setup è completo: ora raccogliamo il metodo di pagamento su Stripe.
-    // Il gate server-side impedisce comunque di saltare questo passaggio con
-    // un URL diretto verso la dashboard o le API di candidatura.
-    router.push("/start-membership");
+    router.push("/dashboard");
     router.refresh();
     } catch {
       toast.error(t("retryError"));
@@ -471,9 +468,9 @@ export default function OnboardingClient({
             }}
           >
             {finishing
-              ? (demo ? "Apertura attivazione…" : "Creo la tua anteprima…")
+              ? (demo ? "Apertura dashboard…" : "Creo la tua anteprima…")
               : step === stepsLocalized.length - 1
-                ? (demo ? "Continua all'attivazione" : "Vedi CV e lettera personalizzati")
+                ? (demo ? "Completa il profilo" : "Vedi CV e lettera personalizzati")
                 : t("continue")}{" "}
             <Icon name="arrow-right" size={13} />
           </button>

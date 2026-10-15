@@ -1,3 +1,4 @@
+import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -38,6 +39,9 @@ export async function POST(request: NextRequest) {
       { status: 401 },
     );
   }
+
+  const block = onboardingAccessBlock(user);
+  if (block) return NextResponse.json(block, { status: block.status });
 
   let body: unknown;
   try {

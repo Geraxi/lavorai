@@ -25,7 +25,7 @@ for (const status of ["paused", "completed", "cancelled", "unknown"]) {
 }
 assert.equal(currentWorkerIneligibility({ ...base, session: { ...base.session, sentCount: 30 } }), "session_capacity_reached");
 for (const patch of [{ suspendedAt: now }, { privacyConsentAt: null }, { emailVerified: null },
-  { subscriptionStatus: "past_due" }, { subscriptionStatus: "paused" }, { currentPeriodEnd: new Date(0) },
+  { subscriptionStatus: "pending_payment_method" }, { subscriptionStatus: "canceled" }, { subscriptionStatus: "past_due" }, { subscriptionStatus: "paused" }, { currentPeriodEnd: new Date(0) },
   { pausedUntil: new Date(+now + 86400000) }, { preferences: { ...base.user.preferences, autoApplyMode: "off" } }]) {
   assert.notEqual(currentWorkerIneligibility({ ...base, user: { ...base.user, ...patch } }), null);
 }

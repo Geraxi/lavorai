@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { TIERS } from "@/lib/billing";
+import { CARD_VERIFICATION_EXPAND, subscriptionAccessStatus } from "@/lib/stripe-subscription-access";
 
 export const runtime = "nodejs";
 
@@ -64,12 +65,20 @@ export async function POST(request: NextRequest) {
         if (!customerId || !subscriptionId) break;
 
         // Recupera la subscription per leggere price/status/period_end.
-        const sub = await stripe().subscriptions.retrieve(subscriptionId);
+        const sub = await stripe().subscriptions.retrieve(subscriptionId, { expand: CARD_VERIFICATION_EXPAND });
+        const existingAccess = await prisma.user.findUnique({
+          where: { stripeCustomerId: customerId },
+          select: { stripeSubscriptionId: true, subscriptionStatus: true },
+        });
+        const liveStatus = subscriptionAccessStatus(sub, existingAccess);
+        // A second unfinished checkout must not replace a legitimate entitlement.
+        if (liveStatus === "pending_payment_method" && existingAccess?.stripeSubscriptionId !== sub.id
+          && ["active", "trialing"].includes(existingAccess?.subscriptionStatus ?? "")) break;
         const item = sub.items.data[0];
 
         // Se il customer aveva già un'altra subscription viva (doppio checkout),
         // cancelliamo la vecchia subito: mai due addebiti per lo stesso utente.
-        try {
+        if (liveStatus === "active" || liveStatus === "trialing") try {
           const others = await stripe().subscriptions.list({ customer: customerId, status: "all", limit: 10 });
           for (const o of others.data) {
             if (o.id !== sub.id && ["active", "trialing", "past_due", "unpaid"].includes(o.status)) {
@@ -93,8 +102,8 @@ export async function POST(request: NextRequest) {
           data: {
             stripeSubscriptionId: sub.id,
             stripePriceId: priceId ?? null,
-            subscriptionStatus: sub.status,
-            tier: sub.status === "active" || sub.status === "trialing" ? tier : "free",
+            subscriptionStatus: liveStatus,
+            tier: liveStatus === "active" || liveStatus === "trialing" ? tier : "free",
             currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
           },
         });
@@ -105,8 +114,8 @@ export async function POST(request: NextRequest) {
               stripeCustomerId: customerId,
               stripeSubscriptionId: sub.id,
               stripePriceId: priceId ?? null,
-              subscriptionStatus: sub.status,
-              tier: sub.status === "active" || sub.status === "trialing" ? tier : "free",
+              subscriptionStatus: liveStatus,
+              tier: liveStatus === "active" || liveStatus === "trialing" ? tier : "free",
               currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
             },
           }).catch((err) => console.error("[stripe/webhook] fallback update failed", err));
@@ -114,7 +123,7 @@ export async function POST(request: NextRequest) {
         const convertedUser = userId
           ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
           : await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
-        if (convertedUser) {
+        if (convertedUser && (liveStatus === "active" || liveStatus === "trialing")) {
           await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
             userId: convertedUser.id,
             plan: tier,
@@ -139,7 +148,9 @@ export async function POST(request: NextRequest) {
       }
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const sub = event.data.object as Stripe.Subscription;
+        // Events may arrive out of order. Read the current subscription and its
+        // card, rather than granting access from an earlier event snapshot.
+        const sub = await stripe().subscriptions.retrieve((event.data.object as Stripe.Subscription).id, { expand: CARD_VERIFICATION_EXPAND });
         const customerId =
           typeof sub.customer === "string" ? sub.customer : sub.customer.id;
         const item = sub.items.data[0];
@@ -158,8 +169,14 @@ export async function POST(request: NextRequest) {
         // piano resta fino a fine periodo (status ancora "active").
         const paused = !!sub.pause_collection;
         const pausedUntil = sub.pause_collection?.resumes_at ? new Date(sub.pause_collection.resumes_at * 1000) : null;
-        const liveStatus = paused ? "paused" : sub.status;
-        const liveTier = !paused && (sub.status === "active" || sub.status === "trialing") ? tier : "free";
+        const existingAccess = await prisma.user.findUnique({
+          where: { stripeCustomerId: customerId },
+          select: { stripeSubscriptionId: true, subscriptionStatus: true },
+        });
+        const liveStatus = subscriptionAccessStatus(sub, existingAccess);
+        if (liveStatus === "pending_payment_method" && existingAccess?.stripeSubscriptionId !== sub.id
+          && ["active", "trialing"].includes(existingAccess?.subscriptionStatus ?? "")) break;
+        const liveTier = liveStatus === "active" || liveStatus === "trialing" ? tier : "free";
 
         const matched = await prisma.user.updateMany({
           where: { stripeCustomerId: customerId },
@@ -172,11 +189,11 @@ export async function POST(request: NextRequest) {
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             pausedUntil,
             // Prova gratuita: una sola per utente (vedi checkout).
-            ...(sub.status === "trialing" ? { proTrialUsedAt: new Date() } : {}),
+            ...(liveStatus === "trialing" ? { proTrialUsedAt: new Date() } : {}),
           },
         });
         // Credito referral consumato al checkout → scala il contatore una volta.
-        if (sub.metadata?.referralCredit === "1" && (sub.status === "active" || sub.status === "trialing")) {
+        if (sub.metadata?.referralCredit === "1" && (liveStatus === "active" || liveStatus === "trialing")) {
           await prisma.user.updateMany({ where: { stripeCustomerId: customerId, referralCredits: { gt: 0 } }, data: { referralCredits: { decrement: 1 } } });
           await stripe().subscriptions.update(sub.id, { metadata: { ...sub.metadata, referralCredit: "used" } }).catch(() => void 0);
         }
@@ -195,8 +212,8 @@ export async function POST(request: NextRequest) {
               stripeCustomerId: customerId,
               stripeSubscriptionId: sub.id,
               stripePriceId: priceId ?? null,
-              subscriptionStatus: sub.status,
-              tier: sub.status === "active" || sub.status === "trialing" ? tier : "free",
+              subscriptionStatus: liveStatus,
+              tier: liveTier,
               currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
             },
           }).catch((err) => console.error("[stripe/webhook] metadata fallback failed", err));
@@ -205,7 +222,7 @@ export async function POST(request: NextRequest) {
           where: { stripeCustomerId: customerId },
           select: { id: true },
         });
-        if (convertedUser && (sub.status === "active" || sub.status === "trialing")) {
+        if (convertedUser && (liveStatus === "active" || liveStatus === "trialing")) {
           await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
             userId: convertedUser.id,
             plan: tier,

@@ -27,8 +27,8 @@ function LoginContent() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [needsVerify, setNeedsVerify] = useState(false);
+  const [err, setErr] = useState<string | null>(params.get("verify") === "required" ? t("errorEmailNotVerified") : null);
+  const [needsVerify, setNeedsVerify] = useState(params.get("verify") === "required");
   const [resending, setResending] = useState(false);
   const [resendDone, setResendDone] = useState(false);
 

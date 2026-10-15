@@ -1,3 +1,4 @@
+import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -19,6 +20,9 @@ export async function POST(request: NextRequest) {
         { status: 401 },
       );
     }
+
+    const block = onboardingAccessBlock(user);
+    if (block) return NextResponse.json(block, { status: block.status });
 
     const rl = await uploadLimiter.limit(`user:${user.id}`);
     if (!rl.success) {

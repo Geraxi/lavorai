@@ -40,7 +40,7 @@ export type Guide = {
 
 const CTA_AUTO = {
   title: "Stanco di compilare form?",
-  body: "LavorAI riscrive il CV per ogni annuncio e invia le candidature al posto tuo sui portali supportati. Prova Pro per 7 giorni dalla registrazione, senza carta.",
+  body: "LavorAI riscrive il CV per ogni annuncio e invia le candidature al posto tuo sui portali supportati. Prova Pro per 7 giorni dalla registrazione, con carta richiesta.",
   label: "Prova Pro 7 giorni gratis",
   href: "/signup",
 };

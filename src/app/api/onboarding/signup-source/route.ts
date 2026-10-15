@@ -1,3 +1,4 @@
+import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/session";
@@ -13,6 +14,9 @@ const Schema = z.object({
 export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+
+  const block = onboardingAccessBlock(user);
+  if (block) return NextResponse.json(block, { status: block.status });
   const parsed = Schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "validation" }, { status: 400 });
   await prisma.user.updateMany({

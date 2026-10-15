@@ -1,3 +1,4 @@
+import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { optimizeCV } from "@/lib/claude";
@@ -22,6 +23,9 @@ const schema = z.object({
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+
+  const block = onboardingAccessBlock(user);
+  if (block) return NextResponse.json(block, { status: block.status });
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

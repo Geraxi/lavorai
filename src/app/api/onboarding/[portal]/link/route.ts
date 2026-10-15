@@ -1,5 +1,7 @@
+import { getCurrentUser } from "@/lib/session";
+import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse, type NextRequest } from "next/server";
-import { getDemoUser, prisma } from "@/lib/db";
+import { prisma } from "@/lib/db";
 import { encryptJson } from "@/lib/crypto";
 import { isPortalId, PORTALS } from "@/lib/portals";
 
@@ -22,6 +24,11 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ portal: string }> },
 ) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const block = onboardingAccessBlock(user);
+  if (block) return NextResponse.json(block, { status: block.status });
+
   const { portal } = await params;
   if (!isPortalId(portal)) {
     return NextResponse.json(
@@ -59,7 +66,6 @@ export async function POST(
       throw new Error("Nessun cookie ricevuto dal portale.");
     }
 
-    const user = await getDemoUser();
     const encrypted = encryptJson(cookies);
 
     await prisma.portalSession.upsert({

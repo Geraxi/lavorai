@@ -46,7 +46,7 @@ import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 
 const EN_TIER_COPY: Record<TierConfig["id"], Pick<TierConfig, "tagline" | "features" | "cta" | "badge" | "priceSuffix">> = {
   free: {
-    tagline: "7 days of Pro from signup, up to 5 applications a day. No card and no automatic renewal.",
+    tagline: "7 days of Pro from signup, up to 5 applications a day. Card required. Renews at the end unless canceled.",
     priceSuffix: "",
     badge: undefined,
     cta: "Try Pro free for 7 days",

@@ -29,7 +29,7 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
             <ul className="mt-4 space-y-2 text-sm leading-6 text-muted-foreground">
               <li>• 50 candidature al mese</li>
               <li>• CV e lettera adattati a ogni posizione</li>
-              <li>• Nessuna carta o vincolo nascosto: disdici quando vuoi</li>
+              <li>• Carta richiesta e condizioni visibili su Stripe: disdici quando vuoi</li>
             </ul>
           </div>
           <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 px-5 py-4 text-left sm:min-w-48">
