@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon, type IconName } from "@/components/design/icon";
@@ -75,8 +75,10 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
   const [excludeInput, setExcludeInput] = useState("");
   const [isPending, startTransition] = useTransition();
   const [dirty, setDirty] = useState(false);
+  const revision = useRef(0);
 
   function mark() {
+    revision.current += 1;
     if (!dirty) setDirty(true);
   }
 
@@ -103,6 +105,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
   }
 
   function save() {
+    const savedRevision = revision.current;
     startTransition(async () => {
       try {
         const res = await fetch("/api/preferences", {
@@ -135,7 +138,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
           return;
         }
         toast.success("Preferenze salvate");
-        setDirty(false);
+        if (revision.current === savedRevision) setDirty(false);
         // Trigger first-apply se l'utente non ha ancora candidature.
         // Fire-and-forget: se fallisce l'utente non lo vede — il cron
         // notturno lo prenderà comunque. Se va, il toast successivo
@@ -167,6 +170,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
     <>
       <AppTopbar title="Preferenze" breadcrumb="Profilo" />
       <div
+        className="profile-workspace preferences-workspace"
         style={{
           padding: "24px 32px 80px",
           maxWidth: 880,
@@ -174,7 +178,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
           margin: "0 auto",
         }}
       >
-        <div className="mb-5 flex items-center justify-between gap-4">
+        <div className="profile-heading mb-5 flex items-center justify-between gap-4">
           <h1
             style={{
               fontSize: 22,
@@ -210,7 +214,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
 
         <PreferencesTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
-        <div className="flex flex-col" style={{ gap: 16, marginTop: 16 }}>
+        <div className="profile-scroll flex flex-col" style={{ gap: 16, marginTop: 16 }}>
           {/* ---------------- AUTO-APPLY ---------------- */}
           {activeTab === "auto" && (
             <SectionCard>

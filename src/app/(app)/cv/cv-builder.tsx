@@ -91,6 +91,8 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
       a.download = `CV_${profile.firstName}_${profile.lastName}_${lang}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Download non riuscito. Riprova.");
     } finally {
       setDownloadingLang(null);
     }
@@ -98,7 +100,7 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
 
   return (
     <>
-      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+      <div className="profile-heading mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 600, letterSpacing: "-0.022em", margin: 0 }}>
             Il tuo CV
@@ -175,6 +177,7 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
         ))}
       </div>
 
+      <div className="profile-scroll">
       {tab === "personal" && <PersonalSection profile={profile} update={update} />}
       {tab === "summary" && <SummarySection profile={profile} update={update} />}
       {tab === "experience" && (
@@ -230,6 +233,7 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
           <LinksSection profile={profile} update={update} />
         </div>
       )}
+      </div>
     </>
   );
 }

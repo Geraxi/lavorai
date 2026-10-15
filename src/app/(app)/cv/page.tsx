@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { CVUpload } from "@/components/cv-upload";
 import { redirect } from "next/navigation";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
@@ -56,6 +56,7 @@ export default async function CVPage() {
     <>
       <AppTopbar title="Il tuo CV" breadcrumb="Profilo" />
       <div
+        className="profile-workspace cv-workspace"
         style={{
           padding: "24px 32px 80px",
           maxWidth: 1100,
@@ -106,16 +107,10 @@ function EmptyCV() {
           lineHeight: 1.5,
         }}
       >
-        Serve per poter candidarti in automatico — lo analizziamo e lo adattiamo
-        al singolo annuncio.
+        Carica il curriculum per preparare il tuo profilo e i documenti per
+        ogni posizione. Il caricamento non invia candidature.
       </div>
-      <Link
-        href="/onboarding"
-        className="ds-btn ds-btn-primary"
-        style={{ marginTop: 8 }}
-      >
-        Carica il CV <Icon name="arrow-right" size={13} />
-      </Link>
+      <CVUpload />
     </div>
   );
 }

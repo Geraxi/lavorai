@@ -1,8 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "@/components/design/icon";
+
+import { useLocale } from "next-intl";
+import { workspaceNavigation } from "@/lib/workspace-navigation";
+import { useModalFocus } from "./use-modal-focus";
 
 interface Command {
   id: string;
@@ -14,8 +18,13 @@ interface Command {
 
 export function CommandPalette() {
   const router = useRouter();
+  const locale = useLocale();
+  const en = locale === "en";
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const panel = useRef<HTMLDivElement>(null);
+  const close = useCallback(() => setOpen(false), []);
+  useModalFocus(open, panel, close);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -33,16 +42,10 @@ export function CommandPalette() {
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("lavorai:palette", onOpen); };
   }, []);
 
-  const commands: Command[] = [
-    { id: "1", label: "Dashboard", hint: "Home", icon: "dashboard", action: () => router.push("/dashboard") },
-    { id: "2", label: "Candidature", hint: "Le tue", icon: "briefcase", action: () => router.push("/applications") },
-    { id: "3", label: "Job board", hint: "Nuovi annunci", icon: "inbox", action: () => router.push("/jobs") },
-    { id: "4", label: "Analisi", hint: "Metriche", icon: "chart", action: () => router.push("/analytics") },
-    { id: "5", label: "CV", hint: "Il tuo curriculum", icon: "file", action: () => router.push("/cv") },
-    { id: "6", label: "Preferenze", hint: "Cosa cerchi", icon: "target", action: () => router.push("/preferences") },
-    { id: "7", label: "Impostazioni", hint: "Account · Billing", icon: "settings", action: () => router.push("/settings") },
-    { id: "8", label: "Messaggi", hint: "Recruiter", icon: "inbox", action: () => router.push("/inbox") },
-  ];
+  const navigation = workspaceNavigation(locale);
+  const commands: Command[] = [...navigation.work, ...navigation.profile].map(item => ({
+    id: item.href, label: item.label, hint: "", icon: item.icon, action: () => router.push(item.href),
+  }));
 
   const filtered = query
     ? commands.filter((c) =>
@@ -54,8 +57,7 @@ export function CommandPalette() {
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
+      className="product-workspace"
       style={{
         position: "fixed",
         inset: 0,
@@ -69,9 +71,14 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       <div
+        ref={panel}
+        role="dialog"
+        aria-modal="true"
+        aria-label={en ? "Go to a section" : "Vai a una sezione"}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: "var(--bg-elev)",
+          background: "var(--bg)",
           border: "1px solid var(--border-ds)",
           borderRadius: "var(--radius-lg)",
           width: 540,
@@ -91,10 +98,12 @@ export function CommandPalette() {
         >
           <Icon name="search" size={16} style={{ color: "var(--fg-subtle)" }} />
           <input
-            autoFocus
+            data-modal-autofocus
+            aria-label={en ? "Find a section" : "Cerca una sezione"}
+            onKeyDown={event => { if (event.key === "Enter" && filtered.length) { event.preventDefault(); filtered[0].action(); close(); } }}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Cerca un'azione..."
+            placeholder={en ? "Go to a section…" : "Vai a una sezione…"}
             style={{
               flex: 1,
               border: "none",
@@ -104,9 +113,9 @@ export function CommandPalette() {
               color: "var(--fg)",
             }}
           />
-          <span className="ds-kbd">ESC</span>
+          <button type="button" onClick={close} aria-label={en ? "Close navigation" : "Chiudi navigazione"} style={{ minWidth: 36, minHeight: 36 }}><Icon name="x" size={18} /></button>
         </div>
-        <div style={{ maxHeight: 360, overflow: "auto" }}>
+        <div style={{ maxHeight: "min(420px, 55dvh)", overflow: "auto" }}>
           {filtered.length === 0 ? (
             <div
               style={{
@@ -116,7 +125,7 @@ export function CommandPalette() {
                 color: "var(--fg-muted)",
               }}
             >
-              Nessun risultato
+              {en ? "No matching section. Try another name." : "Nessuna sezione trovata. Prova un altro nome."}
             </div>
           ) : (
             filtered.map((c) => (
@@ -131,7 +140,8 @@ export function CommandPalette() {
                   display: "flex",
                   alignItems: "center",
                   gap: 12,
-                  padding: "10px 18px",
+                  padding: "12px 18px",
+                  minHeight: 44,
                   width: "100%",
                   textAlign: "left",
                   border: "none",

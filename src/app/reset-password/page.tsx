@@ -2,7 +2,7 @@
 
 import { Suspense, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { Logo } from "@/components/logo";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/design/icon";
 
@@ -68,11 +68,7 @@ function ResetContent() {
   }
 
   return (
-    <div className="lavorai-login font-sans">
-      <div className="lavorai-login-left">
-        <Logo size="md" />
-
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", maxWidth: 380, width: "100%" }}>
+    <AuthShell>
           {done ? (
             <>
               <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--primary-weak)", color: "var(--primary-ds)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 20 }}>
@@ -94,7 +90,7 @@ function ResetContent() {
                 Minimo 8 caratteri. Usane una che non hai mai usato altrove.
               </p>
 
-              <form onSubmit={onSubmit}>
+              <form className="auth-form" onSubmit={onSubmit}>
                 <label htmlFor="password" style={{ fontSize: 12, fontWeight: 500, color: "var(--fg-muted)", display: "block", marginBottom: 6 }}>
                   Nuova password
                 </label>
@@ -108,7 +104,7 @@ function ResetContent() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Minimo 8 caratteri"
-                  className="ds-input"
+                  className="auth-input"
                   style={{ padding: "10px 12px", fontSize: 14, marginBottom: 14 }}
                 />
 
@@ -124,19 +120,19 @@ function ResetContent() {
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   placeholder="Ripeti la password"
-                  className="ds-input"
+                  className="auth-input"
                   style={{ padding: "10px 12px", fontSize: 14 }}
                 />
 
                 {err && (
-                  <p style={{ fontSize: 12, color: "var(--red-ds)", marginTop: 8 }}>
+                  <p role="alert" className="auth-error" style={{ marginTop: 8 }}>
                     {err}
                   </p>
                 )}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="ds-btn ds-btn-primary"
+                  className="auth-submit"
                   style={{ width: "100%", padding: "12px 18px", fontSize: 14, marginTop: 14 }}
                 >
                   {loading ? (
@@ -150,31 +146,10 @@ function ResetContent() {
                   )}
                 </button>
               </form>
+              <p className="auth-switch"><Link href="/login">Torna al login</Link></p>
             </>
           )}
-        </div>
-      </div>
-
-      <div className="lavorai-login-right">
-        <div className="lavorai-login-showcase">
-          <div style={{ fontSize: 42, fontWeight: 600, letterSpacing: "-0.035em", lineHeight: 1.05 }}>
-            Quasi fatto.
-          </div>
-        </div>
-      </div>
-
-      <style>{`
-        .lavorai-login { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 480px) minmax(0, 1fr); background: var(--bg); color: var(--fg); }
-        .lavorai-login-left { padding: 40px 48px; display: flex; flex-direction: column; }
-        .lavorai-login-right { position: relative; background: var(--bg-sunken); display: flex; align-items: center; padding: 64px; border-left: 1px solid var(--border-ds); }
-        .lavorai-login-showcase { max-width: 520px; }
-        @media (max-width: 860px) {
-          .lavorai-login { grid-template-columns: 1fr; }
-          .lavorai-login-right { display: none; }
-          .lavorai-login-left { padding: 28px 20px; }
-        }
-      `}</style>
-    </div>
+    </AuthShell>
   );
 }
 
@@ -188,14 +163,14 @@ function CenteredMessage({
   cta: { href: string; label: string };
 }) {
   return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <AuthShell>
       <div style={{ maxWidth: 400, textAlign: "center" }}>
         <h1 style={{ fontSize: 24, fontWeight: 600, margin: "0 0 10px" }}>{title}</h1>
         <p style={{ fontSize: 14, color: "var(--fg-muted)", lineHeight: 1.5, margin: "0 0 20px" }}>{body}</p>
-        <Link href={cta.href} className="ds-btn ds-btn-primary">
+        <Link href={cta.href} className="auth-submit">
           {cta.label}
         </Link>
       </div>
-    </div>
+    </AuthShell>
   );
 }

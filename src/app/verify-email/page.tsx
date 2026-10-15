@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { AuthShell } from "@/components/auth/auth-shell";
 import { Icon } from "@/components/design/icon";
 
 export default function VerifyEmailPage() {
@@ -47,16 +48,7 @@ function VerifyContent() {
   }, [token]);
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-        background: "var(--bg)",
-      }}
-    >
+    <AuthShell>
       <div style={{ maxWidth: 440, textAlign: "center" }}>
         {status === "pending" && (
           <>
@@ -82,7 +74,7 @@ function VerifyContent() {
             <p style={lead}>Ora puoi accedere al tuo account.</p>
             <Link
               href="/login"
-              className="ds-btn ds-btn-primary"
+              className="auth-submit"
               style={{ marginTop: 20 }}
             >
               Vai al login <Icon name="arrow-right" size={13} />
@@ -101,7 +93,7 @@ function VerifyContent() {
               <Icon name="x" size={22} />
             </div>
             <h1 style={title}>Verifica fallita</h1>
-            <p style={lead}>{err}</p>
+            <p role="alert" style={lead}>{err}</p>
             <Link
               href="/login"
               className="ds-btn"
@@ -112,7 +104,7 @@ function VerifyContent() {
           </>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }
 

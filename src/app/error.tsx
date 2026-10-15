@@ -54,8 +54,7 @@ export default function GlobalError({
             lineHeight: 1.5,
           }}
         >
-          Abbiamo ricevuto la segnalazione. Prova a ricaricare o torna alla
-          dashboard.
+          La pagina non è disponibile. Riprova oppure torna alla home.
         </p>
         <div
           style={{

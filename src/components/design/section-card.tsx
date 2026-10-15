@@ -5,13 +5,15 @@ export function SectionCard({
   children,
   className,
   style,
+  id,
 }: {
   children: ReactNode;
   className?: string;
   style?: React.CSSProperties;
+  id?: string;
 }) {
   return (
-    <div className={cn("ds-section-card", className)} style={style}>
+    <div id={id} className={cn("ds-section-card", className)} style={style}>
       {children}
     </div>
   );

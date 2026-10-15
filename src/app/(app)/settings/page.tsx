@@ -44,6 +44,7 @@ export default async function SettingsPage() {
       </Suspense>
       <AppTopbar title="Impostazioni" breadcrumb="Profilo" />
       <div
+        className="profile-workspace settings-workspace"
         style={{
           padding: "24px 32px 80px",
           maxWidth: 960,
@@ -51,7 +52,7 @@ export default async function SettingsPage() {
           margin: "0 auto",
         }}
       >
-        <div className="mb-6">
+        <div className="profile-heading mb-6">
           <h1
             style={{
               fontSize: 22,
@@ -64,36 +65,35 @@ export default async function SettingsPage() {
           </h1>
         </div>
 
-        <div className="flex flex-col" style={{ gap: 16 }}>
-          <SectionCard>
+        <div className="profile-scroll flex flex-col" style={{ gap: 16 }}>
+          <SectionCard id="account">
             <SectionHead
               icon={<Icon name="user" size={14} />}
               title="Account"
               actions={<ThemeToggle compact={false} />}
             />
             <SectionBody>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: 16,
-                }}
-              >
+              <div className="profile-grid">
                 <div>
-                  <label className="ds-label">Email</label>
+                  <label className="ds-label" htmlFor="account-email">Email</label>
                   <input
                     className="ds-input"
+                    id="account-email"
                     defaultValue={user.email}
                     readOnly
                   />
                 </div>
                 <div>
-                  <label className="ds-label">Nome</label>
+                  <label className="ds-label" htmlFor="account-name">Nome</label>
                   <input
                     className="ds-input"
+                    id="account-name"
+                    readOnly
+                    aria-describedby="account-name-note"
                     defaultValue={user.name ?? ""}
                     placeholder="Il tuo nome"
                   />
+                  <p id="account-name-note" className="workspace-muted" style={{ marginTop: 6 }}>Nome associato all’account.</p>
                 </div>
               </div>
             </SectionBody>
@@ -109,7 +109,7 @@ export default async function SettingsPage() {
             </SectionBody>
           </SectionCard>
 
-          <SectionCard>
+          <SectionCard id="billing">
             <SectionHead
               icon={<Icon name="zap" size={14} />}
               title="Piano"

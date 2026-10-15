@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { useLocale } from "next-intl";
 import { AppSidebar, type SidebarProps } from "@/components/design/sidebar";
 import { Icon } from "@/components/design/icon";
+import { workspaceNavigation, isWorkspaceRouteActive } from "@/lib/workspace-navigation";
+import { useModalFocus } from "./use-modal-focus";
 import "./user-workspace.css";
+import "./product-workspace.css";
 
 /**
  * Responsive app shell.
@@ -24,12 +27,10 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const en = useLocale() === "en";
-  const mobileNavItems = [
-    { href: "/dashboard", label: "Home", icon: "dashboard" as const },
-    { href: "/discover", label: en ? "Discover" : "Scopri", icon: "sparkles" as const },
-    { href: "/applications", label: en ? "Applications" : "Candidature", icon: "briefcase" as const },
-    { href: "/inbox", label: "Inbox", icon: "inbox" as const },
-  ];
+  const mobileNavItems = workspaceNavigation(en ? "en" : "it").work.slice(0, 4);
+  const drawer = useRef<HTMLDivElement>(null);
+  const closeDrawer = useCallback(() => setOpen(false), []);
+  useModalFocus(open, drawer, closeDrawer);
 
   // Chiudi automaticamente il drawer quando si naviga
   useEffect(() => {
@@ -47,7 +48,7 @@ export function AppShell({
 
   return (
     <div
-      className={`font-sans lavorai-app-shell${["/dashboard", "/discover", "/applications", "/inbox", "/materiali", "/feedback"].includes(pathname) ? " reference-workspace" : ""}`}
+      className={`font-sans lavorai-app-shell product-workspace${["/dashboard", "/discover", "/applications", "/inbox", "/materiali", "/feedback"].includes(pathname) ? " reference-workspace" : ""}`}
       style={{
         background: "var(--bg)",
         color: "var(--fg)",
@@ -68,7 +69,8 @@ export function AppShell({
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="lavorai-sidebar-drawer">
+          <div className="lavorai-sidebar-drawer" ref={drawer} role="dialog" aria-modal="true" aria-label={en ? "Navigation" : "Navigazione"} tabIndex={-1}>
+            <button className="lavorai-drawer-close" type="button" onClick={closeDrawer}>{en ? "Close menu" : "Chiudi menu"}<Icon name="x" size={18} /></button>
             <AppSidebar {...sidebarProps} />
           </div>
         </>
@@ -77,6 +79,7 @@ export function AppShell({
       {/* Main */}
       <main
         id="main-content"
+        inert={open}
         className="ds-scroll lavorai-main"
       >
         {/* Mobile topbar — visibile su <1024px sopra al contenuto */}
@@ -84,6 +87,7 @@ export function AppShell({
           <button
             type="button"
             aria-label={en ? "Open menu" : "Apri menu"}
+            aria-expanded={open}
             className="lavorai-menu-btn"
             onClick={() => setOpen(true)}
           >
@@ -109,7 +113,7 @@ export function AppShell({
       {!open && (
         <nav className="lavorai-mobile-bottom-nav" aria-label={en ? "Main navigation" : "Navigazione principale"}>
           {mobileNavItems.map((item) => {
-            const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
+            const active = isWorkspaceRouteActive(pathname, item.href);
             return (
               <Link key={item.href} href={item.href} className="lavorai-mobile-nav-item" aria-current={active ? "page" : undefined}>
                 <Icon name={item.icon} size={18} />

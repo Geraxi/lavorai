@@ -8,6 +8,7 @@ import { signOut } from "next-auth/react";
 import { motion } from "motion/react";
 import { useLocale, useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/design/icon";
+import { workspaceNavigation, isWorkspaceRouteActive } from "@/lib/workspace-navigation";
 import { cn } from "@/lib/utils";
 import { AutoApplyToggle } from "@/components/auto-apply-toggle";
 import { ThemeToggle } from "@/components/design/theme-toggle";
@@ -74,18 +75,8 @@ export function AppSidebar({
 
   const applicationsCount = stats?.applicationsCount ?? applicationsCountProp;
 
-  const workItems: NavItem[] = [
-    { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
-    { href: "/discover", label: t("discover"), icon: "sparkles" },
-    { href: "/applications", label: t("applications"), icon: "briefcase", count: null },
-    { href: "/inbox", label: "Inbox", icon: "inbox" },
-    { href: "/materiali", label: locale === "en" ? "CV by position" : "CV per posizione", icon: "file" },
-    { href: "/questions", label: locale === "en" ? "Questions" : "Domande", icon: "check" },
-    { href: "/jobs", label: t("jobs"), icon: "inbox" },
-    { href: "/analytics", label: t("analytics"), icon: "chart" },
-    { href: "/interview", label: locale === "en" ? "Interviews" : "Colloqui", icon: "sparkles" },
-    { href: "/founder-coach", label: "Founder Coach", icon: "target" },
-  ];
+  const navigation = workspaceNavigation(locale);
+  const workItems: NavItem[] = navigation.work;
 
   // Sezione ADMIN — visibile SOLO al founder (isAdmin dal layout server).
   // Un'unica sidebar: niente nav annidata dentro /admin.
@@ -100,12 +91,7 @@ export function AppSidebar({
     { href: "/admin/automation", label: "Automazione & Utenti", icon: "zap" },
   ];
 
-  const setupItems: NavItem[] = [
-    { href: "/preferences", label: t("preferences"), icon: "target" },
-    { href: "/cv", label: t("materials"), icon: "file" },
-    { href: "/settings", label: t("account"), icon: "settings" },
-    { href: "/feedback", label: locale === "en" ? "Feedback & bugs" : "Feedback e bug", icon: "inbox" },
-  ];
+  const setupItems: NavItem[] = navigation.profile;
 
   const pathname = usePathname();
 
@@ -133,7 +119,7 @@ export function AppSidebar({
                 ? applicationsCount
                 : it.count,
           }}
-          active={isActive(pathname, it.href)}
+          active={isWorkspaceRouteActive(pathname, it.href)}
         />
       ))}
 
@@ -141,7 +127,7 @@ export function AppSidebar({
         <>
           <SectionLabel>Admin</SectionLabel>
           {adminItems.map((it) => (
-            <NavItem key={it.href} item={it} active={isActive(pathname, it.href)} />
+            <NavItem key={it.href} item={it} active={isWorkspaceRouteActive(pathname, it.href)} />
           ))}
           <AdminAssistantNavButton />
         </>
@@ -149,7 +135,7 @@ export function AppSidebar({
 
       <SectionLabel>{t("sectionProfile")}</SectionLabel>
       {setupItems.map((it) => (
-        <NavItem key={it.href} item={it} active={isActive(pathname, it.href)} />
+        <NavItem key={it.href} item={it} active={isWorkspaceRouteActive(pathname, it.href)} />
       ))}
       <LogoutButton />
 
@@ -245,6 +231,7 @@ function NavItem({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
       href={item.href}
+      aria-current={active ? "page" : undefined}
       className={cn("ds-nav-item", active && "active")}
       style={{
         position: "relative",
@@ -353,15 +340,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
-}
-
-function isActive(pathname: string | null, href: string) {
-  if (!pathname) return false;
-  if (href === "/dashboard") return pathname === "/dashboard";
-  // /admin è la Panoramica: attivo solo su match esatto, altrimenti
-  // resterebbe evidenziato su tutte le sub-route admin.
-  if (href === "/admin") return pathname === "/admin";
-  return pathname === href || pathname.startsWith(href + "/");
 }
 
 function getInitials(name: string): string {

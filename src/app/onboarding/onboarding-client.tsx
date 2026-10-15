@@ -356,8 +356,11 @@ export default function OnboardingClient({
             const done = i < step;
             const current = i === step;
             return (
-              <div
+              <button
                 key={s.key}
+                type="button"
+                disabled={!done}
+                aria-current={current ? "step" : undefined}
                 className="ob-step"
                 data-done={done ? "true" : "false"}
                 data-current={current ? "true" : "false"}
@@ -378,7 +381,7 @@ export default function OnboardingClient({
                   <div className="ob-step-index">Step {i + 1}</div>
                   <div className="ob-step-name">{s.label}</div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>

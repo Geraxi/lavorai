@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { isApplicationAccessPaused } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
 import { TrialExpiredActions } from "./trial-expired-actions";
+import { Logo } from "@/components/logo";
 import { prisma } from "@/lib/db";
 
 export const metadata = { title: "Free trial expired | LavorAI", robots: { index: false, follow: false } };
@@ -16,9 +17,10 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
     where: { userId: user.id, status: "success" },
   });
   return (
-    <main className="min-h-screen flex items-center justify-center bg-background text-foreground px-6 py-12">
-      <section className="w-full max-w-2xl overflow-hidden rounded-2xl border bg-card shadow-lg">
+    <main className="trial-expired-screen min-h-screen flex items-center justify-center bg-background text-foreground px-6 py-12">
+      <section className="trial-expired-panel w-full max-w-2xl overflow-hidden rounded-2xl border bg-card shadow-lg">
         <div className="border-b border-border bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,.16),transparent_44%)] px-8 py-8 sm:px-10">
+          <div className="mb-6"><Logo /></div>
           <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-400">La tua ricerca, in pausa</p>
           <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Riprendi da dove eri arrivato.</h1>
           <p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">La prova Pro di 7 giorni è terminata. Attiva Pro per far ripartire la ricerca, le candidature su misura e il monitoraggio delle risposte.</p>

@@ -31,7 +31,9 @@
     "test:user-workspace": "node --import tsx scripts/test-user-workspace.ts",
     "test:user-workspace-browser": "node scripts/test-user-workspace-browser.mjs",
     "test:feedback-postgres": "node --import tsx scripts/test-feedback-reports.ts",
-    "test:feedback-browser": "node scripts/test-feedback-browser.mjs"
+    "test:feedback-browser": "node scripts/test-feedback-browser.mjs",
+    "test:product-consistency-browser": "node scripts/test-product-consistency-browser.mjs",
+    "test:integrated-postgres": "node scripts/test-integrated-postgres.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

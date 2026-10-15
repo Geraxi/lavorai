@@ -101,6 +101,7 @@ const db = {
 };
 const redirect = (path: string): never => { throw new Error(`REDIRECT:${path}`); };
 const common: Record<string, any> = {
+  "@/components/logo": { Logo: () => <span>LavorAI</span> },
   "react": React, "react/jsx-runtime": jsx, "next/server": { NextResponse }, "zod": { z },
   "next/navigation": { redirect, useRouter: () => ({ refresh() {} }) },
   "@/lib/session": { getCurrentUser: async () => user },

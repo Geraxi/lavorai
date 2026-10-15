@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+@media (min-width: 1024px) {
+  .trial-expired-screen { height: 100dvh; min-height: 0; padding-block: 24px; }
+  .trial-expired-panel { max-height: 100%; overflow-y: auto; scrollbar-width: thin; }
+}
+
 /* cache-bust: regola reale (sopravvive alla minificazione, a
    differenza di un commento) per forzare un nuovo content-hash del
    chunk CSS e invalidare versioni rotte cachate immutable. */
@@ -1658,3 +1663,14 @@ a.gd-chip:hover { border-color: hsl(var(--primary) / 0.6); }
 .gd-cta-btn:hover { filter: brightness(1.05); }
 .gd-cta h2 { font-size: 1.15rem; margin: 0 0 6px; }
 .gd-cta { flex-wrap: wrap; }
+
+/* Onboarding uses the same bounded desktop flow as the signed-in workspace. */
+.ob-step { text-align: left; }
+.ob-step:focus-visible { outline: 2px solid var(--primary-ds); outline-offset: 3px; }
+@media (min-width: 1024px) {
+  .ob-root { height: 100dvh; min-height: 0; overflow: hidden; }
+  .ob-main { min-height: 0; padding: 24px 32px; }
+  .ob-main > div:first-child { min-height: 0; overflow-y: auto; padding-right: 6px; scrollbar-width: thin; }
+  .ob-preview { min-height: 0; overflow-y: auto; padding: 24px; scrollbar-width: thin; }
+  .ob-rail { min-height: 0; overflow-y: auto; }
+}

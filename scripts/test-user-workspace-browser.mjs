@@ -437,8 +437,8 @@ try {
   await page.getByRole('button',{name:'Light theme',exact:true}).first().click();
   assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
   await page.getByRole('button',{name:'Dark theme',exact:true}).first().waitFor();
-  await page.waitForFunction(()=>getComputedStyle(document.querySelector('.workspace-topbar')).backgroundColor==='rgb(255, 255, 255)');
-  assert.equal(await page.locator('.workspace-topbar').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)','Light topbar must contrast with dark text');
+  await page.waitForFunction(()=>getComputedStyle(document.querySelector('.workspace-topbar')).backgroundColor==='rgb(238, 245, 240)');
+  assert.equal(await page.locator('.workspace-topbar').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(238, 245, 240)','Light topbar uses the historical #EEF5F0 surface with dark text');
   await page.screenshot({path:join(out,'discover-light.png'),fullPage:false,animations:'disabled'});
   assert.deepEqual(errors,[]); assert.deepEqual(external,[]);
   console.log('PASS: five real views, Italian/English desktop/mobile, empty/error states, filters, safe email text, status update, keyboard save without application, tabs, light theme and English/Italian map sheets/status labels. No production requests.');

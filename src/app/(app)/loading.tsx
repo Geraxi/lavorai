@@ -12,17 +12,9 @@
  */
 export default function AppLoading() {
   return (
-    <div style={{ padding: "24px 32px", maxWidth: 1480, margin: "0 auto" }}>
+    <div className="workspace-loading" role="status" aria-label="Caricamento della sezione">
       {/* Topbar skeleton */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 28,
-          gap: 16,
-        }}
-      >
+      <div className="workspace-loading-header">
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <Bar w={220} h={28} />
           <Bar w={320} h={14} muted />
@@ -105,6 +97,7 @@ function Bar({
     <div
       style={{
         width: typeof w === "number" ? `${w}px` : w,
+        maxWidth: "100%",
         height: h,
         borderRadius: rounded ?? 6,
         background:

@@ -36,7 +36,7 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event("lavorai:palette"))}
-          aria-label={en ? "Search (⌘K)" : "Cerca (⌘K)"}
+          aria-label={en ? "Go to a section (⌘K)" : "Vai a una sezione (⌘K)"}
           className="flex items-center gap-2 rounded border px-2.5 py-1.5 hidden md:flex"
           style={{
             cursor: "text",
@@ -49,7 +49,7 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
           }}
         >
           <Icon name="search" size={15} />
-          <span style={{ flex: 1, fontSize: 13, color: "var(--fg-subtle)" }}>{en ? "Search applications, companies…" : "Cerca candidature, aziende…"}</span>
+          <span style={{ flex: 1, fontSize: 13, color: "var(--fg-subtle)" }}>{en ? "Go to a section…" : "Vai a una sezione…"}</span>
           <kbd style={{ fontSize: 11, color: "var(--fg-subtle)", border: "1px solid var(--border-ds)", borderRadius: 5, padding: "1px 5px" }}>⌘K</kbd>
         </button>
         {actions}

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { workspaceNavigation, isWorkspaceRouteActive } from "../src/lib/workspace-navigation";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { StatusChip } from "../src/components/design/status-chip";
@@ -48,3 +50,18 @@ assert.equal(globeCopy("en").cta.saved, "Approve and submit");
 assert.equal(globeCopy("it").cta.saved, "Approva e invia");
 assert.equal(regionDisplayName({ key: "regno-unito", name: "Regno Unito" }, "en"), "United Kingdom");
 console.log("PASS shared status chips preserve heuristic qualifiers and support English/Italian; globe copy is localized.");
+
+for (const locale of ["it", "en"]) {
+  const navigation = workspaceNavigation(locale);
+  const routes = [...navigation.work, ...navigation.profile];
+  assert.equal(new Set(routes.map(item => item.href)).size, routes.length);
+  for (const item of routes) {
+    assert.ok(existsSync(`src/app/(app)${item.href}/page.tsx`), `${item.href} must resolve`);
+    assert.equal(isWorkspaceRouteActive(item.href, item.href), true);
+    assert.equal(isWorkspaceRouteActive(`${item.href}-unrelated`, item.href), false);
+  }
+}
+assert.equal(isWorkspaceRouteActive("/admin/reports", "/admin"), false);
+assert.equal(isWorkspaceRouteActive("/admin/reports", "/admin/reports"), true);
+assert.equal(isWorkspaceRouteActive("/applications/new", "/applications"), true);
+console.log("PASS shared navigation routes resolve with unique entries, exact admin root and nested application selection.");

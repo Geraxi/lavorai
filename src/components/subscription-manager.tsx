@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Icon } from "@/components/design/icon";
+import { useModalFocus } from "@/components/design/use-modal-focus";
 
 type Reason = "too_expensive" | "found_job" | "not_useful" | "technical" | "other";
 type Step = "reason" | "found_job" | "discount" | "pause" | "confirm" | "done";
@@ -44,10 +45,19 @@ export function SubscriptionManager({ planName }: { planName: string }) {
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [doneMsg, setDoneMsg] = useState<string>("");
+  const [loadError, setLoadError] = useState(false);
+  const dialog = useRef<HTMLDivElement>(null);
+  const closeDialog = useCallback(() => setOpen(false), []);
+  useModalFocus(open, dialog, closeDialog);
 
   async function load() {
-    const r = await fetch("/api/stripe/subscription").then((x) => x.json()).catch(() => ({}));
-    setSub(r.subscription ?? null);
+    setLoadError(false);
+    try {
+      const response = await fetch("/api/stripe/subscription");
+      if (!response.ok) throw new Error("Subscription unavailable");
+      const result = await response.json();
+      setSub(result.subscription ?? null);
+    } catch { setLoadError(true); }
   }
   useEffect(() => { load(); }, []);
 
@@ -60,6 +70,9 @@ export function SubscriptionManager({ planName }: { planName: string }) {
       await load();
       router.refresh();
       return j;
+    } catch {
+      toast.error("Connessione interrotta. Verifica lo stato e riprova.");
+      return null;
     } finally {
       setBusy(null);
     }
@@ -99,6 +112,7 @@ export function SubscriptionManager({ planName }: { planName: string }) {
     setStep("done");
   }
 
+  if (loadError) return <div role="alert" style={{ fontSize: 13, color: "var(--fg-muted)" }}>Stato del pagamento non disponibile. <button type="button" className="ds-btn ds-btn-sm" onClick={() => void load()}>Riprova</button></div>;
   if (sub === undefined) return <span className="ds-chip">Carico…</span>;
   if (sub === null) return null;
 
@@ -129,7 +143,7 @@ export function SubscriptionManager({ planName }: { planName: string }) {
       </div>
 
       {open && (
-        <div role="dialog" aria-modal="true" onClick={(e) => e.target === e.currentTarget && setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.45)", display: "grid", placeItems: "center", padding: 16 }}>
+        <div ref={dialog} role="dialog" aria-modal="true" aria-label="Gestisci abbonamento" tabIndex={-1} onClick={(e) => e.target === e.currentTarget && setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(0,0,0,0.45)", display: "grid", placeItems: "center", padding: 16 }}>
           <div className="fit-card" style={{ width: "min(520px, 100%)", padding: "22px 24px", gap: 0, maxHeight: "90vh", overflow: "auto" }}>
             {step === "reason" && (
               <>

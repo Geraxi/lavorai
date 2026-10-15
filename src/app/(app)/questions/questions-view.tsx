@@ -73,6 +73,7 @@ export function QuestionsView() {
   const [waiting, setWaiting] = useState(0);
   const [continuations, setContinuations] = useState<Continuation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const saveInFlight = useRef(false);
   const [view, setView] = useState<View>("pending");
@@ -83,6 +84,7 @@ export function QuestionsView() {
   const [locale, setLocale] = useState("it");
 
   async function load() {
+    setLoadError(false);
     const response = await fetch("/api/questions", { cache: "no-store" });
     if (!response.ok) throw new Error("Impossibile caricare le domande.");
     const data: { questions?: Question[]; continuations?: Continuation[]; waitingApplications?: number; locale?: string } = await response.json();
@@ -96,7 +98,11 @@ export function QuestionsView() {
       setView((current) => current === "pending" ? "review" : current);
     }
   }
-  useEffect(() => { void load().catch(() => setNotice("Non riusciamo a caricare le domande. Ricarica la pagina.")).finally(() => setLoading(false)); }, []);
+  async function retryLoad() {
+    setLoading(true);
+    try { await load(); } catch { setLoadError(true); } finally { setLoading(false); }
+  }
+  useEffect(() => { void retryLoad(); }, []);
 
   const pending = useMemo(() => questions.filter((question) => !question.answer.trim() && !question.suggestion).sort((a, b) => b.applications.length - a.applications.length), [questions]);
   const review = useMemo(() => questions.filter(needsReview), [questions]);
@@ -185,7 +191,7 @@ export function QuestionsView() {
           : "Risposte salvabili. Ripresa bloccata: manca una prova verificabile della pausa prima dell’invio oppure la candidatura non è idonea. Non verrà ritentata automaticamente."}</span>
         {application.canResume && <button type="button" disabled={saving || hasUnsavedAnswers(application.applicationId)} onClick={() => void confirmResume(application)}>Conferma ripresa di questa candidatura</button>}
       </div>)}
-      {loading ? <div className="qa-empty">Caricamento delle domande…</div> : total === 0 ? <div className="qa-empty"><CircleCheck size={35} aria-hidden /><h2>Nessuna domanda in sospeso</h2><p>Quando una candidatura richiederà una risposta, la troverai qui.</p><Link href="/applications">Vai alle candidature <ArrowRight size={16} aria-hidden /></Link></div> : <>
+      {loading ? <div className="qa-empty" role="status">Caricamento delle domande…</div> : loadError ? <div className="qa-empty" role="alert"><h2>Impossibile caricare le domande</h2><p>Le risposte salvate restano disponibili. Riprova a caricare la sezione.</p><button type="button" className="qa-primary" onClick={() => void retryLoad()}>Riprova</button></div> : total === 0 ? <div className="qa-empty"><CircleCheck size={35} aria-hidden /><h2>Nessuna domanda in sospeso</h2><p>Quando una candidatura richiederà una risposta, la troverai qui.</p><Link href="/applications">Vai alle candidature <ArrowRight size={16} aria-hidden /></Link></div> : <>
         {view === "focus" && focused ? <div className="qa-focus-layout">
           <section className="qa-focus-main">
             <button className="qa-back" type="button" onClick={() => setView("pending")}><ArrowLeft size={16} aria-hidden /> Tutte le domande</button>

@@ -25,17 +25,22 @@ export function ReferralCard() {
   const [data, setData] = useState<MyReferral | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetch("/api/referral/me")
-      .then((r) => r.json())
-      .then((j) => setData(j))
-      .finally(() => setLoading(false));
-  }, []);
+  async function load() {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/referral/me");
+      const body = await response.json();
+      if (!response.ok || typeof body.link !== "string" || !body.stats) throw new Error("Referral unavailable");
+      setData(body);
+    } catch { setData(null); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void load(); }, []);
 
-  function copyLink() {
+  async function copyLink() {
     if (!data) return;
     try {
-      navigator.clipboard.writeText(data.link);
+      await navigator.clipboard.writeText(data.link);
       toast.success("Link copiato!");
     } catch {
       toast.error("Copia fallita — copia manualmente");
@@ -62,7 +67,7 @@ export function ReferralCard() {
         {loading ? (
           <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>Carico…</div>
         ) : !data ? (
-          <div style={{ fontSize: 13, color: "var(--fg-muted)" }}>Errore nel caricamento.</div>
+          <div role="alert" style={{ fontSize: 13, color: "var(--fg-muted)" }}>Il link di invito non è disponibile. <button type="button" className="ds-btn ds-btn-sm" onClick={() => void load()}>Riprova</button></div>
         ) : (
           <>
             <div
@@ -75,6 +80,7 @@ export function ReferralCard() {
             >
               <input
                 readOnly
+                aria-label="Il tuo link di invito"
                 value={data.link}
                 style={{
                   flex: 1,
