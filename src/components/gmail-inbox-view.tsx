@@ -158,17 +158,16 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, locale = "
               <option value="newest">{tr("Newest", "Più recenti")}</option><option value="oldest">{tr("Oldest", "Meno recenti")}</option>
             </select>
           </div>
-          <div aria-label={tr("Messages", "Messaggi")}>
+          <div className="inbox-message-list" aria-label={tr("Messages", "Messaggi")}>
             {filtered.length === 0 ? <div className="workspace-empty">{messages.length
               ? tr("No messages match your filters.", "Nessun messaggio corrisponde ai filtri.")
               : tr("No replies yet. Messages received by LavorAI will appear here.", "Nessuna risposta per ora. I messaggi ricevuti da LavorAI compariranno qui.")}</div>
               : filtered.map((message) => <button key={message.id} type="button" className="inbox-message" onClick={() => setSelected(message.id)} aria-pressed={message.id === current?.id}>
-                <strong style={{ fontWeight: message.read === false ? 750 : 500 }}>{message.from.split("<")[0].trim() || message.from}</strong>
-                {message.company && <small>{message.company}</small>}
+                <div className="inbox-message-sender"><span className="inbox-avatar" aria-hidden="true">{(message.company || message.from).slice(0, 2).toUpperCase()}</span><div><strong style={{ fontWeight: message.read === false ? 750 : 500 }}>{message.from.split("<")[0].trim() || message.from}</strong>
+                {message.company && <small>{message.company}</small>}</div></div>
                 <p>{message.subject || tr("(no subject)", "(senza oggetto)")}</p>
                 <p className="fit-ellipsis workspace-muted">{message.snippet}</p>
-                <span className="workspace-chip">{kindLabel(message.kind, message.label)}</span>
-                <div><small>{fmtDate(message.date)} · {inboxSourceLabel(message.source)}</small></div>
+                <div className="inbox-message-meta"><span className="workspace-chip">{kindLabel(message.kind, message.label)}</span><small title={inboxSourceLabel(message.source)}>{fmtDate(message.date)}</small></div>
               </button>)}
           </div>
         </div>
@@ -178,9 +177,9 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, locale = "
               <div className="workspace-eyebrow">{tr("Received message", "Messaggio ricevuto")}</div>
               <h2>{current.subject || tr("(no subject)", "(senza oggetto)")}</h2>
               <p className="workspace-muted">{current.from}</p>
-              <p className="workspace-muted">{fmtDate(current.date)}</p>
+
             </div>
-            <div className="inbox-body" data-testid="message-body">{current.bodyText || current.snippet || tr("No content", "Nessun contenuto")}</div>
+            <div className="inbox-conversation"><div className="inbox-date-divider">{fmtDate(current.date)}</div><div className="inbox-body" data-testid="message-body">{current.bodyText || current.snippet || tr("No content", "Nessun contenuto")}</div></div>
             <div className="inbox-source-note">
               {current.source === "application_reply"
                 ? tr("Received directly by LavorAI. Read and archive state are not tracked for these messages.", "Ricevuto direttamente da LavorAI. Lettura e archiviazione non sono tracciate per questi messaggi.")

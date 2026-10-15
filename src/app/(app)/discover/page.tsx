@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
-import { JobSwiper } from "@/components/job-swiper";
+import { JobSwiper, DiscoverHeading } from "@/components/job-swiper";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -128,28 +128,8 @@ export default async function DiscoverPage() {
   return (
     <>
       <AppTopbar title={t("title")} breadcrumb={t("breadcrumb")} />
-      <div className="workspace-page">
-        <div className="mb-5">
-          <h1
-            style={{
-              fontSize: 22,
-              fontWeight: 600,
-              letterSpacing: "-0.022em",
-              margin: 0,
-            }}
-          >
-            {t("heading")}
-          </h1>
-          <p
-            style={{
-              fontSize: 13.5,
-              color: "var(--fg-muted)",
-              marginTop: 4,
-            }}
-          >
-            {t("subtitle", { count: jobs.length })}
-          </p>
-        </div>
+      <div className="workspace-page workspace-discover">
+        <DiscoverHeading count={jobs.length} />
 
         <JobSwiper jobs={jobs} />
       </div>

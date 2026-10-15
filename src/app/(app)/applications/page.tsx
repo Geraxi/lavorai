@@ -218,7 +218,7 @@ export default function ApplicationsPage() {
   return (
     <>
       <AppTopbar title={t("title")} breadcrumb={t("breadcrumb")} />
-      <div className="workspace-page">
+      <div className="workspace-page workspace-applications">
         <div className="workspace-heading">
           <div>
             <h1
@@ -483,8 +483,8 @@ export default function ApplicationsPage() {
             </tbody>
           </table>
         </div>}
-        {pendingApplications.length > 0 && <section className="ds-section-card" style={{ marginTop: 20, padding: 18 }} aria-label={tr("Candidature da completare", "Applications needing attention")}>
-          <h2 style={{ fontSize: 17, marginBottom: 12 }}>{tr("Da completare o verificare", "Complete or verify")} ({pendingApplications.length})</h2>
+        {pendingApplications.length > 0 && <details className="ds-section-card applications-attention" aria-label={tr("Candidature da completare", "Applications needing attention")}>
+          <summary>{tr("Da completare o verificare", "Complete or verify")} <span className="workspace-chip">{pendingApplications.length}</span></summary><div className="applications-attention-list">
           <p style={{ fontSize: 13, color: "var(--fg-muted)", marginBottom: 14 }}>{tr("Queste candidature non hanno una conferma di invio. Un errore tecnico non è un rifiuto dell'azienda.", "These applications have no submission confirmation. A technical failure is not a rejection by the company.")}</p>
           {pendingApplications.slice(0, 50).map((a) => <div key={a.id} style={{ padding: "12px 0", borderTop: "1px solid var(--border-ds)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
@@ -499,7 +499,7 @@ export default function ApplicationsPage() {
             </div>
           </div>)}
           {pendingApplications.length > 50 && <p style={{ fontSize: 12 }}>{tr("Mostrate le 50 candidature più recenti da completare.", "Showing the 50 most recent applications needing attention.")}</p>}
-        </section>}
+        </div></details>}
       </div>
 
       <DetailDrawer locale={en ? "en" : "it"} app={selected} onClose={closeDetails} />

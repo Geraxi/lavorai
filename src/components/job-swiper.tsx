@@ -88,6 +88,11 @@ function saveSkipped(set: Set<string>): void {
 
 type DiscoverJob = JobRow & { matchScore?: number | null };
 
+export function DiscoverHeading({ count }: { count: number }) {
+  const t = useTranslations("discoverPage");
+  return <header className="workspace-heading"><div><div className="workspace-eyebrow">Discover / LavorAI</div><h1>{t("heading")}</h1><p>{t("subtitle", { count })}</p></div></header>;
+}
+
 export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
   const en = useLocale() === "en";
   const tr = (it: string, english: string) => en ? english : it;
@@ -248,16 +253,17 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
         <button type="button" className={`ds-btn${!remoteOnly ? " ds-btn-primary" : ""}`} aria-pressed={!remoteOnly} onClick={() => setRemoteOnly(false)}>{tr("Tutti i ruoli", "All roles")} ({jobs.length})</button>
         <button type="button" className={`ds-btn${remoteOnly ? " ds-btn-primary" : ""}`} aria-pressed={remoteOnly} onClick={() => setRemoteOnly(true)}>{tr("Solo remoto", "Remote only")} ({jobs.filter(j => j.remote).length})</button>
         <a className="ds-btn" href="/preferences"><Icon name="filter" size={13} /> {tr("Preferenze di ricerca", "Search preferences")}</a>
+        <div className="discover-selection"><span>{t("queueRemaining", { count: queue.length })}</span><span>{jobs.filter(j => saved.has(j.id)).length} {tr("salvati su questo dispositivo", "saved on this device")}</span></div>
       </div>
       <div className="discover-layout">
         <div className="discover-main">
-          <div style={{ position: "relative", width: "100%", height: 540, marginTop: 8 }}>
+          <div className="discover-deck">
             <SwipeCard key={currentJob.id} job={currentJob} isAnimatingOut={animatingId === currentJob.id} animDir={animDir}
               isSaved={saved.has(currentJob.id)} onToggleSave={() => toggleSave(currentJob.id, currentJob.title)}
               onSwipe={(dir) => { if (dir === "right") apply(currentJob); else skip(currentJob.id); }}
               onTap={() => setDetailJob(currentJob)} />
           </div>
-          <div className="workspace-toolbar" style={{ justifyContent: "center", marginTop: 18 }}>
+          <div className="workspace-toolbar discover-actions">
             <button type="button" className="ds-btn" onClick={() => skip(currentJob.id)} disabled={!!animatingId} aria-label={t("skip")}><Icon name="x" size={16} /> {t("skip")}</button>
             <button type="button" className="ds-btn" onClick={() => setDetailJob(currentJob)}>{tr("Dettagli", "Details")}</button>
             <button type="button" className="ds-btn ds-btn-primary" onClick={() => apply(currentJob)} disabled={!!animatingId} aria-label={t("apply")}><Icon name="send" size={16} /> {t("apply")}</button>
@@ -266,22 +272,16 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
         </div>
         <aside className="workspace-stack">
           <section className="workspace-panel">
-            <div className="workspace-eyebrow">{tr("La tua selezione", "Your selection")}</div>
-            <h2>{t("queueRemaining", { count: queue.length })}</h2>
-            <p className="workspace-muted">{jobs.filter(j => saved.has(j.id)).length} {tr("salvate su questo dispositivo tra questi annunci", "saved on this device among these jobs")}</p>
-          </section>
-          <section className="workspace-panel">
             <h2>{tr("Coda di riserva", "Up next")} <span className="workspace-chip">{Math.min(queue.length - 1, 3)}</span></h2>
             {queue.slice(1, 4).map(job => <button key={job.id} type="button" className="discover-queue" onClick={() => setDetailJob(job)}>
-              <strong>{job.title}</strong><small>{job.company ?? "—"} · {job.location ?? tr("Sede non indicata", "Location not specified")}</small>
+              <div className="discover-queue-heading"><strong>{job.title}</strong>{job.matchScore != null && <span className="workspace-chip" title={tr("Match stimato dal CV", "Estimated CV match")}>{job.matchScore}%</span>}</div><small>{job.company ?? "—"} · {job.location ?? tr("Sede non indicata", "Location not specified")}</small>
               {(job.salaryMin || job.salaryMax) ? <small>{formatSalary(job.salaryMin, job.salaryMax)}</small> : null}
-              {job.matchScore != null && <span className="workspace-chip">{job.matchScore}% {tr("match stimato", "estimated match")}</span>}
             </button>)}
             {queue.length === 1 && <p className="workspace-muted">{tr("È l'ultimo annuncio della selezione.", "This is the last job in this selection.")}</p>}
           </section>
           <section className="workspace-panel">
             <h2>{tr("Affina la ricerca", "Refine your search")}</h2>
-            <p className="workspace-muted">{tr("Apri le preferenze per rivedere la ricerca. Controlla località e retribuzione nell’annuncio. Il match è una stima basata sul CV, non una valutazione del recruiter.", "Open preferences to review your search. Check location and salary in the listing. Match is an estimate based on your CV, not a recruiter assessment.")}</p>
+            <p className="workspace-muted">{tr("Il match è una stima dal CV, non una valutazione del recruiter. Rivedi località e retribuzione nelle preferenze.", "Match is a CV-based estimate, not a recruiter assessment. Review location and salary in your preferences.")}</p>
             <a className="ds-btn" href="/preferences" style={{ marginTop: 12 }}>{tr("Modifica preferenze", "Edit preferences")}</a>
           </section>
           <section className="workspace-panel">
@@ -581,11 +581,12 @@ function JobCardSurface({
     <div className="discover-tags">
       {job.remote && <span>{tr("Remoto", "Remote")}</span>}
       {job.contractType && <span>{job.contractType === "permanent" ? tr("Tempo indeterminato", "Permanent") : job.contractType}</span>}
-      <span>{jobSourceLabel(job.url) ?? portalOf(job.url)}</span>
+      {jobSourceLabel(job.url) && <span>{jobSourceLabel(job.url)}</span>}
     </div>
     {skills.length > 0 && <div><div className="workspace-eyebrow">{tr("Competenze citate nell'annuncio", "Skills mentioned in the job")}</div><div className="discover-tags">{skills.map(skill => <span key={skill}>{skill}</span>)}</div></div>}
     {description && <div className="discover-description">{description.length > 420 ? description.slice(0, 420) + "…" : description}</div>}
-    <p className="workspace-muted" style={{ marginTop: "auto" }}>{tr("Apri i dettagli per leggere la descrizione completa.", "Open details to read the full description.")}</p>
+    <div className="discover-facts"><div><small>{tr("Sede", "Location")}</small><strong>{job.location || tr("Non indicata", "Not specified")}</strong></div><div><small>{tr("Contratto", "Contract")}</small><strong>{job.contractType === "permanent" ? tr("Indeterminato", "Permanent") : job.contractType || tr("Non indicato", "Not specified")}</strong></div><div><small>{tr("Pubblicato", "Posted")}</small><strong>{job.postedAt ? new Date(job.postedAt).toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short" }) : "—"}</strong></div></div>
+    <p className="workspace-muted discover-footnote">{tr("Apri i dettagli per leggere la descrizione completa.", "Open details to read the full description.")}</p>
     {children}
   </article>;
 }

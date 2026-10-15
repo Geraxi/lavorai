@@ -9,7 +9,7 @@
 
 import dynamic from "next/dynamic";
 import { useLocale } from "next-intl";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { CityMarker, GlobeStats, PinKind } from "@/lib/dashboard-globe-data";
 import { PIN_COLORS, buildPins, JobCard, type GlobeFilter, type GlobePin } from "./dashboard-globe";
@@ -41,13 +41,25 @@ const LEGEND: Array<{ key: PinKind; label: string }> = [
   { key: "saved", label: "Salvate" },
 ];
 
-export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityMarker[]; stats: GlobeStats; greeting?: React.ReactNode }) {
+export function DashboardGlobeMap({ markers, stats, greeting, compact = false }: { markers: CityMarker[]; stats: GlobeStats; greeting?: React.ReactNode; compact?: boolean }) {
   const en = useLocale() === "en";
   const tr = (it: string, english: string) => en ? english : it;
   const label = (key: GlobeFilter) => ({ all: tr("Tutto", "All"), open: tr("Opportunità", "Opportunities"), sent: tr("Inviate", "Submitted"), desired: tr("Desiderate", "Preferred"), saved: tr("Salvate", "Saved") }[key]);
   const [filter, setFilter] = useState<GlobeFilter>("all");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [sheet, setSheet] = useState<GlobePin | null>(null);
+  const mapRef = useRef<HTMLElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const sheetWasOpen = useRef(false);
+  useEffect(() => {
+    if (sheet) sheetRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    else if (sheetWasOpen.current) {
+      // WebGL regenerates its pin elements after selection, so restore to the
+      // stable active filter instead of a possibly detached pin button.
+      mapRef.current?.querySelector<HTMLButtonElement>('.dg-filters [aria-selected="true"]')?.focus();
+    }
+    sheetWasOpen.current = Boolean(sheet);
+  }, [sheet]);
   const { region, setRegionKey } = useDashboardFocus();
   const focus = region ? { key: region.key, lat: region.lat, lng: region.lng, altitude: regionAltitude(region.radius) } : null;
 
@@ -56,9 +68,10 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
   const sheetJobs = sheet ? sheet.cities.flatMap((c) => c.jobs).filter((j) => filter === "all" || j.kind === filter) : [];
 
   return (
-    <section className="dg-hero" aria-label={tr("Mappa globale delle opportunità", "Global opportunity map")}>
+    <section ref={mapRef} className={`dg-hero${compact ? " dg-compact" : ""}`} onKeyDown={event => { if (sheet && event.key === "Escape") { event.preventDefault(); setSheet(null); } }} aria-label={tr("Mappa globale delle opportunità", "Global opportunity map")}>
+      <div className="dg-map-content" inert={sheet ? true : undefined}>
       <div className="dg-stage">
-        <DashboardGlobe markers={markers} filter={filter} selectedKey={selectedKey} onSelect={(k) => { setSelectedKey(k); setSheet(null); }} onMore={(p) => setSheet(p)} focus={focus} />
+        <DashboardGlobe compact={compact} markers={markers} filter={filter} selectedKey={selectedKey} onSelect={(k) => { setSelectedKey(k); setSheet(null); }} onMore={(p) => setSheet(p)} focus={focus} />
       </div>
 
       {greeting && <div className="dg-greeting">{greeting}</div>}
@@ -95,9 +108,11 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
         </div>
       )}
 
+      </div>
+
       {/* Sheet laterale: tutte le opportunità di una città/cluster */}
       {sheet && (
-        <aside className="dg-sheet" aria-label={`${tr("Opportunità a", "Opportunities in")} ${sheet.name}`}>
+        <aside ref={sheetRef} role="dialog" className="dg-sheet" aria-label={`${tr("Opportunità a", "Opportunities in")} ${sheet.name}`}>
           <div className="dg-sheet-head">
             <div>
               <div className="dg-sheet-title">{sheet.name}</div>
@@ -119,7 +134,7 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
       )}
 
       {/* Mobile: card scorrevoli sotto il globo */}
-      <div className="dg-mobile-cards" aria-label={tr("Opportunità", "Opportunities")}>
+      <div className="dg-mobile-cards" inert={sheet ? true : undefined} aria-label={tr("Opportunità", "Opportunities")}>
         {mobilePins.map((p) => (
           <div key={p.key} className={`dg-mobile-card${p.key === selectedKey ? " is-selected" : ""}`} role="group" aria-label={`${p.name}: ${p.total} ${tr("opportunità", "opportunities")}`}>
             <button type="button" className="dg-mobile-card-focus" aria-pressed={p.key === selectedKey} onClick={() => setSelectedKey(p.key === selectedKey ? null : p.key)}>

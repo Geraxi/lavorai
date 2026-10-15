@@ -8,8 +8,11 @@ import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
 
-const out = resolve('output/playwright/user-workspace');
+const out = resolve(process.env.WORKSPACE_SCREENSHOT_DIR || 'output/playwright/user-workspace');
 await mkdir(out, { recursive: true });
+const fontFile = process.env.WORKSPACE_FONT_FILE;
+const fontCss = fontFile ? '@font-face{font-family:WorkspaceInter;font-style:normal;font-weight:100 900;font-display:block;src:url(data:font/woff2;base64,'+(await readFile(fontFile)).toString('base64')+') format("woff2");}' : '';
+const fixtureFont = fontFile ? 'WorkspaceInter' : 'Arial';
 const stub = {
   'next/navigation': `export const usePathname = () => location.pathname; const router = { refresh() { window.__refreshes++; }, push(url) { window.__navigation = url; } }; export const useRouter = () => router; const params = new URLSearchParams(location.search); export const useSearchParams = () => params;`,
   'next/link': `import React from 'react'; export default function Link({ prefetch, ...props }) { return React.createElement('a', props); }`,
@@ -17,8 +20,8 @@ const stub = {
   'next-auth/react': `export const signOut = () => {};`,
   'next-intl/server': `export const getLocale = async () => window.__locale; export const getTranslations = async namespace => (key, values={}) => Object.entries(values).reduce((text,[name,value])=>text.replace("{"+name+"}",value),window.__messages[namespace][key] ?? key);`,
   '@/lib/session': `export const getCurrentUser = async () => ({ id: 'fixture', name: 'Alex Example', email: 'alex@example.test', welcomeSeenAt: new Date() });`,
-  '@/lib/db': `export const prisma = { application: { count: async query => window.__empty ? 0 : query.where.userStatus === 'offerta' ? 1 : 2, findMany: async query => query.select.interviewSessions ? [] : [] } };`,
-  '@/lib/onboarding': `export const getOnboardingState = async () => ({ hasUploadedCv: true, hasSetPreferences: true, hasFirstApplication: true });`,
+  '@/lib/db': `export const prisma = { application: { count: async query => window.__empty ? 0 : query.where.userStatus === 'offerta' ? 1 : 2, findMany: async query => !window.__dense ? [] : query.select.interviewSessions ? Array.from({length:3},(_,i)=>({id:'interview-'+i,createdAt:new Date(),lastReplyAt:new Date(),job:{title:'Senior Engineer — accessibility and international product platforms',company:'Synthetic Interview Company '+i},interviewSessions:[]})) : [{id:'accepted-fixture',userId:'fixture',status:'success',submittedVia:'email_recruiter',emailAttempts:[{status:'accepted',providerEmailId:'synthetic-proof',acceptedAt:new Date()}]}] } };`,
+  '@/lib/onboarding': `export const getOnboardingState = async () => ({ hasUploadedCv: !window.__dense, hasSetPreferences: !window.__dense, hasFirstApplication: !window.__dense });`,
   '@/lib/dashboard-globe-data': `export const getDashboardGlobeData = async () => window.__globe; export const angularDistance = (a,b,c,d) => Math.acos(Math.max(-1,Math.min(1,Math.sin(a*Math.PI/180)*Math.sin(c*Math.PI/180)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.cos((b-d)*Math.PI/180))))*180/Math.PI;`,
   '@/lib/auto-apply-readiness': `export const getAutoApplyReadiness = async () => ({ tone: 'action', eyebrow: 'Candidature', title: 'Solo candidature confermate', detail: "L'invio automatico è sospeso. Il servizio accetta soltanto nuove candidature confermate esplicitamente, con un limite complessivo di 10 invii al giorno (UTC). Le tue preferenze restano salvate.", href: '/jobs', cta: 'Vedi le offerte' });`,
   '@/components/welcome-modal': `export const WelcomeModal = () => null;`,
@@ -35,7 +38,7 @@ import { Toaster } from 'sonner';
 import { AppShell } from './src/components/design/app-shell';
 import { AppTopbar } from './src/components/design/topbar';
 import { GmailInboxView } from './src/components/gmail-inbox-view';
-import { JobSwiper } from './src/components/job-swiper';
+import { JobSwiper, DiscoverHeading } from './src/components/job-swiper';
 import ApplicationsPage from './src/app/(app)/applications/page';
 import DashboardPage from './src/app/(app)/dashboard/page';
 import { MaterialiView } from './src/app/(app)/materiali/materiali-view';
@@ -44,15 +47,29 @@ import it from './messages/it.json'; import en from './messages/en.json';
 window.__locale = new URLSearchParams(location.search).get('locale') || 'it';
 window.__messages = window.__locale === 'en' ? en : it;
 window.__empty = new URLSearchParams(location.search).has('empty');
+window.__dense = new URLSearchParams(location.search).has('dense');
 window.__requests = []; window.__refreshes = 0;
 const now = new Date().toISOString();
 const jobs = ['Senior React Engineer', 'Product Designer', 'Platform Engineer', 'Frontend Developer'].map((title,i) => ({ id:'job-'+i, title, company:['Example Studio','Sample Labs','Demo Cloud','Example Works'][i], location:['Milano, Italia','Berlin, Germany','Remote EU','London, UK'][i], description:'React TypeScript design systems and accessible interfaces. Work with the product team to build reliable customer experiences. Experience with SQL, Git and automated testing is useful. This is a local synthetic job fixture.', url:'https://example.test/jobs/'+i, contractType:'permanent', remote:new URLSearchParams(location.search).has('onsite')?false:i!==1, salaryMin:i===1?null:60000, salaryMax:i===1?null:80000, postedAt:now, matchScore:i===0?null:88-i }));
 const phases = ['confirmed','accepted','pending','delivered','manual','failed'];
 const labels = ['Ricevuta ATS verificata','Email accettata dal provider','Risposte necessarie','Email consegnata','Invio dichiarato da te','Non inviata'];
 const applications = window.__empty ? [] : phases.map((phase,i) => ({ id:'app-'+i, status:i===2?'needs_answers':i===5?'failed':'success', portal:'greenhouse', atsScore:i===0?null:80+i, suggestions:[], createdAt:now, errorMessage:null, coverLetterText:i%2?'Dear hiring team, this is a synthetic cover letter used only for local browser verification.':null, hasCvDocx:true, hasCoverLetterDocx:i%2===1, hasCvPdf:false, cvLanguage:i%2?'en':'it', userStatus:i===3?'colloquio':i===4?'offerta':null, viewedAt:i===1?now:null, submittedVia:phase==='manual'?'manual':'portal_greenhouse', submittedAt:phase==='confirmed'?now:null, lastReplyAt:i===3?now:null, replyCount:i===3?1:0, lastReplyKind:i===3?'colloquio':null, submitConfirmation:null, delivery:{phase,label:labels[i],detail:'Stato documentato della candidatura di prova.',tone:'neutral'}, deliveryRecipient:null, job:{ ...jobs[i%4], source:'greenhouse' } }));
+if(window.__dense && applications.length) {
+  const originals=applications.slice();
+  applications.push(...Array.from({length:54},(_,i)=>({...originals[i%originals.length],id:'dense-'+i,job:{...originals[i%originals.length].job,title:originals[i%originals.length].job.title+' — Design systems and accessibility for international customer platforms'}})));
+  applications[2].status='awaiting_consent';
+}
 const messages = window.__empty ? [] : applications.slice(0,4).map((a,i)=> ({id:'application_reply:'+i, source:i===3?'gmail':'application_reply', from:'Recruiter '+i+' <recruiter@example.test>', subject:['Interview availability','Application received','Delivery failed','Role update'][i], snippet:'Thank you for your interest in this position.', bodyText:'Hello Alex,\\n\\nThank you for your interest. Can we arrange a conversation next week?\\n\\nThis is a synthetic message for browser QA.\\n<img src="https://tracker.invalid/pixel"><script>alert(1)</script>', date:now, kind:['colloquio','ricevuta','bounce','risposta'][i], label:['Possible interview','Application receipt','Delivery failure','Possible recruiter reply'][i], read:i===3?false:null, applicationId:a.id, applicationStatus:a.userStatus, company:a.job.company, jobTitle:a.job.title, jobRelated:true}));
+if(window.__dense && messages.length) {
+  const originals=messages.slice();
+  messages.push(...Array.from({length:96},(_,i)=>({...originals[i%4],id:'dense-message-'+i})));
+  messages[0].bodyText=Array.from({length:60},()=>messages[0].bodyText).join('\\n\\n');
+}
 const materials = applications.map(a => ({id:a.id,title:a.job.title,company:a.job.company,location:a.job.location,jobUrl:a.job.url,createdAt:a.createdAt,completedAt:null,status:a.status,submittedVia:a.submittedVia,delivery:a.delivery,hasPdf:false,hasDocx:true,hasLetter:a.hasCoverLetterDocx,letterText:a.coverLetterText,language:a.cvLanguage,match:a.atsScore,lastReplyAt:a.lastReplyAt,lastReplyKind:a.lastReplyKind}));
 window.__globe = { markers: window.__empty ? [] : [{ key:'milan', name:'Milano', country:'IT', lat:45.46,lng:9.19,counts:{open:4,sent:0,desired:0,saved:0},jobs:jobs.map(j=>({...j,href:'/jobs/'+j.id,match:j.matchScore,kind:'open',isNew:false})),isNew:false}], stats:{analyzed:window.__empty?0:4,compatible:window.__empty?0:4,newOpportunities:0,counts:{open:window.__empty?0:4,sent:0,desired:0,saved:0}}, featuredKeys:[] };
+if(window.__dense) {
+  window.__globe.markers.push(...['DE','GB','US'].map((country,i)=>({...window.__globe.markers[0],key:'country-'+i,name:'Synthetic City '+i,country,lat:40+i,lng:-30+i*20})));
+}
 if(new URLSearchParams(location.search).has('globeLabels')) {
   const counts={open:1,sent:1,desired:1,saved:1}; window.__globe.markers[0].counts=counts; window.__globe.stats.counts=counts;
   window.__globe.markers[0].jobs.forEach((job,i)=>job.kind=['open','sent','desired','saved'][i]);
@@ -60,7 +77,7 @@ if(new URLSearchParams(location.search).has('globeLabels')) {
 window.fetch = async (url, options={}) => {
   window.__requests.push({url:String(url),method:options.method||'GET',body:options.body});
   if(String(url).includes('/api/applications/apply')) return new Response(JSON.stringify({message:'Synthetic blocked submission'}),{status:403});
-  if(String(url).includes('/cv-preview')) return Response.json({text:'Alex Example\\nFrontend Engineer\\n\\nSUMMARY\\nSynthetic CV document for local testing.\\n\\nEXPERIENCE\\nExample Studio — Frontend Engineer\\nBuilt accessible web interfaces with React and TypeScript.\\n\\nSKILLS\\nReact · TypeScript · SQL · Testing'});
+  if(String(url).includes('/cv-preview')) return Response.json({text:(window.__dense ? 'Long synthetic CV paragraph for scroll testing. '.repeat(400)+'\\n\\n' : '')+'Alex Example\\nFrontend Engineer\\n\\nSUMMARY\\nSynthetic CV document for local testing.\\n\\nEXPERIENCE\\nExample Studio — Frontend Engineer\\nBuilt accessible web interfaces with React and TypeScript.\\n\\nSKILLS\\nReact · TypeScript · SQL · Testing'});
   if(String(url).startsWith('/api/applications?')) {
     if(new URLSearchParams(location.search).has('error')) return new Response('{}',{status:503});
     return Response.json({applications});
@@ -78,7 +95,7 @@ async function main() {
  else if(location.pathname==='/inbox') content=<GmailInboxView messages={messages} gmailConnected={false} userEmail="alex@example.test" locale={window.__locale} />;
  else if(location.pathname==='/applications') content=<ApplicationsPage />;
  else if(location.pathname==='/materiali') content=<MaterialiView items={materials} total={materials.length} />;
- else content=<><AppTopbar title="Discover" /><div className="workspace-page"><header className="workspace-heading"><div><div className="workspace-eyebrow">Discover</div><h1>{window.__locale==='en'?'Your next opportunity':'La tua prossima opportunità'}</h1></div></header><JobSwiper jobs={window.__empty?[]:jobs} /></div></>;
+ else content=<><AppTopbar title="Discover" /><div className="workspace-page workspace-discover"><DiscoverHeading count={window.__empty?0:jobs.length} /><JobSwiper jobs={window.__empty?[]:jobs} /></div></>;
  createRoot(document.getElementById('root')).render(<NextIntlClientProvider locale={window.__locale} messages={window.__messages}><SWRConfig value={{provider:()=>new Map(),dedupingInterval:0,shouldRetryOnError:false}}><AppShell sidebarProps={{userName:'Alex Example',userPlan:'Local fixture',isAdmin:false}}>{content}</AppShell><Toaster /></SWRConfig></NextIntlClientProvider>);
 }
 main();
@@ -88,7 +105,7 @@ await build({ stdin:{contents:entry,resolveDir:process.cwd(),loader:'tsx'}, bund
   b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:stub[args.path],loader:'tsx',resolveDir:process.cwd()}));
 }}] });
 execFileSync(process.execPath,['node_modules/tailwindcss/lib/cli.js','-i','src/app/globals.css','-o',join(out,'base.css')],{stdio:'pipe'});
-await writeFile(join(out,'index.html'),'<!doctype html><html style="--font-inter:Arial"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/workspace.css"></head><body><div id="root"></div><script>window.__nativeFetch=window.fetch.bind(window)</script><script src="/workspace.js"></script></body></html>');
+await writeFile(join(out,'index.html'),'<!doctype html><html style="--font-inter:'+fixtureFont+'"><head><style>'+fontCss+'</style><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/workspace.css"></head><body><div id="root"></div><script>window.__nativeFetch=window.fetch.bind(window)</script><script src="/workspace.js"></script></body></html>');
 const server = createServer(async(req,res)=>{
   const pathname=new URL(req.url,'http://localhost').pathname;
   const path=['/workspace.js','/workspace.css','/base.css'].includes(pathname)?join(out,pathname.slice(1)):pathname.startsWith('/textures/')?join(process.cwd(),'public',pathname):join(out,'index.html');
@@ -102,14 +119,71 @@ if(process.argv.includes('--serve')) { console.log(base); await new Promise(()=>
 let browser;
 try {
   browser=await chromium.launch({channel:'chrome',headless:true,args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
-  const page=await browser.newPage({viewport:{width:1440,height:1000}});
+  const page=await browser.newPage({viewport:{width:1440,height:900},reducedMotion:"reduce"});
   const errors=[]; const external=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/*',route=>{if(!route.request().url().startsWith(base)){external.push(route.request().url());return route.abort();} return route.continue();});
+  if (process.argv.includes('--reference-captures')) {
+    const geometry = [];
+    for (const [width,height] of [[1440,900],[1366,768],[390,844]]) {
+      await page.setViewportSize({width,height});
+      for (const name of (process.env.WORKSPACE_CAPTURE_ROUTES || 'dashboard,discover,inbox,applications,materiali').split(',')) for (const locale of ['it','en']) {
+        await page.goto(base+'/'+name+'?locale='+locale);
+        await page.locator('.lavorai-main h1').waitFor();
+        await page.evaluate(()=>document.fonts.ready);
+        if(name==='materiali') await page.locator('.mat-cv-paper').waitFor();
+        if(name==='applications') await page.locator('.pipeline-card').first().waitFor();
+        if(name==='dashboard') await page.locator('.dg-globe canvas').waitFor();
+        await page.mouse.move(0,0);
+        await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+        const sizes = await page.evaluate(()=>{const main=document.querySelector('.lavorai-main');return {bodyHeight:document.documentElement.scrollHeight,bodyWidth:document.documentElement.scrollWidth,mainHeight:main.clientHeight,mainScrollHeight:main.scrollHeight,panels:Object.fromEntries(['.pipeline-board','.mat-preview','.dashboard-overview','.discover-deck','.inbox-reader'].map(selector=>[selector,document.querySelector(selector)?.getBoundingClientRect().top ?? null]))};});
+        geometry.push({name,locale,width,height,...sizes});
+        if (process.argv.includes('--assert-fit') && width > 1100) { assert.ok(sizes.bodyHeight <= height + 1, name+' body vertical overflow'); assert.ok(sizes.mainScrollHeight <= sizes.mainHeight + 1, name+' main vertical overflow'); assert.ok(sizes.bodyWidth <= width, name+' horizontal overflow'); }
+        await page.screenshot({path:join(out,`${name}-${locale}-${width}x${height}.png`),fullPage:false,animations:'disabled'});
+      }
+    }
+    if (process.argv.includes('--assert-fit')) {
+      await page.setViewportSize({width:1366,height:768});
+      for(const variant of ['dense','empty']) for(const name of (process.env.WORKSPACE_CAPTURE_ROUTES || 'dashboard,discover,inbox,applications,materiali').split(',')) {
+        await page.goto(base+'/'+name+'?locale=en&'+variant+'=1');
+        await page.locator('.lavorai-main h1').waitFor();
+        await page.evaluate(()=>document.fonts.ready);
+        if(name==='applications' && variant==='dense') await page.locator('.pipeline-card').first().waitFor();
+        if(name==='materiali' && variant==='dense') await page.locator('.mat-cv-paper').waitFor();
+        if(name==='dashboard') await page.locator('.dg-globe canvas').waitFor();
+        const sizes=await page.evaluate(()=>{const main=document.querySelector('.lavorai-main');return {bodyHeight:document.documentElement.scrollHeight,bodyWidth:document.documentElement.scrollWidth,mainHeight:main.clientHeight,mainScrollHeight:main.scrollHeight,panels:Object.fromEntries(['.pipeline-board','.mat-preview','.dashboard-overview','.discover-deck','.inbox-reader'].map(selector=>[selector,document.querySelector(selector)?.getBoundingClientRect().top ?? null]))};});
+        assert.ok(sizes.bodyHeight<=768 && sizes.bodyWidth<=1366 && sizes.mainScrollHeight<=sizes.mainHeight+1,name+' '+variant+' viewport fit');
+        geometry.push({name,variant,width:1366,height:768,...sizes});
+        if(name==='dashboard' && variant==='empty') {
+          assert.ok(await page.locator('.dg-empty').evaluate(el=>{const outer=el.closest('.dg-hero').getBoundingClientRect(); const bounds=el.getBoundingClientRect(); const cta=el.querySelector('a').getBoundingClientRect();return bounds.left>=outer.left && bounds.right<=outer.right && cta.top>=outer.top && cta.bottom<=outer.bottom;}),'Empty globe message and preferences action remain inside the map');
+        }
+        if(name==='applications' && variant==='dense') {
+          await page.locator('.applications-attention summary').click();
+          assert.ok(await page.locator('.applications-attention-list').evaluate(el=>el.scrollHeight>el.clientHeight),'Attention records have bounded scrolling');
+          assert.ok(await page.locator('.lavorai-main').evaluate(el=>el.scrollHeight<=el.clientHeight+1),'Expanded attention keeps the page in the viewport');
+          await page.locator('.applications-attention summary').click();
+          assert.ok(await page.locator('.pipeline-lane-list').first().evaluate(el=>el.scrollHeight>el.clientHeight),'Dense pipeline scrolls internally');
+        }
+        if(name==='inbox' && variant==='dense') {
+          assert.ok(await page.locator('.inbox-message-list').evaluate(el=>el.scrollHeight>el.clientHeight));
+          assert.ok(await page.locator('.inbox-conversation').evaluate(el=>el.scrollHeight>el.clientHeight));
+        }
+        if(name==='materiali' && variant==='dense') {
+          assert.ok(await page.locator('.mat-list-scroll').evaluate(el=>el.scrollHeight>el.clientHeight));
+          assert.ok(await page.locator('.mat-preview').evaluate(el=>el.scrollHeight>el.clientHeight));
+        }
+        await page.screenshot({path:join(out,name+'-'+variant+'-1366x768.png'),fullPage:false,animations:'disabled'});
+      }
+      assert.deepEqual(errors,[]); assert.deepEqual(external,[]);
+    }
+    await writeFile(join(out,'geometry.json'),JSON.stringify({geometry,errors,external,font:fixtureFont},null,2));
+    console.log(JSON.stringify({captures:geometry.length,errors,external,geometry},null,2));
+  } else {
   for(const route of ['dashboard','discover','inbox','applications','materiali']) {
     for(const locale of ['it','en']) {
       await page.goto(base+'/'+route+'?locale='+locale);
       await page.locator('.lavorai-main h1').waitFor();
+        await page.evaluate(()=>document.fonts.ready);
       if(route==='materiali') await page.locator('.mat-cv-paper').waitFor();
       if(route==='applications') await page.locator('.pipeline-card').first().waitFor();
       if(route==='dashboard') { await page.locator('.dg-globe canvas').waitFor(); if(locale==='en') await page.getByText('Automatic submissions are paused.',{exact:false}).waitFor(); }
@@ -134,16 +208,21 @@ try {
     await page.locator('.dg-globe canvas').waitFor();
     const kinds=locale==='en' ? [['Opportunity','Apply'],['Submitted','View application'],['Preferred','Search here'],['Saved','Approve and submit']] : [['Opportunità','Invia candidatura'],['Inviata','Vedi candidatura'],['Desiderata','Cerca qui'],['Salvata','Approva e invia']];
     for(let index=0;index<kinds.length;index++) {
-      const [label,action]=kinds[index];
+      const [label]=kinds[index];
       await page.locator('.dg-filters [role=tab]').nth(index+1).click();
       await page.waitForFunction(expected => document.querySelector('.dg-globe .dg-pin-body')?.getAttribute('aria-label')?.endsWith(expected.toLowerCase()),label);
-      await page.locator('.dg-globe .dg-pin-body').first().evaluate(el=>el.click());
-      const webgl=page.locator('.dg-globe .dg-card-cta').first();
-      await page.waitForFunction(expected => document.querySelector('.dg-globe .dg-card-cta')?.textContent?.includes(expected),action);
-      assert.ok((await webgl.textContent()).includes(action),'WebGL '+locale+' '+action);
-      assert.equal(await page.locator('.dg-globe .dg-card .dg-chip').first().textContent(),label);
-      assert.equal(await page.locator('.dg-mobile-cards .dg-card .dg-chip').first().textContent(),label);
-      assert.ok((await page.locator('.dg-mobile-cards .dg-card-cta').first().textContent()).includes(action),'React card '+locale+' '+action);
+      await page.locator('.dg-globe .dg-pin-body').first().focus();
+      await page.keyboard.press('Enter');
+      const sheet=page.locator('.dg-sheet');
+      await sheet.waitFor();
+      assert.equal(await sheet.locator('.dg-sheet-row').count(),1,'Filtered map sheet has the selected record');
+      assert.ok((await sheet.textContent()).includes(['Senior React Engineer','Product Designer','Platform Engineer','Frontend Developer'][index]));
+      assert.ok(await sheet.evaluate(el=>el.contains(document.activeElement)),'Map sheet receives keyboard focus');
+      assert.equal(await page.locator('.dg-map-content').evaluate(el=>el.inert),true,'Covered map controls are inert');
+      await page.keyboard.press('Escape');
+      assert.equal(await sheet.count(),0,'Escape dismisses map sheet');
+      assert.ok(await page.locator('.dg-filters [aria-selected=true]').evaluate(el=>el===document.activeElement),'Closing map sheet restores stable focus');
+
     }
     const select=page.locator('.dg-region-select');
     await select.selectOption('regno-unito');
@@ -151,7 +230,9 @@ try {
     await page.goto(base+'/dashboard?locale='+locale);
     await page.locator('.dg-globe .dg-pin-body').first().waitFor({state:'attached'});
     await page.locator('.dg-globe .dg-pin-body').first().evaluate(el=>el.click());
-    await page.waitForFunction(expected => document.querySelector('.dg-globe .dg-card-more')?.textContent?.includes(expected),locale==='en'?'4 opportunities':'4 opportunità');
+    await page.locator('.dg-sheet').waitFor();
+    assert.equal(await page.locator('.dg-sheet-row').count(),4);
+    await page.locator('.dg-sheet-close').click();
   }
   await page.setViewportSize({width:390,height:844});
   await page.goto(base+'/inbox?locale=en');
@@ -225,9 +306,11 @@ try {
   await page.getByRole('button',{name:'Light theme',exact:true}).first().click();
   assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
   await page.getByRole('button',{name:'Dark theme',exact:true}).first().waitFor();
+  await page.waitForFunction(()=>getComputedStyle(document.querySelector('.workspace-topbar')).backgroundColor==='rgb(255, 255, 255)');
   assert.equal(await page.locator('.workspace-topbar').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)','Light topbar must contrast with dark text');
   await page.screenshot({path:join(out,'discover-light.png'),fullPage:false,animations:'disabled'});
   assert.deepEqual(errors,[]); assert.deepEqual(external,[]);
-  console.log('PASS: five real views, Italian/English desktop/mobile, empty/error states, filters, safe email text, status update, keyboard save without application, tabs, light theme and English/Italian WebGL/React globe/status labels. No production requests.');
-  await writeFile(join(out,'qa-result.json'),JSON.stringify({passed:true,errors,external,screenshots:41,base},null,2));
+  console.log('PASS: five real views, Italian/English desktop/mobile, empty/error states, filters, safe email text, status update, keyboard save without application, tabs, light theme and English/Italian map sheets/status labels. No production requests.');
+  await writeFile(join(out,'qa-result.json'),JSON.stringify({passed:true,errors,external,screenshots:41,base,font:fixtureFont},null,2));
+  }
 } finally { if(browser) await browser.close(); await new Promise(resolve=>server.close(resolve)); }

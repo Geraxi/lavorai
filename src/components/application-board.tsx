@@ -26,7 +26,7 @@ export function ApplicationBoard({ applications, onOpen }: { applications: Board
         const rows = applications.filter(a => pipelineLane(a) === lane);
         return <section key={lane} className="pipeline-lane" aria-label={label}>
           <h2>{label}<span className="workspace-chip">{rows.length}</span></h2>
-          {rows.length === 0 && <p className="workspace-muted">{tr("Nessuna candidatura", "No applications")}</p>}
+          <div className="pipeline-lane-list">{rows.length === 0 && <p className="workspace-muted">{tr("Nessuna candidatura", "No applications")}</p>}
           {rows.map(a => <button key={a.id} type="button" className="pipeline-card" aria-pressed={selected?.id === a.id} onClick={() => setSelectedId(a.id)}>
             <strong>{a.role}</strong><small>{a.company} · {a.location}</small>
             <span className="workspace-chip">{a.match == null ? tr("Score non disponibile", "Score unavailable") : `${a.match}% · ${tr("score AI", "AI score")}`}</span>
@@ -34,7 +34,7 @@ export function ApplicationBoard({ applications, onOpen }: { applications: Board
             {a.userStatus && <small>{tr("Stato dichiarato", "Reported status")}: {applicationLabel(a.userStatus, en ? "en" : "it")}</small>}
             {!a.userStatus && a.lastReplyKind && <small>{tr("Messaggio classificato", "Message classified")}: {applicationLabel(a.lastReplyKind, en ? "en" : "it")}</small>}
             <small>{a.applied}</small>
-          </button>)}
+          </button>)}</div>
         </section>;
       })}
     </div>

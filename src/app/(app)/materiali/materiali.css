@@ -216,3 +216,83 @@
   .mat-controls .mat-search { max-width: none; }
   .reference-workspace .mat-summary-item { min-height: 70px; }
 }
+
+/* Keep the package list, preview and downloads in the same desktop viewport. */
+.reference-workspace .mat-header { margin-bottom: 10px; align-items: center; }
+.reference-workspace .mat-header h1 { font-size: 20px; margin: 3px 0; }
+.reference-workspace .mat-eyebrow { font-size: 10px; }
+.reference-workspace .mat-primary { min-height: 32px; padding: 7px 11px; border-radius: 7px; font-size: 11px; }
+.reference-workspace .mat-summary { gap: 8px; margin-bottom: 10px; }
+.reference-workspace .mat-summary-item { min-height: 48px; padding: 7px 11px; gap: 9px; }
+.reference-workspace .mat-summary-item > svg { width: 20px; height: 20px; }
+.reference-workspace .mat-summary-item strong { font-size: 18px; }
+.reference-workspace .mat-summary-update strong { font-size: 12px; }
+.reference-workspace .mat-summary-item span { font-size: 11px; }
+.reference-workspace .mat-controls { gap: 8px; margin-bottom: 10px; }
+.reference-workspace .mat-controls .mat-search { max-width: 200px; }
+.reference-workspace .mat-search, .reference-workspace .mat-select { min-height: 32px; border-radius: 6px; }
+.reference-workspace .mat-select select { min-width: 95px; font-size: 11px; }
+.reference-workspace .mat-filters { gap: 3px; }
+.reference-workspace .mat-filters button { min-height: 32px; padding: 0 9px; font-size: 11px; }
+.reference-workspace .mat-workspace { gap: 10px; grid-template-columns: 300px minmax(0,1fr); }
+.reference-workspace .mat-list, .reference-workspace .mat-detail { border-radius: 9px; }
+.reference-workspace .mat-list-heading { padding: 10px 12px; font-size: 11px; }
+.reference-workspace .mat-list-scroll { min-height: 0; padding: 0 7px 7px; }
+.reference-workspace .mat-list-row { padding: 9px 7px; grid-template-columns: 32px minmax(0,1fr) 64px; gap: 8px; margin-bottom: 3px; border-radius: 7px; }
+.reference-workspace .mat-list-row > :first-child { width: 32px !important; height: 32px !important; font-size: 12px !important; }
+.reference-workspace .mat-list-end { gap: 5px; }
+.reference-workspace .mat-match { width: 32px; height: 32px; }
+.reference-workspace .mat-status { font-size: 9px; padding: 3px 5px; }
+.reference-workspace .mat-detail-head { padding: 11px 12px; flex-wrap: nowrap; }
+.reference-workspace .mat-detail-title { gap: 9px; }
+.reference-workspace .mat-detail-title > :first-child { width: 36px !important; height: 36px !important; font-size: 13px !important; }
+.reference-workspace .mat-detail-title h2 { font-size: 16px; }
+.reference-workspace .mat-detail-actions { gap: 8px; }
+.reference-workspace .mat-journey { margin: 0 12px 5px; padding: 5px; border-radius: 6px; }
+.reference-workspace .mat-step > span { width: 20px; height: 20px; }
+.reference-workspace .mat-detail-tabs { margin: 0 12px; }
+.reference-workspace .mat-detail-tabs button { min-height: 32px; padding-inline: 11px; font-size: 11px; }
+.reference-workspace .mat-detail-main { padding: 10px 12px 12px; gap: 10px; grid-template-columns: minmax(0,1fr) 205px; }
+.reference-workspace .mat-preview { min-height: 0; }
+.reference-workspace .mat-preview iframe { min-height: 0; }
+.reference-workspace .mat-cv-paper, .reference-workspace .mat-letter-paper { padding: 24px; font-family: var(--font-inter), Arial, sans-serif; }
+.reference-workspace .mat-cv-paper > span { margin-bottom: 14px; padding-bottom: 12px; }
+.reference-workspace .mat-cv-paper > div, .reference-workspace .mat-letter-paper > div { font-size: 12px; line-height: 1.6; }
+.reference-workspace .mat-document-aside { padding: 12px; border-radius: 6px; }
+.reference-workspace .mat-document-aside > p { margin-bottom: 10px; }
+.reference-workspace .mat-aside-divider { margin: 12px 0; }
+.reference-workspace .mat-aside-state, .reference-workspace .mat-aside-fact { flex-wrap: wrap; }
+@media (min-width: 1101px) {
+  .reference-workspace .mat-page { padding: 14px 16px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .reference-workspace .mat-page > :is(.mat-header, .mat-summary, .mat-controls) { flex-shrink: 0; }
+  .reference-workspace .mat-workspace { flex: 1; min-height: 0; height: auto; }
+  .reference-workspace .mat-detail-head, .reference-workspace .mat-journey, .reference-workspace .mat-detail-tabs { flex-shrink: 0; }
+}
+@media (max-width: 1100px) {
+  .reference-workspace .mat-workspace { grid-template-columns: 1fr; height: auto; min-height: 0; }
+}
+@media (max-width: 700px) {
+  .reference-workspace .mat-header { align-items: flex-start; }
+  .reference-workspace .mat-header h1 { font-size: 25px; }
+  .reference-workspace .mat-primary { min-height: 40px; }
+  .reference-workspace .mat-summary-item { min-height: 65px; }
+  .reference-workspace .mat-controls .mat-search { max-width: none; }
+  .reference-workspace .mat-toolbar { flex-wrap: wrap; width: 100%; }
+  .reference-workspace .mat-search { min-height: 40px; }
+  .reference-workspace .mat-select { min-height: 38px; }
+  .reference-workspace .mat-filters { width: 100%; }
+  .reference-workspace .mat-filters button { min-height: 40px; }
+  .reference-workspace .mat-detail-main { grid-template-columns: 1fr; }
+  .reference-workspace .mat-preview { min-height: 400px; }
+  .reference-workspace .mat-preview iframe { min-height: 460px; }
+  .reference-workspace .mat-document-aside { overflow: visible; }
+  .reference-workspace .mat-list-scroll { padding-bottom: 12px; }
+}
+
+.reference-workspace .mat-header h1 { margin: 0 0 3px; line-height: 1.2; }
+.reference-workspace .mat-header p { line-height: 1.4; }
+.reference-workspace .mat-summary-item { min-height: 44px; padding-block: 6px; }
+.reference-workspace .mat-detail-head { padding-block: 9px; }
+.reference-workspace .mat-detail-title h2 { margin: 0 0 3px; line-height: 1.2; }
+.reference-workspace .mat-select::after { top: 5px; }
+.reference-workspace .mat-controls :is(input,select) { padding-block: 4px; }

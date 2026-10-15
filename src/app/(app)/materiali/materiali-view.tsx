@@ -9,7 +9,7 @@ import { materialText } from "./materiali-copy";
 import {
   ArrowDown, ArrowUpRight, BriefcaseBusiness, Check, ChevronRight,
   CircleAlert, Clock3, Download, FileCheck2, FileText, Mail,
-  MapPin, Plus, Search, Send, Sparkles,
+  MapPin, Plus, Search, Send,
 } from "lucide-react";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 
@@ -147,7 +147,6 @@ export function MaterialiView({ items, total }: { items: MaterialItem[]; total: 
     <div className="mat-page">
       <header className="mat-header">
         <div>
-          <div className="mat-eyebrow"><Sparkles size={14} aria-hidden /> {tr("Documenti personalizzati")}</div>
           <h1>{tr("I tuoi CV su misura")}</h1>
           <p>{tr("Ogni posizione, il suo CV e la sua lettera. Apri un pacchetto per vedere cosa è stato preparato.")}</p>
         </div>
@@ -197,7 +196,7 @@ export function MaterialiView({ items, total }: { items: MaterialItem[]; total: 
             <section className="mat-detail" aria-label={tr("Dettaglio pacchetto")}>
               {selected ? <>
                 <div className="mat-detail-head">
-                  <div className="mat-detail-title"><CompanyLogo company={selected.company} color={companyColor(selected.company)} size={54} rounded={12} url={selected.jobUrl} /><div><div className="mat-detail-kicker">{tr("Pacchetto per posizione")}</div><h2>{selected.title}</h2><p>{selected.company}{selected.location ? <><span aria-hidden> · </span><MapPin size={13} aria-hidden />{selected.location}</> : null}</p></div></div>
+                  <div className="mat-detail-title"><CompanyLogo company={selected.company} color={companyColor(selected.company)} size={54} rounded={12} url={selected.jobUrl} /><div><h2>{selected.title}</h2><p>{selected.company}{selected.location ? <><span aria-hidden> · </span><MapPin size={13} aria-hidden />{selected.location}</> : null}</p></div></div>
                   <div className="mat-detail-actions"><Match value={selected.match} large /><Link href={`/applications?id=${selected.id}`} className="mat-primary">{tr("Apri candidatura")} <ChevronRight size={17} aria-hidden /></Link></div>
                 </div>
 

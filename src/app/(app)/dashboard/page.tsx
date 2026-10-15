@@ -83,41 +83,55 @@ export default async function DashboardPage() {
       <DashboardLiveRefresh />
       <AppTopbar title={t("title")} actions={<NewSearchButton locale={locale} />} />
       <DashboardFocusProvider>
-        <div className="workspace-page">
-          <header className="workspace-heading">
+        <div className="workspace-page workspace-dashboard">
+          <div className="dashboard-top-row"><header className="workspace-heading">
             <div>
               <div className="workspace-eyebrow">{tr("Il tuo spazio di lavoro", "Your workspace")} / LavorAI</div>
               <h1>{t("greeting", { name: greetingName })}</h1>
               <p>{tr("Opportunità, risposte e prossimi passi in un unico posto.", "Opportunities, replies and next steps in one place.")}</p>
             </div>
-            <AutoApplyToggle locale={locale} />
           </header>
           <div className="workspace-metrics" role="list">
             <Link role="listitem" href="/applications" className="workspace-metric"><strong>{deliveryCounts.confirmed}</strong><small>{tr("Invii confermati", "Confirmed submissions")}</small>{deliveryCounts.providerAccepted > 0 && <small>{deliveryCounts.providerAccepted} {tr("email accettate dal provider, consegna da confermare", "provider-accepted emails, delivery unconfirmed")}</small>}</Link>
             <Link role="listitem" href="/inbox" className="workspace-metric" title={tr("Candidature con risposte classificate come recruiter. Aperture email e ricevute automatiche escluse.", "Applications with recruiter-classified replies. Email opens and automatic receipts excluded.")}><strong>{responseCount}</strong><small>{tr("Con risposte recruiter", "With recruiter replies")}</small></Link>
-            <Link role="listitem" href="/interview" className="workspace-metric"><strong>{interviews.length}</strong><small>{tr("Attività colloqui recenti (max 3)", "Recent interview activity (up to 3)")}</small></Link>
+            <Link role="listitem" href="/interview" className="workspace-metric"><strong>{interviews.length}</strong><small>{tr("Attività colloqui (max 3)", "Interview activity (max 3)")}</small></Link>
             <Link role="listitem" href="/applications" className="workspace-metric"><strong>{offersCount}</strong><small>{tr("Offerte dichiarate", "Reported offers")}</small></Link>
           </div>
+          </div>
           <div className="workspace-dashboard-grid">
-            <div className="workspace-stack">
-              <section className="workspace-panel">
+            <div className="workspace-stack dashboard-primary">
+              <section className="workspace-panel dashboard-overview">
                 <div className="fit-card-head">
                   <h2><Icon name="globe" size={14} /> {tr("Panoramica globale", "Global overview")}</h2>
-                  <Link href="/discover" className="workspace-chip">{globe.stats.counts.open} {tr("opportunità sulla mappa", "mapped opportunities")}</Link>
+                  <div className="dashboard-overview-actions"><AutoApplyToggle locale={locale} /><Link href="/discover" className="workspace-chip">{globe.stats.counts.open} {tr("opportunità sulla mappa", "mapped opportunities")}</Link></div>
                 </div>
-                <DashboardGlobeMap markers={globe.markers} stats={globe.stats} />
+                <div className="dashboard-overview-body"><div className="dashboard-map-column"><DashboardGlobeMap markers={globe.markers} stats={globe.stats} compact />
                 <div className="workspace-geography">
                   {countries.map(([country, count]) => <a key={country} href={`/jobs?where=${encodeURIComponent(new Intl.DisplayNames(["en"], { type: "region" }).of(country) ?? country)}`}><span>{new Intl.DisplayNames([locale], { type: "region" }).of(country) ?? country}</span><strong>{count}</strong></a>)}
                 </div>
+                </div><div className="dashboard-overview-summary">
+                  <div className="dashboard-counts" aria-label={tr("Distribuzione delle posizioni sulla mappa", "Mapped position breakdown")}>
+                    <h3>{tr("Posizioni sulla mappa", "Positions on the map")}</h3>
+                    {([
+                      ["open", tr("Opportunità", "Opportunities")],
+                      ["sent", tr("Inviate", "Submitted")],
+                      ["desired", tr("Desiderate", "Preferred")],
+                      ["saved", tr("Salvate", "Saved")],
+                    ] as const).map(([kind, label]) => <div className="dashboard-count-row" key={kind}>
+                      <span>{label}</span><strong>{globe.stats.counts[kind]}</strong>
+                      <div className="dashboard-count-track"><i style={{ width: `${100 * globe.stats.counts[kind] / Math.max(1, ...Object.values(globe.stats.counts))}%` }} /></div>
+                    </div>)}
+                  </div>
+                  <DashboardRegionPanel markers={globe.markers} />
+                </div></div>
               </section>
-              <DashboardRegionPanel markers={globe.markers} />
-              <section className="workspace-panel">
+              <section className="workspace-panel dashboard-opportunities">
                 <div className="fit-card-head">
                   <h2>{tr("Opportunità selezionate", "Selected opportunities")}</h2>
                   <Link href="/jobs" className="fit-link">{tr("Vedi tutte", "View all")} <Icon name="arrow-right" size={12} /></Link>
                 </div>
                 {recommended.length === 0 ? <Empty text={tr("Completa profilo e preferenze per trovare annunci compatibili.", "Complete your profile and preferences to find matching jobs.")} cta={{ href: "/preferences", label: tr("Imposta le preferenze", "Set preferences") }} />
-                  : recommended.slice(0, 4).map((j) => {
+                  : recommended.slice(0, 3).map((j) => {
                     const company = j.company ?? tr("Azienda", "Company");
                     return <Link key={j.id} href={j.href} className="fit-row" style={{ gridTemplateColumns: "36px minmax(0,1fr) auto", textDecoration: "none", color: "inherit" }}>
                       <CompanyLogo company={company} color={companyColor(company)} size={32} rounded={8} />
@@ -127,7 +141,7 @@ export default async function DashboardPage() {
                   })}
               </section>
             </div>
-            <aside className="workspace-stack">
+            <aside className="workspace-stack dashboard-rail">
               <section className="workspace-panel">
                 <div className="workspace-eyebrow">{tr("Preparati al prossimo passo", "Prepare your next step")}</div>
                 <h2>{tr("Attività colloqui", "Interview activity")}</h2>

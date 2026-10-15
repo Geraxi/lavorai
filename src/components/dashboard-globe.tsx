@@ -156,8 +156,9 @@ function jobCardHtml(pin: GlobePin, selected: boolean, locale: string): string {
 export interface GlobeFocus { key: string; lat: number; lng: number; altitude: number }
 
 export function DashboardGlobe({
-  markers, filter, selectedKey, onSelect, onMore, focus,
+  markers, filter, selectedKey, onSelect, onMore, focus, compact = false,
 }: {
+  compact?: boolean;
   markers: CityMarker[];
   filter: GlobeFilter;
   selectedKey: string | null;
@@ -304,8 +305,8 @@ export function DashboardGlobe({
 
   type Item = { type: "pin"; lat: number; lng: number; pin: GlobePin; card: boolean; selected: boolean };
   const items = useMemo<Item[]>(() => [
-    ...pins.map((p): Item => { const selected = p.key === selectedKey; return { type: "pin", lat: p.lat, lng: p.lng, pin: p, selected, card: selected || (selectedKey == null && featured.includes(p.key)) }; }),
-  ], [pins, featured, selectedKey, locale]);
+    ...pins.map((p): Item => { const selected = p.key === selectedKey; return { type: "pin", lat: p.lat, lng: p.lng, pin: p, selected, card: !compact && (selected || (selectedKey == null && featured.includes(p.key))) }; }),
+  ], [pins, featured, selectedKey, locale, compact]);
 
   const makeEl = (d: object) => {
     const item = d as Item;
@@ -331,7 +332,7 @@ export function DashboardGlobe({
     el.addEventListener("touchstart", stop, { passive: true });
     el.addEventListener("wheel", stop, { passive: true });
     const body = el.querySelector(".dg-pin-body") as HTMLButtonElement;
-    body.addEventListener("click", (e) => { e.stopPropagation(); onSelect(selected ? null : p.key); });
+    body.addEventListener("click", (e) => { e.stopPropagation(); onSelect(selected ? null : p.key); if (compact) onMore(p); });
     el.querySelector("[data-more]")?.addEventListener("click", (e) => { e.stopPropagation(); onMore(p); });
     el.querySelector(".dg-card")?.addEventListener("click", (e) => e.stopPropagation());
     return el;
