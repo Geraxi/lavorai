@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
@@ -25,12 +25,14 @@ export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
 /**
- * Dashboard utente, tutta in un viewport (nessuno scroll di pagina).
- * Sinistra: globo hero con saluto, filtri, pin e card. Destra: riepilogo
- * candidature, opportunità consigliate, prossimi colloqui. Numeri reali.
+ * User dashboard with evidence-backed metrics, opportunities and interview activity.
+ * Content stacks on narrow screens; all metrics use the signed-in user's records.
  */
 export default async function DashboardPage() {
   const t = await getTranslations("dashboardPage");
+  const locale = await getLocale();
+  const en = locale === "en";
+  const tr = (italian: string, english: string) => en ? english : italian;
   const user = await getCurrentUser();
   if (!user) return null;
 
@@ -70,96 +72,85 @@ export default async function DashboardPage() {
   const allDone = onboarding.hasUploadedCv && onboarding.hasSetPreferences && onboarding.hasFirstApplication;
   const readiness = await getAutoApplyReadiness(user.id, globe.stats.counts.open);
 
-  const greeting = (
-    <>
-      <h1 className="fit-h1">{t("greeting", { name: greetingName })}</h1>
-      <p className="dg-head-lead">LavorAI sta cercando opportunità per te in tutto il mondo.</p>
-      <p className="dg-head-sub">Esplora dove stiamo trovando le migliori opportunità per il tuo profilo.</p>
-    </>
-  );
+  const countryCounts = new Map<string, number>();
+  for (const marker of globe.markers) countryCounts.set(marker.country, (countryCounts.get(marker.country) ?? 0) + marker.counts.open);
+  const countries = [...countryCounts].sort((a, b) => b[1] - a[1]).slice(0, 4);
 
   return (
     <>
       <WelcomeModal show={showWelcome} />
       <PostLoginCheckout />
       <DashboardLiveRefresh />
-      <AppTopbar title={t("title")} actions={<><AutoApplyToggle /><NewSearchButton /></>} />
-
+      <AppTopbar title={t("title")} actions={<NewSearchButton locale={locale} />} />
       <DashboardFocusProvider>
-      <div className="fit-page dg-page">
-        <DashboardGlobeMap markers={globe.markers} stats={globe.stats} greeting={greeting} />
-
-        <aside className="dg-side">
-          <div className="dg-summary" role="list">
-            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{deliveryCounts.confirmed}</span><small>Invii confermati</small>{deliveryCounts.providerAccepted > 0 && <small>{deliveryCounts.providerAccepted} email accettate dal provider, consegna da confermare</small>}</Link>
-            <Link role="listitem" href="/inbox" className="dg-sum" title="Candidature con risposte classificate come recruiter. Aperture email e ricevute automatiche escluse."><span className="fit-num">{responseCount}</span><small>Con risposte recruiter</small></Link>
-            <Link role="listitem" href="/interview" className="dg-sum"><span className="fit-num">{interviews.length}</span><small>Colloqui</small></Link>
-            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{offersCount}</span><small>Offerte</small></Link>
+        <div className="workspace-page">
+          <header className="workspace-heading">
+            <div>
+              <div className="workspace-eyebrow">{tr("Il tuo spazio di lavoro", "Your workspace")} / LavorAI</div>
+              <h1>{t("greeting", { name: greetingName })}</h1>
+              <p>{tr("Opportunità, risposte e prossimi passi in un unico posto.", "Opportunities, replies and next steps in one place.")}</p>
+            </div>
+            <AutoApplyToggle locale={locale} />
+          </header>
+          <div className="workspace-metrics" role="list">
+            <Link role="listitem" href="/applications" className="workspace-metric"><strong>{deliveryCounts.confirmed}</strong><small>{tr("Invii confermati", "Confirmed submissions")}</small>{deliveryCounts.providerAccepted > 0 && <small>{deliveryCounts.providerAccepted} {tr("email accettate dal provider, consegna da confermare", "provider-accepted emails, delivery unconfirmed")}</small>}</Link>
+            <Link role="listitem" href="/inbox" className="workspace-metric" title={tr("Candidature con risposte classificate come recruiter. Aperture email e ricevute automatiche escluse.", "Applications with recruiter-classified replies. Email opens and automatic receipts excluded.")}><strong>{responseCount}</strong><small>{tr("Con risposte recruiter", "With recruiter replies")}</small></Link>
+            <Link role="listitem" href="/interview" className="workspace-metric"><strong>{interviews.length}</strong><small>{tr("Attività colloqui recenti (max 3)", "Recent interview activity (up to 3)")}</small></Link>
+            <Link role="listitem" href="/applications" className="workspace-metric"><strong>{offersCount}</strong><small>{tr("Offerte dichiarate", "Reported offers")}</small></Link>
           </div>
-
-          <DashboardRegionPanel markers={globe.markers} />
-
-          <AutoApplyReadinessCard readiness={readiness} />
-
-          {!allDone && <OnboardingChecklist state={onboarding} />}
-
-          <div className="fit-card dg-side-card">
-            <div className="fit-card-head">
-              <div className="fit-card-title"><Icon name="sparkles" size={15} /> Opportunità consigliate</div>
-              <Link href="/jobs" className="fit-link">Vedi tutte <Icon name="arrow-right" size={12} /></Link>
+          <div className="workspace-dashboard-grid">
+            <div className="workspace-stack">
+              <section className="workspace-panel">
+                <div className="fit-card-head">
+                  <h2><Icon name="globe" size={14} /> {tr("Panoramica globale", "Global overview")}</h2>
+                  <Link href="/discover" className="workspace-chip">{globe.stats.counts.open} {tr("opportunità sulla mappa", "mapped opportunities")}</Link>
+                </div>
+                <DashboardGlobeMap markers={globe.markers} stats={globe.stats} />
+                <div className="workspace-geography">
+                  {countries.map(([country, count]) => <a key={country} href={`/jobs?where=${encodeURIComponent(new Intl.DisplayNames(["en"], { type: "region" }).of(country) ?? country)}`}><span>{new Intl.DisplayNames([locale], { type: "region" }).of(country) ?? country}</span><strong>{count}</strong></a>)}
+                </div>
+              </section>
+              <DashboardRegionPanel markers={globe.markers} />
+              <section className="workspace-panel">
+                <div className="fit-card-head">
+                  <h2>{tr("Opportunità selezionate", "Selected opportunities")}</h2>
+                  <Link href="/jobs" className="fit-link">{tr("Vedi tutte", "View all")} <Icon name="arrow-right" size={12} /></Link>
+                </div>
+                {recommended.length === 0 ? <Empty text={tr("Completa profilo e preferenze per trovare annunci compatibili.", "Complete your profile and preferences to find matching jobs.")} cta={{ href: "/preferences", label: tr("Imposta le preferenze", "Set preferences") }} />
+                  : recommended.slice(0, 4).map((j) => {
+                    const company = j.company ?? tr("Azienda", "Company");
+                    return <Link key={j.id} href={j.href} className="fit-row" style={{ gridTemplateColumns: "36px minmax(0,1fr) auto", textDecoration: "none", color: "inherit" }}>
+                      <CompanyLogo company={company} color={companyColor(company)} size={32} rounded={8} />
+                      <div style={{ minWidth: 0 }}><div className="fit-ellipsis" style={{ fontWeight: 600 }}>{j.title}</div><div className="fit-ellipsis workspace-muted">{company}{j.location ? ` · ${j.location}` : ""}</div></div>
+                      <span className="workspace-chip">{j.match != null ? `${Math.round(j.match)}%` : tr("Aperta", "Open")}</span>
+                    </Link>;
+                  })}
+              </section>
             </div>
-            <div className="fit-body fit-scroll">
-              {recommended.length === 0 ? (
-                <Empty text="Appena il tuo profilo e le preferenze sono pronti, qui compaiono gli annunci più compatibili." cta={{ href: "/preferences", label: "Imposta le preferenze" }} />
-              ) : (
-                recommended.slice(0, 4).map((j) => {
-                  const company = j.company ?? "Azienda";
-                  return (
-                    <Link key={j.id} href={j.href} className="fit-row" style={{ gridTemplateColumns: "30px 1fr auto", textDecoration: "none", color: "inherit" }}>
-                      <CompanyLogo company={company} color={companyColor(company)} size={30} rounded={8} />
-                      <div style={{ minWidth: 0 }}>
-                        <div className="fit-ellipsis" style={{ fontWeight: 600, fontSize: 12.5 }}>{j.title}</div>
-                        <div className="fit-ellipsis" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{company}{j.location ? ` · ${j.location}` : ""}</div>
-                      </div>
-                      <span className="dg-chip" style={{ ["--c" as string]: "#2ED69A" }}>{j.match != null ? `${Math.round(j.match)}%` : "Aperta"}</span>
-                    </Link>
-                  );
-                })
-              )}
-            </div>
+            <aside className="workspace-stack">
+              <section className="workspace-panel">
+                <div className="workspace-eyebrow">{tr("Preparati al prossimo passo", "Prepare your next step")}</div>
+                <h2>{tr("Attività colloqui", "Interview activity")}</h2>
+                <p className="workspace-muted">{tr("Inviti rilevati, stati dichiarati e sessioni di preparazione. Le date non sono appuntamenti confermati.", "Detected invitations, reported statuses and practice sessions. These dates are not confirmed appointments.")}</p>
+                {interviews.length === 0 ? <Empty text={tr("Nessuna attività colloquio registrata.", "No interview activity recorded yet.")} /> : interviews.map((a) => {
+                  const when = a.lastReplyAt ?? a.createdAt;
+                  return <Link key={a.id} href={`/applications?id=${encodeURIComponent(a.id)}`} className="fit-row" style={{ gridTemplateColumns: "1fr auto", color: "inherit" }}>
+                    <div><strong>{a.job.company ?? tr("Azienda", "Company")}</strong><p className="workspace-muted">{a.job.title}</p></div>
+                    <small className="workspace-muted">{when.toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short" })}</small>
+                  </Link>;
+                })}
+                <Link href="/interview" className="ds-btn ds-btn-primary" style={{ marginTop: 14 }}><Icon name="sparkles" size={13} /> {tr("Prepara un colloquio", "Practice an interview")}</Link>
+              </section>
+              <AutoApplyReadinessCard readiness={readiness} locale={locale} />
+              {!allDone && <OnboardingChecklist state={onboarding} />}
+              <section className="workspace-panel">
+                <h2>{tr("Risposte e aggiornamenti", "Replies and updates")}</h2>
+                <p className="workspace-muted">{tr("Leggi i messaggi ricevuti e aggiorna lo stato delle tue candidature.", "Read received messages and update your application status.")}</p>
+                <Link href="/inbox" className="ds-btn" style={{ marginTop: 14 }}><Icon name="inbox" size={13} /> {tr("Apri inbox", "Open inbox")}</Link>
+              </section>
+            </aside>
           </div>
-
-          <div className="fit-card dg-side-card">
-            <div className="fit-card-head">
-              <div className="fit-card-title"><Icon name="calendar" size={15} /> Prossimi colloqui</div>
-              <Link href="/interview" className="fit-link">Vedi tutti <Icon name="arrow-right" size={12} /></Link>
-            </div>
-            <div className="fit-body fit-scroll">
-              {interviews.length === 0 ? (
-                <Empty text="Nessun colloquio in programma. Quando un recruiter ti invita, lo vedrai qui." />
-              ) : (
-                interviews.map((a) => {
-                  const when = a.interviewSessions[0]?.startedAt ?? a.lastReplyAt ?? a.createdAt;
-                  const company = a.job.company ?? "Azienda";
-                  return (
-                    <Link key={a.id} href="/interview" className="fit-row" style={{ gridTemplateColumns: "30px 1fr auto", textDecoration: "none", color: "inherit" }}>
-                      <CompanyLogo company={company} color={companyColor(company)} size={30} rounded={8} />
-                      <div style={{ minWidth: 0 }}>
-                        <div className="fit-ellipsis" style={{ fontWeight: 600, fontSize: 12.5 }}>{company}</div>
-                        <div className="fit-ellipsis" style={{ fontSize: 11.5, color: "var(--fg-muted)" }}>{a.job.title} · Video call</div>
-                      </div>
-                      <div style={{ textAlign: "right", fontSize: 11.5, color: "var(--fg-muted)", whiteSpace: "nowrap" }}>
-                        <div style={{ fontWeight: 600, color: "var(--fg)" }}>{when.getDate()} {when.toLocaleDateString("it-IT", { month: "short" }).replace(".", "")}</div>
-                        <div style={{ fontSize: 10.5, color: "var(--fg-subtle)" }}>{a.interviewSessions[0]?.startedAt ? when.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }) : "da fissare"}</div>
-                      </div>
-                    </Link>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </aside>
-      </div>
+        </div>
       </DashboardFocusProvider>
     </>
   );

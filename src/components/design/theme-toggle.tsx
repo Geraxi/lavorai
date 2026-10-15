@@ -27,7 +27,7 @@ export function applyTheme(t: Theme) {
  * <html> (impostato prima del paint da ThemeScript); qui lo leggiamo
  * dopo il mount per evitare mismatch di idratazione.
  */
-export function ThemeToggle({ compact = true, fullWidth = false }: { compact?: boolean; fullWidth?: boolean }) {
+export function ThemeToggle({ compact = true, fullWidth = false, locale = "it" }: { compact?: boolean; fullWidth?: boolean; locale?: string }) {
   const [theme, setTheme] = useState<Theme>("dark");
   const [ready, setReady] = useState(false);
 
@@ -40,7 +40,7 @@ export function ThemeToggle({ compact = true, fullWidth = false }: { compact?: b
   }, []);
 
   const next: Theme = theme === "light" ? "dark" : "light";
-  const label = theme === "light" ? "Tema scuro" : "Tema chiaro";
+  const label = locale === "en" ? (theme === "light" ? "Dark theme" : "Light theme") : (theme === "light" ? "Tema scuro" : "Tema chiaro");
 
   return (
     <button

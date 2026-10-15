@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CompanyLogo } from "@/components/design/company-logo";
 import { Icon } from "@/components/design/icon";
 import { toast } from "sonner";
+import { applicationLabel } from "@/lib/application-presentation";
 import type { DeliveryView } from "@/lib/application-delivery-view";
 
 export interface DrawerApp {
@@ -15,9 +16,10 @@ export interface DrawerApp {
   mode: string;
   salary: string;
   applied: string;
-  match: number;
+  match: number | null;
   source: string;
   stage: number;
+  userStatus?: string | null;
   status: "inviata" | "vista" | "colloquio" | "offerta" | "rifiutata";
   jobUrl?: string;
   coverLetterText?: string | null;
@@ -31,24 +33,33 @@ export interface DrawerApp {
   deliveryRecipient?: string | null;
 }
 
-const PIPELINE = ["Applicata", "Vista", "Screening", "Colloquio", "Offerta"];
-
 export function DetailDrawer({
   app,
   onClose,
+  locale = "it",
 }: {
+  locale?: string;
   app: DrawerApp | null;
   onClose: () => void;
 }) {
   const open = !!app;
+  const drawerRef = useRef<HTMLElement>(null);
+  const tr = (it: string, en: string) => locale === "en" ? en : it;
 
   useEffect(() => {
     if (!open) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    drawerRef.current?.querySelector<HTMLButtonElement>("button[data-close]")?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      if (e.key !== "Tab") return;
+      const items = [...(drawerRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]') ?? [])].filter(el => el.offsetParent !== null);
+      const first = items[0], last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => { window.removeEventListener("keydown", onKey); previousFocus?.focus(); };
   }, [open, onClose]);
 
   return (
@@ -57,7 +68,7 @@ export function DetailDrawer({
         className={`ds-drawer-backdrop${open ? " open" : ""}`}
         onClick={onClose}
       />
-      <aside className={`ds-drawer${open ? " open" : ""}`}>
+      <aside ref={drawerRef} role="dialog" aria-modal={open || undefined} aria-hidden={!open} inert={!open} aria-label={tr("Dettaglio candidatura", "Application details")} className={`ds-drawer${open ? " open" : ""}`}>
         {app && (
           <>
             <div
@@ -83,7 +94,7 @@ export function DetailDrawer({
                     href={app.jobUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="Apri annuncio"
+                    aria-label={tr("Apri annuncio", "Open listing")}
                   >
                     <Icon name="external" size={13} />
                   </a>
@@ -92,7 +103,7 @@ export function DetailDrawer({
                   className="ds-btn ds-btn-sm ds-btn-ghost"
                   type="button"
                   onClick={onClose}
-                  aria-label="Chiudi"
+                  aria-label={tr("Chiudi", "Close")} data-close
                 >
                   <Icon name="x" size={14} />
                 </button>
@@ -106,55 +117,40 @@ export function DetailDrawer({
               {app.delivery && <section style={{ padding: 14, border: "1px solid var(--border-ds)", borderRadius: 8, marginBottom: 18 }}>
                 <strong>{app.delivery.label}</strong>
                 <p style={{ fontSize: 13, marginTop: 6 }}>{app.delivery.detail}</p>
-                {app.deliveryRecipient && <p style={{ fontSize: 12, marginTop: 6 }}>Destinatario: {app.deliveryRecipient}</p>}
+                {app.deliveryRecipient && <p style={{ fontSize: 12, marginTop: 6 }}>{tr("Destinatario", "Recipient")}: {app.deliveryRecipient}</p>}
               </section>}
               {/* Mini stats */}
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                   gap: 12,
                   marginBottom: 22,
                 }}
               >
-                <MiniStat label="Match" value={`${app.match}%`} accent={app.match >= 85} />
-                <MiniStat label="RAL" value={app.salary} mono />
-                <MiniStat label="Registrata" value={app.applied} />
+                <MiniStat label="Match" value={app.match == null ? "—" : `${app.match}%`} accent={app.match != null && app.match >= 85} />
+                <MiniStat label={tr("RAL", "Salary")} value={app.salary} mono />
+                <MiniStat label={tr("Registrata", "Recorded")} value={app.applied} />
               </div>
 
-              {/* Pipeline */}
-              <div className="mb-6">
-                <div className="ds-label mb-2">Pipeline</div>
-                <div className="ds-pipeline">
-                  {PIPELINE.map((p, i) => (
-                    <div
-                      key={p}
-                      className={`ds-pipeline-step${
-                        (!app.delivery || ["confirmed", "delivered", "manual"].includes(app.delivery.phase)) && i <= app.stage ? " done" : ""
-                      }${i === app.stage ? " current" : ""}`}
-                    >
-                      <div className="ds-pipeline-step-label">
-                        {String(i + 1).padStart(2, "0")}
-                      </div>
-                      <div className="ds-pipeline-step-value">{p}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
+              <section className="workspace-panel mb-6">
+                <h2>{tr("Stato dichiarato da te", "Status reported by you")}</h2>
+                <p>{app.userStatus ? applicationLabel(app.userStatus, locale) : tr("Nessuno stato dichiarato.", "No status reported.")}</p>
+                <p className="workspace-muted">{tr("Le fasi precedenti non sono dedotte da questo stato. Le prove di invio sono indicate separatamente.", "This status does not verify earlier stages. Submission evidence is shown separately.")}</p>
+              </section>
 
               {/* Documents */}
               <div className="ds-section-card mb-6">
                 <div className="ds-section-head">
                   <div className="ds-section-head-title">
                     <Icon name="file" size={13} />
-                    Materiali della candidatura
+                    {tr("Materiali della candidatura", "Application documents")}
                   </div>
                 </div>
                 <div className="ds-section-body flush">
-                  <DocRow
+                  <DocRow locale={locale}
                     title={`CV PDF tailored${app.cvLanguage ? ` (${app.cvLanguage.toUpperCase()})` : ""}`}
-                    sub="ATS-friendly · riordinato per questo annuncio"
+                    sub={tr("ATS-friendly · riordinato per questo annuncio", "ATS-friendly · tailored for this role")}
                     available={Boolean(app.hasCvPdf)}
                     downloadHref={
                       app.hasCvPdf
@@ -162,9 +158,9 @@ export function DetailDrawer({
                         : undefined
                     }
                   />
-                  <DocRow
-                    title="CV DOCX (classico)"
-                    sub="Versione DOCX ottimizzata"
+                  <DocRow locale={locale}
+                    title={tr("CV DOCX (classico)", "DOCX CV")}
+                    sub={tr("Versione DOCX ottimizzata", "Tailored DOCX version")}
                     available={Boolean(app.hasCvDocx)}
                     downloadHref={
                       app.hasCvDocx
@@ -172,9 +168,9 @@ export function DetailDrawer({
                         : undefined
                     }
                   />
-                  <DocRow
-                    title="Lettera motivazionale"
-                    sub="Scritta su misura per questa candidatura"
+                  <DocRow locale={locale}
+                    title={tr("Lettera motivazionale", "Cover letter")}
+                    sub={tr("Scritta su misura per questa candidatura", "Tailored for this application")}
                     available={Boolean(app.hasCoverLetterDocx)}
                     downloadHref={
                       app.hasCoverLetterDocx
@@ -192,7 +188,7 @@ export function DetailDrawer({
                   <div className="ds-section-head">
                     <div className="ds-section-head-title">
                       <Icon name="sparkles" size={13} />
-                      Lettera di motivazione
+                      {tr("Lettera di motivazione", "Cover letter")}
                     </div>
                     {app.hasCoverLetterDocx && (
                       <a
@@ -236,9 +232,9 @@ export function DetailDrawer({
                   }}
                 >
                   <div style={{ fontSize: 12, color: "var(--fg-muted)", marginBottom: 10 }}>
-                    Nessuna risposta dopo {app.ghostingDays} giorni — normale per molti ATS
+                    {app.ghostingDays} {tr("giorni senza risposta registrata", "days without a recorded reply")}
                   </div>
-                  <FollowUpButton appId={app.id} />
+                  <FollowUpButton appId={app.id} locale={locale} />
                 </div>
               )}
 
@@ -246,14 +242,14 @@ export function DetailDrawer({
                 <div className="ds-section-head">
                   <div className="ds-section-head-title">
                     <Icon name="check" size={13} />
-                    Aggiorna stato
+                    {tr("Aggiorna stato", "Update status")}
                   </div>
                 </div>
                 <div className="ds-section-body flush">
                   <div style={{ fontSize: 12, color: "var(--fg-muted)", padding: "0 0 10px 0" }}>
-                    Hai ricevuto risposte via email o LinkedIn? Aggiorna lo stato manualmente:
+                    {tr("Hai ricevuto risposte via email o LinkedIn? Aggiorna lo stato manualmente:", "Received a reply by email or LinkedIn? Update your status manually:")}
                   </div>
-                  <UserStatusButtons appId={app.id} currentStatus={app.status} />
+                  <UserStatusButtons appId={app.id} currentStatus={app.userStatus ?? ""} locale={locale} />
                 </div>
               </div>
 
@@ -266,7 +262,7 @@ export function DetailDrawer({
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    <Icon name="external" size={13} /> Vedi annuncio
+                    <Icon name="external" size={13} /> {tr("Vedi annuncio", "View listing")}
                   </a>
                 ) : (
                   <button
@@ -274,9 +270,9 @@ export function DetailDrawer({
                     style={{ flex: 1 }}
                     type="button"
                     disabled
-                    title="Link annuncio non disponibile"
+                    title={tr("Link annuncio non disponibile", "Listing link unavailable")}
                   >
-                    <Icon name="external" size={13} /> Vedi annuncio
+                    <Icon name="external" size={13} /> {tr("Vedi annuncio", "View listing")}
                   </button>
                 )}
               </div>
@@ -325,12 +321,14 @@ function MiniStat({
 }
 
 function DocRow({
+  locale,
   title,
   sub,
   available,
   downloadHref,
   last,
 }: {
+  locale: string;
   title: string;
   sub: string;
   available: boolean;
@@ -365,7 +363,7 @@ function DocRow({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 500 }}>{title}</div>
         <div style={{ fontSize: 11.5, color: "var(--fg-muted)", marginTop: 1 }}>
-          {available ? sub : "In generazione…"}
+          {available ? sub : locale === "en" ? "Not available" : "Non disponibile"}
         </div>
       </div>
       {available && downloadHref ? (
@@ -373,6 +371,7 @@ function DocRow({
           className="ds-btn ds-btn-sm ds-btn-ghost"
           href={downloadHref}
           download
+          aria-label={`${locale === "en" ? "Download" : "Scarica"} ${title}`}
         >
           <Icon name="download" size={12} />
         </a>
@@ -381,14 +380,15 @@ function DocRow({
           className="mono"
           style={{ fontSize: 11, color: "var(--fg-subtle)" }}
         >
-          pending
+          —
         </span>
       )}
     </div>
   );
 }
 
-function UserStatusButtons({ appId, currentStatus }: { appId: string; currentStatus: string }) {
+function UserStatusButtons({ appId, currentStatus, locale }: { appId: string; currentStatus: string; locale: string }) {
+  const tr = (it: string, en: string) => locale === "en" ? en : it;
   const [updating, setUpdating] = useState(false);
 
   async function setStatus(status: string) {
@@ -401,24 +401,24 @@ function UserStatusButtons({ appId, currentStatus }: { appId: string; currentSta
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        toast.error(body.error ?? "Errore aggiornamento stato");
+        toast.error(body.error ?? tr("Errore aggiornamento stato", "Unable to update status"));
         return;
       }
-      toast.success("Stato aggiornato");
+      toast.success(tr("Stato aggiornato", "Status updated"));
       // Refresh the page to show updated status
       window.location.reload();
     } catch {
-      toast.error("Errore di rete");
+      toast.error(tr("Errore di rete", "Network error"));
     } finally {
       setUpdating(false);
     }
   }
 
   const statuses = [
-    { key: "vista", label: "Risposta ricevuta", icon: "inbox" as const },
-    { key: "colloquio", label: "Colloquio", icon: "calendar" as const },
-    { key: "rifiutata", label: "Rifiutata", icon: "x" as const },
-    { key: "offerta", label: "Offerta", icon: "check" as const },
+    { key: "vista", label: tr("Risposta ricevuta", "Reply received"), icon: "inbox" as const },
+    { key: "colloquio", label: tr("Colloquio", "Interview"), icon: "calendar" as const },
+    { key: "rifiutata", label: tr("Rifiutata", "Rejected"), icon: "x" as const },
+    { key: "offerta", label: tr("Offerta", "Offer"), icon: "check" as const },
   ];
 
   return (
@@ -443,7 +443,8 @@ function UserStatusButtons({ appId, currentStatus }: { appId: string; currentSta
   );
 }
 
-function FollowUpButton({ appId }: { appId: string }) {
+function FollowUpButton({ appId, locale }: { appId: string; locale: string }) {
+  const tr = (it: string, en: string) => locale === "en" ? en : it;
   const [loading, setLoading] = useState(false);
 
   async function openFollowUp() {
@@ -451,17 +452,17 @@ function FollowUpButton({ appId }: { appId: string }) {
     try {
       const res = await fetch(`/api/applications/${appId}/followup`);
       if (!res.ok) {
-        toast.error("Errore generazione follow-up");
+        toast.error(tr("Errore generazione follow-up", "Unable to prepare follow-up"));
         return;
       }
       const { mailto, hasRecruiterEmail } = await res.json();
       if (!hasRecruiterEmail) {
-        toast.error("Email recruiter non disponibile per questo annuncio");
+        toast.error(tr("Email recruiter non disponibile per questo annuncio", "Recruiter email unavailable for this job"));
         return;
       }
       window.location.href = mailto;
     } catch {
-      toast.error("Errore di rete");
+      toast.error(tr("Errore di rete", "Network error"));
     } finally {
       setLoading(false);
     }
@@ -475,7 +476,7 @@ function FollowUpButton({ appId }: { appId: string }) {
       disabled={loading}
       style={{ width: "100%" }}
     >
-      <Icon name="send" size={13} /> Invia follow-up
+      <Icon name="send" size={13} /> {tr("Prepara follow-up", "Prepare follow-up")}
     </button>
   );
 }

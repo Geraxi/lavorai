@@ -86,7 +86,7 @@ async function main() {
   const element = (type: unknown, props: unknown) => ({ type, props });
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },
-    "next/link": { default: "Link" }, "next-intl/server": { getTranslations: async () => (key: string) => key },
+    "next/link": { default: "Link" }, "next-intl/server": { getLocale: async () => "it", getTranslations: async () => (key: string) => key },
     "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence,
     "@/lib/session": { getCurrentUser: async () => ({ id: "owner", email: "owner@example.test", name: "Owner", welcomeSeenAt: new Date() }) },
     "@/lib/onboarding": { getOnboardingState: async () => ({ hasUploadedCv: true, hasSetPreferences: true, hasFirstApplication: true }) },

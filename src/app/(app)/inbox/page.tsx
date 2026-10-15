@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getLocale } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { GmailInboxView } from "@/components/gmail-inbox-view";
@@ -18,9 +19,11 @@ export default async function InboxPage() {
     getInboxMessages(user.id),
   ]);
 
+  const locale = await getLocale();
   return (
-    <div style={{ height: "100%", overflow: "hidden" }}>
+    <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <GmailInboxView
+        locale={locale}
         messages={messages}
         gmailConnected={gmailConnected}
         userEmail={user.email ?? null}

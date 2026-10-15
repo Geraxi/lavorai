@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
+import { useLocale } from "next-intl";
 import { AppSidebar, type SidebarProps } from "@/components/design/sidebar";
 import { Icon } from "@/components/design/icon";
+import "./user-workspace.css";
 
 /**
  * Responsive app shell.
@@ -21,10 +23,11 @@ export function AppShell({
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const en = useLocale() === "en";
   const mobileNavItems = [
     { href: "/dashboard", label: "Home", icon: "dashboard" as const },
-    { href: "/discover", label: "Scopri", icon: "sparkles" as const },
-    { href: "/applications", label: "Candidature", icon: "briefcase" as const },
+    { href: "/discover", label: en ? "Discover" : "Scopri", icon: "sparkles" as const },
+    { href: "/applications", label: en ? "Applications" : "Candidature", icon: "briefcase" as const },
     { href: "/inbox", label: "Inbox", icon: "inbox" as const },
   ];
 
@@ -44,7 +47,7 @@ export function AppShell({
 
   return (
     <div
-      className="font-sans lavorai-app-shell"
+      className={`font-sans lavorai-app-shell${["/dashboard", "/discover", "/applications", "/inbox", "/materiali"].includes(pathname) ? " reference-workspace" : ""}`}
       style={{
         background: "var(--bg)",
         color: "var(--fg)",
@@ -80,7 +83,7 @@ export function AppShell({
         <div className="lavorai-mobile-topbar">
           <button
             type="button"
-            aria-label="Apri menu"
+            aria-label={en ? "Open menu" : "Apri menu"}
             className="lavorai-menu-btn"
             onClick={() => setOpen(true)}
           >
@@ -91,7 +94,7 @@ export function AppShell({
           <Link
             href="/settings"
             className="lavorai-menu-btn"
-            aria-label="Impostazioni"
+            aria-label={en ? "Settings" : "Impostazioni"}
             style={{ padding: "8px 10px" }}
           >
             <Icon name="user" size={16} />
@@ -104,7 +107,7 @@ export function AppShell({
       {/* I percorsi quotidiani restano a portata di pollice; il drawer
           conserva le sezioni meno frequenti. */}
       {!open && (
-        <nav className="lavorai-mobile-bottom-nav" aria-label="Navigazione principale">
+        <nav className="lavorai-mobile-bottom-nav" aria-label={en ? "Main navigation" : "Navigazione principale"}>
           {mobileNavItems.map((item) => {
             const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
             return (
@@ -114,9 +117,9 @@ export function AppShell({
               </Link>
             );
           })}
-          <button type="button" className="lavorai-mobile-nav-item lavorai-mobile-nav-menu" onClick={() => setOpen(true)} aria-label="Apri tutte le sezioni">
+          <button type="button" className="lavorai-mobile-nav-item lavorai-mobile-nav-menu" onClick={() => setOpen(true)} aria-label={en ? "Open all sections" : "Apri tutte le sezioni"}>
             <Icon name="menu" size={19} />
-            <span>Altro</span>
+            <span>{en ? "More" : "Altro"}</span>
           </button>
         </nav>
       )}
@@ -133,6 +136,7 @@ export function AppShell({
           overflow-y: auto;
         }
         .lavorai-main {
+          min-width: 0;
           overflow: auto;
           background: var(--bg);
           display: flex;
@@ -246,7 +250,6 @@ export function AppShell({
           .lavorai-mobile-nav-menu { border: 0; background: transparent; font: inherit; cursor: pointer; }
           .lavorai-mobile-nav-menu:hover { color: #fff; background: rgba(255,255,255,.08); }
           @media (prefers-reduced-motion: reduce) { .lavorai-mobile-nav-item { transition: none; } }
-          }
         }
         @keyframes lavorai-fade-in { from { opacity: 0; } to { opacity: 1; } }
         @keyframes lavorai-slide-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }

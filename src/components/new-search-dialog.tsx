@@ -30,11 +30,14 @@ const TARGET_PRESETS = [10, 30, 50, 100];
 export function NewSearchDialog({
   open,
   onClose,
+  locale = "it",
 }: {
   open: boolean;
+  locale?: string;
   onClose: () => void;
 }) {
   const router = useRouter();
+  const tr = (it: string, en: string) => locale === "en" ? en : it;
   const [title, setTitle] = useState("");
   const [target, setTarget] = useState<number>(30);
   const [customContext, setCustomContext] = useState("");
@@ -56,7 +59,7 @@ export function NewSearchDialog({
   async function submit() {
     const t = title.trim();
     if (t.length < 2) {
-      toast.error("Inserisci un titolo del ruolo");
+      toast.error(tr("Inserisci un titolo del ruolo", "Enter a role title"));
       return;
     }
     setSubmitting(true);
@@ -72,10 +75,10 @@ export function NewSearchDialog({
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(body?.message ?? "Errore creazione round");
+        toast.error(body?.message ?? tr("Errore creazione round", "Unable to create search round"));
         return;
       }
-      toast.success(`Round "${t}" avviato — target ${target}`);
+      toast.success(locale === "en" ? `Round "${t}" started — target ${target}` : `Round "${t}" avviato — target ${target}`);
       setTitle("");
       setCustomContext("");
       setTarget(30);
@@ -129,7 +132,7 @@ export function NewSearchDialog({
         >
           <div>
             <div style={{ fontSize: 20, fontWeight: 600, letterSpacing: "-0.02em" }}>
-              Avvia un nuovo round
+              {tr("Avvia un nuovo round", "Start a new round")}
             </div>
             <div
               style={{
@@ -139,18 +142,16 @@ export function NewSearchDialog({
                 lineHeight: 1.5,
               }}
             >
-              Un round = N candidature mirate ad un titolo specifico. A target
-              raggiunto, ti chiediamo sulla dashboard se avviarne un altro.
-              Massimo 3 round attivi in parallelo.
+              {tr("Un round = N candidature mirate ad un titolo specifico. A target raggiunto, ti chiediamo sulla dashboard se avviarne un altro. Massimo 3 round attivi in parallelo.", "A round groups applications for a specific role. Once its target is reached, the dashboard asks whether to start another. Up to 3 rounds can be active at once.")}
             </div>
           </div>
 
           <div>
-            <label className="ds-label">Titolo del ruolo</label>
+            <label className="ds-label">{tr("Titolo del ruolo", "Role title")}</label>
             <input
               ref={inputRef}
               className="ds-input"
-              placeholder="es. Senior Product Designer"
+              placeholder={tr("es. Senior Product Designer", "e.g. Senior Product Designer")}
               value={title}
               maxLength={120}
               onChange={(e) => setTitle(e.target.value)}
@@ -191,7 +192,7 @@ export function NewSearchDialog({
           </div>
 
           <div>
-            <label className="ds-label">Target candidature</label>
+            <label className="ds-label">{tr("Target candidature", "Application target")}</label>
             <div className="ds-toggle-group" style={{ display: "flex", width: "100%" }}>
               {TARGET_PRESETS.map((n) => (
                 <button
@@ -209,22 +210,21 @@ export function NewSearchDialog({
 
           <div>
             <label className="ds-label">
-              Contesto extra per questo round{" "}
+              {tr("Contesto extra per questo round", "Extra context for this round")}{" "}
               <span style={{ color: "var(--fg-muted)", fontWeight: 400 }}>
-                (opzionale)
+                {tr("(opzionale)", "(optional)")}
               </span>
             </label>
             <textarea
               className="ds-input"
               rows={3}
               maxLength={2000}
-              placeholder="Esperienze o progetti specifici da valorizzare nel CV per questo round (es. side project, freelance, certificazioni). L'AI lo integra naturalmente nel CV ottimizzato per ogni candidatura."
+              placeholder={tr("Esperienze o progetti specifici da valorizzare nel CV per questo round (es. side project, freelance, certificazioni). L'AI lo integra naturalmente nel CV ottimizzato per ogni candidatura.", "Relevant experience, projects or certifications to highlight in the tailored CV for this round.")}
               value={customContext}
               onChange={(e) => setCustomContext(e.target.value)}
             />
             <p style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 4 }}>
-              Se non hai un CV alternativo per questo tipo di ruolo, scrivi
-              qui le esperienze specifiche che vuoi far emergere.
+              {tr("Se non hai un CV alternativo per questo tipo di ruolo, scrivi qui le esperienze specifiche che vuoi far emergere.", "If you do not have an alternative CV for this role, describe the relevant experience you want to highlight.")}
             </p>
           </div>
 
@@ -235,7 +235,7 @@ export function NewSearchDialog({
               onClick={onClose}
               disabled={submitting}
             >
-              Annulla
+              {tr("Annulla", "Cancel")}
             </button>
             <button
               type="button"
@@ -244,7 +244,7 @@ export function NewSearchDialog({
               disabled={submitting || title.trim().length < 2}
               style={{ minHeight: 40 }}
             >
-              {submitting ? "Avvio..." : "Avvia round"}
+              {submitting ? tr("Avvio...", "Starting…") : tr("Avvia round", "Start round")}
               {!submitting && <Icon name="zap" size={13} />}
             </button>
           </div>

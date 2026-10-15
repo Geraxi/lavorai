@@ -14,7 +14,9 @@ type ApplicationService = {
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-export function AutoApplyToggle() {
+export function AutoApplyToggle({ compact = false, locale = "it" }: { compact?: boolean; locale?: string } = {}) {
+  const en = locale === "en";
+  const tr = (it: string, english: string) => en ? english : it;
   const { data, mutate } = useSWR<{ autoApplyMode: Mode; applicationService?: ApplicationService }>(
     "/api/preferences",
     fetcher,
@@ -28,12 +30,12 @@ export function AutoApplyToggle() {
   const automaticBlocked = service?.automaticBlocked !== false;
   const submissionsPaused = service?.submissionsPaused !== false;
   const controlsDisabled = automaticBlocked || submissionsPaused;
-  const serviceLabel = !service ? "Stato invii non disponibile"
-    : submissionsPaused ? "Invii in pausa"
-      : automaticBlocked ? "Solo candidature confermate" : null;
-  const serviceDetail = !service ? "In attesa dello stato del servizio."
-    : submissionsPaused ? "Gli invii sono temporaneamente sospesi. Le preferenze restano salvate."
-      : automaticBlocked ? `Invio automatico sospeso. Solo nuove candidature confermate; limite complessivo ${service.dailyCap} al giorno (UTC). Le preferenze restano salvate.`
+  const serviceLabel = !service ? tr("Stato invii non disponibile", "Submission status unavailable")
+    : submissionsPaused ? tr("Invii in pausa", "Submissions paused")
+      : automaticBlocked ? tr("Solo candidature confermate", "Confirmed applications only") : null;
+  const serviceDetail = !service ? tr("In attesa dello stato del servizio.", "Waiting for service status.")
+    : submissionsPaused ? tr("Gli invii sono temporaneamente sospesi. Le preferenze restano salvate.", "Submissions are temporarily paused. Your preferences are saved.")
+      : automaticBlocked ? tr(`Invio automatico sospeso. Solo nuove candidature confermate; limite complessivo ${service.dailyCap} al giorno (UTC). Le preferenze restano salvate.`, `Automatic submissions paused. New confirmed applications only; global limit ${service.dailyCap} per day (UTC). Your preferences are saved.`)
         : undefined;
 
   useEffect(() => {
@@ -76,15 +78,15 @@ export function AutoApplyToggle() {
   }
 
   const options = [
-    { value: "auto", label: "Auto-apply (100% automatico)", icon: "zap" },
-    { value: "hybrid", label: "Review (Richiede approvazione)", icon: "eye" },
-    { value: "off", label: "In pausa", icon: "pause-circle" },
+    { value: "auto", label: tr("Auto-apply (100% automatico)", "Auto-apply (automatic)"), icon: "zap" },
+    { value: "hybrid", label: tr("Review (Richiede approvazione)", "Review (approval required)"), icon: "eye" },
+    { value: "off", label: tr("In pausa", "Paused"), icon: "pause-circle" },
   ];
 
   const currentOption = options.find((o) => o.value === mode) || options[0];
 
   return (
-    <div ref={ref} style={{ position: "relative", display: "inline-block" }}>
+    <div ref={ref} style={{ position: "relative", display: "inline-block", ...(compact ? { width: "100%", minWidth: 0 } : {}) }}>
       <button
         type="button"
         className="ds-btn ds-btn-ghost"
@@ -100,13 +102,17 @@ export function AutoApplyToggle() {
           display: "flex",
           alignItems: "center",
           gap: 8,
-          minWidth: 150,
+          minWidth: compact ? 0 : 150,
+          width: compact ? "100%" : undefined,
+          whiteSpace: compact ? "normal" : undefined,
+          textAlign: "left",
+          lineHeight: 1.4,
           justifyContent: "space-between",
           padding: "6px 10px 6px 12px",
-          height: 32,
+          height: compact ? "auto" : 32,
         }}
       >
-        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
           {busy ? (
             <Icon name="refresh" size={14} className="animate-spin" />
           ) : (

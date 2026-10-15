@@ -187,3 +187,32 @@
   .mat-page .mat-primary, .mat-page .mat-list-row { transition: none; }
   .mat-page .mat-primary:hover { transform: none; }
 }
+
+/* Compact package workspace from the October user reference. */
+.reference-workspace .mat-page { --mat-panel: var(--bg-elev); --mat-panel-raised: var(--bg-sunken); --mat-mint: var(--primary-ds); --mat-muted: var(--fg-muted); padding: 20px; }
+.reference-workspace .mat-header { margin-bottom: 16px; gap: 14px; }
+.reference-workspace .mat-header h1 { font-size: 24px; margin-top: 5px; }
+.reference-workspace .mat-header p { font-size: 12px; }
+.reference-workspace .mat-summary { gap: 10px; padding: 0; border: 0; background: none; margin-bottom: 14px; }
+.reference-workspace .mat-summary-item { border: 1px solid var(--mat-line); border-radius: 8px; background: var(--mat-panel); padding: 12px; min-height: 64px; }
+.reference-workspace .mat-summary-item strong { font-size: 19px; }
+.reference-workspace .mat-summary-update strong { font-size: 14px; }
+.mat-controls { display: flex; align-items: center; gap: 12px; justify-content: space-between; flex-wrap: wrap; margin-bottom: 12px; }
+.mat-controls .mat-filters { order: -1; margin: 0; border: 0; }
+.mat-controls .mat-filters button.is-active { background: var(--mat-mint); color: var(--mat-mint-ink); border-radius: 7px; }
+.mat-controls .mat-toolbar { flex: 1; justify-content: flex-end; margin: 0; }
+.mat-controls .mat-search { max-width: 240px; }
+.reference-workspace .mat-workspace { min-height: 580px; height: calc(100vh - 310px); grid-template-columns: 320px minmax(0,1fr); }
+.reference-workspace .mat-detail-head { padding: 14px 16px; flex-wrap: wrap; }
+.reference-workspace .mat-detail-title h2 { font-size: 17px; }
+.reference-workspace .mat-match-large { width: 40px; height: 40px; padding: 3px; }
+.reference-workspace .mat-match-large span { font-size: 11px; }
+.reference-workspace .mat-detail-main { padding: 12px; }
+.reference-workspace .mat-journey { padding: 7px; margin-bottom: 8px; }
+.reference-workspace .mat-status { white-space: normal; }
+@media (max-width: 1100px) { .reference-workspace .mat-workspace { height: auto; grid-template-columns: minmax(0,1fr); } }
+@media (max-width: 700px) {
+  .reference-workspace .mat-page { padding: 16px 12px; }
+  .mat-controls .mat-search { max-width: none; }
+  .reference-workspace .mat-summary-item { min-height: 70px; }
+}

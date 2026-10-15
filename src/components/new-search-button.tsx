@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Icon } from "@/components/design/icon";
 import { NewSearchDialog } from "@/components/new-search-dialog";
 
-export function NewSearchButton() {
+export function NewSearchButton({ locale = "it" }: { locale?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -13,9 +13,9 @@ export function NewSearchButton() {
         className="ds-btn"
         onClick={() => setOpen(true)}
       >
-        <Icon name="plus" size={14} /> Nuova ricerca
+        <Icon name="plus" size={14} /> {locale === "en" ? "New search" : "Nuova ricerca"}
       </button>
-      <NewSearchDialog open={open} onClose={() => setOpen(false)} />
+      <NewSearchDialog locale={locale} open={open} onClose={() => setOpen(false)} />
     </>
   );
 }

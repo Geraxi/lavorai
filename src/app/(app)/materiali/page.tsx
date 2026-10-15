@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { MaterialiView, type MaterialItem } from "./materiali-view";
 import "./materiali.css";
+import { applicationDeliveryView } from "@/lib/application-delivery-view";
 
 export const metadata: Metadata = {
   title: "CV per posizione · LavorAI",
@@ -36,6 +37,10 @@ export default async function MaterialiPage() {
         completedAt: true,
         status: true,
         submittedVia: true,
+        submitConfirmation: true,
+        submissionReceiptJson: true,
+        errorMessage: true,
+        emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true, acceptedAt: true } },
         cvDocxPath: true,
         cvPdfPath: true,
         coverLetterPath: true,
@@ -60,6 +65,7 @@ export default async function MaterialiPage() {
     completedAt: row.completedAt?.toISOString() ?? null,
     status: row.status,
     submittedVia: row.submittedVia,
+    delivery: applicationDeliveryView(row),
     hasPdf: Boolean(row.cvPdfPath),
     hasDocx: Boolean(row.cvDocxPath),
     hasLetter: Boolean(row.coverLetterPath),

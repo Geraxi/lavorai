@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { Heart, Sparkles, Target } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from "motion/react";
 import { toast } from "sonner";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
@@ -86,7 +86,12 @@ function saveSkipped(set: Set<string>): void {
   }
 }
 
-export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
+type DiscoverJob = JobRow & { matchScore?: number | null };
+
+export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
+  const en = useLocale() === "en";
+  const tr = (it: string, english: string) => en ? english : it;
+  const [remoteOnly, setRemoteOnly] = useState(false);
   const t = useTranslations("discoverPage");
   const router = useRouter();
   const [skipped, setSkipped] = useState<Set<string>>(() => new Set());
@@ -122,8 +127,8 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
   );
 
   const queue = useMemo(
-    () => jobs.filter((j) => !skipped.has(j.id)),
-    [jobs, skipped],
+    () => jobs.filter((j) => !skipped.has(j.id) && (!remoteOnly || j.remote)),
+    [jobs, skipped, remoteOnly],
   );
 
   const currentJob = queue[0];
@@ -206,7 +211,7 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
   useEffect(() => {
     if (!currentJob) return;
     const onKey = (e: KeyboardEvent) => {
-      if (animatingId || detailJob) return;
+      if (animatingId || detailJob || paywallOpen || e.defaultPrevented || (e.target instanceof HTMLElement && e.target.closest("input, textarea, select, button, a, [contenteditable=true], [role=dialog]"))) return;
       if (e.key === "ArrowRight") {
         e.preventDefault();
         apply(currentJob);
@@ -220,242 +225,70 @@ export function JobSwiper({ jobs }: { jobs: JobRow[] }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentJob, animatingId, detailJob, apply, skip]);
+  }, [currentJob, animatingId, detailJob, paywallOpen, apply, skip]);
 
   if (!currentJob) {
-    const hasSkipped = skipped.size > 0;
-    const totalJobs = jobs.length;
-    return (
-      <div
-        className="ds-section-card"
-        style={{
-          padding: "48px 32px",
-          textAlign: "center",
-          borderRadius: 20,
-        }}
-      >
-        <div style={{ marginBottom: 14, display: "flex", justifyContent: "center", color: "hsl(var(--primary))" }}><Target size={46} strokeWidth={1.4} aria-hidden /></div>
-        <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8, letterSpacing: "-0.01em" }}>
-          {totalJobs === 0 ? "Nessuna offerta trovata" : "Hai visto tutte le offerte"}
-        </div>
-        <div
-          style={{
-            fontSize: 14,
-            color: "var(--fg-muted)",
-            maxWidth: 440,
-            margin: "0 auto 24px",
-            lineHeight: 1.55,
-          }}
-        >
-          {totalJobs === 0
-            ? "Nessun annuncio corrisponde alle tue preferenze attuali. Allarga ruoli, città o tipologia di contratto per scoprire altre opportunità."
-            : `Hai esaminato tutte le ${totalJobs} offerte allineate al tuo profilo. Allarga le preferenze per nuovi match, oppure resetta gli skip per riprovare quelli scartati.`}
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            maxWidth: 380,
-            margin: "0 auto",
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => router.push("/preferences")}
-            className="ds-btn ds-btn-primary"
-            style={{
-              padding: "12px 18px",
-              fontSize: 14,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            }}
-          >
-            <Icon name="filter" size={14} />
-            Modifica preferenze (ruoli, città, salario)
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.push("/jobs")}
-            className="ds-btn"
-            style={{
-              padding: "11px 18px",
-              fontSize: 13.5,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            }}
-          >
-            <Icon name="search" size={13} />
-            Cerca manualmente su /jobs
-          </button>
-
-          {hasSkipped && (
-            <button
-              type="button"
-              onClick={() => {
-                localStorage.removeItem(SKIP_KEY);
-                setSkipped(new Set());
-                toast.success(`Ripristinati ${skipped.size} annunci scartati`);
-              }}
-              className="ds-btn"
-              style={{
-                padding: "11px 18px",
-                fontSize: 13.5,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              }}
-            >
-              <Icon name="refresh" size={13} />
-              Ripristina gli {skipped.size} skip
-            </button>
-          )}
-        </div>
-
-        <div
-          style={{
-            marginTop: 24,
-            fontSize: 11.5,
-            color: "var(--fg-subtle)",
-            lineHeight: 1.5,
-          }}
-        >
-          Il cron sync-jobs pesca nuovi annunci ogni 2 ore.
-        </div>
+    const filteredOut = remoteOnly && jobs.some(job => !skipped.has(job.id));
+    return <section className="workspace-panel" style={{ padding: 32, textAlign: "center" }}>
+      <Target size={38} aria-hidden style={{ margin: "0 auto 16px", color: "var(--primary-ds)" }} />
+      <h2 style={{ fontSize: 22 }}>{filteredOut ? tr("Nessun ruolo remoto in questa selezione", "No remote roles in this selection") : jobs.length === 0 ? tr("Nessuna offerta trovata", "No jobs found") : tr("Hai visto tutte le offerte", "You have reviewed this selection")}</h2>
+      <p className="workspace-muted">{filteredOut ? tr("Ci sono altri ruoli disponibili. Rimuovi il filtro per vederli.", "Other roles are available. Clear the filter to see them.") : tr("Rivedi le preferenze di ricerca o esplora gli annunci disponibili.", "Review your search preferences or explore available listings.")}</p>
+      <div className="workspace-toolbar" style={{ justifyContent: "center", marginTop: 18 }}>
+        {remoteOnly && <button className="ds-btn" onClick={() => setRemoteOnly(false)}>{tr("Mostra tutti i ruoli", "Show all roles")}</button>}
+        <a className="ds-btn ds-btn-primary" href="/preferences">{tr("Modifica preferenze", "Edit preferences")}</a>
+        <a className="ds-btn" href="/jobs">{tr("Esplora annunci", "Browse jobs")}</a>
+        {skipped.size > 0 && <button className="ds-btn" onClick={() => { try { localStorage.removeItem(SKIP_KEY); } catch {} setSkipped(new Set()); }}>{tr("Rivedi annunci scartati", "Review skipped jobs")}</button>}
       </div>
-    );
+    </section>;
   }
 
   return (
     <>
-      <div
-        style={{
-          position: "relative",
-          width: "100%",
-          height: 540,
-          marginTop: 8,
-        }}
-      >
-        {/* Peek cards rimosse temporaneamente: causavano bleed-through
-            visibile del contenuto della prossima card attraverso il body
-            della corrente (anche con background bianco solido — root cause
-            non chiara). Da reintrodurre con un'animazione di stack proper
-            (next-card già montata, scala/y-shift in sync con l'uscita della
-            corrente) invece dell'attuale layer statico. */}
-
-        {/* Card attiva con drag */}
-        <SwipeCard
-          key={currentJob.id}
-          job={currentJob}
-          isAnimatingOut={animatingId === currentJob.id}
-          animDir={animDir}
-          isSaved={saved.has(currentJob.id)}
-          onToggleSave={() => toggleSave(currentJob.id, currentJob.title)}
-          onSwipe={(dir) => {
-            if (dir === "right") apply(currentJob);
-            else skip(currentJob.id);
-          }}
-          onTap={() => setDetailJob(currentJob)}
-        />
+      <div className="workspace-toolbar">
+        <button type="button" className={`ds-btn${!remoteOnly ? " ds-btn-primary" : ""}`} aria-pressed={!remoteOnly} onClick={() => setRemoteOnly(false)}>{tr("Tutti i ruoli", "All roles")} ({jobs.length})</button>
+        <button type="button" className={`ds-btn${remoteOnly ? " ds-btn-primary" : ""}`} aria-pressed={remoteOnly} onClick={() => setRemoteOnly(true)}>{tr("Solo remoto", "Remote only")} ({jobs.filter(j => j.remote).length})</button>
+        <a className="ds-btn" href="/preferences"><Icon name="filter" size={13} /> {tr("Preferenze di ricerca", "Search preferences")}</a>
       </div>
-
-      {/* Action buttons */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          gap: 14,
-          marginTop: 18,
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => skip(currentJob.id)}
-          disabled={!!animatingId}
-          aria-label={t("skip")}
-          style={{
-            width: 60,
-            height: 60,
-            borderRadius: 999,
-            border: "1px solid var(--border-ds)",
-            background: "var(--bg-elev)",
-            color: "var(--fg-muted)",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "transform 0.15s, background 0.15s",
-            fontSize: 22,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "scale(1.05)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "scale(1)";
-          }}
-        >
-          ✕
-        </button>
-        <button
-          type="button"
-          onClick={() => apply(currentJob)}
-          disabled={!!animatingId}
-          aria-label={t("apply")}
-          style={{
-            width: 60,
-            height: 60,
-            borderRadius: 999,
-            border: "1px solid hsl(var(--primary) / 0.5)",
-            background:
-              "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.85))",
-            color: "white",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "transform 0.15s, box-shadow 0.15s",
-            boxShadow: "0 8px 24px hsl(var(--primary) / 0.35)",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "scale(1.08)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "scale(1)";
-          }}
-        >
-          <Icon name="zap" size={22} />
-        </button>
-      </div>
-
-      {/* Hint keyboard */}
-      <div
-        style={{
-          marginTop: 14,
-          textAlign: "center",
-          fontSize: 11,
-          color: "var(--fg-subtle)",
-        }}
-      >
-        {t("hintKeyboard")}
-      </div>
-
-      {/* Counter */}
-      <div
-        style={{
-          marginTop: 4,
-          textAlign: "center",
-          fontSize: 11.5,
-          color: "var(--fg-muted)",
-        }}
-      >
-        {t("queueRemaining", { count: queue.length })}
+      <div className="discover-layout">
+        <div className="discover-main">
+          <div style={{ position: "relative", width: "100%", height: 540, marginTop: 8 }}>
+            <SwipeCard key={currentJob.id} job={currentJob} isAnimatingOut={animatingId === currentJob.id} animDir={animDir}
+              isSaved={saved.has(currentJob.id)} onToggleSave={() => toggleSave(currentJob.id, currentJob.title)}
+              onSwipe={(dir) => { if (dir === "right") apply(currentJob); else skip(currentJob.id); }}
+              onTap={() => setDetailJob(currentJob)} />
+          </div>
+          <div className="workspace-toolbar" style={{ justifyContent: "center", marginTop: 18 }}>
+            <button type="button" className="ds-btn" onClick={() => skip(currentJob.id)} disabled={!!animatingId} aria-label={t("skip")}><Icon name="x" size={16} /> {t("skip")}</button>
+            <button type="button" className="ds-btn" onClick={() => setDetailJob(currentJob)}>{tr("Dettagli", "Details")}</button>
+            <button type="button" className="ds-btn ds-btn-primary" onClick={() => apply(currentJob)} disabled={!!animatingId} aria-label={t("apply")}><Icon name="send" size={16} /> {t("apply")}</button>
+          </div>
+          <p className="workspace-muted" style={{ textAlign: "center" }}>{t("hintKeyboard")}</p>
+        </div>
+        <aside className="workspace-stack">
+          <section className="workspace-panel">
+            <div className="workspace-eyebrow">{tr("La tua selezione", "Your selection")}</div>
+            <h2>{t("queueRemaining", { count: queue.length })}</h2>
+            <p className="workspace-muted">{jobs.filter(j => saved.has(j.id)).length} {tr("salvate su questo dispositivo tra questi annunci", "saved on this device among these jobs")}</p>
+          </section>
+          <section className="workspace-panel">
+            <h2>{tr("Coda di riserva", "Up next")} <span className="workspace-chip">{Math.min(queue.length - 1, 3)}</span></h2>
+            {queue.slice(1, 4).map(job => <button key={job.id} type="button" className="discover-queue" onClick={() => setDetailJob(job)}>
+              <strong>{job.title}</strong><small>{job.company ?? "—"} · {job.location ?? tr("Sede non indicata", "Location not specified")}</small>
+              {(job.salaryMin || job.salaryMax) ? <small>{formatSalary(job.salaryMin, job.salaryMax)}</small> : null}
+              {job.matchScore != null && <span className="workspace-chip">{job.matchScore}% {tr("match stimato", "estimated match")}</span>}
+            </button>)}
+            {queue.length === 1 && <p className="workspace-muted">{tr("È l'ultimo annuncio della selezione.", "This is the last job in this selection.")}</p>}
+          </section>
+          <section className="workspace-panel">
+            <h2>{tr("Affina la ricerca", "Refine your search")}</h2>
+            <p className="workspace-muted">{tr("Apri le preferenze per rivedere la ricerca. Controlla località e retribuzione nell’annuncio. Il match è una stima basata sul CV, non una valutazione del recruiter.", "Open preferences to review your search. Check location and salary in the listing. Match is an estimate based on your CV, not a recruiter assessment.")}</p>
+            <a className="ds-btn" href="/preferences" style={{ marginTop: 12 }}>{tr("Modifica preferenze", "Edit preferences")}</a>
+          </section>
+          <section className="workspace-panel">
+            <h2>{tr("Prima di candidarti", "Before you apply")}</h2>
+            <p className="workspace-muted">{tr("Leggi l'annuncio completo e controlla i requisiti. La candidatura segue i controlli e i limiti del tuo account; nessun invio è garantito.", "Read the full description and check the requirements. Applications follow your account controls and limits; submission is not guaranteed.")}</p>
+          </section>
+        </aside>
       </div>
 
       <PaywallDialog
@@ -506,7 +339,7 @@ function SwipeCard({
   onSwipe,
   onTap,
 }: {
-  job: JobRow;
+  job: DiscoverJob;
   isAnimatingOut: boolean;
   animDir: "left" | "right" | null;
   isSaved: boolean;
@@ -722,272 +555,39 @@ function JobCardSurface({
   onToggleSave,
   children,
 }: {
-  job: JobRow;
+  job: DiscoverJob;
   compact?: boolean;
   isSaved?: boolean;
   onToggleSave?: () => void;
   children?: React.ReactNode;
 }) {
-  const color = companyColor(job.company ?? job.title);
-  const seniority = useMemo(() => seniorityFromTitle(job.title), [job.title]);
-  const skills = useMemo(
-    () => (compact ? [] : extractSkills(job.description)),
-    [job.description, compact],
-  );
-  const descSnippet = useMemo(() => {
-    if (compact) return "";
-    const clean = cleanHtmlText(job.description).replace(/\s+/g, " ").trim();
-    return clean.length > 280 ? clean.slice(0, 280).trimEnd() + "…" : clean;
-  }, [job.description, compact]);
-  const postedLabel = relativeDateLabel(job.postedAt ?? null);
-  // Portale ATS → pill di fiducia "candidatura diretta". Segnala
-  // all'utente che è un form reale, non un redirect.
-  const portalLabel = useMemo(() => {
-    if (compact) return null;
-    const p = portalOf(job.url);
-    const map: Record<string, string> = {
-      greenhouse: "Greenhouse · invio diretto",
-      lever: "Lever · invio diretto",
-      ashby: "Ashby · invio diretto",
-      workable: "Workable · invio diretto",
-      smartrecruiters: "SmartRecruiters · invio diretto",
-    };
-    return map[p] ?? null;
-  }, [job.url, compact]);
-  const salaryLabel = (job.salaryMin || job.salaryMax) ? formatSalary(job.salaryMin, job.salaryMax) : null;
-
-  return (
-    <div
-      style={
-        {
-          position: "relative",
-          height: "100%",
-          borderRadius: "2rem",
-          border: "1px solid rgba(0,0,0,0.06)",
-          // White card — pop su dark background, tono Tinder.
-          background: "#FFFFFF",
-          color: "#0F1012",
-          boxShadow:
-            "0 1px 2px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.18), 0 32px 80px -16px rgba(0,0,0,0.35)",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-          userSelect: compact ? "none" : "auto",
-          // Override CSS vars per cascade dark-on-white nel contenuto.
-          "--fg": "#0F1012",
-          "--fg-muted": "rgba(15,16,18,0.65)",
-          "--fg-subtle": "rgba(15,16,18,0.42)",
-          "--border-ds": "rgba(15,16,18,0.10)",
-          "--bg-elev": "rgba(15,16,18,0.04)",
-          "--bg-sunken": "rgba(15,16,18,0.06)",
-        } as React.CSSProperties
-      }
-    >
-      {/* Brand banner: gradient col company color, logo centrato.
-          Sostituisce la "photo" stile Tinder con un'identità visiva
-          deterministica derivata dal nome azienda. */}
-      <div
-        aria-hidden
-        style={{
-          position: "relative",
-          height: compact ? 90 : 120,
-          background: `linear-gradient(135deg, ${color}, ${color}CC 60%, ${color}88)`,
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          overflow: "hidden",
-        }}
-      >
-        {/* Texture overlay sottile per evitare il flat-color */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "radial-gradient(circle at 30% 20%, rgba(255,255,255,0.18), transparent 50%), radial-gradient(circle at 80% 80%, rgba(0,0,0,0.15), transparent 50%)",
-            pointerEvents: "none",
-          }}
-        />
-        <CompanyLogo
-          company={job.company ?? job.title}
-          color={color}
-          size={compact ? 56 : 76}
-          rounded={18}
-        />
-      </div>
-
-      {/* Bookmark heart — floating sul banner, top-right */}
-      {!compact && onToggleSave && (
-        <button
-          type="button"
-          aria-label={isSaved ? "Rimuovi dai preferiti" : "Salva nei preferiti"}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSave();
-          }}
-          onPointerDown={(e) => e.stopPropagation()}
-          style={{
-            position: "absolute",
-            top: 16,
-            right: 16,
-            zIndex: 5,
-            width: 40,
-            height: 40,
-            borderRadius: 999,
-            background: isSaved ? "#FFFFFF" : "rgba(255,255,255,0.22)",
-            border: "1px solid rgba(255,255,255,0.5)",
-            color: isSaved ? "#DC2626" : "#FFFFFF",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            backdropFilter: "blur(12px)",
-            transition: "transform 0.15s, background 0.15s",
-            fontSize: 18,
-            lineHeight: 1,
-            boxShadow: isSaved ? "0 2px 8px rgba(0,0,0,0.15)" : undefined,
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.08)")}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-        >
-          <Heart size={18} aria-hidden fill={isSaved ? "currentColor" : "none"} />
-        </button>
-      )}
-
-      {/* Header testuale sotto il banner: title + company + location */}
-      <div style={{ padding: "20px 24px 12px" }}>
-        <div
-          style={{
-            fontSize: 20,
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-            lineHeight: 1.25,
-            color: "#0F1012",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {job.title}
-        </div>
-        <div
-          style={{
-            marginTop: 6,
-            fontSize: 13.5,
-            color: "rgba(15,16,18,0.65)",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            flexWrap: "wrap",
-          }}
-        >
-          <span style={{ fontWeight: 600, color: "#0F1012" }}>
-            {job.company ?? "—"}
-          </span>
-          {job.location && (
-            <>
-              <span style={{ opacity: 0.4 }}>·</span>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
-                <Icon name="map-pin" size={11} />
-                {shortLocation(job.location)}
-              </span>
-            </>
-          )}
-          {postedLabel && (
-            <>
-              <span style={{ opacity: 0.4 }}>·</span>
-              <span>{postedLabel}</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* PILL CLUSTER — sempre presente. Deriva tag da tutti i campi
-          disponibili così la card non è mai vuota anche quando
-          salario/contratto/remote mancano (es. ruolo onsite senza RAL
-          pubblicata). Ordine: highlight (salario) → meta strutturati
-          → skill tech. */}
-      {!compact && (
-        <div
-          style={{
-            padding: "0 24px 14px",
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 7,
-          }}
-        >
-          {salaryLabel && (
-            <Pill icon="euro" tone="salary" text={salaryLabel} />
-          )}
-          {job.remote && <Pill icon="globe" tone="green" text="Remote" />}
-          {seniority && <Pill icon="star" tone="accent" text={seniority} />}
-          {job.contractType && (
-            <Pill
-              icon="clock"
-              text={
-                job.contractType === "permanent"
-                  ? "Tempo indeterminato"
-                  : job.contractType
-              }
-            />
-          )}
-          {job.location && (
-            <Pill icon="map-pin" text={shortLocation(job.location)} />
-          )}
-          {postedLabel && <Pill icon="clock" text={postedLabel} />}
-          {portalLabel && (
-            <Pill icon="zap" tone="trust" text={portalLabel} />
-          )}
-          {skills.map((s) => (
-            <Pill key={s} tone="tech" text={s} />
-          ))}
-        </div>
-      )}
-
-      {/* Description snippet — più lungo (280 char) per densità info */}
-      {!compact && descSnippet && (
-        <div
-          style={{
-            padding: "0 24px 14px",
-            fontSize: 13.5,
-            lineHeight: 1.6,
-            color: "rgba(15,16,18,0.75)",
-            display: "-webkit-box",
-            WebkitLineClamp: 4,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {descSnippet}
-        </div>
-      )}
-
-      {/* Spacer flessibile per spingere il footer in basso */}
-      <div style={{ flex: 1, minHeight: 4 }} />
-
-      {/* Footer hint */}
-      {!compact && (
-        <div
-          style={{
-            padding: "14px 24px 20px",
-            fontSize: 11.5,
-            color: "rgba(15,16,18,0.45)",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            alignSelf: "flex-start",
-          }}
-        >
-          <Icon name="arrow-up-right" size={11} />
-          Tocca la card per la descrizione completa
-        </div>
-      )}
-
-      {children}
+  const en = useLocale() === "en";
+  const tr = (it: string, english: string) => en ? english : it;
+  const skills = useMemo(() => extractSkills(job.description), [job.description]);
+  const description = useMemo(() => cleanHtmlText(job.description).replace(/\s+/g, " ").trim(), [job.description]);
+  const salary = formatSalary(job.salaryMin, job.salaryMax);
+  return <article className="discover-card">
+    <div className="discover-card-heading">
+      <CompanyLogo company={job.company ?? job.title} color={companyColor(job.company ?? job.title)} size={42} rounded={10} />
+      <div><strong>{job.company ?? tr("Azienda non indicata", "Company not specified")}</strong><p className="workspace-muted">{job.location ?? tr("Sede non indicata", "Location not specified")}</p></div>
     </div>
-  );
+    {onToggleSave && <button type="button" className="discover-save" aria-pressed={isSaved} aria-label={isSaved ? tr("Rimuovi dai preferiti", "Remove from saved") : tr("Salva nei preferiti", "Save job")}
+      onClick={e => { e.stopPropagation(); onToggleSave(); }} onPointerDown={e => e.stopPropagation()}><Heart size={18} fill={isSaved ? "currentColor" : "none"} /></button>}
+    <div>
+      {job.matchScore != null && <span className="workspace-chip" style={{ marginBottom: 10 }}>{job.matchScore}% {tr("match stimato dal CV", "estimated CV match")}</span>}
+      <h2>{job.title}</h2>
+      <p style={{ marginTop: 8, color: salary ? "var(--primary-ds)" : "var(--fg-muted)" }}>{salary || tr("Retribuzione non indicata", "Salary not specified")}</p>
+    </div>
+    <div className="discover-tags">
+      {job.remote && <span>{tr("Remoto", "Remote")}</span>}
+      {job.contractType && <span>{job.contractType === "permanent" ? tr("Tempo indeterminato", "Permanent") : job.contractType}</span>}
+      <span>{jobSourceLabel(job.url) ?? portalOf(job.url)}</span>
+    </div>
+    {skills.length > 0 && <div><div className="workspace-eyebrow">{tr("Competenze citate nell'annuncio", "Skills mentioned in the job")}</div><div className="discover-tags">{skills.map(skill => <span key={skill}>{skill}</span>)}</div></div>}
+    {description && <div className="discover-description">{description.length > 420 ? description.slice(0, 420) + "…" : description}</div>}
+    <p className="workspace-muted" style={{ marginTop: "auto" }}>{tr("Apri i dettagli per leggere la descrizione completa.", "Open details to read the full description.")}</p>
+    {children}
+  </article>;
 }
 
 /**

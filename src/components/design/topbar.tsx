@@ -2,6 +2,7 @@
 
 import { Icon } from "@/components/design/icon";
 import { ThemeToggle } from "@/components/design/theme-toggle";
+import { useLocale } from "next-intl";
 
 export interface TopbarProps {
   title: string;
@@ -10,9 +11,10 @@ export interface TopbarProps {
 }
 
 export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
+  const en = useLocale() === "en";
   return (
     <div
-      className="sticky top-0 z-10 flex items-center justify-between border-b"
+      className="workspace-topbar sticky top-0 z-10 flex items-center justify-between border-b"
       style={{
         background: "var(--bg)",
         borderColor: "var(--border-ds)",
@@ -34,7 +36,7 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event("lavorai:palette"))}
-          aria-label="Cerca (⌘K)"
+          aria-label={en ? "Search (⌘K)" : "Cerca (⌘K)"}
           className="flex items-center gap-2 rounded border px-2.5 py-1.5 hidden md:flex"
           style={{
             cursor: "text",
@@ -47,11 +49,11 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
           }}
         >
           <Icon name="search" size={15} />
-          <span style={{ flex: 1, fontSize: 14.5, color: "var(--fg-subtle)" }}>Cerca candidature, aziende...</span>
+          <span style={{ flex: 1, fontSize: 13, color: "var(--fg-subtle)" }}>{en ? "Search applications, companies…" : "Cerca candidature, aziende…"}</span>
           <kbd style={{ fontSize: 11, color: "var(--fg-subtle)", border: "1px solid var(--border-ds)", borderRadius: 5, padding: "1px 5px" }}>⌘K</kbd>
         </button>
         {actions}
-        <ThemeToggle compact={false} />
+        <ThemeToggle compact={false} locale={en ? "en" : "it"} />
       </div>
     </div>
   );

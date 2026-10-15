@@ -99,6 +99,7 @@ async function testPage(messages: InboxMessage[]) {
   let messageCalls = 0;
   let connectionCalls = 0;
   const api = loadModule("src/app/(app)/inbox/page.tsx", {
+    "next-intl/server": { getLocale: async () => "en" },
     "react/jsx-runtime": jsx,
     "next/navigation": { redirect: (path: string) => { throw new Error(`redirect:${path}`); } },
     "@/lib/session": { getCurrentUser: async () => authenticated ? { id: "owner", email: "owner@example.test" } : null },

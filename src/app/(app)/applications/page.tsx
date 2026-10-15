@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
@@ -12,6 +12,9 @@ import { DetailDrawer } from "@/components/design/detail-drawer";
 import { AutoApplyToggle } from "@/components/auto-apply-toggle";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ReplyKindChip } from "@/components/reply-kind-chip";
+import { ApplicationBoard } from "@/components/application-board";
+import { pipelineLane } from "@/lib/application-pipeline";
+import { applicationLabel, deliveryCopy } from "@/lib/application-presentation";
 import type { DeliveryView } from "@/lib/application-delivery-view";
 
 interface ApiApplication {
@@ -47,7 +50,7 @@ interface ApiApplication {
   };
 }
 
-const fetcher = (u: string) => fetch(u).then((r) => r.json());
+const fetcher = async (u: string) => { const response = await fetch(u); if (!response.ok) throw new Error("Unable to load applications"); return response.json(); };
 
 interface Row {
   id: string;
@@ -59,7 +62,8 @@ interface Row {
   salary: string;
   applied: string;
   status: "inviata" | "vista" | "colloquio" | "offerta" | "rifiutata";
-  match: number;
+  match: number | null;
+  userStatus?: string | null;
   source: string;
   stage: number;
   jobUrl?: string;
@@ -84,11 +88,15 @@ type Range = "today" | "week" | "month" | "all";
 
 export default function ApplicationsPage() {
   const t = useTranslations("applicationsPage");
+  const en = useLocale() === "en";
+  const tr = (it: string, english: string) => en ? english : it;
+  const [view, setView] = useState<"board" | "table">("board");
+  const [search, setSearch] = useState("");
+  const [lane, setLane] = useState("all");
   const [range, setRange] = useState<Range>("all");
-  // Due fetch: sent = solo candidature consegnate (success) → vista principale
-  // awaiting = solo in attesa di consenso → banner "Consenti tutte"
-  const { data } = useSWR<{ applications: ApiApplication[] }>(
-    `/api/applications?range=${range}`,
+  // The selected range includes every phase; the all-time query supplies consent actions.
+  const { data, error, isLoading, mutate } = useSWR<{ applications: ApiApplication[] }>(
+    `/api/applications?range=${range}&includeAll=1`,
     fetcher,
     { refreshInterval: 5000 },
   );
@@ -98,6 +106,7 @@ export default function ApplicationsPage() {
     { refreshInterval: 15000 },
   );
   const [selected, setSelected] = useState<Row | null>(null);
+  const closeDetails = useCallback(() => setSelected(null), []);
 
   const toRow = (a: ApiApplication): Row => {
     const ghostingDays =
@@ -110,14 +119,15 @@ export default function ApplicationsPage() {
       color: companyColor(a.job.company ?? a.job.title),
       role: a.job.title,
       location: a.job.location ?? "—",
-      mode: "Ibrido",
+      mode: "—",
       salary: "—",
-      applied: relativeTime(new Date(a.createdAt)),
-      // Priorità: userStatus (override manuale) → viewedAt (pixel) → backend status.
+      applied: relativeTime(new Date(a.createdAt), en),
+      // Only a user-declared outcome overrides the backend state. Pixel opens are not recruiter views.
       status:
         (a.userStatus as Row["status"]) ??
-        (a.viewedAt ? "vista" : backendToStatus(a.status)),
-      match: a.atsScore ?? 80,
+        backendToStatus(a.status),
+      match: a.atsScore,
+      userStatus: a.userStatus,
       source: a.job.source === "mock" ? "Demo" : cap(a.job.source),
       stage: a.userStatus === "offerta" ? 4 : a.userStatus === "colloquio" ? 3 : a.userStatus === "vista" ? 1 : 0,
       jobUrl: a.job.url,
@@ -134,11 +144,11 @@ export default function ApplicationsPage() {
       replyCount: a.replyCount,
       lastReplyKind: a.lastReplyKind,
       ghostingDays,
-      delivery: a.delivery,
+      delivery: deliveryCopy(a.delivery, en ? "en" : "it"),
       deliveryRecipient: a.deliveryRecipient,
     };
   };
-  const realRows: Row[] = data?.applications.map(toRow) ?? [];
+  const realRows: Row[] = data?.applications.filter(a => a.status !== "diagnostic").map(toRow) ?? [];
 
   // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).
 
@@ -153,13 +163,13 @@ export default function ApplicationsPage() {
   }, [data, awaitingData]);
 
   const allRows: Row[] = realRows;
-  const filtered = allRows;
+  const filtered = allRows.filter(a => (lane === "all" || pipelineLane(a) === lane) && `${a.company} ${a.role} ${a.location}`.toLowerCase().includes(search.trim().toLowerCase()));
 
   const awaitingCount =
     awaitingData?.applications.filter((a) => a.status === "awaiting_consent")
       .length ?? 0;
 
-  const pendingApplications = (awaitingData?.applications ?? []).filter((a) => a.status !== "success");
+  const pendingApplications = (data?.applications ?? []).filter((a) => a.status !== "diagnostic" && !["confirmed", "delivered", "manual"].includes(a.delivery?.phase));
 
   const [consentConfirmOpen, setConsentConfirmOpen] = useState(false);
 
@@ -208,8 +218,8 @@ export default function ApplicationsPage() {
   return (
     <>
       <AppTopbar title={t("title")} breadcrumb={t("breadcrumb")} />
-      <div style={{ padding: "24px 32px 80px", maxWidth: 1480, width: "100%", margin: "0 auto" }}>
-        <div className="mb-6 flex items-end justify-between gap-4">
+      <div className="workspace-page">
+        <div className="workspace-heading">
           <div>
             <h1
               style={{ fontSize: 26, fontWeight: 600, letterSpacing: "-0.022em", margin: 0 }}
@@ -217,7 +227,7 @@ export default function ApplicationsPage() {
               {t("title")}
             </h1>
             <p style={{ fontSize: 15, color: "var(--fg-muted)", marginTop: 6 }}>
-              {allRows.length} candidature registrate
+              {allRows.length} {tr("candidature caricate (max 500)", "loaded applications (up to 500)")}
               {" · "}
               {rangeLabel(range, t)}
             </p>
@@ -246,13 +256,13 @@ export default function ApplicationsPage() {
                 </button>
               ))}
             </div>
-            <AutoApplyToggle />
+            <AutoApplyToggle locale={en ? "en" : "it"} />
             <a
               href="/applications/new"
               className="ds-btn"
               style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             >
-              <Icon name="plus" size={12} /> Importa candidatura
+              <Icon name="plus" size={12} /> {tr("Importa candidatura", "Import application")}
             </a>
             <button
               className="ds-btn"
@@ -295,7 +305,29 @@ export default function ApplicationsPage() {
           </div>
         )}
 
-        <div className="ds-section-card">
+        <div className="workspace-metrics">
+          <div className="workspace-metric"><strong>{isLoading || error ? "—" : allRows.filter(a => ["confirmed", "delivered"].includes(a.delivery?.phase ?? "")).length}</strong><small>{tr("Invii confermati", "Confirmed submissions")}</small></div>
+          <div className="workspace-metric"><strong>{isLoading || error ? "—" : allRows.filter(a => pipelineLane(a) === "attention").length}</strong><small>{tr("Da completare / verificare", "Needs attention")}</small></div>
+          <div className="workspace-metric"><strong>{isLoading || error ? "—" : allRows.filter(a => a.userStatus === "colloquio").length}</strong><small>{tr("Colloqui dichiarati", "Reported interviews")}</small></div>
+          <div className="workspace-metric"><strong>{isLoading || error ? "—" : allRows.filter(a => a.userStatus === "offerta").length}</strong><small>{tr("Offerte dichiarate", "Reported offers")}</small></div>
+        </div>
+        <div className="workspace-toolbar">
+          <input aria-label={tr("Filtra candidature", "Filter applications")} placeholder={tr("Cerca azienda, ruolo o località…", "Search company, role or location…")} value={search} onChange={event => setSearch(event.target.value)} />
+          <select aria-label={tr("Fase candidatura", "Application stage")} value={lane} onChange={event => setLane(event.target.value)}>
+            <option value="all">{tr("Tutte le fasi", "All stages")}</option>
+            <option value="attention">{tr("Da verificare", "Needs attention")}</option><option value="recorded">{tr("Invio registrato", "Submission recorded")}</option>
+            <option value="conversation">{tr("Risposte e colloqui", "Replies & interviews")}</option><option value="outcome">{tr("Esiti dichiarati", "Reported outcomes")}</option>
+          </select>
+          <div className="ds-toggle-group">
+            <button type="button" aria-pressed={view === "board"} className={view === "board" ? "active" : undefined} onClick={() => setView("board")}>Kanban</button>
+            <button type="button" aria-pressed={view === "table"} className={view === "table" ? "active" : undefined} onClick={() => setView("table")}>{tr("Tabella", "Table")}</button>
+          </div>
+        </div>
+        {isLoading && <p role="status" className="workspace-empty">{tr("Caricamento candidature…", "Loading applications…")}</p>}
+        {error && <div role="alert" className="workspace-empty">{tr("Impossibile caricare le candidature.", "Unable to load applications.")} <button className="ds-btn" onClick={() => mutate()}>{tr("Riprova", "Retry")}</button></div>}
+        {!isLoading && !error && filtered.length === 0 && <p className="workspace-empty">{allRows.length ? tr("Nessun risultato per questi filtri.", "No results for these filters.") : tr("Non hai ancora candidature registrate. Esplora le opportunità o importa una candidatura esistente.", "No applications recorded yet. Explore opportunities or import an existing application.")}</p>}
+        {!isLoading && !error && view === "board" && <ApplicationBoard applications={filtered} onOpen={setSelected} />}
+        {!isLoading && !error && view === "table" && <div className="ds-section-card applications-table">
           <table className="ds-tbl">
             <thead>
               <tr>
@@ -304,14 +336,14 @@ export default function ApplicationsPage() {
                 <th>{t("colSalary")}</th>
                 <th>{t("colMatch")}</th>
                 <th>{t("colStatus")}</th>
-                <th>Inviata</th>
-                <th style={{ width: 60, textAlign: "center" }} title="CV ottimizzato per questa posizione">CV</th>
+                <th>{tr("Registrata", "Recorded")}</th>
+                <th style={{ width: 60, textAlign: "center" }} title={tr("CV ottimizzato per questa posizione", "Tailored CV for this role")}>CV</th>
                 <th style={{ width: 40 }}></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((a) => (
-                <tr key={a.id} onClick={() => setSelected(a)}>
+                <tr key={a.id} tabIndex={0} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); setSelected(a); } }} onClick={() => setSelected(a)}>
                   <td>
                     <div className="flex items-center gap-2.5">
                       <CompanyLogo company={a.company} color={a.color} />
@@ -340,19 +372,19 @@ export default function ApplicationsPage() {
                       >
                         <div
                           style={{
-                            width: `${a.match}%`,
+                            width: `${a.match ?? 0}%`,
                             height: "100%",
                             background:
-                              a.match >= 85
+                              (a.match ?? 0) >= 85
                                 ? "var(--primary-ds)"
-                                : a.match >= 75
+                                : (a.match ?? 0) >= 75
                                   ? "var(--amber)"
                                   : "var(--fg-subtle)",
                           }}
                         />
                       </div>
                       <span className="mono" style={{ fontSize: 11 }}>
-                        {a.match}
+                        {a.match ?? "—"}
                       </span>
                     </div>
                   </td>
@@ -366,7 +398,7 @@ export default function ApplicationsPage() {
                           fontWeight: 500,
                         }}
                       >
-                        attesa consenso
+                        {tr("attesa consenso", "awaiting consent")}
                       </span>
                     ) : (
                       <span
@@ -425,7 +457,7 @@ export default function ApplicationsPage() {
                         <Icon name="download" size={11} /> {a.hasCvPdf ? "PDF" : "DOCX"}
                       </a>
                     ) : (
-                      <span style={{ fontSize: 10.5, color: "var(--fg-subtle)" }} title="CV non ancora generato">—</span>
+                      <span style={{ fontSize: 10.5, color: "var(--fg-subtle)" }} title={tr("CV non ancora generato", "CV not generated yet")}>—</span>
                     )}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
@@ -436,7 +468,7 @@ export default function ApplicationsPage() {
                         onClick={() => consentOne(a.id)}
                         style={{ fontSize: 11.5, padding: "4px 10px" }}
                       >
-                        <Icon name="check" size={11} /> Consenti
+                        <Icon name="check" size={11} /> {tr("Consenti", "Approve")}
                       </button>
                     ) : (
                       <Icon
@@ -450,27 +482,27 @@ export default function ApplicationsPage() {
               ))}
             </tbody>
           </table>
-        </div>
-        {pendingApplications.length > 0 && <section className="ds-section-card" style={{ marginTop: 20, padding: 18 }} aria-label="Candidature da completare">
-          <h2 style={{ fontSize: 17, marginBottom: 12 }}>Da completare o verificare ({pendingApplications.length})</h2>
-          <p style={{ fontSize: 13, color: "var(--fg-muted)", marginBottom: 14 }}>Queste candidature non hanno una conferma di invio. Un errore tecnico non è un rifiuto dell'azienda.</p>
+        </div>}
+        {pendingApplications.length > 0 && <section className="ds-section-card" style={{ marginTop: 20, padding: 18 }} aria-label={tr("Candidature da completare", "Applications needing attention")}>
+          <h2 style={{ fontSize: 17, marginBottom: 12 }}>{tr("Da completare o verificare", "Complete or verify")} ({pendingApplications.length})</h2>
+          <p style={{ fontSize: 13, color: "var(--fg-muted)", marginBottom: 14 }}>{tr("Queste candidature non hanno una conferma di invio. Un errore tecnico non è un rifiuto dell'azienda.", "These applications have no submission confirmation. A technical failure is not a rejection by the company.")}</p>
           {pendingApplications.slice(0, 50).map((a) => <div key={a.id} style={{ padding: "12px 0", borderTop: "1px solid var(--border-ds)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <strong>{a.job.title} · {a.job.company ?? "Azienda"}</strong>
-              <span className="ds-chip">{a.delivery.label}</span>
+              <strong>{a.job.title} · {a.job.company ?? tr("Azienda", "Company")}</strong>
+              <span className="ds-chip">{applicationLabel(a.delivery.label, en ? "en" : "it")}</span>
             </div>
-            <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: "6px 0" }}>{a.errorMessage || a.delivery.detail}</p>
+            <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: "6px 0" }}>{a.errorMessage || deliveryCopy(a.delivery, en ? "en" : "it")?.detail}</p>
             <div style={{ display: "flex", gap: 12, fontSize: 13 }}>
-              <button className="ds-btn ds-btn-sm" onClick={() => setSelected(toRow(a))}>Vedi dettagli</button>
-              {a.status === "needs_answers" && <a href="/questions">Completa le risposte</a>}
-              {a.status === "awaiting_consent" && <button className="ds-btn ds-btn-sm" onClick={() => consentOne(a.id)}>Consenti invio</button>}
+              <button className="ds-btn ds-btn-sm" onClick={() => setSelected(toRow(a))}>{tr("Vedi dettagli", "View details")}</button>
+              {a.status === "needs_answers" && <a href="/questions">{tr("Completa le risposte", "Complete answers")}</a>}
+              {a.status === "awaiting_consent" && <button className="ds-btn ds-btn-sm" onClick={() => consentOne(a.id)}>{tr("Consenti invio", "Approve submission")}</button>}
             </div>
           </div>)}
-          {pendingApplications.length > 50 && <p style={{ fontSize: 12 }}>Mostrate le 50 candidature più recenti da completare.</p>}
+          {pendingApplications.length > 50 && <p style={{ fontSize: 12 }}>{tr("Mostrate le 50 candidature più recenti da completare.", "Showing the 50 most recent applications needing attention.")}</p>}
         </section>}
       </div>
 
-      <DetailDrawer app={selected} onClose={() => setSelected(null)} />
+      <DetailDrawer locale={en ? "en" : "it"} app={selected} onClose={closeDetails} />
       <ConfirmDialog
         open={consentConfirmOpen}
         title={t("consentConfirmTitle", { count: awaitingCount })}
@@ -494,7 +526,7 @@ function exportCsv(rows: Row[]): void {
     r.location,
     r.mode,
     r.delivery?.label ?? r.status,
-    String(r.match),
+    r.match == null ? "" : String(r.match),
     r.applied,
   ]);
   const escape = (v: string) =>
@@ -514,20 +546,20 @@ function exportCsv(rows: Row[]): void {
 
 function backendToStatus(b: string): Row["status"] {
   if (b === "success") return "inviata";
-  if (b === "failed") return "rifiutata";
+  // Technical failures never imply a recruiter rejection.
   return "inviata";
 }
 function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-function relativeTime(d: Date): string {
+function relativeTime(d: Date, en = false): string {
   const diffMin = Math.floor((Date.now() - d.getTime()) / 60_000);
-  if (diffMin < 60) return `${diffMin} min fa`;
+  if (diffMin < 60) return `${diffMin} min ${en ? "ago" : "fa"}`;
   const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH} ${diffH === 1 ? "ora" : "ore"} fa`;
+  if (diffH < 24) return en ? `${diffH}h ago` : `${diffH} ${diffH === 1 ? "ora" : "ore"} fa`;
   const diffD = Math.floor(diffH / 24);
-  if (diffD === 1) return "Ieri";
-  return `${diffD} giorni fa`;
+  if (diffD === 1) return en ? "Yesterday" : "Ieri";
+  return en ? `${diffD} days ago` : `${diffD} giorni fa`;
 }
 
 

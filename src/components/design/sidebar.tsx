@@ -6,9 +6,10 @@ import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { motion } from "motion/react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Icon, type IconName } from "@/components/design/icon";
 import { cn } from "@/lib/utils";
+import { AutoApplyToggle } from "@/components/auto-apply-toggle";
 import { ThemeToggle } from "@/components/design/theme-toggle";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -38,7 +39,6 @@ export interface SidebarProps {
 
 export function AppSidebar({
   applicationsCount: applicationsCountProp,
-  autoApplyOn = true,
   autoApplyToday: autoApplyTodayProp,
   autoApplyRemaining: autoApplyRemainingProp,
   userName = "Demo User",
@@ -46,6 +46,7 @@ export function AppSidebar({
   isAdmin = false,
 }: SidebarProps) {
   const t = useTranslations("appShell");
+  const locale = useLocale();
 
   // Conteggi via SWR DOPO il primo paint così non bloccano la
   // navigazione. Refresh ogni 30s mentre l'utente naviga, dedupe
@@ -72,20 +73,17 @@ export function AppSidebar({
   );
 
   const applicationsCount = stats?.applicationsCount ?? applicationsCountProp;
-  const autoApplyToday = stats?.autoApplyToday ?? autoApplyTodayProp ?? 0;
-  const autoApplyRemaining =
-    stats?.autoApplyRemaining ?? autoApplyRemainingProp ?? 0;
 
   const workItems: NavItem[] = [
     { href: "/dashboard", label: t("dashboard"), icon: "dashboard" },
     { href: "/discover", label: t("discover"), icon: "sparkles" },
     { href: "/applications", label: t("applications"), icon: "briefcase", count: null },
     { href: "/inbox", label: "Inbox", icon: "inbox" },
-    { href: "/materiali", label: "CV per posizione", icon: "file" },
-    { href: "/questions", label: "Domande", icon: "check" },
+    { href: "/materiali", label: locale === "en" ? "CV by position" : "CV per posizione", icon: "file" },
+    { href: "/questions", label: locale === "en" ? "Questions" : "Domande", icon: "check" },
     { href: "/jobs", label: t("jobs"), icon: "inbox" },
     { href: "/analytics", label: t("analytics"), icon: "chart" },
-    { href: "/interview", label: "Colloqui", icon: "sparkles" },
+    { href: "/interview", label: locale === "en" ? "Interviews" : "Colloqui", icon: "sparkles" },
     { href: "/founder-coach", label: "Founder Coach", icon: "target" },
   ];
 
@@ -158,7 +156,7 @@ export function AppSidebar({
       <div className="mt-auto pt-3">
         {/* Tema chiaro/scuro: sempre raggiungibile, su ogni pagina dell'app */}
         <div style={{ display: "flex", justifyContent: "stretch", marginBottom: 8 }}>
-          <ThemeToggle compact={false} fullWidth />
+          <ThemeToggle compact={false} fullWidth locale={locale} />
         </div>
         <div
           className="ds-glass"
@@ -167,40 +165,7 @@ export function AppSidebar({
             borderRadius: 12,
           }}
         >
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                "ds-dot ds-dot-green",
-                autoApplyOn && "ds-dot-pulse",
-              )}
-            />
-            <span
-              style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap" }}
-            >
-              {t("autoApply")} · {autoApplyOn ? "ON" : "OFF"}
-            </span>
-          </div>
-          <div
-            className="mono mt-1"
-            style={{ fontSize: 12, color: "var(--fg-muted)" }}
-          >
-            {t("appsToday", { count: autoApplyToday })} · {t("remaining", { count: autoApplyRemaining })}
-          </div>
-          <div
-            className="mt-2.5 overflow-hidden rounded"
-            style={{
-              height: 4,
-              background: "var(--border-ds)",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${Math.min(100, (autoApplyToday / (autoApplyToday + autoApplyRemaining)) * 100)}%`,
-                background: "var(--primary-ds)",
-              }}
-            />
-          </div>
+          <AutoApplyToggle compact locale={locale} />
         </div>
 
         <Link

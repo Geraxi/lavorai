@@ -5,6 +5,7 @@ import { JobSwiper } from "@/components/job-swiper";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { rowToProfile } from "@/lib/cv-profile-types";
+import { discoverMatchScore } from "@/lib/discover-match-score";
 import { quickMatchScore } from "@/lib/match-score";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import type { JobRow } from "@/components/jobs-list";
@@ -110,6 +111,7 @@ export default async function DiscoverPage() {
     })
     .slice(0, 50)
     .map((j) => ({
+      matchScore: discoverMatchScore(userProfile, `${j.title}\n${j.company ?? ""}\n${j.description}`),
       id: j.id,
       title: j.title,
       company: j.company,
@@ -126,14 +128,7 @@ export default async function DiscoverPage() {
   return (
     <>
       <AppTopbar title={t("title")} breadcrumb={t("breadcrumb")} />
-      <div
-        style={{
-          padding: "24px 32px 80px",
-          maxWidth: 720,
-          width: "100%",
-          margin: "0 auto",
-        }}
-      >
+      <div className="workspace-page">
         <div className="mb-5">
           <h1
             style={{

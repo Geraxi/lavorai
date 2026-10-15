@@ -8,10 +8,11 @@
  */
 
 import dynamic from "next/dynamic";
+import { useLocale } from "next-intl";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { CityMarker, GlobeStats, PinKind } from "@/lib/dashboard-globe-data";
-import { PIN_COLORS, PIN_LABELS, buildPins, JobCard, type GlobeFilter, type GlobePin } from "./dashboard-globe";
+import { PIN_COLORS, buildPins, JobCard, type GlobeFilter, type GlobePin } from "./dashboard-globe";
 import { useDashboardFocus } from "./dashboard-focus";
 import { regionAltitude } from "@/lib/city-centroids";
 
@@ -35,6 +36,9 @@ const LEGEND: Array<{ key: PinKind; label: string }> = [
 ];
 
 export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityMarker[]; stats: GlobeStats; greeting?: React.ReactNode }) {
+  const en = useLocale() === "en";
+  const tr = (it: string, english: string) => en ? english : it;
+  const label = (key: GlobeFilter) => ({ all: tr("Tutto", "All"), open: tr("Opportunità", "Opportunities"), sent: tr("Inviate", "Submitted"), desired: tr("Desiderate", "Preferred"), saved: tr("Salvate", "Saved") }[key]);
   const [filter, setFilter] = useState<GlobeFilter>("all");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [sheet, setSheet] = useState<GlobePin | null>(null);
@@ -46,7 +50,7 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
   const sheetJobs = sheet ? sheet.cities.flatMap((c) => c.jobs).filter((j) => filter === "all" || j.kind === filter) : [];
 
   return (
-    <section className="dg-hero" aria-label="Mappa globale delle opportunità">
+    <section className="dg-hero" aria-label={tr("Mappa globale delle opportunità", "Global opportunity map")}>
       <div className="dg-stage">
         <DashboardGlobe markers={markers} filter={filter} selectedKey={selectedKey} onSelect={(k) => { setSelectedKey(k); setSheet(null); }} onMore={(p) => setSheet(p)} focus={focus} />
       </div>
@@ -54,66 +58,66 @@ export function DashboardGlobeMap({ markers, stats, greeting }: { markers: CityM
       {greeting && <div className="dg-greeting">{greeting}</div>}
 
       {/* Filtri, attaccati al bordo alto del globo */}
-      <div className="dg-filters" role="tablist" aria-label="Filtra la mappa">
+      <div className="dg-filters" role="tablist" aria-label={tr("Filtra la mappa", "Filter map")}>
         {FILTERS.map((f) => (
           <button key={f.key} type="button" role="tab" aria-selected={filter === f.key} className={`dg-pill${filter === f.key ? " is-active" : ""}`} onClick={() => { setFilter(f.key); setSelectedKey(null); setSheet(null); }}>
-            {f.label}{f.key !== "all" && <span className="dg-pill-n">{count(f.key)}</span>}
+            {label(f.key)}{f.key !== "all" && <span className="dg-pill-n">{count(f.key)}</span>}
           </button>
         ))}
       </div>
 
       {/* Stato live dell'AI: una riga leggera, niente box */}
       <div className="dg-status">
-        <div className="dg-status-title"><span className="dg-live" /> LavorAI sta cercando per te</div>
-        <div className="dg-status-line"><b>{stats.analyzed.toLocaleString("it-IT")}</b> analizzate · <b>{stats.compatible.toLocaleString("it-IT")}</b> compatibili · <b>{stats.newOpportunities.toLocaleString("it-IT")}</b> nuove</div>
-        <div className="dg-status-searching">Ricerca in corso<span className="dg-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></div>
-        {region && <button type="button" className="dg-zone" onClick={() => setRegionKey(null)}>Zona: <b>{region.name}</b> <span aria-hidden="true">×</span></button>}
+        <div className="dg-status-title"><span className="dg-live" /> {tr("Opportunità registrate", "Recorded opportunities")}</div>
+        <div className="dg-status-line"><b>{stats.analyzed.toLocaleString(en ? "en-GB" : "it-IT")}</b> {tr("nel catalogo", "in the catalog")} · <b>{stats.compatible.toLocaleString(en ? "en-GB" : "it-IT")}</b> {tr("compatibili", "matching")} · <b>{stats.newOpportunities.toLocaleString(en ? "en-GB" : "it-IT")}</b> {tr("nuove", "new")}</div>
+        <div className="dg-status-searching">{tr("Dati aggiornati al caricamento", "Data as of page load")}</div>
+        {region && <button type="button" className="dg-zone" onClick={() => setRegionKey(null)}>{tr("Zona", "Area")}: <b>{region.name}</b> <span aria-hidden="true">×</span></button>}
       </div>
 
-      <div className="dg-legend" aria-label="Legenda">
+      <div className="dg-legend" aria-label={tr("Legenda", "Legend")}>
         {LEGEND.map((l) => (
-          <span key={l.key} className="dg-legend-row"><i style={{ background: PIN_COLORS[l.key], boxShadow: `0 0 6px ${PIN_COLORS[l.key]}` }} />{l.label}</span>
+          <span key={l.key} className="dg-legend-row"><i style={{ background: PIN_COLORS[l.key], boxShadow: `0 0 6px ${PIN_COLORS[l.key]}` }} />{label(l.key)}</span>
         ))}
       </div>
-      <div className="dg-hint" aria-hidden="true">Trascina per ruotare · scroll per zoom · clicca un pin</div>
+      <div className="dg-hint" aria-hidden="true">{tr("Trascina per ruotare · scroll per zoom · clicca un pin", "Drag to rotate · scroll to zoom · select a pin")}</div>
 
       {markers.length === 0 && (
         <div className="dg-empty">
-          <b>Nessuna opportunità sulla mappa, per ora.</b>
-          <span>Imposta i ruoli e le località che ti interessano: LavorAI inizierà a cercare in tutto il mondo.</span>
-          <Link href="/preferences" className="ds-btn ds-btn-sm ds-btn-primary">Imposta le preferenze</Link>
+          <b>{tr("Nessuna opportunità sulla mappa, per ora.", "No mapped opportunities yet.")}</b>
+          <span>{tr("Imposta i ruoli e le località che ti interessano.", "Set the roles and locations you are interested in.")}</span>
+          <Link href="/preferences" className="ds-btn ds-btn-sm ds-btn-primary">{tr("Imposta le preferenze", "Set preferences")}</Link>
         </div>
       )}
 
       {/* Sheet laterale: tutte le opportunità di una città/cluster */}
       {sheet && (
-        <aside className="dg-sheet" aria-label={`Opportunità a ${sheet.name}`}>
+        <aside className="dg-sheet" aria-label={`${tr("Opportunità a", "Opportunities in")} ${sheet.name}`}>
           <div className="dg-sheet-head">
             <div>
               <div className="dg-sheet-title">{sheet.name}</div>
-              <div className="dg-sheet-sub">{sheet.total} opportunità{sheet.cities.length > 1 ? ` · ${sheet.cities.map((c) => c.name).join(", ")}` : ""}</div>
+              <div className="dg-sheet-sub">{sheet.total} {tr("opportunità", "opportunities")}{sheet.cities.length > 1 ? ` · ${sheet.cities.map((c) => c.name).join(", ")}` : ""}</div>
             </div>
-            <button type="button" className="dg-sheet-close" aria-label="Chiudi" onClick={() => setSheet(null)}>×</button>
+            <button type="button" className="dg-sheet-close" aria-label={tr("Chiudi", "Close")} onClick={() => setSheet(null)}>×</button>
           </div>
           <div className="dg-sheet-list">
             {sheetJobs.map((j) => (
               <a key={`${j.kind}-${j.id}`} href={j.href} className="dg-sheet-row">
                 <span className="dg-sheet-dot" style={{ background: PIN_COLORS[j.kind] }} />
-                <span className="dg-sheet-txt"><b>{j.company ?? "Azienda"}</b><span>{j.title}</span></span>
-                <span className="dg-sheet-meta">{j.match != null ? `${Math.round(j.match)}%` : PIN_LABELS[j.kind]}</span>
+                <span className="dg-sheet-txt"><b>{j.company ?? tr("Azienda", "Company")}</b><span>{j.title}</span></span>
+                <span className="dg-sheet-meta">{j.match != null ? `${Math.round(j.match)}%` : label(j.kind)}</span>
               </a>
             ))}
           </div>
-          <Link href={`/jobs?q=${encodeURIComponent(sheet.name)}`} className="dg-card-cta">Vedi tutte a {sheet.name} <span aria-hidden="true">→</span></Link>
+          <Link href={`/jobs?where=${encodeURIComponent(sheet.name)}`} className="dg-card-cta">{tr("Vedi tutte a", "View all in")} {sheet.name} <span aria-hidden="true">→</span></Link>
         </aside>
       )}
 
       {/* Mobile: card scorrevoli sotto il globo */}
-      <div className="dg-mobile-cards" aria-label="Opportunità">
+      <div className="dg-mobile-cards" aria-label={tr("Opportunità", "Opportunities")}>
         {mobilePins.map((p) => (
-          <div key={p.key} className={`dg-mobile-card${p.key === selectedKey ? " is-selected" : ""}`} role="group" aria-label={`${p.name}: ${p.total} opportunità`}>
-            <button type="button" className="dg-mobile-card-focus" aria-pressed={p.key === selectedKey} onClick={() => setSelectedKey(p.key)}>
-              {p.key === selectedKey ? "Nascondi dal globo" : "Mostra sul globo"}
+          <div key={p.key} className={`dg-mobile-card${p.key === selectedKey ? " is-selected" : ""}`} role="group" aria-label={`${p.name}: ${p.total} ${tr("opportunità", "opportunities")}`}>
+            <button type="button" className="dg-mobile-card-focus" aria-pressed={p.key === selectedKey} onClick={() => setSelectedKey(p.key === selectedKey ? null : p.key)}>
+              {p.key === selectedKey ? tr("Nascondi dal globo", "Hide on globe") : tr("Mostra sul globo", "Show on globe")}
             </button>
             <JobCard pin={p} compact selected={p.key === selectedKey} onMore={(x) => setSheet(x)} />
           </div>
