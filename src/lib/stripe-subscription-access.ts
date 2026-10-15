@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import type { Prisma } from "@prisma/client";
 
 export const CARD_REQUIRED_CHECKOUT = "onboarding_v1";
 
@@ -27,3 +28,13 @@ export function subscriptionAccessStatus(sub: Stripe.Subscription, existing: Exi
 export const CARD_VERIFICATION_EXPAND = [
   "default_payment_method", "customer.invoice_settings.default_payment_method", "pending_setup_intent",
 ];
+
+/** Applied in the database write as well as the earlier snapshot check. */
+export function subscriptionAccessWriteGuard(existing: ExistingAccess): Prisma.UserWhereInput {
+  // The caller reads this snapshot BEFORE retrieving Stripe. If cancellation or
+  // another grant wins meanwhile, retry instead of overwriting its newer state.
+  return {
+    stripeSubscriptionId: existing?.stripeSubscriptionId ?? null,
+    subscriptionStatus: existing?.subscriptionStatus ?? null,
+  };
+}

@@ -44,12 +44,58 @@ let writes: any[] = [];
 let reads = 0;
 let ready = true;
 let matchedCount = 1;
+let beforeWrite: (() => void) | null = null;
+let writeFailure = false;
+let linkedUserLookup = false;
+const claims = new Set<string>();
+const conversions: string[] = [];
+function matches(where: any): boolean {
+  return !!user && Object.entries(where).every(([key, value]: [string, any]) => {
+    if (key === "OR") return value.some(matches);
+    const actual = (user as any)[key];
+    if (value === null) return actual == null;
+    if (value && typeof value === "object" && "notIn" in value) return actual != null && !value.notIn.includes(actual);
+    if (value && typeof value === "object" && "gt" in value) return actual > value.gt;
+    return actual === value;
+  });
+}
+let transactionTail = Promise.resolve();
 const db = {
   user: {
-    findUnique: async () => { reads++; return user; },
-    findFirst: async () => null,
+    findUnique: async ({ where }: any) => { reads++; return matches(where) ? { ...user } : null; },
+    findFirst: async (query: any) => linkedUserLookup && !query.where.referredById ? { id: user!.id } : null,
     update: async ({ data }: any) => { writes.push(data); Object.assign(user!, data); return user; },
-    updateMany: async ({ data }: any) => { writes.push(data); if (matchedCount) Object.assign(user!, data); return { count: matchedCount }; },
+    updateMany: async ({ where, data }: any) => {
+      if (beforeWrite) { const change = beforeWrite; beforeWrite = null; change(); }
+      if (writeFailure) throw new Error("fixture database unavailable");
+      const count = matches(where) && (where.id || matchedCount) ? 1 : 0;
+      if (count) {
+        writes.push(data);
+        const values = { ...data };
+        if (data.referralCredits?.decrement) values.referralCredits = user!.referralCredits - data.referralCredits.decrement;
+        Object.assign(user!, values);
+      }
+      return { count };
+    },
+  },
+  subscriptionEvent: { create: async ({ data }: any) => {
+    if (data.id) {
+      if (claims.has(data.id)) throw Object.assign(new Error("duplicate fixture claim"), { code: "P2002" });
+      claims.add(data.id);
+    }
+    return data;
+  } },
+  $transaction: (fn: (tx: any) => Promise<unknown>) => {
+    const result = transactionTail.then(async () => {
+      const snapshot = { ...user };
+      const originalClaims = new Set(claims);
+      try { return await fn(db); }
+      catch (error) {
+        Object.assign(user!, snapshot); claims.clear(); originalClaims.forEach(id => claims.add(id)); throw error;
+      }
+    });
+    transactionTail = result.then(() => undefined, () => undefined);
+    return result;
   },
   cVDocument: { findFirst: async () => { reads++; return null; } },
 };
@@ -63,7 +109,7 @@ const common: Record<string, any> = {
   "@/lib/onboarding-access": access, "@/lib/stripe-subscription-access": card,
   "@/lib/admin-billing-readiness": adminBilling,
   "@/lib/activation-readiness": { getActivationReadiness: async () => ({ ready, issue: ready ? null : "upload_cv" }), ACTIVATION_MESSAGES: { upload_cv: "Upload CV", preview_demo: "Preview required" } },
-  "@/lib/analytics": { AnalyticsEvent }, "@/lib/conversion-events": { recordConversionEvent: async () => {} },
+  "@/lib/analytics": { AnalyticsEvent }, "@/lib/conversion-events": { recordConversionEvent: async (name: string) => { conversions.push(name); } },
 };
 const actions = loadModule("src/app/start-membership/start-membership-actions.tsx", common);
 const membership = loadModule("src/app/start-membership/page.tsx", {
@@ -119,12 +165,16 @@ async function main() {
     metadata: { userId: user.id, cardRequired: card.CARD_REQUIRED_CHECKOUT },
     items: { data: [{ price: { id: "price_fixture" }, current_period_end: Math.floor(user.trialEndsAt.getTime() / 1000) }] },
   };
+  let retrieveFailure = false;
+  let subscriptionUpdates = 0;
   const stripeService = {
     webhooks: stripeWebhooks,
     customers: { create: async () => ({ id: "cus_fixture" }) },
     subscriptions: { list: async () => ({ data: live }), retrieve: async (_id: string, opts: any) => {
-      assert.equal(JSON.stringify(opts.expand), JSON.stringify(card.CARD_VERIFICATION_EXPAND)); return sub;
-    } },
+      assert.equal(JSON.stringify(opts.expand), JSON.stringify(card.CARD_VERIFICATION_EXPAND));
+      if (retrieveFailure) throw new Error("fixture Stripe unavailable");
+      return sub;
+    }, update: async () => { subscriptionUpdates++; return sub; } },
     billingPortal: { sessions: { create: async () => ({ url: "https://fixture.invalid/portal" }) } },
     checkout: { sessions: { create: async (payload: any) => { checkoutPayload = payload; return { id: "cs_fixture", url: "https://fixture.invalid/checkout" }; } } },
   };
@@ -200,6 +250,93 @@ async function main() {
   assert.equal(card.subscriptionAccessStatus({ ...sub, pause_collection: {} }), "paused");
   assert.equal(card.subscriptionAccessStatus({ ...sub, status: "canceled" }), "canceled");
   assert.equal(card.subscriptionAccessStatus({ ...sub, default_payment_method: null, customer: { id: "cus_fixture", invoice_settings: { default_payment_method: sub.default_payment_method } } }), "trialing");
+
+  // Independent review regressions: alternate entitlement writers and retries.
+  user = { ...fresh(), stripeCustomerId: "cus_fixture", stripeSubscriptionId: sub.id, subscriptionStatus: "pending_payment_method" };
+  sub.default_payment_method = null;
+  const subscriptionRoute = loadModule("src/app/api/stripe/subscription/route.ts", { ...common, "@/lib/stripe": stripeDeps }).POST;
+  const action = (name: string) => new NextRequest("https://fixture.invalid/api/stripe/subscription", { method: "POST", body: JSON.stringify({ action: name }) });
+  subscriptionUpdates = 0;
+  assert.equal((await subscriptionRoute(action("resume"))).status, 402);
+  assert.equal(subscriptionUpdates, 0, "Unverified resume must not mutate Stripe or mint Pro");
+  assert.equal(user.tier, "free");
+  sub.status = "canceled";
+  assert.equal((await subscriptionRoute(action("resume"))).status, 402);
+  sub.status = "trialing";
+  live = [sub];
+  const adminLink = loadModule("src/app/api/admin/link-stripe/route.ts", {
+    ...common, "@/lib/admin": { isAdmin: () => true }, "@/lib/stripe": stripeDeps,
+    "@/lib/db": { prisma: { ...db, user: { ...db.user, findFirst: async () => ({ ...user }) } } },
+  }).POST;
+  assert.equal((await adminLink(new NextRequest("https://fixture.invalid/api/admin/link-stripe", { method: "POST", body: JSON.stringify({ email: user.email, customerId: "cus_fixture" }) }))).status, 200);
+  assert.equal(user.subscriptionStatus, "pending_payment_method"); assert.equal(user.tier, "free"); live = [];
+
+  // Failed remote verification or a failed fallback write returns retryable 500.
+  retrieveFailure = true; writes = [];
+  assert.equal((await sendEvent("customer.subscription.updated", sub)).status, 500);
+  assert.equal(writes.length, 0); assert.equal((await finish()).status, 402);
+  retrieveFailure = false; writeFailure = true;
+  assert.equal((await sendEvent("checkout.session.completed", { mode: "subscription", payment_status: "no_payment_required", customer: "cus_fixture", subscription: sub.id, client_reference_id: user.id })).status, 500);
+  writeFailure = false;
+
+  // A concurrent confirmation wins over an earlier pending snapshot, even on fallback.
+  beforeWrite = () => Object.assign(user!, { tier: "pro", subscriptionStatus: "trialing", stripeSubscriptionId: sub.id });
+  assert.equal((await sendEvent("customer.subscription.updated", sub)).status, 200);
+  assert.equal(user.subscriptionStatus, "trialing"); assert.equal(user.tier, "pro");
+  sub.default_payment_method = { id: "pm_fixture", type: "card", customer: "cus_fixture" };
+  await sendEvent("customer.subscription.updated", sub);
+  const usedAt = (user as any).proTrialUsedAt;
+  await sendEvent("customer.subscription.updated", sub);
+  assert.equal((user as any).proTrialUsedAt, usedAt, "Duplicate events retain first-used time");
+
+  // Old deletion, failure and live-checkout replays must not replace a newer entitlement.
+  user = { ...fresh(), tier: "pro", stripeCustomerId: "cus_fixture", stripeSubscriptionId: "sub_newer", subscriptionStatus: "active" };
+  writes = [];
+  await sendEvent("customer.subscription.deleted", sub);
+  sub.status = "past_due";
+  await sendEvent("invoice.payment_failed", { customer: "cus_fixture", parent: { subscription_details: { subscription: sub.id } } });
+  sub.status = "active";
+  await sendEvent("checkout.session.completed", { mode: "subscription", payment_status: "paid", customer: "cus_fixture", subscription: sub.id });
+  assert.equal(writes.length, 0); assert.equal(user.stripeSubscriptionId, "sub_newer");
+  user.stripeSubscriptionId = sub.id;
+  await sendEvent("invoice.payment_failed", { customer: "cus_fixture", parent: { subscription_details: { subscription: sub.id } } });
+  assert.equal(user.subscriptionStatus, "active", "Resolved invoice failure cannot downgrade recovered access");
+
+  // A stale verified snapshot cannot regrant after a concurrent cancellation.
+  beforeWrite = () => Object.assign(user!, { tier: "free", subscriptionStatus: "canceled", stripeSubscriptionId: null });
+  assert.equal((await sendEvent("customer.subscription.updated", sub)).status, 500);
+  assert.equal(user.subscriptionStatus, "canceled"); assert.equal(user.tier, "free");
+
+  // Stale failure snapshots cannot overwrite a concurrent successful recovery.
+  for (const eventType of ["customer.subscription.updated", "invoice.payment_failed"]) {
+    user = { ...fresh(), tier: "free", stripeCustomerId: "cus_fixture", stripeSubscriptionId: sub.id, subscriptionStatus: "past_due" };
+    sub.status = "past_due";
+    beforeWrite = () => Object.assign(user!, { tier: "pro", subscriptionStatus: "active" });
+    const object = eventType === "invoice.payment_failed"
+      ? { customer: "cus_fixture", parent: { subscription_details: { subscription: sub.id } } } : sub;
+    assert.equal((await sendEvent(eventType, object)).status, 500);
+    assert.equal(user.subscriptionStatus, "active"); assert.equal(user.tier, "pro");
+  }
+
+  // Unverified zero-value active setup must not record a purchase or reward.
+  user = { ...fresh(), stripeCustomerId: "cus_fixture" };
+  sub.status = "active";
+  sub.default_payment_method = null; linkedUserLookup = true; conversions.length = 0;
+  await sendEvent("customer.subscription.updated", sub);
+  assert.equal(user.subscriptionStatus, "pending_payment_method");
+  assert.equal(conversions.length, 0);
+  linkedUserLookup = false;
+
+  // An existing per-subscription DB claim makes referral consumption idempotent.
+  sub.default_payment_method = { id: "pm_fixture", type: "card", customer: "cus_fixture" };
+  sub.status = "trialing"; sub.metadata.referralCredit = "1";
+  user.referralCredits = 3;
+  const simultaneous = await Promise.all([sendEvent("customer.subscription.updated", sub), sendEvent("customer.subscription.updated", sub)]);
+  assert.ok(simultaneous.some(response => response.status === 200));
+  assert.equal(user.referralCredits, 2, "Concurrent/replayed events consume one referral credit");
+  await sendEvent("customer.subscription.updated", sub);
+  assert.equal(user.referralCredits, 2);
+  delete sub.metadata.referralCredit;
 
   // Redirect graph terminates for expired, canceled, paid and lifetime states.
   for (const fixture of [

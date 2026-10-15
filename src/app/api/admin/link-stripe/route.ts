@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { stripe, priceIdToTier } from "@/lib/stripe";
+import { CARD_VERIFICATION_EXPAND, subscriptionAccessStatus } from "@/lib/stripe-subscription-access";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
   const email = (body.email ?? "").trim().toLowerCase();
   if (!email) return NextResponse.json({ error: "email_required" }, { status: 400 });
 
-  const user = await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, email: true, tier: true } });
+  const user = await prisma.user.findFirst({ where: { email: { equals: email, mode: "insensitive" } }, select: { id: true, email: true, tier: true, stripeSubscriptionId: true, subscriptionStatus: true } });
   if (!user) return NextResponse.json({ error: "user_not_found" }, { status: 404 });
 
   const s = stripe();
@@ -43,18 +44,21 @@ export async function POST(req: NextRequest) {
     .filter((x) => x.status in rank)
     .sort((a, b) => (rank[a.status] - rank[b.status]) || b.created - a.created)[0];
   const priceId = live?.items.data[0]?.price.id ?? null;
-  const tier = live && (live.status === "active" || live.status === "trialing") ? ((priceId && priceIdToTier(priceId)) || "pro") : user.tier;
+  const current = live ? await s.subscriptions.retrieve(live.id, { expand: CARD_VERIFICATION_EXPAND }) : null;
+  const status = current ? subscriptionAccessStatus(current, user) : null;
+  const tier = status === "active" || status === "trialing" ? ((priceId && priceIdToTier(priceId)) || "pro") : user.tier;
 
-  const updated = await prisma.user.update({
-    where: { id: user.id },
+  const synced = await prisma.user.updateMany({
+    where: { id: user.id, stripeSubscriptionId: user.stripeSubscriptionId, subscriptionStatus: user.subscriptionStatus },
     data: {
       stripeCustomerId: customerId,
       stripeSubscriptionId: live?.id ?? null,
       stripePriceId: priceId,
-      subscriptionStatus: live?.status ?? null,
+      subscriptionStatus: status,
       tier,
     },
-    select: { email: true, tier: true, subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true },
   });
+  if (!synced.count) return NextResponse.json({ error: "subscription_state_changed" }, { status: 409 });
+  const updated = await prisma.user.findUnique({ where: { id: user.id }, select: { email: true, tier: true, subscriptionStatus: true, stripeCustomerId: true, stripeSubscriptionId: true } });
   return NextResponse.json({ ok: true, user: updated, subscriptions: subs.data.map((x) => ({ id: x.id, status: x.status })) });
 }

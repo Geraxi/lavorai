@@ -5,9 +5,26 @@ import { prisma } from "@/lib/db";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { TIERS } from "@/lib/billing";
-import { CARD_VERIFICATION_EXPAND, subscriptionAccessStatus } from "@/lib/stripe-subscription-access";
+import { CARD_VERIFICATION_EXPAND, subscriptionAccessStatus, subscriptionAccessWriteGuard } from "@/lib/stripe-subscription-access";
 
 export const runtime = "nodejs";
+
+async function consumeReferralCreditOnce(customerId: string, subscriptionId: string) {
+  try {
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({ where: { stripeCustomerId: customerId }, select: { id: true } });
+      if (!user) throw new Error("referral_customer_not_linked");
+      // Existing primary key provides a durable per-subscription claim. A
+      // retry/concurrent event cannot decrement another credit; no new schema.
+      await tx.subscriptionEvent.create({ data: {
+        id: `referral-credit-used:${subscriptionId}`, userId: user.id, action: "referral_credit_used",
+      } });
+      await tx.user.updateMany({ where: { id: user.id, referralCredits: { gt: 0 } }, data: { referralCredits: { decrement: 1 } } });
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code !== "P2002") throw error;
+  }
+}
 
 /**
  * Stripe webhook — gestisce eventi subscription lifecycle.
@@ -65,30 +82,25 @@ export async function POST(request: NextRequest) {
         if (!customerId || !subscriptionId) break;
 
         // Recupera la subscription per leggere price/status/period_end.
-        const sub = await stripe().subscriptions.retrieve(subscriptionId, { expand: CARD_VERIFICATION_EXPAND });
         const existingAccess = await prisma.user.findUnique({
           where: { stripeCustomerId: customerId },
           select: { stripeSubscriptionId: true, subscriptionStatus: true },
         });
+        const sub = await stripe().subscriptions.retrieve(subscriptionId, { expand: CARD_VERIFICATION_EXPAND });
         const liveStatus = subscriptionAccessStatus(sub, existingAccess);
+        const writeGuard = subscriptionAccessWriteGuard(existingAccess);
         // A second unfinished checkout must not replace a legitimate entitlement.
-        if (liveStatus === "pending_payment_method" && existingAccess?.stripeSubscriptionId !== sub.id
+        if (!["active", "trialing"].includes(liveStatus) && existingAccess?.stripeSubscriptionId !== sub.id
           && ["active", "trialing"].includes(existingAccess?.subscriptionStatus ?? "")) break;
+        if (existingAccess?.stripeSubscriptionId && existingAccess.stripeSubscriptionId !== sub.id
+          && ["active", "trialing"].includes(existingAccess.subscriptionStatus ?? "")) {
+          const incumbent = await stripe().subscriptions.retrieve(existingAccess.stripeSubscriptionId, { expand: CARD_VERIFICATION_EXPAND });
+          if (["active", "trialing"].includes(incumbent.status)) break;
+        }
         const item = sub.items.data[0];
 
-        // Se il customer aveva già un'altra subscription viva (doppio checkout),
-        // cancelliamo la vecchia subito: mai due addebiti per lo stesso utente.
-        if (liveStatus === "active" || liveStatus === "trialing") try {
-          const others = await stripe().subscriptions.list({ customer: customerId, status: "all", limit: 10 });
-          for (const o of others.data) {
-            if (o.id !== sub.id && ["active", "trialing", "past_due", "unpaid"].includes(o.status)) {
-              await stripe().subscriptions.cancel(o.id, { prorate: true });
-              console.warn(`[stripe/webhook] cancellata subscription duplicata ${o.id} per customer ${customerId}`);
-            }
-          }
-        } catch (e) {
-          console.error("[stripe/webhook] dedupe subscriptions failed", e);
-        }
+        // Never cancel another subscription as a side effect of card setup or
+        // webhook replay. Checkout already refuses an existing live subscription.
         const priceId = item?.price.id;
         const tier = priceId ? priceIdToTier(priceId) ?? "free" : "free";
         const anyItem = item as unknown as { current_period_end?: number };
@@ -98,7 +110,7 @@ export async function POST(request: NextRequest) {
         // Match utente: prima per stripeCustomerId, poi per client_reference_id
         // (fallback se il customer non era ancora persistito lato nostro).
         const matched = await prisma.user.updateMany({
-          where: { stripeCustomerId: customerId },
+          where: { stripeCustomerId: customerId, ...writeGuard },
           data: {
             stripeSubscriptionId: sub.id,
             stripePriceId: priceId ?? null,
@@ -107,9 +119,10 @@ export async function POST(request: NextRequest) {
             currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
           },
         });
-        if (matched.count === 0 && userId) {
-          await prisma.user.update({
-            where: { id: userId },
+        let synced = matched.count;
+        if (synced === 0 && userId) {
+          const fallback = await prisma.user.updateMany({
+            where: { id: userId, ...writeGuard },
             data: {
               stripeCustomerId: customerId,
               stripeSubscriptionId: sub.id,
@@ -118,8 +131,10 @@ export async function POST(request: NextRequest) {
               tier: liveStatus === "active" || liveStatus === "trialing" ? tier : "free",
               currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
             },
-          }).catch((err) => console.error("[stripe/webhook] fallback update failed", err));
+          });
+          synced = fallback.count;
         }
+        if (!synced && liveStatus !== "pending_payment_method" && (existingAccess || userId)) throw new Error("subscription_state_changed_retry");
         const convertedUser = userId
           ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
           : await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
@@ -150,9 +165,13 @@ export async function POST(request: NextRequest) {
       case "customer.subscription.updated": {
         // Events may arrive out of order. Read the current subscription and its
         // card, rather than granting access from an earlier event snapshot.
-        const sub = await stripe().subscriptions.retrieve((event.data.object as Stripe.Subscription).id, { expand: CARD_VERIFICATION_EXPAND });
-        const customerId =
-          typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+        const eventSub = event.data.object as Stripe.Subscription;
+        const customerId = typeof eventSub.customer === "string" ? eventSub.customer : eventSub.customer.id;
+        const existingAccess = await prisma.user.findUnique({
+          where: { stripeCustomerId: customerId },
+          select: { stripeSubscriptionId: true, subscriptionStatus: true },
+        });
+        const sub = await stripe().subscriptions.retrieve(eventSub.id, { expand: CARD_VERIFICATION_EXPAND });
         const item = sub.items.data[0];
         const priceId = item?.price.id;
         const tier = priceId ? priceIdToTier(priceId) ?? "free" : "free";
@@ -167,19 +186,20 @@ export async function POST(request: NextRequest) {
         // Pausa (pause_collection) e cancellazione programmata gestite dalle
         // Impostazioni: in pausa niente piano Pro; con cancel_at_period_end il
         // piano resta fino a fine periodo (status ancora "active").
-        const paused = !!sub.pause_collection;
         const pausedUntil = sub.pause_collection?.resumes_at ? new Date(sub.pause_collection.resumes_at * 1000) : null;
-        const existingAccess = await prisma.user.findUnique({
-          where: { stripeCustomerId: customerId },
-          select: { stripeSubscriptionId: true, subscriptionStatus: true },
-        });
         const liveStatus = subscriptionAccessStatus(sub, existingAccess);
-        if (liveStatus === "pending_payment_method" && existingAccess?.stripeSubscriptionId !== sub.id
+        const writeGuard = subscriptionAccessWriteGuard(existingAccess);
+        if (!["active", "trialing"].includes(liveStatus) && existingAccess?.stripeSubscriptionId !== sub.id
           && ["active", "trialing"].includes(existingAccess?.subscriptionStatus ?? "")) break;
+        if (existingAccess?.stripeSubscriptionId && existingAccess.stripeSubscriptionId !== sub.id
+          && ["active", "trialing"].includes(existingAccess.subscriptionStatus ?? "")) {
+          const incumbent = await stripe().subscriptions.retrieve(existingAccess.stripeSubscriptionId, { expand: CARD_VERIFICATION_EXPAND });
+          if (["active", "trialing"].includes(incumbent.status)) break;
+        }
         const liveTier = liveStatus === "active" || liveStatus === "trialing" ? tier : "free";
 
         const matched = await prisma.user.updateMany({
-          where: { stripeCustomerId: customerId },
+          where: { stripeCustomerId: customerId, ...writeGuard },
           data: {
             stripeSubscriptionId: sub.id,
             stripePriceId: priceId ?? null,
@@ -188,26 +208,12 @@ export async function POST(request: NextRequest) {
             currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
             cancelAtPeriodEnd: sub.cancel_at_period_end,
             pausedUntil,
-            // Prova gratuita: una sola per utente (vedi checkout).
-            ...(liveStatus === "trialing" ? { proTrialUsedAt: new Date() } : {}),
           },
         });
-        // Credito referral consumato al checkout → scala il contatore una volta.
-        if (sub.metadata?.referralCredit === "1" && (liveStatus === "active" || liveStatus === "trialing")) {
-          await prisma.user.updateMany({ where: { stripeCustomerId: customerId, referralCredits: { gt: 0 } }, data: { referralCredits: { decrement: 1 } } });
-          await stripe().subscriptions.update(sub.id, { metadata: { ...sub.metadata, referralCredit: "used" } }).catch(() => void 0);
-        }
-        // L'invitato è diventato pagante (post-trial) → premia chi l'ha invitato.
-        if (sub.status === "active" && !paused) {
-          const payer = await prisma.user.findFirst({ where: { stripeCustomerId: customerId, referredById: { not: null }, referralRewardedAt: null }, select: { id: true } });
-          if (payer) {
-            const { rewardReferralIfDue } = await import("@/lib/referral");
-            await rewardReferralIfDue(payer.id).catch((err) => console.error("[stripe/webhook] referral reward failed", err));
-          }
-        }
-        if (matched.count === 0 && metaUserId) {
-          await prisma.user.update({
-            where: { id: metaUserId },
+        let synced = matched.count;
+        if (synced === 0 && metaUserId) {
+          const fallback = await prisma.user.updateMany({
+            where: { id: metaUserId, ...writeGuard },
             data: {
               stripeCustomerId: customerId,
               stripeSubscriptionId: sub.id,
@@ -216,7 +222,28 @@ export async function POST(request: NextRequest) {
               tier: liveTier,
               currentPeriodEnd: periodEndTs ? new Date(periodEndTs * 1000) : null,
             },
-          }).catch((err) => console.error("[stripe/webhook] metadata fallback failed", err));
+          });
+          synced = fallback.count;
+        }
+        if (!synced && liveStatus !== "pending_payment_method" && (existingAccess || metaUserId)) throw new Error("subscription_state_changed_retry");
+        if (liveStatus === "trialing") {
+          await prisma.user.updateMany({
+            where: { stripeCustomerId: customerId, stripeSubscriptionId: sub.id, subscriptionStatus: "trialing", proTrialUsedAt: null },
+            data: { proTrialUsedAt: new Date() },
+          });
+        }
+        // L'invitato è diventato pagante (post-trial) → premia chi l'ha invitato.
+        if (liveStatus === "active") {
+          const payer = await prisma.user.findFirst({ where: { stripeCustomerId: customerId, referredById: { not: null }, referralRewardedAt: null }, select: { id: true } });
+          if (payer) {
+            const { rewardReferralIfDue } = await import("@/lib/referral");
+            await rewardReferralIfDue(payer.id).catch((err) => console.error("[stripe/webhook] referral reward failed", err));
+          }
+        }
+        // Credito referral consumato al checkout → scala il contatore una volta.
+        if (sub.metadata?.referralCredit === "1" && (liveStatus === "active" || liveStatus === "trialing")) {
+          await consumeReferralCreditOnce(customerId, sub.id);
+          await stripe().subscriptions.update(sub.id, { metadata: { ...sub.metadata, referralCredit: "used" } }).catch(() => void 0);
         }
         const convertedUser = await prisma.user.findFirst({
           where: { stripeCustomerId: customerId },
@@ -231,7 +258,7 @@ export async function POST(request: NextRequest) {
             dedupeKey: `subscription_started:${sub.id}`,
           });
         }
-        if (convertedUser && sub.status === "active" && !paused) {
+        if (convertedUser && liveStatus === "active") {
           await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
             userId: convertedUser.id,
             plan: tier,
@@ -247,7 +274,7 @@ export async function POST(request: NextRequest) {
         const customerId =
           typeof sub.customer === "string" ? sub.customer : sub.customer.id;
         await prisma.user.updateMany({
-          where: { stripeCustomerId: customerId },
+          where: { stripeCustomerId: customerId, stripeSubscriptionId: sub.id },
           data: {
             tier: "free",
             subscriptionStatus: "canceled",
@@ -268,11 +295,22 @@ export async function POST(request: NextRequest) {
         const inv = event.data.object as Stripe.Invoice;
         const customerId =
           typeof inv.customer === "string" ? inv.customer : inv.customer?.id;
-        if (customerId) {
-          await prisma.user.updateMany({
+        const invoiceSubscription = inv.parent?.subscription_details?.subscription
+          ?? (inv as unknown as { subscription?: string | { id: string } | null }).subscription;
+        const subscriptionId = typeof invoiceSubscription === "string" ? invoiceSubscription : invoiceSubscription?.id;
+        if (customerId && subscriptionId) {
+          const existingAccess = await prisma.user.findUnique({
             where: { stripeCustomerId: customerId },
-            data: { subscriptionStatus: "past_due" },
+            select: { stripeSubscriptionId: true, subscriptionStatus: true },
           });
+          if (existingAccess?.stripeSubscriptionId !== subscriptionId) break;
+          const current = await stripe().subscriptions.retrieve(subscriptionId, { expand: CARD_VERIFICATION_EXPAND });
+          if (!["past_due", "unpaid"].includes(current.status)) break;
+          const affected = await prisma.user.updateMany({
+            where: { stripeCustomerId: customerId, ...subscriptionAccessWriteGuard(existingAccess) },
+            data: { subscriptionStatus: current.status },
+          });
+          if (!affected.count) throw new Error("subscription_state_changed_retry");
           const failedUser = await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
           if (failedUser) {
             await recordConversionEvent(AnalyticsEvent.PAYMENT_FAILED, {

@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { stripe } from "@/lib/stripe";
+import { CARD_VERIFICATION_EXPAND, subscriptionAccessStatus } from "@/lib/stripe-subscription-access";
 
 export const runtime = "nodejs";
 
@@ -111,8 +112,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, pausedUntil: resumesAt.toISOString() });
       }
       case "resume": {
-        const sub = await s.subscriptions.update(subId, { pause_collection: "" as unknown as null });
-        await prisma.user.update({ where: { id: user.id }, data: { pausedUntil: null, subscriptionStatus: sub.status, tier: user.stripePriceId ? user.tier === "free" ? "pro" : user.tier : "pro" } });
+        const current = await s.subscriptions.retrieve(subId, { expand: CARD_VERIFICATION_EXPAND });
+        const statusAfterResume = subscriptionAccessStatus({ ...current, pause_collection: null }, user);
+        if (!["active", "trialing"].includes(statusAfterResume)) {
+          return NextResponse.json({ error: "payment_method_required", message: "Completa la verifica del pagamento prima di riprendere.", redirect: "/start-membership" }, { status: 402 });
+        }
+        const sub = await s.subscriptions.update(subId, { pause_collection: "" as unknown as null, expand: CARD_VERIFICATION_EXPAND });
+        const status = subscriptionAccessStatus(sub, user);
+        const synced = await prisma.user.updateMany({ where: { id: user.id, stripeSubscriptionId: subId, subscriptionStatus: user.subscriptionStatus }, data: { pausedUntil: null, subscriptionStatus: status, tier: ["active", "trialing"].includes(status) ? user.stripePriceId ? user.tier === "free" ? "pro" : user.tier : "pro" : "free" } });
+        if (!synced.count) return NextResponse.json({ error: "subscription_state_changed", message: "Lo stato è cambiato. Aggiorna la pagina e riprova." }, { status: 409 });
         await log("resume");
         return NextResponse.json({ ok: true });
       }
