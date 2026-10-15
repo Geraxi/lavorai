@@ -1,14 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocale } from "next-intl";
 import type { DrawerApp } from "./design/detail-drawer";
 import { applicationLabel, deliveryCopy } from "@/lib/application-presentation";
 import { pipelineLane, type PipelineLane } from "@/lib/application-pipeline";
+import type { ApplicationPagination } from "@/lib/application-pagination";
+import { ApplicationPager } from "./application-pager";
 
 export type BoardApplication = DrawerApp & { userStatus?: string | null; lastReplyKind?: string | null; backendStatus?: string };
 
-export function ApplicationBoard({ applications, onOpen }: { applications: BoardApplication[]; onOpen: (app: BoardApplication) => void }) {
+export function ApplicationBoard({ applications, onOpen, pages, busy, onPage }: {
+  applications: BoardApplication[]; onOpen: (app: BoardApplication) => void;
+  pages: Record<PipelineLane, ApplicationPagination>; busy?: boolean;
+  onPage: (lane: PipelineLane, page: number) => void;
+}) {
   const en = useLocale() === "en";
   const tr = (it: string, english: string) => en ? english : it;
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -20,13 +26,16 @@ export function ApplicationBoard({ applications, onOpen }: { applications: Board
     ["conversation", tr("Risposte e colloqui", "Replies & interviews")],
     ["outcome", tr("Esiti dichiarati", "Reported outcomes")],
   ];
-  return <div className="pipeline-layout">
+  const boardRef = useRef<HTMLDivElement>(null);
+  const pageKey = JSON.stringify(pages);
+  useEffect(() => { boardRef.current?.querySelectorAll('.pipeline-lane-list').forEach(el => { el.scrollTop = 0; }); }, [pageKey]);
+  return <div className="pipeline-layout" ref={boardRef} aria-busy={busy}>
     <div className="pipeline-board" aria-label={tr("Pipeline candidature", "Application pipeline")}>
       {lanes.map(([lane, label]) => {
         const rows = applications.filter(a => pipelineLane(a) === lane);
         return <section key={lane} className="pipeline-lane" aria-label={label}>
-          <h2>{label}<span className="workspace-chip">{rows.length}</span></h2>
-          <div className="pipeline-lane-list">{rows.length === 0 && <p className="workspace-muted">{tr("Nessuna candidatura", "No applications")}</p>}
+          <h2>{label}<span className="workspace-chip">{pages[lane].total}</span></h2>
+          <div className="pipeline-lane-list" tabIndex={0} aria-label={label}>{rows.length === 0 && <p className="workspace-muted">{tr("Nessuna candidatura", "No applications")}</p>}
           {rows.map(a => <button key={a.id} type="button" className="pipeline-card" aria-pressed={selected?.id === a.id} onClick={() => setSelectedId(a.id)}>
             <strong>{a.role}</strong><small>{a.company} · {a.location}</small>
             <span className="workspace-chip">{a.match == null ? tr("Score non disponibile", "Score unavailable") : `${a.match}% · ${tr("score AI", "AI score")}`}</span>
@@ -35,6 +44,7 @@ export function ApplicationBoard({ applications, onOpen }: { applications: Board
             {!a.userStatus && a.lastReplyKind && <small>{tr("Messaggio classificato", "Message classified")}: {applicationLabel(a.lastReplyKind, en ? "en" : "it")}</small>}
             <small>{a.applied}</small>
           </button>)}</div>
+          <ApplicationPager pagination={pages[lane]} label={label} busy={busy} onPage={page => onPage(lane, page)} />
         </section>;
       })}
     </div>

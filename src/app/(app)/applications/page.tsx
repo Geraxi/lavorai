@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
@@ -13,7 +13,10 @@ import { AutoApplyToggle } from "@/components/auto-apply-toggle";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ReplyKindChip } from "@/components/reply-kind-chip";
 import { ApplicationBoard } from "@/components/application-board";
-import { pipelineLane } from "@/lib/application-pipeline";
+import type { PipelineLane } from "@/lib/application-pipeline";
+import type { ApplicationListMeta } from "@/lib/application-pagination";
+import { ApplicationPager } from "@/components/application-pager";
+import "@/components/application-pagination.css";
 import { applicationLabel, deliveryCopy } from "@/lib/application-presentation";
 import type { DeliveryView } from "@/lib/application-delivery-view";
 
@@ -85,6 +88,9 @@ interface Row {
 }
 
 type Range = "today" | "week" | "month" | "all";
+type ApplicationListResponse = ApplicationListMeta & { applications: ApiApplication[] };
+const firstPages = { attention: 1, recorded: 1, conversation: 1, outcome: 1 };
+
 
 export default function ApplicationsPage() {
   const t = useTranslations("applicationsPage");
@@ -94,17 +100,38 @@ export default function ApplicationsPage() {
   const [search, setSearch] = useState("");
   const [lane, setLane] = useState("all");
   const [range, setRange] = useState<Range>("all");
-  // The selected range includes every phase; the all-time query supplies consent actions.
-  const { data, error, isLoading, mutate } = useSWR<{ applications: ApiApplication[] }>(
-    `/api/applications?range=${range}&includeAll=1`,
-    fetcher,
-    { refreshInterval: 5000 },
+  const [query, setQuery] = useState("");
+  const [pages, setPages] = useState(firstPages);
+  const [page, setPage] = useState(1);
+  const [attentionPage, setAttentionPage] = useState(1);
+  const [attentionOpen, setAttentionOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const pendingRef = useRef<HTMLDivElement>(null);
+  const [deepId, setDeepId] = useState<string | null>(null);
+  const resetPages = () => { setPages(firstPages); setPage(1); setAttentionPage(1); };
+  useEffect(() => {
+    if (search.trim() === query) return;
+    const timer = setTimeout(() => { setQuery(search.trim()); setPages(firstPages); setPage(1); setAttentionPage(1); }, 250);
+    return () => clearTimeout(timer);
+  }, [search, query]);
+  useEffect(() => { setDeepId(new URLSearchParams(window.location.search).get("id")); }, []);
+  const filters = new URLSearchParams({ range, includeAll: "1", search: query, lane });
+  const listParams = new URLSearchParams(filters);
+  listParams.set("view", view);
+  listParams.set("page", String(page));
+  for (const [key, value] of Object.entries(pages)) listParams.set(`${key}Page`, String(value));
+  const { data, error, isLoading, mutate } = useSWR<ApplicationListResponse>(
+    `/api/applications?${listParams}`, fetcher, { refreshInterval: 15000, keepPreviousData: true },
   );
-  const { data: awaitingData } = useSWR<{ applications: ApiApplication[] }>(
-    `/api/applications?range=all&includeAll=1`,
-    fetcher,
-    { refreshInterval: 15000 },
+  const pendingParams = new URLSearchParams(filters);
+  pendingParams.set("view", "attention"); pendingParams.set("page", String(attentionPage));
+  const { data: pendingData, error: pendingError, isLoading: pendingLoading, mutate: mutatePending } = useSWR<ApplicationListResponse>(
+    attentionOpen ? `/api/applications?${pendingParams}` : null, fetcher, { keepPreviousData: true },
   );
+  useEffect(() => { if (tableRef.current) tableRef.current.scrollTop = 0; }, [data?.pagination.page, query, range, lane]);
+  useEffect(() => { if (pendingRef.current) pendingRef.current.scrollTop = 0; }, [pendingData?.pagination.page, query, range, lane]);
+  const { data: deepData } = useSWR<{ applications: ApiApplication[] }>(deepId ? `/api/applications?id=${encodeURIComponent(deepId)}` : null, fetcher);
   const [selected, setSelected] = useState<Row | null>(null);
   const closeDetails = useCallback(() => setSelected(null), []);
 
@@ -150,26 +177,32 @@ export default function ApplicationsPage() {
   };
   const realRows: Row[] = data?.applications.filter(a => a.status !== "diagnostic").map(toRow) ?? [];
 
-  // Solo dati reali. Niente padding con mock (utenti nuovi vedono stato vuoto).
-
-  // Deep-link dall'Inbox / email: /applications?id=<applicationId> apre il dettaglio.
+  // Resolve deep links independently of the current page, always owner-scoped by the API.
   useEffect(() => {
-    if (selected || typeof window === "undefined") return;
-    const id = new URLSearchParams(window.location.search).get("id");
-    if (!id) return;
-    const hit = [...(data?.applications ?? []), ...(awaitingData?.applications ?? [])].find((a) => a.id === id);
-    if (hit) setSelected(toRow(hit));
+    if (deepData?.applications[0]) { setSelected(toRow(deepData.applications[0])); setDeepId(null); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, awaitingData]);
+  }, [deepData]);
+  const filtered = realRows;
+  const awaitingCount = data?.awaitingCount ?? 0;
+  const pendingApplications = pendingData?.applications ?? [];
 
-  const allRows: Row[] = realRows;
-  const filtered = allRows.filter(a => (lane === "all" || pipelineLane(a) === lane) && `${a.company} ${a.role} ${a.location}`.toLowerCase().includes(search.trim().toLowerCase()));
-
-  const awaitingCount =
-    awaitingData?.applications.filter((a) => a.status === "awaiting_consent")
-      .length ?? 0;
-
-  const pendingApplications = (data?.applications ?? []).filter((a) => a.status !== "diagnostic" && !["confirmed", "delivered", "manual"].includes(a.delivery?.phase));
+  async function exportMatching() {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams(filters);
+      params.set("view", "export");
+      const rows: Row[] = [];
+      let cursor: string | null = null;
+      do {
+        if (cursor) params.set("cursor", cursor);
+        const result: { applications: ApiApplication[]; nextCursor: string | null } = await fetcher(`/api/applications?${params}`);
+        rows.push(...result.applications.map(toRow));
+        cursor = result.nextCursor;
+      } while (cursor);
+      exportCsv(rows, en);
+    } catch { toast.error(t("genericError")); }
+    finally { setExporting(false); }
+  }
 
   const [consentConfirmOpen, setConsentConfirmOpen] = useState(false);
 
@@ -193,6 +226,7 @@ export default function ApplicationsPage() {
         return;
       }
       toast.success(tr(`${body.enqueued} candidature accodate`, `${body.enqueued} applications queued`));
+      void mutate(); void mutatePending();
     } catch {
       toast.error(t("networkError"));
     }
@@ -210,6 +244,7 @@ export default function ApplicationsPage() {
         return;
       }
       toast.success(t("appQueued"));
+      void mutate(); void mutatePending();
     } catch {
       toast.error(t("networkError"));
     }
@@ -227,7 +262,7 @@ export default function ApplicationsPage() {
               {t("title")}
             </h1>
             <p style={{ fontSize: 15, color: "var(--fg-muted)", marginTop: 6 }}>
-              {allRows.length} {tr("candidature caricate (max 500)", "loaded applications (up to 500)")}
+              {data?.total ?? "—"} {tr("candidature", "applications")}
               {" · "}
               {rangeLabel(range, t)}
             </p>
@@ -248,7 +283,7 @@ export default function ApplicationsPage() {
                 <button
                   key={k}
                   type="button"
-                  onClick={() => setRange(k)}
+                  onClick={() => { setRange(k); resetPages(); }}
                   className={range === k ? "active" : undefined}
                   style={{ padding: "6px 10px" }}
                 >
@@ -267,17 +302,17 @@ export default function ApplicationsPage() {
             <button
               className="ds-btn"
               type="button"
-              disabled={allRows.length === 0}
-              onClick={() => exportCsv(allRows, en)}
+              disabled={!data?.total || exporting}
+              onClick={exportMatching}
             >
-              <Icon name="download" size={13} /> {t("exportCsv")}
+              <Icon name="download" size={13} /> {exporting ? tr("Esportazione…", "Exporting…") : t("exportCsv")}
             </button>
           </div>
         </div>
 
         {awaitingCount > 0 && (
           <div
-            className="mb-4 flex items-center justify-between gap-3 flex-wrap"
+            className="applications-consent-banner flex items-center justify-between gap-3 flex-wrap"
             style={{
               padding: "12px 16px",
               background: "var(--primary-weak)",
@@ -306,14 +341,14 @@ export default function ApplicationsPage() {
         )}
 
         <div className="workspace-metrics">
-          <div className="workspace-metric"><strong>{isLoading || error ? "—" : allRows.filter(a => ["confirmed", "delivered"].includes(a.delivery?.phase ?? "")).length}</strong><small>{tr("Invii confermati", "Confirmed submissions")}</small></div>
-          <div className="workspace-metric"><strong>{isLoading || error ? "—" : allRows.filter(a => pipelineLane(a) === "attention").length}</strong><small>{tr("Da completare / verificare", "Needs attention")}</small></div>
-          <div className="workspace-metric"><strong>{isLoading || error ? "—" : allRows.filter(a => a.userStatus === "colloquio").length}</strong><small>{tr("Colloqui dichiarati", "Reported interviews")}</small></div>
-          <div className="workspace-metric"><strong>{isLoading || error ? "—" : allRows.filter(a => a.userStatus === "offerta").length}</strong><small>{tr("Offerte dichiarate", "Reported offers")}</small></div>
+          <div className="workspace-metric"><strong>{isLoading || error ? "—" : data?.summary.confirmed ?? 0}</strong><small>{tr("Invii confermati", "Confirmed submissions")}</small></div>
+          <div className="workspace-metric"><strong>{isLoading || error ? "—" : data?.summary.attention ?? 0}</strong><small>{tr("Da completare / verificare", "Needs attention")}</small></div>
+          <div className="workspace-metric"><strong>{isLoading || error ? "—" : data?.summary.interviews ?? 0}</strong><small>{tr("Colloqui dichiarati", "Reported interviews")}</small></div>
+          <div className="workspace-metric"><strong>{isLoading || error ? "—" : data?.summary.offers ?? 0}</strong><small>{tr("Offerte dichiarate", "Reported offers")}</small></div>
         </div>
         <div className="workspace-toolbar">
           <input aria-label={tr("Filtra candidature", "Filter applications")} placeholder={tr("Cerca azienda, ruolo o località…", "Search company, role or location…")} value={search} onChange={event => setSearch(event.target.value)} />
-          <select aria-label={tr("Fase candidatura", "Application stage")} value={lane} onChange={event => setLane(event.target.value)}>
+          <select aria-label={tr("Fase candidatura", "Application stage")} value={lane} onChange={event => { setLane(event.target.value); resetPages(); }}>
             <option value="all">{tr("Tutte le fasi", "All stages")}</option>
             <option value="attention">{tr("Da verificare", "Needs attention")}</option><option value="recorded">{tr("Invio registrato", "Submission recorded")}</option>
             <option value="conversation">{tr("Risposte e colloqui", "Replies & interviews")}</option><option value="outcome">{tr("Esiti dichiarati", "Reported outcomes")}</option>
@@ -323,11 +358,11 @@ export default function ApplicationsPage() {
             <button type="button" aria-pressed={view === "table"} className={view === "table" ? "active" : undefined} onClick={() => setView("table")}>{tr("Tabella", "Table")}</button>
           </div>
         </div>
-        {isLoading && <p role="status" className="workspace-empty">{tr("Caricamento candidature…", "Loading applications…")}</p>}
+        {isLoading && !data && <p role="status" className="workspace-empty">{tr("Caricamento candidature…", "Loading applications…")}</p>}
         {error && <div role="alert" className="workspace-empty">{tr("Impossibile caricare le candidature.", "Unable to load applications.")} <button className="ds-btn" onClick={() => mutate()}>{tr("Riprova", "Retry")}</button></div>}
-        {!isLoading && !error && filtered.length === 0 && <p className="workspace-empty">{allRows.length ? tr("Nessun risultato per questi filtri.", "No results for these filters.") : tr("Non hai ancora candidature registrate. Esplora le opportunità o importa una candidatura esistente.", "No applications recorded yet. Explore opportunities or import an existing application.")}</p>}
-        {!isLoading && !error && view === "board" && <ApplicationBoard applications={filtered} onOpen={setSelected} />}
-        {!isLoading && !error && view === "table" && <div className="ds-section-card applications-table">
+        {data && !isLoading && !error && data.total === 0 && <p className="workspace-empty">{query || lane !== "all" || range !== "all" ? tr("Nessun risultato per questi filtri.", "No results for these filters.") : tr("Non hai ancora candidature registrate. Esplora le opportunità o importa una candidatura esistente.", "No applications recorded yet. Explore opportunities or import an existing application.")}</p>}
+        {data && !error && view === "board" && <ApplicationBoard applications={filtered} onOpen={setSelected} pages={data.lanes} busy={isLoading} onPage={(key: PipelineLane, next: number) => setPages(current => ({ ...current, [key]: next }))} />}
+        {data && !error && view === "table" && <><div className="ds-section-card applications-table" ref={tableRef} aria-busy={isLoading}>
           <table className="ds-tbl">
             <thead>
               <tr>
@@ -482,11 +517,13 @@ export default function ApplicationsPage() {
               ))}
             </tbody>
           </table>
-        </div>}
-        {pendingApplications.length > 0 && <details className="ds-section-card applications-attention" aria-label={tr("Candidature da completare", "Applications needing attention")}>
-          <summary>{tr("Da completare o verificare", "Complete or verify")} <span className="workspace-chip">{pendingApplications.length}</span></summary><div className="applications-attention-list">
+        </div><ApplicationPager pagination={data.pagination} label={tr("Candidature", "Applications")} busy={isLoading} onPage={setPage} /></>}
+        {(data?.summary.pending ?? 0) > 0 && <details open={attentionOpen} onToggle={event => setAttentionOpen(event.currentTarget.open)} className="ds-section-card applications-attention" aria-label={tr("Candidature da completare", "Applications needing attention")}>
+          <summary>{tr("Da completare o verificare", "Complete or verify")} <span className="workspace-chip">{data?.summary.pending}</span></summary><div className="applications-attention-list" ref={pendingRef}>
           <p style={{ fontSize: 13, color: "var(--fg-muted)", marginBottom: 14 }}>{tr("Queste candidature non hanno una conferma di invio. Un errore tecnico non è un rifiuto dell'azienda.", "These applications have no submission confirmation. A technical failure is not a rejection by the company.")}</p>
-          {pendingApplications.slice(0, 50).map((a) => <div key={a.id} style={{ padding: "12px 0", borderTop: "1px solid var(--border-ds)" }}>
+          {pendingLoading && !pendingData && <p role="status">{tr("Caricamento…", "Loading…")}</p>}
+          {pendingError && <p role="alert">{tr("Impossibile caricare le candidature.", "Unable to load applications.")} <button className="ds-btn" onClick={() => mutatePending()}>{tr("Riprova", "Retry")}</button></p>}
+          {!pendingError && pendingApplications.map((a) => <div key={a.id} style={{ padding: "12px 0", borderTop: "1px solid var(--border-ds)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
               <strong>{a.job.title} · {a.job.company ?? tr("Azienda", "Company")}</strong>
               <span className="ds-chip">{applicationLabel(a.delivery.label, en ? "en" : "it")}</span>
@@ -498,8 +535,8 @@ export default function ApplicationsPage() {
               {a.status === "awaiting_consent" && <button className="ds-btn ds-btn-sm" onClick={() => consentOne(a.id)}>{tr("Consenti invio", "Approve submission")}</button>}
             </div>
           </div>)}
-          {pendingApplications.length > 50 && <p style={{ fontSize: 12 }}>{tr("Mostrate le 50 candidature più recenti da completare.", "Showing the 50 most recent applications needing attention.")}</p>}
-        </div></details>}
+          {!pendingLoading && !pendingError && pendingData?.total === 0 && <p>{tr("Nessuna candidatura da completare per questi filtri.", "No pending applications for these filters.")}</p>}
+        </div>{pendingData && <ApplicationPager pagination={pendingData.pagination} label={tr("Da completare", "Pending applications")} busy={pendingLoading} onPage={setAttentionPage} />}</details>}
       </div>
 
       <DetailDrawer locale={en ? "en" : "it"} app={selected} onClose={closeDetails} />

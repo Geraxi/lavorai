@@ -1,0 +1,24 @@
+/* Applications only: each column is a bounded page, with navigation outside its scroll area. */
+.reference-workspace .workspace-applications .pipeline-lane-list { flex: 1; min-height: 0; }
+.reference-workspace .workspace-applications .pipeline-card strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.reference-workspace .workspace-applications .pipeline-card > small:first-of-type { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.application-pager { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-top: 1px solid var(--border-ds); font-size: 11px; color: var(--fg-muted); }
+.application-pager > div { display: flex; align-items: center; justify-content: space-between; gap: 7px; font-variant-numeric: tabular-nums; }
+.application-pager .ds-btn { width: 32px; height: 32px; min-height: 32px; padding: 0; justify-content: center; }
+.application-pager .ds-btn[aria-disabled="true"] { opacity: .35; cursor: default; }
+.application-pager .ds-btn:focus-visible { outline: 2px solid var(--primary-ds); outline-offset: 2px; }
+.pipeline-lane > .application-pager { flex-direction: column; gap: 5px; padding: 8px 0 0; }
+.pipeline-lane > .application-pager > div { width: 100%; }
+.application-page-range { white-space: nowrap; }
+.applications-consent-banner { flex-shrink: 0; margin-bottom: 8px; padding: 8px 12px !important; }
+.reference-workspace .workspace-applications .applications-attention-list { max-height: 120px; }
+.reference-workspace .workspace-applications .applications-attention .application-pager { padding-block: 4px; }
+@media (min-width: 1101px) {
+  .reference-workspace .workspace-applications .pipeline-board { grid-template-rows: minmax(0, 1fr); }
+  .reference-workspace .workspace-applications .pipeline-lane-list { max-height: none; }
+}
+@media (max-width: 760px) {
+  .application-pager .ds-btn { width: 44px; height: 44px; min-height: 44px; }
+  .reference-workspace .workspace-applications .pipeline-lane-list { max-height: 390px; }
+  .reference-workspace .workspace-applications .applications-table { max-height: 520px; }
+}

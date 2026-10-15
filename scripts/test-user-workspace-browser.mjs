@@ -40,6 +40,8 @@ import { AppTopbar } from './src/components/design/topbar';
 import { GmailInboxView } from './src/components/gmail-inbox-view';
 import { JobSwiper, DiscoverHeading } from './src/components/job-swiper';
 import ApplicationsPage from './src/app/(app)/applications/page';
+import { pipelineLane } from './src/lib/application-pipeline';
+import { APPLICATION_LANES, pageWindow } from './src/lib/application-pagination';
 import DashboardPage from './src/app/(app)/dashboard/page';
 import { MaterialiView } from './src/app/(app)/materiali/materiali-view';
 import './src/app/(app)/materiali/materiali.css';
@@ -59,6 +61,12 @@ if(window.__dense && applications.length) {
   applications.push(...Array.from({length:54},(_,i)=>({...originals[i%originals.length],id:'dense-'+i,job:{...originals[i%originals.length].job,title:originals[i%originals.length].job.title+' — Design systems and accessibility for international customer platforms'}})));
   applications[2].status='awaiting_consent';
 }
+if(new URLSearchParams(location.search).has('pagination') && applications.length) {
+  const originals=applications.slice(0,6);
+  applications.splice(0,applications.length,...Array.from({length:720},(_,i)=>({...originals[i%6],id:'page-'+String(i).padStart(4,'0'),createdAt:new Date(Date.now()-i*3600_000).toISOString(),job:{...originals[i%6].job,title:originals[i%6].job.title+' #'+i}})));
+  applications[2].status='awaiting_consent';
+}
+window.__applicationResponseSizes=[];
 const messages = window.__empty ? [] : applications.slice(0,4).map((a,i)=> ({id:'application_reply:'+i, source:i===3?'gmail':'application_reply', from:'Recruiter '+i+' <recruiter@example.test>', subject:['Interview availability','Application received','Delivery failed','Role update'][i], snippet:'Thank you for your interest in this position.', bodyText:'Hello Alex,\\n\\nThank you for your interest. Can we arrange a conversation next week?\\n\\nThis is a synthetic message for browser QA.\\n<img src="https://tracker.invalid/pixel"><script>alert(1)</script>', date:now, kind:['colloquio','ricevuta','bounce','risposta'][i], label:['Possible interview','Application receipt','Delivery failure','Possible recruiter reply'][i], read:i===3?false:null, applicationId:a.id, applicationStatus:a.userStatus, company:a.job.company, jobTitle:a.job.title, jobRelated:true}));
 if(window.__dense && messages.length) {
   const originals=messages.slice();
@@ -79,8 +87,32 @@ window.fetch = async (url, options={}) => {
   if(String(url).includes('/api/applications/apply')) return new Response(JSON.stringify({message:'Synthetic blocked submission'}),{status:403});
   if(String(url).includes('/cv-preview')) return Response.json({text:(window.__dense ? 'Long synthetic CV paragraph for scroll testing. '.repeat(400)+'\\n\\n' : '')+'Alex Example\\nFrontend Engineer\\n\\nSUMMARY\\nSynthetic CV document for local testing.\\n\\nEXPERIENCE\\nExample Studio — Frontend Engineer\\nBuilt accessible web interfaces with React and TypeScript.\\n\\nSKILLS\\nReact · TypeScript · SQL · Testing'});
   if(String(url).startsWith('/api/applications?')) {
+    if(window.__applicationDelayMs) await new Promise(resolve=>setTimeout(resolve,window.__applicationDelayMs));
     if(new URLSearchParams(location.search).has('error')) return new Response('{}',{status:503});
-    return Response.json({applications});
+    if(window.__failNextApplications) {window.__failNextApplications=false;return new Response('{}',{status:503});}
+    const params=new URL(String(url),location.origin).searchParams;
+    const source=window.__removeApplications?[]:applications;
+    if(params.has('id'))return Response.json({applications:source.filter(a=>a.id===params.get('id'))});
+    const query=(params.get('search')||'').toLowerCase();
+    const since=params.get('range')==='today'?new Date().setHours(0,0,0,0):params.get('range')==='week'?Date.now()-7*86400_000:params.get('range')==='month'?Date.now()-30*86400_000:0;
+    const rows=source.filter(a=>a.status!=='diagnostic'&&new Date(a.createdAt).getTime()>=since&&[a.job.company,a.job.title,a.job.location].join(' ').toLowerCase().includes(query));
+    const view=params.get('view'),lane=params.get('lane')||'all';
+    const summary={confirmed:rows.filter(a=>['confirmed','delivered'].includes(a.delivery.phase)).length,attention:rows.filter(a=>pipelineLane(a)==='attention').length,interviews:rows.filter(a=>a.userStatus==='colloquio').length,offers:rows.filter(a=>a.userStatus==='offerta').length,pending:rows.filter(a=>(lane==='all'||pipelineLane(a)===lane)&&!['confirmed','delivered','manual'].includes(a.delivery.phase)).length};
+    const matching=rows.filter(a=>lane==='all'||pipelineLane(a)===lane);
+    if(view==='export') {
+      const offset=params.get('cursor')?matching.findIndex(a=>a.id===params.get('cursor'))+1:0;
+      const chunk=matching.slice(offset,offset+50);
+      window.__applicationResponseSizes.push(chunk.length);
+      return Response.json({applications:chunk,nextCursor:offset+50<matching.length?chunk[chunk.length-1].id:null});
+    }
+    const windows=Object.fromEntries(APPLICATION_LANES.map(key=>[key,pageWindow(Number(params.get(key+'Page'))||1,3)]));
+    const list=pageWindow(Number(params.get('page'))||1,view==='table'?(Number(params.get('pageSize'))||10):3);
+    matching.forEach(a=>{windows[pipelineLane(a)].add(a.id);if(view!=='attention'||!['confirmed','delivered','manual'].includes(a.delivery.phase))list.add(a.id);});
+    const lanes=Object.fromEntries(APPLICATION_LANES.map(key=>[key,windows[key].result().pagination]));
+    const ids=view==='board'?APPLICATION_LANES.flatMap(key=>windows[key].result().ids):list.result().ids;
+    const result={applications:ids.map(id=>source.find(a=>a.id===id)),lanes,pagination:list.result().pagination,total:list.result().pagination.total,summary,awaitingCount:source.filter(a=>a.status==='awaiting_consent').length};
+    window.__applicationResponseSizes.push(result.applications.length);
+    return Response.json(result);
   }
   if(String(url)==='/api/preferences') return Response.json({autoApplyMode:'manual',applicationService:{automaticBlocked:true,submissionsPaused:false,dailyCap:10}});
   if(String(url)==='/api/sidebar-stats') return Response.json({applicationsCount:applications.length,autoApplyToday:0,autoApplyRemaining:0});
@@ -123,6 +155,104 @@ try {
   const errors=[]; const external=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/*',route=>{if(!route.request().url().startsWith(base)){external.push(route.request().url());return route.abort();} return route.continue();});
+  if (process.argv.includes('--pagination-checks')) {
+    const geometry=[];
+    for(const [width,height] of [[1440,900],[1366,768],[390,844]]) for(const locale of ['it','en']) {
+      await page.setViewportSize({width,height});
+      await page.goto(base+'/applications?pagination=1&locale='+locale);
+      await page.waitForFunction(()=>document.querySelectorAll('.pipeline-card').length===12);
+      await page.evaluate(()=>document.fonts.ready);
+      const lanes=page.locator('.pipeline-lane');
+      assert.equal(await lanes.count(),4);
+      for(let i=0;i<4;i++)assert.equal(await lanes.nth(i).locator('.pipeline-card').count(),3);
+      assert.match(await page.locator('.workspace-heading p').innerText(),/720/);
+      const size=await page.evaluate(()=>{const main=document.querySelector('.lavorai-main');return {bodyWidth:document.documentElement.scrollWidth,bodyHeight:document.documentElement.scrollHeight,mainHeight:main.clientHeight,mainScrollHeight:main.scrollHeight};});
+      if(width>1100){assert.ok(size.mainScrollHeight<=size.mainHeight+1);assert.ok(size.bodyHeight<=height+1);for(let i=0;i<4;i++){const box=await lanes.nth(i).locator('.application-pager').boundingBox();assert.ok(box.y+box.height<=height,'Lane controls remain visible');}}
+      assert.ok(size.bodyWidth<=width);
+      geometry.push({width,height,locale,...size});
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      await page.screenshot({path:join(out,`applications-paginated-${locale}-${width}x${height}.png`),fullPage:false,animations:'disabled'});
+      if(width===390) {
+        await lanes.first().evaluate(el=>el.scrollIntoView({block:'start'}));
+        await page.screenshot({path:join(out,`applications-paginated-${locale}-mobile-board.png`),fullPage:false,animations:'disabled'});
+      }
+      const firstBefore=await lanes.first().locator('.pipeline-card strong').allTextContents();
+      const secondBefore=await lanes.nth(1).locator('.pipeline-card strong').allTextContents();
+      const next=lanes.first().getByRole('button',{name:/next page|pagina successiva/});
+      await page.evaluate(()=>window.__applicationDelayMs=350);
+      await next.click();
+      assert.equal(await next.evaluate(el=>document.activeElement===el),true,'Focus survives loading');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(()=>document.querySelector('.pipeline-lane .application-page-range')?.textContent.startsWith('4–6'));
+      await page.evaluate(()=>window.__applicationDelayMs=0);
+      assert.notDeepEqual(await lanes.first().locator('.pipeline-card strong').allTextContents(),firstBefore);
+      assert.deepEqual(await lanes.nth(1).locator('.pipeline-card strong').allTextContents(),secondBefore);
+      if(width>1100)assert.equal(await next.evaluate(el=>document.activeElement===el),true,'Pagination keeps keyboard focus');
+      await lanes.first().getByRole('button',{name:/previous page|pagina precedente/}).click();
+      await page.waitForFunction(()=>document.querySelector('.pipeline-lane .application-page-range')?.textContent.startsWith('1–3'));
+      await page.getByRole('button',{name:locale==='en'?'Table':'Tabella',exact:true}).click();
+      await page.waitForFunction(()=>document.querySelectorAll('.applications-table tbody tr').length===10);
+      const tableFirst=await page.locator('.applications-table tbody tr').first().innerText();
+      const tablePager=page.locator('.workspace-applications > .application-pager');
+      await page.locator('.applications-table').evaluate(el=>el.scrollTop=el.scrollHeight);
+      await tablePager.getByRole('button',{name:/next page|pagina successiva/}).click();
+      await page.waitForFunction(()=>document.querySelector('.workspace-applications > .application-pager .application-page-range')?.textContent.startsWith('11–20'));
+      assert.notEqual(await page.locator('.applications-table tbody tr').first().innerText(),tableFirst);
+      assert.equal(await page.locator('.applications-table').evaluate(el=>el.scrollTop),0);
+      const filter=page.getByRole('textbox',{name:locale==='en'?'Filter applications':'Filtra candidature'});
+      await filter.fill('#719');
+      await page.waitForFunction(()=>document.querySelectorAll('.applications-table tbody tr').length===1);
+      assert.match(await tablePager.innerText(),/1–1/);
+      assert.match(await page.locator('.applications-table tbody').innerText(),/#719/);
+      await filter.fill('no matching role at all');
+      await page.waitForFunction(()=>document.querySelector('.workspace-applications > .workspace-empty')?.textContent.match(/Nessun risultato|No results/));
+      await filter.fill('');
+      await page.waitForFunction(()=>document.querySelector('.workspace-heading p')?.textContent.includes('720'));
+      await page.getByRole('combobox',{name:locale==='en'?'Application stage':'Fase candidatura'}).selectOption('outcome');
+      await page.waitForFunction(()=>document.querySelector('.workspace-heading p')?.textContent.includes('120'));
+      assert.match(await tablePager.innerText(),/1–10/);
+      await page.getByRole('combobox',{name:locale==='en'?'Application stage':'Fase candidatura'}).selectOption('all');
+      await page.waitForFunction(()=>document.querySelector('.workspace-heading p')?.textContent.includes('720'));
+      await page.locator('.applications-attention summary').click();
+      await page.waitForFunction(()=>document.querySelectorAll('.applications-attention-list > div').length===3);
+      const pending=page.locator('.applications-attention .application-pager');
+      await pending.getByRole('button',{name:/next page|pagina successiva/}).click();
+      await page.waitForFunction(()=>document.querySelector('.applications-attention .application-page-range')?.textContent.startsWith('4–6'));
+      if(width>1100)assert.ok(await page.locator('.lavorai-main').evaluate(el=>el.scrollHeight<=el.clientHeight+1),'Expanded pending remains within desktop');
+      await page.locator('.applications-attention summary').click();
+      assert.ok(await page.evaluate(()=>window.__applicationResponseSizes.every(size=>size<=12)),'No list response includes full history');
+      if(width===1366 && locale==='en') {
+        const downloadPromise=page.waitForEvent('download');
+        await page.getByRole('button',{name:'Export CSV',exact:true}).click();
+        const download=await downloadPromise;
+        const csv=await readFile(await download.path(),'utf8');
+        assert.equal(csv.trim().split('\n').length,721,'CSV exports all matching records in bounded batches');
+        assert.ok(await page.evaluate(()=>window.__applicationResponseSizes.every(size=>size<=50)));
+      }
+      assert.ok(await page.evaluate(()=>window.__requests.every(r=>!r.method||r.method==='GET')),'No writes or submissions');
+    }
+    await page.setViewportSize({width:1366,height:768});
+    await page.goto(base+'/applications?pagination=1&locale=en&id=page-0700');
+    await page.getByRole('dialog').waitFor();
+    assert.match(await page.getByRole('dialog').innerText(),/#700/,'Deep link opens a record outside loaded page');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button',{name:'Table',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelectorAll('.applications-table tbody tr').length===10);
+    await page.evaluate(()=>window.__failNextApplications=true);
+    await page.locator('.workspace-applications > .application-pager').getByRole('button',{name:/next page/}).click();
+    await page.getByRole('alert').filter({hasText:'Unable to load applications'}).waitFor();
+    await page.getByRole('button',{name:'Retry',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('.workspace-applications > .application-pager .application-page-range')?.textContent.startsWith('11–20'));
+    await page.screenshot({path:join(out,'applications-paginated-table-1366x768.png'),fullPage:false});
+    await page.evaluate(()=>window.__removeApplications=true);
+    await page.locator('.workspace-applications > .application-pager').getByRole('button',{name:/next page/}).click();
+    await page.waitForFunction(()=>document.querySelector('.workspace-heading p')?.textContent.startsWith('0 '));
+    assert.match(await page.locator('.workspace-applications > .application-pager').innerText(),/0–0/);
+    await page.screenshot({path:join(out,'applications-paginated-empty-1366x768.png'),fullPage:false});
+    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+    await writeFile(join(out,'pagination-qa.json'),JSON.stringify({passed:true,records:720,geometry,errors,external,font:fixtureFont},null,2));
+    console.log('PASS: 720 applications, 3 cards per stage, 10 table rows, independent lane pages, page reset on filters, pending pages, deep links, error recovery, last-page deletion, Italian/English 1440/1366/mobile and visible desktop controls. No external requests or writes.');
+  } else
   if (process.argv.includes('--reference-captures')) {
     const geometry = [];
     for (const [width,height] of [[1440,900],[1366,768],[390,844]]) {
@@ -162,7 +292,7 @@ try {
           assert.ok(await page.locator('.applications-attention-list').evaluate(el=>el.scrollHeight>el.clientHeight),'Attention records have bounded scrolling');
           assert.ok(await page.locator('.lavorai-main').evaluate(el=>el.scrollHeight<=el.clientHeight+1),'Expanded attention keeps the page in the viewport');
           await page.locator('.applications-attention summary').click();
-          assert.ok(await page.locator('.pipeline-lane-list').first().evaluate(el=>el.scrollHeight>el.clientHeight),'Dense pipeline scrolls internally');
+          assert.ok(await page.locator('.pipeline-lane-list').first().locator('.pipeline-card').count()<=3,'Dense pipeline is paginated');
         }
         if(name==='inbox' && variant==='dense') {
           assert.ok(await page.locator('.inbox-message-list').evaluate(el=>el.scrollHeight>el.clientHeight));
@@ -263,6 +393,7 @@ try {
   await page.keyboard.press('Escape');
   await page.getByRole('button',{name:'Kanban',exact:true}).click();
   await page.getByRole('textbox',{name:'Filter applications'}).fill('no matching company');
+  await page.waitForFunction(()=>document.querySelectorAll('.pipeline-card').length===0);
   assert.equal(await page.locator('.pipeline-card').count(),0);
   await page.goto(base+'/applications?locale=en&empty=1');
   await page.getByText('No applications recorded yet.',{exact:false}).waitFor();
