@@ -1519,7 +1519,8 @@ function StepConfirm({
       </p>
       {demo && (
         <div
-          className="ds-card"
+          data-ph-mask
+          className="ph-no-capture ds-card"
           style={{
             padding: 18,
             marginBottom: 14,

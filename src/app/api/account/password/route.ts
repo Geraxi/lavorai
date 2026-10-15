@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
       mode: dbUser.passwordHash ? "changed" : "set",
     });
   } catch (err) {
+    await captureApiException(err, "/api/account/password");
     console.error("[/api/account/password]", err);
     return NextResponse.json(
       { error: "internal", message: "Errore interno. Riprova." },

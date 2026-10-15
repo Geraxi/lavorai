@@ -1,5 +1,6 @@
 "use client";
 
+import { captureFunnel } from "@/lib/posthog/client";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/design/icon";
@@ -35,6 +36,7 @@ export function PaywallDialog({
 }: PaywallDialogProps) {
   useEffect(() => {
     if (!open) return;
+    captureFunnel("upgrade_wall_viewed");
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -197,6 +199,8 @@ function TierCard({
   const isHighlighted = tier === "pro";
 
   async function onSelect() {
+    captureFunnel("plan_selected", { plan: tier });
+    if (variant === "limit") captureFunnel("upgrade_clicked", { target_plan: tier });
     if (variant === "signup") {
       // L'utente non è ancora loggato: salviamo l'intent e dopo il verify
       // email + login lo reindirizziamo a Stripe.

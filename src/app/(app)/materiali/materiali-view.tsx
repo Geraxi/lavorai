@@ -96,8 +96,8 @@ function CvPreview({ item }: { item: MaterialItem }) {
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [item.id, item.hasPdf, item.hasDocx]);
 
-  if (preview.pdfUrl) return <><iframe title={`CV su misura per ${item.title}`} src={preview.pdfUrl} /><a className="mat-preview-open" href={preview.pdfUrl} target="_blank" rel="noopener noreferrer">Apri il CV in una nuova scheda <ArrowUpRight size={14} aria-hidden /></a></>;
-  if (preview.text) return <article className="mat-cv-paper"><span>CV su misura · {item.company}</span><div>{preview.text}</div></article>;
+  if (preview.pdfUrl) return <><iframe data-ph-mask className="ph-no-capture" title={`CV su misura per ${item.title}`} src={preview.pdfUrl} /><a className="mat-preview-open" href={preview.pdfUrl} target="_blank" rel="noopener noreferrer">Apri il CV in una nuova scheda <ArrowUpRight size={14} aria-hidden /></a></>;
+  if (preview.text) return <article data-ph-mask className="ph-no-capture mat-cv-paper"><span>CV su misura · {item.company}</span><div>{preview.text}</div></article>;
   return <div className="mat-preview-fallback"><FileText size={32} aria-hidden /><h3>{preview.error ? "Anteprima non disponibile" : "Caricamento del CV…"}</h3><p>{preview.error ? "Non siamo riusciti ad aprire questo documento. Puoi scaricarlo dal pannello accanto." : "Stiamo aprendo il documento per questa posizione."}</p></div>;
 }
 
@@ -201,7 +201,7 @@ export function MaterialiView({ items, total }: { items: MaterialItem[]; total: 
                 <div className="mat-detail-main">
                   <div className="mat-preview" role="tabpanel" id={`mat-panel-${tab}`} aria-labelledby={`mat-tab-${tab}`}>
                     {tab === "cv" ? <CvPreview key={selected.id} item={selected} /> : null}
-                    {tab === "letter" ? selected.letterText ? <article className="mat-letter-paper"><span>Lettera per {selected.company}</span><h3>{selected.title}</h3><div>{selected.letterText}</div></article> : <div className="mat-preview-fallback"><Mail size={32} aria-hidden /><h3>{selected.hasLetter ? "Lettera pronta da scaricare" : "Lettera non disponibile"}</h3><p>{selected.hasLetter ? "Puoi scaricarla in formato DOCX dal pannello accanto." : "Questa candidatura non ha ancora una lettera associata."}</p></div> : null}
+                    {tab === "letter" ? selected.letterText ? <article data-ph-mask className="ph-no-capture mat-letter-paper"><span>Lettera per {selected.company}</span><h3>{selected.title}</h3><div>{selected.letterText}</div></article> : <div className="mat-preview-fallback"><Mail size={32} aria-hidden /><h3>{selected.hasLetter ? "Lettera pronta da scaricare" : "Lettera non disponibile"}</h3><p>{selected.hasLetter ? "Puoi scaricarla in formato DOCX dal pannello accanto." : "Questa candidatura non ha ancora una lettera associata."}</p></div> : null}
                     {tab === "job" ? <div className="mat-job-paper"><BriefcaseBusiness size={30} aria-hidden /><span>Annuncio originale</span><h3>{selected.title}</h3><p>{selected.company}{selected.location ? ` · ${selected.location}` : ""}</p><a href={selected.jobUrl} target="_blank" rel="noopener noreferrer">Apri annuncio <ArrowUpRight size={16} aria-hidden /></a></div> : null}
                   </div>
                   <aside className="mat-document-aside" aria-label="File disponibili">

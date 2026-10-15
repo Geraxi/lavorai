@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -95,7 +96,8 @@ export async function POST(request: NextRequest) {
   //    per candidatura + cover letter DOCX + PDF tailored + foto profilo).
   //    Best-effort: se Blob/Supabase è giù, continuiamo comunque con il
   //    delete DB (GDPR Art.17 è priorità assoluta).
-  await deleteAllUserFiles(user.id).catch((err) => {
+  await deleteAllUserFiles(user.id).catch(async (err) => {
+    await captureApiException(err, "/api/account/delete");
     console.error("[account/delete] storage wipe failed, continuing", err);
   });
 

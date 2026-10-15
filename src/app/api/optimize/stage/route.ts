@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db";
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, expiresAt: expiresAt.toISOString() });
   } catch (err) {
+    await captureApiException(err, "/api/optimize/stage");
     console.error("[/api/optimize/stage]", err);
     return NextResponse.json(
       { error: "internal", message: "Errore interno. Riprova." },

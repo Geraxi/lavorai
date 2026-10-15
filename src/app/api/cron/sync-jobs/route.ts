@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { syncAtsJobs } from "@/lib/scrapers/sync-jobs";
 import { syncProtectedCategoryJobs } from "@/lib/protected-category-sync";
@@ -36,6 +37,7 @@ export async function GET(request: NextRequest) {
     console.log(`[cron/sync-jobs] ${ms}ms`, result);
     return NextResponse.json({ ok: true, ms, ...result, protectedCategory: protectedStats });
   } catch (err) {
+    await captureApiException(err, "/api/cron/sync-jobs");
     console.error("[cron/sync-jobs]", err);
     return NextResponse.json(
       { error: "internal", message: err instanceof Error ? err.message : "Errore" },

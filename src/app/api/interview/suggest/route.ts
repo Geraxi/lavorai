@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { guardPremiumAPI } from "@/lib/premium-gate";
@@ -165,6 +166,7 @@ export async function POST(request: NextRequest) {
   try {
     suggestion = await suggestAnswer(ctx, question);
   } catch (err) {
+    await captureApiException(err, "/api/interview/suggest");
     console.error("[copilot] suggestAnswer failed", err);
     return NextResponse.json(
       {

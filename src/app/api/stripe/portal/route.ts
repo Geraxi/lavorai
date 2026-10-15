@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { getCurrentUser } from "@/lib/session";
@@ -29,6 +30,7 @@ export async function POST() {
     });
     return NextResponse.json({ url: session.url });
   } catch (err) {
+    await captureApiException(err, "/api/stripe/portal");
     console.error("[/api/stripe/portal]", err);
     return NextResponse.json(
       {

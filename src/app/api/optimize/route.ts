@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { optimizeCV } from "@/lib/claude";
@@ -149,6 +150,7 @@ export async function POST(request: NextRequest) {
     });
     return response;
   } catch (err) {
+    await captureApiException(err, "/api/optimize");
     console.error("[api/optimize] errore interno", err);
     const message =
       err instanceof Error

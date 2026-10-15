@@ -1,5 +1,6 @@
 "use client";
 
+import { resetAnalyticsUser } from "@/lib/posthog/client";
 import Link from "next/link";
 import useSWR from "swr";
 import { Logo } from "@/components/logo";
@@ -340,7 +341,7 @@ function LogoutButton() {
   return (
     <button
       type="button"
-      onClick={() => signOut({ callbackUrl: "/login" })}
+      onClick={() => { resetAnalyticsUser(); void signOut({ callbackUrl: "/login" }); }}
       className="ds-nav-item"
       style={{
         display: "flex",

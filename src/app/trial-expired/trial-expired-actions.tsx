@@ -1,4 +1,5 @@
 "use client";
+import { resetAnalyticsUser } from "@/lib/posthog/client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -28,6 +29,6 @@ export function TrialExpiredActions({ confirming }: { confirming: boolean }) {
     <p className="text-center text-xs text-muted-foreground">Il pagamento apre Stripe in una nuova pagina sicura. Puoi annullare quando vuoi dalle Impostazioni.</p>
     <button className="ds-btn" disabled={busy} onClick={() => checkout("pro_plus")}>Ho bisogno di candidature illimitate · Pro+</button>
     {error && <p role="alert" className="text-red-500 text-sm">{error}</p>}
-    <div className="mt-2 flex items-center justify-center gap-4 text-sm text-muted-foreground"><a href="/api/gdpr/export" className="underline">Esporta i tuoi dati</a><button className="underline" onClick={() => signOut({ callbackUrl: "/login" })}>Esci</button></div>
+    <div className="mt-2 flex items-center justify-center gap-4 text-sm text-muted-foreground"><a href="/api/gdpr/export" className="underline">Esporta i tuoi dati</a><button className="underline" onClick={() => { resetAnalyticsUser(); void signOut({ callbackUrl: "/login" }); }}>Esci</button></div>
   </div>;
 }

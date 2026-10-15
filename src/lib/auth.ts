@@ -1,3 +1,5 @@
+import { rememberAnalyticsConsent, captureServerEvent } from "@/lib/posthog/server";
+import { CONSENT_COOKIE } from "@/lib/posthog/shared";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import NextAuth, { type DefaultSession } from "next-auth";
@@ -300,6 +302,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   events: {
     async createUser({ user }) {
+      if (user.id && process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+        try {
+          const { cookies } = await import("next/headers");
+          await rememberAnalyticsConsent(user.id, (await cookies()).get(CONSENT_COOKIE)?.value === "accepted");
+          await captureServerEvent(user.id, "signup_completed", { plan: "free" }, `signup_completed:${user.id}`);
+        } catch { /* optional analytics */ }
+      }
       // Primo signup → welcome email
       if (!user.email) return;
       try {

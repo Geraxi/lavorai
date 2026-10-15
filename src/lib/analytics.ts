@@ -92,6 +92,9 @@ export function trackEvent(
   payload?: EventPayload,
 ): void {
   if (typeof window === "undefined") return;
+  if (name === AnalyticsEvent.PRICING_CTA) {
+    void import("@/lib/posthog/client").then(({ captureFunnel }) => captureFunnel("plan_selected", { plan: typeof payload?.plan === "string" ? payload.plan : undefined })).catch(() => {});
+  }
   const event = {
     event: name,
     ts: Date.now(),

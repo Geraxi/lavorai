@@ -188,7 +188,7 @@ export function DetailDrawer({
 
               {/* Cover letter anteprima */}
               {app.coverLetterText && (
-                <div className="ds-section-card mb-6">
+                <div data-ph-mask className="ph-no-capture ds-section-card mb-6">
                   <div className="ds-section-head">
                     <div className="ds-section-head-title">
                       <Icon name="sparkles" size={13} />

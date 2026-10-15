@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
@@ -94,6 +95,7 @@ export async function POST(req: NextRequest) {
       });
       created++;
     } catch (err) {
+      await captureApiException(err, "/api/admin/backfill-sessions");
       console.error("[backfill-sessions]", t, err);
     }
   }

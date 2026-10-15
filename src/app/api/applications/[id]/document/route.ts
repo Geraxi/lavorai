@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -87,6 +88,7 @@ export async function GET(
       },
     });
   } catch (err) {
+    await captureApiException(err, "/api/applications/[id]/document");
     console.error("[api/applications/:id/document]", err);
     return NextResponse.json(
       { error: "read_failed", message: "Impossibile leggere il file." },

@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import crypto from "crypto";
@@ -124,6 +125,7 @@ export async function GET(req: NextRequest) {
 
     tokenData = await tokenResponse.json();
   } catch (err) {
+    await captureApiException(err, "/api/gmail/callback");
     console.error("[gmail/callback] Token exchange error:", err);
     return redirectWithError(req.url, "token_exchange");
   }
@@ -154,6 +156,7 @@ export async function GET(req: NextRequest) {
       return redirectWithError(req.url, "userinfo_missing");
     }
   } catch (err) {
+    await captureApiException(err, "/api/gmail/callback");
     console.error("[gmail/callback] Userinfo fetch error:", err);
     return redirectWithError(req.url, "userinfo_fetch");
   }
@@ -223,6 +226,7 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
+    await captureApiException(err, "/api/gmail/callback");
     console.error("[gmail/callback] Account upsert failed:", err);
     return redirectWithError(req.url, "db_error");
   }

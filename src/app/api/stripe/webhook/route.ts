@@ -1,3 +1,4 @@
+import { captureServerEvent, captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { stripe, priceIdToTier } from "@/lib/stripe";
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
   try {
     event = stripe().webhooks.constructEvent(rawBody, sig, secret);
   } catch (err) {
+    await captureApiException(err, "/api/stripe/webhook");
     console.error("[stripe/webhook] signature invalid", err);
     return NextResponse.json(
       { error: "invalid_signature" },
@@ -89,6 +91,7 @@ export async function POST(request: NextRequest) {
           // Never overwrite an intervening paid upgrade, trial or cancellation.
           await prisma.user.updateMany({ where: { id: linked.id, stripeCustomerId: customerId, cardSetupAt: null },
             data: { cardSetupAt: new Date() } });
+          await captureServerEvent(linked.id, "card_setup_completed", { plan: "free" }, `card_setup_completed:${live.id}`);
           break;
         }
 
@@ -165,6 +168,8 @@ export async function POST(request: NextRequest) {
           ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
           : await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
         if (convertedUser && (liveStatus === "active" || liveStatus === "trialing")) {
+          await captureServerEvent(convertedUser.id, "card_setup_completed", { plan: tier }, `card_setup_completed:${sub.id}`);
+          await captureServerEvent(convertedUser.id, "subscription_started", { plan: tier }, `subscription_started:${sub.id}`);
           await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
             userId: convertedUser.id,
             plan: tier,
@@ -263,7 +268,7 @@ export async function POST(request: NextRequest) {
           const payer = await prisma.user.findFirst({ where: { stripeCustomerId: customerId, referredById: { not: null }, referralRewardedAt: null }, select: { id: true } });
           if (payer) {
             const { rewardReferralIfDue } = await import("@/lib/referral");
-            await rewardReferralIfDue(payer.id).catch((err) => console.error("[stripe/webhook] referral reward failed", err));
+            await rewardReferralIfDue(payer.id).catch(async (err) => (await captureApiException(err, "/api/stripe/webhook"), console.error("[stripe/webhook] referral reward failed", err)));
           }
         }
         // Credito referral consumato al checkout → scala il contatore una volta.
@@ -276,6 +281,8 @@ export async function POST(request: NextRequest) {
           select: { id: true },
         });
         if (convertedUser && (liveStatus === "active" || liveStatus === "trialing")) {
+          await captureServerEvent(convertedUser.id, "card_setup_completed", { plan: tier }, `card_setup_completed:${sub.id}`);
+          await captureServerEvent(convertedUser.id, "subscription_started", { plan: tier }, `subscription_started:${sub.id}`);
           await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
             userId: convertedUser.id,
             plan: tier,
@@ -368,6 +375,7 @@ export async function POST(request: NextRequest) {
                 });
               });
             } catch (e) {
+              await captureApiException(e, "/api/stripe/webhook");
               console.error("[stripe/webhook] payment_failed email error", e);
             }
           }
@@ -380,6 +388,7 @@ export async function POST(request: NextRequest) {
     }
     return NextResponse.json({ received: true });
   } catch (err) {
+    await captureApiException(err, "/api/stripe/webhook");
     console.error("[stripe/webhook] handler error", err);
     return NextResponse.json({ error: "handler_failed" }, { status: 500 });
   }

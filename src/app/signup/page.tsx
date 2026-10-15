@@ -8,6 +8,7 @@ import { AuthShell, PasswordInput } from "@/components/auth/auth-shell";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/design/icon";
 import { GoogleButton } from "@/components/google-signin-button";
+import { captureFunnel } from "@/lib/posthog/client";
 import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 
 export default function SignupPage() {
@@ -34,6 +35,7 @@ function SignupContent() {
   const [err, setErr] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
   useEffect(() => {
+    captureFunnel("signup_started");
     trackEvent(AnalyticsEvent.SIGNUP_START, { plan: plan ?? "free" });
     if (plan === "pro" || plan === "pro_plus") {
       try {

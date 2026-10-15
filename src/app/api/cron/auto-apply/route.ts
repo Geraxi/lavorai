@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { runAutoApplyCron } from "@/lib/auto-apply-cron";
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
     console.log(`[cron/auto-apply] ${ms}ms`, stats);
     return NextResponse.json({ ok: true, ms, ...stats, replyForwards, emailReconciliation });
   } catch (err) {
+    await captureApiException(err, "/api/cron/auto-apply");
     console.error("[cron/auto-apply]", err);
     return NextResponse.json(
       { error: "internal", message: err instanceof Error ? err.message : "Errore" },

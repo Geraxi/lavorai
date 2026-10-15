@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { prisma } from "@/lib/db";
@@ -62,6 +63,7 @@ export async function GET() {
       },
     });
   } catch (err) {
+    await captureApiException(err, "/api/stripe/subscription");
     console.error("[stripe/subscription] GET failed", err);
     return NextResponse.json({ error: "stripe_error" }, { status: 502 });
   }
@@ -81,7 +83,7 @@ export async function POST(req: NextRequest) {
   const subId = user.stripeSubscriptionId;
 
   const log = (a: string) =>
-    prisma.subscriptionEvent.create({ data: { userId: user.id, action: a, reason, foundViaUs, comment } }).catch((e) => console.error("[stripe/subscription] log failed", e));
+    prisma.subscriptionEvent.create({ data: { userId: user.id, action: a, reason, foundViaUs, comment } }).catch(async (e) => (await captureApiException(e, "/api/stripe/subscription"), console.error("[stripe/subscription] log failed", e)));
 
   try {
     switch (action) {
@@ -139,6 +141,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "bad_action" }, { status: 400 });
     }
   } catch (err) {
+    await captureApiException(err, "/api/stripe/subscription");
     console.error(`[stripe/subscription] ${action} failed`, err);
     return NextResponse.json({ error: "stripe_error", message: "Operazione non riuscita, riprova o scrivici a support@lavorai.it." }, { status: 502 });
   }

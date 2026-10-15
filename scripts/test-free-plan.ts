@@ -1,3 +1,4 @@
+import { posthogMocks } from "./helpers/posthog-mocks";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -10,6 +11,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import * as billing from "../src/lib/billing";
 
 function load(path: string, deps: Record<string, unknown>) {
+  deps = { ...posthogMocks, ...deps };
   const code = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const module = { exports: {} as any };
   vm.runInNewContext(code, { module, exports: module.exports, Date, Map, Set, console, process,

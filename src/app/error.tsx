@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { captureClientException } from "@/lib/posthog/client";
 import Link from "next/link";
 
 export default function GlobalError({
@@ -12,6 +13,7 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     console.error("[app-error]", error);
+    captureClientException(error);
   }, [error]);
 
   return (

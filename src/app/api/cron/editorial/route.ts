@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { EDITORIAL_TOPICS, ensureEditorialStore, generateEditorialDraft, nextEditorialTopic } from "@/lib/editorial";
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
     });
     return NextResponse.json({ ok: true, article });
   } catch (error) {
+    await captureApiException(error, "/api/cron/editorial");
     console.error("[cron/editorial]", error);
     return NextResponse.json({ error: "generation_failed", message: error instanceof Error ? error.message : "unknown" }, { status: 500 });
   }

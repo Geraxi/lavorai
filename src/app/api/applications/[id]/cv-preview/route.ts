@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse } from "next/server";
 import mammoth from "mammoth";
 import { prisma } from "@/lib/db";
@@ -34,6 +35,7 @@ export async function GET(
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {
+    await captureApiException(error, "/api/applications/[id]/cv-preview");
     console.error("[api/applications/:id/cv-preview]", error);
     return NextResponse.json({ error: "read_failed" }, { status: 500 });
   }

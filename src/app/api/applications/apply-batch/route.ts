@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { freePlanBlock, approvedPreview } from "@/lib/free-plan";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
@@ -319,6 +320,7 @@ export async function POST(request: NextRequest) {
           : Math.max(0, remainingQuota - enqueued - awaitingConsent),
     });
   } catch (err) {
+    await captureApiException(err, "/api/applications/apply-batch");
     console.error("[api/applications/apply-batch]", err);
     return NextResponse.json(
       { error: "internal", message: err instanceof Error ? err.message : "Errore" },

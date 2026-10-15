@@ -1,3 +1,4 @@
+import { captureServerEvent } from "@/lib/posthog/server";
 import { answerContinuationIneligibility, answerConfirmationDigest, continuationDigest, continuationSelect, parseAnswerContinuation, type AnswerContinuation } from "./application-answer-continuation";
 import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
 import { parseAnswers } from "./application-answers";
@@ -12,7 +13,7 @@ import { quickMatchScore } from "@/lib/match-score";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { parseVerifiedSubmissionReceipt, receiptJobId } from "@/lib/submission-receipt";
 import { prisma } from "@/lib/db";
-import { isApplicationAccessPaused, isLifetimeProPlus, requiresPaymentMethodBeforeApp, usesFreeQuota, FREE_APPLICATION_LIMIT } from "@/lib/billing";
+import { effectiveTier, isApplicationAccessPaused, isLifetimeProPlus, requiresPaymentMethodBeforeApp, usesFreeQuota, FREE_APPLICATION_LIMIT } from "@/lib/billing";
 
 // Persisted before crossing a delivery boundary. A crash/timeout never releases
 // this reservation: only a proved no-send outcome or an atomic success does.
@@ -287,7 +288,8 @@ export async function completeApplicationSubmission(
   if (typeof data.submitConfirmation !== "string"
     || !(data.submitConfirmation.startsWith("DETECTED") || data.submitConfirmation === "EMAIL_SENT")
     || data.submittedVia === "mock_demo") return false;
-  return (await withLockedApplication(id, db, async (tx, row) => {
+  let analytics: { userId: string; plan: string; free_remaining: number } | undefined;
+  const completed = (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()) return false;
     const inFlight = row.status === "applying" && row.submitConfirmation === SUBMISSION_STARTED;
     const recovered = row.status === "ready_to_apply" && row.submitConfirmation === "UNCONFIRMED";
@@ -328,8 +330,18 @@ export async function completeApplicationSubmission(
           ? { status: "completed", completedAt: new Date() } : {}),
       } });
     }
+    analytics = { userId: row.userId, plan: effectiveTier(row.user),
+      free_remaining: Math.max(0, FREE_APPLICATION_LIMIT - row.user.freeApplicationsUsed - (usesFreeQuota(row.user) ? 1 : 0)) };
     return true;
   })) === true;
+  if (completed && analytics) {
+    const { userId, ...properties } = analytics;
+    await captureServerEvent(userId, "application_sent", properties, `application_sent:${id}`);
+    if (properties.plan === "free" && properties.free_remaining === 0) {
+      await captureServerEvent(userId, "free_quota_exhausted", properties, `free_quota_exhausted:${userId}`);
+    }
+  }
+  return completed;
 }
 
 

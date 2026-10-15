@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
     await sendVerificationEmail(user.id, user.email, user.locale);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    await captureApiException(err, "/api/auth/verify-email/resend");
     console.error("[/api/auth/verify-email/resend]", err);
     return NextResponse.json({ ok: true });
   }

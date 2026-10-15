@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes, createHash } from "node:crypto";
 import { z } from "zod";
@@ -96,11 +97,12 @@ export async function POST(request: NextRequest) {
           html: renderResetEmail(resetUrl),
           text: `Reimposta la password:\n\n${resetUrl}\n\nIl link scade tra 30 minuti.`,
         })
-        .catch((err) => console.error("[pw-reset] resend error", err));
+        .catch(async (err) => (await captureApiException(err, "/api/auth/password-reset/request"), console.error("[pw-reset] resend error", err)));
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
+    await captureApiException(err, "/api/auth/password-reset/request");
     console.error("[/api/auth/password-reset/request]", err);
     return NextResponse.json({ ok: true }); // non rivelare errori interni
   }

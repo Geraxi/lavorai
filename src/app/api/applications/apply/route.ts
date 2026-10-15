@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { freePlanBlock, approvedPreview } from "@/lib/free-plan";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
@@ -265,6 +266,7 @@ export async function POST(request: NextRequest) {
         dailyLimit - usedToday - 1,
     });
   } catch (err) {
+    await captureApiException(err, "/api/applications/apply");
     console.error("[api/applications/apply]", err);
     return NextResponse.json(
       {

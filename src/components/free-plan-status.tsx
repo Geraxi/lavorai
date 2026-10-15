@@ -1,10 +1,14 @@
 "use client";
-import { useState } from "react";
+import { captureFunnel } from "@/lib/posthog/client";
+import { useEffect, useState } from "react";
 
 export function FreePlanStatus({ remaining }: { remaining: number }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => { if (remaining === 0) captureFunnel("upgrade_wall_viewed"); }, [remaining]);
   async function upgrade() {
+    captureFunnel("upgrade_clicked", { target_plan: "pro" });
+    captureFunnel("plan_selected", { plan: "pro" });
     setBusy(true); setError("");
     try {
       const response = await fetch("/api/stripe/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tier: "pro" }) });

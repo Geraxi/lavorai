@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 
@@ -38,6 +39,7 @@ export async function GET(
         });
       }
     } catch {
+      await captureApiException(undefined, "/api/track/open/[token]");
       console.error("[track/open] update failed");
     }
   }

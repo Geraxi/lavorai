@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
     const preview = cached ?? await prisma.applicationPreview.create({ data: { userId: user.id, jobId, resultJson: JSON.stringify(result) } });
     return NextResponse.json({ previewId: preview.id, jobTitle: job.title, company: job.company, cv: result.optimizedCV, coverLetter: result.coverLetter }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
+    await captureApiException(error, "/api/applications/preview");
     console.error("[application-preview]", error);
     return NextResponse.json({ message: "Anteprima non disponibile. Riprova tra poco." }, { status: 502 });
   }

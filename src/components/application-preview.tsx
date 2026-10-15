@@ -1,4 +1,5 @@
 "use client";
+import { captureFunnel } from "@/lib/posthog/client";
 import { useEffect, useRef } from "react";
 import type { OptimizedCVData } from "@/types/cv";
 
@@ -9,6 +10,7 @@ export function ApplicationPreview({ preview, onConfirm, onCancel, busy, confirm
   const cv = preview.cv;
   const dialog = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    captureFunnel("application_preview_viewed");
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     dialog.current?.querySelector<HTMLButtonElement>("button")?.focus();
     return () => { previous?.focus(); };
@@ -28,7 +30,7 @@ export function ApplicationPreview({ preview, onConfirm, onCancel, busy, confirm
       <h2 id="position-preview-title" className="text-xl font-semibold">CV e lettera su misura per questa posizione</h2>
       <p className="mt-2 font-medium">{preview.jobTitle} · {preview.company}</p>
       <p className="my-3 text-sm text-muted-foreground">Controlla i documenti prima di inviare. Verranno usati questi contenuti; l’anteprima non consuma candidature Free.</p>
-      <article className="space-y-3 rounded border border-border p-4">
+      <article data-ph-mask className="ph-no-capture space-y-3 rounded border border-border p-4">
         <h3 className="font-semibold">CV · {cv.fullName}</h3>
         <p>{[cv.email, cv.phone, cv.location, cv.linkedinUrl].filter(Boolean).join(" · ")}</p>
         <p className="whitespace-pre-wrap">{cv.summary}</p>
@@ -37,7 +39,7 @@ export function ApplicationPreview({ preview, onConfirm, onCancel, busy, confirm
         <p>{[...cv.skills.technical, ...cv.skills.soft, ...cv.skills.tools].join(" · ")}</p>
         <p>{cv.languages.map(x => `${x.language}: ${x.level}`).join(" · ")}</p>
       </article>
-      <section className="my-4 rounded border border-border p-4"><h3 className="font-semibold">Lettera di presentazione</h3><p className="mt-2 whitespace-pre-wrap">{preview.coverLetter}</p></section>
+      <section data-ph-mask className="ph-no-capture my-4 rounded border border-border p-4"><h3 className="font-semibold">Lettera di presentazione</h3><p className="mt-2 whitespace-pre-wrap">{preview.coverLetter}</p></section>
       <div className="flex gap-3"><button autoFocus type="button" className="ds-btn ds-btn-accent" disabled={busy} onClick={onConfirm}>{busy ? "Invio…" : confirmLabel ?? "Confermo i documenti e invio"}</button><button type="button" className="ds-btn ds-btn-ghost" disabled={busy} onClick={onCancel}>Annulla</button></div>
     </div>
   </div>;

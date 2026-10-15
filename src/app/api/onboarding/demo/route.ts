@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
       coverLetter: result.coverLetter,
     });
   } catch (error) {
+    await captureApiException(error, "/api/onboarding/demo");
     console.error("[/api/onboarding/demo]", error);
     return NextResponse.json(
       { error: "generation_failed", message: "Non siamo riusciti a preparare l'anteprima. Riprova tra qualche istante." },

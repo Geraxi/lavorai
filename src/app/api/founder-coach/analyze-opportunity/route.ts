@@ -1,3 +1,4 @@
+import { captureApiException } from "@/lib/posthog/server";
 import { NextResponse, type NextRequest } from "next/server";
 import { analyzeOpportunity } from "@/lib/founder-coach/analyzer";
 import { guardPremiumAPI } from "@/lib/premium-gate";
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
     const analysis = await analyzeOpportunity(input);
     return NextResponse.json({ ok: true, analysis });
   } catch (err) {
+    await captureApiException(err, "/api/founder-coach/analyze-opportunity");
     console.error("[founder-coach] analyze failed", err);
     return NextResponse.json(
       { error: "ai_error", message: err instanceof Error ? err.message : "AI failure" },
