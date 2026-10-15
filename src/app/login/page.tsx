@@ -7,6 +7,7 @@ import { AuthShell, PasswordInput } from "@/components/auth/auth-shell";
 import { useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Icon } from "@/components/design/icon";
+import { authErrorMessageKey } from "@/lib/auth-errors";
 import { GoogleButton } from "@/components/google-signin-button";
 
 export default function LoginPage() {
@@ -22,7 +23,7 @@ function LoginContent() {
   const params = useSearchParams();
   const next = params.get("next") ?? "/dashboard";
   const plan = params.get("plan");
-  const error = params.get("error") === "1";
+  const errorKey = authErrorMessageKey(params);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -101,7 +102,7 @@ function LoginContent() {
     <AuthShell>
       <h1>{plan ? t("loginHeadingCheckout") : t("loginHeadingDefault")}</h1>
       <p className="auth-subtitle">{plan ? t("loginSubtitleCheckout") : t("loginSubtitleDefault")}</p>
-      {error && <p className="auth-error" role="alert">{t("errorLinkInvalid")}</p>}
+      {errorKey && <p className="auth-error" role="alert">{t(errorKey)}</p>}
       <div className="auth-google"><GoogleButton mode="login" position="above" callbackUrl={callbackUrl} /></div>
       <form onSubmit={onPasswordSubmit} className="auth-form">
         <label htmlFor="email">{t("email")}</label>

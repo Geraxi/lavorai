@@ -3,12 +3,13 @@ import { recordConversionEvent } from "@/lib/conversion-events";
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
-import { PrismaAdapter } from "@auth/prisma-adapter";
+import { createAuthAdapter } from "@/lib/auth-adapter";
+import { allowGoogleSignIn, verifyGoogleSignInEmail } from "@/lib/google-auth";
 import { Resend } from "resend";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { moveFile } from "@/lib/storage";
-import { effectiveTier, registrationTrialEnd, type Tier } from "@/lib/billing";
+import { effectiveTier, type Tier } from "@/lib/billing";
 import { CredentialsSignin } from "next-auth";
 import { createHash } from "node:crypto";
 
@@ -51,19 +52,7 @@ function hashEmail(email: string): string {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: {
-    ...PrismaAdapter(prisma),
-    async createUser(data) {
-      const normalizedData = {
-        ...data,
-        email: typeof data.email === "string" ? data.email.trim().toLowerCase() : data.email,
-        trialDurationDays: 7,
-        trialEndsAt: registrationTrialEnd(new Date()),
-        proTrialUsedAt: new Date(),
-      };
-      return prisma.user.create({ data: normalizedData });
-    },
-  },
+  adapter: createAuthAdapter(prisma),
   // Credentials richiede strategy "jwt" — il Prisma adapter continua
   // a funzionare per email magic link + Account/User lookup.
   session: {
@@ -78,7 +67,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   pages: {
     signIn: "/login",
     verifyRequest: "/login?check=1",
-    error: "/login?error=1",
+    error: "/login",
   },
   providers: [
     Credentials({
@@ -209,20 +198,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 scope: "openid email profile",
               },
             },
-            // Consente il link di account Google a utenti già loggati con
-            // email/password o magic link, SE l'email Google coincide.
-            // Senza questo, NextAuth creerebbe un nuovo utente.
-            allowDangerousEmailAccountLinking: true,
-            // profile() serve a marcare l'email come verified: Google
-            // già garantisce l'email verificata, quindi saltiamo il
-            // gate `emailVerified` che blocca il Credentials login.
+            // Existing Google accounts use provider + subject identity. A new
+            // Google identity must not take over an existing user by email alone.
+            allowDangerousEmailAccountLinking: false,
+            // Verification is persisted after the Account link in events.signIn;
+            // Auth.js resets emailVerified on OAuth user creation.
             profile(p) {
               return {
                 id: p.sub,
                 name: p.name,
-                email: p.email,
+                email: p.email?.trim().toLowerCase(),
                 image: p.picture,
-                emailVerified: p.email_verified ? new Date() : null,
               };
             },
           }),
@@ -230,6 +216,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       : []),
   ],
   callbacks: {
+    async signIn({ account, profile }) {
+      if (account?.provider !== "google") return true;
+      const session = await auth();
+      return allowGoogleSignIn(prisma, account, profile, session?.user?.id);
+    },
     async jwt({ token, user, trigger }) {
       // Caching aggressivo dei campi User nel JWT per evitare di hittare
       // il DB su OGNI session() lookup (= ogni nav RSC). Prima: 1 query
@@ -323,6 +314,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
     },
     async signIn({ user, account, profile }) {
+      if (user.id && account?.provider === "google") {
+        await verifyGoogleSignInEmail(prisma, user.id, account, profile);
+      }
       // Aggiorna lastLoginAt
       if (user.id) {
         await prisma.user
