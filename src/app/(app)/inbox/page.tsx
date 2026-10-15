@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/db";
+import { publicReply } from "@/lib/inbox-replies";
 import type { Metadata } from "next";
 import { getLocale } from "next-intl/server";
 import { redirect } from "next/navigation";
@@ -14,9 +16,10 @@ export default async function InboxPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/inbox");
 
+  const outgoing = await prisma.inboxReply.findMany({ where: { application: { userId: user.id } }, orderBy: { createdAt: "desc" }, take: 200 });
   const [gmailConnected, messages] = await Promise.all([
     hasGmailConnected(user.id),
-    getInboxMessages(user.id),
+    getInboxMessages(user.id, outgoing.map(row => row.parentReplyId)),
   ]);
 
   const locale = await getLocale();
@@ -24,6 +27,8 @@ export default async function InboxPage() {
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <GmailInboxView
         locale={locale}
+        ownerId={user.id}
+        outgoing={outgoing.map(publicReply)}
         messages={messages}
         gmailConnected={gmailConnected}
         userEmail={user.email ?? null}

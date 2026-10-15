@@ -7,7 +7,7 @@ import * as jsx from "react/jsx-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
 import { formatInboxEmailText } from "../src/lib/inbox-email-text";
 import { isApplicationVerificationMessage } from "../src/lib/reply-security-message";
-import { filterInboxMessages, inboxKindLabel, inboxSourceLabel, type InboxMessage } from "../src/lib/inbox-message";
+import { filterInboxMessages, inboxKindLabel, inboxSourceLabel, inboxThreadKey, type InboxMessage } from "../src/lib/inbox-message";
 
 // All storage, auth, network, navigation and visual dependencies are isolated.
 // These tests cannot read production messages or send a recruiter email.
@@ -24,7 +24,7 @@ function loadModule(path: string, dependencies: Record<string, unknown>, globals
   return module.exports;
 }
 
-const presentation = { filterInboxMessages, inboxKindLabel, inboxSourceLabel };
+const presentation = { filterInboxMessages, inboxKindLabel, inboxSourceLabel, inboxThreadKey };
 const owner = { userId: "owner", userStatus: null, job: { company: "Acme", title: "Engineer" } };
 const reply = (id: string, overrides: Record<string, unknown> = {}) => ({
   id, applicationId: "owned-app", fromAddress: "Recruiter <recruiter@example.test>",
@@ -99,6 +99,8 @@ async function testPage(messages: InboxMessage[]) {
   let messageCalls = 0;
   let connectionCalls = 0;
   const api = loadModule("src/app/(app)/inbox/page.tsx", {
+    "@/lib/db": { prisma: { inboxReply: { findMany: async () => [] } } },
+    "@/lib/inbox-replies": { publicReply: (row: unknown) => row },
     "next-intl/server": { getLocale: async () => "en" },
     "react/jsx-runtime": jsx,
     "next/navigation": { redirect: (path: string) => { throw new Error(`redirect:${path}`); } },
@@ -121,6 +123,8 @@ function componentDependencies(react: unknown, router: unknown, fetch: unknown) 
   return {
     dependencies: {
       react, "react/jsx-runtime": jsx,
+      "lucide-react": new Proxy({}, { get: () => () => null }),
+      "./design/inbox-mailbox.css": {},
       "next/navigation": { useRouter: () => router, useSearchParams: () => new URLSearchParams() },
       "next/link": { __esModule: true, default: ({ children, ...props }: any) => React.createElement("a", props, children) },
       sonner: { toast: { error() {}, success() {} } },
@@ -146,14 +150,14 @@ function testSafeRendering(messages: InboxMessage[]) {
   assert.ok(!html.includes("<script"));
   assert.ok(!html.includes("<img"));
   assert.ok(!html.includes('href="https://evil.invalid'));
-  assert.ok(html.includes("LavorAI inbound"));
-  assert.ok(html.includes("Connect Gmail (optional)"));
+  assert.ok(html.includes("LavorAI"));
+  assert.ok(html.includes("Connect Gmail"));
   assert.ok(!html.includes(">Sync Gmail<"));
-  assert.ok(html.includes("Read and archive state are not tracked"));
-  assert.ok(!html.includes(">Reply<") && !html.includes(">Archive<") && !html.includes(">Delete<"));
-  assert.ok(html.includes("does not verify who wrote"));
+  assert.ok(html.includes("Reply composer"));
+  assert.ok(!html.includes("<select"));
+  assert.ok(html.includes("Message labels are estimates"));
   const empty = renderToStaticMarkup(React.createElement(GmailInboxView, { messages: [], gmailConnected: false, userEmail: null }));
-  assert.ok(empty.includes("No replies yet"));
+  assert.ok(empty.includes("Select an email"));
   const { ReplyKindChip } = loadModule("src/components/reply-kind-chip.tsx", { "react/jsx-runtime": jsx });
   const renderBadge = (kind: string | null, count = 1) => renderToStaticMarkup(React.createElement(ReplyKindChip, { lastReplyKind: kind, replyCount: count }));
   assert.ok(renderBadge(null).includes("Messaggio ricevuto"));
@@ -201,30 +205,17 @@ async function testInteractions(messages: InboxMessage[]) {
   const { GmailInboxView } = loadModule("src/components/gmail-inbox-view.tsx", deps.dependencies, deps.globals);
   let props = { messages, gmailConnected: false, userEmail: "owner@example.test" };
   const render = () => { cursor = 0; return GmailInboxView(props); };
-  const button = (tree: any, label: string) => findElements(tree, (element) => element.type === "button" && textOf(element) === label)[0];
+  const button = (tree: any, label: string) => findElements(tree, (element) => element.type === "button" && (textOf(element) === label || element.props["aria-label"] === label))[0];
   let tree = render();
   assert.equal(button(tree, "Sync Gmail"), undefined);
   button(tree, "Refresh inbox").props.onClick();
   assert.equal(refreshCalls, 1);
   assert.equal(requests, 0, "Refreshing inbound must never call Gmail APIs");
-  const statusSelect = () => findElements(tree, (element) => element.type === "select" && element.props.children?.[0]?.props?.children === "Set status…")[0];
-  const pending = statusSelect().props.onChange({ target: { value: "inviata" } });
-  assert.equal(request!.url, "/api/applications/owned-app");
-  assert.equal(request!.options.method, "PATCH");
-  assert.deepEqual(JSON.parse(request!.options.body), { userStatus: "inviata" }, "Applied must never mean Viewed");
-  await statusSelect().props.onChange({ target: { value: "colloquio" } });
-  assert.equal(requests, 1, "Repeated status clicks must not race");
-  props = { ...props, messages: [{ ...messages[0], id: "application_reply:second", applicationId: "second-app", applicationStatus: "offerta" }] };
-  tree = render();
-  finish({ ok: true });
-  await pending;
-  tree = render();
-  assert.equal(statusSelect().props.value, "offerta", "Late save must not overwrite the newly selected application");
   props = { ...props, gmailConnected: true };
   tree = render();
   const syncing = button(tree, "Sync Gmail").props.onClick();
   await button(tree, "Sync Gmail").props.onClick();
-  assert.equal(requests, 2, "Double sync must be guarded");
+  assert.equal(requests, 1, "Double sync must be guarded");
   assert.equal(request!.url, "/api/gmail/sync");
   finish({ ok: true, json: async () => ({ synced: 2 }) });
   await syncing;

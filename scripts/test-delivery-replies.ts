@@ -1,3 +1,4 @@
+import * as inboxReplyPolicy from "../src/lib/inbox-reply-policy";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -75,6 +76,7 @@ prisma.$transaction = async (work: any) => work(prisma);
 const delivery = load("src/lib/application-delivery.ts", { "@/lib/db": { prisma } });
 const projection = load("src/lib/apply-reply-to-application.ts", { "@/lib/db": { prisma }, "@/lib/reply-parser": parser });
 const processing = load("src/lib/application-reply-processing.ts", {
+  "@/lib/inbox-reply-policy": inboxReplyPolicy,
   "node:crypto": crypto, "@/lib/db": { prisma }, "@/lib/reply-parser": parser,
   "@/lib/reply-security-message": replySecurity, "@/lib/application-delivery": delivery,
   "@/lib/apply-reply-to-application": projection,
@@ -222,6 +224,7 @@ async function main() {
   console.log("PASS late accepted-attempt reconciliation uses exact owner gate once and never sends email.");
 
   const route = load("src/app/api/webhooks/resend/route.ts", {
+    "@/lib/inbox-replies": { recordInboxReplyEvent: async () => false },
     "node:crypto": crypto,
     "next/server": { NextResponse: { json: (body: unknown, options?: { status: number }) => ({ body, status: options?.status ?? 200 }) } },
     "@/lib/resend-webhook-signature": { verifyResendWebhook: () => true },

@@ -1,3 +1,4 @@
+import { replyMetadata } from "@/lib/inbox-reply-policy";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { forwardReplyToUser } from "@/lib/email";
@@ -8,6 +9,9 @@ import { emailTransaction } from "@/lib/application-delivery";
 
 export interface InboundEmail {
   email_id: string;
+  message_id?: string;
+  headers?: Record<string, string>;
+  reply_to?: string[] | string;
   to?: string[] | string;
   from?: string;
   subject?: string;
@@ -48,7 +52,7 @@ export async function hydrateInboundEmail(data: InboundEmail): Promise<InboundEm
   if (!response.ok) throw new Error("inbound_body_unavailable");
   const full = await response.json() as Partial<InboundEmail>;
   if (!full || typeof full !== "object" || !("text" in full || "html" in full)) throw new Error("inbound_body_invalid");
-  return { ...data, text: full.text, html: full.html, to: data.to ?? full.to, from: data.from ?? full.from, subject: data.subject ?? full.subject };
+  return { ...data, text: full.text, html: full.html, to: data.to ?? full.to, from: data.from ?? full.from, subject: data.subject ?? full.subject, message_id: data.message_id ?? full.message_id, headers: full.headers, reply_to: full.reply_to };
 }
 
 async function matchForwardedReply(data: InboundEmail): Promise<{ appId: string; recruiterFrom: string | null } | null> {
@@ -121,6 +125,7 @@ export async function processInboundReply(input: {
     if (duplicate) return duplicate;
     const row = await tx.applicationReply.create({ data: {
       ...identity, providerEventId: input.providerEventId, applicationId: app.id,
+      ...replyMetadata(data), directRecipient: appIds.length === 1 && !forwardedFrom,
       fromAddress, subject, bodyText, ...classification, isSecurityCode, receivedAt: input.receivedAt,
       forwardStatus: isSecurityCode ? "skipped" : "pending",
       forwardIdempotencyKey: isSecurityCode ? null : `reply-forward/${randomUUID()}`,

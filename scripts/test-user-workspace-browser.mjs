@@ -117,6 +117,7 @@ window.fetch = async (url, options={}) => {
   if(String(url)==='/api/preferences') return Response.json({autoApplyMode:'manual',applicationService:{automaticBlocked:true,submissionsPaused:false,dailyCap:10}});
   if(String(url)==='/api/sidebar-stats') return Response.json({applicationsCount:applications.length,autoApplyToday:0,autoApplyRemaining:0});
   if(String(url).startsWith('/api/applications/') && options.method === 'PATCH') return Response.json({ok:true});
+  if(String(url).startsWith('/api/inbox/replies') && !options.method) return Response.json({recipient:'recruiter@example.test',subject:'Re: Synthetic application message'});
   if(String(url)==='/api/gmail/sync') return Response.json({synced:1});
   if(!String(url).startsWith('/api/')) return window.__nativeFetch(url,options);
   return Response.json({});
@@ -266,7 +267,7 @@ try {
         if(name==='dashboard') await page.locator('.dg-globe canvas').waitFor();
         await page.mouse.move(0,0);
         await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-        const sizes = await page.evaluate(()=>{const main=document.querySelector('.lavorai-main');return {bodyHeight:document.documentElement.scrollHeight,bodyWidth:document.documentElement.scrollWidth,mainHeight:main.clientHeight,mainScrollHeight:main.scrollHeight,panels:Object.fromEntries(['.pipeline-board','.mat-preview','.dashboard-overview','.discover-deck','.inbox-reader'].map(selector=>[selector,document.querySelector(selector)?.getBoundingClientRect().top ?? null]))};});
+        const sizes = await page.evaluate(()=>{const main=document.querySelector('.lavorai-main');return {bodyHeight:document.documentElement.scrollHeight,bodyWidth:document.documentElement.scrollWidth,mainHeight:main.clientHeight,mainScrollHeight:main.scrollHeight,panels:Object.fromEntries(['.pipeline-board','.mat-preview','.dashboard-overview','.discover-deck','.mail-reader'].map(selector=>[selector,document.querySelector(selector)?.getBoundingClientRect().top ?? null]))};});
         geometry.push({name,locale,width,height,...sizes});
         if (process.argv.includes('--assert-fit') && width > 1100) { assert.ok(sizes.bodyHeight <= height + 1, name+' body vertical overflow'); assert.ok(sizes.mainScrollHeight <= sizes.mainHeight + 1, name+' main vertical overflow'); assert.ok(sizes.bodyWidth <= width, name+' horizontal overflow'); }
         await page.screenshot({path:join(out,`${name}-${locale}-${width}x${height}.png`),fullPage:false,animations:'disabled'});
@@ -281,7 +282,7 @@ try {
         if(name==='applications' && variant==='dense') await page.locator('.pipeline-card').first().waitFor();
         if(name==='materiali' && variant==='dense') await page.locator('.mat-cv-paper').waitFor();
         if(name==='dashboard') await page.locator('.dg-globe canvas').waitFor();
-        const sizes=await page.evaluate(()=>{const main=document.querySelector('.lavorai-main');return {bodyHeight:document.documentElement.scrollHeight,bodyWidth:document.documentElement.scrollWidth,mainHeight:main.clientHeight,mainScrollHeight:main.scrollHeight,panels:Object.fromEntries(['.pipeline-board','.mat-preview','.dashboard-overview','.discover-deck','.inbox-reader'].map(selector=>[selector,document.querySelector(selector)?.getBoundingClientRect().top ?? null]))};});
+        const sizes=await page.evaluate(()=>{const main=document.querySelector('.lavorai-main');return {bodyHeight:document.documentElement.scrollHeight,bodyWidth:document.documentElement.scrollWidth,mainHeight:main.clientHeight,mainScrollHeight:main.scrollHeight,panels:Object.fromEntries(['.pipeline-board','.mat-preview','.dashboard-overview','.discover-deck','.mail-reader'].map(selector=>[selector,document.querySelector(selector)?.getBoundingClientRect().top ?? null]))};});
         assert.ok(sizes.bodyHeight<=768 && sizes.bodyWidth<=1366 && sizes.mainScrollHeight<=sizes.mainHeight+1,name+' '+variant+' viewport fit');
         geometry.push({name,variant,width:1366,height:768,...sizes});
         if(name==='dashboard' && variant==='empty') {
@@ -295,8 +296,8 @@ try {
           assert.ok(await page.locator('.pipeline-lane-list').first().locator('.pipeline-card').count()<=3,'Dense pipeline is paginated');
         }
         if(name==='inbox' && variant==='dense') {
-          assert.ok(await page.locator('.inbox-message-list').evaluate(el=>el.scrollHeight>el.clientHeight));
-          assert.ok(await page.locator('.inbox-conversation').evaluate(el=>el.scrollHeight>el.clientHeight));
+          assert.ok(await page.locator('.mail-message-list').evaluate(el=>el.scrollHeight>el.clientHeight));
+          assert.ok(await page.locator('.mail-conversation').evaluate(el=>el.scrollHeight>el.clientHeight));
         }
         if(name==='materiali' && variant==='dense') {
           assert.ok(await page.locator('.mat-list-scroll').evaluate(el=>el.scrollHeight>el.clientHeight));
@@ -402,13 +403,12 @@ try {
   await page.getByRole('alert').waitFor();
   await page.screenshot({path:join(out,'applications-error.png'),fullPage:false,animations:'disabled'});
   await page.goto(base+'/inbox?locale=en');
-  await page.getByLabel('Message type',{exact:true}).selectOption('bounce');
+  await page.getByRole('button',{name:'Failed',exact:true}).click();
   assert.equal(await page.locator('[aria-label="Messages"] button').count(),1);
   assert.equal(await page.locator('[data-testid="message-body"] img, [data-testid="message-body"] script').count(),0);
-  await page.getByLabel('Manual application status',{exact:true}).selectOption('offerta');
-  await page.getByText('Application status updated.',{exact:true}).waitFor();
-  const request=await page.evaluate(()=>window.__requests.find(r=>r.method==='PATCH'));
-  assert.equal(request.url,'/api/applications/app-2'); assert.deepEqual(JSON.parse(request.body),{userStatus:'offerta'});
+  assert.ok((await page.getByRole('link',{name:'View application',exact:true}).getAttribute('href')).includes('app-2'));
+  assert.equal(await page.locator('select').count(),0,'Inbox uses folder/filter controls instead of native dropdowns');
+  assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.method==='POST').length),0,'Reading mail must not send email');
   await page.goto(base+'/discover?locale=en');
   await page.getByRole('button',{name:'Remote only',exact:false}).click();
   assert.equal(await page.locator('.discover-card').count(),1);

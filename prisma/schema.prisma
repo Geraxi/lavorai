@@ -636,6 +636,7 @@ model Application {
   replies           ApplicationReply[]
   gmailMessages     GmailMessage[]
   emailAttempts     ApplicationEmailAttempt[]
+  inboxReplies      InboxReply[]
 
   @@index([userId, createdAt])
   @@index([sessionId])
@@ -681,6 +682,12 @@ model ApplicationReply {
   provider          String?
   providerMessageId String?
   providerEventId   String? @unique
+  /// Validated threading metadata only; never expose raw headers to the client.
+  rfcMessageId      String?
+  replyToAddress    String?
+  referencesHeader  String? @db.Text
+  directRecipient   Boolean @default(false)
+  outboundReplies   InboxReply[]
   isSecurityCode    Boolean @default(false)
   processingAppliedAt DateTime?
   /// Durable notification outbox. Message remains visible even if forwarding fails.
@@ -882,4 +889,32 @@ model SubscriptionEvent {
 
   @@index([userId, createdAt])
   @@index([action, createdAt])
+}
+
+/// Deliberate user replies only. Never drained by cron or application workers.
+model InboxReply {
+  id String @id
+  applicationId String
+  parentReplyId String
+  bodyText String @db.Text
+  recipient String
+  subject String
+  fromAddress String
+  replyToAddress String
+  inReplyTo String
+  referencesHeader String @db.Text
+  status String @default("draft")
+  providerEmailId String? @unique
+  failureCode String?
+  firstAttemptAt DateTime?
+  leaseUntil DateTime?
+  leaseToken String?
+  acceptedAt DateTime?
+  lastEventAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  parentReply ApplicationReply @relation(fields: [parentReplyId], references: [id], onDelete: Cascade)
+  @@index([applicationId, createdAt])
+  @@index([parentReplyId])
 }

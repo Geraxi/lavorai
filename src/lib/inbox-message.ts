@@ -17,6 +17,12 @@ export interface InboxMessage {
   company: string | null;
   jobTitle: string | null;
   jobRelated: boolean;
+  location?: string | null;
+  remote?: boolean;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  threadId?: string | null;
+  gmailMessageId?: string;
 }
 
 export type InboxFilter = "all" | "colloquio" | "risposta" | "rifiutata" | "ricevuta" | "bounce" | "auto";
@@ -50,4 +56,12 @@ export function filterInboxMessages(
     const difference = new Date(b.date).getTime() - new Date(a.date).getTime();
     return (options.oldestFirst ? -difference : difference) || a.id.localeCompare(b.id);
   });
+}
+
+export interface InboxOutgoing {
+  id: string; parentReplyId: string; applicationId: string; bodyText: string;
+  recipient: string; subject: string; status: string; failureCode: string | null; date: string; updatedAt?: string;
+}
+export function inboxThreadKey(message: InboxMessage): string {
+  return message.source === "application_reply" ? `application:${message.applicationId}` : `gmail:${message.threadId ?? message.id}`;
 }

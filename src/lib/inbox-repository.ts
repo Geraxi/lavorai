@@ -18,34 +18,43 @@ function isSecurityMessage(message: { fromAddress: string; subject: string | nul
  * inbound relationship is authoritative even when Gmail is not connected.
  * Already synced Gmail is retained if the connection is later removed.
  */
-export async function getInboxMessages(userId: string): Promise<InboxMessage[]> {
+const inboundSelect = {
+  id: true, applicationId: true, fromAddress: true, subject: true,
+  bodyText: true, receivedAt: true, kind: true, isSecurityCode: true,
+  application: {
+    select: { userId: true, userStatus: true, job: { select: { company: true, title: true, location: true, remote: true, salaryMin: true, salaryMax: true } } },
+  },
+} as const;
+
+export async function getInboxMessages(userId: string, savedReplyParents: string[] = []): Promise<InboxMessage[]> {
   if (!userId) throw new Error("Inbox owner is required");
-  const [replies, gmailMessages] = await Promise.all([
+  const [recentReplies, gmailMessages] = await Promise.all([
     prisma.applicationReply.findMany({
       where: { application: { userId }, isSecurityCode: false },
       orderBy: { receivedAt: "desc" },
       take: 200,
-      select: {
-        id: true, applicationId: true, fromAddress: true, subject: true,
-        bodyText: true, receivedAt: true, kind: true, isSecurityCode: true,
-        application: {
-          select: { userId: true, userStatus: true, job: { select: { company: true, title: true } } },
-        },
-      },
+      select: inboundSelect,
     }),
     prisma.gmailMessage.findMany({
       where: { userId, archived: false },
       orderBy: { date: "desc" },
       take: 200,
       select: {
-        id: true, fromAddress: true, subject: true, snippet: true, bodyText: true,
+        id: true, fromAddress: true, subject: true, snippet: true, bodyText: true, threadId: true, gmailMessageId: true,
         date: true, kind: true, read: true, applicationId: true,
         application: {
-          select: { userId: true, userStatus: true, job: { select: { company: true, title: true } } },
+          select: { userId: true, userStatus: true, job: { select: { company: true, title: true, location: true, remote: true, salaryMin: true, salaryMax: true } } },
         },
       },
     }),
   ]);
+
+  // Keep saved drafts/replies usable even after their original leaves the recent window.
+  const missingIds = [...new Set(savedReplyParents)].slice(0, 200).filter(id => !recentReplies.some(row => row.id === id));
+  const olderParents = missingIds.length ? await prisma.applicationReply.findMany({
+    where: { id: { in: missingIds }, application: { userId }, isSecurityCode: false }, select: inboundSelect,
+  }) : [];
+  const replies = [...recentReplies, ...olderParents];
 
   const inbound: InboxMessage[] = replies
     // Legacy security emails predate the explicit flag. Never display their code.
@@ -67,6 +76,7 @@ export async function getInboxMessages(userId: string): Promise<InboxMessage[]> 
         applicationStatus: reply.application.userStatus,
         company: reply.application.job.company,
         jobTitle: reply.application.job.title,
+        location: reply.application.job.location, remote: reply.application.job.remote, salaryMin: reply.application.job.salaryMin, salaryMax: reply.application.job.salaryMax,
         jobRelated: true,
       };
     });
@@ -82,6 +92,7 @@ export async function getInboxMessages(userId: string): Promise<InboxMessage[]> 
       return {
         id: `gmail:${message.id}`,
         source: "gmail",
+        threadId: message.threadId, gmailMessageId: message.gmailMessageId,
         from: message.fromAddress,
         subject: message.subject,
         snippet: formatInboxEmailText(message.snippet ?? ""),
@@ -94,6 +105,7 @@ export async function getInboxMessages(userId: string): Promise<InboxMessage[]> 
         applicationStatus: application?.userStatus ?? null,
         company: application?.job.company ?? null,
         jobTitle: application?.job.title ?? null,
+        location: application?.job.location, remote: application?.job.remote, salaryMin: application?.job.salaryMin, salaryMax: application?.job.salaryMax,
         jobRelated,
       };
     });
