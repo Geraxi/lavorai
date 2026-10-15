@@ -92,6 +92,7 @@ export function AppSidebar({
   const adminItems: NavItem[] = [
     { href: "/admin", label: "Panoramica", icon: "dashboard" },
     { href: "/admin/users", label: "Utenti", icon: "user" },
+    { href: "/admin/reports", label: locale === "en" ? "User reports" : "Segnalazioni utenti", icon: "inbox" },
     { href: "/admin/product", label: "Product", icon: "target" },
     { href: "/admin/traffic", label: "Traffico", icon: "chart" },
     { href: "/admin/delivery", label: "Consegna", icon: "send" },
@@ -103,6 +104,7 @@ export function AppSidebar({
     { href: "/preferences", label: t("preferences"), icon: "target" },
     { href: "/cv", label: t("materials"), icon: "file" },
     { href: "/settings", label: t("account"), icon: "settings" },
+    { href: "/feedback", label: locale === "en" ? "Feedback & bugs" : "Feedback e bug", icon: "inbox" },
   ];
 
   const pathname = usePathname();

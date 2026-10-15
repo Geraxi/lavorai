@@ -27,7 +27,9 @@
     "test:card-onboarding": "node --import tsx scripts/test-card-onboarding.tsx",
     "test:application-pagination": "node --import tsx scripts/test-application-pagination.ts",
     "test:user-workspace": "node --import tsx scripts/test-user-workspace.ts",
-    "test:user-workspace-browser": "node scripts/test-user-workspace-browser.mjs"
+    "test:user-workspace-browser": "node scripts/test-user-workspace-browser.mjs",
+    "test:feedback-postgres": "node --import tsx scripts/test-feedback-reports.ts",
+    "test:feedback-browser": "node scripts/test-feedback-browser.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

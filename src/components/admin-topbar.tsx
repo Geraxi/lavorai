@@ -23,6 +23,7 @@ function RangeControl({ defaultDays }: { defaultDays: number }) {
 
 const TITLES: Record<string, string> = {
   "/admin": "Panoramica",
+  "/admin/reports": "Feedback & bug",
   "/admin/traffic": "Traffico",
   "/admin/delivery": "Consegna",
   "/admin/users": "Utenti",
