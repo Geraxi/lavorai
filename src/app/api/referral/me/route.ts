@@ -17,10 +17,10 @@ export async function GET() {
     ensureReferralCode(user.id),
     getReferralStats(user.id),
   ]);
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "https://lavorai.it";
   return NextResponse.json({
     code,
-    link: `${siteUrl}/signup?ref=${code}`,
+    link: `${siteUrl}/signup?ref=${code}&utm_source=referral&utm_medium=member_invite&utm_campaign=road_to_1000`,
     stats,
   });
 }

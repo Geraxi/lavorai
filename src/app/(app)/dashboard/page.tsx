@@ -14,6 +14,7 @@ import { DashboardGlobeMap } from "@/components/dashboard-globe-map";
 import { DashboardFocusProvider } from "@/components/dashboard-focus";
 import { DashboardRegionPanel } from "@/components/dashboard-region-panel";
 import { AutoApplyReadinessCard } from "@/components/auto-apply-readiness";
+import { ReferralCard } from "@/components/referral-card";
 import { getDashboardGlobeData, type GlobeJob } from "@/lib/dashboard-globe-data";
 import { getAutoApplyReadiness } from "@/lib/auto-apply-readiness";
 import { getCurrentUser } from "@/lib/session";
@@ -102,6 +103,8 @@ export default async function DashboardPage() {
           <AutoApplyReadinessCard readiness={readiness} />
 
           {!allDone && <OnboardingChecklist state={onboarding} />}
+
+          <ReferralCard compact />
 
           <div className="fit-card dg-side-card">
             <div className="fit-card-head">
