@@ -27,13 +27,21 @@ export function ApplicationBoard({ applications, onOpen, pages, busy, onPage }: 
     ["outcome", tr("Esiti dichiarati", "Reported outcomes")],
   ];
   const boardRef = useRef<HTMLDivElement>(null);
-  const pageKey = JSON.stringify(pages);
-  useEffect(() => { boardRef.current?.querySelectorAll('.pipeline-lane-list').forEach(el => { el.scrollTop = 0; }); }, [pageKey]);
+  const previousPages = useRef(pages);
+  useEffect(() => {
+    for (const lane of Object.keys(pages) as PipelineLane[]) {
+      if (previousPages.current[lane].page !== pages[lane].page) {
+        const list = boardRef.current?.querySelector(`[data-lane="${lane}"] .pipeline-lane-list`);
+        if (list) list.scrollTop = 0;
+      }
+    }
+    previousPages.current = pages;
+  }, [pages]);
   return <div className="pipeline-layout" ref={boardRef} aria-busy={busy}>
     <div className="pipeline-board" aria-label={tr("Pipeline candidature", "Application pipeline")}>
       {lanes.map(([lane, label]) => {
         const rows = applications.filter(a => pipelineLane(a) === lane);
-        return <section key={lane} className="pipeline-lane" aria-label={label}>
+        return <section key={lane} data-lane={lane} className="pipeline-lane" aria-label={label}>
           <h2>{label}<span className="workspace-chip">{pages[lane].total}</span></h2>
           <div className="pipeline-lane-list" tabIndex={0} aria-label={label}>{rows.length === 0 && <p className="workspace-muted">{tr("Nessuna candidatura", "No applications")}</p>}
           {rows.map(a => <button key={a.id} type="button" className="pipeline-card" aria-pressed={selected?.id === a.id} onClick={() => setSelectedId(a.id)}>

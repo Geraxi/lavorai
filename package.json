@@ -28,6 +28,8 @@
     "test:answers-browser": "node --import tsx scripts/test-ats-answer-browser.ts",
     "test:card-onboarding": "node --import tsx scripts/test-card-onboarding.tsx",
     "test:application-pagination": "node --import tsx scripts/test-application-pagination.ts",
+    "test:application-pagination-postgres": "node --import tsx scripts/test-application-pagination-postgres.ts",
+    "test:application-pagination-browser": "node scripts/test-user-workspace-browser.mjs --pagination-checks",
     "test:user-workspace": "node --import tsx scripts/test-user-workspace.ts",
     "test:user-workspace-browser": "node scripts/test-user-workspace-browser.mjs",
     "test:feedback-postgres": "node --import tsx scripts/test-feedback-reports.ts",
