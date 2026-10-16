@@ -1,11 +1,15 @@
 import { createConnection } from "node:net";
 import { ReportError } from "./feedback-errors";
 
+export function isFeedbackScannerConfigured(): boolean {
+  return !!(process.env.FEEDBACK_CLAMD_SOCKET?.trim() || process.env.FEEDBACK_CLAMD_HOST?.trim());
+}
+
 /** ClamAV INSTREAM on an operator-configured private socket. No public scanning
  * service, credential creation or implicit outbound document sharing. */
 export async function scanFeedbackFile(data: Buffer): Promise<"clean" | "unavailable"> {
-  const path = process.env.FEEDBACK_CLAMD_SOCKET;
-  const host = process.env.FEEDBACK_CLAMD_HOST;
+  const path = process.env.FEEDBACK_CLAMD_SOCKET?.trim();
+  const host = process.env.FEEDBACK_CLAMD_HOST?.trim();
   if (!path && !host) return "unavailable";
   const port = Number(process.env.FEEDBACK_CLAMD_PORT ?? "3310");
   if (!path && (!Number.isInteger(port) || port < 1 || port > 65535)) throw new ReportError("scanner_unavailable", 503);

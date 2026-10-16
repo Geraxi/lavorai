@@ -1,6 +1,7 @@
 import { getLocale } from "next-intl/server";
 import { redirect } from "next/navigation";
 import { requireReportActor, ReportError } from "@/lib/feedback-server";
+import { isFeedbackScannerConfigured } from "@/lib/feedback-scanner";
 import { FeedbackView } from "@/components/feedback-view";
 import { SupportShell } from "@/components/support-shell";
 export const dynamic = "force-dynamic";
@@ -13,5 +14,5 @@ export default async function FeedbackPage() {
     throw error;
   }
   const locale = await getLocale();
-  return <SupportShell locale={locale}><FeedbackView locale={locale} standalone /></SupportShell>;
+  return <SupportShell locale={locale}><FeedbackView locale={locale} standalone pdfEnabled={isFeedbackScannerConfigured()} /></SupportShell>;
 }

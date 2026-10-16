@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Paperclip, FileText, X } from "lucide-react";
-import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, reportCopy, reportError, type ReportItem } from "@/lib/feedback";
+import { ATTACHMENT_ACCEPT, IMAGE_ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, reportCopy, reportError, type ReportItem } from "@/lib/feedback";
 
-export function AttachmentPicker({ files, onChange, onError, locale }: { files: File[]; onChange: (files: File[]) => void; onError: (error: string) => void; locale: string }) {
+export function AttachmentPicker({ files, onChange, onError, locale, pdfEnabled = false }: { pdfEnabled?: boolean; files: File[]; onChange: (files: File[]) => void; onError: (error: string) => void; locale: string }) {
   const c = reportCopy(locale), input = useRef<HTMLInputElement>(null);
   const [previews, setPreviews] = useState<string[]>([]);
   useEffect(() => {
@@ -12,6 +12,7 @@ export function AttachmentPicker({ files, onChange, onError, locale }: { files: 
     return () => urls.forEach(url => { if (url) URL.revokeObjectURL(url); });
   }, [files]);
   function choose(selected: File[]) {
+    if (!pdfEnabled && selected.some(f => /\.pdf$/i.test(f.name) || f.type === "application/pdf")) return onError("pdf_disabled");
     const combined = [...files, ...selected];
     if (combined.length > MAX_ATTACHMENTS) return onError("attachment_limit");
     if (combined.reduce((sum, f) => sum + f.size, 0) > MAX_ATTACHMENT_BYTES) return onError("attachment_too_large");
@@ -20,8 +21,8 @@ export function AttachmentPicker({ files, onChange, onError, locale }: { files: 
   }
   return <div className="report-attachment-picker">
     <button className="report-attach-button" type="button" onClick={() => input.current?.click()} aria-describedby="report-file-hint"><Paperclip size={16} aria-hidden />{c.attach}</button>
-    <input ref={input} type="file" multiple accept={ATTACHMENT_ACCEPT} hidden tabIndex={-1} aria-label={c.attach} onChange={e => { choose(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
-    <p id="report-file-hint" className="report-muted">{c.attachmentHint}</p>
+    <input ref={input} type="file" multiple accept={pdfEnabled ? ATTACHMENT_ACCEPT : IMAGE_ATTACHMENT_ACCEPT} hidden tabIndex={-1} aria-label={c.attach} onChange={e => { choose(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+    <p id="report-file-hint" className="report-muted">{pdfEnabled ? c.attachmentHint : c.imageAttachmentHint}</p>
     {!!files.length && <ul className="report-file-list">{files.map((file, i) => <li key={`${i}-${file.name}`}>
       {previews[i] ? <img src={previews[i]} alt="" className="report-file-preview" /> : <FileText size={24} aria-hidden />}
       <span>{file.name}<small>{Math.ceil(file.size / 1024)} KB</small></span>

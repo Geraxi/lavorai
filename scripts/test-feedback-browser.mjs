@@ -56,11 +56,11 @@ window.XMLHttpRequest=class {
   if(window.__fail==='network'){this.onerror();return;}
   const response=await window.fetch('/api/feedback',{method:'POST',body:data.get('report')});
   this.status=response.status;const body=await response.json();
-  if(response.ok){body.report.attachments=window.__uploaded.map((f,i)=>({id:'file'+i,filename:f.name,contentType:f.type,byteLength:f.size,scanStatus:f.type==='application/pdf'?'quarantined':'sanitized'}));const saved=window.__reports.find(r=>r.id===body.report.id);if(saved)saved.attachments=body.report.attachments;}
+  if(response.ok){body.report.attachments=window.__uploaded.map((f,i)=>({id:'file'+i,filename:f.name,contentType:f.type,byteLength:f.size,scanStatus:f.type==='application/pdf'?'clean':'sanitized'}));const saved=window.__reports.find(r=>r.id===body.report.id);if(saved)saved.attachments=body.report.attachments;}
   this.responseText=JSON.stringify(body);this.onload();
  }
 };
-async function start(){const content=admin?await AdminLayout({children:<AdminReportsView locale={locale}/>}):<FeedbackView locale={locale} standalone/>;createRoot(document.getElementById('root')).render(<NextIntlClientProvider locale={locale} messages={locale==='en'?en:it}><SWRConfig value={{provider:()=>new Map(),dedupingInterval:0,shouldRetryOnError:false}}>{admin?<AppShell sidebarProps={{userName:'Local fixture',userPlan:'Synthetic QA only',isAdmin:admin}}>{content}</AppShell>:<SupportShell locale={locale}>{content}</SupportShell>}</SWRConfig></NextIntlClientProvider>)}start();
+async function start(){const content=admin?await AdminLayout({children:<AdminReportsView locale={locale}/>}):<FeedbackView locale={locale} standalone pdfEnabled={params.has('pdf')}/>;createRoot(document.getElementById('root')).render(<NextIntlClientProvider locale={locale} messages={locale==='en'?en:it}><SWRConfig value={{provider:()=>new Map(),dedupingInterval:0,shouldRetryOnError:false}}>{admin?<AppShell sidebarProps={{userName:'Local fixture',userPlan:'Synthetic QA only',isAdmin:admin}}>{content}</AppShell>:<SupportShell locale={locale}>{content}</SupportShell>}</SWRConfig></NextIntlClientProvider>)}start();
 `;
 await build({ stdin: { contents: entry, resolveDir: process.cwd(), loader: 'tsx' }, bundle: true, define: { 'process.env.ADMIN_EMAILS': 'undefined' }, platform: 'browser', format: 'iife', jsx: 'automatic', outfile: join(out, 'fixture.js'), plugins: [{ name: 'boundaries', setup(b) { b.onResolve({ filter: /.*/ }, args => args.path in stubs ? { path: args.path, namespace: 'fixture' } : undefined); b.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: stubs[args.path], loader: 'tsx', resolveDir: process.cwd() })); } }] });
 execFileSync(process.execPath, ['node_modules/tailwindcss/lib/cli.js', '-i', 'src/app/globals.css', '-o', join(out, 'base.css')], { stdio: 'pipe' });
@@ -144,6 +144,13 @@ try {
 
  // Picker, preview, removal, retained files on failure, progress and quarantine UX.
  await page.goto(base+'/feedback?locale=it&empty=1');
+ assert.equal(await page.locator('input[type=file]').getAttribute('accept'),'.png,.jpg,.jpeg,.webp');
+ await page.getByText(/Il caricamento PDF non è al momento disponibile/).waitFor();
+ await page.locator('input[type=file]').setInputFiles([{name:'disabled.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4 synthetic browser fixture')}]);
+ await page.getByRole('alert').getByText(/Rimuovi il PDF/).waitFor();
+ assert.equal(await page.locator('.report-file-list li').count(),0);
+ await shot('pdf-upload-disabled');
+ await page.goto(base+'/feedback?locale=it&empty=1&pdf=1');
  await page.locator('#report-subject').fill('Screenshot problema sintetico');
  await page.locator('#report-description').fill('Segnalazione locale sintetica con allegati di prova.');
  const pngFixture=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jw1kAAAAASUVORK5CYII=','base64');
@@ -164,10 +171,10 @@ try {
  await page.getByRole('status').getByText(/Segnalazione inviata/).waitFor();
  assert.equal(await page.locator('.report-file-preview').count(),0);
  assert.equal(await page.evaluate(()=>window.__uploaded.length),2);
- await page.locator('.report-entry summary').first().click();await page.getByText(/PDF in attesa di scansione/).waitFor();
- assert.equal(await page.getByRole('button',{name:'Scarica: evidence.pdf'}).count(),0);
- await shot('attachment-submitted-quarantine');
- await page.getByRole('button',{name:'Rimuovi: evidence.pdf',exact:true}).click();await page.getByText(/PDF in attesa di scansione/).waitFor({state:'hidden'});
+ await page.locator('.report-entry summary').first().click();await page.getByText(/Scansione di sicurezza superata/).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Scarica: evidence.pdf'}).count(),1);
+ await shot('attachment-submitted-scanned');
+ await page.getByRole('button',{name:'Rimuovi: evidence.pdf',exact:true}).click();await page.getByText(/Scansione di sicurezza superata/).waitFor({state:'hidden'});
  await page.locator('input[type=file]').setInputFiles([{name:'a.png',mimeType:'image/png',buffer:Buffer.alloc(3*1024*1024+1)}]);
  await page.getByRole('alert').getByText(/3 MB/).waitFor();
  await page.locator('input[type=file]').setInputFiles([{name:'unsafe.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg/>')}]);
@@ -179,6 +186,6 @@ try {
  await shot('admin-attachments-clean');
 
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
- await writeFile(join(out,'qa-result.json'),JSON.stringify({passed:true,fixtureOnly:true,screenshots,errors,external,checks:['IT/EN at 1440,1280,390,320','no document scrolling','desktop main fits viewport','user submission and draft retention','optional explicit context','native/client validation','safe text rendering','history pagination','admin detail, filters, triage','support shell without paid feature requests','light theme','attachment picker/preview/remove at desktop and mobile','upload progress and retained drafts','quarantined PDF and admin scan UX']},null,2));
+ await writeFile(join(out,'qa-result.json'),JSON.stringify({passed:true,fixtureOnly:true,screenshots,errors,external,checks:['IT/EN at 1440,1280,390,320','no document scrolling','desktop main fits viewport','user submission and draft retention','optional explicit context','native/client validation','safe text rendering','history pagination','admin detail, filters, triage','support shell without paid feature requests','light theme','attachment picker/preview/remove at desktop and mobile','upload progress and retained drafts','unconfigured PDF uploads disabled; configured PDF scan UX; legacy quarantine']},null,2));
  console.log('PASS local fixture browser QA: IT/EN, four viewports, no document scroll, user submission/errors, admin triage, text safety, pagination, support isolation, attachments/quarantine, light theme. '+screenshots+' screenshots. No external requests.');
 } finally {if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}

@@ -3,7 +3,7 @@ import { Worker } from "node:worker_threads";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ReportError } from "./feedback-errors";
-import { scanFeedbackFile } from "./feedback-scanner";
+import { isFeedbackScannerConfigured, scanFeedbackFile } from "./feedback-scanner";
 import { MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS } from "./feedback";
 
 export const MAX_ACCOUNT_ATTACHMENT_BYTES = 30 * 1024 * 1024;
@@ -60,8 +60,12 @@ async function normalizeFeedbackAttachments(files: File[]): Promise<PreparedAtta
     if (!kind || (file.type && file.type !== formats[kind]) || !(kind === "jpeg" ? ["jpg", "jpeg"].includes(ext ?? "") : ext === kind)) throw new ReportError("invalid_attachment", 400);
     let scanStatus: PreparedAttachment["scanStatus"];
     if (kind === "pdf") {
+      // New PDFs never enter indefinite quarantine. A missing/unavailable
+      // scanner rejects the entire submission before any report/file is stored.
+      if (!isFeedbackScannerConfigured()) throw new ReportError("pdf_disabled", 415);
       await validateFeedbackPdf(data);
-      scanStatus = await scanFeedbackFile(data) === "clean" ? "clean" : "quarantined";
+      if (await scanFeedbackFile(data) !== "clean") throw new ReportError("scanner_unavailable", 503);
+      scanStatus = "clean";
     } else {
       try {
         const image = sharp(data, { limitInputPixels: 16_000_000, failOn: "warning", animated: true });

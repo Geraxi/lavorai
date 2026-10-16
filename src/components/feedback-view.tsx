@@ -8,7 +8,7 @@ import { fetchReports, ReportBody, ReportLoadError, ReportMeta, ReportPagination
 import { AttachmentPicker, sendReportWithFiles } from "./feedback-attachments";
 import "./feedback.css";
 
-export function FeedbackView({ locale, standalone = false }: { locale: string; standalone?: boolean }) {
+export function FeedbackView({ locale, standalone = false, pdfEnabled = false }: { locale: string; standalone?: boolean; pdfEnabled?: boolean }) {
   const c = reportCopy(locale);
   const [category, setCategory] = useState<ReportInput["category"]>("feedback");
   const [subject, setSubject] = useState("");
@@ -61,7 +61,7 @@ export function FeedbackView({ locale, standalone = false }: { locale: string; s
               <label className="report-field" htmlFor="report-subject"><span>{c.subject} <small>{subject.length}/120</small></span><input id="report-subject" name="subject" required minLength={3} maxLength={120} value={subject} onChange={e => setSubject(e.target.value)} aria-describedby="report-subject-hint" /><small id="report-subject-hint">{c.subjectHint}</small></label>
               <label className="report-field" htmlFor="report-description"><span>{c.description} <small>{description.length}/4,000</small></span><textarea id="report-description" name="description" required minLength={10} maxLength={4000} rows={5} value={description} onChange={e => setDescription(e.target.value)} aria-describedby="report-description-hint report-privacy" /><small id="report-description-hint">{c.descriptionHint}</small></label>
               <label className="report-field" htmlFor="report-page"><span>{c.context}</span><select id="report-page" value={pageContext} onChange={e => setPageContext(e.target.value)} aria-describedby="report-context-hint"><option value="">{c.noContext}</option>{REPORT_PAGES.map(value => <option key={value} value={value}>{c.pages[value]}</option>)}</select><small id="report-context-hint">{c.contextHint}</small></label>
-              <AttachmentPicker files={files} onChange={setFiles} onError={setError} locale={locale} />
+              <AttachmentPicker pdfEnabled={pdfEnabled} files={files} onChange={setFiles} onError={setError} locale={locale} />
             </fieldset>
             <p id="report-privacy" className="report-privacy"><ShieldCheck size={17} aria-hidden />{c.privacy}</p>
           </div>

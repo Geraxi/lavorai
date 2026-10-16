@@ -191,9 +191,15 @@ async function main() {
     const uploadFiles = (files: File[], alter?: (form: FormData) => void) => user.POST(multipart(files, alter));
     const fileContext = (reportId: string, id: string) => ({ params: Promise.resolve({ reportId, id }) });
     signedIn = 'nocard';
-    const uploadResult = await expectStatus(uploadFiles([file(png), file(syntheticPdf(), 'evidence.pdf', 'application/pdf')]), 201);
+    const disabledPdf = await expectStatus(uploadFiles([file(png), file(syntheticPdf(), 'evidence.pdf', 'application/pdf')]), 415);
+    assert.equal((await disabledPdf.json()).error, 'pdf_disabled');
+    assert.equal(await db.feedbackReport.count(), 0); assert.equal(await db.feedbackAttachment.count(), 0);
+    const uploadResult = await expectStatus(uploadFiles([file(png)]), 201);
     const withFiles = (await uploadResult.json()).report;
-    const imageFile = withFiles.attachments[0], pdfFile = withFiles.attachments[1];
+    const imageFile = withFiles.attachments[0];
+    // Historical/quarantined rows remain locked. New uploads cannot create one.
+    const historicalPdf = syntheticPdf();
+    const pdfFile = await db.feedbackAttachment.create({ data: { reportId: withFiles.id, position: 1, filename: 'old.pdf', contentType: 'application/pdf', byteLength: historicalPdf.length, data: new Uint8Array(historicalPdf), scanStatus: 'quarantined' } });
     assert.equal(imageFile.scanStatus, 'sanitized'); assert.equal(pdfFile.scanStatus, 'quarantined');
     assert.equal(imageFile.data, undefined); assert.equal(imageFile.reportId, undefined);
     assert.ok(!JSON.stringify(withFiles).includes('storagePath'));

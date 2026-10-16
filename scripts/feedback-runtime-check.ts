@@ -52,14 +52,16 @@ export async function runtimeCheck(db: PrismaClient, databaseUrl: string) {
     const png = await sharp({ create: { width: 10, height: 10, channels: 3, background: '#18b980' } }).png().toBuffer();
     data.append('files', new Blob([new Uint8Array(png)], { type: 'image/png' }), 'screen.png');
     data.append('files', new Blob([new Uint8Array(syntheticPdf())], { type: 'application/pdf' }), 'note.pdf');
+    const deniedPdf = await req('runtime-free', '/api/feedback', { method: 'POST', body: data });
+    assert.equal(deniedPdf.status, 415); assert.equal((await deniedPdf.json()).error, 'pdf_disabled');
+    assert.equal(await db.feedbackReport.count({ where: { userId: 'runtime-free' } }), 0);
+    data.delete('files'); data.append('files', new Blob([new Uint8Array(png)], { type: 'image/png' }), 'screen.png');
     const posted = await req('runtime-free', '/api/feedback', { method: 'POST', body: data });
     assert.equal(posted.status, 201, await posted.clone().text());
     const report = (await posted.json()).report;
-    const imagePath = `/api/feedback/${report.id}/attachments/${report.attachments[0].id}`, pdfPath = `/api/feedback/${report.id}/attachments/${report.attachments[1].id}`;
+    const imagePath = `/api/feedback/${report.id}/attachments/${report.attachments[0].id}`;
     assert.equal((await req('runtime-free', imagePath)).status, 200);
     assert.equal((await req('runtime-paid', imagePath)).status, 404);
-    assert.equal((await req('runtime-free', pdfPath)).status, 423);
-    assert.equal((await req('runtime-free', pdfPath, { method: 'POST' })).status, 403);
     browser = await chromium.launch({ channel: 'chrome', headless: true });
     const context = await browser.newContext();
     await context.addCookies([{ name: 'authjs.session-token', value: tokens['runtime-free'], url: base }, { name: 'NEXT_LOCALE', value: 'en', url: base }]);
@@ -70,13 +72,15 @@ export async function runtimeCheck(db: PrismaClient, databaseUrl: string) {
       await page.setViewportSize({ width, height }); await page.goto(base + '/feedback');
       await page.getByRole('heading', { name: 'Help shape a better LavorAI' }).waitFor();
       await page.getByRole('heading', { name: 'Local runtime test' }).waitFor();
+      assert.equal(await page.locator('input[type=file]').getAttribute('accept'), '.png,.jpg,.jpeg,.webp');
+      await page.getByText(/PDF upload is currently unavailable/).waitFor();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await page.screenshot({ path: resolve(out, `real-support-${width}.png`) });
     }
     assert.equal(requested.some(url => url.includes('/api/sidebar-stats') || url.includes('/api/preferences')), false);
     assert.deepEqual(errors, []);
-    await writeFile(resolve(out, 'qa-result.json'), JSON.stringify({ passed: true, realNextProductionRuntime: true, realAuthJsSyntheticSessions: true, ephemeralLocalPostgres: true, checks: ['free/no-card/expired/paid support access', 'paid page/API gates remain', 'suspension', 'admin denial', 'multipart image and PDF worker in compiled bundle', 'owner image download, cross-user denial and PDF quarantine', 'desktop/mobile support rendering and no paid feature requests'] }, null, 2));
-    console.log('PASS compiled Next runtime + real Auth.js synthetic sessions + ephemeral PostgreSQL, real multipart PDF worker and owner downloads, free/expired/paid/suspended gates, desktop/mobile Chrome.');
+    await writeFile(resolve(out, 'qa-result.json'), JSON.stringify({ passed: true, realNextProductionRuntime: true, realAuthJsSyntheticSessions: true, ephemeralLocalPostgres: true, checks: ['free/no-card/expired/paid support access', 'paid page/API gates remain', 'suspension', 'admin denial', 'multipart images with PDFs rejected before storage when scanner is absent', 'owner image download and cross-user denial', 'desktop/mobile support rendering and no paid feature requests'] }, null, 2));
+    console.log('PASS compiled Next runtime + real Auth.js synthetic sessions + ephemeral PostgreSQL, real multipart images, disabled unconfigured PDFs and owner downloads, free/expired/paid/suspended gates, desktop/mobile Chrome.');
   } finally {
     if (browser) await browser.close();
     app.kill('SIGTERM'); await new Promise<void>(resolve => { if (app.exitCode !== null) resolve(); else app.once('exit', () => resolve()); });
