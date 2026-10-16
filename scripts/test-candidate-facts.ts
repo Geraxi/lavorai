@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { candidateFacts, resolveCandidateFact, matchFactOption } from "../src/lib/candidate-facts";
+import { candidateFacts, resolveCandidateFact, matchFactOption, employmentEnded } from "../src/lib/candidate-facts";
 import { EMPTY_PROFILE } from "../src/lib/cv-profile-types";
 const profile = { ...EMPTY_PROFILE, firstName: "Alex", lastName: "Example", city: "Milano", phone: "+44 7911 123456",
   experiences: [{ company: "Previous", role: "Engineer", startDate: "2018", endDate: "2024", location: "", description: "", bullets: [] }],
@@ -12,6 +12,17 @@ assert.equal(resolveCandidateFact(q("Current/previous employer"), { facts }).ans
 assert.equal(resolveCandidateFact(q("Previous employer"), { facts }).answer, "Previous");
 assert.equal(resolveCandidateFact(q("Current employer"), { facts }).answer, null);
 assert.equal(resolveCandidateFact(q("Country of residence"), { facts }).answer, "Italy");
+for (const label of ["Residence country", "Current country of residence", "In which country do you currently reside?", "Which country do you currently live in?"]) assert.equal(resolveCandidateFact(q(label), { facts }).answer, "Italy");
+assert.equal(resolveCandidateFact(q("Current country of residence", "select", ["IT", "GB"]), { facts }).answer, "IT");
+const date = new Date("2026-10-16T00:00:00Z");
+for (const ended of ["2025", "2026-09", "2026-10-15"]) assert.equal(employmentEnded(ended, date), true, ended);
+for (const unknown of ["", "Present", "2026", "2027", "2026-10", "2026-10-16", "2026-10-17", "2026-02-30", "2026-13", "2026-00", "01/02/2026", "around 2025"]) assert.equal(employmentEnded(unknown, date), false, unknown);
+const recentPast = candidateFacts({ ...profile, experiences: [{ ...profile.experiences[0], endDate: "2026-09" }] }, {}, {}, [], date);
+assert.equal(resolveCandidateFact(q("Previous employer name"), { facts: recentPast }).answer, "Previous");
+assert.equal(resolveCandidateFact(q("Current employer"), { facts: recentPast }).answer, null);
+const currentYearOnly = candidateFacts({ ...profile, experiences: [{ ...profile.experiences[0], endDate: "2026" }] }, {}, {}, [], date);
+assert.equal(resolveCandidateFact(q("Previous employer"), { facts: currentYearOnly }).answer, null);
+assert.equal(resolveCandidateFact(q("Phone country code", "select", ["Italy (+39)", "UK (+44)"]), { phone: "02079460000", country: "UK" }).answer, null);
 assert.equal(resolveCandidateFact(q("Country", "select", ["Italy (+39)", "United Kingdom (+44)"]), { facts }).answer, "United Kingdom (+44)");
 assert.equal(resolveCandidateFact(q("Phone country code", "react-select", ["Italy (+39)", "United Kingdom (+44)"]), { facts }).answer, "United Kingdom (+44)");
 assert.equal(matchFactOption(q("Phone country code", "select", ["USA (+1)", "Canada (+1)"]), "+1 212 555 1234"), null);

@@ -5,6 +5,7 @@ import ts from "typescript";
 import * as scoped from "../src/lib/application-question-answers";
 import * as facts from "../src/lib/candidate-facts";
 import * as continuation from "../src/lib/application-answer-continuation";
+import * as guidance from "../src/lib/application-continuation-guidance";
 import * as answers from "../src/lib/application-answers";
 import { EMPTY_PROFILE } from "../src/lib/cv-profile-types";
 
@@ -18,7 +19,7 @@ const makeApp = (id = "owned", overrides: Record<string, any> = {}) => ({
   submissionReceiptJson: null, answerContinuationJson: null, completedAt: null,
   job: { company: `Employer ${id}`, title: "Designer", location: "Milan", description: "Role", url: `https://jobs.example.test/${id}` }, ...overrides,
 });
-function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; saved?: any[]; race?: (app: any) => void } = {}) {
+function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; saved?: any[]; privacy?: boolean; race?: (app: any) => void } = {}) {
   const apps = structuredClone(options.apps ?? [makeApp()]);
   let writes = 0, resumes = 0, queued = 0;
   const equal = (a: any, b: any) => a instanceof Date && b instanceof Date ? +a === +b : a === b;
@@ -35,11 +36,12 @@ function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; 
     },
     userAnswer: { findMany: async () => options.saved ?? [] },
     cVProfile: { findUnique: async () => options.profile ?? null },
-    user: { findUnique: async () => ({ email: "alex@example.test", yearsExperience: 7 }) },
+    user: { findUnique: async () => ({ email: "alex@example.test", yearsExperience: 7, privacyConsentAt: options.privacy === false ? null : moment }) },
     userPreferences: { findUnique: async () => ({ applicationAnswersJson: '{}' }) },
   };
   const dependencies: Record<string, unknown> = {
     "@/lib/application-answer-continuation": continuation,
+    "@/lib/application-continuation-guidance": guidance,
     "@/lib/application-worker-gates": { queueAnswerContinuation: async (input: any) => { resumes++; assert.equal(input.userId, "owner"); return "continuation_proof_missing"; } },
     "@/lib/candidate-facts": facts, "@/lib/application-answers": answers,
     "next/server": { NextResponse: { json: (body: unknown, options?: { status: number }) => ({ status: options?.status ?? 200, body }) } },
@@ -57,6 +59,12 @@ function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; 
     post: (body: any = { answers: [{ applicationId: "owned", fingerprint, answer: "Yes" }] }) => module.exports.POST({ json: async () => body }) };
 }
 async function main() {
+  const privacy = (await setup({ privacy: false }).get()).body.continuations[0];
+  assert.equal(privacy.canResume, false); assert.equal(privacy.reason, "privacy_consent_missing");
+  assert.equal(privacy.guidance.href, "/settings#privacy-consent");
+  const legacy = (await setup().get()).body.continuations[0];
+  assert.equal(legacy.canResume, false); assert.match(legacy.guidance.detail, /Saving answers cannot/);
+  assert.equal(legacy.guidance.href, "/applications?id=owned&includeAll=1");
   const test = setup(); const result = await test.post();
   assert.equal(result.status, 200); assert.equal(result.body.saved, 1); assert.equal(result.body.requeued, 0);
   assert.equal(test.apps[0].status, "needs_answers"); assert.equal(test.counts.resumes, 0);

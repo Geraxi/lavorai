@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { currentWorkerIneligibility, hasPotentialSubmission, NOT_SUBMITTED, SUBMISSION_STARTED, type WorkerGateRow } from "../src/lib/application-worker-gates";
+import { currentWorkerIneligibility, hasPotentialSubmission, continuationDestination, NOT_SUBMITTED, SUBMISSION_STARTED, type WorkerGateRow } from "../src/lib/application-worker-gates";
 
 const now = new Date();
+for (const url of ["https://boards.greenhouse.io/acme/jobs/123", "https://job-boards.greenhouse.io/acme/jobs/123?source=test", "https://boards.greenhouse.io/acme/jobs/123?gh_jid=456", "https://boards.greenhouse.io/embed/job_app?for=acme&token=123", "https://careers.example.invalid/?gh_jid=123"]) assert.equal(continuationDestination("portal_greenhouse", url), "greenhouse:123");
+for (const url of ["https://greenhouse.io.evil.invalid/acme/jobs/123", "http://boards.greenhouse.io/acme/jobs/123", "https://boards.greenhouse.io/acme/jobs/123bad"]) assert.equal(continuationDestination("portal_greenhouse", url), null);
 process.env.APPLICATION_ROLLOUT_MODE = "manual_only";
 process.env.APPLICATION_ROLLOUT_START_AT = new Date(+now - 60000).toISOString();
 process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";

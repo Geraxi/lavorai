@@ -36,6 +36,11 @@ export interface ApplyInput {
   dryRun: boolean;
   /** Fresh worker authorization immediately before the irreversible submission. */
   beforeSubmit?: () => Promise<boolean>;
+  /** Greenhouse only: called on the blank public form, before filling any
+   * candidate fields or attaching files. A pause must be durably attested. */
+  onPreTransmissionPause?: (questions: PendingQuestion[]) => Promise<boolean>;
+  beforeCandidateData?: () => Promise<boolean>;
+  beforeVerificationSubmit?: () => Promise<boolean>;
   /** Risposte standard pre-compilate dall'utente (work auth, salary,
    *  notice period, LinkedIn, EEO, ecc). L'adapter le inietta nei
    *  campi custom che riconosce via fuzzy-match label. */

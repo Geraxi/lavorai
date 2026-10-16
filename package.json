@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "echo 'next lint removed in Next 16; typecheck is the CI gate' && exit 0",
-    "test": "node --import tsx scripts/test-application-security-code.ts && node --import tsx scripts/test-otp-auto-complete.ts && node --import tsx scripts/test-auth-hardening.ts && npm run test:google-auth && node --import tsx scripts/test-registration-trial.ts && node --import tsx scripts/test-growth-lifecycle.ts && node --import tsx scripts/test-auth-schema-compatibility.ts && npm run test:credit-retry && npm run test:worker-gates && npm run test:auto-apply-quality && npm run test:send-reply && npm run test:release-controls && npm run test:manual-rollout && npm run test:card-onboarding && npm run test:user-workspace && npm run test:application-pagination && npm run test:attention-evidence",
+    "test": "node --import tsx scripts/test-application-security-code.ts && node --import tsx scripts/test-otp-auto-complete.ts && node --import tsx scripts/test-auth-hardening.ts && npm run test:google-auth && node --import tsx scripts/test-registration-trial.ts && node --import tsx scripts/test-growth-lifecycle.ts && node --import tsx scripts/test-auth-schema-compatibility.ts && npm run test:credit-retry && npm run test:worker-gates && npm run test:auto-apply-quality && npm run test:send-reply && npm run test:release-controls && npm run test:manual-rollout && npm run test:card-onboarding && npm run test:user-workspace && npm run test:application-pagination && npm run test:attention-evidence && npm run test:privacy-consent",
     "test:google-auth": "node --import tsx scripts/test-google-auth.ts",
     "test:inbox-replies-postgres": "node --import tsx scripts/test-inbox-replies-postgres.ts",
     "test:inbox-replies-browser": "node scripts/test-inbox-replies-browser.mjs",
@@ -24,7 +24,7 @@
     "test:manual-rollout": "node --import tsx scripts/test-manual-submission-budget.ts && node --import tsx scripts/test-manual-rollout-producers.ts && node --import tsx scripts/test-manual-rollout-visibility.ts",
     "test:manual-rollout-postgres": "node --import tsx scripts/test-manual-submission-budget-postgres.ts",
     "test:answers": "node --import tsx scripts/test-candidate-facts.ts && node --import tsx scripts/test-cv-question-suggestions.ts && node --import tsx scripts/test-question-resume.ts && node --import tsx scripts/test-ats-answer-truthfulness.ts",
-    "test:answer-continuation-postgres": "node --import tsx scripts/test-answer-continuation-postgres.ts",
+    "test:answer-continuation-postgres": "node --import tsx scripts/test-answer-continuation-postgres.ts && node --import tsx scripts/test-answer-continuation-postgres.ts --greenhouse",
     "test:answers-browser": "node --import tsx scripts/test-ats-answer-browser.ts",
     "test:card-onboarding": "node --import tsx scripts/test-card-onboarding.tsx",
     "test:application-pagination": "node --import tsx scripts/test-application-pagination.ts",
@@ -37,7 +37,9 @@
     "test:product-consistency-browser": "node scripts/test-product-consistency-browser.mjs",
     "test:integrated-postgres": "node scripts/test-integrated-postgres.mjs",
     "test:attention-evidence": "node --import tsx scripts/test-attention-evidence.ts",
-    "test:attention-postgres": "node scripts/test-attention-postgres.mjs"
+    "test:attention-postgres": "node scripts/test-attention-postgres.mjs",
+    "test:privacy-consent": "node --import tsx scripts/test-privacy-consent.ts",
+    "test:greenhouse-preflight-browser": "node --import tsx scripts/test-greenhouse-preflight-browser.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

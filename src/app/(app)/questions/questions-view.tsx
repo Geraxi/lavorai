@@ -24,7 +24,7 @@ interface Question {
   conflict?: boolean;
   applications: ApplicationExample[];
 }
-type Continuation = { applicationId: string; company: string; title: string; canResume: boolean; proofDigest: string | null; reason: string | null };
+type Continuation = { applicationId: string; company: string; title: string; canResume: boolean; proofDigest: string | null; reason: string | null; guidance?: { detail: string; href: string | null; label: string | null } | null };
 type View = "pending" | "review" | "completed" | "focus";
 
 const categories = [
@@ -184,11 +184,13 @@ export function QuestionsView() {
       </header>
 
       {notice && <div className="qa-notice" role="status">{notice}<button type="button" onClick={() => setNotice("")} aria-label="Chiudi avviso">×</button></div>}
-      {!loading && continuations.map(application => <div className="qa-notice" key={application.applicationId}>
+      {!loading && continuations.map(application => <div className="qa-notice qa-continuation-notice" key={application.applicationId}>
         <span><strong>{application.company} · {application.title}</strong><br />{application.canResume
           ? hasUnsavedAnswers(application.applicationId) ? "Salva le risposte modificate prima di confermare la ripresa." : "Le risposte sono disponibili e la pausa prima dell’invio è verificata. Conferma per rimettere questa candidatura in coda."
+          : application.guidance ? application.guidance.detail
           : application.reason === "answers_incomplete" ? "Completa o chiarisci le risposte prima di confermare la ripresa."
           : "Risposte salvabili. Ripresa bloccata: manca una prova verificabile della pausa prima dell’invio oppure la candidatura non è idonea. Non verrà ritentata automaticamente."}</span>
+        {!application.canResume && application.guidance?.href && <Link className="underline" href={application.guidance.href}>{application.guidance.label}</Link>}
         {application.canResume && <button type="button" disabled={saving || hasUnsavedAnswers(application.applicationId)} onClick={() => void confirmResume(application)}>Conferma ripresa di questa candidatura</button>}
       </div>)}
       {loading ? <div className="qa-empty" role="status">Caricamento delle domande…</div> : loadError ? <div className="qa-empty" role="alert"><h2>Impossibile caricare le domande</h2><p>Le risposte salvate restano disponibili. Riprova a caricare la sezione.</p><button type="button" className="qa-primary" onClick={() => void retryLoad()}>Riprova</button></div> : total === 0 ? <div className="qa-empty"><CircleCheck size={35} aria-hidden /><h2>Nessuna domanda in sospeso</h2><p>Quando una candidatura richiederà una risposta, la troverai qui.</p><Link href="/applications">Vai alle candidature <ArrowRight size={16} aria-hidden /></Link></div> : <>

@@ -11,7 +11,7 @@ async function main() {
   const row = {
     id: "schema-compat-user", email: "schema-compat@example.com", name: "Test",
     tier: "pro", createdAt: new Date(), trialEndsAt: null, trialGraceEndsAt: null,
-    emailVerified: null, subscriptionStatus: "active", stripeCustomerId: null,
+    emailVerified: null, privacyConsentAt: null, subscriptionStatus: "active", stripeCustomerId: null,
     stripeSubscriptionId: null, stripePriceId: null, currentPeriodEnd: null,
     welcomeSeenAt: null, onboardedAt: null, locale: "it", yearsExperience: null,
   };

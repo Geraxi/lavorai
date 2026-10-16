@@ -20,6 +20,7 @@ import { prisma } from "@/lib/db";
 import { ReferralCard } from "@/components/referral-card";
 import { Suspense } from "react";
 import { PostCheckoutRefresh } from "@/components/post-checkout-refresh";
+import { PrivacyConsentForm } from "@/components/privacy-consent-form";
 
 export const metadata: Metadata = { title: "Impostazioni" };
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export default async function SettingsPage() {
   const trial = trialState(user);
   const me = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { passwordHash: true },
+    select: { passwordHash: true, privacyConsentAt: true },
   });
   const hasPassword = Boolean(me?.passwordHash);
 
@@ -173,6 +174,11 @@ export default async function SettingsPage() {
           </SectionCard>
 
           <ReferralCard />
+
+          <SectionCard id="privacy-consent">
+            <SectionHead title={user.locale === "en" ? "Privacy consent" : "Consenso privacy"} />
+            <SectionBody><PrivacyConsentForm recorded={Boolean(me?.privacyConsentAt)} locale={user.locale} /></SectionBody>
+          </SectionCard>
 
           <SectionCard>
             <SectionHead

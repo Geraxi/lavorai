@@ -109,6 +109,7 @@ const TAG = "data-lavorai-idx";
 export async function answerRequiredFields(
   page: Page,
   ctx: CandidateContext,
+  options: { includePopulated?: boolean } = {},
 ): Promise<{
   answered: number;
   remainingRequired: number;
@@ -124,7 +125,7 @@ export async function answerRequiredFields(
   // 1. Enumera + tagga i campi candidati (required & vuoti).
   let pending: FieldDescriptor[] = [];
   try {
-    pending = await collectRequiredEmptyFields(page);
+    pending = await collectRequiredEmptyFields(page, options.includePopulated);
   } catch (err) {
     console.warn("[ai-answer] collect failed", err);
     return { answered: 0, remainingRequired: 1, details: ["collect_failed"], unanswered: [{ label: "Verifica dei campi obbligatori non disponibile: controlla il form prima di inviare.", kind: "text" }], given };
@@ -208,13 +209,21 @@ export async function answerRequiredFields(
   }
   // Per arricchire con le opzioni react-select già lette.
   const optByLabel = new Map(pending.map((f) => [normalizeLabel(f.label), f.options]));
-  const unanswered = stillEmpty.map((f) => ({
+  // A required employer default is still unanswered if the chosen candidate
+  // value could not be applied. Its nonempty DOM value must not hide failure.
+  const unresolved = options.includePopulated ? pending.filter(field => !filledIdx.has(field.idx)) : [];
+  const seenQuestions = new Set<string>();
+  const unanswered = [...unresolved, ...stillEmpty].map((f) => ({
     label: f.label,
     kind: f.kind,
     options: f.options ?? optByLabel.get(normalizeLabel(f.label)) ?? undefined,
-  }));
+  })).filter(question => {
+    const key = JSON.stringify([question.label, question.kind, question.options ?? []]);
+    if (seenQuestions.has(key)) return false;
+    seenQuestions.add(key); return true;
+  });
 
-  return { answered, remainingRequired: stillEmpty.length, details, unanswered, given };
+  return { answered, remainingRequired: unanswered.length, details, unanswered, given };
 }
 
 /**
@@ -260,13 +269,27 @@ export async function answerOffline(
 
 // ---------- enumerazione campi ----------
 
-async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]> {
-  return page.evaluate((tag) => {
+/** Inspect the blank public form without entering answers, files, or search
+ * values. Uses the same labels/types/options as the later filler. */
+export async function inspectRequiredQuestions(page: Page) {
+  // Employer defaults are not candidate assertions, even if already selected.
+  const fields = await collectRequiredEmptyFields(page, true);
+  for (const field of fields) {
+    if (field.kind === "react-select" && !field.options) field.options = await readReactSelectOptions(page, field.idx);
+  }
+  return fields.map(({ label, kind, options }) => ({ label, kind, options }));
+}
+
+async function collectRequiredEmptyFields(page: Page, includePopulated = false): Promise<FieldDescriptor[]> {
+  return page.evaluate(({ tag, includePopulated }) => {
     // NB: NIENTE funzioni nominate qui dentro. I bundler (esbuild/tsx) le
     // avvolgono con un helper __name che NON esiste nel browser quando
     // Playwright serializza la funzione → "ReferenceError: __name". Tutto
     // inline per essere bulletproof su qualsiasi bundler.
     const out: Array<{ idx: number; label: string; kind: string; options?: string[]; inputType?: string }> = [];
+    // A preflight or earlier pass may have numbered controls that are now
+    // filled. Remove those tags so an index never targets the old control.
+    document.querySelectorAll(`[${tag}]`).forEach(el => el.removeAttribute(tag));
     let idx = 0;
     const seen = new Set<string>();
 
@@ -342,7 +365,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
         const sv = shell?.querySelector(
           "[class*='single-value'], [class*='multi-value']",
         );
-        if (sv && (sv.textContent ?? "").trim()) continue; // già selezionato
+        if (!includePopulated && sv && (sv.textContent ?? "").trim()) continue; // già selezionato
         el.setAttribute(tag, String(idx));
         out.push({ idx, label, kind: "react-select" });
         idx++;
@@ -360,7 +383,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
         const group = Array.from(
           document.querySelectorAll(`input[type=radio][name="${CSS.escape(gname)}"]`),
         ) as HTMLInputElement[];
-        if (group.some((r) => r.checked)) continue;
+        if (!includePopulated && group.some((r) => r.checked)) continue;
         const req =
           group.some((r) => r.required || r.getAttribute("aria-required") === "true") ||
           label.includes("*");
@@ -412,7 +435,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
         if (cgroup.length >= 2) {
           if (seen.has("cbg:" + cname)) continue;
           seen.add("cbg:" + cname);
-          if (cgroup.some((c) => c.checked)) continue;
+          if (!includePopulated && cgroup.some((c) => c.checked)) continue;
           const creq =
             cgroup.some((c) => c.required || c.getAttribute("aria-required") === "true") ||
             label.includes("*");
@@ -439,7 +462,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
           continue;
         }
         // b2) checkbox singola (consenso, dichiarazione)
-        if ((el as HTMLInputElement).checked) continue;
+        if (!includePopulated && (el as HTMLInputElement).checked) continue;
         if (!required) continue;
         el.setAttribute(tag, String(idx));
         out.push({ idx, label, kind: "checkbox" });
@@ -449,7 +472,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
 
       // c) <select> nativo
       if (el.tagName === "SELECT") {
-        if ((el as HTMLSelectElement).value.trim()) continue;
+        if (!includePopulated && (el as HTMLSelectElement).value.trim()) continue;
         if (!required) continue;
         el.setAttribute(tag, String(idx));
         const options = Array.from((el as HTMLSelectElement).options)
@@ -461,7 +484,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
       }
 
       // d) text / textarea
-      if ((el as HTMLInputElement).value && (el as HTMLInputElement).value.trim())
+      if (!includePopulated && (el as HTMLInputElement).value && (el as HTMLInputElement).value.trim())
         continue;
       if (required && label.replace(/[^a-z0-9]/gi, "").length < 3) label = `Campo obbligatorio senza etichetta (${idx + 1})`;
       if (!required) continue;
@@ -471,7 +494,7 @@ async function collectRequiredEmptyFields(page: Page): Promise<FieldDescriptor[]
     }
 
     return out;
-  }, TAG) as Promise<FieldDescriptor[]>;
+  }, { tag: TAG, includePopulated }) as Promise<FieldDescriptor[]>;
 }
 
 // ---------- react-select helpers ----------

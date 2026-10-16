@@ -46,6 +46,11 @@ async function main() {
     const absent = await module.exports.answerRequiredFields(page, { city: "Milano" });
     assert.equal(absent.answered, 0); assert.equal(absent.remainingRequired, 1);
     assert.equal(await page.locator(".single-value").textContent(), "");
+    await widget("Location (City)", ["Roma"], ["Milano Marittima"]);
+    await page.locator(".single-value").evaluate(el => { el.textContent = "Roma"; });
+    const preset = await module.exports.answerRequiredFields(page, { city: "Milano" }, { includePopulated: true });
+    assert.equal(preset.answered, 0); assert.equal(preset.remainingRequired, 1, "An unapplied candidate fact cannot be replaced by an employer default");
+    assert.equal(preset.unanswered[0].label, "Location (City)");
     await widget("Country", ["Italy (+39)", "United Kingdom (+44)"], ["Italy (+39)", "United Kingdom (+44)"], true);
     const phone = await module.exports.answerRequiredFields(page, { phone: "+44 7911 123456", country: "Italy" });
     assert.equal(phone.answered, 1); assert.equal(phone.remainingRequired, 0);

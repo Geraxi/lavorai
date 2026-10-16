@@ -23,15 +23,17 @@ const cards = [card('alpha', 'Alpha Studio', 'Product Designer', 'I agree', 'che
   card('gamma', 'Gamma Team', 'Engineer', 'Work arrangement', 'radio', ['Onsite', 'Remote']),
   card('delta', 'Delta Agency', 'Developer', 'Work arrangement', 'radio', ['Hybrid', 'Remote'])];
 const stub = {
+  'next/navigation': `export const useRouter = () => ({refresh(){}});`,
   'next/link': `import React from 'react'; export default function Link(props) { return React.createElement('a', props); }`,
   '@/components/design/topbar': `export const AppTopbar = () => null;`,
   '@/components/design/company-logo': `export const CompanyLogo = () => null; export const companyColor = () => '#226644';`,
 };
 await build({
-  stdin: { contents: `import React from 'react'; import { createRoot } from 'react-dom/client'; import { QuestionsView } from './src/app/(app)/questions/questions-view';
+  stdin: { contents: `import React from 'react'; import { createRoot } from 'react-dom/client'; import { QuestionsView } from './src/app/(app)/questions/questions-view'; import { PrivacyConsentForm } from './src/components/privacy-consent-form'; import { continuationGuidance } from './src/lib/application-continuation-guidance';
   window.__requests = []; window.__fail = false; window.__resumed = false; window.__cards = ${JSON.stringify(cards)};
   window.fetch = async (url, options) => { window.__requests.push({url, options});
-    if (!options?.method) return { ok: true, json: async () => ({ questions: window.__cards, waitingApplications: 4, locale: 'en', continuations: [{ applicationId: 'alpha', company: 'Alpha Studio', title: 'Product Designer', canResume: !window.__resumed && window.__cards[0].answer === 'Yes', reason: 'answers_incomplete', proofDigest: 'a'.repeat(64) }, { applicationId: 'beta', company: 'Beta Company', title: 'UX Researcher', canResume: false, reason: 'continuation_proof_missing', proofDigest: null }] }) };
+    if(url === '/api/account/privacy-consent') return {ok: !window.__privacyFailure};
+    if (!options?.method) return { ok: true, json: async () => ({ questions: window.__cards, waitingApplications: 4, locale: 'en', continuations: [{ applicationId: 'alpha', company: 'Alpha Studio', title: 'Product Designer', canResume: !window.__resumed && window.__cards[0].answer === 'Yes', reason: 'answers_incomplete', proofDigest: 'a'.repeat(64) }, { applicationId: 'beta', company: 'Beta Company', title: 'UX Researcher', canResume: false, reason: 'continuation_proof_missing', proofDigest: null, guidance: continuationGuidance('continuation_proof_missing', 'beta', true) }, { applicationId: 'delta', company: 'Delta Agency', title: 'Developer', canResume: false, reason: 'privacy_consent_missing', proofDigest: null, guidance: continuationGuidance('privacy_consent_missing', 'delta', true) }] }) };
     const body = JSON.parse(options.body);
     if (body.reuseCvOnly) return {ok:true,json:async()=>({ok:true})};
     if(window.__fail) return {ok:false,status:409,json:async()=>({error:'questions_changed_reload'})};
@@ -39,7 +41,7 @@ await build({
     for (const answer of body.answers) { const card = window.__cards.find(card => card.applicationId === answer.applicationId && card.fingerprint === answer.fingerprint); card.answer = answer.answer; card.source = 'user'; }
     return {ok:true,json:async()=>({saved:body.answers.length,requeued:0,remainingApplications:4})};
   };
-  createRoot(document.getElementById('root')).render(<QuestionsView />);`, resolveDir: process.cwd(), loader: 'tsx' },
+  createRoot(document.getElementById('root')).render(<><QuestionsView /><div className="settings-workspace ds-section-card m-4 p-4" id="privacy-consent"><h2>Privacy consent</h2><PrivacyConsentForm recorded={false} locale="en" /></div></>);`, resolveDir: process.cwd(), loader: 'tsx' },
   bundle: true, platform: 'browser', format: 'iife', jsx: 'automatic', outfile: join(out, 'questions.js'),
   plugins: [{ name: 'isolated-boundaries', setup(builder) {
     builder.onResolve({ filter: /.*/ }, args => args.path in stub ? { path: args.path, namespace: 'test-stub' } : undefined);
@@ -93,7 +95,7 @@ try {
   await page.getByRole('status').filter({ hasText: 'Ripresa confermata e in coda' }).waitFor();
   const confirmed = await page.evaluate(() => window.__requests.filter(request => request.options?.body && JSON.parse(request.options.body).resumeApplications).map(request => JSON.parse(request.options.body)));
   assert.deepEqual(confirmed, [{ resumeApplications: [{ applicationId: 'alpha', proofDigest: 'a'.repeat(64) }] }]);
-  assert.match(await page.locator('.qa-notice').filter({ hasText: 'Beta Company' }).innerText(), /Ripresa bloccata/);
+  assert.match(await page.locator('.qa-notice').filter({ hasText: 'Beta Company' }).innerText(), /Continuation is blocked/);
   await page.getByRole('button', { name: /Da rispondere/ }).click();
   await beta.locator('.qa-row-head').click();
   assert.equal(await beta.locator('input:checked').count(), 0, 'Saving Alpha consent must not select Beta consent');
@@ -111,7 +113,25 @@ try {
   await delta.getByRole('button', { name: 'Salva risposta', exact: true }).click();
   await page.getByRole('status').filter({ hasText: 'Il form o le risposte sono cambiati' }).waitFor();
   assert.equal(await delta.count(), 1, 'A failed CAS must not make the question look completed');
-  await page.setViewportSize({ width: 390, height: 844 });
+  const privacy = page.locator('#privacy-consent');
+  assert.equal(await page.getByRole('link', {name:'Review privacy consent',exact:true}).getAttribute('href'), '/settings#privacy-consent');
+  assert.equal(await page.getByRole('link', {name:'Review this application',exact:true}).getAttribute('href'), '/applications?id=beta&includeAll=1');
+  assert.equal(await privacy.getByRole('checkbox').isChecked(), false);
+  const consentButton = privacy.getByRole('button', {name:'Save privacy consent'});
+  assert.equal(await consentButton.isDisabled(), true);
+  assert.equal(await privacy.getByRole('link', {name:'Read the privacy notice'}).getAttribute('href'), '/privacy');
+  await privacy.screenshot({ path: join(out, 'privacy-before-consent.png') });
+  await privacy.getByRole('checkbox').check();
+  await page.evaluate(() => { window.__privacyFailure = true; });
+  await consentButton.click();
+  await privacy.getByRole('alert').waitFor();
+  await page.evaluate(() => { window.__privacyFailure = false; });
+  await consentButton.click();
+  await privacy.getByRole('status').filter({hasText:'Privacy consent recorded'}).waitFor();
+  const privacyRequests = await page.evaluate(() => window.__requests.filter(request => request.url === '/api/account/privacy-consent').map(request => JSON.parse(request.options.body)));
+  assert.deepEqual(privacyRequests, [{privacyConsent:true}, {privacyConsent:true}]);
+  assert.equal(await page.evaluate(() => window.__requests.filter(request => request.options?.body && JSON.parse(request.options.body).resumeApplications).length), 1, 'Privacy consent does not confirm applications');
+  await page.setViewportSize({ width: 360, height: 844 });
   await page.screenshot({ path: join(out, 'mobile-scoped-question.png'), fullPage: true });
   const widths = await page.evaluate(() => ({ body: document.body.scrollWidth, viewport: innerWidth }));
   assert.ok(widths.body <= widths.viewport, `Mobile overflow: ${JSON.stringify(widths)}`);

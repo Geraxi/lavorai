@@ -67,6 +67,10 @@ export default async function AppLayout({
         }}
       >
         <OnboardingBanner />
+        {!user.privacyConsentAt && <div className="ds-section-card m-4 p-4" role="status">
+          <p>{user.locale === "en" ? "Applications are waiting for your privacy consent." : "Le candidature sono in attesa del tuo consenso privacy."}</p>
+          <a className="underline" href="/settings#privacy-consent">{user.locale === "en" ? "Read the notice and review consent in Settings" : "Leggi l’informativa e rivedi il consenso nelle Impostazioni"}</a>
+        </div>}
         {/* Coverage warning: mostra solo se verticale utente low-coverage
             + modalità auto. Previene case Giuseppe (pagante che aspetta
             magia auto-apply su verticale non coperto). Self-hide se

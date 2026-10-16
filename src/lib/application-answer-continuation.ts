@@ -10,6 +10,9 @@ export type AnswerContinuation = {
   attemptStartedAt: string; workToken: string; channel: string; consentGrantedAt: string;
   pendingHash: string; pausedAt: string; phase: "paused" | "queued" | "running";
   confirmedAt: string | null; finalSubmitStarted: boolean;
+  preTransmissionEvidence?: "greenhouse_blank_form_v1";
+  candidateDataStartedAt?: string;
+  verificationSubmitStarted?: boolean;
 };
 export const continuationSelect = {
   id: true, userId: true, jobId: true, createdAt: true, consentGrantedAt: true, retryCount: true,
@@ -38,6 +41,9 @@ export function parseAnswerContinuation(json: string | null | undefined): Answer
     for (const key of ["attemptStartedAt", "workToken", "consentGrantedAt", "pausedAt"]) if (!Number.isFinite(Date.parse(value[key]))) return null;
     if (value.confirmedAt !== null && (typeof value.confirmedAt !== "string" || !Number.isFinite(Date.parse(value.confirmedAt)))) return null;
     if (!/^portal_[a-z0-9_-]+$/.test(value.channel) || !/^[a-f0-9]{64}$/.test(value.pendingHash)) return null;
+    if (value.channel === "portal_greenhouse" && value.preTransmissionEvidence !== "greenhouse_blank_form_v1") return null;
+    if (value.candidateDataStartedAt !== undefined && (typeof value.candidateDataStartedAt !== "string" || !Number.isFinite(Date.parse(value.candidateDataStartedAt)))) return null;
+    if (value.verificationSubmitStarted !== undefined && typeof value.verificationSubmitStarted !== "boolean") return null;
     return value;
   } catch { return null; }
 }
@@ -51,7 +57,8 @@ export function answerContinuationIneligibility(row: ContinuationRow, phase: Ans
     } catch { return "continuation_delivery_evidence"; }
   }
   const proof = parseAnswerContinuation(row.answerContinuationJson);
-  if (!proof || proof.channel !== "portal_recruitee" || proof.phase !== phase || proof.finalSubmitStarted) return "continuation_proof_missing";
+  if (!proof || !["portal_recruitee", "portal_greenhouse"].includes(proof.channel) || proof.phase !== phase) return "continuation_proof_missing";
+  if (proof.finalSubmitStarted || proof.candidateDataStartedAt || proof.verificationSubmitStarted) return "continuation_delivery_uncertain";
   if (proof.applicationId !== row.id || proof.userId !== row.userId || proof.jobId !== row.jobId
     || (jobUrl !== undefined && proof.jobUrl !== jobUrl) || proof.workToken !== row.startedAt?.toISOString()
     || proof.consentGrantedAt !== row.consentGrantedAt?.toISOString()

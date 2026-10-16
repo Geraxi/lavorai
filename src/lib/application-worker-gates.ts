@@ -54,7 +54,8 @@ export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date())
   if (rolloutReason) return rolloutReason;
   const user = row.user;
   if (user.suspendedAt) return "user_suspended";
-  if (!user.emailVerified || !user.privacyConsentAt) return "consent_or_verification_missing";
+  if (!user.privacyConsentAt) return "privacy_consent_missing";
+  if (!user.emailVerified) return "email_verification_missing";
   const mode = user.preferences?.autoApplyMode;
   if (mode === "off" || !mode || (mode !== "auto" && !(["manual", "hybrid"].includes(mode) && row.consentGrantedAt))) return "auto_apply_not_enabled";
   if (user.subscriptionStatus === "paused" || (user.pausedUntil && user.pausedUntil > now)) return "subscription_paused";
@@ -125,6 +126,8 @@ function heldMessage(reason: string): string {
     session_capacity_reached: "Limite del round occupato da invii o candidature ancora in attesa",
     user_suspended: "Account sospeso",
     consent_or_verification_missing: "Verifica email o consenso privacy da completare",
+    privacy_consent_missing: "Consenso privacy mancante. Apri Impostazioni → Consenso privacy (/settings#privacy-consent) per leggere l’informativa e scegliere se acconsentire",
+    email_verification_missing: "Verifica l’indirizzo email del tuo account",
     subscription_paused: "Abbonamento in pausa",
     billing_ineligible: "Abbonamento non attivo o scaduto",
     job_closed: "Annuncio chiuso",
@@ -220,6 +223,7 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     if (row.answerContinuationJson && (!continuation || answerContinuationIneligibility(row, "running", row.job.url)
       || continuation.channel !== channel || !await continuationReservationMatches(tx, row, continuation))) return false;
+    if (["portal_greenhouse", "portal_recruitee"].includes(channel) && !await destinationIsUnique(tx, row, channel)) return false;
     const budgetReason = await reserveSubmissionBudget(tx, { applicationId: id,
       subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, continuation ? "recheck" : "begin");
     if (budgetReason) {
@@ -239,14 +243,28 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
  * stopped attempt may already have transmitted uploads; retain its reservation
  * and uncertainty rather than permitting an automatic replay.
  */
-export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = ""): Promise<boolean> {
+export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit"): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || row.status !== "applying" || row.submitConfirmation !== SUBMISSION_STARTED) return false;
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
+    if (boundary !== "final_submit" && channel !== "portal_greenhouse") return false;
+    // Continuations are one-way: blank inspection -> candidate data -> final
+    // submit -> optional security-code submit. Each boundary is consumed once.
+    if (continuation) {
+      if (boundary === "candidate_data") {
+        if (continuation.candidateDataStartedAt || continuation.finalSubmitStarted || continuation.verificationSubmitStarted) return false;
+      } else if (channel === "portal_greenhouse") {
+        if (!continuation.candidateDataStartedAt || continuation.verificationSubmitStarted) return false;
+        if (boundary === "final_submit" && continuation.finalSubmitStarted) return false;
+        if (boundary === "verification_submit" && !continuation.finalSubmitStarted) return false;
+      } else if (continuation.finalSubmitStarted) return false;
+    }
+    const preTransmissionProof = continuation ? JSON.stringify({ ...continuation, candidateDataStartedAt: undefined, finalSubmitStarted: false, verificationSubmitStarted: undefined }) : null;
     if (row.answerContinuationJson && (!continuation || continuation.channel !== channel
-      || answerContinuationIneligibility({ ...row, status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED }, "running", row.job.url)
+      || answerContinuationIneligibility({ ...row, answerContinuationJson: preTransmissionProof, status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED }, "running", row.job.url)
       || !await continuationReservationMatches(tx, row, continuation))) return false;
+    if (["portal_greenhouse", "portal_recruitee"].includes(channel) && !await destinationIsUnique(tx, row, channel)) return false;
     const reason = currentWorkerIneligibility(row)
       ?? await reserveSubmissionBudget(tx, { applicationId: id,
         subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, "recheck");
@@ -258,7 +276,10 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
       return false;
     }
     if (continuation) await tx.application.update({ where: { id }, data: {
-      answerContinuationJson: JSON.stringify({ ...continuation, finalSubmitStarted: true }),
+      answerContinuationJson: JSON.stringify({ ...continuation,
+        ...(boundary === "candidate_data" ? { candidateDataStartedAt: new Date().toISOString() }
+          : boundary === "verification_submit" ? { verificationSubmitStarted: true } : { finalSubmitStarted: true }),
+      }),
     } });
     return true;
   })) === true;
@@ -319,7 +340,7 @@ export async function completeApplicationSubmission(
 
 /** Read-only validation never refunds, replaces or deletes a reservation. */
 async function continuationReservationMatches(tx: Prisma.TransactionClient, row: WorkerGateRow, proof: AnswerContinuation): Promise<boolean> {
-  if (proof.channel !== "portal_recruitee") return false; // only audited pre-transmission adapter
+  if (!["portal_recruitee", "portal_greenhouse"].includes(proof.channel)) return false;
   const subjectKey = submissionSubjectKey(row.userId, row.jobId);
   const reservations = await tx.applicationSubmissionReservation.findMany({ where: { OR: [{ applicationId: row.id }, { subjectKey }] } });
   if (!reservations.length || reservations.some(r => r.applicationId !== row.id || r.subjectKey !== subjectKey
@@ -327,21 +348,44 @@ async function continuationReservationMatches(tx: Prisma.TransactionClient, row:
     || r.rolloutStartedAt.toISOString() !== applicationRolloutConfig().startedAt?.toISOString())) return false;
   if (await tx.applicationEmailAttempt.findFirst({ where: { applicationId: row.id }, select: { id: true } })) return false;
   if (await tx.application.findFirst({ where: { userId: row.userId, jobId: row.jobId, id: { not: row.id } }, select: { id: true } })) return false;
+  return destinationIsUnique(tx, row, proof.channel);
+}
+
+/** Greenhouse board-host aliases and embedded forms identify the same global
+ * posting. Recruitee slugs are scoped to the employer's origin. */
+export function continuationDestination(channel: string, value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    if (channel === "portal_greenhouse") {
+      const native = /^(?:boards|job-boards|jobs)\.greenhouse\.io$/i.test(url.hostname);
+      const posting = native ? url.pathname.match(/\/jobs\/(\d+)(?:\/|$)/)?.[1] ?? (url.pathname === "/embed/job_app" ? url.searchParams.get("token") : null) : url.searchParams.get("gh_jid");
+      return posting && /^\d+$/.test(posting) ? `greenhouse:${posting}` : null;
+    }
+    const posting = receiptJobId("recruitee", value);
+    return channel === "portal_recruitee" && posting ? `${url.origin}/o/${posting}` : null;
+  } catch { return null; }
+}
+
+async function destinationIsUnique(tx: Prisma.TransactionClient, row: WorkerGateRow, channel: string): Promise<boolean> {
   // Duplicate imported Job rows can target the same ATS posting. Compare the
   // provider, host and posting ID, rather than trusting only internal jobId.
   const others = await tx.application.findMany({ where: { userId: row.userId, id: { not: row.id } }, select: { job: { select: { url: true } } } });
-  const destination = (url: string) => { try { const posting = receiptJobId("recruitee", url); return posting ? `${new URL(url).origin}/o/${posting}` : null; } catch { return null; } };
-  const target = destination(proof.jobUrl);
+  const destination = (url: string) => continuationDestination(channel, url);
+  const target = destination(row.job.url);
   if (!target || others.some(other => destination(other.job.url) === target)) return false;
-  const importedJobs = await tx.job.findMany({ where: { url: { startsWith: new URL(proof.jobUrl).origin } }, select: { id: true, url: true } });
+  const importedJobs = await tx.job.findMany({ where: channel === "portal_greenhouse"
+    ? { OR: [{ url: { contains: "greenhouse.io", mode: "insensitive" } }, { url: { contains: "gh_jid=", mode: "insensitive" } }] }
+    : { url: { startsWith: new URL(row.job.url).origin, mode: "insensitive" } }, select: { id: true, url: true } });
   const duplicateSubjects = importedJobs.filter(job => job.id !== row.jobId && destination(job.url) === target).map(job => submissionSubjectKey(row.userId, job.id));
   return !duplicateSubjects.length || !await tx.applicationSubmissionReservation.findFirst({ where: { subjectKey: { in: duplicateSubjects } }, select: { id: true } });
 }
 
 /** Called only by the audited adapter wrapper after it returned before its sole
- * candidate POST. Browser adapters and old NOT_SUBMITTED rows get no attestation. */
-export async function attestAnswerPause(id: string, token: Date, channel: string, pendingQuestionsJson: string, jobUrl: string, db: DB = prisma): Promise<boolean> {
-  if (channel !== "portal_recruitee") return false;
+ * candidate POST, or Greenhouse's blank-form callback before any personal data.
+ * Old NOT_SUBMITTED rows and post-upload pauses get no attestation. */
+export async function attestAnswerPause(id: string, token: Date, channel: string, pendingQuestionsJson: string, jobUrl: string, db: DB = prisma, evidence?: "greenhouse_blank_form_v1"): Promise<boolean> {
+  if (channel !== "portal_recruitee" && !(channel === "portal_greenhouse" && evidence === "greenhouse_blank_form_v1")) return false;
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.job.url !== jobUrl || row.status !== "applying" || row.startedAt?.getTime() !== +token
       || row.submitConfirmation !== SUBMISSION_STARTED || rolloutApplicationIneligibility(row)
@@ -351,12 +395,13 @@ export async function attestAnswerPause(id: string, token: Date, channel: string
     try { pending = JSON.parse(pendingQuestionsJson); } catch { return false; }
     if (!Array.isArray(pending) || !pending.length || pending.length > 100 || pending.some(value => !parseApplicationQuestion(value))) return false;
     const previous = parseAnswerContinuation(row.answerContinuationJson);
-    if (row.answerContinuationJson && (!previous || previous.phase !== "running" || previous.finalSubmitStarted || previous.workToken !== token.toISOString())) return false;
+    if (row.answerContinuationJson && (!previous || answerContinuationIneligibility({ ...row, status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED }, "running", jobUrl))) return false;
     const proof: AnswerContinuation = {
       version: 1, applicationId: id, userId: row.userId, jobId: row.jobId, jobUrl: row.job.url,
       attemptStartedAt: previous?.attemptStartedAt ?? token.toISOString(), workToken: token.toISOString(), channel,
       consentGrantedAt: row.consentGrantedAt!.toISOString(), pendingHash: continuationDigest(pendingQuestionsJson),
       pausedAt: new Date().toISOString(), phase: "paused", confirmedAt: null, finalSubmitStarted: false,
+      ...(channel === "portal_greenhouse" ? { preTransmissionEvidence: evidence } : {}),
     };
     if (!await continuationReservationMatches(tx, row, proof)) return false;
     await tx.application.update({ where: { id }, data: {
@@ -374,7 +419,8 @@ export async function queueAnswerContinuation(input: {
 }, db: DB = prisma): Promise<string> {
   return (await withLockedApplication(input.applicationId, db, async (tx, row) => {
     if (!row || row.userId !== input.userId) return "application_not_found";
-    if (!row.answerContinuationJson || row.userProvidedAnswersJson !== input.expectedAnswersJson) return "questions_changed_reload";
+    if (!row.answerContinuationJson) return "continuation_proof_missing";
+    if (row.userProvidedAnswersJson !== input.expectedAnswersJson) return "questions_changed_reload";
     const reason = answerContinuationIneligibility(row, "paused", row.job.url) ?? currentWorkerIneligibility(row);
     if (reason) return reason;
     const proof = parseAnswerContinuation(row.answerContinuationJson)!;

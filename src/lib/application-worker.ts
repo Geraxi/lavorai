@@ -1147,7 +1147,7 @@ async function ensureLocalPath(
   return localPath;
 }
 
-async function recheckBeforePortalSubmit(applicationId: string, workToken: Date, jobUrl: string, channel: string): Promise<boolean> {
+async function recheckBeforePortalSubmit(applicationId: string, workToken: Date, jobUrl: string, channel: string, boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit"): Promise<boolean> {
   const live = await checkJobUrlLiveness(jobUrl);
   if (live.state !== "live") {
     if (live.state === "closed") {
@@ -1164,7 +1164,7 @@ async function recheckBeforePortalSubmit(applicationId: string, workToken: Date,
     } });
     return false;
   }
-  return recheckApplicationSubmission(applicationId, workToken, undefined, channel);
+  return recheckApplicationSubmission(applicationId, workToken, undefined, channel, boundary);
 }
 
 async function portalSubmitStrategy(
@@ -1862,13 +1862,34 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       return { ok: false, status: "worker_gate_blocked", error: "Current worker gates blocked delivery." };
     }
     let finalBoundaryEntered = false;
+    let candidateDataEntered = false;
+    let verificationEntered = false;
+    let pauseEntered = false;
     const audit: import("@/lib/portal-adapters/ai-answer").GivenAnswer[] = [];
     const outcome = await adapter.apply(page, {
       profile,
       beforeSubmit: () => {
+        if (finalBoundaryEntered || pauseEntered || (adapter.id === "greenhouse" && !candidateDataEntered)) return Promise.resolve(false);
         finalBoundaryEntered = true;
         return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, `portal_${adapter.id}`);
       },
+      ...(adapter.id === "greenhouse" ? {
+        onPreTransmissionPause: (questions: import("./portal-adapters/types").PendingQuestion[]) => {
+          if (candidateDataEntered || finalBoundaryEntered || pauseEntered) return Promise.resolve(false);
+          pauseEntered = true;
+          return attestAnswerPause(applicationId, input.workToken, "portal_greenhouse", JSON.stringify(questions), jobUrl, undefined, "greenhouse_blank_form_v1");
+        },
+        beforeCandidateData: () => {
+          if (candidateDataEntered || finalBoundaryEntered || pauseEntered) return Promise.resolve(false);
+          candidateDataEntered = true;
+          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, "portal_greenhouse", "candidate_data");
+        },
+        beforeVerificationSubmit: () => {
+          if (!candidateDataEntered || !finalBoundaryEntered || verificationEntered || pauseEntered) return Promise.resolve(false);
+          verificationEntered = true;
+          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, "portal_greenhouse", "verification_submit");
+        },
+      } : {}),
       userEmail: formEmail,
       cvLocalPath,
       clLocalPath,
@@ -1896,8 +1917,8 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       onAiAnswers: (given) => { audit.push(...given); },
     });
     if (audit.length) await persistAiAnswers(userId, applicationId, input.workToken, audit);
-    // Only Recruitee's audited sequence has no candidate-data transmission
-    // before needs_user_input. Browser uploads/autosave cannot prove that.
+    // Greenhouse attests only from its blank-form callback above. Later browser
+    // questions (after autosave/uploads) must never create or renew that proof.
     if (adapter.id === "recruitee" && !finalBoundaryEntered && !outcome.ok && outcome.status === "needs_user_input") {
       await attestAnswerPause(applicationId, input.workToken, "portal_recruitee", JSON.stringify(outcome.pendingQuestions), jobUrl);
     }

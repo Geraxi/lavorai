@@ -9,6 +9,8 @@ import type {
 } from "./types";
 import type { Page } from "playwright";
 import { detectBlockingCaptcha } from "./captcha";
+import { resolveCandidateFact } from "../candidate-facts";
+import { completesApplicationQuestion, resolveScopedQuestionAnswer } from "../application-question-answers";
 
 /**
  * Canary helper: scatta uno screenshot della page corrente e lo
@@ -157,7 +159,7 @@ export const greenhouseAdapter: PortalAdapter = {
           return "";
         }
       })();
-      if (!finalHost.includes("greenhouse.io")) {
+      if (!HOSTS.some(re => re.test(finalHost))) {
         // redirect fuori da Greenhouse → prova URL successivo
         continue;
       }
@@ -194,6 +196,33 @@ export const greenhouseAdapter: PortalAdapter = {
     );
 
     try {
+      // This is the only resumable pause: a fresh, unauthenticated public form
+      // has received no candidate field, search value, CV or cover letter.
+      // Do not move this below any fill/upload (modern forms can autosave).
+      if (input.onPreTransmissionPause) {
+        const { inspectRequiredQuestions } = await import("./ai-answer");
+        const { buildAnswerContext } = await import("./web-form");
+        const context = buildAnswerContext(input);
+        const questions = await inspectRequiredQuestions(page);
+        const missing = questions.filter(question => {
+          const scoped = resolveScopedQuestionAnswer(input.storedAnswers, question);
+          if (scoped.conflict) return true;
+          const fact = scoped.answer ? null : resolveCandidateFact(question, context, true);
+          const answer = scoped.answer ?? fact?.answer;
+          // A factual search value can be tried later; it never selects a
+          // choice now. The filler still verifies the resulting exact option.
+          if (!scoped.answer && fact?.answer && question.kind === "react-select") return false;
+          return !answer || !completesApplicationQuestion({ ...question, options: question.options ?? [] }, answer);
+        });
+        if (missing.length) {
+          if (!await input.onPreTransmissionPause(missing)) return { ok: false, status: "submission_unconfirmed", error: "Pausa non verificabile. Nessun dato candidato inserito; controlla lo stato prima di riprovare." };
+          return { ok: false, status: "needs_user_input", pendingQuestions: missing,
+            error: `${missing.length} risposte richieste. Pausa verificata prima di inserire dati o allegati nel portale.` };
+        }
+        // Durable, one-way boundary before the first candidate data can leave
+        // this process, including on-change autosave and asynchronous uploads.
+        if (!input.beforeCandidateData || !await input.beforeCandidateData()) return { ok: false, status: "submission_unconfirmed", error: "Invio fermato dai controlli attuali prima di inserire dati nel portale." };
+      }
       // Fallback obbligatorio: se profile.email è vuoto (il parser AI non
       // l'ha estratto dal CV), uso l'email dell'account. Senza email il
       // recruiter non può rispondere.
@@ -372,7 +401,7 @@ export const greenhouseAdapter: PortalAdapter = {
       try {
         const { answerRequiredFields } = await import("./ai-answer");
         const { buildAnswerContext } = await import("./web-form");
-        const ai = await answerRequiredFields(page, buildAnswerContext(input));
+        const ai = await answerRequiredFields(page, buildAnswerContext(input), { includePopulated: Boolean(input.onPreTransmissionPause) });
         pendingQuestions = ai.unanswered;
         if (ai.given.length > 0) input.onAiAnswers?.(ai.given);
         aiDebug = `answered=${ai.answered} remaining=${ai.remainingRequired} | ${ai.details.join(" ; ")}`;
@@ -492,7 +521,7 @@ export const greenhouseAdapter: PortalAdapter = {
         if (!input.applicationId || !inboundEnabled || !hasInboundAlias) {
           return { ok: false, status: "submission_unconfirmed", error: "Verifica email richiesta dal portale. Configurare la ricezione email o completare la verifica prima di un nuovo invio.", canary: canaryFull };
         }
-        const verified = await submitWithSecurityCode(page, input.applicationId, submittedAt, undefined, input.jobUrl, input.beforeSubmit);
+        const verified = await submitWithSecurityCode(page, input.applicationId, submittedAt, undefined, input.jobUrl, input.beforeVerificationSubmit ?? input.beforeSubmit);
         return { ...verified, canary: canaryFull };
       }
       return { ...observed.outcome, canary: canaryFull };

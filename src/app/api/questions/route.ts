@@ -1,4 +1,5 @@
 import { answerContinuationIneligibility, answerConfirmationDigest, continuationSelect } from "@/lib/application-answer-continuation";
+import { continuationGuidance } from "@/lib/application-continuation-guidance";
 import { queueAnswerContinuation } from "@/lib/application-worker-gates";
 import { candidateFacts, resolveCandidateFact } from "@/lib/candidate-facts";
 import { parseAnswers } from "@/lib/application-answers";
@@ -31,7 +32,7 @@ export async function GET() {
     prisma.userAnswer.findMany({ where: { userId: user.id, source: "user" }, select: { label: true, kind: true, answer: true, source: true, answeredAt: true, optionsJson: true } }),
     prisma.cVProfile.findUnique({ where: { userId: user.id } }),
     prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { applicationAnswersJson: true } }),
-    prisma.user.findUnique({ where: { id: user.id }, select: { email: true, yearsExperience: true, englishLevel: true, noticePeriod: true } }),
+    prisma.user.findUnique({ where: { id: user.id }, select: { email: true, yearsExperience: true, englishLevel: true, noticePeriod: true, privacyConsentAt: true } }),
   ]);
   const profile = profileRow ? rowToProfile(profileRow) : null;
   const facts = candidateFacts(profile, userFacts ?? user, parseAnswers(preferences?.applicationAnswersJson), globalAnswers);
@@ -63,8 +64,9 @@ export async function GET() {
   const continuations = waiting.map(app => {
     const appQuestions = questions.filter(question => question.applicationId === app.id);
     const complete = appQuestions.length > 0 && appQuestions.every(question => completesApplicationQuestion(question, question.answer || question.suggestion || ""));
-    const reason = answerContinuationIneligibility(app, "paused", app.job.url) ?? (complete ? null : "answers_incomplete");
+    const reason = !userFacts?.privacyConsentAt ? "privacy_consent_missing" : answerContinuationIneligibility(app, "paused", app.job.url) ?? (complete ? null : "answers_incomplete");
     return { applicationId: app.id, company: app.job.company, title: app.job.title, canResume: !reason, reason,
+      guidance: reason ? continuationGuidance(reason, app.id, user.locale === "en") : null,
       proofDigest: !reason && app.answerContinuationJson ? answerConfirmationDigest(app.answerContinuationJson, app.userProvidedAnswersJson, facts) : null };
   });
   return NextResponse.json({ locale: user.locale, questions, continuations, waitingApplications: waiting.length });

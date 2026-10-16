@@ -28,10 +28,10 @@ const aliases: Record<string, string[]> = {
   phone: ["phone", "phone number", "telephone", "mobile", "telefono", "numero di telefono", "cellulare"],
   phoneCountry: ["phone country", "phone country code", "phone country/region", "country calling code", "dial code", "dialing code", "country code", "prefisso telefonico"],
   city: ["city", "location (city)", "current city", "city of residence", "current location", "città", "citta", "città di residenza", "citta di residenza", "where do you live", "where are you based", "where are you currently based", "where are you located", "what city do you live in", "dove vivi", "dove risiedi", "in quale città vivi", "qual è la tua città di residenza"],
-  country: ["country", "current country", "country of residence", "country/region of residence", "paese", "nazione", "paese di residenza"],
+  country: ["country", "current country", "country of residence", "current country of residence", "country/region of residence", "residence country", "country where you currently reside", "in which country do you currently reside", "which country do you currently live in", "what country do you live in", "paese", "nazione", "paese di residenza", "in quale paese risiedi"],
   currentEmployer: ["current employer", "current company", "azienda attuale", "datore di lavoro attuale", "qual è la tua azienda attuale", "where do you currently work"],
   currentOrPreviousEmployer: ["current or previous employer", "current/previous employer", "current / previous employer", "who is your current or previous employer"],
-  previousEmployer: ["previous employer", "previous company", "azienda precedente", "datore di lavoro precedente"],
+  previousEmployer: ["previous employer", "previous employer name", "name of your previous employer", "previous company", "most recent previous employer", "azienda precedente", "datore di lavoro precedente"],
   mostRecentEmployer: ["most recent employer", "last employer", "ultima azienda"],
   currentJobTitle: ["current job title", "current position", "current role", "ruolo attuale", "posizione attuale", "qual è il tuo ruolo attuale", "qual è la tua posizione attuale"],
   currentOrPreviousJobTitle: ["current or previous job title"],
@@ -60,7 +60,7 @@ function canonicalFactValue(key: string | null, value: string): string {
   const normalized = normalizedValue(value);
   if (key === "phone") return normalized.replace(/[\s().-]/g, "").replace(/^00/, "+");
   const groups: Record<string, string[][]> = {
-    country: [["italy", "italia", "it"], ["united kingdom", "uk", "regno unito"], ["united states", "united states of america", "usa", "stati uniti"]],
+    country: [["italy", "italia", "it", "ita"], ["united kingdom", "uk", "gb", "gbr", "regno unito"], ["united states", "united states of america", "us", "usa", "stati uniti"]],
     noticePeriod: [["immediate", "immediately", "immediata", "immediato"], ["2weeks", "2 weeks", "2 settimane"], ["1month", "1 month", "1 mese"], ["2months", "2 months", "2 mesi"], ["3months_plus", "3 months or more", "3 mesi o più"]],
     highestEducation: [["high_school", "high school", "high school diploma"], ["bachelor", "bachelor's degree", "bachelor’s degree"], ["master", "master's degree", "master’s degree"], ["phd", "ph.d.", "doctorate"]],
   };
@@ -122,7 +122,21 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
   return { answer: answer ?? (allowSearchValue && question.kind === "react-select" && reusableFactKey(question.label) !== "phoneCountry" ? value : null), provenance, conflict: false };
 }
 
-export function candidateFacts(profile: CVProfile | null, user: { email?: string | null; yearsExperience?: number | null; englishLevel?: string | null; noticePeriod?: string | null } = {}, preferences: ApplicationAnswers = {}, saved: SavedFactAnswer[] = []): Fact[] {
+/** Only a fully elapsed, explicit calendar period proves a job has ended.
+ * Current-year-only, empty, ambiguous and invalid dates remain unknown. */
+export function employmentEnded(endDate: string, now = new Date()): boolean {
+  const value = endDate.trim();
+  const year = value.match(/^(19\d{2}|20\d{2})$/);
+  if (year) return +year[1] < now.getUTCFullYear();
+  const month = value.match(/^(19\d{2}|20\d{2})-(\d{2})$/);
+  if (month) return +month[2] >= 1 && +month[2] <= 12 && Date.UTC(+month[1], +month[2], 1) <= +now;
+  const day = value.match(/^(19\d{2}|20\d{2})-(\d{2})-(\d{2})$/);
+  if (!day) return false;
+  const date = new Date(Date.UTC(+day[1], +day[2] - 1, +day[3]));
+  return date.toISOString().slice(0, 10) === value && +date + 86400000 <= +now;
+}
+
+export function candidateFacts(profile: CVProfile | null, user: { email?: string | null; yearsExperience?: number | null; englishLevel?: string | null; noticePeriod?: string | null } = {}, preferences: ApplicationAnswers = {}, saved: SavedFactAnswer[] = [], now = new Date()): Fact[] {
   const facts: Fact[] = [];
   const add = (key: string, value: unknown, source: FactSource, reference = key) => {
     if ((typeof value === "string" && value.trim()) || (typeof value === "number" && Number.isFinite(value) && value >= 0)) facts.push({ key, value: String(value).trim(), source, reference });
@@ -134,11 +148,7 @@ export function candidateFacts(profile: CVProfile | null, user: { email?: string
     // An empty end date is not proof of current employment. Ordered CV history
     // supplies the most recent employer; multiple current jobs remain ambiguous.
     current.forEach((e, i) => { add("currentEmployer", e.company, "cv", `experiences.current.${i}`); add("currentJobTitle", e.role, "cv", `experiences.current.${i}`); });
-    const previous = profile.experiences.findIndex(e => {
-      if (/present|current|now|oggi|presente|attuale|in corso/i.test(e.endDate)) return false;
-      const year = e.endDate.match(/\b(?:19|20)\d{2}\b/)?.[0];
-      return !!year && +year < new Date().getFullYear();
-    });
+    const previous = profile.experiences.findIndex(e => e.company.trim() && employmentEnded(e.endDate, now));
     if (previous >= 0) add("previousEmployer", profile.experiences[previous].company, "cv", `experiences.${previous}.company`);
     add("mostRecentEmployer", profile.experiences[0]?.company, "cv", "experiences.0.company");
     add("mostRecentJobTitle", profile.experiences[0]?.role, "cv", "experiences.0.role");

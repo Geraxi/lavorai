@@ -1,5 +1,9 @@
 # LavorAI — design system (extracted from the cinematic hero)
 
+## Application consent repair
+
+The signed-in consent control follows `product-workspace.css` and existing Settings components: `SectionCard`, `SectionHead`, `SectionBody`, `ds-btn`, inherited body type and color tokens. Use the existing 4/12/16px spacing utilities and card radii. No new colors, type scale or animations. Keep the checkbox unchecked, the policy link visible, the action disabled until explicit selection, and errors/status announced. Question holds reuse `qa-notice` with a text action link that wraps on mobile.
+
 Source of truth: `src/components/landing/cinematic-hero.{tsx,module.css}` (the hero is frozen; everything
 below the fold extends it). Mode: landing = Persuade. The signed-in product palette is owned by
 `src/components/design/product-workspace.css` (see `docs/PRODUCT_CONSISTENCY_CANDIDATE.md`); this file covers the landing only.

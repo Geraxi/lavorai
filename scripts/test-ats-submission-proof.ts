@@ -1,3 +1,5 @@
+import * as candidateFacts from "../src/lib/candidate-facts";
+import * as questionAnswers from "../src/lib/application-question-answers";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
@@ -242,6 +244,8 @@ function loadAdapter(name: string, dependencies: Record<string, unknown>, global
 }
 async function testRealAshbyAndOtp() {
   const deps = {
+    "../candidate-facts": candidateFacts,
+    "../application-question-answers": questionAnswers,
     "./submission-proof": proofModule,
     "./captcha": captcha,
     "../application-security-code": securityCode,
