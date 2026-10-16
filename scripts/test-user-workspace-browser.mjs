@@ -534,6 +534,10 @@ try {
   }
   await page.goto(base+'/discover?locale=en');
   await page.locator('.discover-card').waitFor();
+  // Light is the default theme for users without a saved preference.
+  assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
+  await page.getByRole('button',{name:'Dark theme',exact:true}).first().click();
+  assert.equal(await page.locator('html').getAttribute('data-theme'),null);
   await page.getByRole('button',{name:'Light theme',exact:true}).first().click();
   assert.equal(await page.locator('html').getAttribute('data-theme'),'light');
   await page.getByRole('button',{name:'Dark theme',exact:true}).first().waitFor();
