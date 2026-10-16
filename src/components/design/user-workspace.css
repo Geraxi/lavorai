@@ -372,3 +372,13 @@
 @media (max-width: 480px) {
   .reference-workspace .pipeline-board { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Light theme (default): the compact globe keeps its dark scene, as the
+   full hero does in globals.css; the region picker beside it follows the
+   light tokens instead of the dark-scene pill colours. */
+[data-theme="light"] .reference-workspace .workspace-dashboard-grid .dg-compact,
+[data-theme="light"] .reference-workspace .dg-compact .dg-empty { background: #010510; color: #F7F8FA; }
+[data-theme="light"] .dg-region .dg-pill { color: var(--fg-muted); background: var(--bg-sunken); }
+[data-theme="light"] .dg-region .dg-pill.is-active { color: var(--primary-ds); background: color-mix(in srgb, var(--primary-ds) 14%, transparent); }
+[data-theme="light"] .dg-region .dg-region-counts { color: var(--fg-muted); }
+[data-theme="light"] .dg-region .dg-region-counts b { color: var(--fg); }
