@@ -102,8 +102,7 @@ export default async function DashboardPage() {
           </div>
           <div className="workspace-dashboard-grid">
             <div className="workspace-stack dashboard-primary">
-              <AttentionQueue queue={attention} state={onboarding} locale={locale} />
-<details className="dashboard-map-disclosure"><summary>{tr("Mappa delle opportunità", "Opportunity map")}</summary>              <section className="workspace-panel dashboard-overview">
+              <section className="workspace-panel dashboard-overview">
                 <div className="fit-card-head">
                   <h2><Icon name="globe" size={14} /> {tr("Panoramica globale", "Global overview")}</h2>
                   <div className="dashboard-overview-actions"><AutoApplyToggle locale={locale} /><Link href="/discover" className="workspace-chip">{globe.stats.counts.open} {tr("opportunità sulla mappa", "mapped opportunities")}</Link></div>
@@ -128,7 +127,7 @@ export default async function DashboardPage() {
                   <DashboardRegionPanel markers={globe.markers} />
                 </div></div>
               </section>
-</details>
+              <AttentionQueue queue={attention} state={onboarding} locale={locale} />
               <section className="workspace-panel dashboard-opportunities">
                 <div className="fit-card-head">
                   <h2>{tr("Opportunità selezionate", "Selected opportunities")}</h2>

@@ -360,6 +360,4 @@
 .match-explanation p,.match-explanation blockquote { font-size:12px; overflow-wrap:anywhere; }
 .match-explanation blockquote { border-left:2px solid var(--primary-ds); padding-left:10px; margin-top:8px; }
 
-.dashboard-map-disclosure { flex-shrink:0; border:1px solid var(--border-ds); border-radius:8px; }
-.dashboard-map-disclosure summary { cursor:pointer; padding:10px 14px; font-size:13px; }
-@media(min-width:1024px) { .dashboard-primary { overflow-y:auto; padding-right:3px; } .dashboard-map-disclosure[open] { max-height:350px; overflow:auto; } }
+@media(min-width:1024px) { .dashboard-primary { overflow-y:auto; padding-right:3px; } }

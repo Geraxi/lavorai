@@ -208,9 +208,9 @@ try {
     assert.equal(await page.locator('.attention-next .ds-btn-primary').count(),1);
     assert.ok(await page.locator('.attention-list').evaluate(el=>el.scrollHeight>el.clientHeight),'Long queue scrolls inside the panel');
     await shot('dashboard-dense');
-    await page.locator('.dashboard-map-disclosure summary').click();
-    await page.locator('.dg-globe canvas').waitFor();
-    assert.ok(await page.locator('.lavorai-main').evaluate(el=>el.scrollHeight<=el.clientHeight+1),'Existing map expands without page overflow');await shot('dashboard-map-expanded');
+    await page.locator('.dashboard-primary > .dashboard-overview .dg-globe canvas').waitFor();
+    assert.ok(await page.locator('.dashboard-primary > .dashboard-overview + .attention-panel').count()===1,'Globe overview is open above the attention queue');
+    assert.ok(await page.locator('.lavorai-main').evaluate(el=>el.scrollHeight<=el.clientHeight+1),'Open map fits without page overflow');await shot('dashboard-map-expanded');
     await go('/dashboard?locale=en&empty=1');await page.getByText('No action found in the recent selection.').waitFor();await shot('dashboard-empty');
     await go('/dashboard?locale=en&attentionError=1');await page.getByRole('heading',{name:'Activity unavailable'}).waitFor();await shot('dashboard-retry');
     await go('/inbox?locale=en&message=application_reply%3A0');await page.getByRole('button',{name:'Mark handled',exact:true}).waitFor();
@@ -417,7 +417,7 @@ try {
         await page.evaluate(()=>document.fonts.ready);
       if(route==='materiali') await page.locator('.mat-cv-paper').waitFor();
       if(route==='applications') await page.locator('.pipeline-card').first().waitFor();
-      if(route==='dashboard') { await page.locator('.dashboard-map-disclosure summary').click(); await page.locator('.dg-globe canvas').waitFor(); if(locale==='en') await page.getByText('Automatic submissions are paused.',{exact:false}).waitFor(); }
+      if(route==='dashboard') { await page.locator('.dg-globe canvas').waitFor(); if(locale==='en') await page.getByText('Automatic submissions are paused.',{exact:false}).waitFor(); }
       await page.mouse.move(0,0);
       await page.screenshot({path:join(out,route+'-'+locale+'-desktop.png'),fullPage:false,animations:'disabled'});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,route+' desktop overflow');
@@ -436,7 +436,6 @@ try {
   }
   for(const locale of ['en','it']) {
     await page.goto(base+'/dashboard?locale='+locale+'&globeLabels=1');
-    await page.locator('.dashboard-map-disclosure summary').click();
     await page.locator('.dg-globe canvas').waitFor();
     const kinds=locale==='en' ? [['Opportunity','Apply'],['Submitted','View application'],['Preferred','Search here'],['Saved','Approve and submit']] : [['Opportunità','Invia candidatura'],['Inviata','Vedi candidatura'],['Desiderata','Cerca qui'],['Salvata','Approva e invia']];
     for(let index=0;index<kinds.length;index++) {
@@ -460,7 +459,6 @@ try {
     await select.selectOption('regno-unito');
     assert.equal(await select.locator('option:checked').textContent(),locale==='en'?'United Kingdom':'Regno Unito');
     await page.goto(base+'/dashboard?locale='+locale);
-    await page.locator('.dashboard-map-disclosure summary').click();
     await page.locator('.dg-globe .dg-pin-body').first().waitFor({state:'attached'});
     await page.locator('.dg-globe .dg-pin-body').first().evaluate(el=>el.click());
     await page.locator('.dg-sheet').waitFor();
