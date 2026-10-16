@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
  * Niente refresh Adzuna costoso — pesca solo dalla cache job locale
  * (popolata dal cron sync-jobs ogni 2h). Veloce, leggera, low-cost.
  */
-export default async function DiscoverPage({ searchParams }: { searchParams?: Promise<{ dismissed?: string }> } = {}) {
+export default async function DiscoverPage({ searchParams }: { searchParams?: Promise<{ dismissed?: string }> }) {
   const user = await getCurrentUser();
   if (!user) return null;
   const t = await getTranslations("discoverPage");
