@@ -1,14 +1,26 @@
 # Private feedback attachments and support access
 
 Candidate branch: `feat/private-feedback-attachments`, rebased onto released main
-`6a2a15c7a3ba038fc1899f704f201d8431cbd31c`. The Discover fix and application
+`7770b24` (the independently merged landing-menu fix from PR #38). The Discover fix and application
 repair are upstream. PR #39's mobile layout, default light theme, saved theme
 preference and always-open globe are preserved exactly; its rebase had no conflicts.
-No separate #36 changes or open #38 changes were imported. The earlier rebase
+No pending PR changes were imported. PR #38 landed during the approved release;
+its landing CSS is preserved without modification. The earlier rebase
 onto `3764315` only required combining test script entries. Pre-rebase candidates
 are retained at `backup/private-feedback-before-main-3764315` and
-`backup/private-feedback-before-main-6a2a15c`. No production migration,
-publication, push, external report, email or application send is part of this work.
+`backup/private-feedback-before-main-6a2a15c`. The tested candidate `9491922`
+was preserved at `backup/private-feedback-approved-9491922` before publication.
+The user subsequently approved publishing the image-enabled update and its
+two-table migration. No real reports, emails or applications are used for release checks.
+
+Approved migration applied on 2026-10-16 at 17:28:40 UTC to Frankfurt project
+`curly-silence-16024948`, branch `br-aged-band-al1r48g9`, database `neondb`, after
+successful rehearsal on temporary branch `br-dry-breeze-al5m4knf` (now deleted).
+Recovery snapshot: `snap-proud-pond-alaovkod`, expires 2026-10-23 20:00 UTC.
+SQL SHA-256: `213d186f3e5a53dbbf348339f3ba37582e1d23e80ed5ffc929f3303a1db03329`.
+Only its migration-history record was added; existing schema/history hashes and
+counts (318 users, 4,293 applications, 54,207 jobs, zero feedback reports) were
+unchanged. Production scanner settings remain absent, so PDFs remain disabled.
 
 ## Rollout without a scanner
 
@@ -117,7 +129,7 @@ an image-only rollout; the server gate controls PDF admission.
 Before a separately approved release, verify the actual Neon target and migration
 history, apply only the reviewed additive SQL with correct bookkeeping, regenerate
 Prisma and release. Do not trust an old DIRECT_URL or blindly apply all historical
-migrations. No migration was applied remotely during this task.
+migrations. The separately approved application of this migration is recorded above.
 
 ## Optional scanner configuration — not provisioned
 
@@ -169,8 +181,8 @@ compiled-runtime suite all passed. Logs are under `output/feedback-reconciled-*.
 The latter
 uses real synthetic Auth.js sessions and an ephemeral localhost database, with
 no scanner configured: it verifies images succeed and PDFs are rejected before
-storage. The former Discover build blocker is resolved upstream. No production
-migration, publication or scanner setup has been performed.
+storage. The former Discover build blocker is resolved upstream. No scanner setup
+has been performed. Production migration and release are tracked separately above.
 
 Two additional upstream browser suites were attempted without modifying their
 files. `test:user-workspace-browser` reaches line 538, then expects a default light
