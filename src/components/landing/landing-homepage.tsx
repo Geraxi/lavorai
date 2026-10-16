@@ -1,21 +1,33 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import localFont from "next/font/local";
 import { useEffect, useState } from "react";
 import { useLocale } from "next-intl";
 import {
   ArrowDownToLine, ArrowRight, BriefcaseBusiness,
-  Check, FileText, Fingerprint, Layers,
-  MapPin, MessageSquare, Pause, Plus, ShieldCheck, Trash2, Users, X, Zap,
+  Check, FileText, Fingerprint, Layers, ListChecks,
+  MapPin, MessageSquare, Pause, PenLine, Plus, ShieldCheck, Trash2, Users, X, Zap,
 } from "lucide-react";
 import { CinematicHero } from "./cinematic-hero";
 import { SectionLeadMagnet } from "@/components/sections/lead-magnet-banner";
+import { Reveal } from "@/components/reveal";
+import { GlowCard, GlowGrid } from "@/components/ui/glow-card";
 import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 import { TIERS } from "@/lib/billing";
 import styles from "./landing-homepage.module.css";
 
 const displayFont = localFont({ src: "./fonts/InstrumentSerif-Regular.ttf", weight: "400", style: "normal", display: "swap", variable: "--font-landing-display" });
+
+/* Below-the-fold motion is split into its own chunks; the reserved boxes keep
+ * the page from shifting while they load. */
+const ShowcaseCarousel = dynamic(() => import("./showcase-section").then(m => m.ShowcaseCarousel), {
+  loading: () => <div className={styles.carouselPlaceholder} aria-hidden="true" />,
+});
+const StepTimeline = dynamic(() => import("@/components/ui/step-timeline").then(m => m.StepTimeline), {
+  loading: () => <div className={styles.timelinePlaceholder} aria-hidden="true" />,
+});
 
 type Label = (italian: string, english: string) => string;
 
@@ -53,7 +65,7 @@ function Cta({ href = "/signup", children, secondary = false, event = AnalyticsE
   href?: string; children: React.ReactNode; secondary?: boolean;
   event?: (typeof AnalyticsEvent)[keyof typeof AnalyticsEvent];
 }) {
-  return <Link href={href} className={`${styles.button} ${secondary ? styles.buttonOutline : ""}`}
+  return <Link href={href} className={`${styles.button} ${styles.buttonGlow} ${secondary ? styles.buttonOutline : ""}`}
     onClick={() => trackEvent(event, { source: "homepage_redesign", href })}>
     {children}<ArrowRight size={18} aria-hidden="true" />
   </Link>;
@@ -75,10 +87,10 @@ function JobPreview({ l }: { l: Label }) {
   }
   return <div className={styles.jobPreview}>
     <span className={styles.exampleBadge}>{l("Demo interattiva · offerte di esempio", "Interactive demo · sample jobs")}</span>
-    <div className={styles.cardStack}>
+    <div className={styles.cardStack} data-ui="">
       <div className={`${styles.jobCard} ${styles.backCard}`} aria-hidden="true"><Layers size={32} /><p>Digital Designer</p><div className={styles.skeleton} /></div>
       <div className={`${styles.jobCard} ${styles.sideCard}`} aria-hidden="true"><Fingerprint size={28} /><p>UX Researcher</p><span>Milano · Full time</span><b>{l("SALTA", "SKIP")}</b></div>
-      <article className={`${styles.jobCard} ${styles.frontCard}`} aria-label={l("Offerta di esempio", "Sample job")}>
+      <article key={job.mark} className={`${styles.jobCard} ${styles.frontCard}`} aria-label={l("Offerta di esempio", "Sample job")}>
         <div className={styles.companyMark}>{job.mark}</div>
         <div className={styles.jobCardBody}>
           <p className={styles.companyName}>{job.company}</p><h3>{job.title}</h3>
@@ -98,55 +110,16 @@ function JobPreview({ l }: { l: Label }) {
   </div>;
 }
 
-function CvPreview({ l }: { l: Label }) {
-  return <div className={styles.cvStack} aria-label={l("CV di esempio · profilo fittizio", "Sample CV · fictional profile")}>
-    <article className={styles.cvSheet}>
-      <span className={styles.cvExample}>{l("ESEMPIO · PROFILO FITTIZIO", "SAMPLE · FICTIONAL PROFILE")}</span>
-      <div className={styles.cvIdentity}>
-        <div className={styles.cvTop}>Giulia Rossi</div>
-        <h3>Product Designer</h3>
-        <p>{l("Milano, Italia", "Milan, Italy")}</p>
-      </div>
-      <section className={styles.cvSection}>
-        <h4>{l("PROFILO", "PROFILE")}</h4>
-        <p>{l("Progetto esperienze digitali chiare e accessibili. Unisco ricerca utente, prototipazione e cura dei dettagli per trasformare bisogni complessi in interfacce semplici.", "I design clear, accessible digital experiences. I combine user research, prototyping and attention to detail to turn complex needs into straightforward interfaces.")}</p>
-      </section>
-      <section className={styles.cvSection}>
-        <h4>{l("ESPERIENZE", "EXPERIENCE")}</h4>
-        <div className={styles.cvExperience}>
-          <div><strong>Product Designer</strong><span>{l("2023 – oggi", "2023 – present")}</span></div>
-          <em>Studio Linea</em>
-          <p>{l("Flussi di onboarding e prototipi per un servizio digitale. Interviste agli utenti e collaborazione con gli sviluppatori per il rilascio delle interfacce.", "Onboarding flows and prototypes for a digital service. User interviews and collaboration with developers to ship interface designs.")}</p>
-        </div>
-        <div className={styles.cvExperience}>
-          <div><strong>Junior UX Designer</strong><span>2021 – 2023</span></div>
-          <em>Atelier Digitale</em>
-          <p>{l("Wireframe, test di usabilità e componenti di un design system. Documentazione dei pattern e verifica dei requisiti di accessibilità.", "Wireframes, usability testing and design system components. Pattern documentation and accessibility requirements reviews.")}</p>
-        </div>
-      </section>
-      <section className={styles.cvSection}>
-        <h4>{l("COMPETENZE", "SKILLS")}</h4>
-        <div className={styles.cvSkills}>{["Figma", l("Prototipazione", "Prototyping"), l("Ricerca utente", "User research"), l("Accessibilità", "Accessibility")].map(skill => <span key={skill}>{skill}</span>)}</div>
-      </section>
-      <section className={styles.cvSection}>
-        <h4>{l("FORMAZIONE", "EDUCATION")}</h4>
-        <p><strong>{l("Laurea in Design della comunicazione", "BA in Communication Design")}</strong><br />{l("Percorso universitario · 2021", "University studies · 2021")}</p>
-      </section>
-      <p className={styles.cvSampleNote}>{l("Nome, aziende ed esperienze sono inventati a scopo illustrativo.", "Name, companies and experience are fictional and for illustration only.")}</p>
-    </article>
-  </div>;
-}
-
 function ControlPreview({ l }: { l: Label }) {
   const [mode, setMode] = useState<"paused" | "confirmed">("confirmed");
-  return <div className={styles.controlPanel}>
+  return <div className={styles.controlPanel} data-ui="">
     <div className={styles.panelHeading}><h3>{l("Modalità di invio", "Submission mode")}</h3><span className={styles.exampleBadge}>{l("Anteprima", "Preview")}</span></div>
     <div className={styles.modeGrid}>
-      <button type="button" aria-pressed={mode === "paused"} onClick={() => setMode("paused")} className={mode === "paused" ? styles.modeActive : ""}><Pause size={29} /><strong>{l("In pausa", "Paused")}</strong><span>{l("Nessun nuovo invio", "No new submissions")}</span></button>
-      <button type="button" aria-pressed={mode === "confirmed"} onClick={() => setMode("confirmed")} className={mode === "confirmed" ? styles.modeActive : ""}><MessageSquare size={29} /><strong>{l("Con conferma", "With confirmation")}</strong><span>{l("Rivedi ogni candidatura", "Review each application")}</span></button>
-      <div className={styles.modeUnavailable}><Zap size={29} /><strong>{l("Automatico", "Automatic")}</strong><span>{l("Soggetto a disponibilità", "Subject to availability")}</span></div>
+      <button type="button" aria-pressed={mode === "paused"} onClick={() => setMode("paused")} className={mode === "paused" ? styles.modeActive : ""}><Pause size={24} /><strong>{l("In pausa", "Paused")}</strong><span>{l("Nessun nuovo invio", "No new submissions")}</span></button>
+      <button type="button" aria-pressed={mode === "confirmed"} onClick={() => setMode("confirmed")} className={mode === "confirmed" ? styles.modeActive : ""}><MessageSquare size={24} /><strong>{l("Con conferma", "With confirmation")}</strong><span>{l("Rivedi ogni candidatura", "Review each application")}</span></button>
+      <div className={styles.modeUnavailable}><Zap size={24} /><strong>{l("Automatico", "Automatic")}</strong><span>{l("Soggetto a disponibilità", "Subject to availability")}</span></div>
     </div>
-    <div className={styles.controlNotice} aria-live="polite"><ShieldCheck size={23} /><p>{mode === "confirmed" ? l("Prima controlli. Poi confermi.", "Review first. Then confirm.") : l("Fermati quando vuoi.", "Take a break whenever you need.")}<span>{l("Questa anteprima non modifica le impostazioni del tuo account.", "This preview does not change your account settings.")}</span></p></div>
+    <div className={styles.controlNotice} aria-live="polite"><ShieldCheck size={20} aria-hidden="true" /><p>{mode === "confirmed" ? l("Prima controlli. Poi confermi.", "Review first. Then confirm.") : l("Fermati quando vuoi.", "Take a break whenever you need.")}<span>{l("Questa anteprima non modifica le impostazioni del tuo account.", "This preview does not change your account settings.")}</span></p></div>
   </div>;
 }
 
@@ -165,7 +138,13 @@ export function LandingHomepage() {
     { name: TIERS.pro.name, price: TIERS.pro.priceDisplay.replace(en ? "," : ".", en ? "." : ","), suffix: l("/ mese", "/ month"), subtitle: l("Per dare ritmo alla tua ricerca.", "Build momentum in your search."), items: [l("50 candidature al mese", "50 applications a month"), l("CV e lettera su misura", "Tailored CV and cover letter"), l("Portali e canali supportati", "Supported portals and channels"), l("Statistiche di base", "Basic analytics")], cta: l("Scegli Pro", "Choose Pro"), href: "/signup?plan=pro", id: "pro" },
     { name: TIERS.pro_plus.name, price: TIERS.pro_plus.priceDisplay.replace(".", en ? "." : ","), suffix: l("/ mese", "/ month"), subtitle: l("Più strumenti per il prossimo passo.", "More tools for your next step."), items: [l("Candidature illimitate nel piano*", "Unlimited applications in the plan*"), l("CV e lettera su misura", "Tailored CV and cover letter"), l("Analisi avanzate", "Advanced analytics"), "Founder Interview Coach"], cta: l("Scegli Pro+", "Choose Pro+"), href: "/signup?plan=pro_plus", id: "pro_plus" },
   ];
-
+  const steps = [
+    { id: "cv", icon: <FileText size={19} aria-hidden="true" />, title: l("Carica il tuo CV", "Upload your CV"), body: l("Parti dal tuo CV e prova l’analisi.", "Start with your CV and try the analysis.") },
+    { id: "explore", icon: <Layers size={19} aria-hidden="true" />, title: l("Scorri le idee.", "Explore the possibilities."), body: l("Trova la tua direzione.", "Find your direction.") },
+    { id: "tailor", icon: <PenLine size={19} aria-hidden="true" />, title: l("Un CV su misura.", "A tailored CV."), body: l("Per ogni ruolo.", "For every role.") },
+    { id: "confirm", icon: <ShieldCheck size={19} aria-hidden="true" />, title: l("Tu decidi quando inviare.", "You decide when to send."), body: l("Prima controlli. Poi confermi.", "Review first. Then confirm.") },
+    { id: "track", icon: <ListChecks size={19} aria-hidden="true" />, title: l("Ogni invio ha una traccia.", "Every submission has a trail."), body: l("Tieni tutto sotto controllo, dalla candidatura alla risposta.", "Keep track of each step, from application to reply.") },
+  ];
 
   return <div className={`${styles.home} ${displayFont.variable}`}>
     <a className={styles.skipLink} href="#main-content">{l("Vai al contenuto", "Skip to content")}</a>
@@ -175,67 +154,68 @@ export function LandingHomepage() {
 
       <section id="come-funziona" className={styles.workflow}>
         <div className={styles.container}>
-          <div className={styles.centerHeading}><h2>{l("Il prossimo lavoro?", "Your next job?")}<br />{l("Sceglilo con uno swipe.", "A fresh direction.")}</h2></div>
+          <Reveal className={styles.centerHeading}><h2>{l("Il prossimo lavoro?", "Your next job?")}<br />{l("Sceglilo con uno swipe.", "A fresh direction.")}</h2></Reveal>
+          <StepTimeline steps={steps} label={l("Come funziona", "How it works")} className={styles.timeline} />
           <div className={styles.swipeLayout}>
             <JobPreview l={l} />
-            <div className={styles.uploadPanel}>
-              <h3>{l("Carica il tuo CV", "Upload your CV")}<br />{l("e inizia.", "and get started.")}</h3>
+            <Reveal className={styles.uploadPanel} delay={0.08}>
+              <h3>{l("Carica il tuo CV", "Upload your CV")}<br />{" "}{l("e inizia.", "and get started.")}</h3>
               <Link className={styles.uploadCard} href="/analizza-cv" onClick={() => trackEvent(AnalyticsEvent.LEAD_MAGNET_OPEN, { source: "homepage_upload" })}>
-                <FileText size={54} strokeWidth={1.2} /><strong>CV.pdf</strong>
+                <span className={styles.uploadIcon} aria-hidden="true"><FileText size={44} strokeWidth={1.2} /></span><strong>CV.pdf</strong>
                 <span>{l("Parti dal tuo CV e prova l’analisi.", "Start with your CV and try the analysis.")}</span>
                 <span className={styles.uploadAction}>{l("Analizza il CV", "Analyze your CV")}<ArrowRight size={16} /></span>
               </Link>
               <small>PDF · DOCX</small>
-            </div>
+            </Reveal>
           </div>
         </div>
       </section>
 
       <section className={styles.tailoring}>
         <div className={styles.container}>
-          <div className={styles.centerHeading}><h2>{l("Un CV su misura.", "A tailored CV.")}<br /><span>{l("Per ogni ruolo.", "For every role.")}</span></h2></div>
+          <Reveal className={styles.centerHeading}><h2>{l("Un CV su misura.", "A tailored CV.")}<br /><span>{l("Per ogni ruolo.", "For every role.")}</span></h2></Reveal>
           <div className={styles.cvShowcase}>
+            <ShowcaseCarousel l={l} jobs={demoJobs} />
             <div className={styles.cvOptions}>
-              {[l("Analisi del CV", "CV analysis"), l("CV in DOCX", "CV in DOCX"), l("Lettera di presentazione", "Cover letter")].map((text,i) => <Link key={text} href="#lead-magnet" className={i===0 ? styles.cvOptionActive : ""}><FileText size={24} strokeWidth={1.3} /><span>{text}</span></Link>)}
+              {[l("Analisi del CV", "CV analysis"), l("CV in DOCX", "CV in DOCX"), l("Lettera di presentazione", "Cover letter")].map((text,i) => <Link key={text} href="#lead-magnet" className={i===0 ? styles.cvOptionActive : ""}><FileText size={18} strokeWidth={1.4} aria-hidden="true" /><span>{text}</span></Link>)}
             </div>
-            <CvPreview l={l} />
           </div>
           <p className={styles.visualNote}>{l("Anteprima illustrativa · le tue esperienze, valorizzate per l’annuncio.", "Illustrative preview · your experience, tailored to the job.")}</p>
         </div>
       </section>
 
-      <section className={styles.proof}>
+      <section className={styles.features} aria-labelledby="features-proof-title">
         <div className={styles.container}>
-          <div className={styles.centerHeading}><h2>{l("Ogni invio ha una traccia.", "Every submission has a trail.")}</h2><p className={styles.lead}>{l("Tieni tutto sotto controllo, dalla candidatura alla risposta.", "Keep track of each step, from application to reply.")}</p></div>
-          <div className={styles.trackingTable}>
-            <div className={styles.tableCaption}>{l("Anteprima · dati illustrativi", "Preview · illustrative data")}</div>
-            <table><thead><tr><th>{l("Azienda", "Company")}</th><th>{l("Ruolo", "Role")}</th><th>{l("Dati", "Data")}</th><th>{l("Stato", "Status")}</th></tr></thead><tbody>{[
-              { company: "Studio North", role: "Product Manager", mark: "N" },
-              { company: "Forma Studio", role: "UX Designer", mark: "F" },
-              { company: "Orbit Labs", role: "Data Analyst", mark: "O" },
-              { company: "Studio North", role: "Product Analyst", mark: "N" },
-            ].map((item,i)=><tr key={`${item.company}-${item.role}`}><td><span className={styles.companyIcon}>{item.mark}</span><span>{item.company}</span></td><td>{item.role}</td><td>{l("Esempio", "Sample")}</td><td><span className={`${styles.status} ${i===2 ? styles.statusReady : ""}`}>{i===2 ? l("Pronta", "Ready") : l("Da rivedere", "To review")}</span></td></tr>)}</tbody></table>
-          </div>
-          <p className={styles.proofNote}>{l("Una prova di consegna non conferma una lettura, una risposta o un colloquio. Le risposte ricevute sono registrate separatamente.", "Delivery evidence does not confirm a read, reply or interview. Received replies are recorded separately.")} <Link href="/proof">{l("Vedi le prove di consegna", "See delivery evidence")}<ArrowRight size={14} /></Link></p>
-        </div>
-      </section>
+          <GlowGrid className={styles.bento}>
+            <GlowCard as="article" className={`${styles.tile} ${styles.tileProof}`}>
+              <div className={styles.tileHead}><h2 id="features-proof-title">{l("Ogni invio ha una traccia.", "Every submission has a trail.")}</h2><p className={styles.tileLead}>{l("Tieni tutto sotto controllo, dalla candidatura alla risposta.", "Keep track of each step, from application to reply.")}</p></div>
+              <div className={styles.trackingTable} data-ui="">
+                <div className={styles.tableCaption}>{l("Anteprima · dati illustrativi", "Preview · illustrative data")}</div>
+                <table><thead><tr><th>{l("Azienda", "Company")}</th><th>{l("Ruolo", "Role")}</th><th className={styles.hideSm}>{l("Dati", "Data")}</th><th>{l("Stato", "Status")}</th></tr></thead><tbody>{[
+                  { company: "Studio North", role: "Product Manager", mark: "N" },
+                  { company: "Forma Studio", role: "UX Designer", mark: "F" },
+                  { company: "Orbit Labs", role: "Data Analyst", mark: "O" },
+                  { company: "Studio North", role: "Product Analyst", mark: "N" },
+                ].map((item,i)=><tr key={`${item.company}-${item.role}`}><td><span className={styles.companyCell}><span className={styles.companyIcon}>{item.mark}</span><span>{item.company}</span></span></td><td>{item.role}</td><td className={styles.hideSm}>{l("Esempio", "Sample")}</td><td><span className={`${styles.status} ${i===2 ? styles.statusReady : ""}`}>{i===2 ? l("Pronta", "Ready") : l("Da rivedere", "To review")}</span></td></tr>)}</tbody></table>
+              </div>
+              <p className={styles.tileNote}>{l("Una prova di consegna non conferma una lettura, una risposta o un colloquio. Le risposte ricevute sono registrate separatamente.", "Delivery evidence does not confirm a read, reply or interview. Received replies are recorded separately.")} <Link href="/proof">{l("Vedi le prove di consegna", "See delivery evidence")}<ArrowRight size={14} /></Link></p>
+            </GlowCard>
 
-      <section className={styles.control}>
-        <div className={styles.container}>
-          <div className={styles.centerHeading}><h2>{l("Tu decidi quando inviare.", "You decide when to send.")}</h2><p className={styles.lead}>{l("Scegli come gestire le tue candidature.", "Choose how to manage your applications.")}</p></div>
-          <ControlPreview l={l} />
-          <p className={styles.controlFootnote}>{l("Gli invii automatici non sono attivi durante la riapertura controllata. Le modalità disponibili dipendono dai controlli attivi e dal canale.", "Automatic submissions are not enabled during the controlled rollout. Available modes depend on active controls and the channel.")}</p>
-        </div>
-      </section>
+            <GlowCard as="article" className={`${styles.tile} ${styles.tileControl}`}>
+              <div className={styles.tileHead}><h2>{l("Tu decidi quando inviare.", "You decide when to send.")}</h2><p className={styles.tileLead}>{l("Scegli come gestire le tue candidature.", "Choose how to manage your applications.")}</p></div>
+              <ControlPreview l={l} />
+              <p className={styles.tileNote}>{l("Gli invii automatici non sono attivi durante la riapertura controllata. Le modalità disponibili dipendono dai controlli attivi e dal canale.", "Automatic submissions are not enabled during the controlled rollout. Available modes depend on active controls and the channel.")}</p>
+            </GlowCard>
 
-      <section className={styles.privacy}>
-        <div className={`${styles.container} ${styles.privacyPanel}`}>
-          <h2>{l("Il tuo CV resta sotto il tuo controllo.", "Your CV stays under your control.")}</h2>
-          <div className={styles.privacyGrid}>{[
-            { icon: ArrowDownToLine, title: l("Esporta i dati", "Export your data"), body: l("Scarica il tuo CV e le tue informazioni dalle impostazioni.", "Download your CV and information in settings."), href: "/settings" },
-            { icon: Trash2, title: l("Elimina l’account", "Delete your account"), body: l("Gestisci la richiesta di eliminazione dei tuoi dati.", "Manage your request to delete your data."), href: "/settings" },
-            { icon: ShieldCheck, title: l("Leggi la privacy", "Read the privacy policy"), body: l("Scopri come trattiamo i tuoi dati personali.", "See how we process your personal data."), href: "/privacy" },
-          ].map(({icon:Icon,title,body,href})=><Link key={title} href={href} className={styles.privacyCard}><Icon size={28} /><div><h3>{title}</h3><p>{body}</p></div></Link>)}</div>
+            <GlowCard as="article" className={`${styles.tile} ${styles.tilePrivacy}`}>
+              <h2>{l("Il tuo CV resta sotto il tuo controllo.", "Your CV stays under your control.")}</h2>
+              <div className={styles.privacyGrid}>{[
+                { icon: ArrowDownToLine, title: l("Esporta i dati", "Export your data"), body: l("Scarica il tuo CV e le tue informazioni dalle impostazioni.", "Download your CV and information in settings."), href: "/settings" },
+                { icon: Trash2, title: l("Elimina l’account", "Delete your account"), body: l("Gestisci la richiesta di eliminazione dei tuoi dati.", "Manage your request to delete your data."), href: "/settings" },
+                { icon: ShieldCheck, title: l("Leggi la privacy", "Read the privacy policy"), body: l("Scopri come trattiamo i tuoi dati personali.", "See how we process your personal data."), href: "/privacy" },
+              ].map(({icon:Icon,title,body,href})=><Link key={title} href={href} className={styles.privacyCard}><span className={styles.privacyIcon}><Icon size={22} aria-hidden="true" /></span><div><h3>{title}</h3><p>{body}</p></div><ArrowRight size={16} aria-hidden="true" className={styles.privacyArrow} /></Link>)}</div>
+            </GlowCard>
+          </GlowGrid>
         </div>
       </section>
 
@@ -243,15 +223,17 @@ export function LandingHomepage() {
 
       <section className={styles.productDemo} aria-labelledby="product-demo-title">
         <div className={styles.container}>
-          <div className={styles.demoHeading}>
-            <div><p className={styles.demoEyebrow}>{l("Dentro LavorAI", "Inside LavorAI")}</p><h2 id="product-demo-title">{l("Il tuo prossimo passo.", "Your next step.")}<br />{l("Guardalo da vicino.", "Take a closer look.")}</h2></div>
+          <Reveal className={styles.demoHeading}>
+            <div><h2 id="product-demo-title">{l("Il tuo prossimo passo.", "Your next step.")}<br />{l("Guardalo da vicino.", "Take a closer look.")}</h2><p className={styles.demoKicker}>{l("Dentro LavorAI", "Inside LavorAI")}</p></div>
             <p className={styles.lead}>{l("Dalle offerte al CV su misura, fino al monitoraggio delle candidature. Una panoramica del prodotto, in 34 secondi.", "From opportunities and tailored CVs to application tracking. A 34-second look at the product.")}</p>
-          </div>
+          </Reveal>
           <figure className={styles.demoPlayer}>
-            <video controls playsInline preload="none" poster="/lavorai-launch-poster.jpg" aria-label={l("Presentazione di LavorAI", "LavorAI product walkthrough")} aria-describedby="product-demo-caption">
-              <source src="/lavorai-launch-demo.mp4" type="video/mp4" />
-              <a href="/lavorai-launch-demo.mp4">{l("Apri il video di presentazione", "Open the product video")}</a>
-            </video>
+            <div className={styles.demoFrame}>
+              <video controls playsInline preload="none" poster="/lavorai-launch-poster.jpg" aria-label={l("Presentazione di LavorAI", "LavorAI product walkthrough")} aria-describedby="product-demo-caption">
+                <source src="/lavorai-launch-demo.mp4" type="video/mp4" />
+                <a href="/lavorai-launch-demo.mp4">{l("Apri il video di presentazione", "Open the product video")}</a>
+              </video>
+            </div>
             <figcaption id="product-demo-caption">{l("Video dimostrativo. Al momento sono disponibili solo candidature confermate manualmente, con un limite temporaneo di 10 tentativi d’invio al giorno complessivi sulla piattaforma. Le promozioni mostrate non confermano le condizioni attive: verifica prezzi e disponibilità prima dell’attivazione.", "Product demo. Only manually confirmed applications are currently available, with a temporary platform-wide limit of 10 submission attempts per day. Promotions shown do not confirm current terms: check pricing and availability before activation.")}</figcaption>
           </figure>
           <details className={styles.demoTranscript}>
@@ -264,22 +246,29 @@ export function LandingHomepage() {
 
       <section id="prezzi" className={styles.pricing}>
         <div className={styles.container}>
-          <div className={styles.centerHeading}><h2>{l("Prova. Poi scegli.", "Try it. Then choose.")}</h2><p className={styles.lead}>{l("Inizia dall’analisi. Scegli il piano più adatto a te, quando vuoi.", "Start with the analysis. Choose the plan that suits you, when you are ready.")}</p></div>
-          <div className={styles.pricingGrid}>{plans.map(plan=><article key={plan.id} className={`${styles.plan} ${plan.id==="pro" ? styles.planFeatured : ""}`}>
+          <Reveal className={styles.centerHeading}><h2>{l("Prova. Poi scegli.", "Try it. Then choose.")}</h2><p className={styles.lead}>{l("Inizia dall’analisi. Scegli il piano più adatto a te, quando vuoi.", "Start with the analysis. Choose the plan that suits you, when you are ready.")}</p></Reveal>
+          <div className={styles.pricingGrid}>{plans.map((plan, index)=><Reveal key={plan.id} delay={index * 0.08} className={styles.planWrap}><article className={`${styles.plan} ${plan.id==="pro" ? styles.planFeatured : ""}`}>
             {plan.id==="pro" && <span className={styles.planBadge}>{l("Il tuo prossimo passo", "Your next step")}</span>}
-            <h3>{plan.name}</h3><div className={styles.planPrice}>{plan.price}<span>{plan.suffix}</span></div><p>{plan.subtitle}</p><ul>{plan.items.map(item=><li key={item}><Check size={17} />{item}</li>)}</ul>
-            <Link href={plan.href} className={`${styles.button} ${styles.buttonOutline}`} onClick={()=>trackEvent(AnalyticsEvent.PRICING_CTA,{plan:plan.id})}>{plan.cta}</Link>
-          </article>)}</div>
+            <h3>{plan.name}</h3><div className={styles.planPrice}>{plan.price}<span>{plan.suffix}</span></div><p>{plan.subtitle}</p><ul>{plan.items.map(item=><li key={item}><Check size={16} />{item}</li>)}</ul>
+            <Link href={plan.href} className={`${styles.button} ${plan.id==="pro" ? styles.buttonGlow : styles.buttonOutline}`} onClick={()=>trackEvent(AnalyticsEvent.PRICING_CTA,{plan:plan.id})}>{plan.cta}</Link>
+          </article></Reveal>)}</div>
           <p className={styles.pricingNote}>{l("* Restano applicabili i controlli di sicurezza, la disponibilità dei canali e i limiti operativi. Le condizioni di pagamento e rinnovo vengono mostrate prima dell’attivazione.", "* Safety controls, channel availability and operational limits still apply. Payment and renewal terms are shown before activation.")} <Link href="/termini">{l("Leggi i termini", "Read the terms")}</Link></p>
         </div>
       </section>
 
-      <section id="faq" className={styles.faq}><div className={styles.container}><div className={styles.centerHeading}><h2>{l("Domande frequenti", "Frequently asked questions")}</h2></div><div className={styles.faqList}>{faq.map(([q,a],index)=><details key={q} onToggle={event=>{if(event.currentTarget.open)trackEvent(AnalyticsEvent.FAQ_EXPAND,{index,question:q})}}><summary>{q}<Plus size={20} /></summary><p>{a}</p></details>)}</div></div></section>
+      <section id="faq" className={styles.faq}><div className={styles.container}><Reveal className={styles.centerHeading}><h2>{l("Domande frequenti", "Frequently asked questions")}</h2></Reveal><div className={styles.faqList}>{faq.map(([q,a],index)=><details key={q} className={styles.faqItem} onToggle={event=>{if(event.currentTarget.open)trackEvent(AnalyticsEvent.FAQ_EXPAND,{index,question:q})}}><summary><span className={styles.faqQuestion}>{q}</span><span className={styles.faqIcon} aria-hidden="true"><Plus size={18} /></span></summary><p>{a}</p></details>)}</div></div></section>
 
-      <section className={styles.referral}><div className={styles.container}><Link href="/settings" className={styles.referralCard}><span className={styles.referralIcon}><Users size={34} /></span><div><h3>{l("Invita un amico.", "Invite a friend.")}</h3><p>{l("Scopri il programma inviti e le sue condizioni.", "Explore the referral program and its conditions.")}</p></div><span className={styles.button}>{l("Scopri il programma", "Explore the program")}</span></Link></div></section>
+      <section className={styles.referral}><div className={styles.container}><Link href="/settings" className={styles.referralCard}><span className={styles.referralIcon}><Users size={30} /></span><div><h3>{l("Invita un amico.", "Invite a friend.")}</h3><p>{l("Scopri il programma inviti e le sue condizioni.", "Explore the referral program and its conditions.")}</p></div><span className={styles.button}>{l("Scopri il programma", "Explore the program")}</span></Link></div></section>
 
-      <section className={styles.finalCta}><div className={styles.container}><h2>{l("Il prossimo passo", "Your next step")}<br />{l("parte da qui.", "starts here.")}</h2><Cta event={AnalyticsEvent.CTA_FINAL}>{l("Crea account", "Get started")}</Cta><Link className={styles.finalCvLink} href="#lead-magnet">{l("Oppure prova il tuo CV", "Or try your CV")}</Link></div></section>
+      <section className={styles.finalCta}><div className={styles.finalGlow} aria-hidden="true" /><div className={styles.container}><Reveal><h2>{l("Il prossimo passo", "Your next step")}<br />{l("parte da qui.", "starts here.")}</h2><Cta event={AnalyticsEvent.CTA_FINAL}>{l("Crea account", "Get started")}</Cta><Link className={styles.finalCvLink} href="#lead-magnet">{l("Oppure prova il tuo CV", "Or try your CV")}</Link></Reveal></div></section>
     </main>
-    <footer className={styles.footer}><div className={styles.container}><div className={styles.footerTop}><Link href="/" aria-label="LavorAI home"><Brand /></Link><nav aria-label="Footer">{[{href:"/lavoro",label:l("Offerte","Jobs")},{href:"/guide",label:l("Guide","Guides")},{href:"/proof",label:l("Prove di invio","Delivery evidence")},{href:"/privacy",label:"Privacy"},{href:"/termini",label:l("Termini","Terms")},{href:"/contatti",label:l("Contatti","Contact")}].map(link=><Link key={link.href} href={link.href}>{link.label}</Link>)}</nav></div><div className={styles.footerBottom}><p>© 2026 LavorAI · P.IVA 01452520776</p><p>{l("Il tuo talento, nuove possibilità.", "Your talent, new possibilities.")}</p></div></div></footer>
+    <footer className={styles.footer}><div className={styles.container}>
+      <div className={styles.footerTop}>
+        <div className={styles.footerBrand}><Link href="/" aria-label="LavorAI home"><Brand /></Link><p>{l("Il tuo talento, nuove possibilità.", "Your talent, new possibilities.")}</p></div>
+        <nav aria-label="Footer" className={styles.footerNav}><ul>{[{href:"/lavoro",label:l("Offerte","Jobs")},{href:"/guide",label:l("Guide","Guides")},{href:"/proof",label:l("Prove di invio","Delivery evidence")},{href:"/privacy",label:"Privacy"},{href:"/termini",label:l("Termini","Terms")},{href:"/contatti",label:l("Contatti","Contact")}].map(link=><li key={link.href}><Link href={link.href}>{link.label}</Link></li>)}</ul></nav>
+      </div>
+      <div className={styles.footerWordmark} aria-hidden="true"><Brand large /></div>
+      <div className={styles.footerBottom}><p>© 2026 LavorAI · P.IVA 01452520776</p></div>
+    </div></footer>
   </div>;
 }

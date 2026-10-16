@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
-import { Icon } from "@/components/design/icon";
+import { Icon, type IconName } from "@/components/design/icon";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { WelcomeModal } from "@/components/welcome-modal";
@@ -16,6 +16,7 @@ import { DashboardGlobeMap } from "@/components/dashboard-globe-map";
 import { DashboardFocusProvider } from "@/components/dashboard-focus";
 import { DashboardRegionPanel } from "@/components/dashboard-region-panel";
 import { AutoApplyReadinessCard } from "@/components/auto-apply-readiness";
+import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { getDashboardGlobeData, type GlobeJob } from "@/lib/dashboard-globe-data";
 import { getAutoApplyReadiness } from "@/lib/auto-apply-readiness";
 import { getCurrentUser } from "@/lib/session";
@@ -94,10 +95,10 @@ export default async function DashboardPage() {
 
         <aside className="dg-side">
           <div className="dg-summary" role="list">
-            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{deliveryCounts.confirmed}</span><small>Invii confermati</small>{deliveryCounts.providerAccepted > 0 && <small>{deliveryCounts.providerAccepted} email accettate dal provider, consegna da confermare</small>}</Link>
-            <Link role="listitem" href="/inbox" className="dg-sum" title="Candidature con risposte classificate come recruiter. Aperture email e ricevute automatiche escluse."><span className="fit-num">{responseCount}</span><small>Con risposte recruiter</small></Link>
-            <Link role="listitem" href="/interview" className="dg-sum"><span className="fit-num">{interviews.length}</span><small>Colloqui</small></Link>
-            <Link role="listitem" href="/applications" className="dg-sum"><span className="fit-num">{offersCount}</span><small>Offerte</small></Link>
+            <Link role="listitem" href="/applications" className="dg-sum dg-sum-sent"><AnimatedCounter className="fit-num" duration={0.7}>{deliveryCounts.confirmed}</AnimatedCounter><small>Invii confermati</small>{deliveryCounts.providerAccepted > 0 && <small>{deliveryCounts.providerAccepted} email accettate dal provider, consegna da confermare</small>}</Link>
+            <Link role="listitem" href="/inbox" className="dg-sum dg-sum-replies" title="Candidature con risposte classificate come recruiter. Aperture email e ricevute automatiche escluse."><AnimatedCounter className="fit-num" duration={0.7}>{responseCount}</AnimatedCounter><small>Con risposte recruiter</small></Link>
+            <Link role="listitem" href="/interview" className="dg-sum dg-sum-interviews"><AnimatedCounter className="fit-num" duration={0.7}>{interviews.length}</AnimatedCounter><small>Colloqui</small></Link>
+            <Link role="listitem" href="/applications" className="dg-sum dg-sum-offers"><AnimatedCounter className="fit-num" duration={0.7}>{offersCount}</AnimatedCounter><small>Offerte</small></Link>
           </div>
 
           <DashboardRegionPanel markers={globe.markers} />
@@ -113,12 +114,12 @@ export default async function DashboardPage() {
             </div>
             <div className="fit-body fit-scroll">
               {recommended.length === 0 ? (
-                <Empty text="Appena il tuo profilo e le preferenze sono pronti, qui compaiono gli annunci più compatibili." cta={{ href: "/preferences", label: "Imposta le preferenze" }} />
+                <Empty icon="sparkles" text="Appena il tuo profilo e le preferenze sono pronti, qui compaiono gli annunci più compatibili." cta={{ href: "/preferences", label: "Imposta le preferenze" }} />
               ) : (
                 recommended.slice(0, 4).map((j) => {
                   const company = j.company ?? "Azienda";
                   return (
-                    <Link key={j.id} href={j.href} className="fit-row" style={{ gridTemplateColumns: "30px 1fr auto", textDecoration: "none", color: "inherit" }}>
+                    <Link key={j.id} href={j.href} className="fit-row dg-row" style={{ gridTemplateColumns: "30px 1fr auto", textDecoration: "none", color: "inherit" }}>
                       <CompanyLogo company={company} color={companyColor(company)} size={30} rounded={8} />
                       <div style={{ minWidth: 0 }}>
                         <div className="fit-ellipsis" style={{ fontWeight: 600, fontSize: 12.5 }}>{j.title}</div>
@@ -137,15 +138,15 @@ export default async function DashboardPage() {
               <div className="fit-card-title"><Icon name="calendar" size={15} /> Prossimi colloqui</div>
               <Link href="/interview" className="fit-link">Vedi tutti <Icon name="arrow-right" size={12} /></Link>
             </div>
-            <div className="fit-body fit-scroll">
+            <div className="fit-body fit-scroll dg-timeline">
               {interviews.length === 0 ? (
-                <Empty text="Nessun colloquio in programma. Quando un recruiter ti invita, lo vedrai qui." />
+                <Empty icon="calendar" text="Nessun colloquio in programma. Quando un recruiter ti invita, lo vedrai qui." />
               ) : (
                 interviews.map((a) => {
                   const when = a.interviewSessions[0]?.startedAt ?? a.lastReplyAt ?? a.createdAt;
                   const company = a.job.company ?? "Azienda";
                   return (
-                    <Link key={a.id} href="/interview" className="fit-row" style={{ gridTemplateColumns: "30px 1fr auto", textDecoration: "none", color: "inherit" }}>
+                    <Link key={a.id} href="/interview" className="fit-row dg-row dg-timeline-row" style={{ gridTemplateColumns: "30px 1fr auto", textDecoration: "none", color: "inherit" }}>
                       <CompanyLogo company={company} color={companyColor(company)} size={30} rounded={8} />
                       <div style={{ minWidth: 0 }}>
                         <div className="fit-ellipsis" style={{ fontWeight: 600, fontSize: 12.5 }}>{company}</div>
@@ -193,9 +194,10 @@ async function dashboardDeliveryCounts(userId: string): Promise<{ confirmed: num
   return { confirmed, providerAccepted };
 }
 
-function Empty({ text, cta }: { text: string; cta?: { href: string; label: string } }) {
+function Empty({ text, cta, icon = "sparkles" }: { text: string; cta?: { href: string; label: string }; icon?: IconName }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, padding: "6px 0 2px", fontSize: 12, color: "var(--fg-muted)" }}>
+    <div className="dg-empty-state">
+      <span className="dg-empty-icon" aria-hidden="true"><Icon name={icon} size={16} /></span>
       <span>{text}</span>
       {cta && <Link href={cta.href} className="ds-btn ds-btn-sm ds-btn-primary">{cta.label}</Link>}
     </div>

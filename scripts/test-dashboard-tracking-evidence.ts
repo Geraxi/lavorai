@@ -102,7 +102,7 @@ async function main() {
     "onboarding-checklist": ["OnboardingChecklist"], "welcome-modal": ["WelcomeModal"], "dashboard-live-refresh": ["DashboardLiveRefresh"],
     "post-login-checkout": ["PostLoginCheckout"], "auto-apply-toggle": ["AutoApplyToggle"], "new-search-button": ["NewSearchButton"],
     "dashboard-globe-map": ["DashboardGlobeMap"], "dashboard-focus": ["DashboardFocusProvider"], "dashboard-region-panel": ["DashboardRegionPanel"],
-    "auto-apply-readiness": ["AutoApplyReadinessCard"],
+    "auto-apply-readiness": ["AutoApplyReadinessCard"], "ui/animated-counter": ["AnimatedCounter"],
   };
   for (const [path, names] of Object.entries(components)) dependencies[`@/components/${path}`] = Object.fromEntries(names.map((name) => [name, name]));
   const dashboard = load("src/app/(app)/dashboard/page.tsx", dependencies);
