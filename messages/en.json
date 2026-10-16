@@ -164,7 +164,7 @@
     "belowMatch": "Match below threshold.",
     "retryError": "Error. Try again.",
     "networkError": "Network error.",
-    "applicationSent": "Application sent for {title}",
+    "applicationSent": "Application request saved for {title}. Check its status in Applications.",
     "sending": "Sending...",
     "sendingShort": "Sending...",
     "applyToAll": "Apply to all ({count})",
@@ -229,7 +229,7 @@
     "uploadCvFirst": "Upload your CV first.",
     "retryError": "Error. Try again.",
     "networkError": "Network error.",
-    "applied": "Application sent for {title}",
+    "applied": "Application request saved for {title}. Check its status in Applications.",
     "fullDescription": "Full description",
     "openOriginal": "Open original posting"
   },

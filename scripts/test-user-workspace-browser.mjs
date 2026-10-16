@@ -99,7 +99,7 @@ window.fetch = async (url, options={}) => {
     const {action}=JSON.parse(options.body);const state=action==='read'?{read:true}:action==='handled'?{handledAt:new Date().toISOString(),remindAt:null}:action==='tomorrow'?{handledAt:null,remindAt:new Date(Date.now()+86400_000).toISOString()}:{handledAt:null,remindAt:null};
     return Response.json(window.__mutationFail?{error:'synthetic_failure'}:{ok:true,state},{status:window.__mutationFail?503:200});
   }
-  if(String(url).includes('/api/applications/apply')) return new Response(JSON.stringify({message:'Synthetic blocked submission'}),{status:403});
+  if(String(url).includes('/api/applications/apply')) return window.__applicationAllowed ? Response.json({ok:true,applicationId:'pending-consent',status:'awaiting_consent'}) : new Response(JSON.stringify({message:'Synthetic blocked submission'}),{status:403});
   if(String(url).endsWith('/evidence'))return Response.json({steps:applications.find(a=>String(url)==='/api/applications/'+a.id+'/evidence')?.timeline??[]});
   if(String(url).includes('/cv-preview')) return Response.json({text:(window.__dense ? 'Long synthetic CV paragraph for scroll testing. '.repeat(400)+'\\n\\n' : '')+'Alex Example\\nFrontend Engineer\\n\\nSUMMARY\\nSynthetic CV document for local testing.\\n\\nEXPERIENCE\\nExample Studio — Frontend Engineer\\nBuilt accessible web interfaces with React and TypeScript.\\n\\nSKILLS\\nReact · TypeScript · SQL · Testing'});
   if(String(url).startsWith('/api/applications?')) {
@@ -174,7 +174,17 @@ try {
   const errors=[]; const external=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/*',route=>{if(!route.request().url().startsWith(base)){external.push(route.request().url());return route.abort();} return route.continue();});
-  if (process.argv.includes('--attention-checks')) {
+  const verifyPendingRequest=async()=>{
+    await page.goto(base+'/discover?locale=en');await page.evaluate(()=>window.__applicationAllowed=true);
+    await page.getByRole('button',{name:'Apply',exact:true}).first().click();
+    await page.getByText('Application request saved for Senior React Engineer. Check its status in Applications.',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Application sent for Senior React Engineer',{exact:true}).count(),0);
+    assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.url==='/api/applications/apply').length),1);
+  };
+  if (process.argv.includes('--request-evidence-check')) {
+    await verifyPendingRequest();assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+    console.log('PASS a pending-consent application request does not claim submission; one mocked user-requested API call, no external requests.');
+  } else if (process.argv.includes('--attention-checks')) {
     const geometry=[];
     const go=async path=>{await page.goto(base+path);await page.waitForFunction(()=>document.getElementById('root').children.length>0);await page.evaluate(()=>document.fonts.ready);};
     const shot=async name=>page.screenshot({path:join(out,name+'.png'),animations:'disabled'});
@@ -206,6 +216,7 @@ try {
     await go('/discover?locale=en');await page.getByRole('heading',{name:'Why this role?'}).waitFor();await page.getByRole('heading',{name:'Required skills without CV evidence'}).waitFor();
     await page.evaluate(()=>window.__mutationFail=true);await page.getByRole('button',{name:'Not relevant',exact:true}).click();await page.getByText("Couldn't dismiss this listing. Try again.").waitFor();assert.equal(await page.locator('.discover-card').getByText('Senior React Engineer',{exact:true}).count(),1);
     await page.evaluate(()=>window.__mutationFail=false);await page.getByRole('button',{name:'Not relevant',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.discover-card')?.textContent.includes('Senior React Engineer'));
+    await verifyPendingRequest();
     await go('/dismissed?locale=en');await page.getByRole('button',{name:'Restore',exact:true}).first().click();await page.waitForFunction(()=>document.querySelectorAll('.setup-row').length===3);await shot('discover-restored');
     await go('/applications?locale=en&id=app-1');await page.getByRole('heading',{name:'What we can verify'}).waitFor();await shot('application-evidence');
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);

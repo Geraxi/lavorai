@@ -164,7 +164,7 @@
     "belowMatch": "Match sotto la soglia.",
     "retryError": "Errore. Riprova.",
     "networkError": "Errore di rete.",
-    "applicationSent": "Candidatura inviata per {title}",
+    "applicationSent": "Richiesta di candidatura salvata per {title}. Controlla lo stato in Candidature.",
     "sending": "Invio in corso...",
     "sendingShort": "Invio...",
     "applyToAll": "Candidati a tutte ({count})",
@@ -229,7 +229,7 @@
     "uploadCvFirst": "Carica prima il tuo CV.",
     "retryError": "Errore. Riprova.",
     "networkError": "Errore di rete.",
-    "applied": "Candidatura inviata per {title}",
+    "applied": "Richiesta di candidatura salvata per {title}. Controlla lo stato in Candidature.",
     "fullDescription": "Descrizione completa",
     "openOriginal": "Apri annuncio originale"
   },
