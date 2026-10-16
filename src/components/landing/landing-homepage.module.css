@@ -73,7 +73,36 @@
 
 
 /* ---------- Section rhythm + ambient glow ---------- */
-.workflow, .tailoring, .features, .pricing, .faq, .referral, .productDemo, .leadMagnet { position: relative; isolation: isolate; }
+.problem, .workflow, .tailoring, .features, .pricing, .faq, .referral, .productDemo, .leadMagnet { position: relative; isolation: isolate; }
+
+/* ---------- Problem → solution ---------- */
+.problem { padding: 110px 0 40px; }
+.problemLayout { display: grid; grid-template-columns: minmax(0, .82fr) minmax(0, 1.3fr); align-items: stretch; gap: 48px; }
+.problemCopy { min-width: 0; }
+.problemKicker { color: var(--mint-soft); font-size: 14px; line-height: 1.5; }
+.problemCopy h2 { margin-top: 14px !important; font-size: clamp(36px, 3.4vw, 50px); line-height: 1.05; }
+.problemCopy .lead { margin-top: 20px !important; color: #d2e0e8; }
+.painList { display: grid; gap: 10px; margin: 28px 0 0; padding: 0; list-style: none; }
+.painList li { display: flex; align-items: center; gap: 14px; padding: 12px 16px 12px 12px; border: 1px solid rgba(204, 232, 246, .14); border-radius: 16px; background: rgba(255, 255, 255, .03); color: #e1ebf1; font-size: 14px; line-height: 1.45; }
+.painIcon { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border-radius: 10px; background: rgba(248, 185, 77, .1); color: #f8c66f; box-shadow: inset 0 0 0 1px rgba(248, 185, 77, .24); }
+.problemFigure { display: flex; min-width: 0; min-height: 460px; }
+.problemFigure figure { position: relative; flex: 1; margin: 0; overflow: hidden; border: 1px solid var(--glass-edge); border-radius: 28px; background: #061c28; box-shadow: 0 40px 80px -36px rgba(0, 9, 18, .8), var(--glass-shadow); }
+.problemFigure figure::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(120% 95% at 55% 40%, transparent 55%, rgba(6, 28, 40, .55) 100%), linear-gradient(180deg, transparent 62%, rgba(9, 42, 58, .7)); pointer-events: none; }
+.problemFigure picture { display: block; height: 100%; }
+.problemImage { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 62% 50%; transform-origin: 60% 55%; }
+@media (prefers-reduced-motion: no-preference) {
+  .problemImage { animation: problemDrift 28s ease-in-out infinite alternate; }
+}
+@keyframes problemDrift { from { transform: scale(1); } to { transform: scale(1.045); } }
+.problemBridge { width: 1px; height: 96px; margin: 72px auto 40px; background: linear-gradient(180deg, rgba(204, 232, 246, 0), rgba(204, 232, 246, .35) 40%, var(--mint)); }
+.solutionHeading h2 { margin-top: 14px !important; }
+.solutionGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; max-width: 1040px; margin: 48px auto 0; }
+.solutionWrap { display: flex; min-width: 0; }
+.solutionCard { display: flex; flex: 1; flex-direction: column; gap: 14px; padding: 26px; }
+.solutionCard p { margin-top: 8px !important; }
+.solutionCard h3 { margin-top: 4px !important; font-size: 17px; font-weight: 500; line-height: 1.35; }
+.solutionCard p { color: #bcd1de; font-size: 13.5px; line-height: 1.6; }
+.solutionCta { display: flex; justify-content: center; margin-top: 40px; }
 
 /* ---------- How it works ---------- */
 .workflow { padding: 110px 0 100px; }
@@ -339,6 +368,10 @@
   .uploadPanel h3 { text-align: center; }
   .pricingGrid { grid-template-columns: 1fr; max-width: 480px; margin-inline: auto; gap: 24px; }
   .privacyGrid { grid-template-columns: 1fr; }
+  .problemLayout { grid-template-columns: 1fr; gap: 32px; }
+  .problemFigure { order: -1; min-height: 0; }
+  .problemImage { height: auto; }
+  .solutionGrid { grid-template-columns: 1fr; max-width: 520px; gap: 14px; }
   .leadMagnet :global(.ds-glass-green) { padding: 28px !important; gap: 28px !important; }
   .leadMagnet h2 { font-size: 38px !important; }
 }
@@ -355,6 +388,15 @@
   .centerHeading h2 { font-size: 40px; }
   .centerHeading .lead { font-size: 14px; }
   .workflow { padding: 70px 0 64px; }
+  .problem { padding: 64px 0 20px; }
+  .problemFigure figure { border-radius: 20px; }
+  .problemCopy h2 { font-size: 34px; }
+  .problemCopy .lead { font-size: 15px; }
+  .painList li { font-size: 13.5px; }
+  .problemBridge { height: 64px; margin: 48px auto 28px; }
+  .solutionCard { flex-direction: row; align-items: flex-start; padding: 20px 18px; gap: 16px; }
+  .solutionCard h3 { margin-top: 0 !important; font-size: 16px; }
+  .solutionCta .button { width: 100%; }
   .timeline, .timelinePlaceholder { margin-top: 36px; }
   .timelinePlaceholder { min-height: 520px; }
   .cardStack { width: 340px; height: 380px; }
