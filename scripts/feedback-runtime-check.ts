@@ -73,14 +73,20 @@ export async function runtimeCheck(db: PrismaClient, databaseUrl: string) {
       await page.setViewportSize({ width, height }); await page.goto(base + '/feedback');
       await page.getByRole('heading', { name: 'Help shape a better LavorAI' }).waitFor();
       await page.getByRole('heading', { name: 'Local runtime test' }).waitFor();
+      assert.equal(await page.locator('html').getAttribute('data-theme'), 'light', 'No saved theme defaults to light');
       assert.equal(await page.locator('input[type=file]').getAttribute('accept'), '.png,.jpg,.jpeg,.webp');
       await page.getByText(/PDF upload is currently unavailable/).waitFor();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       await page.screenshot({ path: resolve(out, `real-support-${width}.png`) });
     }
+    await page.evaluate(() => localStorage.setItem('lavorai-theme', 'dark'));
+    await page.reload();
+    await page.getByRole('heading', { name: 'Help shape a better LavorAI' }).waitFor();
+    assert.equal(await page.locator('html').getAttribute('data-theme'), null, 'An explicit saved dark preference is preserved');
+    await page.screenshot({ path: resolve(out, 'real-support-saved-dark.png') });
     assert.equal(requested.some(url => url.includes('/api/sidebar-stats') || url.includes('/api/preferences')), false);
     assert.deepEqual(errors, []);
-    await writeFile(resolve(out, 'qa-result.json'), JSON.stringify({ passed: true, realNextProductionRuntime: true, realAuthJsSyntheticSessions: true, ephemeralLocalPostgres: true, checks: ['free/no-card/expired/paid support access', 'paid page/API gates remain', 'suspension', 'admin denial', 'multipart images with PDFs rejected before storage when scanner is absent', 'owner image download and cross-user denial', 'desktop/mobile support rendering and no paid feature requests'] }, null, 2));
+    await writeFile(resolve(out, 'qa-result.json'), JSON.stringify({ passed: true, realNextProductionRuntime: true, realAuthJsSyntheticSessions: true, ephemeralLocalPostgres: true, checks: ['free/no-card/expired/paid support access', 'paid page/API gates remain', 'suspension', 'admin denial', 'multipart images with PDFs rejected before storage when scanner is absent', 'owner image download and cross-user denial', 'desktop/mobile support rendering and no paid feature requests', 'default light theme and preserved saved dark preference'] }, null, 2));
     console.log('PASS compiled Next runtime + real Auth.js synthetic sessions + ephemeral PostgreSQL, real multipart images, disabled unconfigured PDFs and owner downloads, free/expired/paid/suspended gates, desktop/mobile Chrome.');
   } finally {
     if (browser) await browser.close();

@@ -1,11 +1,13 @@
 # Private feedback attachments and support access
 
 Candidate branch: `feat/private-feedback-attachments`, rebased onto released main
-`37643155d5ec0bc47391ac4dac95e2d67a71183a`. The Discover props fix is already
-upstream; the released application repair and shared app layout are preserved.
-The rebase only required combining upstream and feedback test script entries.
-The pre-rebase candidate is retained at
-`backup/private-feedback-before-main-3764315`. No production migration,
+`6a2a15c7a3ba038fc1899f704f201d8431cbd31c`. The Discover fix and application
+repair are upstream. PR #39's mobile layout, default light theme, saved theme
+preference and always-open globe are preserved exactly; its rebase had no conflicts.
+No separate #36 changes or open #38 changes were imported. The earlier rebase
+onto `3764315` only required combining test script entries. Pre-rebase candidates
+are retained at `backup/private-feedback-before-main-3764315` and
+`backup/private-feedback-before-main-6a2a15c`. No production migration,
 publication, push, external report, email or application send is part of this work.
 
 ## Rollout without a scanner
@@ -153,12 +155,13 @@ References: [ClamAV protocol](https://docs.clamav.net/manual/Usage/ClamdProtocol
   multipart image uploads, unconfigured PDF rejection before storage, owned
   downloads, cross-user denial and desktop/mobile Chrome. Evidence under
   `output/playwright/feedback-runtime/`. Default uses this candidate's build.
+  Also verifies the merged light default and preservation of a saved dark theme.
 
 The prior isolated diagnostic build is retained only as historical evidence; it
 is no longer needed with the Discover fix already on released main.
 No shared cache or another task's artifact may be removed to free disk space.
 
-Latest candidate validation after reconciliation with main `3764315`: normal
+Latest candidate validation after reconciliation with main `6a2a15c`: normal
 `npm run build` (Turbopack, 155 routes), generated/source TypeScript, the full
 `npm test` chain including upstream privacy consent, file/scanner tests, exact
 PostgreSQL migration/route suite, 29 browser fixture screenshots and the normal
@@ -168,3 +171,18 @@ uses real synthetic Auth.js sessions and an ephemeral localhost database, with
 no scanner configured: it verifies images succeed and PDFs are rejected before
 storage. The former Discover build blocker is resolved upstream. No production
 migration, publication or scanner setup has been performed.
+
+Two additional upstream browser suites were attempted without modifying their
+files. `test:user-workspace-browser` reaches line 538, then expects a default light
+theme although its fixture HTML omits the root `ThemeScript`.
+`test:product-consistency-browser` cannot bundle because its `next/image` mock
+lacks `getImageProps`, now imported by the landing page. These are recorded as
+unpassed fixture checks, not a claim that the broad suites passed. Logs are
+`output/feedback-reconciled-workspace-browser.log` and
+`output/feedback-reconciled-product-browser.log`. The actual compiled support
+runtime independently passes both theme assertions.
+
+Visual observation for the parent: the inherited cookie banner has low text
+contrast under the new light default in `output/playwright/feedback-runtime/real-support-390.png`.
+No shared banner or theme code was changed in this scoped feedback candidate.
+PR #39's production hosting was not checked here.
