@@ -89,6 +89,8 @@ async function main() {
     "next/link": { default: "Link" }, "next-intl/server": { getLocale: async () => "it", getTranslations: async () => (key: string) => key },
     "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence,
     "@/lib/session": { getCurrentUser: async () => ({ id: "owner", email: "owner@example.test", name: "Owner", welcomeSeenAt: new Date() }) },
+    "@/lib/attention-repository": { getAttentionQueue: async () => ({ items: [], unread: 0, unknownRead: 0, drafts: 0, limited: false }) },
+    "@/components/attention-queue": { AttentionQueue: "AttentionQueue" },
     "@/lib/onboarding": { getOnboardingState: async () => ({ hasUploadedCv: true, hasSetPreferences: true, hasFirstApplication: true }) },
     "@/lib/dashboard-globe-data": { getDashboardGlobeData: async () => ({ markers: [], stats: { counts: { open: 0 } } }) },
     "@/lib/auto-apply-readiness": { getAutoApplyReadiness: async () => ({}) },

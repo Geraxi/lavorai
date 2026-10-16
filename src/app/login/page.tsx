@@ -1,6 +1,7 @@
 "use client";
 
-import { Suspense, useState, type FormEvent } from "react";
+import { observeGoogleCallbackError } from "@/lib/google-login-observation";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { AuthShell, PasswordInput } from "@/components/auth/auth-shell";
@@ -24,6 +25,8 @@ function LoginContent() {
   const next = params.get("next") ?? "/dashboard";
   const plan = params.get("plan");
   const errorKey = authErrorMessageKey(params);
+  const callbackError = params.getAll("error").find(value => value !== "1") ?? null;
+  useEffect(() => { observeGoogleCallbackError(callbackError); }, [callbackError]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

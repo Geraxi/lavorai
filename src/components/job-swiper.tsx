@@ -1,5 +1,7 @@
 "use client";
 
+import { MatchExplanation } from "@/components/match-explanation";
+import type { MatchExplanation as Explanation } from "@/lib/match-explanation";
 import { jobSourceLabel } from "@/lib/job-source-label";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Heart, Sparkles, Target } from "lucide-react";
@@ -16,19 +18,18 @@ import type { JobRow } from "@/components/jobs-list";
 /**
  * Tinder-style swipe card stack per i job recommendation.
  *  - Drag right + drop oltre soglia → applica
- *  - Drag left + drop oltre soglia → skip (persisted in localStorage)
+ *  - Drag left + drop oltre soglia → dismiss this listing (owner-scoped)
  *  - Click su "Skip" / "Apply" → stessa azione, animazione triggerata
  *  - Arrow keyboard ← → → equivalente click
  *
  * Stack visivo: 1 card in primo piano + 2 dietro (z-index decrescente)
  * per dare profondità e suggerire che ci sono altre opportunità.
  *
- * Persistenza skip: localStorage chiave `lavorai-skipped-jobs` (per-device).
+ * Dismissals persist through /api/jobs/dismissals and are reversible in Discover.
  * Apply usa lo stesso endpoint di /jobs (`/api/applications/apply`).
  */
 
 const SWIPE_THRESHOLD = 100; // px di drag minimo per triggare l'action
-const SKIP_KEY = "lavorai-skipped-jobs";
 const SAVED_KEY = "lavorai-saved-jobs";
 
 function loadSaved(): Set<string> {
@@ -63,30 +64,7 @@ function portalOf(url: string): string {
   return "other";
 }
 
-function loadSkipped(): Set<string> {
-  if (typeof window === "undefined") return new Set();
-  try {
-    const raw = localStorage.getItem(SKIP_KEY);
-    if (!raw) return new Set();
-    const arr = JSON.parse(raw) as string[];
-    return new Set(Array.isArray(arr) ? arr : []);
-  } catch {
-    return new Set();
-  }
-}
-
-function saveSkipped(set: Set<string>): void {
-  if (typeof window === "undefined") return;
-  try {
-    // Cap a 500 elementi: oltre, droppiamo i più vecchi (FIFO)
-    const arr = Array.from(set).slice(-500);
-    localStorage.setItem(SKIP_KEY, JSON.stringify(arr));
-  } catch {
-    /* quota / private mode */
-  }
-}
-
-type DiscoverJob = JobRow & { matchScore?: number | null };
+type DiscoverJob = JobRow & { matchScore?: number | null; explanation?: Explanation };
 
 export function DiscoverHeading({ count }: { count: number }) {
   const t = useTranslations("discoverPage");
@@ -107,9 +85,9 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
   const [animDir, setAnimDir] = useState<"left" | "right" | null>(null);
   const [detailJob, setDetailJob] = useState<JobRow | null>(null);
 
-  // Carica skipped da localStorage solo lato client per evitare hydration mismatch
+  // Local saved jobs remain a separate existing feature.
   useEffect(() => {
-    setSkipped(loadSkipped());
+    // Explicit dismissals now come from the owner-scoped server selection.
     setSaved(loadSaved());
   }, []);
 
@@ -140,23 +118,17 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
   // Peek cards (queue.slice(1,3)) rimosse — vedi commento nel JSX sotto.
 
   // Skip programmaticamente (anche da bottone o swipe)
-  const skip = useCallback(
-    (jobId: string) => {
-      setAnimatingId(jobId);
-      setAnimDir("left");
-      setTimeout(() => {
-        setSkipped((prev) => {
-          const next = new Set(prev);
-          next.add(jobId);
-          saveSkipped(next);
-          return next;
-        });
-        setAnimatingId(null);
-        setAnimDir(null);
-      }, 250);
-    },
-    [],
-  );
+  const skip = useCallback(async (jobId: string) => {
+    if (animatingId) return;
+    setAnimatingId(jobId); setAnimDir(null);
+    try {
+      const result = await fetch("/api/jobs/dismissals", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId, action: "dismiss" }) });
+      if (!result.ok) throw new Error();
+      setSkipped(old => new Set([...old, jobId]));
+      toast.success(en ? "Listing dismissed. Restore it from Dismissed listings." : "Annuncio escluso. Puoi ripristinarlo da Annunci esclusi.");
+    } catch { toast.error(en ? "Couldn't dismiss this listing. Try again." : "Impossibile escludere l'annuncio. Riprova."); }
+    finally { setAnimatingId(null); setAnimDir(null); }
+  }, [animatingId, en]);
 
   // Apply — UX ottimistica: la card scorre a destra e la SUCCESSIVA
   // appare in 250ms, indipendentemente da quanto ci mette il fetch.
@@ -172,7 +144,7 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
         setSkipped((prev) => {
           const next = new Set(prev);
           next.add(job.id);
-          saveSkipped(next);
+          // Applied cards are hidden for this visit only; no preference is inferred.
           return next;
         });
         setAnimatingId(null);
@@ -236,13 +208,12 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
     const filteredOut = remoteOnly && jobs.some(job => !skipped.has(job.id));
     return <section className="workspace-panel" style={{ padding: 32, textAlign: "center" }}>
       <Target size={38} aria-hidden style={{ margin: "0 auto 16px", color: "var(--primary-ds)" }} />
-      <h2 style={{ fontSize: 22 }}>{filteredOut ? tr("Nessun ruolo remoto in questa selezione", "No remote roles in this selection") : jobs.length === 0 ? tr("Nessuna offerta trovata", "No jobs found") : tr("Hai visto tutte le offerte", "You have reviewed this selection")}</h2>
+      <a className="fit-link" href="/discover?dismissed=1">{tr("Annunci esclusi · ripristina", "Dismissed listings · restore")}</a><h2 style={{ fontSize: 22 }}>{filteredOut ? tr("Nessun ruolo remoto in questa selezione", "No remote roles in this selection") : jobs.length === 0 ? tr("Nessuna offerta trovata", "No jobs found") : tr("Hai visto tutte le offerte", "You have reviewed this selection")}</h2>
       <p className="workspace-muted">{filteredOut ? tr("Ci sono altri ruoli disponibili. Rimuovi il filtro per vederli.", "Other roles are available. Clear the filter to see them.") : tr("Rivedi le preferenze di ricerca o esplora gli annunci disponibili.", "Review your search preferences or explore available listings.")}</p>
       <div className="workspace-toolbar" style={{ justifyContent: "center", marginTop: 18 }}>
         {remoteOnly && <button className="ds-btn" onClick={() => setRemoteOnly(false)}>{tr("Mostra tutti i ruoli", "Show all roles")}</button>}
         <a className="ds-btn ds-btn-primary" href="/preferences">{tr("Modifica preferenze", "Edit preferences")}</a>
         <a className="ds-btn" href="/jobs">{tr("Esplora annunci", "Browse jobs")}</a>
-        {skipped.size > 0 && <button className="ds-btn" onClick={() => { try { localStorage.removeItem(SKIP_KEY); } catch {} setSkipped(new Set()); }}>{tr("Rivedi annunci scartati", "Review skipped jobs")}</button>}
       </div>
     </section>;
   }
@@ -264,13 +235,15 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
               onTap={() => setDetailJob(currentJob)} />
           </div>
           <div className="workspace-toolbar discover-actions">
-            <button type="button" className="ds-btn" onClick={() => skip(currentJob.id)} disabled={!!animatingId} aria-label={t("skip")}><Icon name="x" size={16} /> {t("skip")}</button>
+            <button type="button" className="ds-btn" onClick={() => skip(currentJob.id)} disabled={!!animatingId} aria-label={tr("Non pertinente", "Not relevant")}><Icon name="x" size={16} /> {tr("Non pertinente", "Not relevant")}</button>
             <button type="button" className="ds-btn" onClick={() => setDetailJob(currentJob)}>{tr("Dettagli", "Details")}</button>
             <button type="button" className="ds-btn ds-btn-primary" onClick={() => apply(currentJob)} disabled={!!animatingId} aria-label={t("apply")}><Icon name="send" size={16} /> {t("apply")}</button>
           </div>
-          <p className="workspace-muted" style={{ textAlign: "center" }}>{t("hintKeyboard")}</p>
+          <p className="workspace-muted" style={{ textAlign: "center" }}>{tr("← esclude questo annuncio · → candidati · esclusioni ripristinabili", "← dismisses this listing · → apply · dismissals can be restored")}</p>
         </div>
         <aside className="workspace-stack">
+          {currentJob.explanation && <MatchExplanation explanation={currentJob.explanation} en={en} />}
+          <a className="fit-link" href="/discover?dismissed=1">{tr("Annunci esclusi · ripristina", "Dismissed listings · restore")}</a>
           <section className="workspace-panel">
             <h2>{tr("Coda di riserva", "Up next")} <span className="workspace-chip">{Math.min(queue.length - 1, 3)}</span></h2>
             {queue.slice(1, 4).map(job => <button key={job.id} type="button" className="discover-queue" onClick={() => setDetailJob(job)}>
@@ -280,7 +253,7 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
             {queue.length === 1 && <p className="workspace-muted">{tr("È l'ultimo annuncio della selezione.", "This is the last job in this selection.")}</p>}
           </section>
           <section className="workspace-panel">
-            <h2>{tr("Affina la ricerca", "Refine your search")}</h2>
+            <h2>{tr("Affina la ricerca", "Refine your search")}</h2><p className="workspace-muted">{tr("Non pertinente esclude solo questo annuncio dai suggerimenti. Non modifica ruoli, aziende o dati personali. Per escludere altri ruoli, modifica le preferenze.", "Not relevant excludes only this listing from suggestions. It does not change roles, companies or personal data. Edit preferences to exclude other roles.")}</p>
             <p className="workspace-muted">{tr("Il match è una stima dal CV, non una valutazione del recruiter. Rivedi località e retribuzione nelle preferenze.", "Match is a CV-based estimate, not a recruiter assessment. Review location and salary in your preferences.")}</p>
             <a className="ds-btn" href="/preferences" style={{ marginTop: 12 }}>{tr("Modifica preferenze", "Edit preferences")}</a>
           </section>
@@ -311,7 +284,7 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
         }}
         labels={{
           apply: t("apply"),
-          skip: t("skip"),
+          skip: tr("Non pertinente", "Not relevant"),
           fullDescription: t("fullDescription"),
           openOriginal: t("openOriginal"),
         }}

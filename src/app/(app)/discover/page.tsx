@@ -1,5 +1,7 @@
+import { explainMatch } from "@/lib/match-explanation";
+import { DismissedJobs } from "@/components/dismissed-jobs";
 import type { Metadata } from "next";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
 import { JobSwiper, DiscoverHeading } from "@/components/job-swiper";
 import { getCurrentUser } from "@/lib/session";
@@ -8,7 +10,6 @@ import { rowToProfile } from "@/lib/cv-profile-types";
 import { discoverMatchScore } from "@/lib/discover-match-score";
 import { quickMatchScore } from "@/lib/match-score";
 import { titleMatchesAnyRole } from "@/lib/role-match";
-import type { JobRow } from "@/components/jobs-list";
 
 export const metadata: Metadata = { title: "Discover" };
 export const dynamic = "force-dynamic";
@@ -19,15 +20,19 @@ export const dynamic = "force-dynamic";
  * Stessi filtri della /jobs (ruoli, sede, salario, matchMin, avoid),
  * ma renderizzati uno alla volta in un card stack swipeable:
  *   swipe right / arrow right → applica
- *   swipe left / arrow left   → skip (memo localStorage)
+ *   swipe left / arrow left   → dismiss (owner-scoped and reversible)
  *
  * Niente refresh Adzuna costoso — pesca solo dalla cache job locale
  * (popolata dal cron sync-jobs ogni 2h). Veloce, leggera, low-cost.
  */
-export default async function DiscoverPage() {
+export default async function DiscoverPage({ searchParams }: { searchParams?: Promise<{ dismissed?: string }> } = {}) {
   const user = await getCurrentUser();
   if (!user) return null;
   const t = await getTranslations("discoverPage");
+  if ((await searchParams)?.dismissed === "1") {
+    const dismissed = await prisma.jobDismissal.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, take: 50, select: { job: { select: { id: true, title: true } } } });
+    return <><AppTopbar title={t("title")} /><div className="workspace-page"><DismissedJobs jobs={dismissed.map(d => d.job)} en={(await getLocale()) === "en"} /></div></>;
+  }
 
   const [prefs, full] = await Promise.all([
     prisma.userPreferences.findUnique({
@@ -72,6 +77,8 @@ export default async function DiscoverPage() {
   // Pesca dalla cache: ultimi 14 giorni, fino a 300 job, ordinati per data
   const jobsRaw = await prisma.job.findMany({
     where: {
+      closedAt: null,
+      dismissals: { none: { userId: user.id } },
       cachedAt: { gte: new Date(Date.now() - 14 * 86400_000) },
       source: {
         in: ["greenhouse", "lever", "ashby", "smartrecruiters", "linkedin"],
@@ -91,7 +98,7 @@ export default async function DiscoverPage() {
   });
 
   // Applica gli stessi filtri di /jobs
-  const jobs: JobRow[] = jobsRaw
+  const jobs = jobsRaw
     .filter((j) => {
       if (prefRoles.length > 0 && !titleMatchesAnyRole(j.title, prefRoles))
         return false;
@@ -111,6 +118,7 @@ export default async function DiscoverPage() {
     })
     .slice(0, 50)
     .map((j) => ({
+      explanation: explainMatch(userProfile, j.description),
       matchScore: discoverMatchScore(userProfile, `${j.title}\n${j.company ?? ""}\n${j.description}`),
       id: j.id,
       title: j.title,

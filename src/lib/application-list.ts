@@ -3,12 +3,8 @@ import { applicationDeliveryView } from "./application-delivery-view";
 import { pipelineLane, type PipelineLane } from "./application-pipeline";
 import { APPLICATION_LANES, BOARD_PAGE_SIZE, TABLE_PAGE_SIZE, pageWindow } from "./application-pagination";
 
-const evidenceSelect = {
-  id: true, createdAt: true, status: true, userStatus: true, lastReplyKind: true,
-  submittedVia: true, submitConfirmation: true, submissionReceiptJson: true,
-  emailAttempts: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1,
-    select: { status: true, providerEmailId: true } },
-} satisfies Prisma.ApplicationSelect;
+import { applicationListIndex, evidenceSelect } from "./application-list-index";
+
 const detailSelect = {
   ...evidenceSelect, portal: true, errorMessage: true, atsScore: true, suggestionsJson: true,
   completedAt: true, coverLetterText: true, cvDocxPath: true, coverLetterPath: true, cvPdfPath: true,
@@ -77,10 +73,10 @@ async function exportPage(db: Pick<PrismaClient, "application">, where: Prisma.A
 
 /** Read-only, owner-scoped pagination. Stage membership needs the canonical
  * receipt validator, which cannot safely be approximated by raw status in SQL.
- * Scan only lightweight evidence in bounded keyset batches; retain only page
- * IDs, and load document/role details only for those IDs. No 500-row payload,
- * large full-record fetch, schema change or duplicated receipt rules. */
-export async function listApplications(db: Pick<PrismaClient, "application">, userId: string, params: URLSearchParams, now = new Date()) {
+ * Reuse a bounded compact index only after checking current database evidence.
+ * Cold instances scan lightweight evidence in bounded keyset batches; document
+ * and role details remain limited to the requested page. */
+export async function listApplications(db: Pick<PrismaClient, "application"> & Partial<Pick<PrismaClient, "$queryRaw">>, userId: string, params: URLSearchParams, now = new Date()) {
   const id = params.get("id");
   if (id) {
     const app = await db.application.findFirst({ where: { id, userId, status: { not: "diagnostic" } }, select: detailSelect });
@@ -106,29 +102,39 @@ export async function listApplications(db: Pick<PrismaClient, "application">, us
   const windows = Object.fromEntries(APPLICATION_LANES.map(key => [key, pageWindow(positiveInteger(params.get(`${key}Page`), 1), BOARD_PAGE_SIZE)])) as Record<PipelineLane, ReturnType<typeof pageWindow>>;
   const table = pageWindow(positiveInteger(params.get("page"), 1), size);
   const summary = { confirmed: 0, attention: 0, interviews: 0, offers: 0, pending: 0 };
-  let cursor: { createdAt: Date; id: string } | undefined;
-  while (true) {
-    const batch = await db.application.findMany({
-      where: cursor ? { AND: [where, before(cursor)] } : where,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100, select: evidenceSelect,
-    });
-    for (const app of batch) {
-      const delivery = applicationDeliveryView(app);
-      const stage = pipelineLane({ ...app, delivery });
-      const pending = !["confirmed", "delivered", "manual"].includes(delivery.phase);
-      if (["confirmed", "delivered"].includes(delivery.phase)) summary.confirmed++;
-      if (stage === "attention") summary.attention++;
-      if (app.userStatus === "colloquio") summary.interviews++;
-      if (app.userStatus === "offerta") summary.offers++;
-      if (pending && (lane === "all" || lane === stage)) summary.pending++;
-      if (lane === "all" || lane === stage) {
-        windows[stage].add(app.id);
-        if (view !== "attention" || pending) table.add(app.id);
-      }
+  const add = (row: { id: string; stage: PipelineLane; pending: boolean; confirmed: boolean; interview: boolean; offer: boolean }) => {
+    if (row.confirmed) summary.confirmed++;
+    if (row.stage === "attention") summary.attention++;
+    if (row.interview) summary.interviews++;
+    if (row.offer) summary.offers++;
+    if (row.pending && (lane === "all" || lane === row.stage)) summary.pending++;
+    if (lane === "all" || lane === row.stage) {
+      windows[row.stage].add(row.id);
+      if (view !== "attention" || row.pending) table.add(row.id);
     }
-    if (batch.length < 100) break;
-    cursor = batch[batch.length - 1];
+  };
+  const index = db.$queryRaw ? await applicationListIndex(db as Pick<PrismaClient, "application" | "$queryRaw">, where,
+    { userId, since, search, includeAll: params.get("includeAll") === "1" }) : null;
+  if (index) index.forEach(add);
+  else {
+    let cursor: { createdAt: Date; id: string } | undefined;
+    while (true) {
+      const batch = await db.application.findMany({
+        where: cursor ? { AND: [where, before(cursor)] } : where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100, select: evidenceSelect,
+      });
+      for (const app of batch) {
+        const delivery = applicationDeliveryView(app);
+        add({ id: app.id, stage: pipelineLane({ ...app, delivery }),
+          pending: !["confirmed", "delivered", "manual"].includes(delivery.phase),
+          confirmed: ["confirmed", "delivered"].includes(delivery.phase),
+          interview: app.userStatus === "colloquio", offer: app.userStatus === "offerta" });
+      }
+      if (batch.length < 100) break;
+      cursor = batch[batch.length - 1];
+    }
   }
+
   const pages = Object.fromEntries(APPLICATION_LANES.map(key => [key, windows[key].result()])) as Record<PipelineLane, ReturnType<ReturnType<typeof pageWindow>["result"]>>;
   const page = table.result();
   const ids = view === "board" ? APPLICATION_LANES.flatMap(key => pages[key].ids) : page.ids;

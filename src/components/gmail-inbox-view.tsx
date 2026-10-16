@@ -104,9 +104,12 @@ function ReplyComposer({ message, ownerId, en, initial, onSaved, onDiscarded }: 
   </section>;
 }
 
-export function GmailInboxView({ messages, gmailConnected, userEmail, locale = "en", ownerId = "current", outgoing = [] }: InboxViewProps) {
+export function GmailInboxView({ messages: initialMessages, gmailConnected, userEmail, locale = "en", ownerId = "current", outgoing = [] }: InboxViewProps) {
   const en = locale === "en"; const tr = (a: string, b: string) => en ? a : b;
   const router = useRouter(); const searchParams = useSearchParams();
+  const [attentionState, setAttentionState] = useState<Record<string, Partial<InboxMessage>>>({});
+  const [attentionBusy, setAttentionBusy] = useState(false);
+  const messages = useMemo(() => initialMessages.map(m => ({ ...m, ...attentionState[m.id] })), [initialMessages, attentionState]);
   const [folder, setFolder] = useState<Folder>("inbox");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [search, setSearch] = useState(""); const [oldest, setOldest] = useState(false);
@@ -143,7 +146,27 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, locale = "
     { id: "all", label: tr("All mail", "Tutte le email"), icon: Archive, count: messages.length },
   ];
   const chooseFolder = (value: Folder) => { setFolder(value); setPage(0); setSelected(null); setMobileOpen(false); setFilter("all"); };
-  const selectMessage = (id: string) => { setSelected(id); setMobileOpen(true); setConversationLimit(20); };
+  const updateAttention = async (id: string, action: "read" | "handled" | "reopen" | "tomorrow") => {
+    if (attentionBusy) return; setAttentionBusy(true);
+    try {
+      const result = await fetch("/api/inbox/attention", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, action }) });
+      if (!result.ok) throw new Error();
+      const { state: change } = await result.json();
+      setAttentionState(old => ({ ...old, [id]: { ...old[id], ...change } }));
+      setNotice(action === "tomorrow" ? tr("Reminder saved for tomorrow in LavorAI. No email will be sent.", "Promemoria salvato per domani in LavorAI. Nessuna email verrà inviata.") : tr("Attention status saved.", "Stato attività salvato."));
+      startRefresh(() => router.refresh());
+    } catch { setNotice(tr("Couldn't save attention status. Try again.", "Impossibile salvare lo stato. Riprova.")); }
+    finally { setAttentionBusy(false); }
+  };
+  const selectMessage = (id: string) => { setSelected(id); setMobileOpen(true); setConversationLimit(20); if (messages.some(m => m.id === id)) void updateAttention(id, "read"); };
+  const deepLink = searchParams.get("message");
+  const openedDeepLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!deepLink) { openedDeepLink.current = null; return; }
+    if (openedDeepLink.current === deepLink) return;
+    const index = initialMessages.filter(m => m.jobRelated).findIndex(m => m.id === deepLink);
+    if (index >= 0) { openedDeepLink.current = deepLink; setFolder("inbox"); setPage(Math.floor(index / PAGE_SIZE)); setSelected(deepLink); setMobileOpen(true); }
+  }, [deepLink, initialMessages]);
   useEffect(() => {
     const refreshVisible = () => { if (!document.hidden) startRefresh(() => router.refresh()); };
     const timer = window.setInterval(refreshVisible, 60000); window.addEventListener("focus", refreshVisible);
@@ -165,7 +188,7 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, locale = "
     {notice && <div role="status" className="mail-global-notice">{notice}<button type="button" className="mail-icon" aria-label={tr("Dismiss notice", "Chiudi avviso")} onClick={() => setNotice("")}><X size={15} /></button></div>}
     <div className="mail-layout">
       <section className="mail-list-pane" aria-label={tr("Message list", "Elenco messaggi")}>
-        <div className="mail-list-heading"><h1>{tr("Messages", "Messaggi")}</h1><span className="mail-count">{messages.length}</span><button type="button" className="mail-icon" aria-label={tr("Refresh inbox", "Aggiorna inbox")} title={tr("Refresh inbox", "Aggiorna inbox")} disabled={refreshing} onClick={() => startRefresh(() => router.refresh())}><RefreshCw size={15} className={refreshing ? "mail-spin" : ""} /></button></div>
+        <div className="mail-list-heading"><h1>{tr("Messages", "Messaggi")}</h1><span className="mail-count" title={tr("Unread in this recent selection", "Non letti in questa selezione recente")}>{messages.filter(m => m.read === false).length} {tr("unread", "non letti")}</span><button type="button" className="mail-icon" aria-label={tr("Refresh inbox", "Aggiorna inbox")} title={tr("Refresh inbox", "Aggiorna inbox")} disabled={refreshing} onClick={() => startRefresh(() => router.refresh())}><RefreshCw size={15} className={refreshing ? "mail-spin" : ""} /></button></div>
         <label className="mail-search"><Search size={16} /><input aria-label={tr("Search inbox", "Cerca nella inbox")} placeholder={tr("Search recruiter or company…", "Cerca recruiter o azienda…")} value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} />{search && <button type="button" className="mail-icon" aria-label={tr("Clear search", "Cancella ricerca")} onClick={() => setSearch("")}><X size={15} /></button>}</label>
         <nav className="mail-folders" aria-label={tr("Mail folders", "Cartelle email")}>
           {folders.map(item => <button key={item.id} type="button" title={item.label} aria-label={item.label} aria-current={folder === item.id ? "page" : undefined} onClick={() => chooseFolder(item.id)}><item.icon size={13} /><span>{item.label}</span>{item.id === "drafts" && item.count > 0 && <small>{item.count}</small>}</button>)}
@@ -187,6 +210,14 @@ export function GmailInboxView({ messages, gmailConnected, userEmail, locale = "
             {current.applicationId && <Link className="mail-application" title={tr("View application", "Vedi candidatura")} href={`/applications?id=${encodeURIComponent(current.applicationId)}`}><BriefcaseBusiness size={14} /><span>{tr("Application", "Candidatura")}</span></Link>}
             </div>
           </header>
+          <div className="mail-attention-controls">
+            <span>{current.read === null ? tr("Historical read state unknown", "Lettura storica sconosciuta") : current.read ? tr("Read in LavorAI", "Letto in LavorAI") : tr("Unread", "Non letto")}</span>
+            {current.read !== true && <button type="button" disabled={attentionBusy} onClick={() => updateAttention(current.id, "read")}>{tr("Mark read", "Segna come letto")}</button>}
+            <button type="button" disabled={attentionBusy} onClick={() => updateAttention(current.id, current.handledAt || current.remindAt ? "reopen" : "handled")}>{current.handledAt || current.remindAt ? tr("Reopen attention", "Riapri attività") : tr("Mark handled", "Segna gestito")}</button>
+            {!current.handledAt && <button type="button" disabled={attentionBusy} onClick={() => updateAttention(current.id, "tomorrow")}>{tr("Remind tomorrow", "Ricorda domani")}</button>}
+            {current.remindAt && <small>{tr("In-app reminder:", "Promemoria in app:")} {new Date(current.remindAt).toLocaleString(locale)}</small>}
+            {current.handledAt && <small>{tr("Marked handled by you; this is not a send receipt.", "Segnato gestito da te; non è una ricevuta di invio.")}</small>}
+          </div>
           <div className="mail-conversation"><div className="mail-thread-subject">{current.subject || tr("(no subject)", "(senza oggetto)")}</div>
             {conversation.length > conversationLimit && <button type="button" className="mail-text-button" onClick={() => setConversationLimit(value => value + 20)}>{tr("Show earlier messages", "Mostra messaggi precedenti")} ({conversation.length - conversationLimit})</button>}
             {conversation.slice(-conversationLimit).map(item => <article className={`mail-letter${item.reply ? " mail-letter-outgoing" : ""}`} key={item.reply?.id ?? item.message!.id}>

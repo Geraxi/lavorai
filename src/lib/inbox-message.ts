@@ -10,8 +10,11 @@ export interface InboxMessage {
   date: string;
   kind: string;
   label: string;
-  /** Inbound replies do not have persisted read state. null must not mean unread. */
+  /** Historical inbound read state is unknown until explicitly read. */
   read: boolean | null;
+  isHuman?: boolean;
+  handledAt?: string | null;
+  remindAt?: string | null;
   applicationId: string | null;
   applicationStatus: string | null;
   company: string | null;

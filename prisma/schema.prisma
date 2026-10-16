@@ -170,6 +170,7 @@ model User {
   answers        UserAnswer[]
   conversionEvents ConversionEvent[]
   gmailMessages  GmailMessage[]
+  jobDismissals  JobDismissal[]
 
   // Referral: ogni utente ha un codice univoco da condividere; referredById
   // punta a chi l'ha invitato (se applicabile). Reward gestito a parte
@@ -498,6 +499,7 @@ model Job {
   protectedCategory Boolean @default(false)
 
   applications Application[]
+  dismissals JobDismissal[]
 
   @@unique([externalId, source])
   @@index([closedAt])
@@ -678,6 +680,11 @@ model ApplicationReply {
   /// true se è una risposta umana reale (non auto/bounce) → conta come "risposta".
   isHuman       Boolean  @default(true)
   receivedAt    DateTime @default(now())
+  /// Null on historical rows: unread history must not be invented.
+  attentionTrackedAt DateTime? @default(now())
+  readAt        DateTime?
+  handledAt     DateTime?
+  remindAt      DateTime?
   /// Provider identity deduplicates redelivery independently of webhook event IDs.
   provider          String?
   providerMessageId String?
@@ -781,6 +788,8 @@ model GmailMessage {
   label         String?
   /// true se l'utente ha visualizzato il messaggio nella UI Inbox.
   read          Boolean  @default(false)
+  handledAt     DateTime?
+  remindAt      DateTime?
   /// true se l'utente ha archiviato/nascosto il messaggio.
   archived      Boolean  @default(false)
   syncedAt      DateTime @default(now())
@@ -917,4 +926,14 @@ model InboxReply {
   parentReply ApplicationReply @relation(fields: [parentReplyId], references: [id], onDelete: Cascade)
   @@index([applicationId, createdAt])
   @@index([parentReplyId])
+}
+
+/// Explicit, reversible listing exclusions. Never changes profile/preferences.
+model JobDismissal {
+  userId String
+  jobId String
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  @@id([userId, jobId])
 }

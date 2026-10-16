@@ -42,6 +42,9 @@ export const AnalyticsEvent = {
   CHECKOUT_STARTED: "checkout_started",
   SUBSCRIPTION_STARTED: "subscription_started",
   PURCHASE_COMPLETED: "purchase_completed",
+  CARD_SETUP_CONFIRMED: "card_setup_confirmed",
+  GOOGLE_LOGIN_STARTED_OBSERVED: "google_login_started_observed",
+  GOOGLE_LOGIN_FAILURE_OBSERVED: "google_login_failure_observed",
   FIRST_APPLICATION_DELIVERED: "first_application_delivered",
 
   // Product, paywall and lifecycle — used by the admin operating system.

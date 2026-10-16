@@ -193,3 +193,8 @@
 @media (max-width:1023px) { .mail-mobile-sync { display:flex; margin:0; padding:9px 14px; justify-content:space-between; font-size:11px; color:var(--primary-ds); border:0; border-top:1px solid var(--border-ds); background:transparent; } }
 
 @media(max-width:700px){.mail-compose textarea,.mail-search input{font-size:16px}.mail-icon{min-width:40px;min-height:40px}.mail-folders > button,.mail-filters button{min-height:40px}}
+
+.mail-attention-controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:8px 16px; border-bottom:1px solid var(--border-ds); font-size:11px; flex-shrink:0; }
+.mail-attention-controls button { padding:5px 8px; border:1px solid var(--border-ds); border-radius:6px; color:var(--fg); }
+.mail-attention-controls button:focus-visible { outline:2px solid var(--primary-ds); }
+.mail-attention-controls small { width:100%; color:var(--fg-muted); }

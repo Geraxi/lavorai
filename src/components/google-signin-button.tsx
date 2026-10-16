@@ -1,5 +1,6 @@
 "use client";
 
+import { recordGoogleLoginObservation } from "@/lib/google-login-observation";
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
@@ -55,6 +56,7 @@ export function GoogleButton({
       type="button"
       disabled={loading}
       onClick={async () => {
+        recordGoogleLoginObservation("started");
         setLoading(true);
         setError(null);
         try {
@@ -71,8 +73,10 @@ export function GoogleButton({
             return;
           }
 
+          recordGoogleLoginObservation("launch_failed");
           setError("Impossibile avviare l'accesso con Google. Riprova.");
         } catch {
+          recordGoogleLoginObservation("launch_failed");
           setError("Impossibile avviare l'accesso con Google. Riprova.");
         } finally {
           setLoading(false);

@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
@@ -14,14 +14,19 @@ const fontFile = process.env.WORKSPACE_FONT_FILE;
 const fontCss = fontFile ? '@font-face{font-family:WorkspaceInter;font-style:normal;font-weight:100 900;font-display:block;src:url(data:font/woff2;base64,'+(await readFile(fontFile)).toString('base64')+') format("woff2");}' : '';
 const fixtureFont = fontFile ? 'WorkspaceInter' : 'Arial';
 const stub = {
-  'next/navigation': `export const usePathname = () => location.pathname; const router = { refresh() { window.__refreshes++; }, push(url) { window.__navigation = url; } }; export const useRouter = () => router; const params = new URLSearchParams(location.search); export const useSearchParams = () => params;`,
+  'next/navigation': `export const notFound=()=>{throw Error('Fixture access denied')}; export const usePathname = () => location.pathname; const router = { refresh() { window.__refreshes++; }, push(url) { window.__navigation = url; } }; export const useRouter = () => router; const params = new URLSearchParams(location.search); export const useSearchParams = () => params;`,
   'next/link': `import React from 'react'; export default function Link({ prefetch, ...props }) { return React.createElement('a', props); }`,
   'next/dynamic': `import React from 'react'; export default function dynamic(loader) { const Component = React.lazy(() => loader().then(component => ({default: component.default ?? component}))); return props => <React.Suspense fallback={<div>Loading map…</div>}><Component {...props} /></React.Suspense>; }`,
   'next-auth/react': `export const signOut = () => {};`,
   'next-intl/server': `export const getLocale = async () => window.__locale; export const getTranslations = async namespace => (key, values={}) => Object.entries(values).reduce((text,[name,value])=>text.replace("{"+name+"}",value),window.__messages[namespace][key] ?? key);`,
   '@/lib/session': `export const getCurrentUser = async () => ({ id: 'fixture', name: 'Alex Example', email: 'alex@example.test', welcomeSeenAt: new Date() });`,
+  '@/lib/admin': `export const isAdmin=()=>true;`,
+  '@/lib/admin-alerts': `export const getAdminAlerts=async()=>[];`,
+  '@/components/admin-topbar': `import React from 'react'; export const AdminTopbar=()=> <div style={{padding:16}}>Admin · Product</div>;`,
+  '@/components/admin-auto-refresh': `export const AdminAutoRefresh=()=>null;`,
   '@/lib/db': `export const prisma = { application: { count: async query => window.__empty ? 0 : query.where.userStatus === 'offerta' ? 1 : 2, findMany: async query => !window.__dense ? [] : query.select.interviewSessions ? Array.from({length:3},(_,i)=>({id:'interview-'+i,createdAt:new Date(),lastReplyAt:new Date(),job:{title:'Senior Engineer — accessibility and international product platforms',company:'Synthetic Interview Company '+i},interviewSessions:[]})) : [{id:'accepted-fixture',userId:'fixture',status:'success',submittedVia:'email_recruiter',emailAttempts:[{status:'accepted',providerEmailId:'synthetic-proof',acceptedAt:new Date()}]}] } };`,
-  '@/lib/onboarding': `export const getOnboardingState = async () => ({ hasUploadedCv: !window.__dense, hasSetPreferences: !window.__dense, hasFirstApplication: !window.__dense });`,
+  '@/lib/attention-repository': `export const getAttentionQueue = async () => { if(new URLSearchParams(location.search).has('attentionError'))throw Error('fixture'); return { items: window.__empty ? [] : Array.from({length:window.__dense?30:4},(_,i)=>({id:'attention-'+i,href:i%2?'/applications?id=app-2&includeAll=1':'/inbox?message=application_reply%3A0',title:i%2?'Frontend Engineer · Example Studio':'Recruiter message · Example Studio',detail:i%2?'Complete required answers':'No reply found in the recent selection · review the message',kind:i%2?'application':'message',date:i%2?null:new Date().toISOString(),unread:i===0})),limited:false,unread:window.__empty?0:2,unknownRead:1,drafts:window.__empty?0:1} };`,
+  '@/lib/onboarding': `export const getOnboardingState = async () => ({ hasUploadedCv: !window.__dense, hasSetPreferences: !window.__dense, hasVerifiedEmail: !window.__dense, cardConfirmedAt: null, paymentReady:true });`,
   '@/lib/dashboard-globe-data': `export const getDashboardGlobeData = async () => window.__globe; export const angularDistance = (a,b,c,d) => Math.acos(Math.max(-1,Math.min(1,Math.sin(a*Math.PI/180)*Math.sin(c*Math.PI/180)+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.cos((b-d)*Math.PI/180))))*180/Math.PI;`,
   '@/lib/auto-apply-readiness': `export const getAutoApplyReadiness = async () => ({ tone: 'action', eyebrow: 'Candidature', title: 'Solo candidature confermate', detail: "L'invio automatico è sospeso. Il servizio accetta soltanto nuove candidature confermate esplicitamente, con un limite complessivo di 10 invii al giorno (UTC). Le tue preferenze restano salvate.", href: '/jobs', cta: 'Vedi le offerte' });`,
   '@/components/welcome-modal': `export const WelcomeModal = () => null;`,
@@ -43,6 +48,11 @@ import ApplicationsPage from './src/app/(app)/applications/page';
 import { pipelineLane } from './src/lib/application-pipeline';
 import { APPLICATION_LANES, pageWindow } from './src/lib/application-pagination';
 import DashboardPage from './src/app/(app)/dashboard/page';
+import {ActivationEvidence} from './src/components/activation-evidence';
+import AdminLayout from './src/app/(app)/admin/layout';
+import {DismissedJobs} from './src/components/dismissed-jobs';
+import {explainMatch} from './src/lib/match-explanation';
+import {EMPTY_PROFILE} from './src/lib/cv-profile-types';
 import { MaterialiView } from './src/app/(app)/materiali/materiali-view';
 import './src/app/(app)/materiali/materiali.css';
 import it from './messages/it.json'; import en from './messages/en.json';
@@ -52,10 +62,11 @@ window.__empty = new URLSearchParams(location.search).has('empty');
 window.__dense = new URLSearchParams(location.search).has('dense');
 window.__requests = []; window.__refreshes = 0;
 const now = new Date().toISOString();
-const jobs = ['Senior React Engineer', 'Product Designer', 'Platform Engineer', 'Frontend Developer'].map((title,i) => ({ id:'job-'+i, title, company:['Example Studio','Sample Labs','Demo Cloud','Example Works'][i], location:['Milano, Italia','Berlin, Germany','Remote EU','London, UK'][i], description:'React TypeScript design systems and accessible interfaces. Work with the product team to build reliable customer experiences. Experience with SQL, Git and automated testing is useful. This is a local synthetic job fixture.', url:'https://example.test/jobs/'+i, contractType:'permanent', remote:new URLSearchParams(location.search).has('onsite')?false:i!==1, salaryMin:i===1?null:60000, salaryMax:i===1?null:80000, postedAt:now, matchScore:i===0?null:88-i }));
+const jobs = ['Senior React Engineer', 'Product Designer', 'Platform Engineer', 'Frontend Developer'].map((title,i) => ({ id:'job-'+i, title, company:['Example Studio','Sample Labs','Demo Cloud','Example Works'][i], location:['Milano, Italia','Berlin, Germany','Remote EU','London, UK'][i], description:'Python required. React required. TypeScript design systems and accessible interfaces. Work with the product team to build reliable customer experiences. Experience with SQL, Git and automated testing is useful. This is a local synthetic job fixture.', url:'https://example.test/jobs/'+i, contractType:'permanent', remote:new URLSearchParams(location.search).has('onsite')?false:i!==1, salaryMin:i===1?null:60000, salaryMax:i===1?null:80000, postedAt:now, matchScore:i===0?null:88-i }));
+jobs.forEach(j=>j.explanation=explainMatch({...EMPTY_PROFILE,skills:[{name:'React'}]},j.description));
 const phases = ['confirmed','accepted','pending','delivered','manual','failed'];
 const labels = ['Ricevuta ATS verificata','Email accettata dal provider','Risposte necessarie','Email consegnata','Invio dichiarato da te','Non inviata'];
-const applications = window.__empty ? [] : phases.map((phase,i) => ({ id:'app-'+i, status:i===2?'needs_answers':i===5?'failed':'success', portal:'greenhouse', atsScore:i===0?null:80+i, suggestions:[], createdAt:now, errorMessage:null, coverLetterText:i%2?'Dear hiring team, this is a synthetic cover letter used only for local browser verification.':null, hasCvDocx:true, hasCoverLetterDocx:i%2===1, hasCvPdf:false, cvLanguage:i%2?'en':'it', userStatus:i===3?'colloquio':i===4?'offerta':null, viewedAt:i===1?now:null, submittedVia:phase==='manual'?'manual':'portal_greenhouse', submittedAt:phase==='confirmed'?now:null, lastReplyAt:i===3?now:null, replyCount:i===3?1:0, lastReplyKind:i===3?'colloquio':null, submitConfirmation:null, delivery:{phase,label:labels[i],detail:'Stato documentato della candidatura di prova.',tone:'neutral'}, deliveryRecipient:null, job:{ ...jobs[i%4], source:'greenhouse' } }));
+const applications = window.__empty ? [] : phases.map((phase,i) => ({ id:'app-'+i, status:i===2?'needs_answers':i===5?'failed':'success', portal:'greenhouse', atsScore:i===0?null:80+i, suggestions:[], createdAt:now, errorMessage:null, coverLetterText:i%2?'Dear hiring team, this is a synthetic cover letter used only for local browser verification.':null, hasCvDocx:true, hasCoverLetterDocx:i%2===1, hasCvPdf:false, cvLanguage:i%2?'en':'it', userStatus:i===3?'colloquio':i===4?'offerta':null, viewedAt:i===1?now:null, submittedVia:phase==='manual'?'manual':['accepted','delivered'].includes(phase)?'email_recruiter':'portal_greenhouse', submittedAt:phase==='confirmed'?now:null, lastReplyAt:i===3?now:null, replyCount:i===3?1:0, lastReplyKind:i===3?'colloquio':null, submitConfirmation:null, delivery:{phase,label:labels[i],detail:'Stato documentato della candidatura di prova.',tone:'neutral'}, timeline:[{kind:'prepared',state:'observed',at:null,source:'materials'},{kind:'submitted',state:['confirmed','accepted','delivered'].includes(phase)?'observed':'unknown',at:['confirmed','accepted','delivered'].includes(phase)?now:null,source:phase==='confirmed'?'ats_receipt':['accepted','delivered'].includes(phase)?'provider_acceptance':'no_receipt'},{kind:'delivered',state:['confirmed','delivered'].includes(phase)?'observed':phase==='failed'?'problem':'pending',at:['confirmed','delivered'].includes(phase)?now:null,source:phase==='confirmed'?'ats_receipt':phase==='failed'?'delivery_failure':'recipient_server'},{kind:'response',state:i===3?'observed':'unknown',at:i===3?now:null,source:'classified_message'}], deliveryRecipient:null, job:{ ...jobs[i%4], source:'greenhouse' } }));
 if(window.__dense && applications.length) {
   const originals=applications.slice();
   applications.push(...Array.from({length:54},(_,i)=>({...originals[i%originals.length],id:'dense-'+i,job:{...originals[i%originals.length].job,title:originals[i%originals.length].job.title+' — Design systems and accessibility for international customer platforms'}})));
@@ -67,7 +78,7 @@ if(new URLSearchParams(location.search).has('pagination') && applications.length
   applications[2].status='awaiting_consent';
 }
 window.__applicationResponseSizes=[];
-const messages = window.__empty ? [] : applications.slice(0,4).map((a,i)=> ({id:'application_reply:'+i, source:i===3?'gmail':'application_reply', from:'Recruiter '+i+' <recruiter@example.test>', subject:['Interview availability','Application received','Delivery failed','Role update'][i], snippet:'Thank you for your interest in this position.', bodyText:'Hello Alex,\\n\\nThank you for your interest. Can we arrange a conversation next week?\\n\\nThis is a synthetic message for browser QA.\\n<img src="https://tracker.invalid/pixel"><script>alert(1)</script>', date:now, kind:['colloquio','ricevuta','bounce','risposta'][i], label:['Possible interview','Application receipt','Delivery failure','Possible recruiter reply'][i], read:i===3?false:null, applicationId:a.id, applicationStatus:a.userStatus, company:a.job.company, jobTitle:a.job.title, jobRelated:true}));
+const messages = window.__empty ? [] : applications.slice(0,4).map((a,i)=> ({id:'application_reply:'+i, source:i===3?'gmail':'application_reply', from:'Recruiter '+i+' <recruiter@example.test>', subject:['Interview availability','Application received','Delivery failed','Role update'][i], snippet:'Thank you for your interest in this position.', bodyText:'Hello Alex,\\n\\nThank you for your interest. Can we arrange a conversation next week?\\n\\nThis is a synthetic message for browser QA.\\n<img src="https://tracker.invalid/pixel"><script>alert(1)</script>', date:now, kind:['colloquio','ricevuta','bounce','risposta'][i], label:['Possible interview','Application receipt','Delivery failure','Possible recruiter reply'][i], isHuman:i===0||i===3,read:i===0?false:i===3?false:null, applicationId:a.id, applicationStatus:a.userStatus, company:a.job.company, jobTitle:a.job.title, jobRelated:true}));
 if(window.__dense && messages.length) {
   const originals=messages.slice();
   messages.push(...Array.from({length:96},(_,i)=>({...originals[i%4],id:'dense-message-'+i})));
@@ -84,10 +95,19 @@ if(new URLSearchParams(location.search).has('globeLabels')) {
 }
 window.fetch = async (url, options={}) => {
   window.__requests.push({url:String(url),method:options.method||'GET',body:options.body});
-  if(String(url).includes('/api/applications/apply')) return new Response(JSON.stringify({message:'Synthetic blocked submission'}),{status:403});
+  if(String(url)==='/api/inbox/attention'||String(url)==='/api/jobs/dismissals'){
+    const {action}=JSON.parse(options.body);const state=action==='read'?{read:true}:action==='handled'?{handledAt:new Date().toISOString(),remindAt:null}:action==='tomorrow'?{handledAt:null,remindAt:new Date(Date.now()+86400_000).toISOString()}:{handledAt:null,remindAt:null};
+    return Response.json(window.__mutationFail?{error:'synthetic_failure'}:{ok:true,state},{status:window.__mutationFail?503:200});
+  }
+  if(String(url).includes('/api/applications/apply')) return window.__applicationAllowed ? Response.json({ok:true,applicationId:'pending-consent',status:'awaiting_consent'}) : new Response(JSON.stringify({message:'Synthetic blocked submission'}),{status:403});
+  if(String(url).endsWith('/evidence'))return Response.json({steps:applications.find(a=>String(url)==='/api/applications/'+a.id+'/evidence')?.timeline??[]});
   if(String(url).includes('/cv-preview')) return Response.json({text:(window.__dense ? 'Long synthetic CV paragraph for scroll testing. '.repeat(400)+'\\n\\n' : '')+'Alex Example\\nFrontend Engineer\\n\\nSUMMARY\\nSynthetic CV document for local testing.\\n\\nEXPERIENCE\\nExample Studio — Frontend Engineer\\nBuilt accessible web interfaces with React and TypeScript.\\n\\nSKILLS\\nReact · TypeScript · SQL · Testing'});
   if(String(url).startsWith('/api/applications?')) {
-    if(window.__applicationDelayMs) await new Promise(resolve=>setTimeout(resolve,window.__applicationDelayMs));
+    if(window.__applicationDelayMs) await new Promise((resolve,reject)=>{
+      const signal=options.signal; const abort=()=>{clearTimeout(timer);window.__applicationAborts=(window.__applicationAborts||0)+1;reject(new DOMException('Aborted','AbortError'));};
+      const timer=setTimeout(()=>{signal?.removeEventListener('abort',abort);resolve();},window.__applicationDelayMs);
+      if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
+    });
     if(new URLSearchParams(location.search).has('error')) return new Response('{}',{status:503});
     if(window.__failNextApplications) {window.__failNextApplications=false;return new Response('{}',{status:503});}
     const params=new URL(String(url),location.origin).searchParams;
@@ -124,17 +144,20 @@ window.fetch = async (url, options={}) => {
 };
 async function main() {
  let content;
- if(location.pathname==='/dashboard') content=await DashboardPage();
+ if(location.pathname==='/admin/product') content=await AdminLayout({children:<div className="adm-page"><ActivationEvidence metrics={{cohort:12,stages:[{index:0,entering:12,completed:10,withoutEvidence:2},{index:1,entering:10,completed:7,withoutEvidence:3},{index:2,entering:7,completed:6,withoutEvidence:1},{index:3,entering:6,completed:2,withoutEvidence:4},{index:4,entering:2,completed:1,withoutEvidence:1}],firstConfirmed:2,recruiterResponse:1,unverifiedLegacy:3,observations:{card:null,googleStarts:4,googleFailures:null}}}/></div>});
+ else if(location.pathname==='/dismissed')content=<><AppTopbar title="Discover"/><div className="workspace-page"><DismissedJobs jobs={jobs} en={window.__locale==='en'}/></div></>;
+ else if(location.pathname==='/dashboard') content=await DashboardPage();
  else if(location.pathname==='/inbox') content=<GmailInboxView messages={messages} gmailConnected={false} userEmail="alex@example.test" locale={window.__locale} />;
  else if(location.pathname==='/applications') content=<ApplicationsPage />;
  else if(location.pathname==='/materiali') content=<MaterialiView items={materials} total={materials.length} />;
  else content=<><AppTopbar title="Discover" /><div className="workspace-page workspace-discover"><DiscoverHeading count={window.__empty?0:jobs.length} /><JobSwiper jobs={window.__empty?[]:jobs} /></div></>;
- createRoot(document.getElementById('root')).render(<NextIntlClientProvider locale={window.__locale} messages={window.__messages}><SWRConfig value={{provider:()=>new Map(),dedupingInterval:0,shouldRetryOnError:false}}><AppShell sidebarProps={{userName:'Alex Example',userPlan:'Local fixture',isAdmin:false}}>{content}</AppShell><Toaster /></SWRConfig></NextIntlClientProvider>);
+ createRoot(document.getElementById('root')).render(<React.StrictMode><NextIntlClientProvider locale={window.__locale} messages={window.__messages}><SWRConfig value={{provider:()=>new Map(),dedupingInterval:0,shouldRetryOnError:false}}><AppShell sidebarProps={{userName:'Alex Example',userPlan:'Local fixture',isAdmin:false}}>{content}</AppShell><Toaster /></SWRConfig></NextIntlClientProvider></React.StrictMode>);
 }
 main();
 `;
 await build({ stdin:{contents:entry,resolveDir:process.cwd(),loader:'tsx'}, bundle:true,platform:'browser',format:'iife',jsx:'automatic',outfile:join(out,'workspace.js'),plugins:[{name:'local-boundaries',setup(b){
   b.onResolve({filter:/.*/},args=>{const path=args.path==='./company-logo-image'?'@/components/design/company-logo-image':args.path;return path in stub?{path,namespace:'fixture'}:undefined;});
+  if(process.env.WORKSPACE_PAGINATION_BASELINE) b.onLoad({filter:/src\/app\/\(app\)\/applications\/page\.tsx$/},args=>({contents:execFileSync('git',['show','9b308d57a373e8662a52237ebdb48f54bd7efd38:'+relative(process.cwd(),args.path)],{encoding:'utf8'}),loader:'tsx',resolveDir:dirname(args.path)}));
   b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:stub[args.path],loader:'tsx',resolveDir:process.cwd()}));
 }}] });
 execFileSync(process.execPath,['node_modules/tailwindcss/lib/cli.js','-i','src/app/globals.css','-o',join(out,'base.css')],{stdio:'pipe'});
@@ -156,9 +179,57 @@ try {
   const errors=[]; const external=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/*',route=>{if(!route.request().url().startsWith(base)){external.push(route.request().url());return route.abort();} return route.continue();});
-  if (process.argv.includes('--pagination-checks')) {
+  const verifyPendingRequest=async()=>{
+    await page.goto(base+'/discover?locale=en');await page.evaluate(()=>window.__applicationAllowed=true);
+    await page.getByRole('button',{name:'Apply',exact:true}).first().click();
+    await page.getByText('Application request saved for Senior React Engineer. Check its status in Applications.',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Application sent for Senior React Engineer',{exact:true}).count(),0);
+    assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.url==='/api/applications/apply').length),1);
+  };
+  if (process.argv.includes('--request-evidence-check')) {
+    await verifyPendingRequest();assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+    console.log('PASS a pending-consent application request does not claim submission; one mocked user-requested API call, no external requests.');
+  } else if (process.argv.includes('--attention-checks')) {
     const geometry=[];
-    for(const [width,height] of [[1440,900],[1366,768],[390,844]]) for(const locale of ['it','en']) {
+    const go=async path=>{await page.goto(base+path);await page.waitForFunction(()=>document.getElementById('root').children.length>0);await page.evaluate(()=>document.fonts.ready);};
+    const shot=async name=>page.screenshot({path:join(out,name+'.png'),animations:'disabled'});
+    for(const [width,height] of [[1366,768],[1440,900],[390,844],[320,740]])for(const locale of ['en','it']){
+      await page.setViewportSize({width,height});
+      for(const route of ['dashboard','discover','inbox','admin/product']){
+        await go('/'+route+'?locale='+locale);
+        const size=await page.evaluate(()=>{const m=document.querySelector('.lavorai-main');return {body:document.documentElement.scrollHeight,width:document.documentElement.scrollWidth,main:m.clientHeight,scroll:m.scrollHeight}});
+        assert.ok(size.width<=width,route+' horizontal overflow');
+        if(width>1100){assert.ok(size.body<=height,route+' document overflow');assert.ok(size.scroll<=size.main+1,route+' main overflow');}
+        geometry.push({route,locale,width,height,...size});await shot(route.replace('/','-')+'-'+locale+'-'+width);
+      }
+    }
+    await page.setViewportSize({width:1366,height:768});
+    await go('/dashboard?locale=en&dense=1');
+    assert.equal(await page.locator('.attention-next .ds-btn-primary').count(),1);
+    assert.ok(await page.locator('.attention-list').evaluate(el=>el.scrollHeight>el.clientHeight),'Long queue scrolls inside the panel');
+    await shot('dashboard-dense');
+    await page.locator('.dashboard-map-disclosure summary').click();
+    await page.locator('.dg-globe canvas').waitFor();
+    assert.ok(await page.locator('.lavorai-main').evaluate(el=>el.scrollHeight<=el.clientHeight+1),'Existing map expands without page overflow');await shot('dashboard-map-expanded');
+    await go('/dashboard?locale=en&empty=1');await page.getByText('No action found in the recent selection.').waitFor();await shot('dashboard-empty');
+    await go('/dashboard?locale=en&attentionError=1');await page.getByRole('heading',{name:'Activity unavailable'}).waitFor();await shot('dashboard-retry');
+    await go('/inbox?locale=en&message=application_reply%3A0');await page.getByRole('button',{name:'Mark handled',exact:true}).waitFor();
+    await page.evaluate(()=>window.__mutationFail=true);await page.getByRole('button',{name:'Mark handled',exact:true}).click();await page.getByText("Couldn't save attention status. Try again.").waitFor();
+    await page.evaluate(()=>window.__mutationFail=false);await page.getByRole('button',{name:'Remind tomorrow',exact:true}).click();await page.getByText('In-app reminder:',{exact:false}).waitFor();await shot('inbox-reminder');
+    await page.getByRole('button',{name:'Reopen attention',exact:true}).click();await page.getByRole('button',{name:'Mark handled',exact:true}).click();await page.getByText('Marked handled by you; this is not a send receipt.').waitFor();
+    assert.equal(await page.evaluate(()=>window.__requests.filter(r=>r.url==='/api/inbox/replies'&&r.method==='POST').length),0,'Attention controls never send');
+    await go('/discover?locale=en');await page.getByRole('heading',{name:'Why this role?'}).waitFor();await page.getByRole('heading',{name:'Required skills without CV evidence'}).waitFor();
+    await page.evaluate(()=>window.__mutationFail=true);await page.getByRole('button',{name:'Not relevant',exact:true}).click();await page.getByText("Couldn't dismiss this listing. Try again.").waitFor();assert.equal(await page.locator('.discover-card').getByText('Senior React Engineer',{exact:true}).count(),1);
+    await page.evaluate(()=>window.__mutationFail=false);await page.getByRole('button',{name:'Not relevant',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('.discover-card')?.textContent.includes('Senior React Engineer'));
+    await verifyPendingRequest();
+    await go('/dismissed?locale=en');await page.getByRole('button',{name:'Restore',exact:true}).first().click();await page.waitForFunction(()=>document.querySelectorAll('.setup-row').length===3);await shot('discover-restored');
+    await go('/applications?locale=en&id=app-1');await page.getByRole('heading',{name:'What we can verify'}).waitFor();await shot('application-evidence');
+    assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+    await writeFile(join(out,'attention-qa.json'),JSON.stringify({passed:true,geometry,errors,external},null,2));
+    console.log('PASS attention/checklist, read/handled/reminder/error, dismissal/restore, evidence timeline and admin unknowns at 1366/1440/390/320; no external requests or sends.');
+  } else if (process.argv.includes('--pagination-checks')) {
+    const geometry=[];
+    for(const [width,height] of [[1440,900],[1366,768],[390,844],[430,932]]) for(const locale of ['it','en']) {
       await page.setViewportSize({width,height});
       await page.goto(base+'/applications?pagination=1&locale='+locale);
       await page.waitForFunction(()=>document.querySelectorAll('.pipeline-card').length===12);
@@ -191,6 +262,23 @@ try {
       if(width>1100)assert.equal(await next.evaluate(el=>document.activeElement===el),true,'Pagination keeps keyboard focus');
       await lanes.first().getByRole('button',{name:/previous page|pagina precedente/}).click();
       await page.waitForFunction(()=>document.querySelector('.pipeline-lane .application-page-range')?.textContent.startsWith('1–3'));
+      // Revisiting a cached page revalidates: isLoading alone is false here.
+      await page.waitForFunction(()=>document.querySelector('.application-pager')?.getAttribute('aria-busy')==='false');
+      await page.evaluate(()=>window.__applicationDelayMs=500);
+      await next.click();
+      await page.waitForTimeout(50);
+      assert.equal(await next.getAttribute('aria-disabled'),'true','Cached-page revalidation must block repeated clicks');
+      await next.evaluate(el=>{for(let i=0;i<8;i++)el.click()});
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(()=>document.querySelector('.application-pager')?.getAttribute('aria-busy')==='false');
+      assert.match(await lanes.first().locator('.application-page-range').innerText(),/^4–6/,'Cached-page rapid clicks do not skip to page three');
+      await page.evaluate(()=>window.__applicationDelayMs=0);
+      const firstAfter=await lanes.first().locator('.pipeline-card strong').allTextContents();
+      await lanes.nth(1).getByRole('button',{name:/next page|pagina successiva/}).click();
+      await page.waitForFunction(()=>document.querySelectorAll('.pipeline-lane .application-page-range')[1]?.textContent.startsWith('4–6'));
+      assert.deepEqual(await lanes.first().locator('.pipeline-card strong').allTextContents(),firstAfter,'Independent column page retained');
+      await lanes.nth(1).getByRole('button',{name:/previous page|pagina precedente/}).click();
+      await page.waitForFunction(()=>document.querySelector('.application-pager')?.getAttribute('aria-busy')==='false');
       await page.getByRole('button',{name:locale==='en'?'Table':'Tabella',exact:true}).click();
       await page.waitForFunction(()=>document.querySelectorAll('.applications-table tbody tr').length===10);
       const tableFirst=await page.locator('.applications-table tbody tr').first().innerText();
@@ -232,6 +320,18 @@ try {
       }
       assert.ok(await page.evaluate(()=>window.__requests.every(r=>!r.method||r.method==='GET')),'No writes or submissions');
     }
+    // Superseding a slow page with a filter cancels it; late completion cannot restore old rows.
+    await page.goto(base+'/applications?pagination=1&locale=en');
+    await page.locator('.pipeline-card').first().waitFor();
+    await page.evaluate(()=>window.__applicationDelayMs=1500);
+    await page.locator('.pipeline-lane').first().getByRole('button',{name:/next page/}).click();
+    await page.evaluate(()=>window.__applicationDelayMs=0);
+    await page.getByRole('textbox',{name:'Filter applications'}).fill('#719');
+    await page.waitForFunction(()=>document.querySelectorAll('.pipeline-card').length===1);
+    await page.waitForFunction(()=>window.__applicationAborts>0);
+    await page.waitForTimeout(1600);
+    assert.match(await page.locator('.pipeline-card').innerText(),/#719/);
+    assert.equal(await page.locator('[role="alert"]').count(),0,'Cancellation is not shown as a load failure');
     await page.setViewportSize({width:1366,height:768});
     await page.goto(base+'/applications?pagination=1&locale=en&id=page-0700');
     await page.getByRole('dialog').waitFor();
@@ -317,7 +417,7 @@ try {
         await page.evaluate(()=>document.fonts.ready);
       if(route==='materiali') await page.locator('.mat-cv-paper').waitFor();
       if(route==='applications') await page.locator('.pipeline-card').first().waitFor();
-      if(route==='dashboard') { await page.locator('.dg-globe canvas').waitFor(); if(locale==='en') await page.getByText('Automatic submissions are paused.',{exact:false}).waitFor(); }
+      if(route==='dashboard') { await page.locator('.dashboard-map-disclosure summary').click(); await page.locator('.dg-globe canvas').waitFor(); if(locale==='en') await page.getByText('Automatic submissions are paused.',{exact:false}).waitFor(); }
       await page.mouse.move(0,0);
       await page.screenshot({path:join(out,route+'-'+locale+'-desktop.png'),fullPage:false,animations:'disabled'});
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,route+' desktop overflow');
@@ -336,6 +436,7 @@ try {
   }
   for(const locale of ['en','it']) {
     await page.goto(base+'/dashboard?locale='+locale+'&globeLabels=1');
+    await page.locator('.dashboard-map-disclosure summary').click();
     await page.locator('.dg-globe canvas').waitFor();
     const kinds=locale==='en' ? [['Opportunity','Apply'],['Submitted','View application'],['Preferred','Search here'],['Saved','Approve and submit']] : [['Opportunità','Invia candidatura'],['Inviata','Vedi candidatura'],['Desiderata','Cerca qui'],['Salvata','Approva e invia']];
     for(let index=0;index<kinds.length;index++) {
@@ -359,6 +460,7 @@ try {
     await select.selectOption('regno-unito');
     assert.equal(await select.locator('option:checked').textContent(),locale==='en'?'United Kingdom':'Regno Unito');
     await page.goto(base+'/dashboard?locale='+locale);
+    await page.locator('.dashboard-map-disclosure summary').click();
     await page.locator('.dg-globe .dg-pin-body').first().waitFor({state:'attached'});
     await page.locator('.dg-globe .dg-pin-body').first().evaluate(el=>el.click());
     await page.locator('.dg-sheet').waitFor();

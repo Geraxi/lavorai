@@ -3,6 +3,7 @@ import type { DeliveryView } from "./application-delivery-view";
 const english: Record<string, string> = {
   inviata: "Applied", vista: "Viewed", colloquio: "Interview", offerta: "Offer", rifiutata: "Rejected",
   risposta: "Possible recruiter reply", ricevuta: "Receipt", auto: "Automated message", bounce: "Delivery failure",
+  "Anteprima, non inviata": "Preview, not submitted",
   "Test diagnostico": "Diagnostic test", "Email segnalata": "Email reported", "Email non consegnata": "Email not delivered",
   "Email consegnata": "Email delivered", "Consegna email in ritardo": "Email delivery delayed",
   "Email accettata dal provider": "Email accepted by provider", "Ricevuta ATS verificata": "Verified ATS receipt",
