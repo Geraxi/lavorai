@@ -54,7 +54,7 @@ function AdminReportDetail({ report, locale, onSaved }: { report: ReportItem; lo
     <ReportMeta report={report} locale={locale} /><h2>{report.subject}</h2>
     <p className="report-muted">{c.reporter}: {report.user?.name} · {report.user?.email}</p>
     <p className="report-muted">{c.language}: {report.locale === "en" ? "English" : "Italiano"}</p>
-    <ReportBody report={report} locale={locale} />
+    <ReportBody report={report} locale={locale} admin onChanged={onSaved} />
     <form onSubmit={save} className="report-triage"><label className="report-field">{c.status}<select value={status} disabled={busy} onChange={e => setStatus(e.target.value as ReportStatus)}>{REPORT_STATUSES.map(value => <option key={value} value={value}>{c.statuses[value]}</option>)}</select></label><button className="report-primary" type="submit" disabled={busy}>{busy ? c.saving : c.save}</button></form>
     {error && <p role="alert" className="report-notice">{reportError(error, locale)}</p>}{saved && <p role="status" className="report-notice report-success">{c.saved}</p>}
     <p className="report-muted">{c.updated}: {new Date(report.updatedAt).toLocaleString(locale === "en" ? "en-GB" : "it-IT", { timeZone: "UTC" })} UTC</p>

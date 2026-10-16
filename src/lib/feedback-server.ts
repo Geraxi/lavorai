@@ -4,13 +4,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isAdmin } from "@/lib/admin";
 import { checkOrigin } from "@/lib/csrf";
-import { accessUserSelect } from "@/lib/user-selects";
-import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { ReportError } from "./feedback-errors";
+import { MAX_ACCOUNT_ATTACHMENT_BYTES, type PreparedAttachment } from "./feedback-attachments";
+export { ReportError } from "./feedback-errors";
 import { REPORT_CATEGORIES, REPORT_STATUSES, type ReportInput } from "@/lib/feedback";
 
-export class ReportError extends Error {
-  constructor(public code: string, public status: number, public retryAfter?: number) { super(code); }
-}
 export function reportJson(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store", ...headers } });
 }
@@ -26,12 +24,11 @@ export async function requireReportActor(adminOnly = false) {
   // Require a real session, including in development; no demo-user fallback.
   const session = await auth();
   if (!session?.user?.id) throw new ReportError("unauthorized", 401);
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { ...accessUserSelect, id: true, suspendedAt: true } });
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, email: true, suspendedAt: true } });
   if (!user || user.suspendedAt) throw new ReportError("forbidden", 403);
   const admin = isAdmin(user.email);
   if (adminOnly && !admin) throw new ReportError("forbidden", 403);
-  if (!admin && isApplicationAccessPaused(user)) throw new ReportError("trial_expired", 402);
-  if (!admin && requiresPaymentMethodBeforeApp(user)) throw new ReportError("payment_method_required", 402);
+  // Support is independent of billing. A genuine suspension still denies access.
   return user;
 }
 export function requireReportOrigin(request: NextRequest) {
@@ -60,10 +57,11 @@ export async function readReportBody(request: NextRequest) {
   } finally { reader.releaseLock(); }
 }
 
-export const reportSelect = { id: true, category: true, subject: true, description: true, pageContext: true, locale: true, status: true, createdAt: true, updatedAt: true } satisfies Prisma.FeedbackReportSelect;
+export const attachmentSelect = { id: true, filename: true, contentType: true, byteLength: true, scanStatus: true } satisfies Prisma.FeedbackAttachmentSelect;
+export const reportSelect = { attachments: { select: attachmentSelect, orderBy: { position: "asc" as const } }, id: true, category: true, subject: true, description: true, pageContext: true, locale: true, status: true, createdAt: true, updatedAt: true } satisfies Prisma.FeedbackReportSelect;
 export const adminReportSelect = { ...reportSelect, user: { select: { name: true, email: true } } } satisfies Prisma.FeedbackReportSelect;
 
-export async function createReport(userId: string, input: ReportInput) {
+export async function createReport(userId: string, input: ReportInput, attachments: PreparedAttachment[] = []) {
   // Durable, per-user limits across all instances. Lock + count + insert are
   // atomic so concurrent requests cannot race past the limits. DB failure closes.
   return prisma.$transaction(async tx => {
@@ -75,7 +73,13 @@ export async function createReport(userId: string, input: ReportInput) {
       const resets = [hour.length >= 5 ? hour[4].createdAt.getTime() + 3_600_000 : 0, recent.length >= 20 ? recent[19].createdAt.getTime() + 86_400_000 : 0];
       throw new ReportError("rate_limited", 429, Math.max(1, Math.ceil((Math.max(...resets) - now) / 1000)));
     }
-    return tx.feedbackReport.create({ data: { ...input, userId }, select: reportSelect });
+    if (attachments.length) {
+      const usage = await tx.feedbackAttachment.aggregate({ where: { report: { userId } }, _sum: { byteLength: true } });
+      if ((usage._sum.byteLength ?? 0) + attachments.reduce((sum, a) => sum + a.byteLength, 0) > MAX_ACCOUNT_ATTACHMENT_BYTES) throw new ReportError("attachment_quota", 413);
+    }
+    // Bytes and metadata commit with the report. Failures leave no staged files;
+    // report/account deletion removes bytes through the same database cascade.
+    return tx.feedbackReport.create({ data: { ...input, userId, attachments: { create: attachments.map((a, position) => ({ ...a, position })) } }, select: reportSelect });
   }, { isolationLevel: "ReadCommitted" });
 }
 
@@ -94,4 +98,22 @@ export async function listReports(request: NextRequest, userId?: string) {
   }
   const reports = await prisma.feedbackReport.findMany({ where, select: userId ? reportSelect : adminReportSelect, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * 20, take: 21 });
   return reportJson({ reports: reports.slice(0, 20), page, hasMore: reports.length > 20 });
+}
+
+export async function reserveFeedbackUpload(userId: string) {
+  await prisma.$transaction(async tx => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('feedback-report'), hashtext(${userId}))::text`;
+    const now = new Date();
+    const budget = await tx.feedbackUploadBudget.findUnique({ where: { userId } });
+    const hourStart = budget && now.getTime() - budget.hourStart.getTime() < 3_600_000 ? budget.hourStart : now;
+    const dayStart = budget && now.getTime() - budget.dayStart.getTime() < 86_400_000 ? budget.dayStart : now;
+    const hourCount = hourStart === now ? 0 : budget!.hourCount;
+    const dayCount = dayStart === now ? 0 : budget!.dayCount;
+    if (hourCount >= 20 || dayCount >= 60) {
+      const until = Math.max(hourCount >= 20 ? hourStart.getTime() + 3_600_000 : 0, dayCount >= 60 ? dayStart.getTime() + 86_400_000 : 0);
+      throw new ReportError("upload_rate_limited", 429, Math.max(1, Math.ceil((until - now.getTime()) / 1000)));
+    }
+    const data = { hourStart, dayStart, hourCount: hourCount + 1, dayCount: dayCount + 1 };
+    await tx.feedbackUploadBudget.upsert({ where: { userId }, create: { userId, ...data }, update: data });
+  }, { isolationLevel: "ReadCommitted" });
 }

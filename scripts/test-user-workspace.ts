@@ -56,7 +56,7 @@ for (const locale of ["it", "en"]) {
   const routes = [...navigation.work, ...navigation.profile];
   assert.equal(new Set(routes.map(item => item.href)).size, routes.length);
   for (const item of routes) {
-    assert.ok(existsSync(`src/app/(app)${item.href}/page.tsx`), `${item.href} must resolve`);
+    assert.ok(existsSync(`src/app/(app)${item.href}/page.tsx`) || (item.href === "/feedback" && existsSync("src/app/(support)/feedback/page.tsx")), `${item.href} must resolve`);
     assert.equal(isWorkspaceRouteActive(item.href, item.href), true);
     assert.equal(isWorkspaceRouteActive(`${item.href}-unrelated`, item.href), false);
   }

@@ -39,7 +39,9 @@
     "test:attention-evidence": "node --import tsx scripts/test-attention-evidence.ts",
     "test:attention-postgres": "node scripts/test-attention-postgres.mjs",
     "test:privacy-consent": "node --import tsx scripts/test-privacy-consent.ts",
-    "test:greenhouse-preflight-browser": "node --import tsx scripts/test-greenhouse-preflight-browser.ts"
+    "test:greenhouse-preflight-browser": "node --import tsx scripts/test-greenhouse-preflight-browser.ts",
+    "test:feedback-files": "node --import tsx scripts/test-feedback-files.ts",
+    "test:feedback-runtime": "node --import tsx scripts/test-feedback-reports.ts --runtime"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
@@ -89,7 +91,8 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.185.1",
     "tldts": "7.4.18",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/node": "^20",

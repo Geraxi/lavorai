@@ -1,4 +1,7 @@
-# Feedback and bug reports — local candidate
+# Feedback and bug reports — original text-only rollout
+
+The current private-attachment/support-access candidate supersedes the access and
+text-only limitations below. See [Private feedback attachments](feedback-private-attachments.md).
 
 Based on `aaf09bb9b5e0dfa36c1e0cdebd499869debac125`. Local branch:
 `codex/feedback-reports`. Nothing has been pushed, deployed or migrated in production.

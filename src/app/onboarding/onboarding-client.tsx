@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Icon, type IconName } from "@/components/design/icon";
+import { SupportLink } from "@/components/support-link";
 import { Logo } from "@/components/logo";
 import { LOCATION_PREFS, ROLE_PREFERENCES } from "@/lib/ui-applications";
 
@@ -326,8 +327,9 @@ export default function OnboardingClient({
     <div className="ob-root">
       {/* ===== Mobile / tablet: progress bar orizzontale in alto ===== */}
       <div className="ob-mobile-bar">
-        <div className="ob-mobile-brand">
+        <div className="ob-mobile-brand" style={{ flexDirection: "column", alignItems: "flex-start" }}>
           <Logo size="sm" />
+          <SupportLink compact />
         </div>
         <div className="ob-mobile-progress">
           {STEPS.map((_, i) => (
@@ -350,6 +352,7 @@ export default function OnboardingClient({
       {/* ===== Desktop: Rail sinistro con stepper verticale ===== */}
       <aside className="ob-rail">
         <Logo size="sm" />
+        <SupportLink compact />
 
         <div className="ob-stepper">
           {stepsLocalized.map((s, i) => {

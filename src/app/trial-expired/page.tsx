@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { isApplicationAccessPaused } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
 import { TrialExpiredActions } from "./trial-expired-actions";
+import { SupportLink } from "@/components/support-link";
 import { Logo } from "@/components/logo";
 import { prisma } from "@/lib/db";
 
@@ -42,6 +43,7 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
         </div>
         <div className="border-t border-border px-8 py-7 sm:px-10">
           <TrialExpiredActions confirming={confirming} />
+          <SupportLink />
         </div>
       </section>
     </main>

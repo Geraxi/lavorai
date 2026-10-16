@@ -167,6 +167,7 @@ model User {
   verifyTokens   EmailVerificationToken[]
   popupResponses PopupResponse[]
   feedbackReports FeedbackReport[]
+  feedbackUploadBudget FeedbackUploadBudget?
   answers        UserAnswer[]
   conversionEvents ConversionEvent[]
   gmailMessages  GmailMessage[]
@@ -355,7 +356,7 @@ model PopupResponse {
   @@index([popupId, createdAt])
 }
 
-/// User-initiated, text-only reports. Never stores automatic diagnostics or URLs.
+/// User-initiated reports. Never stores automatic diagnostics or URLs.
 model FeedbackReport {
   id          String   @id @default(cuid())
   userId      String
@@ -369,10 +370,37 @@ model FeedbackReport {
   updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments FeedbackAttachment[]
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([createdAt, id])
+}
+
+/// Fixed-window upload attempt budget, including invalid and failed uploads.
+model FeedbackUploadBudget {
+  userId    String @id
+  hourStart DateTime
+  hourCount Int
+  dayStart  DateTime
+  dayCount  Int
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Private, bounded support files. Never select data in report list/detail JSON.
+model FeedbackAttachment {
+  id          String @id @default(cuid())
+  reportId    String
+  position    Int
+  filename    String @db.VarChar(120)
+  contentType String @db.VarChar(32)
+  byteLength  Int
+  data        Bytes
+  scanStatus  String @db.VarChar(16)
+  createdAt   DateTime @default(now())
+  report      FeedbackReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, position])
 }
 
 model UserPreferences {

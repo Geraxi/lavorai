@@ -1,4 +1,5 @@
 "use client";
+import { ReportAttachments } from "./feedback-attachments";
 import { reportCopy, reportError, type ReportItem } from "@/lib/feedback";
 
 export async function fetchReports(url: string) {
@@ -12,9 +13,9 @@ export function ReportMeta({ report, locale }: { report: ReportItem; locale: str
   const c = reportCopy(locale);
   return <div className="report-meta"><span className="report-badge">{report.category === "bug" ? c.bug : c.feedback}</span><span className={`report-badge report-status-${report.status}`}>{c.statuses[report.status]}</span><time dateTime={report.createdAt}>{new Date(report.createdAt).toLocaleDateString(locale === "en" ? "en-GB" : "it-IT", { timeZone: "UTC" })}</time></div>;
 }
-export function ReportBody({ report, locale }: { report: ReportItem; locale: string }) {
+export function ReportBody({ report, locale, admin, onChanged }: { report: ReportItem; locale: string; admin?: boolean; onChanged?: () => void }) {
   const c = reportCopy(locale);
-  return <><p className="report-description">{report.description}</p>{report.pageContext && <p className="report-muted">{c.context}: {c.pages[report.pageContext]}</p>}</>;
+  return <><p className="report-description">{report.description}</p>{report.pageContext && <p className="report-muted">{c.context}: {c.pages[report.pageContext]}</p>}<ReportAttachments report={report} locale={locale} admin={admin} onChanged={onChanged} /></>;
 }
 export function ReportPagination({ page, hasMore, disabled, onPage, locale }: { page: number; hasMore: boolean; disabled: boolean; onPage: (page: number) => void; locale: string }) {
   const c = reportCopy(locale);

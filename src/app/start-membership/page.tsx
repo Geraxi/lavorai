@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd } from "@/lib/billing";
 import { StartMembershipActions } from "./start-membership-actions";
+import { SupportLink } from "@/components/support-link";
 import { Logo } from "@/components/logo";
 import { UserPopup } from "@/components/user-popup";
 
@@ -52,6 +53,7 @@ export default async function StartMembershipPage({
             <div><p className="text-sm font-medium text-emerald-300">Passaggio obbligatorio</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Aggiungi la tua carta</h2></div>
             <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">Carta richiesta</span>
           </div>
+          <SupportLink />
           <StartMembershipActions confirming={params.subscribed === "1" || user.subscriptionStatus === "pending_payment_method"} canceled={params.canceled === "1"} />
           <p className="mt-5 text-center text-xs leading-5 text-slate-400">Il pagamento viene gestito da Stripe. Apple Pay e Google Pay compaiono quando sono disponibili sul tuo dispositivo.</p>
         </div>

@@ -113,6 +113,10 @@ const common: Record<string, any> = {
   "@/lib/analytics": { AnalyticsEvent }, "@/lib/conversion-events": { recordConversionEvent: async (name: string) => { conversions.push(name); } },
 };
 const actions = loadModule("src/app/start-membership/start-membership-actions.tsx", common);
+common["@/components/support-link"] = loadModule("src/components/support-link.tsx", {
+  "react/jsx-runtime": jsx, "next-intl": { useLocale: () => "it" },
+  "next/link": { __esModule: true, default: ({ children, prefetch, ...props }: any) => <a {...props}>{children}</a> },
+});
 const membership = loadModule("src/app/start-membership/page.tsx", {
   ...common, "./start-membership-actions": { StartMembershipActions: (props: any) => <div id="qa-actions"><actions.StartMembershipActions {...props} /></div> }, "@/components/user-popup": { UserPopup: () => null },
 }).default;
@@ -135,6 +139,7 @@ async function main() {
     writes = []; reads = 0;
     const page = html(await membership({ searchParams: Promise.resolve(params) }));
     assert.match(page, /Carta richiesta/);
+    assert.match(page, /href="\/feedback"/);
     assert.doesNotMatch(page, /CV setup/);
     assert.equal(writes.length, 0); assert.equal(reads, 0);
     await redirects(onboarding, "/start-membership");

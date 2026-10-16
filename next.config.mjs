@@ -41,6 +41,7 @@ const nextConfig = {
   // bundle delle function API che lanciano il browser. Senza, su Vercel il
   // file .br non viene incluso e executablePath() fallisce a runtime.
   outputFileTracingIncludes: {
+    "/api/feedback": ["./node_modules/pdfjs-dist/legacy/build/pdf*.mjs"],
     "/api/**": ["./node_modules/@sparticuz/chromium/**"],
   },
   async headers() {
