@@ -13,6 +13,7 @@ import {
 import { CinematicHero } from "./cinematic-hero";
 import { SectionLeadMagnet } from "@/components/sections/lead-magnet-banner";
 import { Reveal } from "./landing-reveal";
+import { ProblemSection } from "./problem-section";
 import { GlowCard, GlowGrid } from "@/components/ui/glow-card";
 import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 import { TIERS } from "@/lib/billing";
@@ -151,6 +152,8 @@ export function LandingHomepage() {
     <NewLookAnnouncement l={l} />
     <main id="main-content">
       <CinematicHero />
+
+      <ProblemSection l={l} cta={<Cta>{l("Crea account", "Get started")}</Cta>} />
 
       <section id="come-funziona" className={styles.workflow}>
         <div className={styles.container}>
