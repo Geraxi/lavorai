@@ -7,7 +7,7 @@ type Theme = "light" | "dark";
 const KEY = "lavorai-theme";
 
 function readTheme(): Theme {
-  if (typeof document === "undefined") return "dark";
+  if (typeof document === "undefined") return "light";
   return document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
 }
 
@@ -28,7 +28,7 @@ export function applyTheme(t: Theme) {
  * dopo il mount per evitare mismatch di idratazione.
  */
 export function ThemeToggle({ compact = true, fullWidth = false, locale = "it" }: { compact?: boolean; fullWidth?: boolean; locale?: string }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
