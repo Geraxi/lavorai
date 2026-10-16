@@ -29,10 +29,10 @@ export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
 
       if (
         res.status === 409 &&
-        (body?.error === "missing_cv" || body?.error === "activation_incomplete")
+        (body?.error === "missing_cv" || body?.error === "activation_incomplete" || body?.error === "privacy_consent_required")
       ) {
         toast.error(body?.message ?? "Completa il profilo prima di candidarti.");
-        router.push("/onboarding");
+        router.push(typeof body?.redirect === "string" && body.redirect.startsWith("/") ? body.redirect : "/onboarding");
         return;
       }
       if (res.status === 402) {
