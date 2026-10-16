@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { join, resolve } from 'node:path';
+import { join, resolve, dirname, relative } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
@@ -87,7 +87,11 @@ window.fetch = async (url, options={}) => {
   if(String(url).includes('/api/applications/apply')) return new Response(JSON.stringify({message:'Synthetic blocked submission'}),{status:403});
   if(String(url).includes('/cv-preview')) return Response.json({text:(window.__dense ? 'Long synthetic CV paragraph for scroll testing. '.repeat(400)+'\\n\\n' : '')+'Alex Example\\nFrontend Engineer\\n\\nSUMMARY\\nSynthetic CV document for local testing.\\n\\nEXPERIENCE\\nExample Studio — Frontend Engineer\\nBuilt accessible web interfaces with React and TypeScript.\\n\\nSKILLS\\nReact · TypeScript · SQL · Testing'});
   if(String(url).startsWith('/api/applications?')) {
-    if(window.__applicationDelayMs) await new Promise(resolve=>setTimeout(resolve,window.__applicationDelayMs));
+    if(window.__applicationDelayMs) await new Promise((resolve,reject)=>{
+      const signal=options.signal; const abort=()=>{clearTimeout(timer);window.__applicationAborts=(window.__applicationAborts||0)+1;reject(new DOMException('Aborted','AbortError'));};
+      const timer=setTimeout(()=>{signal?.removeEventListener('abort',abort);resolve();},window.__applicationDelayMs);
+      if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
+    });
     if(new URLSearchParams(location.search).has('error')) return new Response('{}',{status:503});
     if(window.__failNextApplications) {window.__failNextApplications=false;return new Response('{}',{status:503});}
     const params=new URL(String(url),location.origin).searchParams;
@@ -129,12 +133,13 @@ async function main() {
  else if(location.pathname==='/applications') content=<ApplicationsPage />;
  else if(location.pathname==='/materiali') content=<MaterialiView items={materials} total={materials.length} />;
  else content=<><AppTopbar title="Discover" /><div className="workspace-page workspace-discover"><DiscoverHeading count={window.__empty?0:jobs.length} /><JobSwiper jobs={window.__empty?[]:jobs} /></div></>;
- createRoot(document.getElementById('root')).render(<NextIntlClientProvider locale={window.__locale} messages={window.__messages}><SWRConfig value={{provider:()=>new Map(),dedupingInterval:0,shouldRetryOnError:false}}><AppShell sidebarProps={{userName:'Alex Example',userPlan:'Local fixture',isAdmin:false}}>{content}</AppShell><Toaster /></SWRConfig></NextIntlClientProvider>);
+ createRoot(document.getElementById('root')).render(<React.StrictMode><NextIntlClientProvider locale={window.__locale} messages={window.__messages}><SWRConfig value={{provider:()=>new Map(),dedupingInterval:0,shouldRetryOnError:false}}><AppShell sidebarProps={{userName:'Alex Example',userPlan:'Local fixture',isAdmin:false}}>{content}</AppShell><Toaster /></SWRConfig></NextIntlClientProvider></React.StrictMode>);
 }
 main();
 `;
 await build({ stdin:{contents:entry,resolveDir:process.cwd(),loader:'tsx'}, bundle:true,platform:'browser',format:'iife',jsx:'automatic',outfile:join(out,'workspace.js'),plugins:[{name:'local-boundaries',setup(b){
   b.onResolve({filter:/.*/},args=>{const path=args.path==='./company-logo-image'?'@/components/design/company-logo-image':args.path;return path in stub?{path,namespace:'fixture'}:undefined;});
+  if(process.env.WORKSPACE_PAGINATION_BASELINE) b.onLoad({filter:/src\/app\/\(app\)\/applications\/page\.tsx$/},args=>({contents:execFileSync('git',['show','9b308d57a373e8662a52237ebdb48f54bd7efd38:'+relative(process.cwd(),args.path)],{encoding:'utf8'}),loader:'tsx',resolveDir:dirname(args.path)}));
   b.onLoad({filter:/.*/,namespace:'fixture'},args=>({contents:stub[args.path],loader:'tsx',resolveDir:process.cwd()}));
 }}] });
 execFileSync(process.execPath,['node_modules/tailwindcss/lib/cli.js','-i','src/app/globals.css','-o',join(out,'base.css')],{stdio:'pipe'});
@@ -158,7 +163,7 @@ try {
   await page.route('**/*',route=>{if(!route.request().url().startsWith(base)){external.push(route.request().url());return route.abort();} return route.continue();});
   if (process.argv.includes('--pagination-checks')) {
     const geometry=[];
-    for(const [width,height] of [[1440,900],[1366,768],[390,844]]) for(const locale of ['it','en']) {
+    for(const [width,height] of [[1440,900],[1366,768],[390,844],[430,932]]) for(const locale of ['it','en']) {
       await page.setViewportSize({width,height});
       await page.goto(base+'/applications?pagination=1&locale='+locale);
       await page.waitForFunction(()=>document.querySelectorAll('.pipeline-card').length===12);
@@ -191,6 +196,23 @@ try {
       if(width>1100)assert.equal(await next.evaluate(el=>document.activeElement===el),true,'Pagination keeps keyboard focus');
       await lanes.first().getByRole('button',{name:/previous page|pagina precedente/}).click();
       await page.waitForFunction(()=>document.querySelector('.pipeline-lane .application-page-range')?.textContent.startsWith('1–3'));
+      // Revisiting a cached page revalidates: isLoading alone is false here.
+      await page.waitForFunction(()=>document.querySelector('.application-pager')?.getAttribute('aria-busy')==='false');
+      await page.evaluate(()=>window.__applicationDelayMs=500);
+      await next.click();
+      await page.waitForTimeout(50);
+      assert.equal(await next.getAttribute('aria-disabled'),'true','Cached-page revalidation must block repeated clicks');
+      await next.evaluate(el=>{for(let i=0;i<8;i++)el.click()});
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(()=>document.querySelector('.application-pager')?.getAttribute('aria-busy')==='false');
+      assert.match(await lanes.first().locator('.application-page-range').innerText(),/^4–6/,'Cached-page rapid clicks do not skip to page three');
+      await page.evaluate(()=>window.__applicationDelayMs=0);
+      const firstAfter=await lanes.first().locator('.pipeline-card strong').allTextContents();
+      await lanes.nth(1).getByRole('button',{name:/next page|pagina successiva/}).click();
+      await page.waitForFunction(()=>document.querySelectorAll('.pipeline-lane .application-page-range')[1]?.textContent.startsWith('4–6'));
+      assert.deepEqual(await lanes.first().locator('.pipeline-card strong').allTextContents(),firstAfter,'Independent column page retained');
+      await lanes.nth(1).getByRole('button',{name:/previous page|pagina precedente/}).click();
+      await page.waitForFunction(()=>document.querySelector('.application-pager')?.getAttribute('aria-busy')==='false');
       await page.getByRole('button',{name:locale==='en'?'Table':'Tabella',exact:true}).click();
       await page.waitForFunction(()=>document.querySelectorAll('.applications-table tbody tr').length===10);
       const tableFirst=await page.locator('.applications-table tbody tr').first().innerText();
@@ -232,6 +254,18 @@ try {
       }
       assert.ok(await page.evaluate(()=>window.__requests.every(r=>!r.method||r.method==='GET')),'No writes or submissions');
     }
+    // Superseding a slow page with a filter cancels it; late completion cannot restore old rows.
+    await page.goto(base+'/applications?pagination=1&locale=en');
+    await page.locator('.pipeline-card').first().waitFor();
+    await page.evaluate(()=>window.__applicationDelayMs=1500);
+    await page.locator('.pipeline-lane').first().getByRole('button',{name:/next page/}).click();
+    await page.evaluate(()=>window.__applicationDelayMs=0);
+    await page.getByRole('textbox',{name:'Filter applications'}).fill('#719');
+    await page.waitForFunction(()=>document.querySelectorAll('.pipeline-card').length===1);
+    await page.waitForFunction(()=>window.__applicationAborts>0);
+    await page.waitForTimeout(1600);
+    assert.match(await page.locator('.pipeline-card').innerText(),/#719/);
+    assert.equal(await page.locator('[role="alert"]').count(),0,'Cancellation is not shown as a load failure');
     await page.setViewportSize({width:1366,height:768});
     await page.goto(base+'/applications?pagination=1&locale=en&id=page-0700');
     await page.getByRole('dialog').waitFor();

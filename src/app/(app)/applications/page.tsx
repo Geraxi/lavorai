@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import { useApplicationList } from "@/components/use-application-list";
 import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
 import { AppTopbar } from "@/components/design/topbar";
@@ -121,13 +122,13 @@ export default function ApplicationsPage() {
   listParams.set("view", view);
   listParams.set("page", String(page));
   for (const [key, value] of Object.entries(pages)) listParams.set(`${key}Page`, String(value));
-  const { data, error, isLoading, mutate } = useSWR<ApplicationListResponse>(
-    `/api/applications?${listParams}`, fetcher, { refreshInterval: 15000, keepPreviousData: true },
+  const { data, error, isLoading, busy, mutate } = useApplicationList<ApplicationListResponse>(
+    `/api/applications?${listParams}`, 15000,
   );
   const pendingParams = new URLSearchParams(filters);
   pendingParams.set("view", "attention"); pendingParams.set("page", String(attentionPage));
-  const { data: pendingData, error: pendingError, isLoading: pendingLoading, mutate: mutatePending } = useSWR<ApplicationListResponse>(
-    attentionOpen ? `/api/applications?${pendingParams}` : null, fetcher, { keepPreviousData: true },
+  const { data: pendingData, error: pendingError, isLoading: pendingLoading, busy: pendingBusy, mutate: mutatePending } = useApplicationList<ApplicationListResponse>(
+    attentionOpen ? `/api/applications?${pendingParams}` : null,
   );
   useEffect(() => { if (tableRef.current) tableRef.current.scrollTop = 0; }, [data?.pagination.page, query, range, lane]);
   useEffect(() => { if (pendingRef.current) pendingRef.current.scrollTop = 0; }, [pendingData?.pagination.page, query, range, lane]);
@@ -361,8 +362,8 @@ export default function ApplicationsPage() {
         {isLoading && !data && <p role="status" className="workspace-empty">{tr("Caricamento candidature…", "Loading applications…")}</p>}
         {error && <div role="alert" className="workspace-empty">{tr("Impossibile caricare le candidature.", "Unable to load applications.")} <button className="ds-btn" onClick={() => mutate()}>{tr("Riprova", "Retry")}</button></div>}
         {data && !isLoading && !error && data.total === 0 && <p className="workspace-empty">{query || lane !== "all" || range !== "all" ? tr("Nessun risultato per questi filtri.", "No results for these filters.") : tr("Non hai ancora candidature registrate. Esplora le opportunità o importa una candidatura esistente.", "No applications recorded yet. Explore opportunities or import an existing application.")}</p>}
-        {data && !error && view === "board" && <ApplicationBoard applications={filtered} onOpen={setSelected} pages={data.lanes} busy={isLoading} onPage={(key: PipelineLane, next: number) => setPages(current => ({ ...current, [key]: next }))} />}
-        {data && !error && view === "table" && <><div className="ds-section-card applications-table" ref={tableRef} aria-busy={isLoading}>
+        {data && !error && view === "board" && <ApplicationBoard applications={filtered} onOpen={setSelected} pages={data.lanes} busy={busy} onPage={(key: PipelineLane, next: number) => setPages(current => ({ ...current, [key]: next }))} />}
+        {data && !error && view === "table" && <><div className="ds-section-card applications-table" ref={tableRef} aria-busy={busy}>
           <table className="ds-tbl">
             <thead>
               <tr>
@@ -517,7 +518,7 @@ export default function ApplicationsPage() {
               ))}
             </tbody>
           </table>
-        </div><ApplicationPager pagination={data.pagination} label={tr("Candidature", "Applications")} busy={isLoading} onPage={setPage} /></>}
+        </div><ApplicationPager pagination={data.pagination} label={tr("Candidature", "Applications")} busy={busy} onPage={setPage} /></>}
         {(data?.summary.pending ?? 0) > 0 && <details open={attentionOpen} onToggle={event => setAttentionOpen(event.currentTarget.open)} className="ds-section-card applications-attention" aria-label={tr("Candidature da completare", "Applications needing attention")}>
           <summary>{tr("Da completare o verificare", "Complete or verify")} <span className="workspace-chip">{data?.summary.pending}</span></summary><div className="applications-attention-list" ref={pendingRef}>
           <p style={{ fontSize: 13, color: "var(--fg-muted)", marginBottom: 14 }}>{tr("Queste candidature non hanno una conferma di invio. Un errore tecnico non è un rifiuto dell'azienda.", "These applications have no submission confirmation. A technical failure is not a rejection by the company.")}</p>
@@ -536,7 +537,7 @@ export default function ApplicationsPage() {
             </div>
           </div>)}
           {!pendingLoading && !pendingError && pendingData?.total === 0 && <p>{tr("Nessuna candidatura da completare per questi filtri.", "No pending applications for these filters.")}</p>}
-        </div>{pendingData && <ApplicationPager pagination={pendingData.pagination} label={tr("Da completare", "Pending applications")} busy={pendingLoading} onPage={setAttentionPage} />}</details>}
+        </div>{pendingData && <ApplicationPager pagination={pendingData.pagination} label={tr("Da completare", "Pending applications")} busy={pendingBusy} onPage={setAttentionPage} />}</details>}
       </div>
 
       <DetailDrawer locale={en ? "en" : "it"} app={selected} onClose={closeDetails} />
