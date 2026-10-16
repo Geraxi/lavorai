@@ -55,10 +55,11 @@ export async function runtimeCheck(db: PrismaClient, databaseUrl: string) {
     const deniedPdf = await req('runtime-free', '/api/feedback', { method: 'POST', body: data });
     assert.equal(deniedPdf.status, 415); assert.equal((await deniedPdf.json()).error, 'pdf_disabled');
     assert.equal(await db.feedbackReport.count({ where: { userId: 'runtime-free' } }), 0);
-    data.delete('files'); data.append('files', new Blob([new Uint8Array(png)], { type: 'image/png' }), 'screen.png');
+    data.delete('files'); data.append('files', new Blob([new Uint8Array(png)], { type: 'image/png' }), '---screen.png');
     const posted = await req('runtime-free', '/api/feedback', { method: 'POST', body: data });
     assert.equal(posted.status, 201, await posted.clone().text());
     const report = (await posted.json()).report;
+    assert.equal(report.attachments[0].filename, 'screen.png');
     const imagePath = `/api/feedback/${report.id}/attachments/${report.attachments[0].id}`;
     assert.equal((await req('runtime-free', imagePath)).status, 200);
     assert.equal((await req('runtime-paid', imagePath)).status, 404);

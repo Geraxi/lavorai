@@ -1,10 +1,12 @@
 # Private feedback attachments and support access
 
-Candidate branch: `feat/private-feedback-attachments`, based on main
-`09d1f7e11fee343d2be2bd65f8ed702c5e23dad1`. The reviewed one-line Discover props
-fix `b63843159616444380c5a55c2f8d252fc0fd1ecc` was cherry-picked as `ee7d9ee`.
-No application-flow repair code was imported. No production migration, publication,
-push, external report, email or application send is part of this work.
+Candidate branch: `feat/private-feedback-attachments`, rebased onto released main
+`37643155d5ec0bc47391ac4dac95e2d67a71183a`. The Discover props fix is already
+upstream; the released application repair and shared app layout are preserved.
+The rebase only required combining upstream and feedback test script entries.
+The pre-rebase candidate is retained at
+`backup/private-feedback-before-main-3764315`. No production migration,
+publication, push, external report, email or application send is part of this work.
 
 ## Rollout without a scanner
 
@@ -153,13 +155,16 @@ References: [ClamAV protocol](https://docs.clamav.net/manual/Usage/ClamdProtocol
   `output/playwright/feedback-runtime/`. Default uses this candidate's build.
 
 The prior isolated diagnostic build is retained only as historical evidence; it
-is no longer needed once the imported Discover fix allows the normal build.
+is no longer needed with the Discover fix already on released main.
 No shared cache or another task's artifact may be removed to free disk space.
 
-Latest candidate validation: normal `npm run build` (Turbopack), generated/source
-TypeScript, file/scanner tests, exact PostgreSQL migration/route suite, 29 browser
-fixture screenshots and the normal compiled-runtime suite all passed. The latter
+Latest candidate validation after reconciliation with main `3764315`: normal
+`npm run build` (Turbopack, 155 routes), generated/source TypeScript, the full
+`npm test` chain including upstream privacy consent, file/scanner tests, exact
+PostgreSQL migration/route suite, 29 browser fixture screenshots and the normal
+compiled-runtime suite all passed. Logs are under `output/feedback-reconciled-*.log`.
+The latter
 uses real synthetic Auth.js sessions and an ephemeral localhost database, with
 no scanner configured: it verifies images succeed and PDFs are rejected before
-storage. The former Discover build blocker is resolved by the imported minimal
-fix. No production migration, publication or scanner setup has been performed.
+storage. The former Discover build blocker is resolved upstream. No production
+migration, publication or scanner setup has been performed.

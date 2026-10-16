@@ -16,6 +16,10 @@ async function main() {
     assert.equal(stored.scanStatus, "sanitized"); assert.match(stored.filename, /^[A-Za-z0-9][A-Za-z0-9_-]*\.(png|jpg|webp)$/);
     assert.equal(Buffer.from(stored.data).includes(Buffer.from("<script>")), false);
     const meta = await sharp(stored.data).metadata(); assert.equal(meta.format, kind); assert.equal(meta.width, 40); assert.equal(meta.exif, undefined);
+    for (const [name, expected] of [["---screen", "screen"], ["_--_", "attachment"]]) {
+      const [normalized] = await prepareFeedbackAttachments([file(original, `${name}.${kind}`, `image/${kind}`)]);
+      assert.equal(normalized.filename, `${expected}.${kind === "jpeg" ? "jpg" : kind}`);
+    }
     await fails(prepareFeedbackAttachments([file(original, "spoof.pdf", "application/pdf")]));
     await fails(prepareFeedbackAttachments([file(original.subarray(0, 12), `truncated.${kind}`, `image/${kind}`)]));
   }

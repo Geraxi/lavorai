@@ -149,6 +149,7 @@ try {
  await page.locator('input[type=file]').setInputFiles([{name:'disabled.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4 synthetic browser fixture')}]);
  await page.getByRole('alert').getByText(/Rimuovi il PDF/).waitFor();
  assert.equal(await page.locator('.report-file-list li').count(),0);
+ await page.getByRole('alert').scrollIntoViewIfNeeded();
  await shot('pdf-upload-disabled');
  await page.goto(base+'/feedback?locale=it&empty=1&pdf=1');
  await page.locator('#report-subject').fill('Screenshot problema sintetico');

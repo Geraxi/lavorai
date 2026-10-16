@@ -76,7 +76,7 @@ async function normalizeFeedbackAttachments(files: File[]): Promise<PreparedAtta
       } catch { throw new ReportError("invalid_attachment", 400); }
       scanStatus = await scanFeedbackFile(data) === "clean" ? "clean" : "sanitized";
     }
-    const stem = file.name.slice(0, file.name.lastIndexOf(".")).replace(/[^A-Za-z0-9_-]/g, "_").replace(/^_+/, "").slice(0, 90) || "attachment";
+    const stem = file.name.slice(0, file.name.lastIndexOf(".")).replace(/[^A-Za-z0-9_-]/g, "_").replace(/^[^A-Za-z0-9]+/, "").slice(0, 90) || "attachment";
     result.push({ filename: `${stem}.${kind === "jpeg" ? "jpg" : kind}`, contentType: formats[kind], byteLength: data.length, data: new Uint8Array(data), scanStatus });
   }
   if (result.reduce((size, f) => size + f.byteLength, 0) > MAX_ATTACHMENT_BYTES) throw new ReportError("attachment_too_large", 413);
