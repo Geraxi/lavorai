@@ -164,6 +164,11 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
             router.push("/onboarding");
             return;
           }
+          if (res.status === 409 && (body?.error === "privacy_consent_required" || body?.error === "activation_incomplete")) {
+            toast.error(body?.message ?? t("retryError"));
+            router.push(typeof body?.redirect === "string" && body.redirect.startsWith("/") ? body.redirect : "/onboarding");
+            return;
+          }
           if (res.status === 402) {
             setPaywallMessage(body?.message ?? null);
             setPaywallOpen(true);

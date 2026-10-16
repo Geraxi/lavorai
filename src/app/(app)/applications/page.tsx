@@ -241,7 +241,8 @@ export default function ApplicationsPage() {
         body: JSON.stringify({ ids: [id] }),
       });
       if (!res.ok) {
-        toast.error(t("genericError"));
+        const body = await res.json().catch(() => ({}));
+        toast.error(body?.message ?? t("genericError"));
         return;
       }
       toast.success(t("appQueued"));

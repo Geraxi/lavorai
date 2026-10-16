@@ -1,5 +1,6 @@
 import { applicationRolloutConfig, rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
+import { applicationPrerequisiteBlock } from "@/lib/application-prerequisites";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
@@ -33,6 +34,8 @@ export async function POST(request: NextRequest) {
   }
   const config = applicationRolloutConfig();
   if (!config.enabled || !config.startedAt) return NextResponse.json({ error: "application_rollout_closed" }, { status: 503 });
+  const prerequisite = applicationPrerequisiteBlock(user);
+  if (prerequisite) return NextResponse.json(prerequisite.body, { status: prerequisite.status });
   const cohort = {
     createdAt: { gt: config.startedAt, lte: new Date() },
     startedAt: null, completedAt: null, consentGrantedAt: null, retryCount: 0,

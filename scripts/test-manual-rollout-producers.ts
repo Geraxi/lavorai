@@ -5,6 +5,7 @@ import ts from "typescript";
 import { z } from "zod";
 import * as continuation from "../src/lib/application-answer-continuation";
 import * as rollout from "../src/lib/application-rollout";
+import * as prerequisites from "../src/lib/application-prerequisites";
 
 // Execute actual production sources with hermetic DB/queue/provider boundaries.
 // No environment files, network, real account rows or credentials are loaded.
@@ -14,11 +15,12 @@ const json = (body: unknown, options?: { status?: number }) => ({ body, status: 
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-rollout": rollout,
+    "@/lib/application-prerequisites": prerequisites,
     "./application-answer-continuation": continuation,
     "@/lib/application-answer-continuation": continuation,
     "@/lib/application-pause": { applicationsPaused: () => false },
     "@/lib/db": { prisma: noAccess },
-    "@/lib/session": { getCurrentUser: async () => ({ id: "owner", emailVerified: new Date() }) },
+    "@/lib/session": { getCurrentUser: async () => ({ id: "owner", emailVerified: new Date(), privacyConsentAt: new Date() }) },
     "@/lib/admin": { isAdmin: () => true },
     "@/lib/application-worker": { processApplication: async () => { throw new Error("Unexpected worker execution"); } },
     "@/lib/application-queue": { enqueueApplication: async () => { throw new Error("Unexpected queue publication"); } },
