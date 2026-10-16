@@ -210,6 +210,7 @@ export default async function JobsPage({
     <>
       <AppTopbar title={t("title")} breadcrumb={t("breadcrumb")} />
       <div
+        className="jobs-page"
         style={{
           padding: "24px 32px 80px",
           maxWidth: 1480,
@@ -236,7 +237,7 @@ export default async function JobsPage({
         </div>
 
         <form
-          className="mb-5 flex items-center gap-2 rounded border p-2"
+          className="jobs-search-form mb-5 flex items-center gap-2 rounded border p-2"
           style={{
             background: "var(--bg-elev)",
             borderColor: "var(--border-ds)",

@@ -95,3 +95,21 @@
 .activation-observations { display:flex; flex-wrap:wrap; gap:18px; padding:16px 0; }
 .activation-observations > div { flex:1; min-width:170px; }
 .activation-observations span,.activation-observations strong { display:block; }
+
+/* Mobile hardening: overlays opened from the topbar sit above the mobile
+   header and bottom nav; forms reflow to one column on narrow phones. */
+@media (max-width: 1023px) {
+  .product-workspace .workspace-topbar { z-index: auto; }
+  .jobs-search-form { flex-wrap: wrap; }
+  .jobs-search-form > div:first-child { flex: 1 1 100%; }
+}
+@media (max-width: 760px) {
+  .jobs-page { padding: 18px 16px 24px !important; }
+  .jobs-search-form > div { flex: 1 1 100%; width: 100% !important; }
+  .jobs-search-form > .ds-btn { flex: 1 1 100%; justify-content: center; }
+}
+@media (max-width: 600px) {
+  .profile-workspace .ds-toggle-group > button { min-width: 0; padding-inline: 4px; }
+  .profile-workspace :is([style*="grid-template-columns:1fr 1fr"], [style*="grid-template-columns: 1fr 1fr"]) { grid-template-columns: minmax(0, 1fr) !important; }
+  .profile-workspace .ds-section-body .flex.items-center.justify-between { flex-wrap: wrap; }
+}

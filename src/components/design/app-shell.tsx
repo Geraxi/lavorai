@@ -210,6 +210,10 @@ export function AppShell({
           .lavorai-main {
             padding-bottom: calc(88px + env(safe-area-inset-bottom));
           }
+          /* Il main è lo scroller del documento su mobile: i figli non devono
+             restringersi sotto il contenuto, altrimenti l'ultima sezione
+             finisce sotto la bottom nav senza poter scorrere. */
+          .lavorai-main > * { flex-shrink: 0; }
           .lavorai-mobile-bottom-nav {
             position: fixed;
             left: max(12px, env(safe-area-inset-left));
@@ -251,7 +255,7 @@ export function AppShell({
           }
           .lavorai-mobile-nav-item:active { transform: scale(.95); }
           .lavorai-mobile-nav-item:focus-visible { outline: 2px solid #b9ffde; outline-offset: 2px; }
-          .lavorai-mobile-nav-menu { border: 0; background: transparent; font: inherit; cursor: pointer; }
+          .lavorai-mobile-nav-menu { border: 0; background: transparent; font-family: inherit; cursor: pointer; }
           .lavorai-mobile-nav-menu:hover { color: #fff; background: rgba(255,255,255,.08); }
           @media (prefers-reduced-motion: reduce) { .lavorai-mobile-nav-item { transition: none; } }
         }

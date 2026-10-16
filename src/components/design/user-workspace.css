@@ -361,3 +361,14 @@
 .match-explanation blockquote { border-left:2px solid var(--primary-ds); padding-left:10px; margin-top:8px; }
 
 @media(min-width:1024px) { .dashboard-primary { overflow-y:auto; padding-right:3px; } }
+
+/* Mobile: date and unread chip stay on one line beside the message. */
+.attention-row > span:last-child { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; text-align: right; }
+.attention-row > span:last-child :is(time, .workspace-chip) { white-space: nowrap; overflow-wrap: normal; margin: 0; }
+@media (max-width: 760px) {
+  .dashboard-overview > .fit-card-head { flex-wrap: wrap; }
+  .dashboard-overview > .fit-card-head > h2 { white-space: nowrap; }
+}
+@media (max-width: 480px) {
+  .reference-workspace .pipeline-board { grid-template-columns: minmax(0, 1fr); }
+}
