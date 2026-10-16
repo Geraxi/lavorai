@@ -19,7 +19,9 @@
 }
 .header {
   position: relative;
-  z-index: 10;
+  /* Above .content and .videoControl (both z-index 10, later in the DOM) so the
+     mobile menu panel, which is positioned inside the header, receives taps. */
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -105,7 +107,7 @@
   .header { padding: 20px; gap: 16px; }
   .brand { font-size: 25px; }
   .navActions { gap: 10px; }
-  .navActions > div button { padding-inline: 8px; font-size: 10px; }
+  .navActions > div button { min-width: 44px; padding-inline: 8px; font-size: 10px; }
   .navCta { display: none; }
   .content { padding: 38px 24px 80px; }
   .title { font-size: 48px; line-height: .95; letter-spacing: -2.46px; }
