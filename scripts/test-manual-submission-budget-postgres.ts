@@ -19,9 +19,9 @@ async function main() {
   process.env.DATABASE_URL = fixtureUrl ?? `postgresql://postgres:password@127.0.0.1:${port}/postgres?connection_limit=24`;
   process.env.DIRECT_URL = process.env.DATABASE_URL;
   process.env.APPLICATIONS_PAUSED = "false";
-  process.env.APPLICATION_ROLLOUT_MODE = "manual_only";
+  process.env.APPLICATION_SENDING_MODE = "manual_only";
   process.env.APPLICATION_ROLLOUT_START_AT = new Date(Date.now() - 86400000).toISOString();
-  process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";
+  process.env.APPLY_GLOBAL_DAILY_CAP = "10";
   const dir = await mkdtemp(join(tmpdir(), "lavorai-rollout-postgres-"));
   let pg: { initialise(): Promise<void>; start(): Promise<void>; stop(): Promise<void> } | undefined;
   if (!fixtureUrl) {
@@ -73,10 +73,10 @@ async function main() {
     const chosen = began.indexOf(true), app = apps[chosen], token = tokens[chosen]!, channel = channels[chosen];
     assert.equal(await begin(app.id, token, undefined, channel), false, "Duplicate begin never authorizes another transmission");
     assert.equal(await recheck(app.id, token, undefined, channel), true);
-    process.env.APPLICATION_ROLLOUT_DAILY_CAP = "9";
+    process.env.APPLY_GLOBAL_DAILY_CAP = "9";
     assert.equal(await recheck(app.id, token, undefined, channel), false, "Lowering cap blocks even a reserved final submission when consumed count is above cap");
     assert.equal(await db.applicationSubmissionReservation.count(), 10, "No refund on final gate failure");
-    process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";
+    process.env.APPLY_GLOBAL_DAILY_CAP = "10";
     await db.application.update({ where: { id: app.id }, data: { status: "queued", submitConfirmation: "NOT_SUBMITTED", startedAt: null } });
     assert.equal(await reserve(app.id), null, "Even a proved no-send/reset does not recycle a rollout attempt");
     await db.application.delete({ where: { id: app.id } });
@@ -92,8 +92,8 @@ async function main() {
     assert.equal(await reserve(noConsent.id), null);
     const retry = await make("retry", { retryCount: 1 }); assert.equal(await reserve(retry.id), null);
     const invalid = await make("invalid");
-    delete process.env.APPLICATION_ROLLOUT_DAILY_CAP; assert.equal(await reserve(invalid.id), null);
-    process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";
+    process.env.APPLY_GLOBAL_DAILY_CAP = "0"; assert.equal(await reserve(invalid.id), null);
+    process.env.APPLY_GLOBAL_DAILY_CAP = "10";
     process.env.APPLICATIONS_PAUSED = "true"; assert.equal(await reserve(invalid.id), null);
     process.env.APPLICATIONS_PAUSED = "false";
     console.log("PASS PostgreSQL: old applications, no consent, retries, missing config and global pause are held without history rewrites.");

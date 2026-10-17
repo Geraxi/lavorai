@@ -1,30 +1,78 @@
 import assert from "node:assert/strict";
-import { applicationRolloutConfig, rolloutApplicationIneligibility, ROLLOUT_BUDGET_HELD_MESSAGE } from "../src/lib/application-rollout";
+import {
+  applicationRolloutConfig, automaticApplicationsBlocked, historicalRetriesBlocked, rolloutApplicationIneligibility,
+  ROLLOUT_BUDGET_HELD_MESSAGE, DEFAULT_GLOBAL_DAILY_CAP, DEFAULT_HISTORICAL_CUTOFF,
+} from "../src/lib/application-rollout";
 import { applicationDeliveryView } from "../src/lib/application-delivery-view";
 
-const now = new Date("2026-10-14T12:00:00.000Z");
-const start = "2026-10-14T10:00:00.000Z";
-const valid = () => Object.assign(process.env, { APPLICATION_ROLLOUT_MODE: "manual_only", APPLICATION_ROLLOUT_START_AT: start, APPLICATION_ROLLOUT_DAILY_CAP: "10" });
-valid(); assert.equal(applicationRolloutConfig(now).enabled, true);
-for (const key of ["APPLICATION_ROLLOUT_MODE", "APPLICATION_ROLLOUT_START_AT", "APPLICATION_ROLLOUT_DAILY_CAP"]) {
-  valid(); delete process.env[key]; assert.equal(applicationRolloutConfig(now).enabled, false);
+const now = new Date(Date.UTC(2026, 9, 14, 12, 0, 0));
+const start = new Date(Date.UTC(2026, 9, 14, 10, 0, 0)).toISOString();
+const KEYS = ["APPLICATION_SENDING_MODE", "APPLICATION_ROLLOUT_START_AT", "APPLY_GLOBAL_DAILY_CAP",
+  "APPLICATION_ROLLOUT_MODE", "APPLICATION_ROLLOUT_DAILY_CAP"];
+const reset = (env: Record<string, string> = {}) => { for (const key of KEYS) delete process.env[key]; Object.assign(process.env, env); };
+const manual = () => reset({ APPLICATION_SENDING_MODE: "manual_only", APPLICATION_ROLLOUT_START_AT: start, APPLY_GLOBAL_DAILY_CAP: "10" });
+const automatic = () => reset({ APPLICATION_ROLLOUT_START_AT: start });
+
+// Defaults: no env at all => automatic sending, default cap, Oct 14 cutoff.
+reset();
+const later = new Date(Date.UTC(2026, 9, 20));
+const defaults = applicationRolloutConfig(later);
+assert.equal(defaults.enabled, true); assert.equal(defaults.mode, "automatic");
+assert.equal(defaults.dailyCap, DEFAULT_GLOBAL_DAILY_CAP); assert.equal(DEFAULT_GLOBAL_DAILY_CAP, 300);
+assert.equal(defaults.startedAt!.toISOString(), DEFAULT_HISTORICAL_CUTOFF);
+assert.equal(automaticApplicationsBlocked(), false, "automatic producers run without new env vars");
+assert.equal(historicalRetriesBlocked(), true, "historical replay/retry paths stay suspended");
+
+// The production env of the manual-only release no longer holds sending.
+reset({ APPLICATION_ROLLOUT_MODE: "manual_only", APPLICATION_ROLLOUT_START_AT: start, APPLICATION_ROLLOUT_DAILY_CAP: "10" });
+const legacy = applicationRolloutConfig(now);
+assert.equal(legacy.enabled, true); assert.equal(legacy.mode, "automatic");
+assert.equal(legacy.dailyCap, 300, "legacy 10/day cap is not applied");
+assert.equal(legacy.startedAt!.toISOString(), start, "legacy start timestamp stays the historical cutoff");
+
+// Configurable global cap.
+automatic(); process.env.APPLY_GLOBAL_DAILY_CAP = "500"; assert.equal(applicationRolloutConfig(now).dailyCap, 500);
+automatic(); process.env.APPLY_GLOBAL_DAILY_CAP = "1"; assert.equal(applicationRolloutConfig(now).dailyCap, 1);
+automatic(); process.env.APPLY_GLOBAL_DAILY_CAP = ""; assert.equal(applicationRolloutConfig(now).dailyCap, 300);
+for (const cap of ["0", "-1", "1.5", "NaN", "Infinity", " 10", "10 ", "01", "5001", "100000", "abc"]) {
+  automatic(); process.env.APPLY_GLOBAL_DAILY_CAP = cap;
+  assert.equal(applicationRolloutConfig(now).enabled, false, cap); assert.equal(applicationRolloutConfig(now).reason, "global_cap_invalid");
 }
-for (const cap of ["0", "-1", "11", "100", "1.5", "NaN", "Infinity", " 10", "10 ", "01", ""]) {
-  valid(); process.env.APPLICATION_ROLLOUT_DAILY_CAP = cap; assert.equal(applicationRolloutConfig(now).enabled, false, cap);
+// Invalid mode / cutoff values fail closed; a future cutoff is not started.
+for (const mode of ["auto", "manual", "off", "MANUAL_ONLY"]) {
+  automatic(); process.env.APPLICATION_SENDING_MODE = mode;
+  assert.equal(applicationRolloutConfig(now).enabled, false, mode);
 }
-for (const date of ["2026-10-14", "2026-10-14T10:00:00+00:00", "2026-02-30T10:00:00Z", "bad", "2026-10-14T12:00:00Z", "2026-10-15T00:00:00Z"]) {
-  valid(); process.env.APPLICATION_ROLLOUT_START_AT = date; assert.equal(applicationRolloutConfig(now).enabled, false, date);
+for (const date of ["2026-10-14", "2026-02-30T10:00:00Z", "bad", now.toISOString(), new Date(+now + 3_600_000).toISOString()]) {
+  automatic(); process.env.APPLICATION_ROLLOUT_START_AT = date; assert.equal(applicationRolloutConfig(now).enabled, false, date);
 }
-valid();
-const row = { createdAt: new Date("2026-10-14T11:00:00Z"), consentGrantedAt: new Date("2026-10-14T11:01:00Z"), retryCount: 0 };
+
+// Manual-only kill switch keeps the Oct 14 semantics.
+manual();
+const manualConfig = applicationRolloutConfig(now);
+assert.equal(manualConfig.enabled, true); assert.equal(manualConfig.mode, "manual_only"); assert.equal(manualConfig.dailyCap, 10);
+const row = { createdAt: new Date(Date.UTC(2026, 9, 14, 11, 0)), consentGrantedAt: new Date(Date.UTC(2026, 9, 14, 11, 1)), retryCount: 0 };
 assert.equal(rolloutApplicationIneligibility(row, now), null);
 assert.equal(rolloutApplicationIneligibility({ ...row, createdAt: new Date(start) }, now), "rollout_historical_application");
-assert.equal(rolloutApplicationIneligibility({ ...row, createdAt: new Date("2026-01-01Z") }, now), "rollout_historical_application", "Fresh consent cannot revive old applications");
+assert.equal(rolloutApplicationIneligibility({ ...row, createdAt: new Date("2026-01-01T00:00:00Z") }, now), "rollout_historical_application", "Fresh consent cannot revive old applications");
 assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: null }, now), "rollout_explicit_consent_required");
 assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: new Date(start) }, now), "rollout_explicit_consent_required");
 assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: new Date(+now + 1) }, now), "rollout_explicit_consent_required");
 assert.equal(rolloutApplicationIneligibility({ ...row, retryCount: 1 }, now), "rollout_retry_blocked");
+
+// Automatic mode: auto rows without per-application consent are admitted
+// (the worker gate still requires the user's saved mode to be "auto");
+// historical rows, stale consents and retries stay blocked.
+automatic();
+assert.equal(rolloutApplicationIneligibility(row, now), null);
+assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: null }, now), null);
+assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: new Date(start) }, now), "rollout_explicit_consent_required");
+assert.equal(rolloutApplicationIneligibility({ ...row, createdAt: new Date("2026-01-01T00:00:00Z"), consentGrantedAt: null }, now), "rollout_historical_application");
+assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: null, retryCount: 1 }, now), "rollout_retry_blocked");
+assert.equal(rolloutApplicationIneligibility({ ...row, createdAt: new Date(+now + 1), consentGrantedAt: null }, now), "rollout_historical_application");
+
 const held = applicationDeliveryView({ status: "ready_to_apply", submittedVia: null, submitConfirmation: "NOT_SUBMITTED", errorMessage: ROLLOUT_BUDGET_HELD_MESSAGE });
 assert.equal(held.phase, "pending"); assert.equal(held.label, "In attesa: limite giornaliero");
 assert.match(held.detail, /non inviata/); assert.match(held.detail, /Nessun nuovo tentativo automatico/);
-console.log("PASS manual rollout: explicit configuration, approved maximum, strict new-created and consent cutoff, future/invalid inputs and retry rejection.");
+reset();
+console.log("PASS sending policy: automatic by default with env-configurable global cap (default 300), legacy manual-only env ignored, manual_only kill switch, historical cutoff, consent/retry rules, fail-closed invalid inputs.");

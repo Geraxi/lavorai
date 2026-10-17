@@ -43,9 +43,9 @@ function load(path: string, extra: Record<string, any> = {}) {
 const start = new Date(Date.now() - 3_600_000);
 const freshAt = new Date(+start + 60_000);
 function enable() {
-  process.env.APPLICATION_ROLLOUT_MODE = "manual_only";
+  process.env.APPLICATION_SENDING_MODE = "manual_only";
   process.env.APPLICATION_ROLLOUT_START_AT = start.toISOString();
-  process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";
+  process.env.APPLY_GLOBAL_DAILY_CAP = "10";
 }
 function row(id: string, overrides: Record<string, any> = {}) {
   return { id, userId: "owner", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
@@ -63,6 +63,7 @@ function match(value: any, condition: any): boolean {
     if (key === "lte") return value !== null && +value <= +expected;
     if (key === "in") return expected.includes(value);
     if (key === "not") return !match(value, expected);
+    if (key === "OR") return expected.some((condition: any) => match(value, condition));
     return match(value?.[key], expected);
   });
 }
@@ -81,16 +82,21 @@ function database(initial: ReturnType<typeof row>[]) {
   return { rows, prisma: { application }, counts: () => ({ reads, writes }) };
 }
 async function testBlockedEntrypoints() {
-  for (const mode of [undefined, "auto", "manual_only"]) {
+  // Closed (invalid mode) and the manual_only kill switch both block automatic
+  // producers. Retry/reset/replay paths are blocked in every mode, including
+  // the default automatic one.
+  for (const mode of ["invalid-mode", "auto", "manual_only", undefined]) {
     enable();
-    if (mode === undefined) delete process.env.APPLICATION_ROLLOUT_MODE;
-    else process.env.APPLICATION_ROLLOUT_MODE = mode;
+    if (mode === undefined) delete process.env.APPLICATION_SENDING_MODE;
+    else process.env.APPLICATION_SENDING_MODE = mode;
+    if (mode !== undefined) {
     const cron = load("src/lib/auto-apply-cron.ts");
     assert.equal((await cron.runAutoApplyCron()).applicationsEnqueued, 0);
     assert.equal((await cron.runAutoApplyForUser("owner")).applicationsAwaitingConsent, 0);
     assert.equal((await load("src/lib/auto-apply-self-heal.ts").runSelfHeal()).stuckAppsRequeued, 0);
-    assert.equal((await load("src/lib/cron-self-heal.ts").runCronSelfHeal()).appsRecoveredSafely, 0);
     assert.equal(await load("src/lib/trial-quota.ts").reserveTrialApplication("owner", "old"), false);
+    assert.equal((await load("src/lib/cron-self-heal.ts").runCronSelfHeal()).appsRecoveredSafely, 0);
+    }
     const claim = load("src/lib/application-claim.ts");
     assert.equal(await claim.recoverStuckApplications(), 0);
     await claim.resetClaim("old");
@@ -109,7 +115,7 @@ async function testBlockedEntrypoints() {
     assert.equal((await creditRoute.POST(request)).body.error, "historical_application_retries_blocked");
     assert.equal(forbiddenAccesses, 0, "Blocked helpers must return before any caught or uncaught service access");
   }
-  delete process.env.APPLICATION_ROLLOUT_MODE;
+  process.env.APPLICATION_SENDING_MODE = "invalid-mode";
   const claims = load("src/lib/application-claim.ts");
   assert.equal(await claims.claimApplication("old"), false);
   assert.deepEqual(Array.from(await claims.findClaimableQueued(5)), []);
@@ -150,6 +156,39 @@ async function testClaimsAndQueue() {
   for (const fixture of fixtures) await queue.enqueueApplication(fixture.id);
   assert.deepEqual(queued, ["fresh"]);
   assert.equal(queueDb.counts().writes, 0, "Queue notification never resets ownership or history");
+}
+async function testAutomaticClaimsAndQueue() {
+  // Default sending mode (no APPLICATION_SENDING_MODE): rows created by the
+  // automatic producer for auto-mode users carry no per-application consent
+  // and are claimable; historical rows, stale consents, retries, claimed or
+  // evidenced rows are not. The worker gate re-checks the user's saved mode.
+  enable(); delete process.env.APPLICATION_SENDING_MODE;
+  const old = new Date(+start - 1);
+  const fixtures = [row("fresh"), row("auto", { consentGrantedAt: null }), row("historical", { createdAt: old, consentGrantedAt: null }),
+    row("old-consent", { consentGrantedAt: old }), row("retry", { retryCount: 1, consentGrantedAt: null }),
+    row("claimed", { startedAt: old, consentGrantedAt: null }), row("attempted", { submitConfirmation: "NOT_SUBMITTED", consentGrantedAt: null }),
+    row("evidence", { canaryLog: "{}", consentGrantedAt: null })];
+  const db = database(fixtures);
+  const claims = load("src/lib/application-claim.ts", { "@/lib/db": { prisma: db.prisma } });
+  assert.deepEqual(Array.from(await claims.findClaimableQueued(100)).sort(), ["auto", "fresh"]);
+  for (const fixture of fixtures.slice(2)) assert.equal(await claims.claimApplication(fixture.id), false, fixture.id);
+  const results = await Promise.all([claims.claimApplication("auto"), claims.claimApplication("auto")]);
+  assert.equal(results.filter(Boolean).length, 1, "Automatic claim is atomic");
+  assert.equal(await claims.recoverStuckApplications(), 0, "Stale-claim recovery stays suspended in automatic mode");
+  const queueDb = database(fixtures);
+  const queued: string[] = [];
+  process.env.QUEUE_MODE = "bullmq"; process.env.REDIS_URL = "redis://synthetic.invalid";
+  const queue = load("src/lib/application-queue.ts", {
+    "@/lib/db": { prisma: queueDb.prisma }, "@/lib/application-claim": claims,
+    "@/lib/bullmq-queue": { getApplicationsQueue: () => ({ add: async (_name: string, data: any) => queued.push(data.applicationId) }) },
+  });
+  for (const fixture of fixtures) await queue.enqueueApplication(fixture.id);
+  assert.deepEqual(queued.sort(), ["auto", "fresh"]);
+  assert.equal(queueDb.counts().writes, 0);
+  assert.equal(rollout.automaticApplicationsBlocked(), false);
+  process.env.APPLICATIONS_PAUSED = "true";
+  assert.equal(rollout.automaticApplicationsBlocked(), false, "pause is enforced by applicationsPaused() at every producer/claim");
+  delete process.env.APPLICATIONS_PAUSED;
 }
 async function testConsentCohort() {
   enable();
@@ -235,17 +274,17 @@ async function testReadOnlyAndPreferences() {
     assert.ok(source.indexOf('throw new Error("historical_application_retries_blocked")') < source.indexOf("await prisma."), `${name} guard precedes DB access`);
   }
   const bullmq = readFileSync("src/lib/bullmq-queue.ts", "utf8");
-  assert.match(bullmq, /attempts: automaticApplicationsBlocked\(\) \? 1 : 3/);
-  assert.match(bullmq, /maxStalledCount: automaticApplicationsBlocked\(\) \? 0 : 1/);
+  assert.match(bullmq, /attempts: historicalRetriesBlocked\(\) \? 1 : 3/);
+  assert.match(bullmq, /maxStalledCount: historicalRetriesBlocked\(\) \? 0 : 1/);
 }
 async function main() {
   const original = { ...process.env };
   process.env.CRON_SECRET = "fixture-cron";
   try {
-    await testBlockedEntrypoints(); await testClaimsAndQueue(); await testConsentCohort();
+    await testBlockedEntrypoints(); await testClaimsAndQueue(); await testAutomaticClaimsAndQueue(); await testConsentCohort();
     await testExplicitCreation(); await testReadOnlyAndPreferences();
     assert.equal(forbiddenAccesses, 0);
-    console.log("PASS manual rollout producers: automatic/retry/reset entrypoints blocked; fresh claims/queue/consent only; explicit single/batch enabled; historical records/preferences preserved. Hermetic, no DB/network/provider calls.");
+    console.log("PASS sending producers: automatic producers blocked only when closed/manual_only; retry/reset/replay entrypoints blocked in every mode; automatic-mode claims admit fresh auto rows only; fresh claims/queue/consent only; explicit single/batch enabled; historical records/preferences preserved. Hermetic, no DB/network/provider calls.");
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
     Object.assign(process.env, original);

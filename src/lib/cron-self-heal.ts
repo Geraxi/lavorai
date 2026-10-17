@@ -1,4 +1,4 @@
-import { automaticApplicationsBlocked } from "@/lib/application-rollout";
+import { automaticApplicationsBlocked, historicalRetriesBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
@@ -98,7 +98,8 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
   }
 
   // ---------- 2. Shared evidence-aware recovery ----------
-  try {
+  // Stale-claim recovery stays suspended with the other replay paths.
+  if (!historicalRetriesBlocked()) try {
     report.appsRecoveredSafely = await recoverStuckApplications();
   } catch {
     report.appsFailed++;

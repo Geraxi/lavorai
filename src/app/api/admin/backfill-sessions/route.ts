@@ -1,4 +1,4 @@
-import { automaticApplicationsBlocked } from "@/lib/application-rollout";
+import { historicalRetriesBlocked } from "@/lib/application-rollout";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   if (!cronSecret || auth !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (automaticApplicationsBlocked()) return NextResponse.json({ error: "historical_application_retries_blocked" }, { status: 503 });
+  if (historicalRetriesBlocked()) return NextResponse.json({ error: "historical_application_retries_blocked" }, { status: 503 });
   const url = new URL(req.url);
   const email = url.searchParams.get("email")?.trim().toLowerCase();
   const target = Math.max(

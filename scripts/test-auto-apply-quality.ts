@@ -67,7 +67,7 @@ async function testCronBothPasses() {
   // Retain algorithm regression coverage behind an explicitly mocked legacy gate.
   // Production manual-only blocking is exercised in test-manual-rollout-producers.
   const api = loadModule("src/lib/auto-apply-cron.ts", {
-    "@/lib/application-rollout": { automaticApplicationsBlocked: () => false },
+    "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
     "@/lib/application-pause": { applicationsPaused: () => false },
     "@/lib/auto-apply-preferences": preferenceHelpers,
     "@/lib/db": { prisma },

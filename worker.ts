@@ -28,16 +28,16 @@ loadEnv({ path: ".env", override: false });
 import { createApplicationsWorker } from "./src/lib/bullmq-queue";
 import { processApplication } from "./src/lib/application-worker";
 import { claimApplication, findClaimableQueued } from "./src/lib/application-claim";
-import { applicationRolloutConfig } from "./src/lib/application-rollout";
+import { applicationRolloutConfig, automaticApplicationsBlocked } from "./src/lib/application-rollout";
 import { applicationsPaused } from "./src/lib/application-pause";
 
 async function main(): Promise<void> {
   const rollout = applicationRolloutConfig();
   // Bounded public configuration only. Never log credentials or environment.
-  console.log("[worker] manual_rollout_configuration", JSON.stringify({
-    mode: rollout.enabled ? "manual_only" : "closed", reason: rollout.reason,
-    globalDailyCap: rollout.dailyCap, startedAt: rollout.startedAt?.toISOString() ?? null,
-    automaticProducers: false, applicationsPaused: applicationsPaused(),
+  console.log("[worker] application_sending_configuration", JSON.stringify({
+    mode: rollout.enabled ? rollout.mode : "closed", reason: rollout.reason,
+    globalDailyCap: rollout.dailyCap, historicalCutoff: rollout.startedAt?.toISOString() ?? null,
+    automaticProducers: !automaticApplicationsBlocked(), applicationsPaused: applicationsPaused(),
   }));
   const concurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY ?? 2) || 2);
   const queueMode = process.env.QUEUE_MODE ?? "db";

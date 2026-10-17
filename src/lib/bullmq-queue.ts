@@ -1,4 +1,4 @@
-import { automaticApplicationsBlocked } from "@/lib/application-rollout";
+import { historicalRetriesBlocked } from "@/lib/application-rollout";
 import { Queue, Worker, type Processor } from "bullmq";
 import IORedis from "ioredis";
 
@@ -36,7 +36,7 @@ export function getApplicationsQueue(): Queue<{ applicationId: string }> {
   cachedQueue = new Queue<{ applicationId: string }>(APPLICATIONS_QUEUE, {
     connection: connection(),
     defaultJobOptions: {
-      attempts: automaticApplicationsBlocked() ? 1 : 3,
+      attempts: historicalRetriesBlocked() ? 1 : 3,
       backoff: { type: "exponential", delay: 15_000 },
       removeOnComplete: { count: 100, age: 24 * 60 * 60 }, // ultimi 100 o 24h
       removeOnFail: { count: 500, age: 7 * 24 * 60 * 60 }, // ultimi 500 o 7g
@@ -61,7 +61,7 @@ export function createApplicationsWorker(
     // 60s e stalled-check a 5min scendiamo sotto ~2k/giorno a vuoto.
     drainDelay: Number(process.env.WORKER_DRAIN_DELAY_S ?? 60),
     stalledInterval: 5 * 60 * 1000,
-    maxStalledCount: automaticApplicationsBlocked() ? 0 : 1,
+    maxStalledCount: historicalRetriesBlocked() ? 0 : 1,
   });
 }
 

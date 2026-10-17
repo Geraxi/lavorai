@@ -15,7 +15,7 @@ import {
 // mock gate. The exported production function must always reject live retries.
 const legacyModule = { exports: {} as Record<string, any> };
 const legacyDependencies: Record<string, unknown> = {
-  "@/lib/application-rollout": { automaticApplicationsBlocked: () => false },
+  "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
   "@/lib/billing": billing, "node:crypto": { createHash }, "@prisma/client": { Prisma }, zod: { z },
 };
 new Function("require", "module", "exports", ts.transpileModule(readFileSync("src/lib/credit-failure-retry.ts", "utf8"), {
@@ -248,6 +248,8 @@ async function main() {
   const originalFetch = globalThis.fetch;
   const originalEnv = { ...process.env };
   globalThis.fetch = async () => { throw new Error("network forbidden in retry tests"); };
+  // Closed sending policy: queue boundaries must return before any DB access.
+  process.env.APPLICATION_SENDING_MODE = "closed-for-test";
   try {
     const { enqueueApplication } = await import("../src/lib/application-queue");
     process.env.QUEUE_MODE = "db";

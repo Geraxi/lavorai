@@ -10,9 +10,9 @@ async function main() {
   process.env.DATABASE_URL = `postgresql://postgres:password@127.0.0.1:${port}/postgres?connection_limit=12`;
   process.env.DIRECT_URL = process.env.DATABASE_URL;
   process.env.APPLICATIONS_PAUSED = "false";
-  process.env.APPLICATION_ROLLOUT_MODE = "manual_only";
+  process.env.APPLICATION_SENDING_MODE = "manual_only";
   process.env.APPLICATION_ROLLOUT_START_AT = new Date(Date.now() - 86400000).toISOString();
-  process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";
+  process.env.APPLY_GLOBAL_DAILY_CAP = "10";
   const env: Record<string, string | undefined> = process.env;
   env.NODE_ENV = "test";
   const dependency = process.env.WORKER_TEST_EMBEDDED_POSTGRES ?? "embedded-postgres";
