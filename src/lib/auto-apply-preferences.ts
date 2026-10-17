@@ -111,6 +111,20 @@ export function jobMatchesLocationPrefs(job: { location: string | null; remote: 
   return locationPreferenceMismatch(job, prefs) === null;
 }
 
+/**
+ * Stored job salaries are mostly annual euros, but some feeds (Adzuna IT via
+ * Joinrs/agency listings, occasionally RemoteOK) publish RAL in thousands:
+ * "28-32" means €28,000-€32,000. No real annual salary is between 10 and 499
+ * euros, so values in that band are read as k-units. Anything else is left as
+ * stored: values under 10 (hourly) and 500-9,999 (monthly/part-time) keep
+ * failing a set salary floor exactly as before, so the gate is never relaxed
+ * on an ambiguous unit.
+ */
+export function annualSalaryEur(value: number | null | undefined): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return 0;
+  return value >= 10 && value < 500 ? Math.round(value * 1000) : value;
+}
+
 export function autoApplyPreferenceMismatch(
   job: { location: string | null; remote: boolean; title: string; contractType: string | null;
     description: string; salaryMin: number | null; salaryMax: number | null },
@@ -127,7 +141,7 @@ export function autoApplyPreferenceMismatch(
       || /(?:freelance|contractor)\s+(?:role|position|opportunity|basis)|(?:on|su)\s+(?:a\s+)?freelance\s+basis|(?:richiesta|necessaria|required)\s+(?:la\s+)?partita\s+iva/i.test(description);
     if ((employment === "piva" && !isFreelance) || (employment === "employee" && isFreelance)) return "employment";
   }
-  const jobTop = job.salaryMax ?? job.salaryMin ?? 0;
+  const jobTop = annualSalaryEur(job.salaryMax ?? job.salaryMin ?? 0);
   if (prefs.salaryMin > 0 && jobTop > 0 && jobTop < prefs.salaryMin * 1000) return "salary";
   return null;
 }

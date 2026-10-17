@@ -29,6 +29,8 @@ function loadModule(path: string, dependencies: Record<string, unknown>, globals
 async function testCronBothPasses() {
   const created: Array<Record<string, any>> = [];
   const queued: string[] = [];
+  const resolverCalls: Array<{ roles: string[]; limit: number }> = [];
+  const jobQueries: unknown[] = [];
   const job = (id: string, overrides: Record<string, unknown> = {}) => ({
     id, title: "Product Designer", company: "Acme", location: "Milano",
     remote: false, contractType: "full time", description: "Permanent product design role.",
@@ -53,7 +55,7 @@ async function testCronBothPasses() {
   const prisma = {
     user: { findUnique: async () => user },
     applicationSession: { findMany: async () => [] },
-    job: { findMany: async () => jobs },
+    job: { findMany: async (query: unknown) => { jobQueries.push(query); return jobs; } },
     application: {
       count: async () => 0, groupBy: async () => [], findMany: async () => [],
       findFirst: async (query: { where: { jobId: string } }) => created.find((a) => a.jobId === query.where.jobId) ?? null,
@@ -88,8 +90,20 @@ async function testCronBothPasses() {
     "@/lib/auto-apply-self-heal": { runSelfHeal: async () => { throw new Error("Unexpected self-heal"); } },
     "@/lib/conversion-events": { recordConversionEvent: async () => {} },
     "@/lib/analytics": { AnalyticsEvent: { APPLICATION_CREATED: "application_created" } },
+    "@/lib/board-apply-resolver": { resolveBoardListingsForRoles: async (roles: string[], opts: { limit: number; deadline: number }) => {
+      assert.ok(Number.isFinite(opts.deadline) && opts.deadline > Date.now() && opts.deadline <= Date.now() + 15_000, "Single-user runs get a bounded lookup budget");
+      resolverCalls.push({ roles: [...roles], limit: opts.limit });
+      return { attempted: 0, promoted: 0, existing: 0, unsupported: 0 };
+    } },
   });
   const stats = await api.runAutoApplyForUser(user.id);
+  assert.deepEqual(resolverCalls, [{ roles: ["Product Designer"], limit: 6 }],
+    "Board listings are resolved once per user run, bounded, for the user's own roles");
+  const poolQuery = JSON.stringify(jobQueries[0]);
+  assert.ok(poolQuery.includes('"workable"'), "Workable-source jobs with a supported apply URL are in the candidate pool");
+  for (const board of ["adzuna", "weworkremotely", "arbeitnow", "jobicy", "himalayas", "remoteok"]) {
+    assert.ok(!poolQuery.includes(`"${board}"`), `Board rows (${board}) are never direct candidates; only their resolved ATS posting is`);
+  }
   assert.deepEqual(created.map((a) => a.jobId), ["valid-first", "valid-second-same-company"],
     "Pass 2 must fill only with eligible jobs; it may relax company diversification, never preferences");
   assert.equal(queued.length, 2);
@@ -105,6 +119,24 @@ async function testCronBothPasses() {
   assert.equal(mismatch(job("salary-min-only", { salaryMin: 40_000, salaryMax: null }), preferences, ["Milano"]), "salary");
   assert.equal(mismatch(job("salary-boundary", { salaryMax: 50_000 }), preferences, ["Milano"]), null);
   assert.equal(mismatch(job("salary-unknown", { salaryMin: null, salaryMax: null }), preferences, ["Milano"]), null);
+  // Adzuna IT stores RAL in thousands ("28-32" = €28k-€32k). Same floor, right unit.
+  const kUnits = { ...preferences, salaryMin: 25 };
+  assert.equal(mismatch(job("adzuna-k-units", { salaryMin: 28, salaryMax: 32 }), kUnits, ["Milano"]), null, "€32k RAL stored as 32 meets a €25k floor");
+  assert.equal(mismatch(job("adzuna-k-units-low", { salaryMin: 18, salaryMax: 22 }), kUnits, ["Milano"]), "salary", "€22k RAL stored as 22 still fails a €25k floor");
+  assert.equal(mismatch(job("adzuna-k-boundary", { salaryMin: 25, salaryMax: null }), kUnits, ["Milano"]), null);
+  assert.equal(mismatch(job("k-units-high-floor", { salaryMin: 100, salaryMax: 150 }), { ...preferences, salaryMin: 120 }, ["Milano"]), null);
+  assert.equal(mismatch(job("k-units-below-high-floor", { salaryMin: 90, salaryMax: 110 }), { ...preferences, salaryMin: 120 }, ["Milano"]), "salary");
+  // Ambiguous units are not relaxed: hourly (<10) and monthly (500-9,999) still fail a set floor.
+  assert.equal(mismatch(job("hourly", { salaryMin: 8, salaryMax: 9 }), kUnits, ["Milano"]), "salary");
+  assert.equal(mismatch(job("monthly", { salaryMin: 1600, salaryMax: 2100 }), kUnits, ["Milano"]), "salary");
+  assert.equal(mismatch(job("annual-euros", { salaryMin: 28_000, salaryMax: 32_000 }), kUnits, ["Milano"]), null);
+  assert.equal(mismatch(job("no-floor", { salaryMin: 8, salaryMax: 9 }), { ...preferences, salaryMin: 0 }, ["Milano"]), null);
+  assert.equal(preferenceHelpers.annualSalaryEur(32), 32_000);
+  assert.equal(preferenceHelpers.annualSalaryEur(499), 499_000);
+  assert.equal(preferenceHelpers.annualSalaryEur(500), 500);
+  assert.equal(preferenceHelpers.annualSalaryEur(9), 9);
+  assert.equal(preferenceHelpers.annualSalaryEur(45_000), 45_000);
+  assert.equal(preferenceHelpers.annualSalaryEur(null), 0);
   // A remote flag cannot override geographic restrictions.
   assert.equal(mismatch(job("remote", { remote: true, location: "Berlin" }), preferences, ["Milano"]), "location");
   assert.equal(mismatch(job("no-location-pref", { location: "Berlin" }), preferences, []), null);
