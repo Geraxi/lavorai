@@ -16,6 +16,15 @@ export interface JobsFilter extends AdzunaSearchParams {
 }
 
 /**
+ * Ultimo upsert per filtro (per istanza). La risposta Adzuna è già in cache
+ * 10 minuti (fetch revalidate: 600), quindi entro quella finestra ri-scrivere
+ * le stesse righe non aggiunge nulla: era un `$transaction` di 20-100 upsert
+ * sequenziali su OGNI apertura di /jobs (uno per ruolo nelle preferenze).
+ */
+const UPSERT_TTL_MS = 10 * 60_000;
+const recentUpserts = new Map<string, number>();
+
+/**
  * Cerca job: prima fetch da Adzuna, upsert in DB, ritorna la lista.
  * In MVP non facciamo cache TTL — ogni search è fresh (Adzuna ha rate
  * limit basso su free tier, andrà controllato in produzione).
@@ -37,7 +46,10 @@ export async function searchAndCacheJobs(
   }
   const filtered = filter.remoteOnly ? items.filter((j) => j.remote) : items;
 
-  if (filtered.length > 0) {
+  const upsertKey = JSON.stringify(filter);
+  const lastUpsert = recentUpserts.get(upsertKey);
+  const upsertedRecently = lastUpsert != null && Date.now() - lastUpsert < UPSERT_TTL_MS;
+  if (filtered.length > 0 && !upsertedRecently) {
     await prisma.$transaction(
       filtered.map((j) =>
         prisma.job.upsert({
@@ -81,6 +93,8 @@ export async function searchAndCacheJobs(
         }),
       ),
     );
+    recentUpserts.set(upsertKey, Date.now());
+    if (recentUpserts.size > 500) recentUpserts.clear();
   }
 
   // 2. Query unificata su TUTTI i source (adzuna + greenhouse + lever + …)

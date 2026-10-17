@@ -11,9 +11,10 @@ import { useLocale } from "next-intl";
 import Link from "next/link";
 import { Icon } from "@/components/design/icon";
 import { REGIONS, type RegionInfo } from "@/lib/city-centroids";
-import { angularDistance, type CityMarker, type GlobeJob, type PinKind } from "@/lib/dashboard-globe-data";
+import type { CityMarker, GlobeJob, PinKind } from "@/lib/dashboard-globe-data";
+import { angularDistance } from "@/lib/globe-geometry";
 import { regionDisplayName } from "@/lib/globe-presentation";
-import { PIN_COLORS } from "./dashboard-globe";
+import { PIN_COLORS } from "./dashboard-globe-shared";
 import { useDashboardFocus } from "./dashboard-focus";
 
 const QUICK = ["lombardia", "lazio", "piemonte", "emilia-romagna", "basilicata", "europa"];

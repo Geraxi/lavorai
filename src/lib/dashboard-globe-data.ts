@@ -4,6 +4,7 @@ import { matchCity } from "@/lib/city-centroids";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile, type CVProfile } from "@/lib/cv-profile-types";
 import { titleMatchesAnyRole } from "@/lib/role-match";
+import { angularDistance, PERSON_ANCHOR } from "@/lib/globe-geometry";
 
 /**
  * Layer dati del globo della dashboard utente.
@@ -78,15 +79,9 @@ function safeParseArray(json: string | null | undefined): string[] {
   }
 }
 
-/** Distanza angolare (gradi) tra due punti, per tenere le card lontane dalla persona. */
-export function angularDistance(aLat: number, aLng: number, bLat: number, bLng: number): number {
-  const r = Math.PI / 180;
-  const d = Math.sin(aLat * r) * Math.sin(bLat * r) + Math.cos(aLat * r) * Math.cos(bLat * r) * Math.cos((aLng - bLng) * r);
-  return Math.acos(Math.max(-1, Math.min(1, d))) / r;
-}
-
-/** Punto in cui è ancorata la persona sdraiata (Atlantico, come nel riferimento). */
-export const PERSON_ANCHOR = { lat: 4, lng: -24 };
+// Geometria pura in un modulo a parte, così i client component non importano
+// questo file (che porta con sé Prisma). Re-export per i chiamanti server.
+export { angularDistance, PERSON_ANCHOR };
 
 export async function getDashboardGlobeData(userId: string): Promise<DashboardGlobeData> {
   const now = Date.now();
@@ -94,9 +89,12 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
   const newSince = new Date(now - 48 * 3600_000);
 
   const [openJobs, sentCandidates, savedApps, prefs, profileRow, analyzed] = await Promise.all([
+    // Niente `description` qui: con 4000 righe era il grosso del payload
+    // (MB per ogni apertura della dashboard). Il testo serve solo al match
+    // score dei ≤600 job del pool e viene letto sotto, solo per quelli.
     prisma.job.findMany({
       where: { closedAt: null, cachedAt: { gte: since30 }, dismissals: { none: { userId } } },
-      select: { id: true, title: true, company: true, location: true, description: true, cachedAt: true },
+      select: { id: true, title: true, company: true, location: true, cachedAt: true },
       orderBy: { cachedAt: "desc" },
       take: 4000,
     }),
@@ -139,6 +137,16 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
   //    finiscono davvero sul globo (cap) per non pesare sul render.
   const compatible = roles.length ? openJobs.filter((j) => titleMatchesAnyRole(j.title, roles)) : openJobs;
   const pool = compatible.slice(0, 600);
+  // Descrizioni solo per i job geolocalizzabili del pool e solo se c'è un
+  // profilo CV con cui calcolare il match (senza profilo match = null).
+  const descriptions = new Map<string, string>();
+  if (profile) {
+    const ids = pool.filter((j) => geocode(j.location)).map((j) => j.id);
+    if (ids.length) {
+      const rows = await prisma.job.findMany({ where: { id: { in: ids } }, select: { id: true, description: true } });
+      for (const r of rows) descriptions.set(r.id, r.description);
+    }
+  }
   let newOpportunities = 0;
   for (const j of pool) {
     const g = geocode(j.location);
@@ -147,7 +155,7 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
     m.counts.open++;
     const isNew = j.cachedAt >= newSince;
     if (isNew) { m.isNew = true; newOpportunities++; }
-    const match = profile ? quickMatchScore(profile, `${j.title}\n${j.company ?? ""}\n${j.description.slice(0, 4000)}`) : null;
+    const match = profile ? quickMatchScore(profile, `${j.title}\n${j.company ?? ""}\n${(descriptions.get(j.id) ?? "").slice(0, 4000)}`) : null;
     m.jobs.push({ id: j.id, title: j.title, company: j.company, location: j.location, match, kind: "open", href: `/jobs/${j.id}`, isNew });
   }
   // Conta anche gli aperti fuori dal pool per i totali delle pill

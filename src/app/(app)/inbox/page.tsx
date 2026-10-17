@@ -16,13 +16,16 @@ export default async function InboxPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=/inbox");
 
-  const outgoing = await prisma.inboxReply.findMany({ where: { application: { userId: user.id } }, orderBy: { createdAt: "desc" }, take: 200 });
-  const [gmailConnected, messages] = await Promise.all([
+  // Un solo giro: risposte inviate, inbox e stato Gmail partono insieme.
+  const outgoingPromise = prisma.inboxReply.findMany({ where: { application: { userId: user.id } }, orderBy: { createdAt: "desc" }, take: 200 });
+  const parents = outgoingPromise.then((rows) => rows.map(row => row.parentReplyId));
+  parents.catch(() => undefined); // l'errore emerge già da outgoingPromise
+  const [outgoing, gmailConnected, messages, locale] = await Promise.all([
+    outgoingPromise,
     hasGmailConnected(user.id),
-    getInboxMessages(user.id, outgoing.map(row => row.parentReplyId)),
+    getInboxMessages(user.id, parents),
+    getLocale(),
   ]);
-
-  const locale = await getLocale();
   return (
     <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
       <GmailInboxView

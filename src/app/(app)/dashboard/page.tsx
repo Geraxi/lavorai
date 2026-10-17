@@ -31,15 +31,18 @@ export const dynamic = "force-dynamic";
  * Content stacks on narrow screens; all metrics use the signed-in user's records.
  */
 export default async function DashboardPage() {
-  const t = await getTranslations("dashboardPage");
-  const locale = await getLocale();
+  const [t, locale, user] = await Promise.all([getTranslations("dashboardPage"), getLocale(), getCurrentUser()]);
   const en = locale === "en";
   const tr = (italian: string, english: string) => en ? english : italian;
-  const user = await getCurrentUser();
   if (!user) return null;
 
-  const [globe, onboarding, deliveryCounts, responseCount, offersCount, interviews, attention] = await Promise.all([
-    getDashboardGlobeData(user.id),
+  // Tutte le letture partono insieme: anche la readiness, che prima
+  // aspettava la fine del globo per conoscere il numero di job aperti.
+  const globePromise = getDashboardGlobeData(user.id);
+  const openJobsPromise = globePromise.then((g) => g.stats.counts.open);
+  openJobsPromise.catch(() => undefined); // l'errore emerge già da globePromise
+  const [globe, onboarding, deliveryCounts, responseCount, offersCount, interviews, attention, readiness] = await Promise.all([
+    globePromise,
     getOnboardingState(user.id),
     dashboardDeliveryCounts(user.id),
     // Count applications with an actual recruiter-classified source row once,
@@ -56,6 +59,7 @@ export default async function DashboardPage() {
       select: { id: true, createdAt: true, lastReplyAt: true, job: { select: { title: true, company: true } }, interviewSessions: { select: { startedAt: true }, orderBy: { createdAt: "desc" }, take: 1 } },
     }),
     getAttentionQueue(user.id, locale).catch(() => null),
+    getAutoApplyReadiness(user.id, openJobsPromise),
   ]);
 
   // Opportunità consigliate: migliori annunci aperti per match, una per azienda.
@@ -72,7 +76,6 @@ export default async function DashboardPage() {
 
   const greetingName = (user.name ?? user.email.split("@")[0]).split(/\s+/)[0];
   const showWelcome = !user.welcomeSeenAt;
-  const readiness = await getAutoApplyReadiness(user.id, globe.stats.counts.open);
 
   const countryCounts = new Map<string, number>();
   for (const marker of globe.markers) countryCounts.set(marker.country, (countryCounts.get(marker.country) ?? 0) + marker.counts.open);

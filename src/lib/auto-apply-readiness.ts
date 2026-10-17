@@ -11,8 +11,10 @@ export interface AutoApplyReadiness {
   href: string;
 }
 
-/** A concise, user-facing explanation of why applications are or are not moving. */
-export async function getAutoApplyReadiness(userId: string, matchingJobs: number): Promise<AutoApplyReadiness> {
+/** A concise, user-facing explanation of why applications are or are not moving.
+ * `matchingJobs` may be a promise so the dashboard can start these queries in
+ * parallel with the globe data instead of waiting for it first. */
+export async function getAutoApplyReadiness(userId: string, matchingJobsInput: number | Promise<number>): Promise<AutoApplyReadiness> {
   const rollout = applicationRolloutConfig();
   if (applicationsPaused() || !rollout.enabled) return {
     tone: "paused", eyebrow: "Candidature", title: "Invii in pausa",
@@ -24,12 +26,13 @@ export async function getAutoApplyReadiness(userId: string, matchingJobs: number
     detail: `L'invio automatico è sospeso. Il servizio accetta soltanto nuove candidature confermate esplicitamente, con un limite complessivo di ${rollout.dailyCap} invii al giorno (UTC). Le tue preferenze restano salvate.`,
     cta: "Vedi le offerte", href: "/jobs",
   };
-  const [preferences, cvCount, sent, needsAnswers, waitingForConsent] = await Promise.all([
+  const [preferences, cvCount, sent, needsAnswers, waitingForConsent, matchingJobs] = await Promise.all([
     prisma.userPreferences.findUnique({ where: { userId }, select: { autoApplyMode: true, rolesJson: true, locationsJson: true } }),
     prisma.cVDocument.count({ where: { userId } }),
     prisma.application.count({ where: { userId, status: "success" } }),
     prisma.application.count({ where: { userId, status: "needs_answers" } }),
     prisma.application.count({ where: { userId, status: "awaiting_consent" } }),
+    matchingJobsInput,
   ]);
   const listHasItems = (value: string | null | undefined) => {
     try { return Array.isArray(JSON.parse(value ?? "[]")) && JSON.parse(value ?? "[]").length > 0; } catch { return false; }
