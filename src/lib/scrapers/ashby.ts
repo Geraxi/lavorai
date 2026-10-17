@@ -32,6 +32,34 @@ interface AshbyJob {
   applyUrl?: string | null;
   descriptionHtml?: string | null;
   isRemote?: boolean;
+  workplaceType?: string | null;
+  /** Structured scope: `addressCountry` can be a country or a list ("US | EU"). */
+  address?: { postalAddress?: { addressCountry?: string | null; addressRegion?: string | null; addressLocality?: string | null } | null } | null;
+  secondaryLocations?: Array<{ location?: string | null; address?: AshbyJob["address"] }> | null;
+}
+
+/**
+ * Display + match location from Ashby's structured fields. A posting titled
+ * just "Remote" usually carries its real scope in `address` and
+ * `secondaryLocations` (PostHog: "Remote", country "US | EU", secondary
+ * "Remote, USA"); keeping only "Remote" made it unverifiable.
+ */
+export function ashbyLocation(j: Pick<AshbyJob, "location" | "locationName" | "address" | "secondaryLocations">): string | null {
+  const primary = (typeof j.location === "string" && j.location.trim()) || (typeof j.locationName === "string" && j.locationName.trim()) || "";
+  const parts: string[] = [];
+  const add = (v: unknown) => {
+    if (typeof v !== "string") return;
+    const t = v.trim();
+    if (t && !parts.some((p) => p.toLowerCase() === t.toLowerCase())) parts.push(t);
+  };
+  add(primary);
+  const country = (a: AshbyJob["address"]) => a?.postalAddress?.addressCountry;
+  add(country(j.address));
+  for (const s of Array.isArray(j.secondaryLocations) ? j.secondaryLocations.slice(0, 8) : []) {
+    add(s?.location);
+    add(country(s?.address));
+  }
+  return parts.length ? parts.join(" · ") : null;
 }
 
 export async function fetchAshbyJobs(
@@ -87,7 +115,7 @@ function mapJob(
   orgSlug: string,
 ): JobListItem | null {
   const description = cleanHtmlText(j.descriptionHtml).slice(0, 2000);
-  const location = (typeof j.location === "string" && j.location.trim()) || (typeof j.locationName === "string" && j.locationName.trim()) || null;
+  const location = ashbyLocation(j);
   const loc = location ?? "";
   if (!isRelevantLocation(loc, description, !!j.isRemote)) return null;
   return {
@@ -101,7 +129,10 @@ function mapJob(
     description,
     url: j.jobUrl,
     contractType: j.employmentType ?? null,
-    remote: !!j.isRemote || /\bremote|remoto\b/i.test(loc),
+    // workplaceType is authoritative when present: Ashby sets isRemote on
+    // Hybrid postings too (OpenAI "San Francisco", Hybrid, isRemote=true).
+    // A "Remote (United States)" secondary location still marks it remote.
+    remote: (j.workplaceType ? j.workplaceType.toLowerCase() === "remote" : !!j.isRemote) || /\bremote|remoto\b/i.test(loc),
     salaryMin: null,
     salaryMax: null,
     category: j.department ?? j.departmentName ?? "IT Jobs",

@@ -35,7 +35,7 @@ export const workerGateSelect = {
     cvProfile: { select: { firstName: true, lastName: true, email: true, phone: true, city: true, title: true, summary: true,
       experiencesJson: true, educationJson: true, skillsJson: true, languagesJson: true, linksJson: true } },
     preferences: { select: { autoApplyMode: true, rolesJson: true, locationsJson: true,
-      applicationAnswersJson: true, employmentType: true, salaryMin: true, matchMin: true } },
+      applicationAnswersJson: true, employmentType: true, salaryMin: true, matchMin: true, sourcesJson: true } },
   } },
 } satisfies Prisma.ApplicationSelect;
 export type WorkerGateRow = Prisma.ApplicationGetPayload<{ select: typeof workerGateSelect }>;

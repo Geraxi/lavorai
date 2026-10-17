@@ -65,7 +65,8 @@ async function testCronBothPasses() {
       },
     },
   };
-  const preferenceHelpers = loadModule("src/lib/auto-apply-preferences.ts", {});
+  // Pure gazetteer data (city → country) used for remote-from-home scope.
+  const preferenceHelpers = loadModule("src/lib/auto-apply-preferences.ts", { "@/lib/city-centroids": await import("../src/lib/city-centroids") });
   // Retain algorithm regression coverage behind an explicitly mocked legacy gate.
   // Production manual-only blocking is exercised in test-manual-rollout-producers.
   const api = loadModule("src/lib/auto-apply-cron.ts", {

@@ -4,6 +4,7 @@ import { fetchLeverMulti } from "./lever";
 import { fetchAshbyMulti } from "./ashby";
 import { fetchSmartRecruitersMulti } from "./smartrecruiters";
 import { fetchWorkableMulti } from "./workable";
+import { collectWorkableSearchQueries, fetchWorkableSearchJobs } from "./workable-search";
 import { fetchRecruiteeMulti } from "./recruitee";
 import { fetchPersonioMulti } from "./personio";
 import { fetchBreezyMulti } from "./breezy";
@@ -60,6 +61,7 @@ export async function syncAtsJobs(): Promise<{
   pinpoint: number;
   join: number;
   remote: number;
+  workableSearch: number;
   total: number;
 }> {
   console.log(
@@ -71,7 +73,7 @@ export async function syncAtsJobs(): Promise<{
     const seen = new Set(seed.map((c) => c.slug.toLowerCase()));
     return [...seed, ...found.filter((s) => !seen.has(s.toLowerCase())).map((slug) => ({ slug }))];
   };
-  const [gh, lv, ash, sr, wk, li, demand, rc, pe, tt, bh, eu, bz, pp, jn, rb] = await Promise.all([
+  const [gh, lv, ash, sr, wk, li, demand, rc, pe, tt, bh, eu, bz, pp, jn, rb, wks] = await Promise.all([
     fetchGreenhouseMulti(GREENHOUSE_COMPANIES, 4),
     fetchLeverMulti(LEVER_COMPANIES, 4),
     fetchAshbyMulti(ASHBY_COMPANIES, 4),
@@ -91,13 +93,31 @@ export async function syncAtsJobs(): Promise<{
     fetchPinpointMulti(merge(PINPOINT_COMPANIES, disc.pinpoint), 3),
     fetchJoinMulti(merge(JOIN_COMPANIES, disc.join), 2),
     fetchRemoteBoards(),
+    // Workable job search for the roles/places of real auto-apply users,
+    // resolved to the companies' own apply.workable.com feeds.
+    // Kill switch: WORKABLE_SEARCH=false.
+    process.env.WORKABLE_SEARCH === "false"
+      ? Promise.resolve([])
+      : collectWorkableSearchQueries(30)
+          .then((queries) => fetchWorkableSearchJobs(queries, { deadline: Date.now() + 120_000 }))
+          .then(({ items, stats }) => { console.log("[sync-jobs] workable-search", stats); return items; })
+          .catch((err) => { console.warn("[sync-jobs] workable-search failed (non-fatal)", err instanceof Error ? err.message : err); return [] as Awaited<ReturnType<typeof fetchWorkableMulti>>; }),
   ]);
   console.log(`[sync-jobs] recruitee=${rc.length} personio=${pe.length} teamtailor=${tt.length} bamboohr=${bh.length} eures=${eu.length} breezy=${bz.length} pinpoint=${pp.length} join=${jn.length} remote-boards=${rb.length} (tenant scoperti: ${Object.values(disc).flat().length})`);
   console.log(
     `[sync-jobs] greenhouse=${gh.length}  lever=${lv.length}  ashby=${ash.length}  smartrec=${sr.length}  workable=${wk.length}  linkedin=${li.length}  demand=${demand.items.length} (${demand.queries} queries)`,
   );
 
-  const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...li, ...demand.items, ...rc, ...pe, ...tt, ...bh, ...eu, ...bz, ...pp, ...jn, ...rb];
+  // Workable search returns whole account feeds that may overlap the curated
+  // list: keep one record per posting (the one with a description).
+  const curatedWorkable = new Map(wk.map((j) => [j.externalId, j]));
+  const extraWorkable = wks.filter((j) => {
+    const curated = curatedWorkable.get(j.externalId);
+    if (!curated) return true;
+    if (!curated.description && j.description) curated.description = j.description;
+    return false;
+  });
+  const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...extraWorkable, ...li, ...demand.items, ...rc, ...pe, ...tt, ...bh, ...eu, ...bz, ...pp, ...jn, ...rb];
   const upserted = await upsertJobs(all);
   await closeMissingJobs(all);
   return {
@@ -118,6 +138,7 @@ export async function syncAtsJobs(): Promise<{
     pinpoint: pp.length,
     join: jn.length,
     remote: rb.length,
+    workableSearch: extraWorkable.length,
     total: upserted,
   };
 }
