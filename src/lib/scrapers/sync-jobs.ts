@@ -14,7 +14,7 @@ import { fetchRemoteBoards } from "./remote-boards";
 import { fetchTeamtailorMulti } from "./teamtailor";
 import { fetchBambooMulti } from "./bamboohr";
 import { fetchEuresMulti } from "./eures";
-import { discoverTenantsFromPool } from "./tenant-discovery";
+import { discoverTenantsFromPool, discoverAshbyTenantsFromPool } from "./tenant-discovery";
 import { fetchDemandJobs } from "./demand-queries";
 import {
   fetchLinkedinViaApify,
@@ -69,6 +69,7 @@ export async function syncAtsJobs(): Promise<{
   );
   // Tenant scoperti dagli URL già in pool + seed curati (dedup).
   const disc = await discoverTenantsFromPool();
+  const ashbyPoolTenants = await discoverAshbyTenantsFromPool();
   const merge = (seed: Array<{ slug: string; name?: string }>, found: string[]) => {
     const seen = new Set(seed.map((c) => c.slug.toLowerCase()));
     return [...seed, ...found.filter((s) => !seen.has(s.toLowerCase())).map((slug) => ({ slug }))];
@@ -76,7 +77,7 @@ export async function syncAtsJobs(): Promise<{
   const [gh, lv, ash, sr, wk, li, demand, rc, pe, tt, bh, eu, bz, pp, jn, rb, wks] = await Promise.all([
     fetchGreenhouseMulti(GREENHOUSE_COMPANIES, 4),
     fetchLeverMulti(LEVER_COMPANIES, 4),
-    fetchAshbyMulti(ASHBY_COMPANIES, 4),
+    fetchAshbyMulti([...ASHBY_COMPANIES, ...ashbyPoolTenants.filter((t) => !ASHBY_COMPANIES.some((c) => c.slug.toLowerCase() === t.slug.toLowerCase()))], 4),
     fetchSmartRecruitersMulti(SMARTRECRUITERS_COMPANIES, 4),
     fetchWorkableMulti(WORKABLE_COMPANIES, 4),
     fetchLinkedinViaApify(DEFAULT_LINKEDIN_QUERIES, 25),

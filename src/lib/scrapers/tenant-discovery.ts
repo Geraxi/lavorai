@@ -54,3 +54,28 @@ export async function discoverTenantsFromPool(): Promise<DiscoveredTenants> {
   }
   return out;
 }
+
+/**
+ * Ashby tenants that still have open rows in the pool. Rows from tenants that
+ * dropped off the curated list (or came in through board promotion) were never
+ * re-synced: their location stayed null and dead postings stayed open. Syncing
+ * them refreshes the structured location and lets closeMissingJobs close
+ * postings that are gone.
+ */
+export async function discoverAshbyTenantsFromPool(limit = 60): Promise<Array<{ slug: string; name?: string }>> {
+  try {
+    const rows = await prisma.job.findMany({
+      where: { source: "ashby", closedAt: null, sourceSlug: { not: null } },
+      select: { sourceSlug: true, company: true },
+      distinct: ["sourceSlug"],
+      take: limit,
+    });
+    // Keep the company name already shown on the rows ("ElevenLabs", not "Elevenlabs").
+    return rows
+      .map((r) => ({ slug: (r.sourceSlug ?? "").trim(), name: r.company?.trim() || undefined }))
+      .filter((t) => /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/.test(t.slug));
+  } catch (err) {
+    console.warn("[tenant-discovery] ashby failed", err instanceof Error ? err.message : err);
+    return [];
+  }
+}
