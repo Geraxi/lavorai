@@ -15,7 +15,7 @@ import { cleanHtmlText } from "./html-clean";
  * auto-inviabili.
  */
 
-interface WorkableJob {
+export interface WorkableJob {
   id?: string;
   shortcode?: string;
   title?: string;
@@ -29,6 +29,10 @@ interface WorkableJob {
   locations?: Array<{ city?: string; country?: string }>;
   remote?: boolean;
   telecommuting?: boolean;
+  /** v3 feed: "remote" | "hybrid" | "on_site". */
+  workplace?: string;
+  /** v3 feed publish timestamp. */
+  published?: string;
   employment_type?: string;
   department?: string;
   created_at?: string;
@@ -36,40 +40,66 @@ interface WorkableJob {
   url?: string;
 }
 
+/** Raw public feed of one Workable account; null when the account does not
+ * exist or the request failed (so callers can tell "no jobs" from "no account"). */
+export async function fetchWorkableAccountRaw(slug: string, timeoutMs = 15_000, maxPages = 25): Promise<WorkableJob[] | null> {
+  const endpoint = `https://apply.workable.com/api/v3/accounts/${encodeURIComponent(slug)}/jobs`;
+  const out: WorkableJob[] = [];
+  let token: string | undefined;
+  try {
+    // The feed is paged 10 at a time ({ results, nextPage }). Reading only the
+    // first page missed every later posting and let closeMissingJobs close them.
+    for (let page = 0; page < maxPages; page++) {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "User-Agent": "Mozilla/5.0 LavorAI/1.0 jobs-sync",
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: "", location: [], department: [], ...(token ? { token } : {}) }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) {
+        console.warn(`[workable] ${slug} → ${res.status}`);
+        // A failed later page must not look like a complete feed.
+        return null;
+      }
+      const data = (await res.json()) as {
+        results?: WorkableJob[];
+        jobs?: WorkableJob[];
+        nextPage?: string | null;
+      };
+      const jobs = data.results ?? data.jobs ?? [];
+      if (!Array.isArray(jobs)) return null;
+      out.push(...jobs);
+      token = typeof data.nextPage === "string" && data.nextPage ? data.nextPage : undefined;
+      if (!token || jobs.length === 0) return out;
+    }
+    // Page cap reached: the list may be incomplete, so do not offer it as the
+    // full board (closeMissingJobs would close the unseen tail).
+    console.warn(`[workable] ${slug} more than ${maxPages} pages; feed treated as incomplete`);
+    return null;
+  } catch (err) {
+    console.warn(`[workable] ${slug} fetch failed`, err);
+    return null;
+  }
+}
+
+/** Map an account feed to pool rows (same filter as the curated sync). */
+export function mapWorkableAccountJobs(jobs: WorkableJob[], slug: string, companyName?: string): JobListItem[] {
+  const display = companyName ?? prettySlug(slug);
+  return jobs
+    .map((j) => mapJob(j, display, slug))
+    .filter((j): j is JobListItem => j !== null);
+}
+
 export async function fetchWorkableJobs(
   slug: string,
   companyName?: string,
 ): Promise<JobListItem[]> {
-  const endpoint = `https://apply.workable.com/api/v3/accounts/${encodeURIComponent(slug)}/jobs`;
-  try {
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "User-Agent": "Mozilla/5.0 LavorAI/1.0 jobs-sync",
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ query: "", location: [], department: [] }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) {
-      console.warn(`[workable] ${slug} → ${res.status}`);
-      return [];
-    }
-    const data = (await res.json()) as {
-      results?: WorkableJob[];
-      jobs?: WorkableJob[];
-    };
-    const jobs = data.results ?? data.jobs ?? [];
-    if (!Array.isArray(jobs)) return [];
-    const display = companyName ?? prettySlug(slug);
-    return jobs
-      .map((j) => mapJob(j, display, slug))
-      .filter((j): j is JobListItem => j !== null);
-  } catch (err) {
-    console.warn(`[workable] ${slug} fetch failed`, err);
-    return [];
-  }
+  const jobs = await fetchWorkableAccountRaw(slug);
+  return jobs ? mapWorkableAccountJobs(jobs, slug, companyName) : [];
 }
 
 export async function fetchWorkableMulti(
@@ -102,10 +132,13 @@ function mapJob(
     j.location?.country,
     ...(j.locations ?? []).flatMap((l) => [l.city, l.country]),
   ].filter(Boolean);
-  const location = locParts[0] ?? null;
+  // "City, Country" (or just the country for remote postings) so country-level
+  // preferences and remote scopes can be checked; the first part alone lost it.
+  const location = Array.from(new Set([j.location?.city, j.location?.country]
+    .map((v) => (typeof v === "string" ? v.trim() : "")).filter(Boolean))).join(", ") || (locParts[0] ?? null);
   const locStr = locParts.join(" ");
   const description = cleanHtmlText(j.description ?? "").slice(0, 2000);
-  if (!isRelevant(`${locStr} ${j.remote || j.telecommuting ? "remote" : ""}`, description))
+  if (!isRelevant(`${locStr} ${j.remote || j.telecommuting || j.workplace === "remote" ? "remote" : ""}`, description))
     return null;
   return {
     id: "",
@@ -118,7 +151,7 @@ function mapJob(
     description,
     url: `https://apply.workable.com/${slug}/j/${shortcode}/`,
     contractType: j.employment_type ?? null,
-    remote: Boolean(j.remote || j.telecommuting) || /\bremote|remoto\b/i.test(locStr),
+    remote: Boolean(j.remote || j.telecommuting) || j.workplace === "remote" || /\bremote|remoto\b/i.test(locStr),
     salaryMin: null,
     salaryMax: null,
     // Workable a volte restituisce department come array (o vuoto) → Prisma
@@ -130,7 +163,7 @@ function mapJob(
       if (typeof d === "string" && d.trim()) return d;
       return "IT Jobs";
     })(),
-    postedAt: j.published_on || j.created_at ? new Date(j.published_on ?? j.created_at!) : new Date(),
+    postedAt: j.published_on || j.published || j.created_at ? new Date((j.published_on ?? j.published ?? j.created_at)!) : new Date(),
     recruiterEmail: null,
     recruiterScrapedAt: null,
   } as unknown as JobListItem;

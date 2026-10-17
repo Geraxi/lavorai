@@ -19,7 +19,7 @@ const base = {
     emailVerified: now, privacyConsentAt: now, avoidCompanies: null,
     cvProfile: { firstName: "", lastName: "", email: "", phone: "", city: "", title: "Product Designer", summary: "",
       experiencesJson: "[]", educationJson: "[]", skillsJson: "[]", languagesJson: "[]", linksJson: "[]" },
-    preferences: { applicationAnswersJson: "{}", autoApplyMode: "auto", rolesJson: '["Product Designer"]', locationsJson: '["Milano"]', salaryMin: 50, employmentType: "employee", matchMin: 50 } },
+    preferences: { applicationAnswersJson: "{}", autoApplyMode: "auto", rolesJson: '["Product Designer"]', locationsJson: '["Milano"]', salaryMin: 50, employmentType: "employee", matchMin: 50, sourcesJson: '["sede"]' } },
 } satisfies WorkerGateRow;
 assert.equal(currentWorkerIneligibility(base), null);
 for (const status of ["paused", "completed", "cancelled", "unknown"]) {

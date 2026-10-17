@@ -1,4 +1,5 @@
 import type { CVProfile } from "@/lib/cv-profile-types";
+import { titleMatchesRole } from "@/lib/role-match";
 
 /**
  * Quick match score tra profilo utente e un job posting. 0-100.
@@ -97,8 +98,12 @@ export function quickMatchScore(
   // Boost forte: il titolo job contiene un ruolo dichiarato (es. "Senior
   // Product Designer" quando l'utente ha "Product Designer" tra le esperienze)
   const jobHead = job.slice(0, 160);
+  // The job title is the first line of the text callers pass. Token match
+  // (same rule as the role gate): "Motion Designer" is the role of
+  // "Animator & Motion Graphics Designer" even though the exact phrase is not.
+  const jobTitle = job.split("\n")[0] ?? "";
   for (const r of roleTerms) {
-    if (r.length >= 4 && jobHead.includes(r)) {
+    if (r.length >= 4 && (jobHead.includes(r) || titleMatchesRole(jobTitle, r))) {
       score = Math.max(score, 55); // almeno 55% se il ruolo matcha a testa
       score += 15; // bonus additivo
       break;
