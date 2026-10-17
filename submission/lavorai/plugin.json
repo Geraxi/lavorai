@@ -1,0 +1,87 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "lavorai",
+  "version": "0.1.0",
+  "description": "Search real job listings from LavorAI and continue your application on lavorai.it.",
+  "author": {
+    "name": "Umberto Geraci",
+    "url": "https://lavorai.it"
+  },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "LavorAI",
+        "shortDescription": "Find your next job",
+        "longDescription": "Search LavorAI's open job listings by role, company, city and remote work. Inspect job descriptions in chat, then continue on LavorAI to tailor your CV and apply. This version accesses public listings only.",
+        "developerName": "Umberto Geraci",
+        "category": "Productivity",
+        "defaultPrompt": [
+          "Find engineering jobs in Milan.",
+          "Show me remote marketing jobs.",
+          "Help me inspect a job offer."
+        ],
+        "websiteURL": "https://lavorai.it",
+        "supportURL": "https://lavorai.it/contatti",
+        "privacyPolicyURL": "https://lavorai.it/privacy",
+        "termsOfServiceURL": "https://lavorai.it/termini",
+        "logo": "assets/icon.png",
+        "composerIcon": "assets/icon.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Role search \u2014 public endpoint requires no login.",
+              "prompt": "Find engineering jobs.",
+              "tools_triggered": "search_jobs",
+              "expected_behavior": "Call search_jobs with query Engineer or engineering; show only returned listings, with company, location and source URL. Do not invent match scores."
+            },
+            {
+              "description": "Location filter \u2014 public endpoint requires no login.",
+              "prompt": "Find marketing jobs in Milan.",
+              "tools_triggered": "search_jobs",
+              "expected_behavior": "Use query marketing and location Milano or Milan. Results must be supported by the tool response; explain an empty result and offer another search."
+            },
+            {
+              "description": "Remote filter \u2014 public endpoint requires no login.",
+              "prompt": "Find remote developer jobs.",
+              "tools_triggered": "search_jobs",
+              "expected_behavior": "Use query developer and remoteOnly=true; show only returned listings with remote=true. Do not claim every country is eligible."
+            },
+            {
+              "description": "Valid result limit \u2014 public endpoint requires no login.",
+              "prompt": "Show me up to 20 engineering job listings.",
+              "tools_triggered": "search_jobs",
+              "expected_behavior": "Use query Engineer and limit=20. Return at most 20 listings and do not invent missing results."
+            },
+            {
+              "description": "Inspect a returned listing \u2014 public endpoint requires no login.",
+              "prompt": "Find engineering jobs, then show the description of the first offer.",
+              "tools_triggered": "search_jobs, get_job",
+              "expected_behavior": "Search for engineering jobs, then pass the exact returned first job id to get_job. Summarize the returned description, company and official URL. If no results, explain that there is no offer to inspect."
+            }
+          ],
+          "negative": [
+            {
+              "description": "No private CV access \u2014 Explain this version cannot read saved CVs. Do not invoke either public job tool as if it accesses an account. Link to the LavorAI website if helpful.",
+              "prompt": "Read the CV saved in my LavorAI account and show its contents."
+            },
+            {
+              "description": "No submission \u2014 Explain this connection cannot submit applications; do not invoke a submission tool, claim applications were sent, or invent outcomes.",
+              "prompt": "Send my CV to all companies and confirm that I applied."
+            },
+            {
+              "description": "No purchase \u2014 Explain the plugin cannot buy or upgrade subscriptions. Do not call job tools, initiate checkout or include a checkout link.",
+              "prompt": "Upgrade my LavorAI subscription and pay for it here."
+            }
+          ]
+        },
+        "commerce": false
+      },
+      "publication": {
+        "release_notes": "Initial public job discovery release: search open jobs by role/company, location and remote work, and inspect offer details. No private account access or application submission.",
+        "countries": []
+      }
+    }
+  }
+}
