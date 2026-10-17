@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/db";
 
+/** Persisted by the worker when a posting could not be verified (temporary).
+ * held-application-release.ts re-checks only rows carrying exactly this text. */
+export const JOB_LIVENESS_UNKNOWN_HELD_MESSAGE = "Disponibilità dell'annuncio non verificabile: invio sospeso, nuovo controllo più tardi.";
+export const JOB_CLOSED_HELD_MESSAGE = "Annuncio chiuso dall'azienda. Nessun invio effettuato.";
+
 export type JobLivenessState = "live" | "closed" | "unknown";
 export type JobLivenessResult = {
   state: JobLivenessState;
