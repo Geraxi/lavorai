@@ -58,6 +58,7 @@ export function AdminTopbar({ userName, email, alerts = [] }: { userName: string
       <button
         type="button"
         onClick={openPalette}
+        className="adm-topbar-search"
         style={{
           flex: "0 1 460px",
           display: "flex",
@@ -76,6 +77,7 @@ export function AdminTopbar({ userName, email, alerts = [] }: { userName: string
         <Search size={14} />
         <span style={{ flex: 1 }}>Cerca utenti, candidature, aziende…</span>
         <kbd
+          className="adm-topbar-kbd"
           style={{
             fontSize: 10.5,
             padding: "2px 6px",
@@ -90,21 +92,21 @@ export function AdminTopbar({ userName, email, alerts = [] }: { userName: string
         </kbd>
       </button>
 
-      <div style={{ flex: 1 }} />
+      <div className="adm-topbar-spacer" style={{ flex: 1 }} />
 
       {/* Periodo: controllo reale sulle pagine che lo supportano (Panoramica, Consegna, Annunci, Traffico). */}
       {RANGE_PAGES.some((p) => pathname === p) && (
         <RangeControl defaultDays={pathname.startsWith("/admin/traffic") ? 7 : 14} />
       )}
 
-      <span className="adm-pill good">
+      <span className="adm-pill good adm-topbar-live">
         <span className="dot" />
         Live
       </span>
 
       <AdminBell alerts={alerts} />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 6 }}>
+      <div className="adm-topbar-user" style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 6 }}>
         <div
           style={{
             width: 32,
@@ -121,7 +123,7 @@ export function AdminTopbar({ userName, email, alerts = [] }: { userName: string
         >
           {initials}
         </div>
-        <div style={{ lineHeight: 1.15 }}>
+        <div className="adm-topbar-who" style={{ lineHeight: 1.15 }}>
           <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg)" }}>{userName}</div>
           <div style={{ fontSize: 11, color: "var(--fg-subtle)" }} title={TITLES[pathname] ?? "Admin"}>{email || "Admin"}</div>
         </div>

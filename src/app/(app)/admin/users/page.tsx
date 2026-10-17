@@ -1,5 +1,6 @@
 import { adminBillingReadiness, type BillingReadinessUser } from "@/lib/admin-billing-readiness";
 import { AdminRepairApplications } from "@/components/admin-repair-applications";
+import { HScroll } from "@/components/h-scroll";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
@@ -173,14 +174,16 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 360px", gap: 12, minHeight: 0 }}>
         {/* Tabella */}
         <div className="adm-card" style={{ padding: "14px 16px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "minmax(160px,1fr) repeat(4, auto)", gap: 8, marginBottom: 12, flexShrink: 0, alignItems: "center" }}>
+          <div className="adm-filterbar">
             <div style={{ position: "relative" }}>
               <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--fg-subtle)" }} />
               <input type="search" placeholder="Cerca utenti, email o codice…" style={{ width: "100%", padding: "8px 12px 8px 30px", borderRadius: 8, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", color: "var(--fg)", fontSize: 12.5, outline: "none" }} />
             </div>
-            {([["", "Tutti i piani"], ["paying", `Paganti (${payingCount})`], ["unpaid", `Pro senza pagamento (${unpaidProCount})`], ["free", "Free"]] as const).map(([k, l]) => (
-              <Link key={k || "all"} href={qs({ plan: k || undefined, p: undefined, sel: undefined })} className={`adm-pill ${plan === k ? "good" : "neutral"}`} style={{ justifyContent: "center", padding: "8px 12px", fontSize: 12, textDecoration: "none" }}>{l}</Link>
-            ))}
+            <HScroll className="adm-filter-pills" ariaLabel="Filtra per piano">
+              {([["", "Tutti i piani"], ["paying", `Paganti (${payingCount})`], ["unpaid", `Pro senza pagamento (${unpaidProCount})`], ["free", "Free"]] as const).map(([k, l]) => (
+                <Link key={k || "all"} href={qs({ plan: k || undefined, p: undefined, sel: undefined })} aria-current={plan === k ? "true" : undefined} className={`adm-pill ${plan === k ? "good" : "neutral"}`} style={{ justifyContent: "center", padding: "8px 12px", fontSize: 12, textDecoration: "none" }}>{l}</Link>
+              ))}
+            </HScroll>
           </div>
 
           <div className="adm-th" style={{ gridTemplateColumns: "20px minmax(200px,2.4fr) minmax(88px,0.9fr) 60px minmax(80px,0.8fr) 64px 60px minmax(92px,1fr) minmax(64px,0.7fr) 20px" }}>
@@ -193,7 +196,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               const sel = u.id === selected?.id;
               const step = profileProgress(u);
               return (
-                <Link key={u.id} href={qs({ sel: u.id })} className="adm-tr" style={{ gridTemplateColumns: "20px minmax(200px,2.4fr) minmax(88px,0.9fr) 60px minmax(80px,0.8fr) 64px 60px minmax(92px,1fr) minmax(64px,0.7fr) 20px", padding: "9px 6px", textDecoration: "none", color: "inherit", background: sel ? "hsl(var(--primary)/0.07)" : "transparent", borderRadius: 8, margin: "0 -6px" }}>
+                <Link key={u.id} href={qs({ sel: u.id })} className="adm-tr adm-users-row" style={{ gridTemplateColumns: "20px minmax(200px,2.4fr) minmax(88px,0.9fr) 60px minmax(80px,0.8fr) 64px 60px minmax(92px,1fr) minmax(64px,0.7fr) 20px", padding: "9px 6px", textDecoration: "none", color: "inherit", background: sel ? "hsl(var(--primary)/0.07)" : "transparent", borderRadius: 8, margin: "0 -6px" }}>
                   <Box />
                   <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                     <Avatar email={u.email} name={u.name} />
@@ -215,7 +218,7 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
             })}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 10, fontSize: 11.5, color: "var(--fg-subtle)", flexShrink: 0 }}>
+          <div className="adm-pager" style={{ paddingTop: 10, fontSize: 11.5, color: "var(--fg-subtle)", flexShrink: 0 }}>
             <span>Mostra {pageUsers.length} di {total} utenti</span>
             <div style={{ display: "flex", gap: 4 }}>
               <Link href={qs({ p: page > 2 ? String(page - 1) : undefined })} className="adm-btn sm" aria-disabled={page === 1}>‹</Link>
@@ -240,11 +243,11 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
               <X size={14} style={{ color: "var(--fg-subtle)" }} />
             </div>
 
-            <div style={{ display: "flex", gap: 2, marginTop: 12, borderBottom: "1px solid var(--border-ds)", flexShrink: 0 }}>
+            <HScroll className="adm-tabs" role="tablist" ariaLabel="Dettaglio utente" style={{ marginTop: 12, borderBottom: "1px solid var(--border-ds)", flexShrink: 0 }}>
               {([["overview", "Panoramica"], ["apps", `Candidature (${selected._count.applications})`], ["log", "Log"]] as const).map(([key, label]) => (
-                <Link key={key} href={`/admin/users?sel=${selected.id}&tab=${key}${includeTest ? "&includeTest=1" : ""}${plan ? `&plan=${plan}` : ""}${page > 1 ? `&p=${page}` : ""}`} style={{ padding: "7px 10px", fontSize: 12, fontWeight: 600, color: tab === key ? "var(--fg)" : "var(--fg-muted)", borderBottom: tab === key ? "2px solid hsl(var(--primary))" : "2px solid transparent", marginBottom: -1, textDecoration: "none" }}>{label}</Link>
+                <Link key={key} href={`/admin/users?sel=${selected.id}&tab=${key}${includeTest ? "&includeTest=1" : ""}${plan ? `&plan=${plan}` : ""}${page > 1 ? `&p=${page}` : ""}`} aria-current={tab === key ? "true" : undefined} style={{ padding: "7px 10px", fontSize: 12, fontWeight: 600, color: tab === key ? "var(--fg)" : "var(--fg-muted)", borderBottom: tab === key ? "2px solid hsl(var(--primary))" : "2px solid transparent", marginBottom: -1, textDecoration: "none" }}>{label}</Link>
               ))}
-            </div>
+            </HScroll>
 
             <div className="adm-card-body scroll" style={{ gap: 0 }}>
               {tab === "overview" && (<>

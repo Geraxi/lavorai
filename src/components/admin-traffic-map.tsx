@@ -43,14 +43,14 @@ export function AdminTrafficMap({ rows, regions = [], regionsUnresolved = 0, day
   const rest = sorted.slice(9).reduce((s, r) => s + r.count, 0);
 
   return (
-    <div style={{ position: "relative", height: "100%", display: "grid", gridTemplateColumns: "minmax(300px, 0.9fr) minmax(0, 1.6fr)", minHeight: 0 }}>
+    <div className="adm-tmap" style={{ position: "relative", height: "100%", display: "grid", gridTemplateColumns: "minmax(300px, 0.9fr) minmax(0, 1.6fr)", minHeight: 0 }}>
       {/* Header overlay */}
-      <div style={{ position: "absolute", top: 14, left: 18, right: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 2, pointerEvents: "none" }}>
+      <div className="adm-tmap-head" style={{ position: "absolute", top: 14, left: 18, right: 18, display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 2, pointerEvents: "none" }}>
         <div>
           <div className="adm-card-title" style={{ fontSize: 15 }}>Traffico globale</div>
           <div className="adm-card-sub" style={{ color: "var(--fg-muted)" }}>{mode === "regions" ? `Visite dall'Italia per regione (${rangeLabelLong(days).toLowerCase()})` : `Utenti per paese (${rangeLabelLong(days).toLowerCase()})`}</div>
         </div>
-        <div role="tablist" style={{ display: "inline-flex", padding: 3, borderRadius: 999, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", pointerEvents: "auto" }}>
+        <div role="tablist" className="adm-tmap-tabs" style={{ display: "inline-flex", padding: 3, borderRadius: 999, background: "var(--bg-sunken)", border: "1px solid var(--border-ds)", pointerEvents: "auto" }}>
           <Tab active={mode === "map"} onClick={() => setMode("map")} icon={<GlobeIcon size={12} />}>Mappa</Tab>
           <Tab active={mode === "list"} onClick={() => setMode("list")} icon={<ListIcon size={12} />}>Lista</Tab>
           <Tab active={mode === "regions"} onClick={() => setMode("regions")} icon={<MapPin size={12} />}>Regioni IT</Tab>
@@ -58,7 +58,7 @@ export function AdminTrafficMap({ rows, regions = [], regionsUnresolved = 0, day
       </div>
 
       {/* Lista sinistra */}
-      <div style={{ padding: "64px 8px 14px 18px", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+      <div className="adm-tmap-list" style={{ padding: "64px 8px 14px 18px", minHeight: 0, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
         {sorted.length === 0 && <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>Nessun dato paese ancora.</div>}
         {top.map((r) => (
           <CountryRow key={r.country ?? "?"} code={r.country} count={r.count} pct={(r.count / total) * 100} bar={(r.count / max) * 100} />
@@ -67,7 +67,7 @@ export function AdminTrafficMap({ rows, regions = [], regionsUnresolved = 0, day
       </div>
 
       {/* Destra: globo o lista completa */}
-      <div style={{ minHeight: 0, minWidth: 0, position: "relative" }}>
+      <div className="adm-tmap-main" style={{ minHeight: 0, minWidth: 0, position: "relative" }}>
         {mode === "map" ? (
           <AdminTrafficGlobe rows={rows} regions={regions} />
         ) : mode === "regions" ? (

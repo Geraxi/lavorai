@@ -404,7 +404,8 @@ async function main() {
     lastLoginAt: null, suspendedAt: null, preferences: { autoApplyMode: "manual", rolesJson: '["Designer"]', locationsJson: '["Roma"]', dailyCap: 5, matchMin: 40 },
     cvProfile: { id: `cv-${i}` }, _count: { applications: 0, cvDocuments: 1 },
   }));
-  const adminPage = loadModule("src/app/(app)/admin/users/page.tsx", {
+  const hScrollStub = { HScroll: ({ children, className }: { children: React.ReactNode; className?: string }) => React.createElement("div", { className: `lv-hscroll ${className ?? ""}` }, children) };
+  const adminPage = loadModule("src/app/(app)/admin/users/page.tsx", { "@/components/h-scroll": hScrollStub,
     ...common, "next/link": Link, "../_ui": ui, "lucide-react": await import("lucide-react"),
     "./_user-actions": { UserActions: () => null }, "@/components/admin-repair-applications": { AdminRepairApplications: () => null },
     "@/lib/db": { prisma: { user: { findMany: async () => adminUsers }, application: { findMany: async () => [], groupBy: async () => [] } } },
