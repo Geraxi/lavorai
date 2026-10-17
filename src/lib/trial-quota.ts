@@ -1,4 +1,4 @@
-import { automaticApplicationsBlocked } from "@/lib/application-rollout";
+import { historicalRetriesBlocked } from "@/lib/application-rollout";
 import { prisma } from "@/lib/db";
 import { isApplicationAccessPaused } from "@/lib/billing";
 
@@ -8,7 +8,7 @@ import { isApplicationAccessPaused } from "@/lib/billing";
  * creata; qui fermiamo solo le righe rimaste in coda dopo la scadenza.
  */
 export async function reserveTrialApplication(userId: string, applicationId: string): Promise<boolean> {
-  if (automaticApplicationsBlocked()) return false;
+  if (historicalRetriesBlocked()) return false;
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${userId}))`;
     const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });

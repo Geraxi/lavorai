@@ -1,4 +1,25 @@
-# Temporary manual-only producer controls
+# Application sending policy (updated Oct 17, 2026)
+
+**Current default: automatic sending is ON.** No env var is required. Since this change:
+
+- Scheduled runs (Railway worker scheduler, Vercel/GitHub cron) and onboarding runs create applications again for users whose saved mode is `auto` (sent directly) or `hybrid` (created as `awaiting_consent`). Explicit single/batch confirmations work as before.
+- Every customer submission attempt still reserves a slot in the atomic `ApplicationSubmissionReservation` ledger. The global UTC-day ceiling is `APPLY_GLOBAL_DAILY_CAP` (default **300**, accepted 1–5000; any other set value fails closed).
+- Per-user quotas (`dailyApplicationLimit`, trial limits, monthly plan quotas, round caps), privacy consent + email verification, billing eligibility, matching re-check for automatic rows, job liveness, dedup ledger, delivery-proof requirements and the no-double-send fences are unchanged and apply on both runtimes (same modules).
+- Historical replay/retry paths stay suspended in every mode (`historicalRetriesBlocked()`): admin repair/reset/requeue/retry/test routes, transient/credit/CAPTCHA retries, the auto self-heal (which also rewrote matchMin), stale-claim recovery, operational reset scripts, BullMQ multi-attempt/stalled replay. Rows created before the historical cutoff are never sent automatically.
+- Historical cutoff = `APPLICATION_ROLLOUT_START_AT` when set (keep the existing value: ledger rows are bound to it), else `2026-10-14T12:04:49Z`.
+
+Kill switches:
+
+- `APPLICATIONS_PAUSED=true` stops all producers, claims and sends (takes precedence).
+- `APPLICATION_SENDING_MODE=manual_only` restores the Oct 14 manual-only hold described below (automatic producers blocked; only fresh explicit confirmations; same global cap env).
+
+`APPLICATION_ROLLOUT_MODE` and `APPLICATION_ROLLOUT_DAILY_CAP` are no longer read. Health headers report `X-Lavorai-Rollout-Mode: automatic|manual_only|closed` and `X-Lavorai-Automatic-Producers: enabled|blocked`; the worker logs `application_sending_configuration` at start.
+
+---
+
+## Historical: Oct 14 manual-only release (now only via `APPLICATION_SENDING_MODE=manual_only`)
+
+### Temporary manual-only producer controls
 
 This build has no enabled automatic application mode. `automaticApplicationsBlocked()` deliberately returns true even when the manual rollout is correctly configured. User preferences are not rewritten to implement the hold.
 

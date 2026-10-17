@@ -24,8 +24,8 @@ function load(path: string, dependencies: Record<string, unknown>) {
 }
 const start = new Date(Date.now() - 3_600_000).toISOString();
 function configure(overrides: Record<string, string | undefined> = {}) {
-  const env = { APPLICATIONS_PAUSED: "false", APPLICATION_ROLLOUT_MODE: "manual_only",
-    APPLICATION_ROLLOUT_START_AT: start, APPLICATION_ROLLOUT_DAILY_CAP: "10", ...overrides };
+  const env = { APPLICATIONS_PAUSED: "false", APPLICATION_SENDING_MODE: "manual_only",
+    APPLICATION_ROLLOUT_START_AT: start, APPLY_GLOBAL_DAILY_CAP: "10", ...overrides };
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
@@ -56,13 +56,14 @@ async function main() {
       { env: {}, paused: false, cap: 10 },
       { env: { APPLICATIONS_PAUSED: "true" }, paused: true, cap: 10 },
       { env: { APPLICATIONS_PAUSED: "typo" }, paused: true, cap: 10 },
-      { env: { APPLICATION_ROLLOUT_MODE: undefined }, paused: true, cap: null },
-      { env: { APPLICATION_ROLLOUT_MODE: "auto" }, paused: true, cap: null },
+      { env: { APPLICATION_SENDING_MODE: "auto" }, paused: true, cap: null },
+      { env: { APPLICATION_SENDING_MODE: "invalid" }, paused: true, cap: null },
       { env: { APPLICATION_ROLLOUT_START_AT: "invalid" }, paused: true, cap: null },
       { env: { APPLICATION_ROLLOUT_START_AT: new Date(Date.now() + 3_600_000).toISOString() }, paused: true, cap: null },
-      { env: { APPLICATION_ROLLOUT_DAILY_CAP: "11" }, paused: true, cap: null },
-      { env: { APPLICATION_ROLLOUT_DAILY_CAP: undefined }, paused: true, cap: null },
-      { env: { APPLICATION_ROLLOUT_DAILY_CAP: "5" }, paused: false, cap: 5 },
+      { env: { APPLY_GLOBAL_DAILY_CAP: "0" }, paused: true, cap: null },
+      { env: { APPLY_GLOBAL_DAILY_CAP: "99999" }, paused: true, cap: null },
+      { env: { APPLY_GLOBAL_DAILY_CAP: undefined }, paused: false, cap: 300 },
+      { env: { APPLY_GLOBAL_DAILY_CAP: "5" }, paused: false, cap: 5 },
     ];
     for (const state of states) for (const savedMode of ["auto", "hybrid", "manual", "off"]) {
       configure(state.env);
@@ -106,6 +107,35 @@ async function main() {
         if (!state.paused) assert.match(html, new RegExp(`limite complessivo ${state.cap} al giorno \\(UTC\\)`));
       }
     }
+    // Default automatic sending (no mode env): automatic controls are live,
+    // the global cap is reported, and readiness explains real progress.
+    for (const capEnv of [undefined, "450"]) {
+      configure({ APPLICATION_SENDING_MODE: undefined, APPLY_GLOBAL_DAILY_CAP: capEnv });
+      const route = load("src/app/api/preferences/route.ts", {
+        ...dependencies, "@/lib/db": { prisma: { userPreferences: {
+          findUnique: async () => ({ autoApplyMode: "auto", matchMin: 73 }), upsert: unavailable,
+        } } },
+      });
+      const response = await route.GET();
+      assert.deepEqual(response.body.applicationService, { automaticBlocked: false, submissionsPaused: false, dailyCap: capEnv ? 450 : 300 });
+      const readiness = load("src/lib/auto-apply-readiness.ts", {
+        "@/lib/application-rollout": rollout, "@/lib/application-pause": pause, "@/lib/db": { prisma: {
+          userPreferences: { findUnique: async () => ({ autoApplyMode: "auto", rolesJson: '["Engineer"]', locationsJson: '["Milano"]' }) },
+          cVDocument: { count: async () => 1 }, application: { count: async () => 0 },
+        } },
+      });
+      const notice = await readiness.getAutoApplyReadiness("owner", 12);
+      assert.equal(notice.tone, "ready");
+      assert.doesNotMatch(notice.title + notice.detail, /sospeso|Solo candidature confermate|Invii in pausa/);
+      const html = renderToggle(response.body);
+      assert.doesNotMatch(html, /disabled=""/);
+      assert.doesNotMatch(html, /Solo candidature confermate|Invii in pausa|Stato invii non disponibile/);
+    }
+    configure({ APPLICATION_SENDING_MODE: undefined, APPLICATIONS_PAUSED: "true" });
+    assert.equal((await load("src/app/api/preferences/route.ts", { ...dependencies, "@/lib/db": { prisma: { userPreferences: {
+      findUnique: async () => ({ autoApplyMode: "auto", matchMin: 73 }), upsert: unavailable } } } }).GET()).body.applicationService.submissionsPaused, true,
+      "APPLICATIONS_PAUSED kill switch still wins in automatic mode");
+    configure();
     const readsBefore = preferenceReads;
     const unauthenticated = load("src/app/api/preferences/route.ts", {
       ...dependencies, "@/lib/session": { getCurrentUser: async () => null }, "@/lib/db": { prisma: unavailable },
@@ -125,7 +155,7 @@ async function main() {
     assert.doesNotMatch(preferencesSource.slice(preferencesSource.indexOf("export async function PUT")), /applicationService|applicationRolloutConfig|automaticApplicationsBlocked|applicationsPaused/,
       "Stored preference writes remain independent and unchanged");
     assert.equal(forbiddenAccesses, 0);
-    console.log("PASS manual rollout visibility: server-derived pause/manual-only states, validated global cap, unchanged saved preferences, fail-closed rendered toggle and blocked activation menus. No DB writes, history reads or network calls.");
+    console.log("PASS sending visibility: default automatic state, server-derived pause/manual-only states, validated global cap, unchanged saved preferences, fail-closed rendered toggle and blocked activation menus. No DB writes, history reads or network calls.");
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in original)) delete process.env[key];
     Object.assign(process.env, original);

@@ -31,9 +31,9 @@ export async function GET(request: Request): Promise<Response> {
     observedAt: Date.now(),
   }, { headers: {
     ...headers,
-    "X-Lavorai-Rollout-Mode": rollout.enabled ? "manual_only" : "closed",
+    "X-Lavorai-Rollout-Mode": rollout.enabled ? rollout.mode! : "closed",
     "X-Lavorai-Rollout-Cap": rollout.dailyCap?.toString() ?? "0",
     "X-Lavorai-Rollout-Start": rollout.startedAt?.toISOString() ?? "unavailable",
-    "X-Lavorai-Automatic-Producers": "blocked",
+    "X-Lavorai-Automatic-Producers": rollout.enabled && rollout.mode === "automatic" && !applicationsPaused() ? "enabled" : "blocked",
   } });
 }

@@ -1,5 +1,5 @@
 import { answerContinuationIneligibility, continuationSelect } from "./application-answer-continuation";
-import { applicationRolloutConfig, automaticApplicationsBlocked, rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/application-rollout";
+import { applicationRolloutConfig, historicalRetriesBlocked, rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { hasPotentialSubmission } from "@/lib/application-worker-gates";
@@ -13,8 +13,9 @@ import { hasPotentialSubmission } from "@/lib/application-worker-gates";
  * altri ricevono false e non fanno nulla → mai due elaborazioni in parallelo.
  *
  * Una candidatura è "prendibile" se è `queued` e non è stata presa da nessuno
- * (`startedAt` null), nuova nel rollout e confermata esplicitamente.
- * Le prese vecchie restano ferme: nessun recupero automatico nel rollout.
+ * (`startedAt` null), creata dopo il cutoff storico e ammessa dalla policy
+ * (consenso esplicito, oppure modalità auto dell'utente in modalità automatica).
+ * Le prese vecchie restano ferme: nessun recupero/replay automatico.
  */
 
 export const STALE_CLAIM_MS = 20 * 60_000;
@@ -55,7 +56,7 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
  * torna queued; applying resta riservata per verifica, senza replay automatico.
  */
 export async function recoverStuckApplications(): Promise<number> {
-  if (applicationsPaused() || automaticApplicationsBlocked()) return 0;
+  if (applicationsPaused() || historicalRetriesBlocked()) return 0;
   const stale = new Date(Date.now() - STALE_CLAIM_MS);
   const stuck = await prisma.application.findMany({
     where: {
@@ -97,7 +98,11 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
   const rows = await prisma.application.findMany({
     where: { status: "queued", startedAt: null, completedAt: null, retryCount: 0,
       createdAt: { gt: config.startedAt, lte: now },
-      consentGrantedAt: { gt: config.startedAt, lte: now },
+      // Automatic mode also admits rows of auto-mode users (no per-application
+      // consent); the worker gate re-checks the user's saved mode.
+      ...(config.mode === "automatic"
+        ? { OR: [{ consentGrantedAt: null }, { consentGrantedAt: { gt: config.startedAt, lte: now } }] }
+        : { consentGrantedAt: { gt: config.startedAt, lte: now } }),
       submittedAt: null, submittedVia: null, submitConfirmation: null,
       canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
     },
@@ -118,7 +123,7 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
 /** Rimette una candidatura in stato prendibile (da chiamare all'enqueue). */
 export async function resetClaim(applicationId: string): Promise<void> {
   // Queue publication must not clear ownership, including stale historical claims.
-  if (applicationsPaused() || automaticApplicationsBlocked()) return;
+  if (applicationsPaused() || historicalRetriesBlocked()) return;
   await prisma.application
     .updateMany({ where: { id: applicationId, status: "queued" }, data: { startedAt: null } })
     .catch(() => void 0);

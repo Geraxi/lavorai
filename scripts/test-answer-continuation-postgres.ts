@@ -25,9 +25,9 @@ async function main() {
   process.env.DATABASE_URL = `postgresql://postgres:password@127.0.0.1:${port}/postgres?connection_limit=24`;
   process.env.DIRECT_URL = process.env.DATABASE_URL;
   process.env.APPLICATIONS_PAUSED = "false"; process.env.QUEUE_MODE = "db";
-  process.env.APPLICATION_ROLLOUT_MODE = "manual_only";
+  process.env.APPLICATION_SENDING_MODE = "manual_only";
   process.env.APPLICATION_ROLLOUT_START_AT = "2026-10-14T11:47:00.000Z";
-  process.env.APPLICATION_ROLLOUT_DAILY_CAP = "10";
+  process.env.APPLY_GLOBAL_DAILY_CAP = "10";
   const { default: EmbeddedPostgres } = await import(process.env.WORKER_TEST_EMBEDDED_POSTGRES ?? "embedded-postgres");
   const pg = new EmbeddedPostgres({ databaseDir: join(dir, "data"), port, persistent: false, postgresFlags: ["-h", "127.0.0.1", "-c", "unix_socket_directories="], onLog: () => {}, onError: () => {} });
   let db: import("@prisma/client").PrismaClient | undefined;

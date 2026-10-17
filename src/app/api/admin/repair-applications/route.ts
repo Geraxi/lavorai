@@ -1,4 +1,4 @@
-import { automaticApplicationsBlocked } from "@/lib/application-rollout";
+import { historicalRetriesBlocked } from "@/lib/application-rollout";
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
@@ -9,7 +9,7 @@ import { reuseCvAnswers } from "@/lib/cv-answer-reuse";
 export async function POST(request: NextRequest) {
   const admin = await getCurrentUser();
   if (!isAdmin(admin?.email)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  if (automaticApplicationsBlocked()) return NextResponse.json({ error: "historical_application_retries_blocked" }, { status: 503 });
+  if (historicalRetriesBlocked()) return NextResponse.json({ error: "historical_application_retries_blocked" }, { status: 503 });
   const body = await request.json().catch(() => null);
   if (typeof body?.userId !== "string") return NextResponse.json({ error: "invalid_user" }, { status: 400 });
   const user = await prisma.user.findUnique({ where: { id: body.userId }, select: { id: true, yearsExperience: true } });

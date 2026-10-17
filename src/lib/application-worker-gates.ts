@@ -387,6 +387,9 @@ async function destinationIsUnique(tx: Prisma.TransactionClient, row: WorkerGate
 export async function attestAnswerPause(id: string, token: Date, channel: string, pendingQuestionsJson: string, jobUrl: string, db: DB = prisma, evidence?: "greenhouse_blank_form_v1"): Promise<boolean> {
   if (channel !== "portal_recruitee" && !(channel === "portal_greenhouse" && evidence === "greenhouse_blank_form_v1")) return false;
   return (await withLockedApplication(id, db, async (tx, row) => {
+    // Continuations bind to explicit per-application consent; automatic rows
+    // without it simply stay in needs_answers for the user.
+    if (!row?.consentGrantedAt) return false;
     if (!row || row.job.url !== jobUrl || row.status !== "applying" || row.startedAt?.getTime() !== +token
       || row.submitConfirmation !== SUBMISSION_STARTED || rolloutApplicationIneligibility(row)
       || row.submittedAt || row.submittedVia || row.submissionReceiptJson || row.completedAt
