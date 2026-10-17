@@ -227,6 +227,14 @@ export function AdminAssistant({ embedded = false }: { embedded?: boolean } = {}
           cursor: pointer; transition: transform 0.15s; font-weight: 800; font-size: 13px;
         }
         .admin-ai-fab:hover { transform: scale(1.06); }
+        /* Mobile: sopra la bottom nav, compatto, senza coprire "Altro". */
+        @media (max-width: 1023px) {
+          .admin-ai-fab {
+            bottom: calc(88px + env(safe-area-inset-bottom)); right: max(14px, env(safe-area-inset-right));
+            min-width: 48px; width: 48px; padding: 0;
+          }
+          .admin-ai-fab > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        }
         .admin-ai-panel {
           position: fixed; top: 0; right: 0; bottom: 0; z-index: 71;
           width: 400px; max-width: 92vw;

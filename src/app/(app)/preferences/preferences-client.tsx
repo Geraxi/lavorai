@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon, type IconName } from "@/components/design/icon";
+import { HScroll } from "@/components/h-scroll";
 import {
   SectionBody,
   SectionCard,
@@ -678,18 +679,15 @@ function PreferencesTabs({
   ];
 
   return (
-    <div
+    <HScroll
       role="tablist"
-      aria-label="Sezioni preferenze"
+      ariaLabel="Sezioni preferenze"
       style={{
-        display: "flex",
         gap: 4,
         padding: 4,
         background: "var(--bg-elev)",
         border: "1px solid var(--border-ds)",
         borderRadius: 10,
-        overflowX: "auto",
-        scrollbarWidth: "none",
       }}
     >
       {tabs.map((t) => {
@@ -716,7 +714,7 @@ function PreferencesTabs({
               background: isActive ? "var(--bg)" : "transparent",
               color: isActive ? "var(--fg)" : "var(--fg-muted)",
               boxShadow: isActive ? "var(--shadow-sm)" : "none",
-              flex: 1,
+              flex: "1 0 auto",
               justifyContent: "center",
             }}
           >
@@ -725,6 +723,6 @@ function PreferencesTabs({
           </button>
         );
       })}
-    </div>
+    </HScroll>
   );
 }

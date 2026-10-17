@@ -248,7 +248,7 @@ export function ChartCard({
 // Header pagina compatto: breadcrumb "Admin / X" + titolo + sub; azioni a destra.
 export function PageTitle({ title, sub, actions, crumb }: { title: string; sub?: string; actions?: ReactNode; crumb?: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexShrink: 0, paddingBottom: 2 }}>
+    <div className="adm-pagetitle" style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexShrink: 0, paddingBottom: 2 }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
           Admin <span style={{ margin: "0 6px" }}>/</span> <span style={{ color: "var(--fg-muted)" }}>{crumb ?? title}</span>
@@ -256,7 +256,7 @@ export function PageTitle({ title, sub, actions, crumb }: { title: string; sub?:
         <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.025em", margin: "2px 0 0", lineHeight: 1.15 }}>{title}</h1>
         {sub && <p style={{ fontSize: 12.5, color: "var(--fg-muted)", margin: "3px 0 0" }}>{sub}</p>}
       </div>
-      {actions && <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingTop: 6 }}>{actions}</div>}
+      {actions && <div className="adm-pagetitle-actions" style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingTop: 6 }}>{actions}</div>}
     </div>
   );
 }

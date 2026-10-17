@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { AdminAutoRefresh } from "@/components/admin-auto-refresh";
 import { AdminTopbar } from "@/components/admin-topbar";
+import { AdminMobileNav } from "@/components/admin-mobile-nav";
 import { getAdminAlerts } from "@/lib/admin-alerts";
 
 /**
@@ -22,6 +23,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="adm-root">
       <AdminAutoRefresh />
       <AdminTopbar userName={user?.name ?? "Umberto"} email={user?.email ?? ""} alerts={alerts} />
+      <AdminMobileNav />
       <div className="adm-content">{children}</div>
 
       <style>{`
@@ -45,6 +47,25 @@ export default async function AdminLayout({ children }: { children: React.ReactN
            contenuto e le card si sovrapponevano. */
         .adm-content > * { flex: none; min-height: auto; }
         .adm-page [style*="min-height"] { min-height: auto !important; }
+
+        /* Nav sezioni: solo <1024px (su desktop c'è la sidebar). */
+        .adm-mobile-nav { display: none; }
+        @media (max-width: 1023px) {
+          .adm-mobile-nav {
+            display: flex; gap: 6px; padding: 6px 12px;
+            border-bottom: 1px solid var(--border-ds); flex-shrink: 0;
+            scroll-padding-inline: 12px;
+          }
+          .adm-mobile-nav-item {
+            display: inline-flex; align-items: center; min-height: 44px; padding: 0 14px;
+            border-radius: 10px; font-size: 13px; font-weight: 600; text-decoration: none;
+            color: var(--fg-muted); border: 1px solid transparent;
+          }
+          .adm-mobile-nav-item[aria-current="page"] {
+            color: hsl(var(--primary)); background: hsl(var(--primary) / 0.12);
+            border-color: hsl(var(--primary) / 0.35);
+          }
+        }
 
         /* ── Primitive condivise ─────────────────────────────────── */
         .adm-page {
@@ -80,6 +101,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         .adm-card-title { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--fg); }
         .adm-card-sub { font-size: 11.5px; color: var(--fg-subtle); margin-top: 2px; }
         .adm-card-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+        .adm-card-body > * { min-width: 0; }   /* i figli di griglia non sforano la card */
         .adm-card-body.scroll { overflow-y: auto; max-height: 440px; }   /* liste lunghe: scroll interno */
         .adm-card-body.scroll::-webkit-scrollbar { width: 6px; }
         .adm-card-body.scroll::-webkit-scrollbar-thumb { background: var(--border-ds); border-radius: 3px; }
@@ -124,6 +146,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         .adm-fill { flex: 1; min-height: 230px; }
         .adm-th > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
         .adm-svg-fill { width: 100%; height: 100%; display: block; }
+        /* Barra filtri (ricerca + pill): le pill sono uno scroller orizzontale. */
+        .adm-filterbar { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(0, max-content); gap: 8px; margin-bottom: 12px; flex-shrink: 0; align-items: center; min-width: 0; }
+        .adm-filter-pills { gap: 8px; }
+        .adm-tabs { gap: 2px; }
+        .adm-pager { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 
         /* Schermi bassi (laptop 13"): compatta padding e cifre per restare fit. */
         @media (max-height: 900px) {
@@ -133,9 +160,16 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           .adm-page { gap: 10px; }
           .adm-page h1 { font-size: 22px !important; }
         }
+        /* Mobile/tablet: un solo scroller (il <main> dell'AppShell), niente
+           scroll annidato admin-dentro-main che su iOS blocca i gesti. */
+        @media (max-width: 1023px) {
+          .adm-root { height: auto; flex: none; }
+          .adm-content { overflow: visible; flex: none; }
+        }
         @media (max-width: 1100px) {
-          .adm-content { overflow: auto; }
-          .adm-page { height: auto; grid-template-columns: 1fr !important; grid-template-rows: none !important; }
+          /* minmax(0,1fr): una card larga non allarga più la colonna oltre lo schermo. */
+          .adm-page { height: auto; grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: none !important; }
+          .adm-page > * { min-width: 0; max-width: 100%; }
           .adm-card { min-height: 220px; }
         }
         /* ── Tablet: tabelle scorrono in orizzontale dentro la card, KPI a 2 colonne ── */
@@ -157,6 +191,43 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           .adm-tr { min-width: 0; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; row-gap: 4px; padding: 10px 0; }
           .adm-tr > * { min-width: 0; }
           .adm-page h1 { font-size: 20px !important; }
+          /* Le righe non devono sporgere (margin negativo) oltre la card. */
+          .adm-card-body > .adm-tr { margin-left: 0 !important; margin-right: 0 !important; }
+          .adm-content select { max-width: 100%; }
+          /* Filtri: ricerca a tutta larghezza, pill scorrevoli sotto. */
+          .adm-filterbar { grid-template-columns: minmax(0, 1fr); }
+          .adm-filterbar input { min-height: 44px; font-size: 16px !important; }
+          /* Utenti: email a tutta riga, niente checkbox/menu finti. */
+          .adm-users-row > :nth-child(1), .adm-users-row > :nth-child(10) { display: none !important; }
+          .adm-users-row > :nth-child(2) { grid-column: 1 / -1; }
+          /* Paginazione: bersagli da 44px. */
+          .adm-pager .adm-btn { min-width: 44px; min-height: 44px; justify-content: center; }
+          .adm-tabs > a { min-height: 44px; display: inline-flex; align-items: center; }
+          /* Topbar compatta su una riga: ricerca, periodo, campanella, avatar. */
+          .adm-topbar { flex-wrap: nowrap; padding: 8px 12px; }
+          .adm-topbar-search { flex: 1 1 auto !important; min-width: 0; min-height: 44px; }
+          .adm-topbar-search > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+          .adm-topbar-kbd, .adm-topbar-live, .adm-topbar-who, .adm-topbar-spacer { display: none !important; }
+          .adm-topbar-user { padding-left: 0 !important; flex-shrink: 0; }
+          .adm-topbar select { flex-shrink: 0; min-height: 44px; }
+          /* Con il selettore periodo la ricerca diventa solo icona. */
+          .adm-topbar:has(select) .adm-topbar-search { flex: 0 0 44px !important; justify-content: center; padding: 0 !important; }
+          .adm-topbar:has(select) .adm-topbar-search > span { display: none; }
+          .adm-topbar:has(select) select { flex: 1 1 auto; min-width: 0; }
+          /* Titolo pagina: azioni sotto al titolo, a capo se serve. */
+          .adm-pagetitle { flex-wrap: wrap; gap: 10px !important; }
+          .adm-pagetitle > :first-child { flex: 1 1 100%; }
+          /* Traffico: mappa impilata (titolo, tab, lista paesi, globo). */
+          .adm-globe-card { height: auto !important; }
+          .adm-tmap { grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: auto auto minmax(320px, auto); height: auto !important; }
+          .adm-tmap-head { position: static !important; flex-direction: column; gap: 10px; padding: 14px 14px 4px; }
+          .adm-tmap-tabs button { min-height: 40px; }
+          .adm-tmap-list { padding: 4px 14px 10px !important; max-height: 240px; }
+          .adm-tmap-main { min-height: 320px; }
+          .adm-tmap-main > div[style*="64px 18px"] { padding-top: 8px !important; }
+          .adm-pagetitle-actions { flex-wrap: wrap; flex-shrink: 1 !important; padding-top: 0 !important; max-width: 100%; }
+          .adm-topbar button[aria-label^="Notifiche"] { width: 44px !important; height: 44px !important; }
+          .adm-topbar div[role="dialog"][aria-label="Notifiche"] { position: fixed !important; top: 64px !important; left: 12px !important; right: 12px !important; width: auto !important; }
         }
       `}</style>
     </div>
