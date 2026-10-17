@@ -88,7 +88,7 @@ async function main() {
       "@/lib/db": { prisma: db }, "@/lib/application-pause": pause, "@/lib/application-worker-gates": gates,
       "@/lib/application-question-answers": scoped, "@/lib/cv-profile-types": profile,
       "@/lib/email": { inboundReplyAddress: () => "reply+synthetic@example.invalid" },
-      "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "live" }) },
+      "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "live" }), JOB_LIVENESS_UNKNOWN_HELD_MESSAGE: "Disponibilità dell'annuncio non verificabile: invio sospeso, nuovo controllo più tardi.", JOB_CLOSED_HELD_MESSAGE: "Annuncio chiuso dall'azienda. Nessun invio effettuato." },
       "@/lib/browser": { launchBrowser: async () => ({ close: async () => {} }), humanContext: async () => ({ newPage: async () => ({}) }) },
       "@/lib/scrapers/ats-companies": Object.fromEntries(["GREENHOUSE", "LEVER", "ASHBY", "WORKABLE", "SMARTRECRUITERS"].map(name => [`${name}_COMPANIES`, []])),
     });

@@ -1,5 +1,5 @@
 import { onboardingAccessBlock } from "@/lib/onboarding-access";
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { CVParseError, parseCV } from "@/lib/cv-parser";
@@ -7,9 +7,10 @@ import { saveUserFile } from "@/lib/storage";
 import { uploadLimiter } from "@/lib/rate-limit";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
+import { ensureCvProfileFromUpload } from "@/lib/cv-profile-ensure";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -97,6 +98,10 @@ export async function POST(request: NextRequest) {
     });
 
     });
+
+    // Create the structured CV profile now (as /cv would) instead of waiting
+    // for the user to open /cv; runs after the response, never blocks upload.
+    after(() => ensureCvProfileFromUpload(user.id, { sessionEmail: user.email }).then(() => undefined));
 
     await recordConversionEvent(AnalyticsEvent.ONBOARDING_CV_UPLOADED, {
       userId: user.id,

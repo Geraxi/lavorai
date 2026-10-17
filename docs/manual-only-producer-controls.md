@@ -8,6 +8,13 @@
 - Historical replay/retry paths stay suspended in every mode (`historicalRetriesBlocked()`): admin repair/reset/requeue/retry/test routes, transient/credit/CAPTCHA retries, the auto self-heal (which also rewrote matchMin), stale-claim recovery, operational reset scripts, BullMQ multi-attempt/stalled replay. Rows created before the historical cutoff are never sent automatically.
 - Historical cutoff = `APPLICATION_ROLLOUT_START_AT` when set (keep the existing value: ledger rows are bound to it), else `2026-10-14T12:04:49Z`.
 
+Held-row release (Oct 17, 2026, `src/lib/held-application-release.ts`) — a narrow, explicit exception, not a replay path (`historicalRetriesBlocked()` is still `true`):
+
+- When the worker holds a queued row it stamps `startedAt`, and claims require `startedAt = null`, so a held row was frozen forever. Rows are now released (hold cleared, nothing sent) only when the hold reason is cleared: privacy consent granted or email verified (`/api/account/privacy-consent`, `/api/auth/verify-email/confirm`, both require consent + verified + not suspended), or a usable CV profile was created (`profile_unverified` holds).
+- Rows held on a temporary "job availability couldn't be checked" result are re-checked with backoff (≈ +0h, +2h, +4h, +8h after the first 2h wait, then stop with an explicit message). Closed postings mark the job closed and the row `failed`/`JOB_CLOSED`; live postings are released through the same fence. Runs every 30 min in the worker (`LIVENESS_RECHECK_INTERVAL_MS`) and in the daily Vercel self-heal.
+- A release requires all of: queued, created after the cutoff, retryCount 0, never completed, hold text matching exactly, no `submittedAt`/`submittedVia`/ATS receipt/canary/answers/continuation/views/replies/user status, `submitConfirmation` null without documents or `NOT_SUBMITTED`, no `ApplicationEmailAttempt` row, no ledger reservation (by application or user+job), no sibling row for the same user+job. It runs under the same per-user advisory lock as worker admission and is a compare-and-set. Admission and the pre-send fence then re-check consent, verification, billing, preferences, round capacity, dedup ledger and the global cap as for any new row.
+- Missing CV profiles are created from the uploaded CV at upload (after the response) and by a bounded, idempotent backfill (`src/lib/cv-profile-ensure.ts`) in the daily self-heal (25/run) and before each worker auto-apply batch (100/run). Same extractor and state as visiting `/cv`; existing content is never overwritten and empty rows are never written.
+
 Kill switches:
 
 - `APPLICATIONS_PAUSED=true` stops all producers, claims and sends (takes precedence).

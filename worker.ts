@@ -117,6 +117,11 @@ async function main(): Promise<void> {
       if (!hours.includes(now.getUTCHours()) || now.getUTCMinutes() > 4 || key === lastRunKey) return;
       lastRunKey = key;
       try {
+        // Users who uploaded a CV but never opened /cv had no CVProfile and
+        // were skipped by the job below; create theirs first (bounded).
+        const { backfillMissingCvProfiles } = await import("./src/lib/cv-profile-ensure");
+        await backfillMissingCvProfiles({ max: 100, budgetMs: 10 * 60_000 })
+          .catch((err) => console.error("[worker] CV profile backfill failed", err instanceof Error ? err.message : err));
         const { runAutoApplyCron } = await import("./src/lib/auto-apply-cron");
         const t0 = Date.now();
         const stats = await runAutoApplyCron();
@@ -127,10 +132,24 @@ async function main(): Promise<void> {
     }, 60_000);
   }
 
+  // Rows held on a temporary "job availability couldn't be checked" result are
+  // re-checked with backoff (held-application-release.ts). Never a replay:
+  // only rows with zero prior-submission evidence; admission re-gates all.
+  const livenessMs = Math.max(5 * 60_000, Number(process.env.LIVENESS_RECHECK_INTERVAL_MS ?? 30 * 60_000) || 30 * 60_000);
+  const livenessTimer = setInterval(async () => {
+    try {
+      const { recheckLivenessHeldApplications } = await import("./src/lib/held-application-release");
+      await recheckLivenessHeldApplications({ limit: 25 });
+    } catch (err) {
+      console.error("[worker] liveness recheck failed", err instanceof Error ? err.message : err);
+    }
+  }, livenessMs);
+
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     console.log(`[worker] ${signal} received, draining...`);
     clearInterval(pollTimer);
+    clearInterval(livenessTimer);
     if (worker) await worker.close();
     console.log("[worker] closed cleanly");
     process.exit(0);

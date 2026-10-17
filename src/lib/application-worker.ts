@@ -11,7 +11,7 @@ import {
 import { saveUserFile, readUserFile } from "@/lib/storage";
 import { decryptJson } from "@/lib/crypto";
 import { isPortalId, PORTALS } from "@/lib/portals";
-import { checkJobUrlLiveness, markJobClosed } from "@/lib/job-liveness";
+import { checkJobUrlLiveness, JOB_CLOSED_HELD_MESSAGE, JOB_LIVENESS_UNKNOWN_HELD_MESSAGE, markJobClosed } from "@/lib/job-liveness";
 import {
   extractFullProfile,
   tailorProfileForJob,
@@ -891,8 +891,8 @@ async function ensureLiveJobForApplication(id: string, token: Date, jobId: strin
       startedAt: new Date(),
       completedAt: check.state === "closed" ? new Date() : null,
       errorMessage: check.state === "closed"
-        ? "Annuncio chiuso dall'azienda. Nessun invio effettuato."
-        : "Disponibilità dell'annuncio non verificabile: invio sospeso, nuovo controllo più tardi.",
+        ? JOB_CLOSED_HELD_MESSAGE
+        : JOB_LIVENESS_UNKNOWN_HELD_MESSAGE,
     },
   });
   return false;

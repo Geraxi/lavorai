@@ -119,7 +119,9 @@ async function capacityAvailable(tx: Prisma.TransactionClient, row: WorkerGateRo
   return Math.max(row.session.sentCount, successes) + reservations < row.session.targetCount;
 }
 
-function heldMessage(reason: string): string {
+/** Exact text persisted on a held queued row; held-application-release.ts
+ * matches on it to release only rows held for a specific, now-cleared reason. */
+export function heldMessage(reason: string): string {
   const explanations: Record<string, string> = {
     auto_apply_not_enabled: "Consenso specifico non verificabile nella modalità corrente",
     session_inactive: "Round in pausa, concluso o annullato",

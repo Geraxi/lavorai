@@ -26,17 +26,21 @@ async function main() {
   } };
   const workspace = load("src/lib/workspace-mutation.ts", { "next/server": { NextResponse }, "@/lib/auth": { auth: async () => owner ? { user: { id: owner } } : null },
     "@/lib/db": { prisma }, "@/lib/admin": { isAdmin: () => false }, "@/lib/billing": { isApplicationAccessPaused: () => blocked, requiresPaymentMethodBeforeApp: () => false } });
-  const route = load("src/app/api/account/privacy-consent/route.ts", { "next/server": { NextResponse }, "@/lib/db": { prisma }, "@/lib/workspace-mutation": workspace });
+  const releases: Array<[string, string]> = [];
+  const route = load("src/app/api/account/privacy-consent/route.ts", { "next/server": { NextResponse }, "@/lib/db": { prisma }, "@/lib/workspace-mutation": workspace,
+    "@/lib/held-application-release": { releaseHeldApplicationsForUser: async (id: string, trigger: string) => { releases.push([id, trigger]); return 0; } } });
   const request = (body: unknown, origin = "http://localhost") => new NextRequest("http://localhost/api/account/privacy-consent", { method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   owner = null; assert.equal((await route.POST(request({ privacyConsent: true }))).status, 401); owner = "owner";
   blocked = true; assert.equal((await route.POST(request({ privacyConsent: true }))).status, 403); blocked = false;
   assert.equal((await route.POST(request({ privacyConsent: true }, "https://foreign.invalid"))).status, 403);
   for (const body of [null, {}, { privacyConsent: false }, { privacyConsent: "true" }, { privacyConsent: true, userId: "other" }, { privacyConsent: true, consentGrantedAt: new Date().toISOString() }]) assert.equal((await route.POST(request(body))).status, 400);
-  assert.equal(changes, 0);
+  assert.equal(changes, 0); assert.equal(releases.length, 0, "rejected requests release nothing");
   failure = true; assert.equal((await route.POST(request({ privacyConsent: true }))).status, 503); failure = false;
   const replies = await Promise.all([route.POST(request({ privacyConsent: true })), route.POST(request({ privacyConsent: true }))]);
   assert.ok(replies.every(r => r.status === 200)); assert.equal(changes, 1); assert.equal(rows.get("other"), null);
   const first = rows.get("owner"); await route.POST(request({ privacyConsent: true })); assert.equal(rows.get("owner"), first);
-  console.log("PASS privacy consent: explicit boolean, authenticated owner, CSRF, access gates, outage, idempotent timestamp, no application or queue mutations.");
+  // Only the owner's own held rows are handed to the fenced release (it re-checks everything itself).
+  assert.ok(releases.length >= 1 && releases.every(([id, trigger]) => id === "owner" && trigger === "privacy_consent"));
+  console.log("PASS privacy consent: explicit boolean, authenticated owner, CSRF, access gates, outage, idempotent timestamp, never creates applications; only the owner's consent-held rows go to the fenced release.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

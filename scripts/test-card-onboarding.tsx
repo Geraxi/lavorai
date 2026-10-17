@@ -152,7 +152,7 @@ async function main() {
   // Route handlers reject bypasses before reads, uploads, AI or writes.
   const extras: Record<string, any> = {
     "@/lib/crypto": {}, "@/lib/portals": {}, "@/lib/cv-parser": {}, "@/lib/storage": {}, "@/lib/rate-limit": {}, "@/lib/claude": {},
-    "@/lib/onboarding-preferences": { OnboardingPreferencesSchema }, "@/lib/auto-apply-cron": {},
+    "@/lib/onboarding-preferences": { OnboardingPreferencesSchema }, "@/lib/auto-apply-cron": {}, "@/lib/cv-profile-ensure": {},
   };
   for (const path of ["cv", "details", "preferences", "demo", "demo/complete", "trigger-first-apply", "signup-source", "welcome-seen", "[portal]/link"]) {
     const route = loadModule(`src/app/api/onboarding/${path}/route.ts`, { ...common, ...extras });

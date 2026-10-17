@@ -653,6 +653,8 @@ model Application {
   /// Usato per UX onesta "Nessuna risposta dopo N giorni" (ghosting).
   submittedAt     DateTime?
   /// Ultimo check status recruiter (per rate-limit check giornalieri).
+  /// On unsent queued rows held for an unverifiable posting it records the
+  /// FIRST liveness re-check (held-application-release.ts backoff bound).
   lastStatusCheckAt DateTime?
   createdAt       DateTime  @default(now())
   startedAt       DateTime?
