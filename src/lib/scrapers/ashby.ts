@@ -7,8 +7,9 @@ import { cleanHtmlText } from "./html-clean";
  * URL: https://api.ashbyhq.com/posting-api/job-board/<orgSlug>?includeCompensation=true
  * Risposta:
  *   { jobs: [{
- *       id, title, locationName, departmentName, employmentType,
- *       publishedAt, jobUrl, applyUrl, descriptionHtml, ...
+ *       id, title, location, secondaryLocations, department, team,
+ *       employmentType, isRemote, workplaceType, publishedAt, jobUrl,
+ *       applyUrl, descriptionHtml, ...
  *     }]
  *   }
  *
@@ -19,6 +20,10 @@ import { cleanHtmlText } from "./html-clean";
 interface AshbyJob {
   id: string;
   title: string;
+  /** The posting-api field. (`locationName`/`departmentName` are not returned
+   * by this API; reading only them stored every Ashby job with location null.) */
+  location?: string | null;
+  department?: string | null;
   locationName?: string | null;
   departmentName?: string | null;
   employmentType?: string | null;
@@ -82,7 +87,8 @@ function mapJob(
   orgSlug: string,
 ): JobListItem | null {
   const description = cleanHtmlText(j.descriptionHtml).slice(0, 2000);
-  const loc = j.locationName ?? "";
+  const location = (typeof j.location === "string" && j.location.trim()) || (typeof j.locationName === "string" && j.locationName.trim()) || null;
+  const loc = location ?? "";
   if (!isRelevantLocation(loc, description, !!j.isRemote)) return null;
   return {
     id: "",
@@ -91,14 +97,14 @@ function mapJob(
     sourceSlug: orgSlug,
     title: j.title,
     company: companyName,
-    location: j.locationName ?? null,
+    location,
     description,
     url: j.jobUrl,
     contractType: j.employmentType ?? null,
     remote: !!j.isRemote || /\bremote|remoto\b/i.test(loc),
     salaryMin: null,
     salaryMax: null,
-    category: j.departmentName ?? "IT Jobs",
+    category: j.department ?? j.departmentName ?? "IT Jobs",
     postedAt: j.publishedAt ? new Date(j.publishedAt) : new Date(),
     recruiterEmail: null,
     recruiterScrapedAt: null,

@@ -24,7 +24,7 @@ export const RESOLVABLE_BOARD_SOURCES: ResolvableBoardSource[] = ["weworkremotel
 /** A board row is re-checked at most this often (cache on Job.recruiterScrapedAt). */
 export const BOARD_RESOLUTION_TTL_MS = 7 * 86400_000;
 
-export type AtsProvider = "greenhouse" | "lever" | "ashby" | "workable";
+export type AtsProvider = "greenhouse" | "lever" | "ashby" | "workable" | "recruitee" | "personio";
 export interface AtsPosting {
   provider: AtsProvider;
   tenant: string;
@@ -60,6 +60,14 @@ export function parseAtsPosting(value: string): AtsPosting | null {
   }
   if (host === "apply.workable.com" && (m = path.match(new RegExp(`^/(${SLUG})/j/([0-9A-F]{6,16})(?:/apply)?/?$`, "i")))) {
     return { provider: "workable", tenant: m[1].toLowerCase(), postingId: m[2].toUpperCase() };
+  }
+  if ((m = host.match(/^([a-z0-9][a-z0-9-]{0,62})\.recruitee\.com$/)) && !["www", "app", "api", "careers", "jobs"].includes(m[1])) {
+    const offer = path.match(/^\/o\/([a-z0-9][a-z0-9-]{0,120})(?:\/c\/new)?\/?$/i);
+    if (offer) return { provider: "recruitee", tenant: m[1], postingId: offer[1].toLowerCase() };
+  }
+  if ((m = host.match(/^([a-z0-9][a-z0-9-]{0,62})\.jobs\.personio\.(?:de|com)$/))) {
+    const job = path.match(/^\/job\/(\d{3,12})(?:\/apply)?\/?$/);
+    if (job) return { provider: "personio", tenant: m[1], postingId: job[1] };
   }
   return null;
 }
@@ -149,17 +157,25 @@ export async function fetchCanonicalAtsJob(posting: AtsPosting, companyName: str
   else if (posting.provider === "lever") items = await (await import("@/lib/scrapers/lever")).fetchLeverJobs(posting.tenant, name);
   else if (posting.provider === "ashby") items = await (await import("@/lib/scrapers/ashby")).fetchAshbyJobs(posting.tenant, name);
   else if (posting.provider === "workable") items = await (await import("@/lib/scrapers/workable")).fetchWorkableJobs(posting.tenant, name);
+  else if (posting.provider === "recruitee") items = await (await import("@/lib/scrapers/recruitee")).fetchRecruiteeJobs(posting.tenant, name);
+  else if (posting.provider === "personio") items = await (await import("@/lib/scrapers/personio")).fetchPersonioJobs(posting.tenant, name);
   return canonicalItemFor(posting, items);
 }
 
+/** The feed row whose canonical URL identifies exactly the linked posting
+ * (same provider, tenant and posting id). Feed externalIds differ per ATS
+ * (Recruitee uses a numeric id, its URL a slug), so the URL is the identity. */
 export function canonicalItemFor(posting: AtsPosting, items: JobListItem[]): JobListItem | null {
-  const want = posting.postingId.toLowerCase();
-  const hit = items.find((item) => item.source === posting.provider && String(item.externalId).toLowerCase() === want);
-  if (!hit) return null;
-  // The canonical URL must identify exactly the posting the board linked to.
-  const parsed = parseAtsPosting(hit.url);
-  if (!parsed || parsed.provider !== posting.provider || parsed.postingId.toLowerCase() !== want) return null;
-  return hit;
+  const same = (p: AtsPosting | null) => !!p && p.provider === posting.provider
+    && p.tenant.toLowerCase() === posting.tenant.toLowerCase() && p.postingId.toLowerCase() === posting.postingId.toLowerCase();
+  const hits = items.filter((item) => item.source === posting.provider && same(parseAtsPosting(item.url)));
+  return hits.length === 1 ? hits[0] : null;
+}
+
+/** Rate limits, blocks and network errors are retried on a later run;
+ * only a definitive answer (ATS found, 404/410, no/unsupported link) is cached. */
+export function isTransientResolution(r: BoardResolution): boolean {
+  return r.kind === "unsupported" && /^(?:fetch_failed|(?:board|apply)_http_(?:403|408|425|429|5\d\d))$/.test(r.reason);
 }
 
 type ResolverDb = {
@@ -206,20 +222,23 @@ export async function resolveBoardListingsForRoles(
     orderBy: { postedAt: "desc" },
     take: Math.max(0, Math.min(opts.limit ?? 6, 20)),
   });
-  await Promise.all(rows.map(async (row) => {
+  // Sequential: a handful of polite requests per call, never a burst at one board.
+  for (const row of rows) {
+    if (remaining() < 3_000) break;
     stats.attempted++;
     let looked = true; // false only when the run budget ran out before the lookup finished
     try {
       const result = await resolve(row, undefined, Math.max(1_000, Math.min(8_000, remaining())));
-      if (result.kind !== "ats") { stats.unsupported++; return; }
-      if (remaining() < 1_000) { looked = false; stats.unsupported++; return; }
+      if (isTransientResolution(result)) { looked = false; stats.unsupported++; continue; }
+      if (result.kind !== "ats") { stats.unsupported++; continue; }
+      if (remaining() < 1_000) { looked = false; stats.unsupported++; continue; }
       const item = await canonical(result.posting, row.company);
-      if (!item) { stats.unsupported++; return; }
+      if (!item) { stats.unsupported++; continue; }
       const existing = await db.job.findFirst({ where: { OR: [
         { externalId: item.externalId, source: item.source },
         { url: item.url },
       ] }, select: { id: true } });
-      if (existing) { stats.existing++; return; }
+      if (existing) { stats.existing++; continue; }
       const created = await db.job.create({ data: {
         externalId: item.externalId, source: item.source, sourceSlug: item.sourceSlug ?? null,
         title: item.title, company: item.company, location: item.location, description: item.description,
@@ -236,6 +255,6 @@ export async function resolveBoardListingsForRoles(
     } finally {
       if (looked) await db.job.updateMany({ where: { id: row.id }, data: { recruiterScrapedAt: now } }).catch(() => undefined);
     }
-  }));
+  }
   return stats;
 }

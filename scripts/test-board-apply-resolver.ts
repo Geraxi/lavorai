@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { fetchAshbyJobs } from "../src/lib/scrapers/ashby";
 import {
   BOARD_RESOLUTION_TTL_MS, canonicalItemFor, extractWwrApplyUrl, parseAtsPosting,
   resolveBoardApplyDestination, resolveBoardListingsForRoles,
@@ -16,6 +17,12 @@ function testParseAtsPosting() {
   assert.deepEqual(parseAtsPosting("https://jobs.lever.co/acme/3f1c2a10-1111-4222-8333-944455556666/apply"),
     { provider: "lever", tenant: "acme", postingId: "3f1c2a10-1111-4222-8333-944455556666" });
   assert.deepEqual(parseAtsPosting("https://apply.workable.com/acme/j/AB12CD34EF/"), { provider: "workable", tenant: "acme", postingId: "AB12CD34EF" });
+  assert.deepEqual(parseAtsPosting("https://up42gmbh.recruitee.com/o/product-designer-mfx-6?utm_source=arbeitnow.com&source=Arbeitnow"),
+    { provider: "recruitee", tenant: "up42gmbh", postingId: "product-designer-mfx-6" });
+  assert.deepEqual(parseAtsPosting("https://impower.jobs.personio.de/job/2815274#apply?utm_source=arbeitnow.com"), { provider: "personio", tenant: "impower", postingId: "2815274" });
+  // Lever EU postings are not served by the api.lever.co feed the sync reads: not promotable.
+  assert.equal(parseAtsPosting("https://jobs.eu.lever.co/olx/7b0feb8f-a256-4276-b63a-82a6817baf14/apply"), null);
+  assert.equal(parseAtsPosting("https://www.recruitee.com/o/x"), null);
   for (const bad of [
     "http://jobs.ashbyhq.com/zapier/c0582311-18cb-4415-9c86-79014f1b74f6", // not https
     "https://jobs.ashbyhq.com/zapier", // board, not a posting
@@ -95,11 +102,17 @@ function item(overrides: Record<string, unknown> = {}) {
 
 function testCanonical() {
   const posting = { provider: "ashby" as const, tenant: "zapier", postingId: "c0582311-18cb-4415-9c86-79014f1b74f6" };
-  assert.equal(canonicalItemFor(posting, [item({ externalId: "other" }), item()])?.externalId, posting.postingId);
-  assert.equal(canonicalItemFor(posting, [item({ externalId: "other" })]), null, "Closed/filtered postings are not promoted");
+  const other = { externalId: "other", url: "https://jobs.ashbyhq.com/zapier/11111111-1111-4111-8111-111111111111" };
+  assert.equal(canonicalItemFor(posting, [item(other), item()])?.externalId, posting.postingId);
+  assert.equal(canonicalItemFor(posting, [item(other)]), null, "Closed/filtered postings are not promoted");
   assert.equal(canonicalItemFor(posting, [item({ url: "https://jobs.ashbyhq.com/zapier/00000000-0000-4000-8000-000000000000" })]), null,
     "Feed row whose URL identifies another posting is rejected");
   assert.equal(canonicalItemFor(posting, [item({ source: "lever" })]), null);
+  assert.equal(canonicalItemFor(posting, [item({ url: "https://jobs.ashbyhq.com/other-org/c0582311-18cb-4415-9c86-79014f1b74f6" })]), null, "Same posting id under another tenant is not the same posting");
+  assert.equal(canonicalItemFor(posting, [item(), item()]), null, "Ambiguous feed rows are not promoted");
+  const recruitee = { provider: "recruitee" as const, tenant: "up42gmbh", postingId: "product-designer-mfx-6" };
+  assert.equal(canonicalItemFor(recruitee, [item({ source: "recruitee", externalId: "1234567", url: "https://up42gmbh.recruitee.com/o/product-designer-mfx-6" })])?.externalId,
+    "1234567", "Recruitee feed ids differ from URL slugs; identity is the URL");
 }
 
 async function testResolvePass() {
@@ -149,6 +162,14 @@ async function testResolvePass() {
   assert.deepEqual(q.where.AND[0].OR.length, 1, "Role tokens shorter than 3 chars are ignored like the pool query");
 
   assert.deepEqual(await resolveBoardListingsForRoles([], { db, resolve, canonical }), { attempted: 0, promoted: 0, existing: 0, unsupported: 0 });
+  // Rate limits / blocks / network errors are not cached; 404 and "no ATS" are.
+  marked.length = 0;
+  const transient = async (row: { id?: string; url: string }) => row.url.includes("zapier") ? { kind: "unsupported" as const, reason: "apply_http_429" }
+    : row.url.includes("gismart") ? { kind: "unsupported" as const, reason: "fetch_failed" }
+    : row.url.includes("custom") ? { kind: "unsupported" as const, reason: "apply_http_404" }
+    : { kind: "unsupported" as const, reason: "board_http_503" };
+  await resolveBoardListingsForRoles(["Motion Designer"], { db, resolve: transient, canonical, now });
+  assert.deepEqual(marked.map((m) => m.where.id), ["an-2"]);
   // Exhausted run budget: no lookup is started.
   const beforeBudget = queries.length;
   assert.equal((await resolveBoardListingsForRoles(["Motion Designer"], { db, resolve, canonical, deadline: Date.now() + 500 })).attempted, 0);
@@ -162,8 +183,8 @@ async function testResolvePass() {
   Date.now = () => realNow() + (clock ? 3_000 : 0);
   try {
     const partial = await resolveBoardListingsForRoles(["Motion Designer"], { db, resolve: slowResolve, canonical, deadline: tight, now });
-    assert.equal(partial.promoted, 0);
-    assert.deepEqual(marked.map((m) => m.where.id), ["an-2"], "Only the definitively unsupported row is cached; budget-skipped rows stay unmarked");
+    assert.deepEqual(partial, { attempted: 1, promoted: 0, existing: 0, unsupported: 1 }, "Lookups stop when the run budget is spent");
+    assert.deepEqual(marked, [], "A lookup cut short by the budget is not cached, so it is retried next run");
   } finally { Date.now = realNow; }
   const previous = process.env.BOARD_APPLY_RESOLUTION;
   process.env.BOARD_APPLY_RESOLUTION = "false";
@@ -176,7 +197,26 @@ async function testResolvePass() {
   }
 }
 
+async function testAshbyFeedLocation() {
+  // Shape returned by api.ashbyhq.com/posting-api/job-board/<org> (Oct 2026).
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify({ jobs: [
+    { id: "c0582311-18cb-4415-9c86-79014f1b74f6", title: "Sr. Motion Designer", department: "Campaign Marketing", employmentType: "FullTime",
+      location: "EMEA", secondaryLocations: [], isRemote: true, workplaceType: "Remote", publishedAt: "2026-10-02T17:54:00.000Z",
+      jobUrl: "https://jobs.ashbyhq.com/zapier/c0582311-18cb-4415-9c86-79014f1b74f6", descriptionHtml: "<p>Motion design</p>" },
+    { id: "00000000-0000-4000-8000-000000000001", title: "Legacy", locationName: "Milano", jobUrl: "https://jobs.ashbyhq.com/zapier/00000000-0000-4000-8000-000000000001", descriptionHtml: "" },
+  ] }), { status: 200 })) as typeof fetch;
+  try {
+    const [zapier, legacy] = await fetchAshbyJobs("zapier", "Zapier");
+    assert.equal(zapier.location, "EMEA", "Ashby `location` is stored (was always null: the mapper read a field the API does not return)");
+    assert.equal(zapier.category, "Campaign Marketing");
+    assert.equal(zapier.remote, true);
+    assert.equal(legacy.location, "Milano", "Older `locationName` shape still read");
+  } finally { globalThis.fetch = realFetch; }
+}
+
 async function main() {
+  await testAshbyFeedLocation();
   testParseAtsPosting();
   testWwrExtraction();
   await testResolveDestination();
