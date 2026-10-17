@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { CVParseError, parseCV } from "@/lib/cv-parser";
 import { saveUserFile } from "@/lib/storage";
 import { uploadLimiter } from "@/lib/rate-limit";
+import { CV_STAGE_COOKIE } from "@/lib/cv-staging";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -115,7 +116,16 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ ok: true, expiresAt: expiresAt.toISOString() });
+    const response = NextResponse.json({ ok: true, expiresAt: expiresAt.toISOString() });
+    // Only the browser that staged the CV may adopt it at sign-in.
+    response.cookies.set(CV_STAGE_COOKIE, stagingId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: Math.floor(STAGING_TTL_MS / 1000),
+    });
+    return response;
   } catch (err) {
     console.error("[/api/optimize/stage]", err);
     return NextResponse.json(

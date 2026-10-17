@@ -8,6 +8,7 @@ import { AdminCheckoutFeedback } from "@/components/admin-checkout-feedback";
 import { AdminPopups } from "@/components/admin-popups";
 import { AdminAssistant } from "@/components/admin-assistant";
 import { Send, Users, Mail, Target, FlaskConical, BellRing, MessageSquare, Sparkles, ArrowRight, CheckCircle2, ExternalLink } from "lucide-react";
+import { requireAdminPage } from "@/lib/admin-page";
 
 export const metadata: Metadata = { title: "Admin · Automazione & Utenti", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ const DAYS = 14;
  * stato/statistiche reali a dx, come nel mockup.
  */
 export default async function AdminAutomationPage() {
+  await requireAdminPage();
   const now = Date.now();
   const since = (h: number) => new Date(now - h * H);
   const dayKeys: string[] = [];

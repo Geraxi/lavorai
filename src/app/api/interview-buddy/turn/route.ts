@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { publicAiLimiter } from "@/lib/rate-limit";
 import {
   runInterviewTurn,
   type TurnMessage,
@@ -42,6 +43,16 @@ const Schema = z.object({
  *  - Al 4° tentativo di start → 402 Payment Required + redirect signup
  */
 export async function POST(request: NextRequest) {
+  const rlIp =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown";
+  if (!(await publicAiLimiter.limit(`interview-buddy:${rlIp}`)).success) {
+    return NextResponse.json(
+      { error: "rate_limit", message: "Troppe richieste. Riprova tra qualche minuto." },
+      { status: 429 },
+    );
+  }
   let body: unknown;
   try {
     body = await request.json();

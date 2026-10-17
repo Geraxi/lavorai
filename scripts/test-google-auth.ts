@@ -91,6 +91,8 @@ async function main() {
     "@/lib/auth-adapter": { createAuthAdapter }, "@/lib/google-auth": googleAuth,
     "resend": { Resend: class { constructor() { throw new Error("Unexpected email"); } } },
     "bcryptjs": {}, "@/lib/db": { prisma: db }, "@/lib/storage": {},
+    "@/lib/rate-limit": { loginEmailLimiter: { limit: async () => ({ success: true }) }, loginIpLimiter: { limit: async () => ({ success: true }) } },
+    "@/lib/cv-staging": await import("../src/lib/cv-staging"),
     "@/lib/billing": billing, "node:crypto": await import("node:crypto"),
   };
   const code = ts.transpileModule(readFileSync("src/lib/auth.ts", "utf8"), {

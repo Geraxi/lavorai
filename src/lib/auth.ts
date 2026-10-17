@@ -9,6 +9,8 @@ import { Resend } from "resend";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { moveFile } from "@/lib/storage";
+import { loginEmailLimiter, loginIpLimiter } from "@/lib/rate-limit";
+import { CV_STAGE_COOKIE, stagedCvBelongsToBrowser } from "@/lib/cv-staging";
 import { effectiveTier, type Tier } from "@/lib/billing";
 import { CredentialsSignin } from "next-auth";
 import { createHash } from "node:crypto";
@@ -77,7 +79,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const email =
           typeof credentials?.email === "string"
             ? credentials.email.trim().toLowerCase()
@@ -87,6 +89,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!email || !password) return null;
 
         const emailHash = hashEmail(email);
+        const ip =
+          request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+          request?.headers?.get("x-real-ip") ??
+          "unknown";
+        const [byEmail, byIp] = await Promise.all([
+          loginEmailLimiter.limit(`login-email:${emailHash}`),
+          loginIpLimiter.limit(`login-ip:${ip}`),
+        ]);
+        if (!byEmail.success || !byIp.success) {
+          console.warn("[auth] credentials fail", { reason: "rate_limited", emailHash });
+          throw new ServerError();
+        }
         let user;
         try {
           user = await prisma.user.findFirst({
@@ -369,6 +383,17 @@ async function adoptStagedCv(userId: string, rawEmail: string): Promise<void> {
     where: { email },
   });
   if (!staged) return;
+
+  // The staging row is keyed only by a typed email: adopt it only in the
+  // browser that staged it, so nobody can plant a CV on another account.
+  let stageCookie: string | undefined;
+  try {
+    const { cookies } = await import("next/headers");
+    stageCookie = (await cookies()).get(CV_STAGE_COOKIE)?.value;
+  } catch {
+    stageCookie = undefined;
+  }
+  if (!stagedCvBelongsToBrowser(staged.storagePath, stageCookie)) return;
 
   // Cleanup se scaduto
   if (staged.expiresAt.getTime() < Date.now()) {

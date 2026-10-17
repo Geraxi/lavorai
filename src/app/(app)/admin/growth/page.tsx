@@ -3,11 +3,13 @@ import { DataNotice, Funnel, GrowthHeader, OverviewKpis, UpgradeReady } from "..
 import { prisma } from "@/lib/db";
 import { nextEditorialTopic } from "@/lib/editorial";
 import { AdminEditorialStudio } from "@/components/admin-editorial-studio";
+import { requireAdminPage } from "@/lib/admin-page";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Admin · Growth", robots: { index: false } };
 
 export default async function AdminGrowthPage({ searchParams }: { searchParams?: Promise<{ range?: string; from?: string; to?: string }> }) {
+  await requireAdminPage();
   const query = (await searchParams) ?? {};
   const [metrics, editorialArticles] = await Promise.all([
     loadAdminGrowthMetrics(adminPeriod(query)),

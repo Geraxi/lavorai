@@ -7,6 +7,7 @@ import { isTestAccount } from "@/lib/admin";
 import { UserActions } from "./_user-actions";
 import { PageTitle, KpiTrendCard, TierChip, compactNumber } from "../_ui";
 import { Users, CheckCircle2, Activity, UserPlus, Search, MoreVertical, Copy, Mail, RotateCcw, Ban, Trash2, Download, X } from "lucide-react";
+import { requireAdminPage } from "@/lib/admin-page";
 
 export const metadata: Metadata = { title: "Admin · Utenti", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ interface PageProps {
  * Selezione via ?sel=<id>, paginazione via ?p=<n> (server-side, niente JS).
  */
 export default async function AdminUsersPage({ searchParams }: PageProps) {
+  await requireAdminPage();
   const sp = (await searchParams) ?? {};
   const includeTest = sp.includeTest === "1";
   // Filtro piano: paying (addebito completato) | pro | pro_plus | free |

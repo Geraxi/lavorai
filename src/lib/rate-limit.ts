@@ -92,6 +92,11 @@ export const applyLimiter: Limiter = buildLimiter(10, 60 * 60 * 1000, "lavorai:a
 // Limite generoso per supportare job board grandi (43 chunk × 100 job = 4300).
 export const applyBatchLimiter: Limiter = buildLimiter(60, 60 * 60 * 1000, "lavorai:apply-batch");
 export const authLimiter: Limiter = buildLimiter(5, 60 * 60 * 1000, "lavorai:auth");
+// Password login: brute-force guard per account and per IP.
+export const loginEmailLimiter: Limiter = buildLimiter(10, 15 * 60 * 1000, "lavorai:login-email");
+export const loginIpLimiter: Limiter = buildLimiter(50, 15 * 60 * 1000, "lavorai:login-ip");
+// Public AI endpoints (no account): cost guard per IP; the cookie quota is client-side.
+export const publicAiLimiter: Limiter = buildLimiter(60, 60 * 60 * 1000, "lavorai:public-ai");
 export const uploadLimiter: Limiter = buildLimiter(10, 60 * 60 * 1000, "lavorai:upload");
 // Misurazione best-effort: abbastanza capiente per una normale sessione,
 // ma non una superficie aperta per riempire la tabella eventi.

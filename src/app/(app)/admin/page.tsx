@@ -36,6 +36,7 @@ import {
   AlertOctagon,
   Info,
 } from "lucide-react";
+import { requireAdminPage } from "@/lib/admin-page";
 
 export const metadata: Metadata = { title: "Admin · Panoramica", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -50,6 +51,7 @@ const H = 3600_000;
  * somma cap mensili dei tier attivi.
  */
 export default async function AdminOverviewPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  await requireAdminPage();
   const sp = (await searchParams) ?? {};
   const DAYS = parseRange(sp.range, 14);
   const now = Date.now();

@@ -11,6 +11,7 @@ import { AdminAutoApplyButton } from "@/components/admin-autoapply-button";
 import { AdminUpgradeNudgesButton } from "@/components/admin-upgrade-nudges-button";
 import { AdminReparseCvButton } from "@/components/admin-reparse-cv-button";
 import { Layers, Zap, Users as UsersIcon, Database, Settings2, RefreshCw, AlertTriangle, Play, FileText, Crown, Sparkles, Globe, MoreVertical } from "lucide-react";
+import { requireAdminPage } from "@/lib/admin-page";
 
 export const metadata: Metadata = { title: "Admin · Job pool", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ const KNOWN_SOURCES = ["greenhouse", "lever", "ashby", "linkedin", "adzuna", "wo
  * dx: Distribuzione per fonte · Salute AI · Automazioni · Attività motore
  */
 export default async function AdminJobsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  await requireAdminPage();
   const sp = (await searchParams) ?? {};
   const DAYS = parseRange(sp.range, 14);
   const now = Date.now();

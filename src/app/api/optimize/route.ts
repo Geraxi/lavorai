@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
+import { publicAiLimiter } from "@/lib/rate-limit";
 import { optimizeCV } from "@/lib/claude";
 import { CVParseError, parseCV } from "@/lib/cv-parser";
 import {
@@ -25,6 +26,16 @@ const formSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const rlIp =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown";
+  if (!(await publicAiLimiter.limit(`optimize:${rlIp}`)).success) {
+    return NextResponse.json(
+      { error: "rate_limit", message: "Troppe richieste. Riprova tra qualche minuto." },
+      { status: 429 },
+    );
+  }
   try {
     let formData: FormData;
     try {

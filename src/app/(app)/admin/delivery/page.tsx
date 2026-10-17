@@ -6,6 +6,7 @@ import { parseRange, rangeLabel, rangeLabelLong } from "@/components/admin-range
 import { Send, FileCheck, CheckCircle2, AlertTriangle } from "lucide-react";
 import { RetryCaptchaButton } from "../_retry-captcha-button";
 import { CopyTargetButton } from "../_client-buttons";
+import { requireAdminPage } from "@/lib/admin-page";
 
 export const metadata: Metadata = { title: "Admin · Consegna", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ const MONTHS = ["Gen", "Feb", "Mar", "Apr", "Mag", "Giu", "Lug", "Ago", "Set", "
  * "Confermate" = submitConfirmation DETECTED_* (prova hard).
  */
 export default async function AdminDeliveryPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  await requireAdminPage();
   const sp = (await searchParams) ?? {};
   const DAYS = parseRange(sp.range, 14);
   const now = Date.now();

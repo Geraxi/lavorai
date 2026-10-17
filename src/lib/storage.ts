@@ -55,11 +55,13 @@ export async function saveUserFile(
   if (drv === "vercel") {
     try {
       const { put } = await import("@vercel/blob");
+      // Vercel Blob URLs are public. A random suffix makes them unguessable:
+      // without it a CV lived at users/<userId>/<subdir>/<name> on a shared host.
+      // The stored URL is what readUserFile/deleteFile use, so nothing rebuilds it.
       const result = await put(key, data, {
         access: "public",
         contentType: contentTypeFor(safeName),
-        addRandomSuffix: false,
-        allowOverwrite: true,
+        addRandomSuffix: true,
       });
       return result.url;
     } catch (err) {

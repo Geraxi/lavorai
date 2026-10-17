@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { getDbDiagnostics } from "@/lib/db-diagnostics";
+import { requireAdminPage } from "@/lib/admin-page";
 
 export const metadata: Metadata = { title: "Admin · Database health", robots: { index: false } };
 export const dynamic = "force-dynamic";
 
 /** Internal admin-only read-only view. The parent /admin layout enforces admin access. */
 export default async function DbHealthPage() {
+  await requireAdminPage();
   const report = await getDbDiagnostics();
   return (
     <section className="adm-page" style={{ maxWidth: 1100 }}>

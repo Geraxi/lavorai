@@ -407,6 +407,7 @@ async function main() {
   const adminPage = loadModule("src/app/(app)/admin/users/page.tsx", {
     ...common, "next/link": Link, "../_ui": ui, "lucide-react": await import("lucide-react"),
     "./_user-actions": { UserActions: () => null }, "@/components/admin-repair-applications": { AdminRepairApplications: () => null },
+    "@/lib/admin-page": { requireAdminPage: async () => ({ id: "admin", email: "admin@example.org" }) },
     "@/lib/db": { prisma: { user: { findMany: async () => adminUsers }, application: { findMany: async () => [], groupBy: async () => [] } } },
   }).default;
   const adminCss = readFileSync("src/app/(app)/admin/layout.tsx", "utf8").split("<style>{`")[1].split("`}</style>")[0];
