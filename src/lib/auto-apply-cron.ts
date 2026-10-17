@@ -12,6 +12,7 @@ import { titleMatchesAnyRole } from "@/lib/role-match";
 import { runSelfHeal } from "@/lib/auto-apply-self-heal";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { AnalyticsEvent } from "@/lib/analytics";
+import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -29,6 +30,10 @@ import { AnalyticsEvent } from "@/lib/analytics";
  */
 
 const PER_USER_RUN_CAP = 5;
+/** Total wall-clock for board apply-link lookups in one cron run. */
+const BOARD_RESOLUTION_RUN_BUDGET_MS = 60_000;
+/** Same, for a single-user (onboarding) run. */
+const BOARD_RESOLUTION_USER_BUDGET_MS = 15_000;
 
 function randomToken(): string {
   const bytes = new Uint8Array(18);
@@ -148,10 +153,13 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  // Board apply-link lookups share one bounded budget across the whole run
+  // (route maxDuration is 300s); later users simply skip new lookups.
+  const resolutionDeadline = Date.now() + BOARD_RESOLUTION_RUN_BUDGET_MS;
   for (const user of eligibleUsers) {
     try {
       stats.usersProcessed++;
-      await processUser(user, stats, todayStart, monthStart);
+      await processUser(user, stats, todayStart, monthStart, resolutionDeadline);
     } catch (err) {
       console.error(`[auto-apply-cron] user ${user.id} errored`, err);
       stats.errors++;
@@ -236,7 +244,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   try {
     stats.usersProcessed = 1;
-    await processUser(user, stats, todayStart, monthStart);
+    await processUser(user, stats, todayStart, monthStart, Date.now() + BOARD_RESOLUTION_USER_BUDGET_MS);
   } catch (err) {
     console.error(`[runAutoApplyForUser] ${userId} errored`, err);
     stats.errors++;
@@ -268,6 +276,7 @@ async function processUser(
   stats: RunStats,
   todayStart: Date,
   monthStart: Date,
+  resolutionDeadline: number,
 ): Promise<void> {
   if (!user.preferences || !user.cvProfile) return;
   const prefs = user.preferences;
@@ -392,6 +401,18 @@ async function processUser(
 
 
 
+  // Board link-out (We Work Remotely, Arbeitnow): follow the public apply
+  // link and promote a supported ATS posting to its canonical ATS row, which
+  // the query below then treats like any other ATS job. Bounded per run and
+  // cached on the board row; the board row itself is never a candidate.
+  // Kill switch: BOARD_APPLY_RESOLUTION=false (read inside the resolver).
+  try {
+    const resolution = await resolveBoardListingsForRoles(roles, { limit: 6, deadline: resolutionDeadline });
+    if (resolution.promoted) console.log(`[auto-apply-cron] user ${user.id} board listings promoted to ATS`, resolution);
+  } catch (err) {
+    console.warn("[auto-apply-cron] board resolution failed (non-fatal)", err instanceof Error ? err.message : err);
+  }
+
   // Job candidati: match su titoli per ciascun ruolo, fonti Greenhouse/Lever
   // (quelli con URL ATS diretto — submit reale funziona). Adzuna è troppo
   // fragile per auto-apply senza intervento utente.
@@ -409,6 +430,7 @@ async function processUser(
           "greenhouse",
           "lever",
           "ashby",
+          "workable",
           "smartrecruiters",
           "linkedin",
           "recruitee",
