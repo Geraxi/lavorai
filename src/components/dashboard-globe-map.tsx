@@ -12,7 +12,8 @@ import { useLocale } from "next-intl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { CityMarker, GlobeStats, PinKind } from "@/lib/dashboard-globe-data";
-import { PIN_COLORS, buildPins, JobCard, type GlobeFilter, type GlobePin } from "./dashboard-globe";
+// Solo helper leggeri: react-globe.gl/three arrivano col dynamic import sotto.
+import { PIN_COLORS, buildPins, JobCard, type GlobeFilter, type GlobePin } from "./dashboard-globe-shared";
 import { useDashboardFocus } from "./dashboard-focus";
 import { globeCopy, regionDisplayName } from "@/lib/globe-presentation";
 import { regionAltitude } from "@/lib/city-centroids";

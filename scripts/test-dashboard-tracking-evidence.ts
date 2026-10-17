@@ -135,6 +135,7 @@ async function main() {
     "@/lib/application-evidence": evidence, "@/lib/city-centroids": { matchCity: () => ({ key: "milan", name: "Milan", cc: "IT", lat: 45, lng: 9 }) },
     "@/lib/match-score": { quickMatchScore: () => 60 }, "@/lib/cv-profile-types": { rowToProfile: () => null },
     "@/lib/role-match": { titleMatchesAnyRole: () => true },
+    "@/lib/globe-geometry": load("src/lib/globe-geometry.ts", {}),
   });
   const map = await globe.getDashboardGlobeData("owner");
   assert.equal(map.stats.counts.sent, 2); assert.equal(map.markers[0].counts.sent, 2);

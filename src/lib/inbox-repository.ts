@@ -27,9 +27,11 @@ const inboundSelect = {
   },
 } as const;
 
-export async function getInboxMessages(userId: string, savedReplyParents: string[] = []): Promise<InboxMessage[]> {
+/** `savedReplyParents` may be a promise so callers can load their saved
+ * replies in parallel with the inbox instead of one round trip before it. */
+export async function getInboxMessages(userId: string, savedReplyParentsInput: string[] | Promise<string[]> = []): Promise<InboxMessage[]> {
   if (!userId) throw new Error("Inbox owner is required");
-  const [recentReplies, gmailMessages] = await Promise.all([
+  const [recentReplies, gmailMessages, savedReplyParents] = await Promise.all([
     prisma.applicationReply.findMany({
       where: { application: { userId }, isSecurityCode: false },
       orderBy: { receivedAt: "desc" },
@@ -48,6 +50,7 @@ export async function getInboxMessages(userId: string, savedReplyParents: string
         },
       },
     }),
+    savedReplyParentsInput,
   ]);
 
   // Keep saved drafts/replies usable even after their original leaves the recent window.
