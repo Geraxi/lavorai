@@ -67,6 +67,26 @@ async function main() {
   assert.equal(locationPreferenceMismatch(loc("Berlin", false, "Our offices are in Milano. We are a global team."), ["Milano"]), "location");
   assert.equal(locationPreferenceMismatch(loc("Bergamo, Lombardia", false), ["Milano"]), "location");
   assert.equal(locationPreferenceMismatch(loc("Neuhausen", false), ["EU"]), "location", "EU is a token, not an arbitrary substring");
+  // Real aggregator shapes (Oct 2026 diagnosis for Jose / Matteo).
+  const jose = ["Remoto", "Philadelphia, PA USA"];
+  const matteo = ["Losine", "Brescia", "Iseo", "Rezzato", "Gussago"];
+  assert.equal(locationPreferenceMismatch(loc("Remote · Remote"), jose), "location_unverified", "Doubled bare Remote is unverified, not a region");
+  assert.equal(locationPreferenceMismatch(loc("Remote · Worldwide"), jose), null, "Worldwide remote with no restriction is eligible");
+  assert.equal(locationPreferenceMismatch(loc("Remote · EMEA"), jose), "location", "EMEA-only is correctly not eligible for a US/bare-Remote user");
+  const zapierWwr = "Headquarters: United States URL: https://zapier.com/es/ Location: EMEA We're looking for a Motion Designer to join Brand Studio";
+  assert.equal(locationPreferenceMismatch(loc("Remote · Anywhere in the World", true, zapierWwr), jose), "location", "Body 'Location: EMEA' overrides an 'Anywhere' field");
+  assert.equal(locationPreferenceMismatch(loc("Remote · Anywhere in the World", true, zapierWwr), ["Remote (EMEA)"]), null, "A preference for the header region is still eligible");
+  assert.equal(locationPreferenceMismatch(loc("Remote · Worldwide", true, "Location: Remote (Europe-based preferred) Type: Full-time"), jose), null, "'preferred' is not a restriction header");
+  assert.equal(locationPreferenceMismatch(loc("Remote · Worldwide", true, "Location: Usually remote, global team"), jose), null, "Header region is a whole token");
+  assert.equal(locationPreferenceMismatch(loc("Remote · EMEA", true, zapierWwr), ["Remote (EU)"]), "location", "Header only applies to worldwide-labelled fields; region rules unchanged");
+  assert.equal(locationPreferenceMismatch(loc("Worldwide", true, "Candidates must be based in the United States."), ["Remote (United States)"]), null, "Worldwide + satisfied restriction is eligible");
+  assert.equal(locationPreferenceMismatch(loc("Worldwide", true, "Candidates must be based in the United States."), ["Remote"]), "location", "Bare Remote never satisfies a regional restriction");
+  assert.equal(locationPreferenceMismatch(loc(null, true, "This role is based in San Francisco, CA. We use a hybrid work model"), jose), "location_unverified", "Null location with a remote flag stays unverified");
+  assert.equal(locationPreferenceMismatch(loc("Brescia, Provincia di Brescia", false), matteo), null);
+  assert.equal(locationPreferenceMismatch(loc("Rezzato, Provincia di Brescia", false), matteo), null);
+  assert.equal(locationPreferenceMismatch(loc("Provincia di Brescia, Lombardia", false), matteo), null);
+  assert.equal(locationPreferenceMismatch(loc("Rovereto, Provincia di Trento", false), matteo), "location");
+  assert.equal(locationPreferenceMismatch(loc("EMEA"), matteo), "location", "Commuting-town prefs never admit remote regions");
   const job = { ...loc("Milano", false), title: "Designer", contractType: "permanent", salaryMin: null, salaryMax: null, description: "You will partner with a consultant and a contractor." };
   assert.equal(autoApplyPreferenceMismatch(job, { employmentType: "employee", salaryMin: 30 }, ["Milano"]), null, "Generic colleagues are not the contract type");
   const receipt = { version: 1, provider: "greenhouse", kind: "http", jobId: "123", capturedAt: new Date().toISOString(), endpoint: "https://boards.greenhouse.io/acme/jobs/123", operation: "application.create", httpStatus: 201, signal: "application_id", receiptId: "receipt-1" };

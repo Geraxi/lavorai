@@ -68,15 +68,26 @@ export function locationPreferenceMismatch(
   job: { location: string | null; remote: boolean; description?: string }, prefs: string[],
 ): "location" | "location_unverified" | null {
   if (!prefs.length) return null; // callers with automatic authority must require a valid nonempty list
-  const location = (job.location ?? "").trim().toLowerCase();
+  // Aggregators join location parts with "·" ("Remote · Remote",
+  // "Remote · EMEA"). Split and de-duplicate so a doubled bare "Remote" is
+  // classified like a bare "Remote" (unverified), never as a region.
+  const location = Array.from(new Set((job.location ?? "").toLowerCase().split(/\s*·\s*/)
+    .map((part) => part.trim()).filter(Boolean))).join(", ");
   if (!location) return "location_unverified";
   const remote = job.remote || /\b(remot[eo]|fully remote|anywhere|worldwide)\b/i.test(location);
   const worldwide = /\b(anywhere|worldwide|global|work from anywhere)\b/i.test(location);
   // Use only an explicit eligibility sentence from the posting. Company-office
   // lists and global-culture boilerplate are not job-location restrictions.
-  const restrictions = (job.description ?? "").split(/[.\n]/).filter((line) =>
+  let restrictions = (job.description ?? "").split(/[.\n]/).filter((line) =>
     /(?:must|only|require[ds]?|need to)\s+(?:candidates?\s+)?(?:be\s+)?(?:based|reside|located|living)|(?:candidates?|applicants?)\s+(?:based|residing|located)\s+(?:only\s+)?in|(?:remote|remoto)\s+(?:only|solo)\s+(?:in|within|da)/i.test(line),
   ).join(" ").toLowerCase();
+  // A posting whose location field claims "anywhere/worldwide" but whose body
+  // carries an explicit "Location: EMEA"-style header (seen on aggregator
+  // reposts) is region-restricted: the header wins, the field does not.
+  const headerRegions = worldwide ? Array.from((job.description ?? "").matchAll(
+    /\blocation\s*:\s*(emea|europe|eu|latam|apac|americas|north america|united states|usa|us|uk|united kingdom|canada)(?=$|[^a-z])/gi,
+  ), (m) => m[1].toLowerCase()) : [];
+  if (headerRegions.length) restrictions = `${restrictions} ${headerRegions.join(" ")}`.trim();
   const matches = (text: string, pref: string) => expandLocationPref(pref).some((alias) => containsLocation(text, alias));
   for (const raw of prefs) {
     const pref = raw.trim().toLowerCase();
@@ -85,7 +96,9 @@ export function locationPreferenceMismatch(
     if (remotePref && !remote) continue;
     const region = qualifier ?? (remotePref ? null : pref);
     if (restrictions && (!region || !matches(restrictions, region))) continue;
-    if (worldwide && !restrictions) return null;
+    // Worldwide field + no restriction, or a restriction this preference's
+    // region satisfies (checked just above): eligible.
+    if (worldwide) return null;
     // "Remote" alone says nothing about geographic eligibility. Do not turn a
     // remote flag into permission for US-only or otherwise restricted vacancies.
     if (region && matches(location, region)) return null;
