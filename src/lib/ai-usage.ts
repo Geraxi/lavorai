@@ -37,7 +37,12 @@ export function normalizeUsage(provider: "openai" | "anthropic", usage: unknown)
     outputTokens: int(u.output_tokens), cachedInputTokens: cacheRead };
 }
 
+// Set once the table is known to be missing (P2021) so logs aren't flooded
+// before the additive schema is applied; a new deploy/process re-checks.
+let tableMissing = false;
+
 export function recordAiUsage(input: { task: string; provider: "openai" | "anthropic"; model: string; usage: unknown }): void {
+  if (tableMissing) return;
   try {
     const usage = normalizeUsage(input.provider, input.usage);
     if (!usage) return;
@@ -46,6 +51,6 @@ export function recordAiUsage(input: { task: string; provider: "openai" | "anthr
       task: input.task.slice(0, 40), provider: input.provider, model: input.model.slice(0, 80),
       inputTokens: usage.inputTokens, outputTokens: usage.outputTokens, cachedInputTokens: usage.cachedInputTokens,
       applicationId: applicationId ?? null,
-    } }).catch(() => void 0);
+    } }).catch((error: unknown) => { if ((error as { code?: string })?.code === "P2021") tableMissing = true; });
   } catch { /* measurement never breaks the product */ }
 }

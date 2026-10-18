@@ -92,8 +92,8 @@ assert.equal(missing.aiCost.tokensPerCompleted, 0);
 
 // usage recorder is fire-and-forget and never stores prompt content
 const usage = readFileSync(new URL("../src/lib/ai-usage.ts", import.meta.url), "utf8");
-assert(usage.includes(".catch(() => void 0)"));
-const written = usage.slice(usage.indexOf("aiUsageEvent.create({ data: {"), usage.indexOf("} }).catch"));
+assert(usage.includes(".catch((error: unknown) =>") && usage.includes('"P2021"') && usage.includes("if (tableMissing) return;"));
+const written = usage.slice(usage.indexOf("aiUsageEvent.create({ data: {"), usage.indexOf("} }).catch("));
 for (const key of written.matchAll(/(\w+):/g)) assert(["data", "task", "provider", "model", "inputTokens", "outputTokens", "cachedInputTokens", "applicationId"].includes(key[1]), `unexpected stored field ${key[1]}`);
 const schema = readFileSync(new URL("../prisma/schema.prisma", import.meta.url), "utf8");
 const model = schema.slice(schema.indexOf("model AiUsageEvent"));
