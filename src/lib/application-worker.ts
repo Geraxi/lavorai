@@ -187,6 +187,7 @@ async function processApplicationRun(
     result = await optimizeCV({
       cvText: cv.extractedText,
       jobPosting,
+      jobLang,
       coverLetterHints,
       sessionContext: app.session?.customContext ?? null,
       pivaContext: usePivaPitch
@@ -784,6 +785,7 @@ async function processApplicationRun(
       job: app.job,
       cvBuffer,
       clBuffer,
+      cvPdfPath,
       cvLanguage: jobLang,
       coverLetterText: result.coverLetter,
       trackingToken,
@@ -1617,6 +1619,7 @@ interface DeliverInput {
   job: { title: string; company: string | null; url: string };
   cvBuffer: Buffer;
   clBuffer: Buffer;
+  cvPdfPath?: string | null;
   cvLanguage: "it" | "en";
   coverLetterText: string;
   trackingToken: string | null;
@@ -1674,6 +1677,35 @@ async function deliverApplicationToRecruiter(
   const inboundReply = inboundReplyAddress(input.applicationId);
   const effectiveReplyTo = inboundReply ?? input.replyTo;
 
+  // Attachments: always include DOCX, and PDF if available (preferred format)
+  const attachments: Array<{ filename: string; content: Buffer }> = [];
+  
+  // If PDF is available, attach it in addition to (or instead of) DOCX
+  if (input.cvPdfPath) {
+    try {
+      const pdfBuffer = await readUserFile(input.cvPdfPath);
+      attachments.push({
+        filename: `CV_${slugName(candidateName)}.pdf`,
+        content: pdfBuffer,
+      });
+    } catch (err) {
+      console.warn(`[worker] ${input.applicationId} failed to read PDF, falling back to DOCX only`, err);
+    }
+  }
+  
+  // Always attach DOCX as fallback if PDF failed or wasn't available
+  if (attachments.length === 0 || input.cvPdfPath) {
+    attachments.push({
+      filename: `CV_${slugName(candidateName)}.docx`,
+      content: input.cvBuffer,
+    });
+  }
+  
+  attachments.push({
+    filename: `${input.cvLanguage === "en" ? "Cover_Letter" : "Lettera_Motivazionale"}_${slugName(candidateName)}.docx`,
+    content: input.clBuffer,
+  });
+
   return sendRecruiterEmailOnce({
     applicationId: input.applicationId,
     attemptKey: input.attemptKey,
@@ -1699,16 +1731,7 @@ async function deliverApplicationToRecruiter(
         input.cvLanguage === "en"
           ? `${input.coverLetterText}\n\n---\nCV and cover letter attached.\nSent via LavorAI on behalf of ${candidateName} (${input.replyTo}).\nReply directly to this email to reach ${candidateName}.`
           : `${input.coverLetterText}\n\n---\nCV e lettera motivazionale in allegato.\nInviato tramite LavorAI per conto di ${candidateName} (${input.replyTo}).\nRispondi direttamente a questa email per contattare ${candidateName}.`,
-      attachments: [
-        {
-          filename: `CV_${slugName(candidateName)}.docx`,
-          content: input.cvBuffer,
-        },
-        {
-          filename: `${input.cvLanguage === "en" ? "Cover_Letter" : "Lettera_Motivazionale"}_${slugName(candidateName)}.docx`,
-          content: input.clBuffer,
-        },
-      ],
+      attachments,
       headers: {
         "X-Lavorai-App-Id": input.applicationId,
       },
@@ -1741,19 +1764,15 @@ function renderRecruiterEmail(d: {
   const footer = isIt
     ? `Inviato tramite <a href="https://lavorai.it" style="color:#16a34a;text-decoration:none;">LavorAI</a> per conto di <strong>${escapeHtml(d.candidateName)}</strong> · Rispondi a questa email per contattare direttamente il candidato.`
     : `Sent via <a href="https://lavorai.it" style="color:#16a34a;text-decoration:none;">LavorAI</a> on behalf of <strong>${escapeHtml(d.candidateName)}</strong> · Reply to this email to reach the candidate directly.`;
-  const subjectHeader = isIt
-    ? `Candidatura per <strong>${escapeHtml(d.jobTitle)}</strong>${d.company ? ` · ${escapeHtml(d.company)}` : ""}`
-    : `Application for <strong>${escapeHtml(d.jobTitle)}</strong>${d.company ? ` · ${escapeHtml(d.company)}` : ""}`;
   const docsLine = isIt
     ? "CV e lettera motivazionale in allegato."
     : "CV and cover letter attached.";
 
+  // Removed: bold subject-style header before the letter (was duplicate of email subject)
+  // Removed: 1x1 tracking pixel (d.pixelUrl)
   return `<!doctype html>
 <html lang="${d.lang}"><body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,Inter,Helvetica,sans-serif;color:#0F1012;line-height:1.55;">
   <div style="max-width:640px;margin:0 auto;padding:32px 24px;">
-    <p style="font-size:13px;color:#5B5D61;margin:0 0 18px;">
-      ${subjectHeader}
-    </p>
     <div style="font-size:14.5px;color:#0F1012;">
       ${clHtml}
     </div>
@@ -1761,10 +1780,9 @@ function renderRecruiterEmail(d: {
     <p style="font-size:12.5px;color:#5B5D61;margin:0 0 6px;">
       ${docsLine}
     </p>
-    <p style="font-size:12px;color:#8A8C90;margin:0;">
+    <p style="font-size:11.5px;color:#8A8C90;margin:0;">
       ${footer}
     </p>
-    ${d.pixelUrl ? `<img src="${d.pixelUrl}" width="1" height="1" alt="" style="display:block;border:0;width:1px;height:1px;overflow:hidden;"/>` : ""}
   </div>
 </body></html>`;
 }

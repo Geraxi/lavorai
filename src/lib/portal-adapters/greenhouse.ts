@@ -574,13 +574,19 @@ function buildApplyUrlCandidates(jobUrl: string): string[] {
  * 
  * Flow:
  * 1. Attende che il campo security code sia visibile (già rilevato dal caller)
- * 2. Poll ApplicationReply per max 150s (30 * 5s) aspettando l'email di Greenhouse
+ * 2. Poll ApplicationReply per max 180s (36 * 5s) aspettando l'email di Greenhouse
  * 3. Estrae il codice dall'email di verifica
  * 4. Compila il campo e clicca submit
  * 5. Verifica ricevuta della candidatura, mai il solo stato HTTP
  * 
  * Richiede che l'applicazione usi l'inbound email (reply+<appId>@domain) così
  * l'email di verifica arrivi al sistema invece che all'utente.
+ * 
+ * DIAGNOSTICA: aggiunto logging esteso per debug issue 481/482 "Security code
+ * for your application" received but never completed (Sep-Dec 2024):
+ *  - Log del count di email ricevute ad ogni poll
+ *  - Log delle email Greenhouse trovate MA senza codice estratto
+ *  - Log del from address e subject delle email non-Greenhouse
  */
 export async function submitWithSecurityCode(
   page: Page,
@@ -592,13 +598,13 @@ export async function submitWithSecurityCode(
       where: { applicationId, receivedAt: { gte: new Date(since.getTime() - 10_000) } },
       orderBy: { receivedAt: "desc" },
       take: 15,
-      select: { subject: true, bodyText: true, fromAddress: true },
+      select: { subject: true, bodyText: true, fromAddress: true, receivedAt: true },
     });
   },
   jobUrl = page.url(),
   beforeSubmit?: () => Promise<boolean>,
 ): Promise<ApplyOutcome> {
-  console.log(`[greenhouse/otp] applicationId=${applicationId} waiting for security code field...`);
+  console.log(`[greenhouse/otp] applicationId=${applicationId} waiting for security code field (since=${since.toISOString()})...`);
   
   // 1. Attendi campo security code visibile
   const field = page.locator(SECURITY_CODE_FIELD).first();
@@ -624,37 +630,59 @@ export async function submitWithSecurityCode(
   
   console.log(`[greenhouse/otp] ${applicationId} polling ApplicationReply for security code (max ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s, lookback ${LOOKBACK_BUFFER_MS / 1000}s)...`);
   
+  let lastSeenCount = 0;
+  let greenhouseEmailsFoundButNoCode = 0;
+  
   for (let attempt = 1; attempt <= MAX_ATTEMPTS && !code; attempt++) {
     const replies = await readReplies();
     
+    if (replies.length !== lastSeenCount) {
+      console.log(`[greenhouse/otp] ${applicationId} attempt ${attempt}/${MAX_ATTEMPTS}: ${replies.length} reply(s) in DB (was ${lastSeenCount})`);
+      lastSeenCount = replies.length;
+    }
+    
     for (const reply of replies) {
-      if (!isGreenhouseSecurityMessage(reply)) continue;
+      if (!isGreenhouseSecurityMessage(reply)) {
+        // Log non-Greenhouse emails in first few attempts for debugging
+        if (attempt <= 5) {
+          console.log(`[greenhouse/otp] ${applicationId} non-Greenhouse email: from=${reply.fromAddress} subject="${reply.subject?.slice(0, 60)}" receivedAt=${(reply as { receivedAt?: Date }).receivedAt?.toISOString() ?? 'unknown'}`);
+        }
+        continue;
+      }
+      
+      // This IS a Greenhouse security email
+      greenhouseEmailsFoundButNoCode++;
+      console.log(`[greenhouse/otp] ${applicationId} Greenhouse security message found (#${greenhouseEmailsFoundButNoCode}): from=${reply.fromAddress} subject="${reply.subject?.slice(0, 60)}" bodyLength=${reply.bodyText?.length ?? 0}`);
       
       const extracted = extractApplicationSecurityCode(reply.bodyText ?? "");
       if (extracted) {
         code = extracted;
-        console.log(`[greenhouse/otp] ${applicationId} code extracted from email (attempt ${attempt}/${MAX_ATTEMPTS})`);
+        console.log(`[greenhouse/otp] ${applicationId} ✓ CODE EXTRACTED: "${code}" (attempt ${attempt}/${MAX_ATTEMPTS})`);
         break;
+      } else {
+        console.warn(`[greenhouse/otp] ${applicationId} ⚠ Greenhouse email found BUT code extraction FAILED. Body preview: "${reply.bodyText?.slice(0, 200).replace(/\s+/g, ' ')}"`);
       }
     }
     
     if (!code && attempt < MAX_ATTEMPTS) {
-      console.log(`[greenhouse/otp] ${applicationId} no code yet (attempt ${attempt}/${MAX_ATTEMPTS}), waiting ${POLL_INTERVAL_MS}ms...`);
+      if (attempt % 6 === 0) {
+        console.log(`[greenhouse/otp] ${applicationId} still waiting after ${attempt * POLL_INTERVAL_MS / 1000}s (${replies.length} replies checked, ${greenhouseEmailsFoundButNoCode} Greenhouse emails found but no valid code)...`);
+      }
       await page.waitForTimeout(POLL_INTERVAL_MS);
     }
   }
   
   if (!code) {
-    console.error(`[greenhouse/otp] ${applicationId} timeout: no security code received after ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s`);
+    console.error(`[greenhouse/otp] ${applicationId} TIMEOUT: no valid security code extracted after ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s. Total emails checked: ${lastSeenCount}, Greenhouse security emails found: ${greenhouseEmailsFoundButNoCode}. Verifica: (1) INBOUND_EMAIL_DOMAIN configurato, (2) MX record punta al worker, (3) email non bloccata da Greenhouse spam filter.`);
     return { 
       ok: false, 
       status: "unknown_error", 
-      error: `Codice di verifica Greenhouse non ricevuto in ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s. Verifica che INBOUND_EMAIL_DOMAIN sia configurato e che l'email di verifica non sia bloccata.` 
+      error: `Codice di verifica Greenhouse non ricevuto in ${MAX_ATTEMPTS * POLL_INTERVAL_MS / 1000}s. ${greenhouseEmailsFoundButNoCode > 0 ? `${greenhouseEmailsFoundButNoCode} email Greenhouse trovate ma codice non estratto: verifica il formato dell'email.` : 'Nessuna email Greenhouse ricevuta: verifica routing inbound e filtri spam.'}` 
     };
   }
   
   // 3. Compila il campo con il codice estratto
-  console.log(`[greenhouse/otp] ${applicationId} filling security code field...`);
+  console.log(`[greenhouse/otp] ${applicationId} filling security code field with "${code}"...`);
   await field.fill(code);
   
   // 4. Trova e clicca il pulsante di submit
@@ -668,7 +696,10 @@ export async function submitWithSecurityCode(
     };
   }
   
+  console.log(`[greenhouse/otp] ${applicationId} clicking submit with filled code...`);
   const observed = await observeSubmission(page, "greenhouse", jobUrl,
     () => submit.click({ timeout: 8_000 }), beforeSubmit);
+  
+  console.log(`[greenhouse/otp] ${applicationId} verification submit result: ok=${observed.outcome.ok} status=${observed.outcome.status} confirmation=${('confirmation' in observed.outcome && observed.outcome.confirmation) || 'none'}`);
   return observed.outcome;
 }

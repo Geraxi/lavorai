@@ -5,7 +5,7 @@ import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json"
 import type { OptimizationResult } from "@/types/cv";
 import { recordAiUsage } from "@/lib/ai-usage";
 import {
-  SYSTEM_PROMPT,
+  buildSystemPrompt,
   USER_PROMPT_TEMPLATE,
 } from "@/lib/prompts/cv-optimization";
 import { repairCvFacts } from "@/lib/cv-fact-guard";
@@ -32,6 +32,9 @@ function getClient(): Anthropic {
 export interface OptimizeCVInput {
   cvText: string;
   jobPosting: string;
+  /** Language detected from the job posting: "it" or "en". Used to generate
+   *  language-appropriate cover letter and ensure CV consistency. */
+  jobLang: "it" | "en";
   /** Frasi/concetti extra da intrecciare nella cover letter (non nel CV).
    *  Esempio: un founder che vuole menzionare che sta candidandosi dalla
    *  sua stessa piattaforma. Il modello le integra in modo naturale, non copia
@@ -96,6 +99,8 @@ async function optimizeWithAnthropic(
   let lastPreview = "";
   let lastTruncated = false;
 
+  const systemPrompt = buildSystemPrompt(input.jobLang);
+
   for (let attempt = 1; attempt <= 2; attempt++) {
     // Streaming obbligatorio: con max_tokens ≥ ~21k l'SDK rifiuta le
     // chiamate non-stream ("Streaming is required for operations that may
@@ -111,7 +116,7 @@ async function optimizeWithAnthropic(
         system: [
           {
             type: "text",
-            text: SYSTEM_PROMPT,
+            text: systemPrompt,
             cache_control: { type: "ephemeral" },
           },
           {
@@ -284,13 +289,14 @@ function validateShape(data: unknown): asserts data is OptimizationResult {
 async function optimizeWithOpenAI(input: OptimizeCVInput, userContent: string): Promise<OptimizationResult> {
   const model = process.env.OPENAI_MODEL_STRONG ?? "gpt-5.6-terra";
   const startedAt = Date.now();
+  const systemPrompt = buildSystemPrompt(input.jobLang);
   try {
     const res = await openai().responses.create({
       model,
       max_output_tokens: 16000,
       store: false,
       instructions:
-        SYSTEM_PROMPT +
+        systemPrompt +
         "\nRispondi esclusivamente con l'oggetto JSON richiesto.\n\n" +
         `Ecco il CV originale del candidato. Questo è l'UNICO contenuto verificato di cui dispone il candidato — qualsiasi cosa fuori da qui va considerata assente.\n\n<CV>\n${input.cvText}\n</CV>`,
       input: userContent,
