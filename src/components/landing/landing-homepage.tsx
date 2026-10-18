@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CookieSettingsLink } from "@/components/cookie-settings-link";
 import dynamic from "next/dynamic";
 import localFont from "next/font/local";
 import { useEffect, useState } from "react";
@@ -268,7 +269,7 @@ export function LandingHomepage() {
     <footer className={styles.footer}><div className={styles.container}>
       <div className={styles.footerTop}>
         <div className={styles.footerBrand}><Link href="/" aria-label="LavorAI home"><Brand /></Link><p>{l("Il tuo talento, nuove possibilità.", "Your talent, new possibilities.")}</p></div>
-        <nav aria-label="Footer" className={styles.footerNav}><ul>{[{href:"/lavoro",label:l("Offerte","Jobs")},{href:"/guide",label:l("Guide","Guides")},{href:"/proof",label:l("Prove di invio","Delivery evidence")},{href:"/privacy",label:"Privacy"},{href:"/termini",label:l("Termini","Terms")},{href:"/contatti",label:l("Contatti","Contact")}].map(link=><li key={link.href}><Link href={link.href}>{link.label}</Link></li>)}</ul></nav>
+        <nav aria-label="Footer" className={styles.footerNav}><ul>{[{href:"/lavoro",label:l("Offerte","Jobs")},{href:"/guide",label:l("Guide","Guides")},{href:"/proof",label:l("Prove di invio","Delivery evidence")},{href:"/privacy",label:"Privacy"},{href:"/termini",label:l("Termini","Terms")},{href:"/contatti",label:l("Contatti","Contact")}].map(link=><li key={link.href}><Link href={link.href}>{link.label}</Link></li>)}<li><CookieSettingsLink /></li></ul></nav>
       </div>
       <div className={styles.footerWordmark} aria-hidden="true"><Brand large /></div>
       <div className={styles.footerBottom}><p>© 2026 LavorAI · P.IVA 01452520776</p></div>

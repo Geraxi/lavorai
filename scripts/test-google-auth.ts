@@ -31,6 +31,7 @@ async function main() {
   let writes: Record<string, unknown>[] = [];
   let currentUserId: string | undefined;
   let failReads = false;
+  let registrations: [string, string][] = [];
   const select = (row: Row | undefined, fields: Record<string, unknown> | undefined): any => {
     if (failReads) throw new Error("fixture database unavailable");
     if (!fields) throw Object.assign(new Error("missing unrelated business column"), { code: "P2022" });
@@ -82,6 +83,7 @@ async function main() {
   const deps: Record<string, unknown> = {
     "@/lib/analytics": { AnalyticsEvent: { TRIAL_STARTED: "trial_started" } },
     "@/lib/conversion-events": { recordConversionEvent: async () => undefined },
+    "@/lib/registration-conversion": { createRegistrationConversion: async (_db: unknown, userId: string, method: string) => { registrations.push([userId, method]); return true; } },
     "next-auth": { __esModule: true, CredentialsSignin, default: (options: any) => {
       config = options;
       return { auth: async () => currentUserId ? { user: { id: currentUserId } } : null };
@@ -119,7 +121,7 @@ async function main() {
   const account = { provider: "google", providerAccountId: profile.sub, type: "oidc" as const };
   function reset(linked = true) {
     users = [fresh()]; accounts = linked ? [{ ...account, userId: users[0].id }] : [];
-    writes = []; currentUserId = undefined; failReads = false;
+    writes = []; currentUserId = undefined; failReads = false; registrations = [];
   }
   async function login(p: any = profile, a = account) {
     const user = provider.profile(p);
@@ -144,10 +146,12 @@ async function main() {
   const verifiedAt = users[0].emailVerified;
   await login();
   assert.equal(users[0].emailVerified, verifiedAt, "Do not reset verification or trial on repeat login");
+  assert.deepEqual(registrations, [], "Returning Google logins never issue a Meta registration event");
 
   reset(false); users = [];
   assert.equal((await login()).isNewUser, true);
   assert.equal(users.length, 1); assert.equal(accounts.length, 1);
+  assert.deepEqual(registrations, [[users[0].id, "google"]], "A brand-new Google account issues exactly one registration event");
   assert.equal(writes[0].emailVerified, null, "Installed Auth.js stores null during OAuth creation");
   assert.ok(users[0].emailVerified, "Auth.js overwrites profile verification; signIn must restore it after linking");
   assert.equal(users[0].trialEndsAt.getTime() - users[0].proTrialUsedAt.getTime(), 7 * 86400_000);

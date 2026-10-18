@@ -21,6 +21,7 @@ import { ReferralCard } from "@/components/referral-card";
 import { Suspense } from "react";
 import { PostCheckoutRefresh } from "@/components/post-checkout-refresh";
 import { PrivacyConsentForm } from "@/components/privacy-consent-form";
+import { CookieSettingsLink } from "@/components/cookie-settings-link";
 
 export const metadata: Metadata = { title: "Impostazioni" };
 export const dynamic = "force-dynamic";
@@ -178,6 +179,20 @@ export default async function SettingsPage() {
           <SectionCard id="privacy-consent">
             <SectionHead title={user.locale === "en" ? "Privacy consent" : "Consenso privacy"} />
             <SectionBody><PrivacyConsentForm recorded={Boolean(me?.privacyConsentAt)} locale={user.locale} /></SectionBody>
+          </SectionCard>
+
+          <SectionCard id="cookie-settings">
+            <SectionHead title={user.locale === "en" ? "Cookies & advertising" : "Cookie e pubblicità"} />
+            <SectionBody>
+              <div className="flex items-center justify-between gap-4">
+                <p style={{ fontSize: 12.5, color: "var(--fg-muted)", margin: 0 }}>
+                  {user.locale === "en"
+                    ? "Choose separately whether to allow analytics and advertising tools (Meta Pixel, Google). You can withdraw at any time."
+                    : "Scegli separatamente se consentire strumenti di analisi e pubblicità (Meta Pixel, Google). Puoi revocare il consenso in qualsiasi momento."}
+                </p>
+                <CookieSettingsLink className="ds-btn ds-btn-sm" style={{ padding: "6px 12px", border: "1px solid var(--border-ds)", whiteSpace: "nowrap" }} />
+              </div>
+            </SectionBody>
           </SectionCard>
 
           <SectionCard>

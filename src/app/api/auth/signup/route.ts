@@ -9,6 +9,7 @@ import { checkOrigin } from "@/lib/csrf";
 import { sendVerificationEmail } from "@/lib/email-verification";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
+import { createRegistrationConversion } from "@/lib/registration-conversion";
 
 export const runtime = "nodejs";
 
@@ -147,6 +148,10 @@ export async function POST(request: NextRequest) {
       },
       select: { id: true, email: true, locale: true, name: true },
     });
+
+    // Brand-new account confirmed (row created; email verification is soft
+    // and happens later). Issue the one-shot opaque Meta event ID now.
+    await createRegistrationConversion(prisma, user.id, "password");
 
     await recordConversionEvent(AnalyticsEvent.SIGNUP_SUCCESS, {
       userId: user.id,

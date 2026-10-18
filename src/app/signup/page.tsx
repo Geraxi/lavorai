@@ -88,14 +88,10 @@ function SignupContent() {
         setErr(body?.message ?? "Impossibile creare l'account. Riprova.");
         return;
       }
-      // Track signup conversion su Meta+Google (retargeting audiences).
-      try {
-        const { trackConversion } = await import("@/components/tracking-pixels");
-        trackConversion("CompleteRegistration", { content_name: "signup_email" });
-        trackConversion("Lead");
-      } catch {
-        /* silenzioso — se pixel non caricato, non blocca il flow */
-      }
+      // Meta CompleteRegistration is NOT fired here: the server issued a
+      // one-shot event ID at account creation, claimed on the first
+      // authenticated page (components/registration-conversion.tsx) and only
+      // sent with advertising consent.
       const result = await signIn("password", { email, password, redirect: false }).catch(() => null);
       if (result && !result.error) {
         window.location.href = plan === "pro" || plan === "pro_plus"

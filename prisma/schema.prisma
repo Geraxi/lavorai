@@ -190,6 +190,42 @@ model User {
   signupUtmMedium    String? // valore ?utm_medium
   signupUtmCampaign  String? // valore ?utm_campaign
   signupLandingPath  String? // primo path visitato (es. "/auto-candidatura")
+
+  // One-shot Meta CompleteRegistration (relation only; no column on User).
+  registrationConversion RegistrationConversion?
+}
+
+/// Append-only cookie/advertising consent evidence. Never updated or deleted
+/// by the app: a withdrawal inserts a new row. visitorId is an opaque random
+/// browser reference, not linked to User. noticeVersion maps to the exact
+/// text/purposes/recipients in src/lib/consent/notice.ts.
+model ConsentRecord {
+  id              String   @id @default(cuid())
+  visitorId       String
+  noticeVersion   String
+  region          String // ISO 3166-1 alpha-2 or "unknown"
+  consentRequired Boolean
+  analytics       String // "granted" | "denied"
+  advertising     String // "granted" | "denied"
+  action          String // "accept_all" | "reject_all" | "save_preferences" | "withdraw"
+  source          String // "banner" | "settings"
+  createdAt       DateTime @default(now())
+
+  @@index([visitorId, createdAt])
+}
+
+/// One row per brand-new account, created at account creation. eventId is the
+/// opaque Meta eventID; claimedAt makes the browser-side event one-shot.
+model RegistrationConversion {
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  eventId   String    @unique
+  method    String // "password" | "google" | "magic_link"
+  createdAt DateTime  @default(now())
+  claimedAt DateTime?
+  outcome   String? // "released" | "blocked_no_consent" | "expired"
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 /// Pipeline editoriale SEO. Le bozze generate dall'AI non diventano mai

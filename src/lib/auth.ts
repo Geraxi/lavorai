@@ -1,5 +1,6 @@
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
+import { createRegistrationConversion } from "@/lib/registration-conversion";
 import NextAuth, { type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -290,7 +291,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
   events: {
+    // Fires ONLY when the adapter creates a brand-new User (first Google
+    // sign-in or first magic-link sign-in). Returning logins never reach it.
+    // Credentials signup creates its user in /api/auth/signup instead.
     async createUser({ user }) {
+      if (user.id) {
+        // Auth.js creates email-provider users with emailVerified set and
+        // OAuth (Google) users with emailVerified null.
+        await createRegistrationConversion(prisma, user.id, (user as { emailVerified?: Date | null }).emailVerified ? "magic_link" : "google");
+      }
       if (user.id) await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
         userId: user.id, plan: "pro", path: "/signup", valueCents: 0,
         properties: { days: 7, applicationLimit: 5 }, dedupeKey: `trial_started:${user.id}`,
