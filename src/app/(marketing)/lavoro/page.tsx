@@ -15,12 +15,12 @@ import { isRemoteJob } from "@/lib/job-seo";
 export const revalidate = 1800;
 
 export const metadata: Metadata = {
-  title: "Trova lavoro: offerte aggiornate e candidature in un clic",
+  title: "Offerte di lavoro aggiornate ogni giorno, candidature su misura",
   description:
-    "Trova lavoro in Italia o da remoto tra offerte aggiornate dai portali delle aziende. Cerca per ruolo e città, poi candidati con CV e lettera su misura.",
+    "Offerte di lavoro in Italia o da remoto, aggiornate dai portali delle aziende. Cerca per ruolo e città: LavorAI prepara CV e lettera su misura e decidi tu quando inviare.",
   alternates: { canonical: "/lavoro" },
   openGraph: {
-    title: "Trova lavoro tra offerte aggiornate ogni giorno | LavorAI",
+    title: "Offerte di lavoro aggiornate ogni giorno | LavorAI",
     description: "Cerca offerte per ruolo, città o lavoro da remoto. LavorAI prepara CV e lettera su misura per ogni candidatura.",
     url: "/lavoro",
   },
@@ -58,7 +58,7 @@ export default async function LavoroHub({ searchParams }: { searchParams: Promis
         ? `Offerte di lavoro a ${citta}`
         : q
           ? `Offerte di lavoro: ${q}`
-          : "Trova lavoro tra offerte aggiornate ogni giorno";
+          : "Offerte di lavoro aggiornate ogni giorno";
 
   const faq = {
     "@context": "https://schema.org",
@@ -66,10 +66,10 @@ export default async function LavoroHub({ searchParams }: { searchParams: Promis
     mainEntity: [
       {
         "@type": "Question",
-        name: "Come posso trovare lavoro su LavorAI?",
+        name: "Come funzionano le offerte su LavorAI?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Cerca un ruolo o una città, apri le offerte aggiornate e candidati. Dopo la registrazione puoi anche impostare preferenze e ricevere candidature preparate sui lavori compatibili.",
+          text: "Cerca un ruolo o una città e apri le offerte aggiornate. Dopo la registrazione imposti le preferenze: LavorAI prepara CV e lettera su misura per le offerte compatibili e tu decidi quando inviare.",
         },
       },
       {

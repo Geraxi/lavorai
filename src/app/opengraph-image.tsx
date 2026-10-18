@@ -122,9 +122,9 @@ export default async function OG() {
               flexDirection: "column",
             }}
           >
-            <span>Il copilota italiano</span>
+            <span>Candidature su misura,</span>
             <span>
-              per la <span style={{ color: "#16A34A" }}>ricerca del lavoro</span>.
+              sotto il tuo <span style={{ color: "#16A34A" }}>controllo</span>.
             </span>
           </div>
           <div
@@ -138,8 +138,8 @@ export default async function OG() {
               display: "flex",
             }}
           >
-            Auto-apply su Greenhouse, Lever, Workable. CV ottimizzato e
-            cover letter AI per ogni annuncio.
+            Offerte pertinenti, CV e lettera su misura per ognuna,
+            ogni candidatura tracciata. Tu decidi quando inviare.
           </div>
         </div>
 
@@ -173,7 +173,7 @@ export default async function OG() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ color: "#16A34A", fontSize: 22 }}>✓</span>
-              <span>Pausa quando vuoi</span>
+              <span>Approvi tu ogni invio</span>
             </div>
           </div>
           <div

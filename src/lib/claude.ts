@@ -7,6 +7,7 @@ import {
   SYSTEM_PROMPT,
   USER_PROMPT_TEMPLATE,
 } from "@/lib/prompts/cv-optimization";
+import { repairCvFacts } from "@/lib/cv-fact-guard";
 
 /**
  * Modello Anthropic usato solo come fallback dell'ottimizzazione CV.
@@ -70,8 +71,10 @@ export async function optimizeCV(
   const order = providerOrder("cv_optimization");
   for (const provider of order) {
     try {
-      if (provider === "openai") return await optimizeWithOpenAI(input, userContent);
-      return await optimizeWithAnthropic(input, userContent);
+      const raw = provider === "openai"
+        ? await optimizeWithOpenAI(input, userContent)
+        : await optimizeWithAnthropic(input, userContent);
+      return enforceCvFacts(input, raw);
     } catch (err) {
       if (!isFailoverError(err) || provider === order[order.length - 1]) throw err;
       console.warn(
@@ -150,6 +153,25 @@ async function optimizeWithAnthropic(
       ? "Risposta AI troncata (CV troppo lungo). Riprova."
       : "Il servizio AI ha risposto con un formato non valido. Riprova tra qualche secondo.",
   );
+}
+
+/**
+ * Guard deterministico: datori di lavoro, istituti e anni devono essere
+ * tracciabili al CV originale (o al contesto scritto dall'utente). I fatti
+ * non tracciabili vengono rimossi/svuotati, mai sostituiti. Vedi
+ * src/lib/cv-fact-guard.ts.
+ */
+function enforceCvFacts(input: OptimizeCVInput, result: OptimizationResult): OptimizationResult {
+  if (!result.optimizedCV) return result;
+  const source = [input.cvText, input.sessionContext ?? ""].join("\n");
+  const { cv, result: check } = repairCvFacts(source, result.optimizedCV);
+  if (check.issues.length > 0) {
+    console.warn("[optimizeCV] fact guard", {
+      ok: check.ok,
+      issues: check.issues.map((issue) => ({ kind: issue.kind, path: issue.path, action: issue.action })),
+    });
+  }
+  return { ...result, optimizedCV: cv };
 }
 
 function buildSessionContextBlock(ctx: string | null | undefined): string {

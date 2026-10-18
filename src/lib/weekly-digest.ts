@@ -143,7 +143,7 @@ function renderDigest(
   const greeting = first ? (en ? `Hi ${first},` : `Ciao ${first},`) : undefined;
   const noRoles = roles.length === 0;
   const subject = noRoles
-    ? en ? "Tell us what you're looking for and LavorAI applies for you" : "Dicci cosa cerchi e LavorAI si candida per te"
+    ? en ? "Tell us what you're looking for and LavorAI prepares your applications" : "Dicci cosa cerchi e LavorAI prepara le tue candidature"
     : en
       ? `${jobs.length} new ${roles[0]} openings this week you haven't applied to`
       : `${jobs.length} nuove offerte "${roles[0]}" questa settimana a cui non ti sei candidato`;
@@ -165,11 +165,11 @@ function renderDigest(
     greeting,
     paragraphs: noRoles
       ? en
-        ? ["You signed up to LavorAI but haven't told us which roles you want. Add 1 to 3 roles and a city: from then on we find matching openings every day and prepare the application for you."]
-        : ["Ti sei iscritto a LavorAI ma non ci hai ancora detto quali ruoli cerchi. Aggiungi 1-3 ruoli e una città: da lì in poi troviamo ogni giorno le offerte compatibili e prepariamo la candidatura al posto tuo."]
+        ? ["You signed up to LavorAI but haven't told us which roles you want. Add 1 to 3 roles and a city: from then on we find matching openings every day and prepare each application for you to review."]
+        : ["Ti sei iscritto a LavorAI ma non ci hai ancora detto quali ruoli cerchi. Aggiungi 1-3 ruoli e una città: da lì in poi troviamo ogni giorno le offerte compatibili e prepariamo ogni candidatura, che rivedi tu prima dell'invio."]
       : en
-        ? [`These entered the pool this week for <strong>${esc(roles.slice(0, 3).join(", "))}</strong>. In view-only mode they sit here; with Pro, LavorAI applies to them for you, CV and cover letter included.`]
-        : [`Sono entrate nel pool questa settimana per <strong>${esc(roles.slice(0, 3).join(", "))}</strong>. In sola visualizzazione restano qui; con Pro, LavorAI si candida per te, CV e lettera inclusi.`],
+        ? [`These entered the pool this week for <strong>${esc(roles.slice(0, 3).join(", "))}</strong>. In view-only mode they sit here; with Pro, LavorAI prepares a tailored CV and cover letter for each one and you decide when to send.`]
+        : [`Sono entrate nel pool questa settimana per <strong>${esc(roles.slice(0, 3).join(", "))}</strong>. In sola visualizzazione restano qui; con Pro, LavorAI prepara CV e lettera su misura per ognuna e tu decidi quando inviare.`],
     rawBlock: noRoles ? undefined : `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 22px;border-bottom:1px solid #EEECE6;">${rows}</table>`,
     cta: noRoles
       ? { label: en ? "Set my preferences" : "Imposta le preferenze", url: `${site}/preferences` }

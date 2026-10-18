@@ -12,6 +12,7 @@ import {
   MapPin, Plus, Search, Send,
 } from "lucide-react";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
+import { CvChanges } from "./cv-changes";
 
 export interface MaterialItem {
   id: string;
@@ -35,7 +36,8 @@ export interface MaterialItem {
 }
 
 type Filter = "all" | "review" | "ready" | "sent";
-type Tab = "cv" | "letter" | "job";
+type Tab = "cv" | "changes" | "letter" | "job";
+const TABS: Tab[] = ["cv", "changes", "letter", "job"];
 type Sort = "newest" | "oldest" | "match";
 
 const humanReplyKinds = new Set(["risposta", "colloquio", "rifiutata"]);
@@ -211,13 +213,14 @@ export function MaterialiView({ items, total }: { items: MaterialItem[]; total: 
 
                 <div className="mat-detail-tabs" role="tablist" aria-label={tr("Documenti del pacchetto")}>
                   {([
-                    ["cv", "CV su misura"], ["letter", "Lettera"], ["job", "Annuncio"],
-                  ] as const).map(([key, label]) => <button key={key} type="button" role="tab" id={`mat-tab-${key}`} aria-selected={tab === key} aria-controls={`mat-panel-${key}`} tabIndex={tab === key ? 0 : -1} onKeyDown={event => { const keys: Tab[] = ["cv", "letter", "job"]; const index = keys.indexOf(key); const next = event.key === "ArrowRight" ? keys[(index + 1) % 3] : event.key === "ArrowLeft" ? keys[(index + 2) % 3] : event.key === "Home" ? "cv" : event.key === "End" ? "job" : null; if (next) { event.preventDefault(); setTab(next); document.getElementById(`mat-tab-${next}`)?.focus(); } }} className={tab === key ? "is-active" : ""} onClick={() => setTab(key)}>{tr(label)}</button>)}
+                    ["cv", "CV su misura"], ["changes", "Modifiche"], ["letter", "Lettera"], ["job", "Annuncio"],
+                  ] as const).map(([key, label]) => <button key={key} type="button" role="tab" id={`mat-tab-${key}`} aria-selected={tab === key} aria-controls={`mat-panel-${key}`} tabIndex={tab === key ? 0 : -1} onKeyDown={event => { const keys = TABS; const index = keys.indexOf(key); const next = event.key === "ArrowRight" ? keys[(index + 1) % keys.length] : event.key === "ArrowLeft" ? keys[(index + keys.length - 1) % keys.length] : event.key === "Home" ? keys[0] : event.key === "End" ? keys[keys.length - 1] : null; if (next) { event.preventDefault(); setTab(next); document.getElementById(`mat-tab-${next}`)?.focus(); } }} className={tab === key ? "is-active" : ""} onClick={() => setTab(key)}>{tr(label)}</button>)}
                 </div>
 
                 <div className="mat-detail-main">
                   <div className="mat-preview" role="tabpanel" id={`mat-panel-${tab}`} aria-labelledby={`mat-tab-${tab}`}>
                     {tab === "cv" ? <CvPreview key={selected.id} item={selected} /> : null}
+                    {tab === "changes" ? <CvChanges key={selected.id} applicationId={selected.id} hasDocx={selected.hasDocx} /> : null}
                     {tab === "letter" ? selected.letterText ? <article className="mat-letter-paper"><span>{locale === "en" ? "Cover letter for" : "Lettera per"} {selected.company}</span><h3>{selected.title}</h3><div>{selected.letterText}</div></article> : <div className="mat-preview-fallback"><Mail size={32} aria-hidden /><h3>{selected.hasLetter ? tr("Lettera pronta da scaricare") : tr("Lettera non disponibile")}</h3><p>{selected.hasLetter ? tr("Puoi scaricarla in formato DOCX dal pannello accanto.") : tr("Questa candidatura non ha ancora una lettera associata.")}</p></div> : null}
                     {tab === "job" ? <div className="mat-job-paper"><BriefcaseBusiness size={30} aria-hidden /><span>{tr("Annuncio originale")}</span><h3>{selected.title}</h3><p>{selected.company}{selected.location ? ` · ${selected.location}` : ""}</p><a href={selected.jobUrl} target="_blank" rel="noopener noreferrer">{tr("Apri annuncio")} <ArrowUpRight size={16} aria-hidden /></a></div> : null}
                   </div>

@@ -16,12 +16,12 @@ export const revalidate = 1800;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 
 export const metadata: Metadata = {
-  title: "Lavoro categorie protette: offerte L. 68/99 e candidatura automatica",
+  title: "Lavoro categorie protette: offerte L. 68/99 e candidature su misura",
   description:
-    "Offerte di lavoro riservate alle categorie protette (art. 1 e art. 18 L. 68/99) aggiornate ogni giorno. LavorAI trova gli annunci con quota riservata e si candida per te.",
+    "Offerte di lavoro riservate alle categorie protette (art. 1 e art. 18 L. 68/99) aggiornate ogni giorno. LavorAI trova gli annunci con quota riservata e prepara candidature su misura: decidi tu quando inviarle.",
   keywords: ["lavoro categorie protette", "categorie protette offerte di lavoro", "legge 68/99 lavoro", "art. 1 legge 68", "collocamento mirato", "invalidità civile lavoro", "assunzioni categorie protette"],
   alternates: { canonical: "/categorie-protette" },
-  openGraph: { type: "website", title: "Lavoro categorie protette: offerte L. 68/99", description: "Offerte riservate aggiornate ogni giorno e candidatura automatica con LavorAI.", url: "/categorie-protette" },
+  openGraph: { type: "website", title: "Lavoro categorie protette: offerte L. 68/99", description: "Offerte riservate aggiornate ogni giorno e candidature su misura con LavorAI.", url: "/categorie-protette" },
 };
 
 const FAQ = [
@@ -80,7 +80,7 @@ export default async function CategorieProtettePage() {
           <nav aria-label="breadcrumb" className="gd-crumbs">
             <Link href="/">LavorAI</Link> <span>/</span> <span>Categorie protette</span>
           </nav>
-          <h1>Lavoro per categorie protette: offerte riservate L. 68/99, candidatura automatica</h1>
+          <h1>Lavoro per categorie protette: offerte riservate L. 68/99, candidature su misura</h1>
           <p className="gd-lead">
             Le aziende con più di 15 dipendenti devono riservare una quota di assunzioni alle categorie protette. Gli annunci esistono, ma sono sparsi su decine di portali e spesso nascosti nel testo. LavorAI li riconosce ogni giorno e si candida al posto tuo, con CV e lettera su misura.
           </p>

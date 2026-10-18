@@ -1,5 +1,6 @@
 const english: Record<string, string> = {
   "Riepilogo documenti": "Document summary",
+  "Modifiche": "Changes",
   "Filtra i pacchetti": "Filter packages",
   "Pacchetti per posizione": "Position packages",
   "Dettaglio pacchetto": "Package details",

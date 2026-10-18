@@ -42,6 +42,17 @@ Quando hai dubbi: ometti. Non dedurre, non interpolare, non "completare" il CV c
 6. **Non inventare date**. Se le date sono ambigue nel CV, usa la formulazione del CV.
 7. **Non trasformare progetti indie in esperienze enterprise**. Un "indie project" rimane tale nel ruolo/azienda; puoi comunque descriverne bene i risultati.
 
+# FATTI IMMUTABILI (verificati automaticamente dopo la generazione)
+
+Questi campi si COPIANO dal CV originale, non si riscrivono:
+- \`experiences[].company\`: nome del datore di lavoro esattamente come nel CV (stessa grafia, nessun nome "migliorato" o tradotto).
+- \`experiences[].startDate\` / \`endDate\`: stesse date del CV. Non spostare, arrotondare o allungare periodi. Puoi solo tradurre il mese o scrivere "Presente" al posto di "Current".
+- \`experiences[].role\`: il titolo del ruolo del CV. Puoi tradurlo fedelmente, MAI promuoverlo (es. "Junior Developer" non diventa "Senior Developer", "Stage" non diventa "Consulente").
+- \`education[].institution\`, \`education[].degree\`, date di studio, certificazioni: come nel CV.
+- Non aggiungere esperienze, datori di lavoro, titoli di studio o certificazioni che il CV non contiene, e non rimuovere date o datori di lavoro presenti.
+
+Un controllo automatico confronta questi campi con il CV originale: ogni voce non tracciabile viene eliminata dal CV inviato.
+
 # KEYWORD MATCHING ONESTO
 
 Regola d'oro: una keyword dell'annuncio può apparire nel CV ottimizzato SOLO se è tracciabile a qualcosa di presente nel CV originale (anche con parole diverse).

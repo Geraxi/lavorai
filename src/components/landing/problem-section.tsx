@@ -64,7 +64,7 @@ export function ProblemSection({ l, cta }: { l: Label; cta: ReactNode }) {
 
       <Reveal className={`${styles.centerHeading} ${styles.solutionHeading}`}>
         <p className={styles.problemKicker}>{l("La soluzione", "The solution")}</p>
-        <h2>{l("Il lavoro pesante lo fa LavorAI.", "LavorAI does the heavy lifting.")}<br /><span>{l("Tu pensa ai colloqui.", "You focus on interviews.")}</span></h2>
+        <h2>{l("Il lavoro pesante lo fa LavorAI.", "LavorAI does the heavy lifting.")}<br /><span>{l("Tu decidi quando inviare.", "You decide when to send.")}</span></h2>
         <p className={styles.lead}>{l(
           "Trova gli annunci adatti al tuo profilo, adatta il CV a ogni posizione e prepara le candidature per te. Tu confermi l’invio, e ogni invio ha una traccia.",
           "It finds listings that fit your profile, tailors your CV to each role and prepares your applications. You confirm before sending, and every submission has a trail.",
