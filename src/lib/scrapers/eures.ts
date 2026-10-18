@@ -6,10 +6,20 @@ import { stripHtml } from "./feed-utils";
  * offerte dei servizi pubblici per l'impiego, Italia inclusa. Nessuna auth.
  * Sola lettura: l'utente si candida sul sito dell'annuncio (link-out).
  *   POST https://europa.eu/eures/api/jv-searchengine/public/jv-search/search
+ * 
+ * DISABLED by default (EURES_ENABLED env flag) because EURES ToS forbid
+ * automated extraction by non-partner organizations. Jobs already ingested
+ * from EURES are blocked from auto-apply via source filter in auto-apply-cron.ts.
  */
 
 const SEARCH = "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search";
 const DETAIL = "https://europa.eu/eures/api/jv-searchengine/public/jv/id/";
+
+/**
+ * Feature flag: EURES disabled by default due to ToS restrictions.
+ * Only enable if LavorAI becomes an official EURES partner.
+ */
+export const EURES_ENABLED = process.env.EURES_ENABLED === "true";
 
 interface EuresHit {
   id?: string;
@@ -110,6 +120,10 @@ export const EURES_DEFAULT_KEYWORDS = [
 ];
 
 export async function fetchEuresMulti(keywords: string[] = EURES_DEFAULT_KEYWORDS): Promise<JobListItem[]> {
+  if (!EURES_ENABLED) {
+    console.log("[eures] DISABLED (EURES_ENABLED=false): skipping ingestion due to ToS restrictions");
+    return [];
+  }
   const out: JobListItem[] = [];
   for (const k of keywords) out.push(...(await fetchEuresJobs(k, { country: "it", pages: 1, perPage: 50 })));
   const seen = new Set<string>();

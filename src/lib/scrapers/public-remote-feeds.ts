@@ -1,8 +1,21 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { cleanHtmlText, decodeHtmlEntities } from "./html-clean";
 
-// Free, attributed feeds. Bounded requests; the daily sync handles refreshes.
+/**
+ * Free, attributed feeds. Bounded requests; the daily sync handles refreshes.
+ * 
+ * We Work Remotely: DISABLED by default (WWR_ENABLED env flag) because WWR's
+ * ToS require applicants to apply through their site (no direct apply links).
+ * Jobs already ingested from WWR are blocked from auto-apply via source filter
+ * in auto-apply-cron.ts and board-apply-resolver.ts.
+ */
 const UA = "LavorAI/1.0 (+https://lavorai.it)";
+
+/**
+ * Feature flag: We Work Remotely disabled by default due to ToS restrictions.
+ * WWR requires applications to go through their site.
+ */
+export const WWR_ENABLED = process.env.WWR_ENABLED === "true";
 const italy = /\b(italy|italia|IT)\b/i;
 const worldwide = /worldwide|anywhere in the world|europe|emea/i;
 function date(value: unknown): Date | null {
@@ -80,6 +93,10 @@ export async function fetchHimalayasJobs(): Promise<JobListItem[]> {
   return [...out.values()];
 }
 export async function fetchWwrJobs(): Promise<JobListItem[]> {
+  if (!WWR_ENABLED) {
+    console.log("[weworkremotely] DISABLED (WWR_ENABLED=false): skipping ingestion due to ToS restrictions");
+    return [];
+  }
   try {
     const res = await fetch("https://weworkremotely.com/remote-jobs.rss", { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000), next: { revalidate: 86400 } });
     return res.ok ? parseWwr(await res.text()) : [];
