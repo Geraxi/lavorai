@@ -20,6 +20,7 @@ const ITEMS: Array<{ href: string; label: string }> = [
   { href: "/admin/product", label: "Product" },
   { href: "/admin/traffic", label: "Traffico" },
   { href: "/admin/delivery", label: "Consegna" },
+  { href: "/admin/reliability", label: "Affidabilità" },
   { href: "/admin/jobs", label: "Job pool" },
   { href: "/admin/automation", label: "Automazione & Utenti" },
   { href: "/admin/db-health", label: "DB health" },

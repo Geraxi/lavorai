@@ -38,6 +38,7 @@ import {
 } from "@/lib/scrapers/ats-companies";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
+import { withAiUsageContext } from "@/lib/ai-usage";
 
 // Set di nomi azienda con board ATS noto (normalizzati). Usato per evitare
 // il fallback email verso indirizzi scrapati quando esiste un portale
@@ -90,6 +91,14 @@ function applicationDocumentFilename(
  */
 
 export async function processApplication(
+  applicationId: string,
+  opts?: { forceRealSubmit?: boolean },
+): Promise<void> {
+  // Binds AI token usage of this run to the application (cost per application).
+  return withAiUsageContext({ applicationId }, () => processApplicationRun(applicationId, opts));
+}
+
+async function processApplicationRun(
   applicationId: string,
   opts?: { forceRealSubmit?: boolean },
 ): Promise<void> {

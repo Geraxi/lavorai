@@ -44,6 +44,9 @@ jobs:
       - name: Credit retry and worker safety tests
         run: npm run test:credit-retry && npm run test:worker-gates
 
+      - name: Application lifecycle, duplicate prevention and retry rules
+        run: npm run test:application-lifecycle && npm run test:reliability-metrics
+
       - name: Auto-apply quality regressions
         run: npm run test:auto-apply-quality
 
