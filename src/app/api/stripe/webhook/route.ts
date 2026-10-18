@@ -4,7 +4,6 @@ import { stripe, priceIdToTier } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
-import { TIERS } from "@/lib/billing";
 import { CARD_VERIFICATION_EXPAND, subscriptionAccessStatus, subscriptionAccessWriteGuard } from "@/lib/stripe-subscription-access";
 
 export const runtime = "nodejs";
@@ -147,7 +146,7 @@ export async function POST(request: NextRequest) {
           await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
             userId: convertedUser.id,
             plan: tier,
-            valueCents: Math.round(TIERS[tier].price * 100),
+            valueCents: item?.price.unit_amount ?? null,
             properties: { stripeStatus: sub.status, checkoutPaymentStatus: sess.payment_status },
             dedupeKey: `subscription_started:${sub.id}`,
           });
@@ -158,7 +157,7 @@ export async function POST(request: NextRequest) {
             await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
               userId: convertedUser.id,
               plan: tier,
-              valueCents: Math.round(TIERS[tier].price * 100),
+              valueCents: item?.price.unit_amount ?? null,
               properties: { stripeStatus: sub.status, checkoutPaid: true },
               dedupeKey: `purchase_completed:${sub.id}`,
             });
@@ -263,7 +262,7 @@ export async function POST(request: NextRequest) {
           await recordConversionEvent(AnalyticsEvent.SUBSCRIPTION_STARTED, {
             userId: convertedUser.id,
             plan: tier,
-            valueCents: Math.round(TIERS[tier].price * 100),
+            valueCents: item?.price.unit_amount ?? null,
             properties: { stripeStatus: sub.status },
             dedupeKey: `subscription_started:${sub.id}`,
           });
@@ -272,7 +271,7 @@ export async function POST(request: NextRequest) {
           await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
             userId: convertedUser.id,
             plan: tier,
-            valueCents: Math.round(TIERS[tier].price * 100),
+            valueCents: item?.price.unit_amount ?? null,
             properties: { stripeStatus: sub.status },
             dedupeKey: `purchase_completed:${sub.id}`,
           });

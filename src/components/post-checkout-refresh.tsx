@@ -30,6 +30,7 @@ export function PostCheckoutRefresh() {
   const attempts = useRef(0);
 
   const upgrade = params.get("upgrade");
+  const interval = params.get("interval") === "year" ? "year" : "month";
   const subscribed = params.get("subscribed") === "1";
 
   // CASO 1: auto-trigger checkout da ?upgrade=<tier>
@@ -42,7 +43,7 @@ export function PostCheckoutRefresh() {
         const res = await fetch("/api/stripe/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tier: upgrade }),
+          body: JSON.stringify({ tier: upgrade, interval }),
         });
         const body = await res.json().catch(() => ({}));
         if (res.ok && body?.url) {
@@ -57,7 +58,7 @@ export function PostCheckoutRefresh() {
         toast.error("Errore di rete durante il checkout. Riprova.");
       }
     })();
-  }, [upgrade]);
+  }, [upgrade, interval]);
 
   // CASO 2: refresh post-pagamento con polling sulla latenza webhook
   useEffect(() => {

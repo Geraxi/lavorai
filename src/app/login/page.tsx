@@ -24,6 +24,7 @@ function LoginContent() {
   const params = useSearchParams();
   const next = params.get("next") ?? "/dashboard";
   const plan = params.get("plan");
+  const intervalQuery = params.get("interval") === "year" ? "&interval=year" : "";
   const errorKey = authErrorMessageKey(params);
   const callbackError = params.getAll("error").find(value => value !== "1") ?? null;
   useEffect(() => { observeGoogleCallbackError(callbackError); }, [callbackError]);
@@ -36,7 +37,7 @@ function LoginContent() {
   const [resending, setResending] = useState(false);
   const [resendDone, setResendDone] = useState(false);
 
-  const callbackUrl = plan ? `/settings?upgrade=${plan}` : next;
+  const callbackUrl = plan ? `/settings?upgrade=${plan}${intervalQuery}` : next;
 
   async function onPasswordSubmit(e: FormEvent) {
     e.preventDefault();
@@ -121,7 +122,7 @@ function LoginContent() {
           {loading ? <><Icon name="refresh" size={14} /> {t("loginSubmitting")}</> : t("submitLogin")}
         </button>
       </form>
-      <p className="auth-switch">{t("noAccountQuestion")} <Link href={`/signup${plan ? `?plan=${plan}` : ""}`}>{t("submitSignup")}</Link></p>
+      <p className="auth-switch">{t("noAccountQuestion")} <Link href={`/signup${plan ? `?plan=${plan}${intervalQuery}` : ""}`}>{t("submitSignup")}</Link></p>
       <p className="auth-terms">{t("loginFooterPre")}<Link href="/termini">{t("loginFooterTerms")}</Link>{t("loginFooterMid")}<Link href="/privacy">{t("loginFooterPrivacy")}</Link>{t("loginFooterPost")}</p>
     </AuthShell>
   );

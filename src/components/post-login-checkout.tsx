@@ -14,8 +14,10 @@ export function PostLoginCheckout() {
   useEffect(() => {
     if (firedRef.current) return;
     let plan: string | null = null;
+    let interval: "month" | "year" = "month";
     try {
       plan = localStorage.getItem("lavorai.selectedPlan");
+      interval = localStorage.getItem("lavorai.selectedInterval") === "year" ? "year" : "month";
     } catch {
       return;
     }
@@ -26,12 +28,13 @@ export function PostLoginCheckout() {
         const res = await fetch("/api/stripe/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tier: plan }),
+          body: JSON.stringify({ tier: plan, interval }),
         });
         const body = await res.json().catch(() => ({}));
         if (res.ok && body?.url) {
           try {
             localStorage.removeItem("lavorai.selectedPlan");
+            localStorage.removeItem("lavorai.selectedInterval");
           } catch {
             /* noop */
           }
