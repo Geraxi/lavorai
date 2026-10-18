@@ -16,12 +16,12 @@ export const revalidate = 1800;
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 
 export const metadata: Metadata = {
-  title: "Lavoro categorie protette: offerte L. 68/99 e candidatura automatica",
+  title: "Lavoro categorie protette: offerte L. 68/99 e candidature su misura",
   description:
-    "Offerte di lavoro riservate alle categorie protette (art. 1 e art. 18 L. 68/99) aggiornate ogni giorno. LavorAI trova gli annunci con quota riservata e si candida per te.",
+    "Offerte di lavoro riservate alle categorie protette (art. 1 e art. 18 L. 68/99) aggiornate ogni giorno. LavorAI trova gli annunci con quota riservata e prepara candidature su misura: decidi tu quando inviarle.",
   keywords: ["lavoro categorie protette", "categorie protette offerte di lavoro", "legge 68/99 lavoro", "art. 1 legge 68", "collocamento mirato", "invalidità civile lavoro", "assunzioni categorie protette"],
   alternates: { canonical: "/categorie-protette" },
-  openGraph: { type: "website", title: "Lavoro categorie protette: offerte L. 68/99", description: "Offerte riservate aggiornate ogni giorno e candidatura automatica con LavorAI.", url: "/categorie-protette" },
+  openGraph: { type: "website", title: "Lavoro categorie protette: offerte L. 68/99", description: "Offerte riservate aggiornate ogni giorno e candidature su misura con LavorAI.", url: "/categorie-protette" },
 };
 
 const FAQ = [

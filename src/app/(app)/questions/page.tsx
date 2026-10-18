@@ -156,7 +156,7 @@ function LegacyQuestionsPage() {
               <div style={{ fontSize: 16, fontWeight: 600 }}>Nessuna domanda in sospeso</div>
               <div style={{ fontSize: 13, color: "var(--fg-muted)", maxWidth: 420 }}>
                 {done && done.requeued > 0 ? `${done.requeued} candidature ricandidate automaticamente. ` : ""}
-                Le candidature procedono in automatico. Torna qui quando un form chiede qualcosa che solo tu puoi rispondere.
+                Torna qui quando un form chiede qualcosa a cui solo tu puoi rispondere.
               </div>
               <Link href="/applications" className="ds-btn ds-btn-primary" style={{ marginTop: 6 }}>Vai alle candidature</Link>
             </div>

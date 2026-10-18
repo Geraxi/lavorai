@@ -151,7 +151,7 @@ export function estimateCoverage(roles: string[]): CoverageEstimate {
       expectedSubmitRate: ">70%",
       recommendedMode: "auto",
       reason:
-        "Il tuo verticale (tech/design/product/marketing) è ben coperto. L'auto-apply funziona molto bene qui: la maggior parte delle candidature vanno direttamente sui portali ATS delle aziende.",
+        "Il tuo verticale (tech/design/product/marketing) è ben coperto. Molte offerte arrivano dai portali ATS supportati, quindi la maggior parte delle candidature può essere inviata direttamente, con conferma o in automatico se lo attivi.",
     };
   }
 
@@ -160,6 +160,6 @@ export function estimateCoverage(roles: string[]): CoverageEstimate {
     expectedSubmitRate: "40-60%",
     recommendedMode: "hybrid",
     reason:
-      "Il tuo verticale ha una copertura mista. Auto-apply funziona per circa metà delle candidature; le altre vengono preparate per il tuo click. Puoi provare entrambe le modalità e scegliere quella che preferisci.",
+      "Il tuo verticale ha una copertura mista. Una parte delle offerte è inviabile dai portali supportati; le altre vengono preparate per il tuo click. Puoi provare entrambe le modalità e scegliere quella che preferisci.",
   };
 }
