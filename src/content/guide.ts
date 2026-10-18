@@ -737,7 +737,7 @@ export const GUIDES: Guide[] = [
       { q: "Il lavoro da remoto è compatibile con le categorie protette?", a: "Sì. Molte offerte riservate prevedono smart working o remoto, e la Legge 68/99 favorisce esplicitamente le soluzioni che rendono compatibile il lavoro con la condizione della persona." },
     ],
     related: ["cv-ats-friendly", "software-candidature-automatiche", "quante-candidature-per-trovare-lavoro"],
-    cta: { title: "Trova le offerte riservate ogni giorno", body: "Attiva l'opzione Categorie protette: LavorAI riconosce gli annunci L. 68/99, li mette in cima e si candida per te con CV e lettera su misura.", label: "Inizia gratis", href: "/signup?protected=1" },
+    cta: { title: "Trova le offerte riservate ogni giorno", body: "Attiva l'opzione Categorie protette: LavorAI riconosce gli annunci L. 68/99, li mette in cima e prepara CV e lettera su misura. Decidi tu quando inviare.", label: "Inizia gratis", href: "/signup?protected=1" },
   },
 ];
 

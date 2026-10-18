@@ -60,11 +60,11 @@ export const metadata: Metadata = {
     // ATTIVAMENTE un tool di auto-apply) invece del generico "ricerca lavoro"
     // (mismatch di intento — attrae anche career advice searcher che rimbalzano).
     default:
-      "LavorAI — Candidature automatiche ai lavori | Auto-apply CV in italiano",
+      "LavorAI — Candidature su misura, sotto il tuo controllo",
     template: "%s · LavorAI",
   },
   description:
-    "Invia CV in automatico a 50 lavori al mese. LavorAI adatta CV e lettera a ogni annuncio e compila i form ATS. La prova Pro di 7 giorni parte dalla registrazione, fino a 5 candidature al giorno, con carta richiesta e rinnovo al termine salvo disdetta.",
+    "LavorAI trova offerte adatte al tuo profilo, prepara CV e lettera su misura per ognuna e traccia ogni candidatura. Tu decidi quando inviare; l'invio automatico è un'opzione che attivi tu.",
   keywords: [
     // KEYWORD AD ALTA INTENT COMMERCIALE (chi cerca soluzione, non info)
     "auto candidatura lavoro",
@@ -87,15 +87,15 @@ export const metadata: Metadata = {
     locale: "it_IT",
     url: siteUrl,
     siteName: "LavorAI",
-    title: "LavorAI — Candidature automatiche ai lavori | Auto-apply CV",
+    title: "LavorAI — Candidature su misura, sotto il tuo controllo",
     description:
-      "50 candidature al mese, con CV e lettera su misura. Prova Pro per 7 giorni dalla registrazione, con carta richiesta e rinnovo al termine salvo disdetta.",
+      "Offerte pertinenti, CV e lettera su misura per ognuna, ogni candidatura tracciata. Tu decidi quando inviare.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "LavorAI — Candidature automatiche ai lavori",
+    title: "LavorAI — Candidature su misura, sotto il tuo controllo",
     description:
-      "50 candidature/mese automatiche. CV e lettera su misura. Prova di 7 giorni dalla registrazione, fino a 5 candidature al giorno, con carta richiesta.",
+      "Offerte pertinenti, CV e lettera su misura per ognuna, ogni candidatura tracciata. Tu decidi quando inviare.",
   },
   robots: { index: true, follow: true },
 };

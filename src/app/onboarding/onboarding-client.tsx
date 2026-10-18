@@ -95,6 +95,11 @@ export default function OnboardingClient({
   const [step, setStep] = useState(0);
   const [finishing, setFinishing] = useState(false);
   const [demo, setDemo] = useState<OnboardingDemo | null>(null);
+  // Modalità di invio scelta esplicitamente dall'utente. Default = con
+  // conferma ("hybrid": il motore prepara, l'utente approva ogni invio).
+  // L'invio automatico è opt-in: parte solo se l'utente lo seleziona qui
+  // o dalle Preferenze.
+  const [sendMode, setSendMode] = useState<SendMode>("hybrid");
   // Steps localized — usiamo questo array invece di STEPS in render
   const stepsLocalized: StepDef[] = STEPS.map((s, i) => ({
     ...s,
@@ -284,6 +289,16 @@ export default function OnboardingClient({
       return;
     }
 
+    const modeResult = await fetch("/api/preferences/mode", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ autoApplyMode: sendMode }),
+    }).catch(() => null);
+    if (!modeResult?.ok) {
+      toast.error(t("retryError"));
+      return;
+    }
+
     if (!demo) {
       const preview = await fetch("/api/onboarding/demo", {
         method: "POST",
@@ -439,6 +454,8 @@ export default function OnboardingClient({
                 .join(" · ")}
               details={details}
               demo={demo}
+              sendMode={sendMode}
+              setSendMode={setSendMode}
             />
           )}
         </div>
@@ -1487,18 +1504,24 @@ function StepPreferences({
   );
 }
 
+type SendMode = "hybrid" | "auto";
+
 function StepConfirm({
   salary,
   rolesSelected,
   locationsSummary,
   details,
   demo,
+  sendMode,
+  setSendMode,
 }: {
   salary: number;
   rolesSelected: number;
   locationsSummary: string;
   details: Details;
   demo: OnboardingDemo | null;
+  sendMode: SendMode;
+  setSendMode: (mode: SendMode) => void;
 }) {
   const t = useTranslations("onboarding");
   const seniorityLabel: Record<Seniority, string> = {
@@ -1533,8 +1556,7 @@ function StepConfirm({
             background: "linear-gradient(135deg, color-mix(in srgb, var(--primary-ds) 12%, var(--bg-sunken)), var(--bg-sunken))",
           }}
         >
-          <div className="mono" style={{ fontSize: 10, color: "var(--primary-ds)", letterSpacing: ".12em" }}>ANTEPRIMA PERSONALIZZATA</div>
-          <div style={{ marginTop: 7, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: 16 }}>{demo.target.title}</div>
               <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 3 }}>{[demo.target.company, demo.target.location].filter(Boolean).join(" · ") || "Ruolo scelto da te"}</div>
@@ -1551,12 +1573,35 @@ function StepConfirm({
           </div>
         </div>
       )}
+      <fieldset className="ob-send-mode" aria-describedby="ob-send-mode-note">
+        <legend>Quando partono le candidature?</legend>
+        {([
+          { value: "hybrid", title: "Con conferma (consigliato)", body: "LavorAI prepara CV e lettera, tu li rivedi e approvi ogni invio." },
+          { value: "auto", title: "Automatico", body: "Invia da solo le candidature sopra la soglia di compatibilità. Puoi disattivarlo quando vuoi." },
+        ] as const).map((option) => (
+          <label key={option.value} className="ob-send-option" data-active={sendMode === option.value ? "" : undefined}>
+            <input
+              type="radio"
+              name="send-mode"
+              value={option.value}
+              checked={sendMode === option.value}
+              onChange={() => setSendMode(option.value)}
+            />
+            <span>
+              <strong>{option.title}</strong>
+              <span>{option.body}</span>
+            </span>
+          </label>
+        ))}
+        <p id="ob-send-mode-note">
+          In ogni caso datori di lavoro, ruoli, date e titoli di studio restano quelli del tuo CV: prima di ogni invio vedi cosa è cambiato rispetto all’originale.
+        </p>
+      </fieldset>
       <div
         className="ds-card"
         style={{ padding: 18, background: "var(--bg-sunken)" }}
       >
         <div style={{ display: "grid", gap: 12 }}>
-          <ConfirmRow label={t("rowEstimatedApps")} value="~60–80" />
           <ConfirmRow
             label={t("rowRoles")}
             value={t("rolesCount", { count: rolesSelected })}
@@ -1588,7 +1633,7 @@ function StepConfirm({
           )}
           <ConfirmRow
             label={t("rowSources")}
-            value="LinkedIn · Greenhouse · Lever · Ashby · +5"
+            value="Greenhouse · Lever · Ashby · Workable · altri ATS supportati"
           />
         </div>
       </div>
@@ -1607,7 +1652,7 @@ function StepConfirm({
           size={14}
           style={{ color: "var(--primary-ds)" }}
         />
-        Puoi mettere in pausa o modificare tutto dalla dashboard.
+        Puoi cambiare modalità, mettere in pausa o modificare tutto dalle Preferenze.
       </div>
     </>
   );

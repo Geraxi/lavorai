@@ -12,36 +12,36 @@ import { Reveal } from "@/components/reveal";
 import { trackEvent, AnalyticsEvent } from "@/lib/analytics";
 import { FAQ_OBJECTIONS } from "@/lib/marketing-content";
 
-// EN FAQ — speculare alle 7 italiane di marketing-content.ts.
+// EN FAQ — mirrors the 7 Italian items in marketing-content.ts.
 // Mantenuto qui inline per evitare un'altra struttura locale-aware.
 const FAQ_OBJECTIONS_EN = [
   {
-    q: "Is my data safe?",
-    a: "The primary database runs in Neon's European Frankfurt region. Your CV is processed only by the providers listed in the privacy policy, including OpenAI with response storage disabled. We do not sell your data; you can export it or delete your account, CV and applications from settings.",
+    q: "What does LavorAI actually do?",
+    a: "It finds opportunities that fit your profile, prepares a tailored application for each one (adapted CV and cover letter) and tracks every step. You decide when an application goes out.",
   },
   {
     q: "Do I stay in control of what's sent?",
-    a: "Yes, 3 modes you choose from preferences: Off (no sends), Hybrid (asks for ok before each application), Auto (runs on its own above a match threshold you set). One-click toggle, always reversible.",
+    a: "Yes. In confirmation mode you review the CV and letter and approve each submission. If you want, you can turn on automatic sending in preferences above a match threshold you choose, and turn it off at any time.",
   },
   {
-    q: "Does it actually work on major portals?",
-    a: "Yes on public ATS forms — Greenhouse, Lever, Ashby, SmartRecruiters, Workable — the same ones you'd fill clicking Apply. For LinkedIn/Indeed we scrape openings then redirect to the underlying ATS form. We never ask for or store your LinkedIn/Indeed credentials.",
+    q: "Does the tailored CV change my experience?",
+    a: "No. LavorAI reorders and rewords your own material for the posting, but employers, job titles, dates and qualifications stay as they are in your CV. Before approving you see the differences from the original.",
   },
   {
-    q: "Will applications look generic or templated?",
-    a: "Every application has CV and cover letter rewritten by OpenAI for that specific posting: the system reads the job description, identifies ATS keywords, reformulates your existing experience. Nothing made up — only your real material, reordered per listing.",
+    q: "Which portals does it work with?",
+    a: "Public forms on supported ATS platforms such as Greenhouse, Lever, Ashby and Workable. A listing found on LinkedIn or Indeed can only be applied to if it leads to a supported channel. We never ask for or store your LinkedIn or Indeed credentials.",
   },
   {
-    q: "Can I review before sending?",
-    a: "Yes — in Hybrid mode you get a summary for each application before sending and click 'Send' or 'Skip'. In Auto mode you can still see full history in dashboard and flag any issues on individual sends.",
+    q: "Is my data safe?",
+    a: "The primary database runs in Neon's European Frankfurt region. Your CV is processed only by the providers listed in the privacy policy. We do not sell your data; you can export it or delete your account, CV and applications from settings.",
   },
   {
-    q: "Who is LavorAI for?",
-    a: "Professionals looking for tech, design, marketing, product or sales roles — in Italy, EU or remote. Works best if you have 1+ years experience and a CV in English or Italian. Doesn't replace networking, but takes the repetitive work off your evenings.",
+    q: "Does a submitted application mean an interview?",
+    a: "No. An ATS receipt or delivery to the email server documents the submission, not a read or a reply. Recruiter replies are tracked separately. LavorAI does not guarantee interviews or offers.",
   },
   {
     q: "What happens after signup?",
-    a: "1) Verify your email (60 seconds). 2) Upload your CV — OpenAI extracts profile, experience, roles. 3) Confirm 1-2 target roles and locations. 4) LavorAI starts applying 3 times a day (morning, lunch, afternoon) on matching jobs. You only get emails for recruiter replies.",
+    a: "You upload your CV, confirm your profile, roles and locations, then see your first opportunities with documents already prepared. You review, approve the submission and follow each application's status from the dashboard.",
   },
 ];
 
@@ -53,8 +53,7 @@ export function SectionFaq() {
     <section id="faq" className="relative border-t border-border/60 py-24 md:py-32">
       <div className="container">
         <Reveal className="mx-auto max-w-2xl text-center">
-          <p className="text-xs uppercase tracking-[0.2em] text-primary">FAQ</p>
-          <h2 className="mt-3 text-balance text-4xl font-bold tracking-tight sm:text-5xl">
+          <h2 className=" text-balance text-4xl font-bold tracking-tight sm:text-5xl">
             {t("heading")}
           </h2>
           <p className="mt-5 text-lg text-muted-foreground">

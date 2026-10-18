@@ -84,8 +84,8 @@ export function CinematicHero() {
     </header>
 
     <div className={styles.content}>
-      <h1 id="hero-title" className={`${instrumentSerif.className} ${styles.title} ${styles.fadeRise}`}>{l("Tu rilassati.", "Take a breath.")} <span>{l("Alle candidature pensa LavorAI.", "LavorAI helps with your next step.")}</span></h1>
-      <p className={`${styles.subtitle} ${styles.fadeRise}`}>{l("Carica il tuo CV, scegli le opportunità e prepara candidature su misura. Tu decidi quando inviare.", "Upload your CV, explore opportunities and prepare tailored applications. You decide when to send.")}</p>
+      <h1 id="hero-title" className={`${instrumentSerif.className} ${styles.title} ${styles.fadeRise}`}>{l("Tu rilassati.", "Take a breath.")} <span>{l("Le tue candidature, su misura.", "Your applications, tailored.")}</span></h1>
+      <p className={`${styles.subtitle} ${styles.fadeRise}`}>{l("LavorAI trova le offerte adatte a te, prepara CV e lettera per ognuna e tiene traccia di ogni passaggio. Tu decidi quando inviare.", "LavorAI finds openings that fit you, prepares a CV and cover letter for each one and tracks every step. You decide when to send.")}</p>
       <div className={`${styles.actions} ${styles.fadeRise}`}>
         <Link href="/signup" className={`${styles.glass} ${styles.primaryCta}`} onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_PRIMARY, { source: "cinematic_hero" })}>{l("Crea account", "Get started")}</Link>
         <Link href="#lead-magnet" className={styles.cvLink} onClick={() => trackEvent(AnalyticsEvent.HERO_CTA_SECONDARY, { source: "cinematic_hero" })}>{l("Prima, prova il tuo CV", "Try your CV first")}<ArrowDown size={14} aria-hidden="true" /></Link>

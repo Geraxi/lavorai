@@ -141,7 +141,7 @@ function FormCard({
           </h1>
           <p className="text-sm text-muted-foreground">
             Carica il CV e inserisci l&apos;email. Ti invieremo un magic link:
-            dopo il login completi il setup e scegli quando attivare l'auto-apply.
+            dopo il login completi il setup, rivedi le candidature preparate e decidi tu quando inviarle.
             I tuoi 7 giorni di Pro partono dalla registrazione, con carta richiesta e rinnovo al termine salvo disdetta.
           </p>
         </div>
@@ -280,7 +280,7 @@ function SentCard({ email }: { email: string }) {
           {[
             "Apri l'email da LavorAI",
             "Clicca il magic link",
-            "Completa le preferenze e attiva auto-apply",
+            "Completa le preferenze e rivedi le prime candidature",
           ].map((f) => (
             <li key={f} className="flex items-start gap-3">
               <Check className="mt-0.5 h-4 w-4 flex-none text-primary" />
