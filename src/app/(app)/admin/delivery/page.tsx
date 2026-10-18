@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { prisma } from "@/lib/db";
+import { testAccountUserIds } from "@/lib/test-accounts";
 import { PageTitle, KpiTrendCard, LineChart, ChartLegend, Donut, compactNumber, DeliveryFunnel } from "../_ui";
 import { AdminRangeSelect } from "@/components/admin-range-select";
 import { parseRange, rangeLabel, rangeLabelLong } from "@/components/admin-range";
@@ -52,16 +53,19 @@ export default async function AdminDeliveryPage({ searchParams }: { searchParams
     .count({ where: { status: "needs_answers", user: { preferences: { autoApplyMode: "auto" } } } })
     .catch(() => 0);
 
+  // Internal/test accounts (owner +tag aliases included) never count in delivery metrics.
+  const excludeTest = { userId: { notIn: await testAccountUserIds() } };
   const [apps14d, apps28d, failedRecent] = await Promise.all([
     prisma.application.findMany({
-      where: { createdAt: { gte: since(24 * DAYS) } },
+      where: { ...excludeTest, createdAt: { gte: since(24 * DAYS) } },
       select: { createdAt: true, status: true, portal: true, submitConfirmation: true, errorMessage: true, canaryLog: true },
     }),
     prisma.application.findMany({
-      where: { createdAt: { gte: since(24 * DAYS * 2), lt: since(24 * DAYS) } },
+      where: { ...excludeTest, createdAt: { gte: since(24 * DAYS * 2), lt: since(24 * DAYS) } },
       select: { status: true, submitConfirmation: true },
     }),
     prisma.application.findMany({
+      // Diagnostic error log: internal test failures stay visible on purpose.
       where: { status: "failed", errorMessage: { not: null }, createdAt: { gte: since(24 * 7) } },
       orderBy: { createdAt: "desc" },
       take: 20,
