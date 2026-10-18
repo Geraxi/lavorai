@@ -11,6 +11,7 @@ import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { parseVerifiedSubmissionReceipt, receiptJobId } from "@/lib/submission-receipt";
+import { canonicalPostingKey, DUPLICATE_POSTING_MESSAGE } from "@/lib/posting-key";
 import { prisma } from "@/lib/db";
 import { isApplicationAccessPaused, isLifetimeProPlus, requiresPaymentMethodBeforeApp } from "@/lib/billing";
 
@@ -222,6 +223,14 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
       } });
       return false;
     }
+    if (await postingAlreadyClaimed(tx, row)) {
+      // Nothing crossed a delivery boundary for THIS row (hasPotentialSubmission
+      // was false above): record a typed, user-readable no-send outcome.
+      await tx.application.update({ where: { id }, data: {
+        status: "failed", submitConfirmation: NOT_SUBMITTED, errorMessage: DUPLICATE_POSTING_MESSAGE, completedAt: new Date(),
+      } });
+      return false;
+    }
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     if (row.answerContinuationJson && (!continuation || answerContinuationIneligibility(row, "running", row.job.url)
       || continuation.channel !== channel || !await continuationReservationMatches(tx, row, continuation))) return false;
@@ -367,6 +376,22 @@ export function continuationDestination(channel: string, value: string): string 
     const posting = receiptJobId("recruitee", value);
     return channel === "portal_recruitee" && posting ? `${url.origin}/o/${posting}` : null;
   } catch { return null; }
+}
+
+/** One submission per user + POSTING (not per internal Job row), on every
+ * channel. Runs under the per-user advisory lock of withLockedApplication, so
+ * two workers handling sibling rows of the same posting are serialized: the
+ * second one sees the first one's SUBMISSION_STARTED fence or reservation. */
+export async function postingAlreadyClaimed(tx: Prisma.TransactionClient, row: Pick<WorkerGateRow, "id" | "userId" | "jobId"> & { job: { url: string } }): Promise<boolean> {
+  const key = canonicalPostingKey(row.job.url);
+  if (!key) return false;
+  const others = await tx.application.findMany({ where: { userId: row.userId, id: { not: row.id } },
+    select: { jobId: true, status: true, ...evidenceSelect, job: { select: { url: true } } } });
+  const siblings = others.filter(other => canonicalPostingKey(other.job.url) === key);
+  if (!siblings.length) return false;
+  if (siblings.some(other => ["success", "applying", "submitting", "answers_claimed"].includes(other.status) || hasPotentialSubmission(other))) return true;
+  const subjects = [...new Set(siblings.map(other => submissionSubjectKey(row.userId, other.jobId)))];
+  return !!await tx.applicationSubmissionReservation.findFirst({ where: { subjectKey: { in: subjects } }, select: { id: true } });
 }
 
 async function destinationIsUnique(tx: Prisma.TransactionClient, row: WorkerGateRow, channel: string): Promise<boolean> {
