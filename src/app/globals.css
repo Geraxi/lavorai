@@ -26,15 +26,23 @@
      se l'utente ha scelto il tema chiaro nell'app). */
   :root, [data-theme="dark"] {
     color-scheme: dark;
-    --bg: #010510;             /* Dark mode background - matches hero image */
-    --bg-elev: rgba(255,255,255,0.03); /* Glass elevation */
-    --bg-surface: rgba(255,255,255,0.03); /* card piene (es. CV per posizione) */
-    --bg-sunken: rgba(0,0,0,0.3);       
-    --fg: #FFFFFF;             
-    --fg-muted: rgba(255,255,255,0.7);
-    --fg-subtle: rgba(255,255,255,0.45);
-    --border-ds: rgba(255,255,255,0.1);      
-    --border-strong: rgba(255,255,255,0.2);
+    /* Matte black base (Oct 2026 design system): neutral, no blue cast.
+       Surfaces step up in lightness; separation by tone first, hairlines
+       second. Green stays an accent (actions, active state, evidence). */
+    --bg: #0a0b0b;
+    --bg-elev: rgba(255,255,255,0.04);
+    --bg-surface: rgba(255,255,255,0.04);
+    --bg-sunken: rgba(0,0,0,0.35);
+    --fg: #F4F5F4;
+    --fg-muted: rgba(244,245,244,0.72);
+    --fg-subtle: rgba(244,245,244,0.52);
+    --border-ds: rgba(255,255,255,0.08);
+    --border-strong: rgba(255,255,255,0.16);
+    /* Subtle glass: only for floating chrome (topbar, sheets, menus). */
+    --glass-bg: rgba(18,20,20,0.72);
+    --glass-border: rgba(255,255,255,0.08);
+    --glass-blur: 14px;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
     /* GREEN PALETTE */
     --green-bg: oklch(0.2 0.06 155);        
     --green-card: oklch(0.3 0.10 155);      
@@ -59,24 +67,24 @@
     --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
 
     /* Shadcn/ui bridge (HSL) — mappati sui token dark */
-    --background: 240 10% 4%;           /* #0a0a0a */
-    --foreground: 0 0% 100%;            /* #FFFFFF */
-    --card: 240 10% 4%;
+    --background: 180 5% 4%;            /* #0a0b0b */
+    --foreground: 120 4% 96%;
+    --card: 180 4% 6%;
     --card-foreground: 0 0% 100%;
-    --popover: 240 10% 4%;
+    --popover: 180 4% 7%;
     --popover-foreground: 0 0% 100%;
     --primary: 155 50% 38%;             
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 4% 16%;            
+    --secondary: 180 3% 14%;
     --secondary-foreground: 0 0% 100%;
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%;     
+    --muted: 180 3% 14%;
+    --muted-foreground: 180 3% 66%;
     --accent: 155 30% 40%;
     --accent-foreground: 0 0% 100%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 4% 16%;               
-    --input: 240 4% 16%;                
+    --border: 180 3% 15%;
+    --input: 180 3% 15%;
     --ring: 155 30% 40%;
     --radius: 8px;
     --radius-sm: 4px;
@@ -120,6 +128,8 @@
     --shadow-sm: 0 1px 2px rgba(15, 40, 30, 0.08);
     --shadow-premium: inset 0 1px 0 rgba(255,255,255,0.9), 0 12px 32px -12px rgba(15, 40, 30, 0.14), 0 1px 2px rgba(15, 40, 30, 0.05);
     --shadow-hover: inset 0 1px 0 rgba(255,255,255,1), 0 18px 44px -14px rgba(15, 40, 30, 0.2), 0 2px 4px rgba(15, 40, 30, 0.06);
+    --glass-bg: rgba(238,245,240,0.78);
+    --glass-border: rgba(5,120,80,0.14);
 
     --background: 130 15% 96%;
     --foreground: 240 6% 7%;
@@ -1553,7 +1563,7 @@
 }
 
 /* ── Guide SEO (/guide, /guide/[slug]) ──────────────────────────────── */
-.gd-main { background: #010510; color: #fff; padding: 56px 24px 80px; }
+.gd-main { background: #0a0b0b; color: #fff; padding: 56px 24px 80px; }
 .gd-wrap { max-width: 760px; margin: 0 auto; }
 .gd-eyebrow { color: hsl(var(--primary)); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 12px; }
 .gd-head h1, .gd-article h1 { font-size: clamp(2rem, 4.2vw, 3.2rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.08; margin: 0 0 16px; }

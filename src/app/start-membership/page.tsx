@@ -29,7 +29,7 @@ export default async function StartMembershipPage({
   const date = endsAt?.toLocaleDateString("it-IT", { day: "numeric", month: "long" }) ?? "tra 7 giorni";
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#010510] px-5 py-7 text-white sm:px-8 sm:py-10">
+    <main className="min-h-screen overflow-hidden bg-[#0a0b0b] px-5 py-7 text-white sm:px-8 sm:py-10">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_75%_30%,rgba(16,185,129,.18),transparent_28%),radial-gradient(circle_at_20%_90%,rgba(14,116,144,.16),transparent_26%)]" />
       <section className="relative mx-auto grid min-h-[calc(100dvh-5rem)] max-w-6xl items-center gap-10 lg:grid-cols-[1.05fr_.95fr]">
         <div className="max-w-xl">

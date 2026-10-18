@@ -66,11 +66,22 @@ async function main() {
     findMany: async (query: any) => {
       assert.equal(query.where.userId, "owner");
       if (query.select.interviewSessions) return [];
+      if (query.where.OR) {
+        // Interview invites: evidence only (recruiter reply kind or user-declared status); practice sessions never count.
+        assert.equal(JSON.stringify(query.where.OR), JSON.stringify([{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }]));
+        assert.equal(query.select.interviewSessions, undefined);
+        return [];
+      }
       assert.equal(query.take, 200); assert.equal(query.select.emailAttempts.take, 1); assert.equal(query.select.submissionReceiptJson, true);
       pages++;
       const start = query.cursor ? fixture.findIndex((row) => row.id === query.cursor.id) + 1 : 0;
       if (query.cursor) assert.equal(query.skip, 1);
       return fixture.slice(start, start + query.take);
+    },
+    groupBy: async (query: any) => {
+      assert.equal(query.where.userId, "owner");
+      assert.equal(JSON.stringify(query.by), JSON.stringify(["status"]));
+      return [{ status: "success", _count: { _all: 8 } }, { status: "pending", _count: { _all: 2 } }];
     },
     count: async (query: any) => {
       assert.equal(query.where.userId, "owner");
@@ -82,7 +93,10 @@ async function main() {
       assert.ok(!JSON.stringify(query).includes("viewedAt")); assert.ok(!JSON.stringify(query).includes("vista"));
       return 1;
     },
-  } };
+  },
+  cVDocument: { findFirst: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
+  cVProfile: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
+  };
   const element = (type: unknown, props: unknown) => ({ type, props });
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },
@@ -94,6 +108,8 @@ async function main() {
     "@/lib/onboarding": { getOnboardingState: async () => ({ hasUploadedCv: true, hasSetPreferences: true, hasFirstApplication: true }) },
     "@/lib/dashboard-globe-data": { getDashboardGlobeData: async () => ({ markers: [], stats: { counts: { open: 0 } } }) },
     "@/lib/auto-apply-readiness": { getAutoApplyReadiness: async () => ({}) },
+    "@/lib/cv-profile-types": { rowToProfile: () => null },
+    "@/lib/ui-application-status": load("src/lib/ui-application-status.ts", {}),
   };
   const components: Record<string, string[]> = {
     "design/topbar": ["AppTopbar"], "design/icon": ["Icon"], "design/company-logo": ["CompanyLogo", "companyColor"],
