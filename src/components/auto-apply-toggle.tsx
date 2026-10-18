@@ -78,8 +78,8 @@ export function AutoApplyToggle({ compact = false, locale = "it" }: { compact?: 
   }
 
   const options = [
-    { value: "auto", label: tr("Auto-apply (100% automatico)", "Auto-apply (automatic)"), icon: "zap" },
-    { value: "hybrid", label: tr("Review (Richiede approvazione)", "Review (approval required)"), icon: "eye" },
+    { value: "auto", label: tr("Automatico (opzionale)", "Automatic (optional)"), icon: "zap" },
+    { value: "hybrid", label: tr("Con conferma (consigliato)", "With confirmation (recommended)"), icon: "eye" },
     { value: "off", label: tr("In pausa", "Paused"), icon: "pause-circle" },
   ];
 
