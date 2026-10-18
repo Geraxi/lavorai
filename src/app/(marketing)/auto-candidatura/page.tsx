@@ -33,7 +33,7 @@ export default function AutoCandidaturaPage() {
       <SiteNav />
       <main
         className="flex-1"
-        style={{ background: "#010510", color: "#fff" }}
+        style={{ background: "#0a0b0b", color: "#fff" }}
       >
         {/* ============ HERO ============ */}
         <section

@@ -1563,7 +1563,7 @@
 }
 
 /* ── Guide SEO (/guide, /guide/[slug]) ──────────────────────────────── */
-.gd-main { background: #010510; color: #fff; padding: 56px 24px 80px; }
+.gd-main { background: #0a0b0b; color: #fff; padding: 56px 24px 80px; }
 .gd-wrap { max-width: 760px; margin: 0 auto; }
 .gd-eyebrow { color: hsl(var(--primary)); font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 12px; }
 .gd-head h1, .gd-article h1 { font-size: clamp(2rem, 4.2vw, 3.2rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.08; margin: 0 0 16px; }
