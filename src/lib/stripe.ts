@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { TIERS, type Tier } from "@/lib/billing";
+import { TIERS, type BillingInterval, type Tier } from "@/lib/billing";
 
 let cached: Stripe | null = null;
 
@@ -24,17 +24,32 @@ export function stripe(): Stripe {
  * Letto da env in modo che lo stesso codice lavori in test e prod.
  */
 export function priceIdToTier(priceId: string): Tier | null {
-  if (priceId === process.env.STRIPE_PRICE_ID_PRO) return "pro";
-  if (priceId === process.env.STRIPE_PRICE_ID_PRO_PLUS) return "pro_plus";
+  // Un env var mancante è `undefined`: non deve mai combaciare con un priceId.
+  const match = (envName: string) => {
+    const configured = process.env[envName];
+    return Boolean(configured) && priceId === configured;
+  };
+  if (match("STRIPE_PRICE_ID_PRO") || match("STRIPE_PRICE_ID_PRO_ANNUAL")) return "pro";
+  if (match("STRIPE_PRICE_ID_PRO_PLUS") || match("STRIPE_PRICE_ID_PRO_PLUS_ANNUAL")) return "pro_plus";
   return null;
 }
 
-export function tierToPriceId(tier: Tier): string | null {
+/**
+ * Restituisce il priceId per tier+intervallo, oppure null se non configurato.
+ * Nessun fallback tra intervalli: un annuale mancante NON ricade sul mensile.
+ */
+export function tierToPriceId(tier: Tier, interval: BillingInterval = "month"): string | null {
+  if (interval === "year") {
+    const envName =
+      tier === "pro" ? "STRIPE_PRICE_ID_PRO_ANNUAL"
+      : tier === "pro_plus" ? "STRIPE_PRICE_ID_PRO_PLUS_ANNUAL"
+      : null;
+    return envName ? process.env[envName] || null : null;
+  }
   const cfg = TIERS[tier];
   if (!cfg.stripePriceIdEnv) return null;
-  return process.env[cfg.stripePriceIdEnv] ?? null;
+  return process.env[cfg.stripePriceIdEnv] || null;
 }
-
 
 /** Coupon referral: 1 mese gratis (100%, una volta). Creato al volo se manca. */
 export const REFERRAL_COUPON_ID = "LAVORAI-REFERRAL-1M";

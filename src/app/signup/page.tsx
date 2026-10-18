@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizeInterval } from "@/lib/billing";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
@@ -22,6 +23,7 @@ function SignupContent() {
   const t = useTranslations("auth");
   const params = useSearchParams();
   const plan = params.get("plan");
+  const interval = normalizeInterval(params.get("interval"));
   const protectedCategory = params.get("protected") === "1";
   const promo = params.get("promo")?.toUpperCase() ?? null;
 
@@ -38,17 +40,19 @@ function SignupContent() {
     if (plan === "pro" || plan === "pro_plus") {
       try {
         localStorage.setItem("lavorai.selectedPlan", plan);
+        localStorage.setItem("lavorai.selectedInterval", interval);
       } catch {
         /* storage unavailable */
       }
     } else {
       try {
         localStorage.removeItem("lavorai.selectedPlan");
+        localStorage.removeItem("lavorai.selectedInterval");
       } catch {
         /* storage unavailable */
       }
     }
-  }, [plan]);
+  }, [plan, interval]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -99,7 +103,7 @@ function SignupContent() {
       const result = await signIn("password", { email, password, redirect: false }).catch(() => null);
       if (result && !result.error) {
         window.location.href = plan === "pro" || plan === "pro_plus"
-          ? `/settings?upgrade=${plan}`
+          ? `/settings?upgrade=${plan}${interval === "year" ? "&interval=year" : ""}`
           : "/onboarding";
         return;
       }
@@ -144,7 +148,7 @@ function SignupContent() {
           <button type="submit" disabled={loading} className="auth-submit">{loading ? <><Icon name="refresh" size={14} /> {t("creating")}</> : t("submitSignup")}</button>
           <p className="auth-terms">{t("termsFootnotePre")}<Link href="/termini">{t("termsFootnoteLink")}</Link>{t("termsFootnotePost")}</p>
         </form>
-        <p className="auth-switch">{t("haveAccountQuestion")} <Link href={`/login${plan ? `?plan=${plan}` : ""}`}>{t("loginLink2")}</Link></p>
+        <p className="auth-switch">{t("haveAccountQuestion")} <Link href={`/login${plan ? `?plan=${plan}${interval === "year" ? "&interval=year" : ""}` : ""}`}>{t("loginLink2")}</Link></p>
       </>}
     </AuthShell>
   );

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { TIERS, trialEnd, type Tier } from "@/lib/billing";
+import { ANNUAL_PRICING, TIERS, trialEnd, type BillingInterval, type Tier } from "@/lib/billing";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { CARD_REQUIRED_CHECKOUT } from "@/lib/stripe-subscription-access";
@@ -13,6 +13,7 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   tier: z.enum(["pro", "pro_plus"]),
+  interval: z.enum(["month", "year"]).default("month"),
   // The expired-trial screen must return to itself on cancellation so the
   // user does not lose the exact recovery action they just chose.
   returnTo: z.literal("trial_expired").optional(),
@@ -40,18 +41,19 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const { tier, returnTo } = parsed.data as { tier: Tier; returnTo?: "trial_expired" };
-  const priceId = tierToPriceId(tier);
+  const { tier, interval, returnTo } = parsed.data as { tier: Tier; interval: BillingInterval; returnTo?: "trial_expired" };
+  const priceId = tierToPriceId(tier, interval);
   if (!priceId) {
     // Log dettagliato lato server per debugging (non esposto all'utente).
     console.error(
-      `[stripe/checkout] STRIPE_PRICE_ID_${tier.toUpperCase()} mancante. Configuralo in Vercel env vars.`,
+      `[stripe/checkout] STRIPE_PRICE_ID_${tier.toUpperCase()}${interval === "year" ? "_ANNUAL" : ""} mancante. Configuralo in Vercel env vars.`,
     );
     return NextResponse.json(
       {
         error: "pricing_not_configured",
-        message:
-          "Il checkout è temporaneamente non disponibile. Riprova tra qualche minuto o scrivici.",
+        message: interval === "year"
+          ? "Il piano annuale non è ancora disponibile. Scegli il piano mensile o scrivici."
+          : "Il checkout è temporaneamente non disponibile. Riprova tra qualche minuto o scrivici.",
       },
       { status: 503 },
     );
@@ -125,6 +127,7 @@ export async function POST(request: NextRequest) {
           userId: user.id,
           cardRequired: CARD_REQUIRED_CHECKOUT,
           tier,
+          interval,
           trial: hasRemainingTrial ? "registration_trial_with_payment_method" : "none",
           referralCredit: referralCoupon ? "1" : "0",
         },
@@ -135,12 +138,16 @@ export async function POST(request: NextRequest) {
       locale: "it",
     });
 
+    // Valore reale del prezzo scelto (mensile o annuale), non il listino mensile.
+    const checkoutValueCents = interval === "year"
+      ? ANNUAL_PRICING[tier === "pro_plus" ? "pro_plus" : "pro"].price * 100
+      : Math.round(TIERS[tier].price * 100);
     await recordConversionEvent(AnalyticsEvent.CHECKOUT_STARTED, {
       userId: user.id,
       plan: tier,
       path: "/api/stripe/checkout",
-      valueCents: Math.round(TIERS[tier].price * 100),
-      properties: { checkoutSessionId: session.id },
+      valueCents: checkoutValueCents,
+      properties: { checkoutSessionId: session.id, interval },
       dedupeKey: `checkout_started:${session.id}`,
     });
 

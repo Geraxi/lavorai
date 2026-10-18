@@ -206,6 +206,7 @@ function TierCard({
       // email + login lo reindirizziamo a Stripe.
       try {
         localStorage.setItem("lavorai.selectedPlan", tier);
+        localStorage.setItem("lavorai.selectedInterval", "month");
       } catch {
         // storage bloccato (private mode) — fallback: query param al login
       }

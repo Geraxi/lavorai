@@ -343,3 +343,18 @@ export const FEATURE_LABELS: Record<PremiumFeature, { name: string; blurb: strin
       "Teleprompter live durante il colloquio: audio capture da Google Meet, trascrizione automatica, suggerimenti AI in tempo reale. Funzionalità in arrivo — ti avvisiamo appena è pronta. Nel frattempo usa il Mock Interview per allenarti.",
   },
 };
+
+
+/** Intervallo di fatturazione. Il mensile è sempre il default. */
+export type BillingInterval = "month" | "year";
+
+/** Prezzi annuali (EUR/anno). Nessuno sconto dichiarato: solo equivalente mensile. */
+export const ANNUAL_PRICING = {
+  pro: { price: 199, priceDisplay: "€199", monthlyEquivalentDisplay: { it: "€16,58", en: "€16.58" } },
+  pro_plus: { price: 399, priceDisplay: "€399", monthlyEquivalentDisplay: { it: "€33,25", en: "€33.25" } },
+} as const;
+
+/** Qualsiasi valore diverso da "year" torna al mensile. */
+export function normalizeInterval(value: unknown): BillingInterval {
+  return value === "year" ? "year" : "month";
+}

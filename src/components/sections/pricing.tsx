@@ -40,7 +40,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Reveal } from "@/components/reveal";
-import { TIER_LIST, type TierConfig } from "@/lib/billing";
+import { useState } from "react";
+import { ANNUAL_PRICING, TIER_LIST, type BillingInterval, type TierConfig } from "@/lib/billing";
 import { cn } from "@/lib/utils";
 import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 
@@ -96,6 +97,8 @@ const EN_TIER_COPY: Record<TierConfig["id"], Pick<TierConfig, "tagline" | "featu
 export function SectionPricing() {
   const t = useTranslations("pricing");
   const locale = useLocale();
+  const [interval, setInterval] = useState<BillingInterval>("month");
+  const isEn = locale === "en";
   const tiers = locale === "en"
     ? TIER_LIST.map((tier) => ({ ...tier, ...EN_TIER_COPY[tier.id] }))
     : TIER_LIST;
@@ -160,10 +163,35 @@ export function SectionPricing() {
           </div>
         </Reveal>
 
-        <div className="mx-auto mt-16 grid max-w-6xl gap-6 md:grid-cols-3">
+        <div className="mt-10 flex justify-center">
+          <div
+            role="group"
+            aria-label={isEn ? "Billing interval" : "Periodicità di fatturazione"}
+            className="inline-flex rounded-full border border-border/60 p-1 text-sm"
+          >
+            {(["month", "year"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={interval === value}
+                onClick={() => setInterval(value)}
+                className={cn(
+                  "rounded-full px-4 py-1.5 font-medium transition-colors",
+                  interval === value
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {value === "month" ? (isEn ? "Monthly" : "Mensile") : (isEn ? "Annual" : "Annuale")}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mx-auto mt-8 grid max-w-6xl gap-6 md:grid-cols-3">
           {tiers.map((tier, idx) => (
             <Reveal key={tier.id} delay={idx * 0.05}>
-              <TierCard tier={tier} />
+              <TierCard tier={tier} interval={interval} isEn={isEn} />
             </Reveal>
           ))}
         </div>
@@ -176,8 +204,11 @@ export function SectionPricing() {
   );
 }
 
-function TierCard({ tier }: { tier: TierConfig }) {
-  const href = tier.id === "free" ? "/signup" : `/signup?plan=${tier.id}`;
+function TierCard({ tier, interval, isEn }: { tier: TierConfig; interval: BillingInterval; isEn: boolean }) {
+  const annual = interval === "year" && (tier.id === "pro" || tier.id === "pro_plus") ? ANNUAL_PRICING[tier.id] : null;
+  const href = tier.id === "free"
+    ? "/signup"
+    : `/signup?plan=${tier.id}&interval=${annual ? "year" : "month"}`;
 
   return (
     <motion.div
@@ -235,9 +266,9 @@ function TierCard({ tier }: { tier: TierConfig }) {
                 tier.highlight ? "text-foreground" : "text-foreground",
               )}
             >
-              {tier.priceDisplay}
+              {annual ? annual.priceDisplay : tier.priceDisplay}
             </span>
-            {tier.priceSuffix && (
+            {(annual || tier.priceSuffix) && (
               <span
                 className={cn(
                   "text-sm",
@@ -248,10 +279,18 @@ function TierCard({ tier }: { tier: TierConfig }) {
                     : "text-muted-foreground",
                 )}
               >
-                {tier.priceSuffix}
+                {annual ? (isEn ? "/ year" : "/ anno") : tier.priceSuffix}
               </span>
             )}
           </div>
+
+          {annual && (
+            <p className="-mt-3 text-sm text-muted-foreground">
+              {isEn
+                ? `Equivalent to about ${annual.monthlyEquivalentDisplay.en} / month, billed yearly`
+                : `Equivale a circa ${annual.monthlyEquivalentDisplay.it} / mese, fatturati annualmente`}
+            </p>
+          )}
 
           <ul className="flex flex-col gap-3">
             {tier.features.filter((raw) => !parseFeature(raw).comingSoon).map((raw) => {
@@ -328,7 +367,7 @@ function TierCard({ tier }: { tier: TierConfig }) {
           >
             <Link
               href={href}
-              onClick={() => trackEvent(AnalyticsEvent.PRICING_CTA, { plan: tier.id })}
+              onClick={() => trackEvent(AnalyticsEvent.PRICING_CTA, { plan: tier.id, interval: annual ? "year" : "month" })}
             >
               <span className="relative z-10">{tier.cta}</span>
               {tier.highlight && (
