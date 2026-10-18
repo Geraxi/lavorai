@@ -189,14 +189,14 @@ export async function UpgradePrompt({
 const COPY = {
   cold: {
     title: (_used: number, _cap: number) =>
-      "Trova lavoro fino a 17× più veloce con Pro",
+      "Più candidature su misura, sotto il tuo controllo",
     body: "Prova Pro: 7 giorni dalla registrazione, fino a 5 candidature al giorno, con carta richiesta. Poi 50 candidature/mese, priorità sui portali supportati e cover letter personalizzata a €19,99/mese. Disdici quando vuoi.",
     cta: "Prova Pro gratis",
   },
   warning: {
     title: (used: number, cap: number) =>
       `Hai usato ${used}/${cap} candidature del mese — stai per finire`,
-    body: "Ogni candidatura in più conta: più profili raggiunti = più colloqui. Con Pro passi a 50/mese e nessuna interruzione fino alla firma.",
+    body: "Con Pro passi a 50 candidature su misura al mese: CV e lettera preparati per ogni offerta, e decidi tu quando inviarle.",
     cta: "Attiva Pro",
   },
   viewOnly: {

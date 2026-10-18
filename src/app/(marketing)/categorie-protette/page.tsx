@@ -80,7 +80,7 @@ export default async function CategorieProtettePage() {
           <nav aria-label="breadcrumb" className="gd-crumbs">
             <Link href="/">LavorAI</Link> <span>/</span> <span>Categorie protette</span>
           </nav>
-          <h1>Lavoro per categorie protette: offerte riservate L. 68/99, candidatura automatica</h1>
+          <h1>Lavoro per categorie protette: offerte riservate L. 68/99, candidature su misura</h1>
           <p className="gd-lead">
             Le aziende con più di 15 dipendenti devono riservare una quota di assunzioni alle categorie protette. Gli annunci esistono, ma sono sparsi su decine di portali e spesso nascosti nel testo. LavorAI li riconosce ogni giorno e si candida al posto tuo, con CV e lettera su misura.
           </p>

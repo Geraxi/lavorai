@@ -119,7 +119,7 @@ function ControlPreview({ l }: { l: Label }) {
     <div className={styles.modeGrid}>
       <button type="button" aria-pressed={mode === "paused"} onClick={() => setMode("paused")} className={mode === "paused" ? styles.modeActive : ""}><Pause size={24} /><strong>{l("In pausa", "Paused")}</strong><span>{l("Nessun nuovo invio", "No new submissions")}</span></button>
       <button type="button" aria-pressed={mode === "confirmed"} onClick={() => setMode("confirmed")} className={mode === "confirmed" ? styles.modeActive : ""}><MessageSquare size={24} /><strong>{l("Con conferma", "With confirmation")}</strong><span>{l("Rivedi ogni candidatura", "Review each application")}</span></button>
-      <div className={styles.modeUnavailable}><Zap size={24} /><strong>{l("Automatico", "Automatic")}</strong><span>{l("Soggetto a disponibilità", "Subject to availability")}</span></div>
+      <div className={styles.modeUnavailable}><Zap size={24} /><strong>{l("Automatico", "Automatic")}</strong><span>{l("Opzionale, lo attivi tu", "Optional, you turn it on")}</span></div>
     </div>
     <div className={styles.controlNotice} aria-live="polite"><ShieldCheck size={20} aria-hidden="true" /><p>{mode === "confirmed" ? l("Prima controlli. Poi confermi.", "Review first. Then confirm.") : l("Fermati quando vuoi.", "Take a break whenever you need.")}<span>{l("Questa anteprima non modifica le impostazioni del tuo account.", "This preview does not change your account settings.")}</span></p></div>
   </div>;
@@ -208,7 +208,7 @@ export function LandingHomepage() {
             <GlowCard as="article" className={`${styles.tile} ${styles.tileControl}`}>
               <div className={styles.tileHead}><h2>{l("Tu decidi quando inviare.", "You decide when to send.")}</h2><p className={styles.tileLead}>{l("Scegli come gestire le tue candidature.", "Choose how to manage your applications.")}</p></div>
               <ControlPreview l={l} />
-              <p className={styles.tileNote}>{l("Gli invii automatici non sono attivi durante la riapertura controllata. Le modalità disponibili dipendono dai controlli attivi e dal canale.", "Automatic submissions are not enabled during the controlled rollout. Available modes depend on active controls and the channel.")}</p>
+              <p className={styles.tileNote}>{l("L’invio automatico è un’opzione che puoi attivare dalle preferenze, sopra una soglia di compatibilità che scegli tu. Dipende dal portale e dai controlli di sicurezza attivi.", "Automatic sending is an option you can turn on in preferences, above a match threshold you choose. It depends on the portal and active safety controls.")}</p>
             </GlowCard>
 
             <GlowCard as="article" className={`${styles.tile} ${styles.tilePrivacy}`}>
@@ -238,11 +238,11 @@ export function LandingHomepage() {
                 <a href="/lavorai-launch-demo.mp4">{l("Apri il video di presentazione", "Open the product video")}</a>
               </video>
             </div>
-            <figcaption id="product-demo-caption">{l("Video dimostrativo. Al momento sono disponibili solo candidature confermate manualmente, con un limite temporaneo di 10 tentativi d’invio al giorno complessivi sulla piattaforma. Le promozioni mostrate non confermano le condizioni attive: verifica prezzi e disponibilità prima dell’attivazione.", "Product demo. Only manually confirmed applications are currently available, with a temporary platform-wide limit of 10 submission attempts per day. Promotions shown do not confirm current terms: check pricing and availability before activation.")}</figcaption>
+            <figcaption id="product-demo-caption">{l("Video dimostrativo con schermate illustrative. Le promozioni mostrate non confermano le condizioni attive: prezzi e condizioni effettive sono mostrati prima dell’attivazione.", "Product demo with illustrative screens. Promotions shown do not confirm current terms: actual pricing and terms are shown before activation.")}</figcaption>
           </figure>
           <details className={styles.demoTranscript}>
             <summary>{l("Descrizione del video", "Video description")}<Plus size={18} aria-hidden="true" /></summary>
-            <p>{l("Il video presenta LavorAI attraverso schermate dimostrative: ricerca di opportunità, selezione delle offerte con uno swipe, preparazione di un CV su misura e monitoraggio delle candidature. Una scena illustra la selezione di più offerte e un invio in un clic; la schermata finale mostra il marchio LavorAI e una promozione di tre giorni. Queste scene non confermano la disponibilità attuale: gli invii richiedono conferma manuale, vale il limite temporaneo complessivo indicato sopra e le condizioni effettive sono mostrate prima dell’attivazione.", "The video introduces LavorAI through illustrative screens: finding opportunities, swiping through jobs, preparing a tailored CV and tracking applications. One scene illustrates selecting several jobs and sending in one click; the final screen shows the LavorAI brand and a three-day promotion. These scenes do not confirm current availability: submissions require manual confirmation, the temporary platform-wide limit stated above applies, and actual terms are shown before activation.")}</p>
+            <p>{l("Il video presenta LavorAI attraverso schermate dimostrative: ricerca di opportunità, selezione delle offerte con uno swipe, preparazione di un CV su misura e monitoraggio delle candidature. Una scena illustra la selezione di più offerte e un invio in un clic; la schermata finale mostra il marchio LavorAI e una promozione di tre giorni. Le scene sono illustrative: puoi rivedere e confermare ogni invio, l’invio automatico è un’opzione che attivi tu e le condizioni effettive sono mostrate prima dell’attivazione.", "The video introduces LavorAI through illustrative screens: finding opportunities, swiping through jobs, preparing a tailored CV and tracking applications. One scene illustrates selecting several jobs and sending in one click; the final screen shows the LavorAI brand and a three-day promotion. The scenes are illustrative: you can review and confirm every submission, automatic sending is an option you turn on, and actual terms are shown before activation.")}</p>
           </details>
         </div>
       </section>

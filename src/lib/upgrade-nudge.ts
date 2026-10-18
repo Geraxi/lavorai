@@ -244,12 +244,12 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
         ? `Hai finito le ${FREE_MONTHLY_CAP} candidature del mese — sblocca ora`
         : isNoApps
           ? "Nessuna candidatura ancora — proviamo con Pro"
-          : "Sblocca l'auto-apply 24/7 — passa a Pro",
+          : "Più candidature su misura — passa a Pro",
       greet: greetName ? `Ciao ${greetName},` : "Ciao,",
       lead: isLimitHit
-        ? `Hai raggiunto il tetto Free di ${FREE_MONTHLY_CAP} candidature/mese. Il motore ha trovato nuovi annunci compatibili col tuo profilo ma non puo' candidarti finche' il piano non riparte a inizio mese.`
+        ? `Hai raggiunto il tetto Free di ${FREE_MONTHLY_CAP} candidature/mese. Ci sono nuovi annunci compatibili col tuo profilo, ma non possiamo preparare altre candidature finche' il piano non riparte a inizio mese.`
         : isNoApps
-          ? `Sei con noi da ${c.daysSinceSignup} giorni ma il motore non ha ancora candidato per te. Cause tipiche: verticale poco coperto dalle fonti Free, matching stretto, oppure ATS custom. Pro sblocca piu' fonti e priorità sui portali diretti — se non parte niente entro 24h, rimborso integrale.`
+          ? `Sei con noi da ${c.daysSinceSignup} giorni ma non hai ancora candidature. Cause tipiche: verticale poco coperto dalle fonti Free, matching stretto, oppure ATS non supportati. Pro aggiunge fonti e priorità sui portali supportati.`
           : c.applicationsCount > 1
             ? `Hai gia' inviato ${c.applicationsCount} candidature con LavorAI Free. Bene.`
             : `Hai gia' provato LavorAI Free. Bene.`,
@@ -259,14 +259,14 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
           ? "Cosa cambia con Pro:"
           : "Su Pro la differenza e' concreta:",
       bullets: [
-        "Auto-apply 24/7 senza limite giornaliero",
-        "Generazione CV + lettera personalizzata per OGNI annuncio (Free: limitato)",
+        "50 candidature al mese, con invio su tua conferma o automatico se lo attivi",
+        "CV e lettera su misura per ogni annuncio, senza inventare esperienze",
         "Tracking risposte recruiter via email inbound (parsate, classificate)",
         "Match minimo regolabile + round multipli paralleli",
         "Supporto prioritario",
       ],
       promise:
-        "Promessa: prima consegna confermata entro 24h dall'upgrade, o rimborso integrale.",
+        "Tu decidi quando inviare: rivedi CV e lettera prima di ogni candidatura, o attiva l'invio automatico dalle preferenze.",
       cta: isLimitHit ? "Sblocca ora" : isNoApps ? "Prova Pro" : "Passa a Pro",
       footer:
         "Ricevi questa email perche' hai un account LavorAI Free attivo. Cambia tier o disiscriviti in qualsiasi momento.",
@@ -276,12 +276,12 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
         ? `You hit your ${FREE_MONTHLY_CAP}-application monthly cap — unlock now`
         : isNoApps
           ? "No applications yet — let's try with Pro"
-          : "Unlock 24/7 auto-apply — upgrade to Pro",
+          : "More tailored applications — upgrade to Pro",
       greet: greetName ? `Hi ${greetName},` : "Hi,",
       lead: isLimitHit
-        ? `You've hit the Free tier cap of ${FREE_MONTHLY_CAP} applications this month. The engine found new matches for you but can't submit them until the plan resets on the 1st.`
+        ? `You've hit the Free tier cap of ${FREE_MONTHLY_CAP} applications this month. There are new matches for you, but we can't prepare more applications until the plan resets on the 1st.`
         : isNoApps
-          ? `You've been with us ${c.daysSinceSignup} days but the engine hasn't applied for you yet. Common causes: your vertical isn't well covered by Free sources, tight matching, or custom ATS. Pro unlocks more sources and priority on direct portals — if nothing lands within 24h, full refund.`
+          ? `You've been with us ${c.daysSinceSignup} days but you don't have any applications yet. Common causes: your vertical isn't well covered by Free sources, tight matching, or unsupported ATS. Pro adds sources and priority on supported portals.`
           : c.applicationsCount > 1
             ? `You've already submitted ${c.applicationsCount} applications on LavorAI Free. Nice.`
             : `You've tried LavorAI Free. Nice.`,
@@ -291,14 +291,14 @@ function renderUpgrade(c: UpgradeCandidate): { subject: string; html: string; te
           ? "What Pro changes:"
           : "Pro is where the real value kicks in:",
       bullets: [
-        "24/7 auto-apply with no daily cap",
-        "Tailored CV + cover letter for EVERY job (Free is limited)",
+        "50 applications a month, sent on your confirmation or automatically if you turn it on",
+        "Tailored CV and cover letter for every job, with no invented experience",
         "Recruiter reply tracking via inbound email parsing",
         "Adjustable match threshold + parallel rounds",
         "Priority support",
       ],
       promise:
-        "Promise: first confirmed delivery within 24h after upgrade, or full refund.",
+        "You decide when to send: review the CV and letter before each application, or turn on automatic sending in preferences.",
       cta: isLimitHit ? "Unlock now" : isNoApps ? "Try Pro" : "Upgrade to Pro",
       footer:
         "You're receiving this because you have an active LavorAI Free account. Change tier or unsubscribe anytime.",

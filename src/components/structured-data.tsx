@@ -27,7 +27,7 @@ export function StructuredData() {
     url: SITE_URL,
     logo: `${SITE_URL}/Lavoraiherosection.png`,
     description:
-      "Il copilota italiano per la ricerca del lavoro. Auto-apply su Greenhouse, Lever, Workable; CV ottimizzato e cover letter AI per ogni annuncio.",
+      "LavorAI trova offerte pertinenti, prepara CV e lettera su misura per ognuna e traccia ogni candidatura. L'utente decide quando inviare.",
     foundingDate: "2025",
     sameAs: [
       // Aggiungere quando attivi: LinkedIn, X, Instagram, ecc.
@@ -66,7 +66,7 @@ export function StructuredData() {
     operatingSystem: "Web",
     applicationCategory: "BusinessApplication",
     description:
-      "Piattaforma AI di auto-apply: candidature automatiche su portali ATS (Greenhouse, Lever, Ashby, Workable, SmartRecruiters), CV riscritto sull'annuncio, cover letter generata, dashboard live.",
+      "Piattaforma AI per candidature di lavoro: trova offerte pertinenti, prepara CV e lettera su misura per ogni annuncio e traccia lo stato di ogni candidatura sui portali ATS supportati (Greenhouse, Lever, Ashby, Workable). L'utente approva ogni invio; l'invio automatico è opzionale.",
     url: SITE_URL,
     offers: paidTiers.map((t) => ({
       "@type": "Offer",
