@@ -390,7 +390,7 @@ export default function OnboardingClient({
         </div>
 
         <div style={{ marginTop: "auto", fontSize: 11.5, color: "var(--fg-subtle)", lineHeight: 1.5 }}>
-          Bastano 2 minuti. Poi LavorAI candida in automatico per te.
+          Bastano 2 minuti. LavorAI prepara le candidature, tu decidi quando inviarle.
         </div>
       </aside>
 
