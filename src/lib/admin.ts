@@ -45,7 +45,10 @@ export function isAdmin(email: string | null | undefined): boolean {
  * Gonfiano i conteggi e falsano conversion rate / signup trend.
  *   - domini di testing automatico (testmail.app, mailinator, ecc.)
  *   - prefissi di test DB (postdbpush-, test-, demo-)
- *   - email interne note (founder + tester whitelisted)
+ *   - email interne note (founder + tester whitelisted), incluse le varianti
+ *     Gmail con +tag/punti (umbertogeraci0+metatest…, +freetest…, +lavoraitest)
+ *   - dominio aziendale @lavorai.it
+ * È l'UNICO filtro da usare nelle metriche (admin, stats pubbliche, report).
  */
 const INTERNAL_EMAILS = new Set(
   [
@@ -63,7 +66,10 @@ const TEST_DOMAINS = [
   "example.org",
 ];
 
-const TEST_LOCAL_PREFIXES = ["postdbpush-", "test-", "demo-", "e2e-"];
+const TEST_LOCAL_PREFIXES = ["postdbpush-", "test-", "demo-", "e2e-", "chatgpt-helper"];
+
+/** Internal company domain: staff/test mailboxes, never customers. */
+const INTERNAL_DOMAINS = ["lavorai.it"];
 
 export function isTestAccount(email: string | null | undefined): boolean {
   if (!email) return false;
@@ -74,6 +80,7 @@ export function isTestAccount(email: string | null | undefined): boolean {
   const local = e.slice(0, at);
   const domain = e.slice(at + 1);
   if (TEST_DOMAINS.some((d) => domain === d || domain.endsWith("." + d))) return true;
+  if (INTERNAL_DOMAINS.includes(domain)) return true;
   if (TEST_LOCAL_PREFIXES.some((p) => local.startsWith(p))) return true;
   return false;
 }

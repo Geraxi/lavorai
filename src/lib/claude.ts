@@ -3,6 +3,7 @@ import { isFailoverError, openai, providerOrder } from "@/lib/ai-router";
 import { recordAiHealth } from "@/lib/ai-health-state";
 import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json";
 import type { OptimizationResult } from "@/types/cv";
+import { recordAiUsage } from "@/lib/ai-usage";
 import {
   SYSTEM_PROMPT,
   USER_PROMPT_TEMPLATE,
@@ -123,6 +124,7 @@ async function optimizeWithAnthropic(
       })
       .finalMessage();
 
+    recordAiUsage({ task: "cv_optimization", provider: "anthropic", model: CV_OPTIMIZATION_MODEL, usage: response.usage });
     const truncated = response.stop_reason === "max_tokens";
     const rawText = response.content
       .map((block) => (block.type === "text" ? block.text : ""))
@@ -294,6 +296,7 @@ async function optimizeWithOpenAI(input: OptimizeCVInput, userContent: string): 
       input: userContent,
       text: { format: { type: "json_object" } },
     });
+    recordAiUsage({ task: "cv_optimization", provider: "openai", model, usage: res.usage });
     const raw = (res.output_text ?? "").trim();
     if (!raw) {
       throw new Error(

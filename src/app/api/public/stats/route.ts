@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { isTestAccount } from "@/lib/admin";
 
 export const runtime = "nodejs";
 export const revalidate = 60;
@@ -9,8 +10,6 @@ export const revalidate = 60;
  * Cache 60s con SWR 300s per non hammer del DB dal traffico landing.
  */
 export async function GET() {
-  const TEST =
-    /(@inbox\.testmail|@mailinator|@example\.|^postdbpush-|^test-|^demo-|umbertogeraci0@|geracigears@|antonella\.lasalandra07@|chatgpt-helper@|@lavorai\.it$)/i;
   try {
     const [allUsers, apps24h, appsTotal] = await Promise.all([
       prisma.user.findMany({ select: { email: true } }),
@@ -26,7 +25,8 @@ export async function GET() {
         },
       }),
     ]);
-    const realUsers = allUsers.filter((u) => !TEST.test(u.email)).length;
+    // Single shared filter: also excludes +tag Gmail variants of internal accounts.
+    const realUsers = allUsers.filter((u) => !isTestAccount(u.email)).length;
     return NextResponse.json(
       {
         users: realUsers,

@@ -26,6 +26,7 @@ const TITLES: Record<string, string> = {
   "/admin/reports": "Feedback & bug",
   "/admin/traffic": "Traffico",
   "/admin/delivery": "Consegna",
+  "/admin/reliability": "Affidabilità",
   "/admin/users": "Utenti",
   "/admin/jobs": "Job pool",
   "/admin/automation": "Automazione & Utenti",
