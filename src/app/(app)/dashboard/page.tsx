@@ -22,6 +22,8 @@ import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
 import { prisma } from "@/lib/db";
 import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
+import { rowToProfile } from "@/lib/cv-profile-types";
+import { journeyStage, STAGE_LABEL, type JourneyStage } from "@/lib/ui-application-status";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -41,7 +43,7 @@ export default async function DashboardPage() {
   const globePromise = getDashboardGlobeData(user.id);
   const openJobsPromise = globePromise.then((g) => g.stats.counts.open);
   openJobsPromise.catch(() => undefined); // l'errore emerge già da globePromise
-  const [globe, onboarding, deliveryCounts, responseCount, offersCount, interviews, attention, readiness] = await Promise.all([
+  const [globe, onboarding, deliveryCounts, responseCount, offersCount, interviews, attention, readiness, statusGroups, latestCv, cvProfileRow] = await Promise.all([
     globePromise,
     getOnboardingState(user.id),
     dashboardDeliveryCounts(user.id),
@@ -53,14 +55,35 @@ export default async function DashboardPage() {
     ] } }),
     prisma.application.count({ where: { userId: user.id, userStatus: "offerta" } }),
     prisma.application.findMany({
-      where: { userId: user.id, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }, { interviewSessions: { some: {} } }] },
+      // Solo colloqui con evidenza: risposta recruiter classificata come
+      // invito a colloquio, oppure stato dichiarato dall'utente. Le sessioni
+      // di preparazione (interviewSessions) NON sono colloqui e non contano.
+      where: { userId: user.id, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }] },
       orderBy: { lastReplyAt: "desc" },
       take: 3,
-      select: { id: true, createdAt: true, lastReplyAt: true, job: { select: { title: true, company: true } }, interviewSessions: { select: { startedAt: true }, orderBy: { createdAt: "desc" }, take: 1 } },
+      select: { id: true, createdAt: true, lastReplyAt: true, userStatus: true, lastReplyKind: true, job: { select: { title: true, company: true } } },
     }),
     getAttentionQueue(user.id, locale).catch(() => null),
     getAutoApplyReadiness(user.id, openJobsPromise),
+    prisma.application.groupBy({ by: ["status"], where: { userId: user.id, status: { not: "diagnostic" } }, _count: { _all: true } }),
+    prisma.cVDocument.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, select: { originalFilename: true, createdAt: true } }),
+    prisma.cVProfile.findUnique({ where: { userId: user.id } }),
   ]);
+
+  // Avanzamento: stati esistenti raggruppati per tappa del percorso. Le
+  // candidature "inviate" si contano SOLO con prova (deliveryCounts), mai
+  // dallo status "success".
+  const stageCounts = new Map<JourneyStage, number>();
+  for (const group of statusGroups) {
+    const stage = journeyStage(group.status);
+    if (!stage || stage === "unverified" || stage === "sent") continue;
+    stageCounts.set(stage, (stageCounts.get(stage) ?? 0) + group._count._all);
+  }
+  stageCounts.set("sent", deliveryCounts.confirmed);
+  stageCounts.set("unverified", deliveryCounts.unverified);
+  const progressStages: JourneyStage[] = ["awaiting_approval", "preparing", "manual", "in_flight", "sent", "unverified", "stopped"];
+  const totalApplications = statusGroups.reduce((sum, group) => sum + group._count._all, 0);
+  const cvProfile = cvProfileRow ? rowToProfile(cvProfileRow) : null;
 
   // Opportunità consigliate: migliori annunci aperti per match, una per azienda.
   const seen = new Set<string>();
@@ -91,7 +114,6 @@ export default async function DashboardPage() {
         <div className="workspace-page workspace-dashboard">
           <div className="dashboard-top-row"><header className="workspace-heading">
             <div>
-              <div className="workspace-eyebrow">{tr("Il tuo spazio di lavoro", "Your workspace")} / LavorAI</div>
               <h1>{t("greeting", { name: greetingName })}</h1>
               <p>{tr("Opportunità, risposte e prossimi passi in un unico posto.", "Opportunities, replies and next steps in one place.")}</p>
             </div>
@@ -99,7 +121,7 @@ export default async function DashboardPage() {
           <div className="workspace-metrics" role="list">
             <Link role="listitem" href="/applications" className="workspace-metric"><strong>{deliveryCounts.confirmed}</strong><small>{tr("Invii confermati", "Confirmed submissions")}</small>{deliveryCounts.providerAccepted > 0 && <small>{deliveryCounts.providerAccepted} {tr("email accettate dal provider, consegna da confermare", "provider-accepted emails, delivery unconfirmed")}</small>}</Link>
             <Link role="listitem" href="/inbox" className="workspace-metric" title={tr("Candidature con risposte classificate come recruiter. Aperture email e ricevute automatiche escluse.", "Applications with recruiter-classified replies. Email opens and automatic receipts excluded.")}><strong>{responseCount}</strong><small>{tr("Con risposte recruiter", "With recruiter replies")}</small></Link>
-            <Link role="listitem" href="/interview" className="workspace-metric"><strong>{interviews.length}</strong><small>{tr("Attività colloqui (max 3)", "Interview activity (max 3)")}</small></Link>
+            <Link role="listitem" href="/interview" className="workspace-metric"><strong>{interviews.length}</strong><small>{tr("Inviti a colloquio (ultimi 3)", "Interview invites (latest 3)")}</small></Link>
             <Link role="listitem" href="/applications" className="workspace-metric"><strong>{offersCount}</strong><small>{tr("Offerte dichiarate", "Reported offers")}</small></Link>
           </div>
           </div>
@@ -130,6 +152,27 @@ export default async function DashboardPage() {
                   <DashboardRegionPanel markers={globe.markers} />
                 </div></div>
               </section>
+              <section className="workspace-panel dashboard-progress" aria-labelledby="dashboard-progress-title">
+                <div className="fit-card-head">
+                  <h2 id="dashboard-progress-title"><Icon name="send" size={14} /> {tr("Avanzamento candidature", "Application progress")}</h2>
+                  <Link href="/applications" className="fit-link">{tr("Tutte", "All")} <Icon name="arrow-right" size={12} /></Link>
+                </div>
+                {totalApplications === 0
+                  ? <Empty text={tr("Nessuna candidatura ancora. Quando LavorAI ne prepara una, qui ne segui ogni passaggio fino all’invio.", "No applications yet. Once LavorAI prepares one, you can follow each step here until it is sent.")} cta={{ href: "/discover", label: tr("Vedi le opportunità", "See opportunities") }} />
+                  : <ol className="dashboard-progress-list">
+                    {progressStages.map((stage) => {
+                      const count = stageCounts.get(stage) ?? 0;
+                      const label = STAGE_LABEL[stage];
+                      return <li key={stage} data-stage={stage} data-empty={count === 0 ? "" : undefined}>
+                        <Link href={stage === "awaiting_approval" ? "/applications" : stage === "manual" ? "/questions" : "/applications"}>
+                          <strong>{count}</strong>
+                          <span>{en ? label.en : label.it}</span>
+                          <small>{en ? label.hint.en : label.hint.it}</small>
+                        </Link>
+                      </li>;
+                    })}
+                  </ol>}
+              </section>
               <AttentionQueue queue={attention} state={onboarding} locale={locale} />
               <section className="workspace-panel dashboard-opportunities">
                 <div className="fit-card-head">
@@ -149,14 +192,31 @@ export default async function DashboardPage() {
             </div>
             <aside className="workspace-stack dashboard-rail">
               <OnboardingChecklist state={onboarding} locale={locale} />
+              <section className="workspace-panel dashboard-cv" aria-labelledby="dashboard-cv-title">
+                <div className="fit-card-head">
+                  <h2 id="dashboard-cv-title"><Icon name="file" size={14} /> {tr("Il tuo CV", "Your CV")}</h2>
+                  <Link href="/cv" className="fit-link">{tr("Modifica", "Edit")} <Icon name="arrow-right" size={12} /></Link>
+                </div>
+                {!latestCv && !cvProfile
+                  ? <Empty text={tr("Carica il CV: è la base di ogni candidatura su misura.", "Upload your CV: it is the base of every tailored application.")} cta={{ href: "/onboarding", label: tr("Carica il CV", "Upload CV") }} />
+                  : <Link href="/cv" className="dashboard-cv-sheet" aria-label={tr("Apri e modifica il tuo CV", "Open and edit your CV")}>
+                    <div className="dashboard-cv-name">{[cvProfile?.firstName, cvProfile?.lastName].filter(Boolean).join(" ") || greetingName}</div>
+                    {cvProfile?.title ? <div className="dashboard-cv-title">{cvProfile.title}</div> : null}
+                    {cvProfile?.summary ? <p className="dashboard-cv-summary">{cvProfile.summary}</p> : null}
+                    {cvProfile && cvProfile.experiences.length > 0 && <ul className="dashboard-cv-exp">
+                      {cvProfile.experiences.slice(0, 3).map((experience, index) => <li key={index}><strong>{experience.role || tr("Ruolo", "Role")}</strong><span>{[experience.company, [experience.startDate, experience.endDate].filter(Boolean).join(" – ")].filter(Boolean).join(" · ")}</span></li>)}
+                    </ul>}
+                    {cvProfile && cvProfile.skills.length > 0 && <div className="dashboard-cv-skills">{cvProfile.skills.slice(0, 6).map((skill) => <span key={skill.name}>{skill.name}</span>)}</div>}
+                  </Link>}
+                {latestCv && <p className="workspace-muted dashboard-cv-file">{latestCv.originalFilename} · {tr("caricato il", "uploaded")} {latestCv.createdAt.toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short", year: "numeric" })}</p>}
+              </section>
               <section className="workspace-panel">
-                <div className="workspace-eyebrow">{tr("Preparati al prossimo passo", "Prepare your next step")}</div>
-                <h2>{tr("Attività colloqui", "Interview activity")}</h2>
-                <p className="workspace-muted">{tr("Inviti rilevati, stati dichiarati e sessioni di preparazione. Le date non sono appuntamenti confermati.", "Detected invitations, reported statuses and practice sessions. These dates are not confirmed appointments.")}</p>
-                {interviews.length === 0 ? <Empty text={tr("Nessuna attività colloquio registrata.", "No interview activity recorded yet.")} /> : interviews.map((a) => {
+                <h2>{tr("Colloqui", "Interviews")}</h2>
+                <p className="workspace-muted">{tr("Inviti riconosciuti nelle email dei recruiter o segnati da te. Le date indicano l’ultima risposta, non un appuntamento confermato.", "Invites recognised in recruiter emails or marked by you. Dates show the latest reply, not a confirmed appointment.")}</p>
+                {interviews.length === 0 ? <Empty text={tr("Nessun invito a colloquio registrato.", "No interview invites recorded yet.")} /> : interviews.map((a) => {
                   const when = a.lastReplyAt ?? a.createdAt;
                   return <Link key={a.id} href={`/applications?id=${encodeURIComponent(a.id)}`} className="fit-row" style={{ gridTemplateColumns: "1fr auto", color: "inherit" }}>
-                    <div><strong>{a.job.company ?? tr("Azienda", "Company")}</strong><p className="workspace-muted">{a.job.title}</p></div>
+                    <div><strong>{a.job.company ?? tr("Azienda", "Company")}</strong><p className="workspace-muted">{a.job.title} · {a.lastReplyKind === "colloquio" ? tr("da email recruiter", "from recruiter email") : tr("segnato da te", "marked by you")}</p></div>
                     <small className="workspace-muted">{when.toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short" })}</small>
                   </Link>;
                 })}
@@ -175,8 +235,8 @@ export default async function DashboardPage() {
 /** Read bounded pages, rather than loading every attempt or trusting legacy
  * status strings. Every page is owner-scoped and each application counts once.
  */
-async function dashboardDeliveryCounts(userId: string): Promise<{ confirmed: number; providerAccepted: number }> {
-  let confirmed = 0; let providerAccepted = 0; let cursor: string | undefined;
+async function dashboardDeliveryCounts(userId: string): Promise<{ confirmed: number; providerAccepted: number; unverified: number }> {
+  let confirmed = 0; let providerAccepted = 0; let unverified = 0; let cursor: string | undefined;
   while (true) {
     const applications = await prisma.application.findMany({
       where: { userId }, orderBy: { id: "asc" }, take: 200,
@@ -190,11 +250,12 @@ async function dashboardDeliveryCounts(userId: string): Promise<{ confirmed: num
       const evidence = deliveryEvidence(application);
       if (isConfirmedDelivery(evidence)) confirmed++;
       else if (evidence === "provider_accepted") providerAccepted++;
+      else if (application.status === "success") unverified++;
     }
     if (applications.length < 200) break;
     cursor = applications[applications.length - 1].id;
   }
-  return { confirmed, providerAccepted };
+  return { confirmed, providerAccepted, unverified };
 }
 
 function Empty({ text, cta }: { text: string; cta?: { href: string; label: string } }) {

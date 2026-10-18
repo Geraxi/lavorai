@@ -18,10 +18,11 @@
   --fg-subtle: rgba(15,16,18,.68);
 }
 .product-workspace .lavorai-main {
-  background: radial-gradient(ellipse at 20% 0%, hsl(var(--primary) / .12), transparent 55%), var(--bg);
+  /* Matte: a barely-there accent wash, not a glow. */
+  background: radial-gradient(ellipse at 20% 0%, hsl(var(--primary) / .05), transparent 55%), var(--bg);
   min-height: 0;
 }
-.product-workspace .workspace-topbar { flex: none; gap: 12px; padding: 12px 22px !important; flex-wrap: wrap; background: var(--bg) !important; }
+.product-workspace .workspace-topbar { flex: none; gap: 12px; padding: 12px 22px !important; flex-wrap: wrap; background: var(--glass-bg, var(--bg)) !important; -webkit-backdrop-filter: saturate(140%) blur(var(--glass-blur, 14px)); backdrop-filter: saturate(140%) blur(var(--glass-blur, 14px)); border-bottom: 1px solid var(--glass-border, var(--border-ds)); }
 .product-workspace .workspace-topbar > div { min-width: 0; flex-wrap: wrap; }
 .product-workspace .workspace-topbar > div:first-child { font-size: 14px !important; }
 .product-workspace :is(button,a,input,select,textarea,summary):focus-visible { outline: 2px solid var(--primary-ds); outline-offset: 3px; }
@@ -113,3 +114,10 @@
   .profile-workspace :is([style*="grid-template-columns:1fr 1fr"], [style*="grid-template-columns: 1fr 1fr"]) { grid-template-columns: minmax(0, 1fr) !important; }
   .profile-workspace .ds-section-body .flex.items-center.justify-between { flex-wrap: wrap; }
 }
+
+/* Browser surfaces carry the palette too. */
+.product-workspace ::selection { background: color-mix(in srgb, var(--primary-ds) 30%, transparent); color: var(--fg); }
+.product-workspace { scrollbar-color: var(--border-strong) transparent; }
+.product-workspace .ds-btn { transition: transform 140ms var(--ease-out, ease-out), background-color 160ms ease, border-color 160ms ease; }
+.product-workspace .ds-btn:active:not(:disabled) { transform: scale(0.97); }
+@media (prefers-reduced-motion: reduce) { .product-workspace .ds-btn:active:not(:disabled) { transform: none; } }

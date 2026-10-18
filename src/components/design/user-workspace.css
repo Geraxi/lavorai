@@ -382,3 +382,32 @@
 [data-theme="light"] .dg-region .dg-pill.is-active { color: var(--primary-ds); background: color-mix(in srgb, var(--primary-ds) 14%, transparent); }
 [data-theme="light"] .dg-region .dg-region-counts { color: var(--fg-muted); }
 [data-theme="light"] .dg-region .dg-region-counts b { color: var(--fg); }
+
+/* ── Dashboard: application progress + CV preview (Oct 2026) ───────── */
+.workspace-metric strong { letter-spacing: -0.02em; }
+.dashboard-progress-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 8px; }
+.dashboard-progress-list a { display: grid; gap: 2px; padding: 11px 12px; border-radius: 9px; background: var(--bg-sunken); color: inherit; text-decoration: none; min-height: 84px; transition: background-color 160ms ease; }
+.dashboard-progress-list a:hover { background: color-mix(in srgb, var(--primary-ds) 8%, var(--bg-sunken)); }
+.dashboard-progress-list strong { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.dashboard-progress-list span { font-size: 12.5px; font-weight: 560; color: var(--fg); }
+.dashboard-progress-list small { font-size: 11px; line-height: 1.35; color: var(--fg-muted); }
+.dashboard-progress-list li[data-empty] strong { color: var(--fg-subtle); }
+.dashboard-progress-list li[data-stage="awaiting_approval"]:not([data-empty]) strong { color: var(--primary-ds); }
+.dashboard-progress-list li[data-stage="sent"]:not([data-empty]) strong { color: var(--primary-ds); }
+.dashboard-progress-list li[data-stage="unverified"]:not([data-empty]) strong,
+.dashboard-progress-list li[data-stage="manual"]:not([data-empty]) strong { color: var(--amber); }
+
+.dashboard-cv-sheet { display: grid; gap: 6px; padding: 16px 16px 14px; border-radius: 10px; background: #f6f7f5; color: #17201d; text-decoration: none; box-shadow: 0 10px 24px -14px rgba(0,0,0,.55); transition: transform 200ms var(--ease-out, ease-out); }
+.dashboard-cv-sheet:hover { transform: translateY(-1px); }
+.dashboard-cv-name { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+.dashboard-cv-title { font-size: 12px; font-weight: 560; color: #07725d; }
+.dashboard-cv-summary { margin: 2px 0 0; font-size: 11.5px; line-height: 1.5; color: #44514c; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.dashboard-cv-exp { list-style: none; margin: 6px 0 0; padding: 8px 0 0; border-top: 1px solid #dfe5e1; display: grid; gap: 6px; }
+.dashboard-cv-exp li { display: grid; gap: 1px; min-width: 0; }
+.dashboard-cv-exp strong { font-size: 11.5px; font-weight: 620; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-cv-exp span { font-size: 11px; color: #5b6863; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-cv-skills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.dashboard-cv-skills span { font-size: 10.5px; padding: 2px 6px; border-radius: 4px; background: #e6ece8; color: #2c3833; }
+.dashboard-cv-file { margin-top: 8px; overflow-wrap: anywhere; }
+@media (prefers-reduced-motion: reduce) { .dashboard-cv-sheet { transition: none; } .dashboard-cv-sheet:hover { transform: none; } }
+@media (max-width: 420px) { .dashboard-progress-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dashboard-progress-list a { min-height: 78px; padding: 10px; } }
