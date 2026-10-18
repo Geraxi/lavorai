@@ -75,7 +75,7 @@ ${i.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0
   ${highlights}${bullets}${i.rawBlock ?? ""}${cta}${secondary}${footnote}
   <hr style="border:none;border-top:1px solid #E6E4DD;margin:32px 0 14px;">
   <p style="font-size:11.5px;color:#8A8C90;line-height:1.6;margin:0;">
-    LavorAI · ${en ? "Your applications, sent for you." : "Le tue candidature, inviate al posto tuo."}<br>
+    LavorAI · ${en ? "Tailored applications. You decide when to send." : "Candidature su misura. Tu decidi quando inviare."}<br>
     <a href="${site}/settings" style="color:#8A8C90;">${en ? "Preferences" : "Preferenze"}</a> · <a href="${site}/privacy" style="color:#8A8C90;">Privacy</a> · <a href="${site}/contatti" style="color:#8A8C90;">${en ? "Contact" : "Contatti"}</a>
   </p>
 </div>

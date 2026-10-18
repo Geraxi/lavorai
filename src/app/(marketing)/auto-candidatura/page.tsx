@@ -15,14 +15,14 @@ import { LiveStatsBadge } from "@/components/live-stats-badge";
  */
 export const metadata: Metadata = {
   title:
-    "Auto candidatura lavoro: invia CV automaticamente",
+    "Auto candidatura lavoro: candidature su misura, sotto il tuo controllo",
   description:
-    "Cerchi un software per candidarti automaticamente ai lavori? LavorAI invia CV + lettera motivazionale AI a 50 offerte/mese al posto tuo. 7 giorni di Pro gratis, con carta richiesta. Provalo in 2 minuti.",
+    "LavorAI trova offerte pertinenti, prepara CV e lettera su misura per ognuna e traccia ogni candidatura. Approvi tu ogni invio, oppure attivi l'invio automatico sopra una soglia di compatibilità che scegli.",
   alternates: { canonical: "/auto-candidatura" },
   openGraph: {
     title: "Auto candidatura lavoro — LavorAI",
     description:
-      "Il primo software italiano che invia CV in automatico a 50 lavori al mese. 7 giorni di Pro gratis, con carta richiesta.",
+      "Offerte pertinenti, CV e lettera su misura, ogni candidatura tracciata. Tu decidi quando inviare.",
     url: "/auto-candidatura",
   },
 };
@@ -61,9 +61,9 @@ export default function AutoCandidaturaPage() {
                 textShadow: "0 0 40px hsl(var(--primary)/0.35)",
               }}
             >
-              invia CV automaticamente
+              candidature su misura
             </span>{" "}
-            a 50 lavori al mese.
+            sotto il tuo controllo.
           </h1>
           <p
             style={{
@@ -74,11 +74,11 @@ export default function AutoCandidaturaPage() {
               marginBottom: 32,
             }}
           >
-            LavorAI è il software italiano che <strong>trova le offerte
-            giuste, riscrive il CV per ognuna e invia le candidature al
-            posto tuo</strong> su Greenhouse, Lever, LinkedIn, Adzuna e
-            altre 200+ fonti. Tu torni a fare colloqui, non a riempire
-            form.
+            LavorAI <strong>trova offerte pertinenti, prepara CV e lettera
+            su misura per ognuna e traccia ogni candidatura</strong> sui
+            portali ATS supportati, come Greenhouse, Lever, Ashby e Workable.
+            Tu rivedi i documenti e decidi quando inviare; se vuoi, attivi
+            l&apos;invio automatico.
           </p>
           <div
             style={{
@@ -103,7 +103,7 @@ export default function AutoCandidaturaPage() {
                 alignItems: "center",
               }}
             >
-              Attiva auto-apply — gratis
+              Inizia con il tuo CV
             </Link>
             <Link
               href="/pricing"
@@ -155,9 +155,9 @@ export default function AutoCandidaturaPage() {
               marginBottom: 20,
             }}
           >
-            Il flusso è pensato per essere zero-friction: colleghi una volta il
-            tuo CV, imposti le preferenze (ruoli, città, retribuzione minima),
-            attivi l&apos;auto-apply. Da quel momento LavorAI:
+            Carichi il CV, imposti le preferenze (ruoli, città, retribuzione
+            minima) e scegli la modalità di invio: con conferma, oppure
+            automatica sopra una soglia di compatibilità. Da quel momento LavorAI:
           </p>
           <ol
             style={{
@@ -169,7 +169,7 @@ export default function AutoCandidaturaPage() {
             }}
           >
             <li>
-              <strong>Sincronizza il pool</strong> di annunci ogni 6h da fonti
+              <strong>Aggiorna le offerte</strong> più volte al giorno da fonti
               ATS (Greenhouse, Lever, Ashby, Workable, SmartRecruiters) +
               aggregatori italiani (Adzuna).
             </li>
@@ -182,12 +182,14 @@ export default function AutoCandidaturaPage() {
               OpenAI (tone-matched, keyword ATS).
             </li>
             <li>
-              <strong>Compila il form</strong> di candidatura via Playwright su
-              portali ATS supportati o invia email al recruiter dove disponibile.
+              <strong>Invia solo quando lo decidi tu:</strong> dopo la tua
+              approvazione, o in automatico se hai attivato questa opzione,
+              compila il form sui portali ATS supportati o scrive al recruiter
+              dove disponibile.
             </li>
             <li>
-              <strong>Ti notifica</strong> ogni consegna confermata + traccia le
-              risposte via email inbound parsing.
+              <strong>Traccia lo stato</strong> di ogni invio, con la prova di
+              consegna quando il portale la fornisce, e le risposte ricevute.
             </li>
           </ol>
         </section>
@@ -219,11 +221,9 @@ export default function AutoCandidaturaPage() {
               marginBottom: 16,
             }}
           >
-            La ricerca del lavoro moderna è un problema di volume: il candidato
-            medio invia 30-50 candidature prima di ricevere una risposta seria.
-            Farlo a mano significa <strong>15-30 minuti per singola candidatura</strong>{" "}
-            (leggere annuncio, adattare CV, scrivere cover letter, compilare
-            form). Un mese di ricerca full-time.
+            Ogni candidatura fatta bene richiede tempo: leggere l&apos;annuncio,
+            adattare il CV, scrivere la lettera e compilare il form. Ripetuto
+            per decine di offerte, diventa un secondo lavoro.
           </p>
           <p
             style={{
@@ -233,11 +233,10 @@ export default function AutoCandidaturaPage() {
               marginBottom: 16,
             }}
           >
-            LavorAI comprime quel tempo a{" "}
-            <strong>~30 secondi per candidatura</strong>, senza tagliare qualità:
-            ogni CV è ottimizzato per l&apos;annuncio specifico (keyword ATS
-            match), ogni cover letter è scritta in italiano nativo dal contesto
-            reale della job description.
+            LavorAI prepara la parte ripetitiva: ogni CV è adattato
+            all&apos;annuncio specifico usando solo le tue esperienze reali, e
+            ogni lettera parte dalla job description. A te resta la parte che
+            conta: <strong>rivedere e decidere</strong>.
           </p>
         </section>
 
@@ -264,15 +263,15 @@ export default function AutoCandidaturaPage() {
           {[
             {
               q: "È legale inviare candidature in automatico?",
-              a: "Sì. Le candidature vengono inviate col tuo consenso esplicito attraverso i normali canali pubblici degli annunci (portali ATS, form web, email pubbliche di recruiting). Nessuno spam, nessun abuso di piattaforma.",
+              a: "Le candidature partono solo con il tuo consenso esplicito, attraverso i canali pubblici degli annunci (portali ATS, form web, email pubbliche di recruiting). L'invio automatico è un'opzione che attivi tu e puoi disattivare in qualsiasi momento.",
             },
             {
               q: "Con quali portali funziona l'auto-apply?",
-              a: "Direttamente su Greenhouse, Lever, Ashby, Workable, SmartRecruiters (submit reale su ATS con conferma HTTP). Per annunci LinkedIn + Adzuna facciamo fallback via email al recruiter quando disponibile pubblicamente.",
+              a: "Sui form pubblici degli ATS supportati, come Greenhouse, Lever, Ashby e Workable. La disponibilità dipende dal portale e dall'annuncio: un annuncio trovato su LinkedIn o Adzuna è candidabile solo se rimanda a un canale supportato o a un'email pubblica del recruiter.",
             },
             {
               q: "Il CV viene modificato per ogni candidatura?",
-              a: "Sì. OpenAI riscrive summary + bullet delle esperienze in base ai keyword dell'annuncio (rispettando i tuoi dati reali — nessuna invenzione). Anche la cover letter è unica per ogni azienda.",
+              a: "Sì, nella forma: summary e punti delle esperienze vengono riformulati sulle parole chiave dell'annuncio. Datori di lavoro, ruoli, date e titoli di studio restano quelli del tuo CV, e prima di approvare vedi le differenze rispetto all'originale.",
             },
             {
               q: "Quanto costa?",
@@ -280,7 +279,7 @@ export default function AutoCandidaturaPage() {
             },
             {
               q: "Cosa succede se voglio candidarmi solo ad alcuni annunci?",
-              a: "Puoi usare la modalità 'Hybrid': LavorAI trova e prepara le candidature, tu approvi con 1 click ognuna dal dashboard prima dell'invio. Zero automazione cieca.",
+              a: "È il funzionamento consigliato: con la modalità con conferma LavorAI trova e prepara le candidature, e tu approvi dalla dashboard solo quelle che vuoi inviare.",
             },
           ].map((f, i) => (
             <div
@@ -360,7 +359,7 @@ export default function AutoCandidaturaPage() {
               alignItems: "center",
             }}
           >
-            Attiva auto-apply ora →
+            Inizia con il tuo CV →
           </Link>
         </section>
       </main>
