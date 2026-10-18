@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { Logo } from "@/components/logo";
 import { Separator } from "@/components/ui/separator";
+import { CookieSettingsLink } from "@/components/cookie-settings-link";
 
 export function SiteFooter() {
   const t = useTranslations("footer");
@@ -96,7 +97,10 @@ export function SiteFooter() {
         <Separator className="my-10" />
 
         <div className="flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>© 2026 LavorAI · P.IVA 01452520776</p>
+          <p>
+            © 2026 LavorAI · P.IVA 01452520776 ·{" "}
+            <CookieSettingsLink className="underline-offset-2 hover:text-foreground hover:underline" />
+          </p>
           <p className="text-muted-foreground/60">{t("builtWith")}</p>
         </div>
       </div>

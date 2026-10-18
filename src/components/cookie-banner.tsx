@@ -3,93 +3,159 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useLocale } from "next-intl";
+import { useConsent } from "@/components/consent/use-consent";
+import { saveConsent } from "@/lib/consent/client-store";
+import { currentConsentNotice, type ConsentPurpose } from "@/lib/consent/notice";
+import { OPEN_COOKIE_SETTINGS_EVENT, type ConsentChoice } from "@/lib/consent/state";
 
-const KEY = "lavorai-cookie-consent";
-
-/** Consent esplicito per strumenti esterni di analytics e advertising. */
+/**
+ * Consent banner + preferences dialog.
+ * - Shown automatically only where consent is required (EU/EEA, UK, CH) or the
+ *   region could not be resolved, until both purposes are answered.
+ * - Accept and Reject have identical styling and weight.
+ * - Analytics and advertising are separate choices.
+ * - "Cookie settings" (footer, settings page, privacy page) reopens the
+ *   preferences with the saved answers pre-filled; it never resets them.
+ */
 export function CookieBanner() {
-  const [visible, setVisible] = useState(false);
+  const { answers, effective } = useConsent();
   const en = useLocale() === "en";
+  const text = currentConsentNotice().text[en ? "en" : "it"];
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  const [draft, setDraft] = useState<Record<ConsentPurpose, boolean>>({ analytics: false, advertising: false });
+
+  function openPrefs() {
+    // Pre-fill with what is in force: an unanswered purpose starts OFF.
+    setDraft({ analytics: answers.analytics === "granted", advertising: answers.advertising === "granted" });
+    setPrefsOpen(true);
+  }
 
   useEffect(() => {
-    const saved = localStorage.getItem(KEY);
-    if (!saved) setVisible(true);
-  }, []);
+    const onOpen = () => openPrefs();
+    window.addEventListener(OPEN_COOKIE_SETTINGS_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_COOKIE_SETTINGS_EVENT, onOpen);
+  });
 
-  if (!visible) return null;
-
-  function choose(value: "accepted" | "essential") {
-    localStorage.setItem(KEY, value);
-    window.dispatchEvent(new CustomEvent("lavorai-consent-changed", { detail: value }));
-    setVisible(false);
+  function choose(next: Record<ConsentPurpose, ConsentChoice>, source: "banner" | "settings") {
+    saveConsent(next, source);
+    setPrefsOpen(false);
   }
+  const all = (c: ConsentChoice) => ({ analytics: c, advertising: c });
+
+  if (prefsOpen) {
+    return (
+      <>
+        <div role="dialog" aria-modal="true" aria-labelledby="lavorai-cookie-prefs-title" className="lavorai-cookie-banner lavorai-cookie-prefs">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%" }}>
+            <div id="lavorai-cookie-prefs-title" style={{ fontWeight: 600, fontSize: 14 }}>{text.settingsLink}</div>
+            <p style={{ margin: 0, lineHeight: 1.5 }}>{text.body}</p>
+            <label className="lavorai-cookie-row">
+              <input type="checkbox" checked disabled aria-describedby="lavorai-cookie-essential" />
+              <span>
+                <strong>{en ? "Essential" : "Necessari"}</strong>
+                <span id="lavorai-cookie-essential" className="lavorai-cookie-desc">
+                  {en ? "Login, security and language. Always on." : "Accesso, sicurezza e lingua. Sempre attivi."}
+                </span>
+              </span>
+            </label>
+            {(["analytics", "advertising"] as const).map((p) => (
+              <label key={p} className="lavorai-cookie-row">
+                <input
+                  type="checkbox"
+                  name={`consent-${p}`}
+                  checked={draft[p]}
+                  onChange={(e) => setDraft((d) => ({ ...d, [p]: e.target.checked }))}
+                />
+                <span>
+                  <strong>{text.purposes[p].label}</strong>
+                  <span className="lavorai-cookie-desc">
+                    {text.purposes[p].description} {en ? "Recipients" : "Destinatari"}: {text.purposes[p].recipients}.
+                  </span>
+                </span>
+              </label>
+            ))}
+            <Link href="/privacy" style={{ color: "var(--fg-muted)" }}>{text.privacyLink}</Link>
+            <div className="lavorai-cookie-actions">
+              <button type="button" className="ds-btn ds-btn-sm" onClick={() => choose(all("denied"), "settings")}>{text.choices.rejectAll}</button>
+              <button type="button" className="ds-btn ds-btn-sm" onClick={() => choose(all("granted"), "settings")}>{text.choices.acceptAll}</button>
+              <button
+                type="button"
+                className="ds-btn ds-btn-sm"
+                onClick={() => choose({ analytics: draft.analytics ? "granted" : "denied", advertising: draft.advertising ? "granted" : "denied" }, "settings")}
+              >
+                {text.choices.save}
+              </button>
+            </div>
+            <button type="button" className="lavorai-cookie-close" aria-label={text.choices.close} onClick={() => setPrefsOpen(false)}>×</button>
+          </div>
+        </div>
+        <BannerStyles />
+      </>
+    );
+  }
+
+  if (!effective.showBanner) return null;
 
   return (
     <>
-      <div
-        role="dialog"
-        aria-label={en ? "Cookie notice" : "Informativa cookie"}
-        className="lavorai-cookie-banner"
-      >
+      <div role="dialog" aria-label={text.title} className="lavorai-cookie-banner">
         <div style={{ flex: 1, lineHeight: 1.5 }}>
-          {en
-            ? "We use essential cookies for login and preferences. With your permission, optional Google and Meta tools help us measure and improve results. See the "
-            : "Usiamo cookie essenziali per accesso e preferenze. Con il tuo consenso, gli strumenti facoltativi di Google e Meta ci aiutano a misurare e migliorare i risultati. Vedi la "}
-          <Link href="/privacy" style={{ color: "var(--fg-muted)" }}>
-            {en ? "privacy policy" : "informativa privacy"}
-          </Link>
-          .
+          {text.body}{" "}
+          <Link href="/privacy" style={{ color: "var(--fg-muted)" }}>{text.privacyLink}</Link>.
         </div>
         <div className="lavorai-cookie-actions">
-          <button
-            type="button"
-            className="ds-btn ds-btn-sm"
-            onClick={() => choose("essential")}
-          >
-            {en ? "Essential only" : "Solo essenziali"}
-          </button>
-          <button
-            type="button"
-            className="ds-btn ds-btn-primary ds-btn-sm"
-            onClick={() => choose("accepted")}
-          >
-            {en ? "Allow analytics" : "Consenti analisi"}
-          </button>
+          <button type="button" className="ds-btn ds-btn-sm" onClick={() => choose(all("denied"), "banner")}>{text.choices.rejectAll}</button>
+          <button type="button" className="ds-btn ds-btn-sm" onClick={() => choose(all("granted"), "banner")}>{text.choices.acceptAll}</button>
+          <button type="button" className="lavorai-cookie-customize" onClick={openPrefs}>{text.choices.customize}</button>
         </div>
       </div>
-      <style>{`
-        .lavorai-cookie-banner {
-          position: fixed;
-          inset: auto 28px 28px auto;
-          z-index: 90;
-          max-width: 480px;
-          margin: 0;
-          padding: 12px 14px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          border: 1px solid var(--border-ds);
-          border-radius: 4px;
-          background: rgba(4, 12, 21, .88);
-          backdrop-filter: blur(16px);
-          box-shadow: var(--shadow-lg);
-          color: var(--fg);
-          font-size: 13px;
-        }
-        .lavorai-cookie-actions { display: flex; gap: 8px; flex-shrink: 0; }
-        @media (max-width: 640px) {
-          .lavorai-cookie-banner {
-            inset: auto 8px 8px;
-            padding: 14px;
-            flex-direction: column;
-            align-items: stretch;
-            gap: 12px;
-            font-size: 12.5px;
-          }
-          .lavorai-cookie-actions { width: 100%; }
-          .lavorai-cookie-actions > button { flex: 1; justify-content: center; }
-        }
-      `}</style>
+      <BannerStyles />
     </>
+  );
+}
+
+function BannerStyles() {
+  return (
+    <style>{`
+      .lavorai-cookie-banner {
+        position: fixed;
+        inset: auto 28px 28px auto;
+        z-index: 90;
+        max-width: 520px;
+        margin: 0;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        border: 1px solid var(--border-ds);
+        border-radius: 4px;
+        background: rgba(4, 12, 21, .92);
+        backdrop-filter: blur(16px);
+        box-shadow: var(--shadow-lg);
+        color: var(--fg);
+        font-size: 13px;
+      }
+      .lavorai-cookie-prefs { max-width: 460px; padding: 16px; }
+      .lavorai-cookie-actions { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+      .lavorai-cookie-actions > .ds-btn { flex: 1; justify-content: center; }
+      .lavorai-cookie-customize { background: none; border: 0; padding: 6px 4px; color: var(--fg-muted); font: inherit; font-size: 12.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+      .lavorai-cookie-customize:hover { color: var(--fg); }
+      .lavorai-cookie-row { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+      .lavorai-cookie-row input { margin-top: 3px; }
+      .lavorai-cookie-desc { display: block; color: var(--fg-muted); font-size: 12px; line-height: 1.45; margin-top: 2px; }
+      .lavorai-cookie-close { position: absolute; top: 6px; right: 10px; background: none; border: 0; color: var(--fg-muted); font-size: 18px; cursor: pointer; }
+      @media (max-width: 640px) {
+        .lavorai-cookie-banner {
+          inset: auto 8px 8px;
+          padding: 14px;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 12px;
+          font-size: 12.5px;
+        }
+        .lavorai-cookie-actions { width: 100%; }
+      }
+    `}</style>
   );
 }

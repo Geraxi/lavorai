@@ -1,169 +1,127 @@
 "use client";
 
-import Script from "next/script";
-import { useEffect, useState } from "react";
-
-const CONSENT_KEY = "lavorai-cookie-consent";
+import { useEffect, useRef } from "react";
+import { useConsent } from "@/components/consent/use-consent";
+import { hasConsent } from "@/lib/consent/client-store";
+import { isMetaPixelLoaded, loadMetaPixel, revokeMetaPixel, type PixelDocument, type PixelWindow } from "@/lib/consent/meta-pixel";
 
 /**
- * Meta Pixel + Google Ads + GA4 loader.
- * Ognuno si attiva solo se l'ENV corrispondente è impostata → nessun
- * script inutile su dev locale o se il founder non ha ancora creato
- * l'ad account.
+ * Meta Pixel + Google Ads + GA4 loader, gated per purpose:
+ *   - GA4 (NEXT_PUBLIC_GA_MEASUREMENT_ID)  → "analytics" consent
+ *   - Meta Pixel (NEXT_PUBLIC_META_PIXEL_ID), Google Ads (NEXT_PUBLIC_GOOGLE_ADS_ID)
+ *                                           → "advertising" consent
  *
- * ENV richieste (tutte NEXT_PUBLIC_ così arrivano al client):
- *   NEXT_PUBLIC_META_PIXEL_ID       — es. "1234567890"
- *   NEXT_PUBLIC_GOOGLE_ADS_ID       — es. "AW-1234567890"
- *   NEXT_PUBLIC_GA_MEASUREMENT_ID   — es. "G-XXXXXXXXXX" (opzionale, per GA4)
+ * Nothing loads until the region is resolved and the purpose is effective
+ * (see src/lib/consent/state.ts). Withdrawal applies immediately in every
+ * open tab: Meta gets fbq('consent','revoke') and its cookies are expired;
+ * Google gets a consent update to denied and the per-id disable flag.
  *
- * Cookie consent: rispettato — carica solo dopo `analyticsConsent` accepted.
- * Il consent viene gestito dal <CookieBanner />. Prima del consenso, i pixel
- * non si caricano affatto (controllo client tramite la preferenza salvata).
- *
- * Eventi standard emessi (per creare audiences retargeting):
- *   - PageView (automatico su ogni pagina, Meta+GA+GAds)
- *   - trackConversion(name, value?) helper esportato per signup/checkout/purchase
+ * The Meta Pixel is loaded at most once per page with one PageView, automatic
+ * advanced matching disabled and no user data in init. There is no Google Tag
+ * Manager / second pixel in the codebase.
  */
 export function TrackingPixels() {
-  const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
-  const gadsId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
-  const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-  const [consent, setConsent] = useState(false);
+  const metaPixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID?.trim();
+  const gadsId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID?.trim();
+  const gaId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim();
+  const { effective } = useConsent();
+  const prev = useRef({ analytics: false, advertising: false });
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    // Legge la scelta cookie dal localStorage (impostata dal CookieBanner).
-    // Se l'utente ha accettato → carichiamo. Se ha rifiutato o non ha
-    // ancora scelto → niente pixel (rispetto GDPR strict).
-    const v = window.localStorage.getItem(CONSENT_KEY);
-    if (v === "accepted") setConsent(true);
-    // Ascolta cambi: se l'utente accetta dopo, ricarica in memoria.
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === CONSENT_KEY && e.newValue === "accepted") setConsent(true);
-    };
-    const onConsent = (e: Event) => {
-      const value = (e as CustomEvent<string>).detail;
-      setConsent(value === "accepted");
-    };
-    window.addEventListener("storage", onStorage);
-    window.addEventListener("lavorai-consent-changed", onConsent);
-    return () => {
-      window.removeEventListener("storage", onStorage);
-      window.removeEventListener("lavorai-consent-changed", onConsent);
-    };
-  }, []);
+    if (!effective.ready) return;
+    const win = window as unknown as PixelWindow & GtagWindow;
+    const doc = document as unknown as PixelDocument;
+    const was = prev.current;
 
-  // Niente pixel senza consent OR senza ID configurato.
-  if (!consent) return null;
-  if (!metaPixelId && !gadsId && !gaId) return null;
+    // ── Meta Pixel (advertising) ──
+    if (metaPixelId) {
+      if (effective.advertising) loadMetaPixel(win, doc, metaPixelId);
+      else if (was.advertising || isMetaPixelLoaded(win)) revokeMetaPixel(win, doc);
+    }
 
-  return (
-    <>
-      {/* ============ Meta Pixel (Facebook/Instagram Ads) ============ */}
-      {metaPixelId && (
-        <>
-          <Script id="meta-pixel" strategy="afterInteractive">
-            {`
-              !function(f,b,e,v,n,t,s)
-              {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-              n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-              if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-              n.queue=[];t=b.createElement(e);t.async=!0;
-              t.src=v;s=b.getElementsByTagName(e)[0];
-              s.parentNode.insertBefore(t,s)}(window, document,'script',
-              'https://connect.facebook.net/en_US/fbevents.js');
-              fbq('init', '${metaPixelId}');
-              fbq('track', 'PageView');
-            `}
-          </Script>
-          {/* noscript fallback */}
-          <noscript>
-            <img
-              height="1"
-              width="1"
-              style={{ display: "none" }}
-              src={`https://www.facebook.com/tr?id=${metaPixelId}&ev=PageView&noscript=1`}
-              alt=""
-            />
-          </noscript>
-        </>
-      )}
+    // ── Google (GA4 = analytics, Ads = advertising) ──
+    const wantGa = Boolean(gaId && effective.analytics);
+    const wantAds = Boolean(gadsId && effective.advertising);
+    if (wantGa || wantAds) ensureGtag(win, doc, (wantAds ? gadsId : gaId)!);
+    if (win.gtag) {
+      win.gtag("consent", "update", {
+        analytics_storage: effective.analytics ? "granted" : "denied",
+        ad_storage: effective.advertising ? "granted" : "denied",
+        ad_user_data: effective.advertising ? "granted" : "denied",
+        ad_personalization: effective.advertising ? "granted" : "denied",
+      });
+      if (gaId) setGtagId(win, gaId, wantGa);
+      if (gadsId) setGtagId(win, gadsId, wantAds);
+    }
 
-      {/* ============ Google Ads Tag ============ */}
-      {gadsId && (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${gadsId}`}
-            strategy="afterInteractive"
-          />
-          <Script id="google-ads" strategy="afterInteractive">
-            {`
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${gadsId}');
-              ${gaId && gaId !== gadsId ? `gtag('config', '${gaId}');` : ""}
-            `}
-          </Script>
-        </>
-      )}
+    prev.current = { analytics: effective.analytics, advertising: effective.advertising };
+  }, [effective.ready, effective.analytics, effective.advertising, metaPixelId, gadsId, gaId]);
 
-      {/* GA4 standalone (se non condivide gtag con GAds) */}
-      {gaId && !gadsId && (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`}
-            strategy="afterInteractive"
-          />
-          <Script id="ga4" strategy="afterInteractive">
-            {`
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${gaId}');
-            `}
-          </Script>
-        </>
-      )}
-    </>
-  );
+  return null;
+}
+
+interface GtagWindow {
+  dataLayer?: unknown[];
+  gtag?: (...args: unknown[]) => void;
+  __lavoraiGtagLoaded?: boolean;
+  __lavoraiGtagConfigured?: Record<string, boolean>;
+  [disableFlag: `ga-disable-${string}`]: boolean | undefined;
+}
+
+function ensureGtag(win: GtagWindow, doc: PixelDocument, firstId: string) {
+  if (win.__lavoraiGtagLoaded) return;
+  win.__lavoraiGtagLoaded = true;
+  win.dataLayer = win.dataLayer || [];
+  // gtag must push the Arguments object, not an array.
+  win.gtag = function gtag() {
+    // eslint-disable-next-line prefer-rest-params
+    win.dataLayer!.push(arguments);
+  };
+  win.gtag("consent", "default", {
+    analytics_storage: "denied",
+    ad_storage: "denied",
+    ad_user_data: "denied",
+    ad_personalization: "denied",
+  });
+  win.gtag("js", new Date());
+  const s = doc.createElement("script");
+  s.async = true;
+  s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(firstId)}`;
+  doc.head?.appendChild(s);
+}
+
+function setGtagId(win: GtagWindow, id: string, enabled: boolean) {
+  win[`ga-disable-${id}`] = !enabled;
+  if (!enabled) return;
+  win.__lavoraiGtagConfigured = win.__lavoraiGtagConfigured || {};
+  if (win.__lavoraiGtagConfigured[id]) return;
+  win.__lavoraiGtagConfigured[id] = true;
+  win.gtag?.("config", id);
 }
 
 /**
- * Helper per tracciare conversioni chiave (signup / checkout / purchase).
- * Chiamalo dai bottoni/pagine di conversion. Emette event a Meta + Google
- * senza dover conoscere l'implementazione di ognuno.
- *
- * Esempi:
- *   trackConversion("Lead")         // signup started/completed
- *   trackConversion("InitiateCheckout", { value: 19.99, currency: "EUR" })
- *   trackConversion("Purchase", { value: 39.99, currency: "EUR" })
+ * Helper for non-registration conversions (e.g. InitiateCheckout). Re-checks
+ * consent before every call. CompleteRegistration is intentionally NOT here:
+ * it is sent only through the one-shot server-issued event ID
+ * (src/components/registration-conversion.tsx).
  */
 export function trackConversion(
-  eventName: "Lead" | "CompleteRegistration" | "InitiateCheckout" | "Purchase" | "Contact",
+  eventName: "Lead" | "InitiateCheckout" | "Purchase" | "Contact",
   params?: { value?: number; currency?: string; content_name?: string },
 ) {
   if (typeof window === "undefined") return;
   try {
-    // Meta Pixel
-    const fbq = (window as unknown as { fbq?: (...a: unknown[]) => void }).fbq;
-    if (typeof fbq === "function") {
-      fbq("track", eventName, params ?? {});
+    const win = window as unknown as PixelWindow & GtagWindow;
+    if (hasConsent("advertising") && isMetaPixelLoaded(win) && typeof win.fbq === "function") {
+      win.fbq("track", eventName, params ?? {});
     }
-    // Google (Ads + GA4 via gtag)
-    const gtag = (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag;
-    if (typeof gtag === "function") {
+    if ((hasConsent("advertising") || hasConsent("analytics")) && typeof win.gtag === "function") {
       const gtagEvent =
-        eventName === "Lead"
-          ? "generate_lead"
-          : eventName === "CompleteRegistration"
-            ? "sign_up"
-            : eventName === "InitiateCheckout"
-              ? "begin_checkout"
-              : eventName === "Purchase"
-                ? "purchase"
-                : "contact";
-      gtag("event", gtagEvent, {
+        eventName === "Lead" ? "generate_lead"
+          : eventName === "InitiateCheckout" ? "begin_checkout"
+            : eventName === "Purchase" ? "purchase"
+              : "contact";
+      win.gtag("event", gtagEvent, {
         value: params?.value,
         currency: params?.currency ?? "EUR",
         content_name: params?.content_name,

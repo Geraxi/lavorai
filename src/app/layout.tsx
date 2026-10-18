@@ -10,6 +10,7 @@ import { TrackPageView } from "@/components/track-page-view";
 import { TrackReferral } from "@/components/track-referral";
 import { TrackAttribution } from "@/components/track-attribution";
 import { TrackingPixels } from "@/components/tracking-pixels";
+import { RegistrationConversion } from "@/components/registration-conversion";
 import { Analytics } from "@vercel/analytics/next";
 import { assertEnvOrCrash } from "@/lib/env";
 import "./globals.css";
@@ -124,14 +125,19 @@ export default async function RootLayout({
             visibile ai crawler senza richiedere JS. */}
         <StructuredData />
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <Providers>{children}</Providers>
+          <Providers>
+            {children}
+            {/* Meta CompleteRegistration one-shot; needs SessionProvider. */}
+            <RegistrationConversion />
+          </Providers>
           <TrackPageView />
           <TrackReferral />
           <TrackAttribution />
           <Toaster richColors position="top-center" />
           <CookieBanner />
           {/* Meta Pixel + Google Ads + GA4 — solo se ENV NEXT_PUBLIC_*
-              impostate + consent GDPR accettato. Vedi tracking-pixels.tsx. */}
+              impostate + consenso per finalità (analisi / pubblicità) in
+              vigore per la regione. Vedi tracking-pixels.tsx. */}
           <TrackingPixels />
           <Analytics />
         </NextIntlClientProvider>

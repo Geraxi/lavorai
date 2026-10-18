@@ -2,6 +2,7 @@
 
 import { useState, type InputHTMLAttributes, type ReactNode } from "react";
 import Link from "next/link";
+import { CookieSettingsLink } from "@/components/cookie-settings-link";
 import { useTranslations } from "next-intl";
 import { Eye, EyeOff, ArrowUpRight, FileText, Send, Check } from "lucide-react";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -30,7 +31,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
         </header>
         <div className="auth-content">{children}</div>
         <footer className="auth-footer">
-          <Link href="/privacy">{t("footerPrivacy")}</Link><span aria-hidden>·</span><Link href="/termini">{t("footerTerms")}</Link>
+          <Link href="/privacy">{t("footerPrivacy")}</Link><span aria-hidden>·</span><Link href="/termini">{t("footerTerms")}</Link><span aria-hidden>·</span><CookieSettingsLink />
           <LanguageSwitcher />
         </footer>
       </section>
