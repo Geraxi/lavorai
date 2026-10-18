@@ -1003,3 +1003,22 @@ model JobDismissal {
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
   @@id([userId, jobId])
 }
+
+/// One row per AI provider call (token usage as reported by the provider).
+/// Additive table, no FK on purpose: no CV/prompt content, no user id; the
+/// optional applicationId links cost to an application while it exists.
+/// Cost is NOT stored: it is estimated at read time from AI_PRICING_USD_PER_MTOK.
+model AiUsageEvent {
+  id                String   @id @default(cuid())
+  createdAt         DateTime @default(now())
+  task              String
+  provider          String
+  model             String
+  inputTokens       Int?
+  outputTokens      Int?
+  cachedInputTokens Int?
+  applicationId     String?
+
+  @@index([createdAt])
+  @@index([applicationId])
+}

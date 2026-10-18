@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { recordAiHealth } from "@/lib/ai-health-state";
+import { recordAiUsage } from "@/lib/ai-usage";
 
 /**
  * Router AI multi-provider. Ogni feature ("task") ha un provider+modello
@@ -124,6 +125,7 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
             ? { text: { format: { type: "json_object" as const } } }
             : {}),
         });
+        recordAiUsage({ task: input.task, provider: p, model: m, usage: res.usage });
         const text = res.output_text?.trim() ?? "";
         if (!text) {
           throw new Error(
@@ -146,6 +148,7 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
         system: input.system,
         messages: [{ role: "user", content: input.user }],
       });
+      recordAiUsage({ task: input.task, provider: p, model: m, usage: res.usage });
       const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
       await recordAiHealth({
         provider: p,
