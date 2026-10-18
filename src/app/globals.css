@@ -1811,8 +1811,6 @@ a.gd-chip:hover { border-color: hsl(var(--primary) / 0.6); }
   padding-bottom: var(--grow, 8px);
   margin-bottom: calc(-1 * var(--grow, 8px));
   
-  --bg: var(--bg);
-  --card: hsl(var(--card));
   --ember: var(--red-ds);
   --fill-on: var(--fg);
   --fill-slab: var(--bg-elev);
@@ -1823,14 +1821,14 @@ a.gd-chip:hover { border-color: hsl(var(--primary) / 0.6); }
 
 :root, [data-theme="dark"] {
   .bal {
-    --fill-on-rgb: 244 245 244;
-    --ink-rgb: 244 245 244;
+    --fill-on-rgb: 244, 245, 244;
+    --ink-rgb: 244, 245, 244;
   }
 }
 
 [data-theme="light"] .bal {
-  --fill-on-rgb: 15 16 18;
-  --ink-rgb: 15 16 18;
+  --fill-on-rgb: 15, 16, 18;
+  --ink-rgb: 15, 16, 18;
 }
 
 .bal-goo {
@@ -1866,7 +1864,7 @@ a.gd-chip:hover { border-color: hsl(var(--primary) / 0.6); }
   z-index: 2;
   transform: translateY(var(--at));
   touch-action: pan-x;
-  background: var(--fill-slab, var(--card));
+  background: var(--fill-slab, hsl(var(--card)));
 }
 
 .bal-scroll:focus-visible {
