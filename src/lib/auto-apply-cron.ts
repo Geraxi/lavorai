@@ -482,24 +482,17 @@ async function processUser(
           })),
         },
       ],
-      // Skip jobs dove l'utente ha:
-      //   - una candidatura consegnata (success) → mai ricandidare
-      //   - una in volo (queued/optimizing/applying) → no doppioni
-      //   - una in attesa di approvazione (awaiting_consent) → in hybrid
-      //     non vogliamo duplicare la stessa suggestion ogni tick
-      //   - una qualsiasi recente (< 24h) → cooldown anti-spam-retry
-      // I ready_to_apply / failed più vecchi di 24h tornano nel pool ma
-      // solo una volta al giorno, non ogni 30 minuti.
+      // Skip any job for which the user already has ANY application row.
+      // The worker (reserveApplicationWork) refuses to process a second row
+      // for the same user+job (sibling check + immutable submission ledger),
+      // and automatic retries are suspended (historicalRetriesBlocked). Creating
+      // such a duplicate here only burns a daily/monthly quota slot and leaves
+      // a claimed, never-sent "queued" row. Previously only success/queued/
+      // optimizing/applying/awaiting_consent or rows < 12h old were excluded,
+      // so failed / needs_answers / ready_to_apply rows re-entered the pool
+      // after 12h and produced exactly these dead duplicates.
       NOT: {
-        applications: {
-          some: {
-            userId: user.id,
-            OR: [
-              { status: { in: ["success", "queued", "optimizing", "applying", "awaiting_consent"] } },
-              { createdAt: { gte: new Date(Date.now() - 12 * 3600_000) } },
-            ],
-          },
-        },
+        applications: { some: { userId: user.id } },
       },
     },
     orderBy: { postedAt: "desc" },

@@ -170,7 +170,16 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
     // A previous attempt is never eligible for preparation/replay in this mode.
     if (await tx.applicationSubmissionReservation.findFirst({ where: { OR: [
       { applicationId: id }, { subjectKey: submissionSubjectKey(row.userId, row.jobId) },
-    ] }, select: { id: true } })) return null;
+    ] }, select: { id: true } })) {
+      // Never leave a claimed row silently "queued" (startedAt set, no message):
+      // the poller only claims startedAt=null, so it would be frozen with no
+      // explanation. Record the reason and move it out of the queue. Nothing is sent.
+      await tx.application.update({ where: { id }, data: {
+        status: "ready_to_apply",
+        errorMessage: "Invio precedente o tentativo con esito da verificare. Nessun nuovo invio automatico: controlla la consegna prima di ritentare.",
+      } });
+      return null;
+    }
     if (hasPotentialSubmission(row) || (row.cvDocxPath && ![NOT_SUBMITTED, "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation ?? ""))) {
       await tx.application.update({ where: { id }, data: {
         status: "ready_to_apply",
