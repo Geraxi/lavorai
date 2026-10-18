@@ -18,8 +18,13 @@ import type { JobListItem } from "@/lib/adzuna";
  *  - remoteok: /l/<id> redirects back to the listing for non-browser clients.
  */
 
-export type ResolvableBoardSource = "weworkremotely" | "arbeitnow";
-export const RESOLVABLE_BOARD_SOURCES: ResolvableBoardSource[] = ["weworkremotely", "arbeitnow"];
+/**
+ * Board sources that are resolvable to ATS postings. We Work Remotely is
+ * technically resolvable but DISABLED due to ToS restrictions (WWR requires
+ * applicants to apply through their site, not direct ATS links).
+ */
+export type ResolvableBoardSource = "arbeitnow"; // "weworkremotely" removed due to ToS
+export const RESOLVABLE_BOARD_SOURCES: ResolvableBoardSource[] = ["arbeitnow"];
 
 /** A board row is re-checked at most this often (cache on Job.recruiterScrapedAt). */
 export const BOARD_RESOLUTION_TTL_MS = 7 * 86400_000;
@@ -32,7 +37,6 @@ export interface AtsPosting {
 }
 
 const BOARD_HOSTS: Record<ResolvableBoardSource, RegExp> = {
-  weworkremotely: /^(?:www\.)?weworkremotely\.com$/i,
   arbeitnow: /^www\.arbeitnow\.(?:com|co\.uk|fr|ch|de|at|nl|es|it)$/i,
 };
 
@@ -119,13 +123,7 @@ export async function resolveBoardApplyDestination(
   const board = isBoardUrl(source, job.url);
   if (!board) return { kind: "unsupported", reason: "board_url_invalid" };
   try {
-    if (source === "weworkremotely") {
-      const res = await fetchImpl(board.href, { redirect: "follow", headers: { "User-Agent": UA, Accept: "text/html" }, signal: AbortSignal.timeout(timeoutMs) });
-      if (!res.ok) { await res.body?.cancel().catch(() => undefined); return { kind: "unsupported", reason: `board_http_${res.status}` }; }
-      const href = extractWwrApplyUrl(await readCapped(res));
-      const posting = href ? parseAtsPosting(href) : null;
-      return posting && href ? { kind: "ats", posting, applyUrl: href } : { kind: "unsupported", reason: "no_supported_ats_link" };
-    }
+    // weworkremotely resolution removed: ToS require application through WWR site
     // Arbeitnow: `<listing>/apply` is a plain public 302 to the employer.
     let current = `${board.origin}${board.pathname.replace(/\/+$/, "")}/apply`;
     for (let hop = 0; hop < 4; hop++) {

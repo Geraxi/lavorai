@@ -150,6 +150,12 @@ export async function fetchWorkableSearchJobs(
         if (seenSlugs.has(slug)) { accepted = true; break; }
         const raw = await accountFeed(slug);
         if (!raw?.length) continue;
+        // Keep account only if it has >=1 job AND at least one job with country Italy.
+        const hasItalianJob = raw.some((job) => {
+          const country = (job.location?.country ?? "").toLowerCase();
+          return country === "italy" || country === "italia" || country === "it";
+        });
+        if (!hasItalianJob) continue;
         const matched = c.hits.filter((hit) => raw.some((r) => sameWorkablePosting(hit, r)));
         if (!matched.length) continue;
         seenSlugs.add(slug);

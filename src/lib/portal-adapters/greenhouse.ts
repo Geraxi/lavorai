@@ -137,7 +137,28 @@ export const greenhouseAdapter: PortalAdapter = {
     //   2. boards.greenhouse.io/embed/job_app?for=<slug>&token=<id> → form puro
     // Proviamo (1) per primo; se anche /apply redirige a career custom,
     // fallback su (2).
-    const candidates = buildApplyUrlCandidates(input.jobUrl);
+    //
+    // For custom career page URLs with gh_jid parameter, we need to look up
+    // the sourceSlug from the database to build the canonical URL.
+    let normalizedJobUrl = input.jobUrl;
+    const ghId = extractGreenhouseJobId(input.jobUrl);
+    if (ghId && !input.jobUrl.includes("greenhouse.io")) {
+      // This is a custom career page URL with gh_jid - look up sourceSlug
+      try {
+        const { prisma } = await import("@/lib/db");
+        const job = await prisma.job.findFirst({
+          where: { externalId: ghId.id, source: "greenhouse" },
+          select: { sourceSlug: true },
+        });
+        if (job?.sourceSlug) {
+          normalizedJobUrl = buildCanonicalGreenhouseUrl(ghId.id, job.sourceSlug);
+          console.log(`[greenhouse] normalized gh_jid URL ${input.jobUrl} → ${normalizedJobUrl}`);
+        }
+      } catch (err) {
+        console.warn(`[greenhouse] failed to normalize gh_jid URL ${input.jobUrl}:`, err);
+      }
+    }
+    const candidates = buildApplyUrlCandidates(normalizedJobUrl);
     let formFound = false;
     let lastUrlTried = "";
     for (const tryUrl of candidates) {
@@ -567,6 +588,43 @@ function buildApplyUrlCandidates(jobUrl: string): string[] {
     candidates.push(jobUrl);
   }
   return candidates;
+}
+
+/**
+ * Extract Greenhouse job ID and slug from a URL, supporting custom career pages
+ * with gh_jid parameter (e.g., sumup.com/careers/positions/123?gh_jid=123).
+ * Returns null if the URL is not recognizable as a Greenhouse posting.
+ */
+export function extractGreenhouseJobId(url: string): { id: string; slug?: string } | null {
+  try {
+    const u = new URL(url);
+    // Standard Greenhouse URLs: boards.greenhouse.io/<slug>/jobs/<id>
+    const pathMatch = u.pathname.match(/^\/([^/]+)\/jobs\/(\d+)/);
+    if (pathMatch && u.hostname.includes("greenhouse.io")) {
+      return { id: pathMatch[2], slug: pathMatch[1] };
+    }
+    // Custom career pages with gh_jid parameter
+    const ghJid = u.searchParams.get("gh_jid");
+    if (ghJid && /^\d+$/.test(ghJid)) {
+      return { id: ghJid };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build the canonical Greenhouse apply URL from externalId and sourceSlug.
+ * This is used to normalize custom career page URLs (with gh_jid) to the
+ * standard boards.greenhouse.io form that the adapter supports.
+ */
+export function buildCanonicalGreenhouseUrl(externalId: string, sourceSlug: string | null | undefined): string {
+  if (!sourceSlug) {
+    // Fallback to job-boards domain when slug is missing
+    return `https://job-boards.greenhouse.io/jobs/${externalId}`;
+  }
+  return `https://boards.greenhouse.io/${sourceSlug}/jobs/${externalId}`;
 }
 
 /**

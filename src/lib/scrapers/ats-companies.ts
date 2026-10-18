@@ -10,16 +10,10 @@ export interface AtsCompany {
 }
 
 export const GREENHOUSE_COMPANIES: AtsCompany[] = [
-  { slug: "satispay", name: "Satispay", country: "IT" },
-  { slug: "bendingspoons", name: "Bending Spoons", country: "IT" },
-  { slug: "scalapay", name: "Scalapay", country: "IT" },
-  { slug: "casavo", name: "Casavo", country: "IT" },
-  { slug: "moneyfarm", name: "MoneyFarm", country: "IT" },
-  { slug: "docebo", name: "Docebo", country: "IT" },
-  { slug: "everli", name: "Everli", country: "IT" },
-  { slug: "treatwell", name: "Treatwell", country: "IT" },
-  { slug: "nexi", name: "Nexi", country: "IT" },
-  { slug: "prima", name: "Prima Assicurazioni", country: "IT" },
+  // Italian seeds verified dead (404) as of 2026-10-18:
+  // satispay, bendingspoons, scalapay, casavo, moneyfarm (moved to Workable),
+  // docebo, everli, treatwell (moved to Workable), nexi, prima
+  { slug: "sumup", name: "SumUp" }, // ~49 Italian jobs verified 2026-10-18
   { slug: "n26", name: "N26" },
   { slug: "revolut", name: "Revolut" },
   { slug: "remote", name: "Remote" },
@@ -33,7 +27,7 @@ export const GREENHOUSE_COMPANIES: AtsCompany[] = [
 ];
 
 export const LEVER_COMPANIES: AtsCompany[] = [
-  { slug: "mollie", name: "Mollie", country: "NL" },
+  // Verified dead (404) as of 2026-10-18: mollie, pleo, spendesk, glovo, factorial
   { slug: "figma", name: "Figma" },
   { slug: "linear", name: "Linear" },
   { slug: "vercel", name: "Vercel" },
@@ -41,10 +35,7 @@ export const LEVER_COMPANIES: AtsCompany[] = [
   { slug: "posthog", name: "PostHog" },
   { slug: "anthropic", name: "Anthropic" },
   { slug: "openai", name: "OpenAI" },
-  { slug: "pleo", name: "Pleo", country: "DK" },
-  { slug: "factorial", name: "Factorial HR", country: "ES" },
-  { slug: "spendesk", name: "Spendesk", country: "FR" },
-  { slug: "glovo", name: "Glovo" },
+  { slug: "octoenergy", name: "Octopus Energy", country: "IT" },
 ];
 
 export const ASHBY_COMPANIES: AtsCompany[] = [
@@ -56,6 +47,7 @@ export const ASHBY_COMPANIES: AtsCompany[] = [
   { slug: "openai", name: "OpenAI" },
   { slug: "anthropic", name: "Anthropic" },
   { slug: "cursor", name: "Cursor" },
+  { slug: "lexroom", name: "Lexroom", country: "IT" },
 ];
 
 export const WORKABLE_COMPANIES: AtsCompany[] = [
@@ -72,20 +64,19 @@ export const WORKABLE_COMPANIES: AtsCompany[] = [
   { slug: "truelayer", name: "TrueLayer", country: "UK" },
   { slug: "webranking", name: "Webranking", country: "IT" },
   { slug: "empatica", name: "Empatica", country: "IT" },
-  { slug: "moneyfarm", name: "Moneyfarm", country: "IT" },
+  { slug: "moneyfarm", name: "Moneyfarm", country: "IT" }, // 20 jobs, 11 Italian verified 2026-10-18
   { slug: "alfadocs", name: "AlfaDocs", country: "IT" },
   { slug: "gemmo", name: "Gemmo", country: "IT" },
   { slug: "deblock", name: "Deblock", country: "UK" },
-  { slug: "treatwell", name: "Treatwell", country: "UK" },
+  { slug: "treatwell", name: "Treatwell", country: "UK" }, // 98 jobs, 12 Italian verified 2026-10-18
   { slug: "prima", name: "Prima Assicurazioni", country: "IT" },
+  { slug: "cleafy", name: "Cleafy", country: "IT" },
 ];
 
 export const SMARTRECRUITERS_COMPANIES: AtsCompany[] = [
   { slug: "BoschGroup", name: "Bosch", country: "DE" },
-  { slug: "IKEA", name: "IKEA", country: "SE" },
-  { slug: "Generali", name: "Generali", country: "IT" },
-  { slug: "Eni", name: "Eni", country: "IT" },
-  { slug: "UniCredit", name: "UniCredit", country: "IT" },
+  // Verified dead (0 postings) as of 2026-10-18: IKEA, Generali, Eni, UniCredit
+  { slug: "Santen", name: "Santen", country: "IT" },
 ];
 
 export const RECRUITEE_COMPANIES: AtsCompany[] = [
@@ -94,12 +85,13 @@ export const RECRUITEE_COMPANIES: AtsCompany[] = [
   { slug: "docplanner", name: "Docplanner", country: "PL" },
   { slug: "mollie", name: "Mollie", country: "NL" },
   { slug: "sendcloud", name: "Sendcloud", country: "NL" },
-  { slug: "growens", name: "Growens", country: "IT" },
+  // Verified dead (404) as of 2026-10-18: growens, subito
   { slug: "italiaonline", name: "Italiaonline", country: "IT" },
-  { slug: "subito", name: "Subito", country: "IT" },
   { slug: "musement", name: "Musement", country: "IT" },
   { slug: "casavo", name: "Casavo", country: "IT" },
   { slug: "tiledesk", name: "Tiledesk", country: "IT" },
+  { slug: "boggimilano1", name: "Boggi Milano", country: "IT" },
+  { slug: "jobsdeerns", name: "Deerns Italia", country: "IT" },
   { slug: "wacomeurope", name: "Wacom Europe", country: "DE" },
   { slug: "navinfoeurope", name: "NavInfo Europe", country: "NL" },
   { slug: "benqeuropebv", name: "BenQ Europe", country: "NL" },
@@ -121,6 +113,13 @@ export const TEAMTAILOR_COMPANIES: AtsCompany[] = [
   { slug: "pleo", name: "Pleo", country: "DK" },
   { slug: "nexi", name: "Nexi", country: "IT" },
   { slug: "wolt", name: "Wolt", country: "FI" },
+  { slug: "nidec", name: "Nidec Conversion", country: "IT" },
+  { slug: "obicamozzarellabar", name: "Obicà", country: "IT" },
+  { slug: "clubdelsolesrl", name: "Club del Sole", country: "IT" },
+  { slug: "oneexpressitaliaspa", name: "One Express Italia", country: "IT" },
+  { slug: "unobravo", name: "Unobravo", country: "IT" },
+  { slug: "meatcrew", name: "Meat Crew", country: "IT" },
+  { slug: "swegonitaly", name: "Swegon Italy", country: "IT" },
 ];
 
 export const BAMBOOHR_COMPANIES: AtsCompany[] = [
@@ -140,6 +139,7 @@ export const BAMBOOHR_COMPANIES: AtsCompany[] = [
   { slug: "mdotm", name: "MdotM", country: "IT" },
   { slug: "stackinfra", name: "Stackinfra", country: "IT" },
   { slug: "talixo", name: "Talixo", country: "DE" },
+  { slug: "talentgarden", name: "Talent Garden", country: "IT" },
 ];
 
 /** Breezy HR — slug = subdomain di https://<slug>.breezy.hr/json (verificati HTTP 200). */

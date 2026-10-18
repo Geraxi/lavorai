@@ -418,6 +418,9 @@ async function processUser(
   // Job candidati: match su titoli per ciascun ruolo, fonti Greenhouse/Lever
   // (quelli con URL ATS diretto — submit reale funziona). Adzuna è troppo
   // fragile per auto-apply senza intervento utente.
+  // EURES and weworkremotely are EXCLUDED: their ToS conflict with automated
+  // application (EURES forbids non-partner extraction; WWR requires application
+  // through their site).
   const jobs = await prisma.job.findMany({
     where: {
       closedAt: null,
@@ -442,13 +445,18 @@ async function processUser(
           "breezy",
           "pinpoint",
         ],
+        // Explicitly exclude sources with ToS conflicts
+        notIn: ["eures", "weworkremotely"],
       },
       // URL canoniche vanilla: gli adapter Playwright funzionano solo
       // sui domini ATS noti. Aziende con career page custom
       // (es. stripe.com/jobs) falliscono sempre → skip.
+      // Custom Greenhouse career pages with gh_jid parameter are also eligible
+      // (the adapter will canonicalize them to boards.greenhouse.io).
       OR: [
         { url: { contains: "boards.greenhouse.io" } },
         { url: { contains: "job-boards.greenhouse.io" } },
+        { url: { contains: "?gh_jid=" } }, // Custom career pages linking to Greenhouse
         { url: { contains: "jobs.lever.co" } },
         { url: { contains: "workable.com/j/" } },
         { url: { contains: "apply.workable.com" } },
