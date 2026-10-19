@@ -34,7 +34,7 @@ export const FAQ_OBJECTIONS: FaqItem[] = [
   },
   {
     q: "Su quali portali funziona?",
-    a: "Sui form pubblici degli ATS supportati, come Greenhouse, Lever, Ashby e Workable. Un annuncio trovato su LinkedIn o Indeed è candidabile solo se rimanda a un canale supportato. Non chiediamo né conserviamo le tue credenziali di LinkedIn o Indeed.",
+    a: "Sui form pubblici degli ATS supportati, come Greenhouse, Lever, Ashby e Workable. Un annuncio trovato su LinkedIn o Indeed è candidabile solo se il bottone Apply rimanda a un ATS supportato. Non logghiamo mai nei tuoi account LinkedIn o Indeed e non chiediamo le tue credenziali per questi portali.",
   },
   {
     q: "I miei dati sono al sicuro?",

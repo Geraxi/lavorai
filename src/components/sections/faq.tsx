@@ -29,7 +29,7 @@ const FAQ_OBJECTIONS_EN = [
   },
   {
     q: "Which portals does it work with?",
-    a: "Public forms on supported ATS platforms such as Greenhouse, Lever, Ashby and Workable. A listing found on LinkedIn or Indeed can only be applied to if it leads to a supported channel. We never ask for or store your LinkedIn or Indeed credentials.",
+    a: "Public forms on supported ATS platforms such as Greenhouse, Lever, Ashby and Workable. A listing found on LinkedIn or Indeed can only be applied to if the Apply button leads to a supported ATS. We never log into your LinkedIn or Indeed accounts and never ask for your credentials for these portals.",
   },
   {
     q: "Is my data safe?",
