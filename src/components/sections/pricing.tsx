@@ -67,7 +67,7 @@ const EN_TIER_COPY: Record<TierConfig["id"], Pick<TierConfig, "tagline" | "featu
     cta: "Try 7 days free",
     features: [
       "50 applications per month",
-      "Sent on your confirmation, or automatically if you turn it on, on supported portals",
+      "Sent on your confirmation, or automatically if you turn it on, on supported public ATS portals (Greenhouse, Lever, Ashby, Workable and more)",
       "AI CV optimization",
       "AI cover letters",
       "DOCX format",
@@ -83,7 +83,7 @@ const EN_TIER_COPY: Record<TierConfig["id"], Pick<TierConfig, "tagline" | "featu
     features: [
       "[target] Founder Interview Coach (opportunity, equity and vocabulary)",
       "Unlimited applications",
-      "All supported ATS portals (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee and more), with optional automatic sending",
+      "All supported public ATS portals (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee and more), with optional automatic sending",
       "Multi-version AI CV optimization",
       "Personalized AI cover letters",
       "DOCX, PDF and Europass formats",
