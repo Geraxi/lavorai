@@ -14,6 +14,7 @@ import "./user-workspace.css";
 import "./product-workspace.css";
 import "@/components/ui-premium/premium.css";
 import "@/components/ui-premium/shell.css";
+import "@/components/ui-premium/legacy.css";
 
 /**
  * Responsive app shell.
