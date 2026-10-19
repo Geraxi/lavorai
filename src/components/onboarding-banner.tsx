@@ -2,6 +2,15 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingStepForUser, type NudgeStep } from "@/lib/onboarding-nudge";
 import { isAdmin } from "@/lib/admin";
+import { FileText, MailCheck, Send, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { Notice } from "@/components/ui-premium/notice";
+
+const STEP_ICON: Record<NudgeStep, LucideIcon> = {
+  verify: MailCheck,
+  cv: FileText,
+  preferences: SlidersHorizontal,
+  first_application: Send,
+};
 
 interface StepConfig {
   label: string;
@@ -25,14 +34,14 @@ const STEP_CONFIG: Record<NudgeStep, StepConfig> = {
   },
   preferences: {
     label: "Imposta le preferenze",
-    body: "Dicci che ruoli e dove cercare, così LavorAI candida solo a job rilevanti.",
+    body: "Dicci che ruoli e dove cercare, così LavorAI si candida solo a offerte pertinenti.",
     cta: "Apri preferenze",
     href: "/preferences",
   },
   first_application: {
     label: "Prima candidatura",
-    body: "Tutto pronto: scegli un annuncio e candidati. La prima è quella che conta.",
-    cta: "Vedi job board",
+    body: "Tutto pronto: scegli un annuncio e candidati.",
+    cta: "Vedi le offerte",
     href: "/jobs",
   },
 };
@@ -53,55 +62,15 @@ export async function OnboardingBanner() {
 
   const cfg = STEP_CONFIG[step];
 
+  // Calm card-style notice. On the dashboard the same step is already the
+  // featured "Il prossimo passo" card, so shell.css hides it there.
   return (
-    <div
-      role="status"
-      className={step === "cv" ? "dashboard-cv-banner" : undefined}
-      style={{
-        margin: "12px 24px 0",
-        padding: "12px 16px",
-        borderRadius: 12,
-        background: "rgba(22,163,74,0.08)",
-        border: "1px solid rgba(22,163,74,0.35)",
-        display: "flex",
-        alignItems: "center",
-        gap: 14,
-        flexWrap: "wrap",
-      }}
-    >
-      <div
-        style={{
-          width: 6,
-          height: 40,
-          borderRadius: 4,
-          background: "#16a34a",
-          flexShrink: 0,
-        }}
-        aria-hidden
-      />
-      <div style={{ flex: "1 1 280px", minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--fg)" }}>
-          {cfg.label}
-        </div>
-        <div style={{ fontSize: 12.5, color: "var(--fg-muted)", marginTop: 2 }}>
-          {cfg.body}
-        </div>
-      </div>
-      <Link
-        href={cfg.href}
-        style={{
-          padding: "8px 16px",
-          borderRadius: 8,
-          background: "#16a34a",
-          color: "#fff",
-          fontSize: 13,
-          fontWeight: 700,
-          textDecoration: "none",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {cfg.cta} →
-      </Link>
-    </div>
+    <Notice
+      id={`onboarding-${step}`}
+      icon={STEP_ICON[step]}
+      title={cfg.label}
+      body={cfg.body}
+      action={{ href: cfg.href, label: cfg.cta, primary: step === "cv" }}
+    />
   );
 }

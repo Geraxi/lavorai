@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "@/components/design/icon";
+import { ChevronRight, Search } from "lucide-react";
 import { ThemeToggle } from "@/components/design/theme-toggle";
 import { useLocale } from "next-intl";
 
@@ -10,50 +10,36 @@ export interface TopbarProps {
   actions?: React.ReactNode;
 }
 
+/**
+ * Matte top bar: page title on the left, a quiet section switcher and
+ * ghost/outline actions on the right. Visuals: ui-premium/shell.css.
+ */
 export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
   const en = useLocale() === "en";
   return (
-    <div
-      className="workspace-topbar sticky top-0 z-10 flex items-center justify-between border-b"
-      style={{
-        background: "var(--bg)",
-        borderColor: "var(--border-ds)",
-        padding: "12px 24px",
-      }}
-    >
-      <div className="flex items-center gap-2" style={{ fontSize: 17, fontWeight: 600 }}>
+    <div className="workspace-topbar pm-topbar">
+      <div className="pm-topbar-title">
         {breadcrumb && (
           <>
-            <span style={{ color: "var(--fg-subtle)", fontWeight: 400 }}>
-              {breadcrumb}
-            </span>
-            <Icon name="chevron-right" size={15} style={{ opacity: 0.5 }} />
+            <span className="pm-topbar-crumb">{breadcrumb}</span>
+            <ChevronRight size={14} strokeWidth={1.75} aria-hidden className="pm-topbar-sep" />
           </>
         )}
         <span>{title}</span>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="pm-topbar-actions">
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event("lavorai:palette"))}
           aria-label={en ? "Go to a section (⌘K)" : "Vai a una sezione (⌘K)"}
-          className="flex items-center gap-2 rounded border px-2.5 py-1.5 hidden md:flex"
-          style={{
-            cursor: "text",
-            textAlign: "left",
-            minWidth: 260,
-            background: "var(--bg-elev)",
-            borderColor: "var(--border-ds)",
-            fontSize: 14.5,
-            color: "var(--fg-subtle)",
-          }}
+          className="pm-topbar-search"
         >
-          <Icon name="search" size={15} />
-          <span style={{ flex: 1, fontSize: 13, color: "var(--fg-subtle)" }}>{en ? "Go to a section…" : "Vai a una sezione…"}</span>
-          <kbd style={{ fontSize: 11, color: "var(--fg-subtle)", border: "1px solid var(--border-ds)", borderRadius: 5, padding: "1px 5px" }}>⌘K</kbd>
+          <Search size={14} strokeWidth={1.75} aria-hidden />
+          <span>{en ? "Go to a section…" : "Vai a una sezione…"}</span>
+          <kbd>⌘K</kbd>
         </button>
         {actions}
-        <ThemeToggle compact={false} locale={en ? "en" : "it"} />
+        <ThemeToggle compact locale={en ? "en" : "it"} />
       </div>
     </div>
   );

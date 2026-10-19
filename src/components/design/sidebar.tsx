@@ -5,13 +5,13 @@ import useSWR from "swr";
 import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { motion } from "motion/react";
 import { useLocale, useTranslations } from "next-intl";
-import { Icon, type IconName } from "@/components/design/icon";
+import type { IconName } from "@/components/design/icon";
+import { LogOut, Settings, Sparkles } from "lucide-react";
+import { navIcon } from "@/components/ui-premium/nav-icons";
 import { workspaceNavigation, isWorkspaceRouteActive } from "@/lib/workspace-navigation";
 import { cn } from "@/lib/utils";
 import { AutoApplyToggle } from "@/components/auto-apply-toggle";
-import { ThemeToggle } from "@/components/design/theme-toggle";
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -96,113 +96,55 @@ export function AppSidebar({
   const pathname = usePathname();
 
   return (
-    <aside
-      className="app-sidebar sticky top-0 flex h-screen flex-col gap-0.5 overflow-y-auto overflow-x-hidden border-r px-3 py-3.5"
-      style={{
-        background: "var(--sidebar-bg, var(--bg))",
-        borderColor: "var(--border-ds)",
-      }}
-    >
-      {/* Brand */}
-      <div className="px-2 pb-3.5 pt-1">
+    <aside className="app-sidebar pm-sidebar">
+      <div className="pm-sidebar-brand">
         <Logo href="/dashboard" size="sm" />
       </div>
 
-      <SectionLabel>{t("sectionWork")}</SectionLabel>
-      {workItems.map((it) => (
-        <NavItem
-          key={it.href}
-          item={{
-            ...it,
-            count:
-              it.href === "/applications" && applicationsCount != null
-                ? applicationsCount
-                : it.count,
-          }}
-          active={isWorkspaceRouteActive(pathname, it.href)}
-        />
-      ))}
+      <nav className="pm-sidebar-nav" aria-label={locale === "en" ? "Sections" : "Sezioni"}>
+        <SectionLabel>{t("sectionWork")}</SectionLabel>
+        {workItems.map((it) => (
+          <NavItem
+            key={it.href}
+            item={{
+              ...it,
+              count:
+                it.href === "/applications" && applicationsCount != null
+                  ? applicationsCount
+                  : it.count,
+            }}
+            active={isWorkspaceRouteActive(pathname, it.href)}
+          />
+        ))}
 
-      {isAdmin && (
-        <>
-          <SectionLabel>Admin</SectionLabel>
-          {adminItems.map((it) => (
-            <NavItem key={it.href} item={it} active={isWorkspaceRouteActive(pathname, it.href)} />
-          ))}
-          <AdminAssistantNavButton />
-        </>
-      )}
+        {isAdmin && (
+          <>
+            <SectionLabel>Admin</SectionLabel>
+            {adminItems.map((it) => (
+              <NavItem key={it.href} item={it} active={isWorkspaceRouteActive(pathname, it.href)} />
+            ))}
+            <AdminAssistantNavButton />
+          </>
+        )}
 
-      <SectionLabel>{t("sectionProfile")}</SectionLabel>
-      {setupItems.map((it) => (
-        <NavItem key={it.href} item={it} active={isWorkspaceRouteActive(pathname, it.href)} />
-      ))}
-      <LogoutButton />
+        <SectionLabel>{t("sectionProfile")}</SectionLabel>
+        {setupItems.map((it) => (
+          <NavItem key={it.href} item={it} active={isWorkspaceRouteActive(pathname, it.href)} />
+        ))}
+        <LogoutButton />
+      </nav>
 
-
-      {/* Auto-apply status + user card — liquid glass */}
-      <div className="mt-auto pt-3">
-        {/* Tema chiaro/scuro: sempre raggiungibile, su ogni pagina dell'app */}
-        <div style={{ display: "flex", justifyContent: "stretch", marginBottom: 8 }}>
-          <ThemeToggle compact={false} fullWidth locale={locale} />
-        </div>
-        <div
-          className="ds-glass"
-          style={{
-            padding: 14,
-            borderRadius: 12,
-          }}
-        >
+      <div className="pm-sidebar-foot">
+        <div className="pm-sidebar-card">
           <AutoApplyToggle compact locale={locale} />
         </div>
-
-        <Link
-          href="/settings"
-          className="mt-1 flex items-center gap-2.5 rounded-md px-2 py-2.5 transition-colors"
-          style={{
-            textDecoration: "none",
-            color: "inherit",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--bg-sunken)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-          }}
-        >
-          <div
-            className="flex items-center justify-center rounded-full font-semibold text-white"
-            style={{
-              width: 30,
-              height: 30,
-              background: "linear-gradient(135deg,#d9a0a0,#b0628a)",
-              fontSize: 12,
-              flexShrink: 0,
-            }}
-          >
-            {getInitials(userName)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div
-              style={{
-                fontSize: 14,
-                fontWeight: 500,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
-              {userName}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--fg-subtle)" }}>
-              {userPlan}
-            </div>
-          </div>
-          <Icon
-            name="settings"
-            size={13}
-            style={{ color: "var(--fg-subtle)", flexShrink: 0 }}
-          />
+        <Link href="/settings" className="pm-sidebar-user">
+          <span className="pm-avatar" aria-hidden>{getInitials(userName)}</span>
+          <span className="pm-sidebar-user-text">
+            <strong>{userName}</strong>
+            <small>{userPlan}</small>
+          </span>
+          <Settings size={14} strokeWidth={1.75} aria-hidden className="pm-sidebar-user-go" />
         </Link>
       </div>
     </aside>
@@ -214,77 +156,26 @@ function AdminAssistantNavButton() {
   return (
     <button
       type="button"
-      className="ds-nav-item"
+      className="ds-nav-item pm-nav-item"
       onClick={() => window.dispatchEvent(new CustomEvent("lavorai:admin-assistant", { detail: { open: true } }))}
-      style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: "var(--radius-sm)", fontSize: 14.5, color: "var(--fg-muted)", background: "transparent", border: 0, width: "100%", cursor: "pointer", font: "inherit", textAlign: "left" }}
     >
-      <span className="relative z-10 flex min-w-0 flex-1 items-center gap-2.5">
-        <Icon name="sparkles" size={17} style={{ flexShrink: 0, opacity: 0.75, color: "hsl(var(--primary))" }} />
-        <span className="truncate">Assistente AI</span>
-      </span>
-      <span className="ds-dot ds-dot-green" style={{ flexShrink: 0 }} />
+      <Sparkles size={16} strokeWidth={1.75} aria-hidden />
+      <span className="pm-nav-label">Assistente AI</span>
     </button>
   );
 }
 
 function NavItem({ item, active }: { item: NavItem; active: boolean }) {
+  const NavIcon = navIcon(item.href);
   return (
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
-      className={cn("ds-nav-item", active && "active")}
-      style={{
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "9px 10px",
-        borderRadius: "var(--radius-sm)",
-        fontSize: 14.5,
-        color: active ? "var(--fg)" : "var(--fg-muted)",
-        transition: "color 0.2s cubic-bezier(0.22,1,0.36,1)",
-      }}
+      className={cn("ds-nav-item pm-nav-item", active && "active")}
     >
-      {active && (
-        <motion.span
-          layoutId="sidebar-active-pill"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            borderRadius: 10,
-            background:
-              "var(--nav-pill-bg, linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01)), var(--bg-elev))",
-            border: "1px solid var(--nav-pill-border, rgba(255,255,255,0.10))",
-            backdropFilter: "blur(12px) saturate(150%)",
-            WebkitBackdropFilter: "blur(12px) saturate(150%)",
-            boxShadow:
-              "inset 0 1px 0 rgba(255,255,255,0.10), inset 0 -1px 0 rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.18), 0 8px 24px -10px rgba(0,0,0,0.40)",
-            zIndex: 0,
-          }}
-          transition={{ type: "spring", stiffness: 420, damping: 36 }}
-        />
-      )}
-      <span
-        className="relative z-10 flex min-w-0 flex-1 items-center gap-2.5"
-      >
-        <Icon
-          name={item.icon}
-          size={17}
-          style={{ flexShrink: 0, opacity: active ? 1 : 0.75 }}
-        />
-        <span className="truncate">{item.label}</span>
-      </span>
-      {item.count != null && (
-        <span
-          className="relative z-10 mono"
-          style={{
-            fontSize: 12,
-            color: "var(--fg-subtle)",
-            flexShrink: 0,
-          }}
-        >
-          {item.count}
-        </span>
-      )}
+      <NavIcon size={16} strokeWidth={1.75} aria-hidden />
+      <span className="pm-nav-label">{item.label}</span>
+      {item.count != null && <span className="pm-nav-count">{item.count}</span>}
     </Link>
   );
 }
@@ -295,51 +186,16 @@ function LogoutButton() {
     <button
       type="button"
       onClick={() => signOut({ callbackUrl: "/login" })}
-      className="ds-nav-item"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 10,
-        padding: "9px 10px",
-        borderRadius: "var(--radius-sm)",
-        fontSize: 14.5,
-        color: "var(--fg-muted)",
-        background: "transparent",
-        border: "1px solid transparent",
-        cursor: "pointer",
-        width: "100%",
-        textAlign: "left",
-        transition: "background 0.1s, color 0.1s",
-      }}
+      className="ds-nav-item pm-nav-item"
     >
-      <span className="flex min-w-0 items-center gap-2.5">
-        <Icon
-          name="arrow-up-right"
-          size={17}
-          style={{ flexShrink: 0, opacity: 0.75 }}
-        />
-        <span>{t("logout")}</span>
-      </span>
+      <LogOut size={16} strokeWidth={1.75} aria-hidden />
+      <span className="pm-nav-label">{t("logout")}</span>
     </button>
   );
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        padding: "14px 10px 6px",
-        fontSize: 11.5,
-        fontWeight: 600,
-        color: "var(--fg-subtle)",
-        textTransform: "uppercase",
-        letterSpacing: "0.08em",
-      }}
-    >
-      {children}
-    </div>
-  );
+  return <div className="pm-nav-section">{children}</div>;
 }
 
 function getInitials(name: string): string {

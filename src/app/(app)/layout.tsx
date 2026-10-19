@@ -12,6 +12,8 @@ import { getCurrentUser } from "@/lib/session";
 import { effectiveTier } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
 import { AdminAssistant } from "@/components/admin-assistant";
+import { Notice } from "@/components/ui-premium/notice";
+import { ShieldCheck } from "lucide-react";
 
 /**
  * App layout. Strippato delle 2 prisma.count() che giravano su OGNI
@@ -67,10 +69,16 @@ export default async function AppLayout({
         }}
       >
         <OnboardingBanner />
-        {!user.privacyConsentAt && <div className="ds-section-card m-4 p-4" role="status">
-          <p>{user.locale === "en" ? "Applications are waiting for your privacy consent." : "Le candidature sono in attesa del tuo consenso privacy."}</p>
-          <a className="underline" href="/settings#privacy-consent">{user.locale === "en" ? "Read the notice and review consent in Settings" : "Leggi l’informativa e rivedi il consenso nelle Impostazioni"}</a>
-        </div>}
+        {!user.privacyConsentAt && (
+          <Notice
+            id="privacy-consent"
+            icon={ShieldCheck}
+            tone="amber"
+            title={user.locale === "en" ? "Applications are waiting for your privacy consent." : "Le candidature sono in attesa del tuo consenso privacy."}
+            body={user.locale === "en" ? "Nothing is sent until you review it." : "Non inviamo nulla finché non lo confermi."}
+            action={{ href: "/settings#privacy-consent", label: user.locale === "en" ? "Review consent" : "Rivedi il consenso" }}
+          />
+        )}
         {/* Coverage warning: mostra solo se verticale utente low-coverage
             + modalità auto. Previene case Giuseppe (pagante che aspetta
             magia auto-apply su verticale non coperto). Self-hide se

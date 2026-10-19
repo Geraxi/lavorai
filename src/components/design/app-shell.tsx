@@ -6,11 +6,14 @@ import { Logo } from "@/components/logo";
 import { usePathname } from "next/navigation";
 import { useLocale } from "next-intl";
 import { AppSidebar, type SidebarProps } from "@/components/design/sidebar";
-import { Icon } from "@/components/design/icon";
+import { Menu, UserRound, X } from "lucide-react";
+import { navIcon } from "@/components/ui-premium/nav-icons";
 import { workspaceNavigation, isWorkspaceRouteActive } from "@/lib/workspace-navigation";
 import { useModalFocus } from "./use-modal-focus";
 import "./user-workspace.css";
 import "./product-workspace.css";
+import "@/components/ui-premium/premium.css";
+import "@/components/ui-premium/shell.css";
 
 /**
  * Responsive app shell.
@@ -70,7 +73,7 @@ export function AppShell({
             aria-hidden
           />
           <div className="lavorai-sidebar-drawer" ref={drawer} role="dialog" aria-modal="true" aria-label={en ? "Navigation" : "Navigazione"} tabIndex={-1}>
-            <button className="lavorai-drawer-close" type="button" onClick={closeDrawer}>{en ? "Close menu" : "Chiudi menu"}<Icon name="x" size={18} /></button>
+            <button className="lavorai-drawer-close" type="button" onClick={closeDrawer}>{en ? "Close menu" : "Chiudi menu"}<X size={18} strokeWidth={1.75} aria-hidden /></button>
             <AppSidebar {...sidebarProps} />
           </div>
         </>
@@ -91,17 +94,16 @@ export function AppShell({
             className="lavorai-menu-btn"
             onClick={() => setOpen(true)}
           >
-            <Icon name="menu" size={18} />
+            <Menu size={17} strokeWidth={1.75} aria-hidden />
             <span>Menu</span>
           </button>
           <Logo href="/dashboard" size="sm" />
           <Link
             href="/settings"
-            className="lavorai-menu-btn"
+            className="lavorai-menu-btn is-icon"
             aria-label={en ? "Settings" : "Impostazioni"}
-            style={{ padding: "8px 10px" }}
           >
-            <Icon name="user" size={16} />
+            <UserRound size={16} strokeWidth={1.75} aria-hidden />
           </Link>
         </div>
 
@@ -114,15 +116,16 @@ export function AppShell({
         <nav className="lavorai-mobile-bottom-nav" aria-label={en ? "Main navigation" : "Navigazione principale"}>
           {mobileNavItems.map((item) => {
             const active = isWorkspaceRouteActive(pathname, item.href);
+            const NavIcon = navIcon(item.href);
             return (
               <Link key={item.href} href={item.href} className="lavorai-mobile-nav-item" aria-current={active ? "page" : undefined}>
-                <Icon name={item.icon} size={18} />
+                <NavIcon size={19} strokeWidth={1.75} aria-hidden />
                 <span>{item.label}</span>
               </Link>
             );
           })}
           <button type="button" className="lavorai-mobile-nav-item lavorai-mobile-nav-menu" onClick={() => setOpen(true)} aria-label={en ? "Open all sections" : "Apri tutte le sezioni"}>
-            <Icon name="menu" size={19} />
+            <Menu size={19} strokeWidth={1.75} aria-hidden />
             <span>{en ? "More" : "Altro"}</span>
           </button>
         </nav>
@@ -151,23 +154,7 @@ export function AppShell({
         .lavorai-sidebar-drawer { display: none; }
         .lavorai-mobile-bottom-nav { display: none; }
 
-        .lavorai-menu-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          padding: 8px 12px;
-          border-radius: 8px;
-          background: var(--bg-elev);
-          border: 1px solid var(--border-ds);
-          color: var(--fg);
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          text-decoration: none;
-        }
-        .lavorai-menu-btn:hover {
-          background: var(--bg-sunken);
-        }
+        /* Menu button visuals: src/components/ui-premium/shell.css */
 
         @media (max-width: 1023px) {
           .lavorai-app-shell {
@@ -214,50 +201,7 @@ export function AppShell({
              restringersi sotto il contenuto, altrimenti l'ultima sezione
              finisce sotto la bottom nav senza poter scorrere. */
           .lavorai-main > * { flex-shrink: 0; }
-          .lavorai-mobile-bottom-nav {
-            position: fixed;
-            left: max(12px, env(safe-area-inset-left));
-            right: max(12px, env(safe-area-inset-right));
-            bottom: max(12px, env(safe-area-inset-bottom));
-            z-index: 35;
-            display: grid;
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-            gap: 2px;
-            min-height: 62px;
-            padding: 5px;
-            border: 1px solid rgba(184, 255, 226, 0.22);
-            border-radius: 22px;
-            background: linear-gradient(135deg, rgba(9, 22, 26, 0.82), rgba(10, 34, 29, 0.68));
-            box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 16px 44px rgba(0,0,0,0.42), 0 2px 12px rgba(31, 224, 155, 0.10);
-            backdrop-filter: blur(20px) saturate(150%);
-            -webkit-backdrop-filter: blur(20px) saturate(150%);
-          }
-          .lavorai-mobile-nav-item {
-            display: flex;
-            min-width: 0;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 3px;
-            border-radius: 17px;
-            color: rgba(233, 246, 240, 0.66);
-            text-decoration: none;
-            font-size: 10px;
-            font-weight: 650;
-            line-height: 1;
-            letter-spacing: -0.01em;
-            transition: color .18s ease, background .18s ease, transform .18s ease;
-          }
-          .lavorai-mobile-nav-item[aria-current="page"] {
-            color: #04150e;
-            background: linear-gradient(135deg, hsl(var(--primary)), #7cf2be);
-            box-shadow: inset 0 1px 0 rgba(255,255,255,.34), 0 5px 16px hsl(var(--primary) / .28);
-          }
-          .lavorai-mobile-nav-item:active { transform: scale(.95); }
-          .lavorai-mobile-nav-item:focus-visible { outline: 2px solid #b9ffde; outline-offset: 2px; }
-          .lavorai-mobile-nav-menu { border: 0; background: transparent; font-family: inherit; cursor: pointer; }
-          .lavorai-mobile-nav-menu:hover { color: #fff; background: rgba(255,255,255,.08); }
-          @media (prefers-reduced-motion: reduce) { .lavorai-mobile-nav-item { transition: none; } }
+          /* Bottom nav visuals: src/components/ui-premium/shell.css */
         }
         @keyframes lavorai-fade-in { from { opacity: 0; } to { opacity: 1; } }
         @keyframes lavorai-slide-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }

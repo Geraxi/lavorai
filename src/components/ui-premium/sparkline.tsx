@@ -18,7 +18,7 @@ export function Sparkline({
   ariaLabel: string;
 }) {
   const events = daily?.reduce((a, b) => a + b, 0) ?? 0;
-  if (!daily || events < 2) return <span className="dash-spark-empty">{emptyLabel}</span>;
+  if (!daily || events < 2) return <span className="pm-spark-empty">{emptyLabel}</span>;
 
   const W = 100;
   const H = 32;
@@ -30,11 +30,11 @@ export function Sparkline({
     y: H - 2 - (v / max) * (H - 6),
   }));
   const line = monotonePath(points);
-  const gradientId = `dash-spark-${id}`;
+  const gradientId = `pm-spark-${id}`;
   const last = points[points.length - 1];
 
   return (
-    <svg className={`dash-spark tone-${tone}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel}>
+    <svg className={`pm-spark tone-${tone}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={ariaLabel}>
       <title>{ariaLabel}</title>
       <defs>
         <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">

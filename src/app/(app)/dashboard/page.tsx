@@ -39,8 +39,14 @@ import {
   getOpenOpportunities,
   getDashboardTimeSeries,
 } from "@/lib/dashboard-metrics-shared";
-import { Sparkline } from "./sparkline";
-import { WeeklyTrendChart } from "./weekly-trend-chart";
+import { Sparkline } from "@/components/ui-premium/sparkline";
+import { TrendChart, TrendLegend } from "@/components/ui-premium/trend-chart";
+import { KpiCard } from "@/components/ui-premium/kpi-card";
+import { Pill } from "@/components/ui-premium/pill";
+import { Avatar } from "@/components/ui-premium/avatar";
+import { EmptyState as Empty } from "@/components/ui-premium/empty-state";
+import { StatusBar } from "@/components/ui-premium/status-bar";
+import { STAGE_ORDER, STAGE_TONE } from "@/components/ui-premium/tone";
 import "./dashboard.css";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -54,33 +60,6 @@ export const dynamic = "force-dynamic";
  * activity) and a ~1/3 sidebar (CV, profile, interviews, discover).
  * No greeting, no globe, no fabricated numbers, no admin UI.
  */
-
-/** Display order of journey stages in the progress card. */
-const STAGE_ORDER: JourneyStage[] = [
-  "awaiting_approval",
-  "manual",
-  "preparing",
-  "prepared",
-  "approved",
-  "in_flight",
-  "sent",
-  "unverified",
-  "stopped",
-];
-
-type Tone = "green" | "amber" | "red" | "neutral";
-
-const STAGE_TONE: Record<JourneyStage, Tone> = {
-  preparing: "neutral",
-  prepared: "neutral",
-  awaiting_approval: "amber",
-  approved: "neutral",
-  manual: "amber",
-  in_flight: "neutral",
-  sent: "green",
-  unverified: "amber",
-  stopped: "red",
-};
 
 export default async function DashboardPage() {
   const [locale, user] = await Promise.all([getLocale(), getCurrentUser()]);
@@ -166,8 +145,12 @@ export default async function DashboardPage() {
   stageCounts.set("sent", confirmed);
   stageCounts.set("unverified", Math.max(0, unverifiedRaw - confirmed));
   const stages = STAGE_ORDER.map((stage) => ({ stage, count: stageCounts.get(stage) ?? 0 })).filter((s) => s.count > 0);
-  const stageTotal = stages.reduce((sum, s) => sum + s.count, 0) || 1;
   const trendHasData = !!series && series.weeks.some((w) => w.sent > 0 || w.replies > 0);
+
+  const trendSeriesMeta = [
+    { key: "sent" as const, label: tr("Invii confermati", "Confirmed sends"), tone: "green" as const },
+    { key: "replies" as const, label: tr("Risposte recruiter", "Recruiter replies"), tone: "neutral" as const },
+  ];
 
   const activity = recentActivity.map((app) => {
     let stage = journeyStage(app.status);
@@ -217,14 +200,17 @@ export default async function DashboardPage() {
 
       <div className="dash">
         <section className="dash-kpis" aria-label={tr("Indicatori principali", "Key metrics")}>
-          {kpis.map(({ key, label, value, hint, href, icon: KpiIcon, daily, noHistory }) => (
-            <Link key={key} href={href} className="dash-kpi" data-kpi={key}>
-              <div className="dash-kpi-top">
-                <span className="dash-chip-icon"><KpiIcon size={14} strokeWidth={1.75} aria-hidden /></span>
-                <span className="dash-kpi-label">{label}</span>
-              </div>
-              <div className="dash-kpi-body">
-                <div className="dash-kpi-value">{value.toLocaleString(en ? "en-GB" : "it-IT")}</div>
+          {kpis.map(({ key, label, value, hint, href, icon, daily, noHistory }) => (
+            <KpiCard
+              key={key}
+              id={key}
+              label={label}
+              value={value}
+              hint={hint}
+              href={href}
+              icon={icon}
+              locale={locale}
+              visual={
                 <Sparkline
                   id={key}
                   daily={daily}
@@ -232,23 +218,22 @@ export default async function DashboardPage() {
                   emptyLabel={noHistory ?? tr("storico insufficiente", "not enough history")}
                   ariaLabel={tr(`${label}: andamento cumulativo negli ultimi 30 giorni`, `${label}: cumulative trend over the last 30 days`)}
                 />
-              </div>
-              <div className="dash-kpi-hint">{hint}</div>
-            </Link>
+              }
+            />
           ))}
         </section>
 
         <div className="dash-grid">
           <div className="dash-main">
             {/* Next step (featured) */}
-            <section className="dash-card dash-next" aria-labelledby="dash-next-title">
+            <section className="pm-card pm-card-featured dash-next" aria-labelledby="dash-next-title">
               <div className="dash-next-body">
                 <div className="dash-next-text">
-                  <div className="dash-eyebrow"><span className="dash-dot tone-green" aria-hidden /> {tr("Il prossimo passo", "Your next step")}</div>
+                  <div className="pm-eyebrow"><span className="pm-dot tone-green" aria-hidden /> {tr("Il prossimo passo", "Your next step")}</div>
                   <h2 id="dash-next-title">{attention === null ? tr("Attività non disponibili", "Activity unavailable") : next.title}</h2>
                   <p>{attention === null ? tr("Ricarica la pagina per riprovare.", "Reload the page to try again.") : next.detail}</p>
                 </div>
-                <Link href={attention === null ? "/dashboard" : next.href} className="dash-btn-primary">
+                <Link href={attention === null ? "/dashboard" : next.href} className="pm-btn-primary">
                   {attention === null ? tr("Riprova", "Retry") : tr("Apri", "Open")} <ArrowRight size={14} strokeWidth={2} aria-hidden />
                 </Link>
               </div>
@@ -256,21 +241,21 @@ export default async function DashboardPage() {
 
             {/* Remaining to-do items */}
             {rest.length > 0 && (
-              <section className="dash-card" aria-labelledby="dash-todo-title">
-                <header className="dash-card-head">
+              <section className="pm-card" aria-labelledby="dash-todo-title">
+                <header className="pm-card-head">
                   <h2 id="dash-todo-title"><CircleAlert size={15} strokeWidth={1.75} aria-hidden /> {tr("Richiede attenzione", "Needs attention")}</h2>
-                  <Link href="/inbox" className="dash-link">{tr("Apri inbox", "Open inbox")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>
+                  <Link href="/inbox" className="pm-link">{tr("Apri inbox", "Open inbox")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>
                 </header>
-                <ul className="dash-list">
+                <ul className="pm-list">
                   {rest.map((item) => (
                     <li key={item.id}>
-                      <Link href={item.href} className="dash-row">
-                        <span className="dash-row-text">
+                      <Link href={item.href} className="pm-row">
+                        <span className="pm-row-text">
                           <strong>{item.title}</strong>
                           <small>{item.detail}</small>
                         </span>
                         {item.unread === true && <Pill tone="amber">{tr("Non letto", "Unread")}</Pill>}
-                        <ChevronRight size={15} strokeWidth={1.75} aria-hidden className="dash-row-go" />
+                        <ChevronRight size={15} strokeWidth={1.75} aria-hidden className="pm-row-go" />
                       </Link>
                     </li>
                   ))}
@@ -279,37 +264,24 @@ export default async function DashboardPage() {
             )}
 
             {/* Progress */}
-            <section className="dash-card" aria-labelledby="dash-progress-title">
-              <header className="dash-card-head">
+            <section className="pm-card" aria-labelledby="dash-progress-title">
+              <header className="pm-card-head">
                 <h2 id="dash-progress-title"><Briefcase size={15} strokeWidth={1.75} aria-hidden /> {tr("Avanzamento candidature", "Application progress")}</h2>
-                <Link href="/applications" className="dash-link">{tr("Vedi tutte", "View all")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>
+                <Link href="/applications" className="pm-link">{tr("Vedi tutte", "View all")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>
               </header>
               {stages.length > 0 ? (
                 <>
-                  <div className="dash-statusbar-wrap">
-                    <div className="dash-statusbar" role="img" aria-label={stages.map(({ stage, count }) => `${STAGE_LABEL[stage][lang]} ${count}`).join(", ")}>
-                      {stages.map(({ stage, count }) => (
-                        <span key={stage} className={`tone-${STAGE_TONE[stage]}`} style={{ flexGrow: count }} />
-                      ))}
-                    </div>
-                    <ul className="dash-legend" aria-hidden>
-                      {stages.map(({ stage, count }) => (
-                        <li key={stage} className={`tone-${STAGE_TONE[stage]}`}>
-                          <span className="dash-dot" />{STAGE_LABEL[stage][lang]}<b>{Math.round((count / stageTotal) * 100)}%</b>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <StatusBar segments={stages.map(({ stage, count }) => ({ key: stage, label: STAGE_LABEL[stage][lang], count, tone: STAGE_TONE[stage] }))} />
                   <div className="dash-stages">
                     {stages.map(({ stage, count }) => (
                       <Link key={stage} href="/applications" className={`dash-stage tone-${STAGE_TONE[stage]}`} data-stage={stage} data-count={count}>
-                        <span className="dash-stage-label"><span className={`dash-dot tone-${STAGE_TONE[stage]}`} aria-hidden />{STAGE_LABEL[stage][lang]}</span>
+                        <span className="dash-stage-label"><span className={`pm-dot tone-${STAGE_TONE[stage]}`} aria-hidden />{STAGE_LABEL[stage][lang]}</span>
                         <span className="dash-stage-count">{count}</span>
                         <span className="dash-stage-hint">{STAGE_LABEL[stage].hint[lang]}</span>
                       </Link>
                     ))}
                   </div>
-                  <p className="dash-muted dash-foot">
+                  <p className="pm-muted pm-foot">
                     {totalApplications} {tr("candidature in totale · contiamo come inviate solo quelle con ricevuta ATS o consegna email", "applications in total · only those with an ATS receipt or email delivery count as sent")}
                   </p>
                 </>
@@ -319,30 +291,22 @@ export default async function DashboardPage() {
             </section>
 
             {/* Weekly trend */}
-            <section className="dash-card" aria-labelledby="dash-trend-title">
-              <header className="dash-card-head">
+            <section className="pm-card" aria-labelledby="dash-trend-title">
+              <header className="pm-card-head">
                 <h2 id="dash-trend-title"><TrendingUp size={15} strokeWidth={1.75} aria-hidden /> {tr("Andamento settimanale", "Weekly trend")}</h2>
-                {trendHasData && (
-                  <ul className="dash-legend is-head" aria-hidden>
-                    <li><span className="dash-legend-swatch is-sent" />{tr("Invii confermati", "Confirmed sends")}</li>
-                    <li><span className="dash-legend-swatch is-replies" />{tr("Risposte recruiter", "Recruiter replies")}</li>
-                  </ul>
-                )}
+                {trendHasData && <TrendLegend series={trendSeriesMeta} />}
               </header>
               {series === null ? (
-                <p className="dash-muted dash-pad">{tr("Andamento non disponibile. Ricarica la pagina per riprovare.", "Trend unavailable. Reload the page to try again.")}</p>
+                <p className="pm-muted pm-pad">{tr("Andamento non disponibile. Ricarica la pagina per riprovare.", "Trend unavailable. Reload the page to try again.")}</p>
               ) : trendHasData ? (
-                <div className="dash-pad">
-                  <WeeklyTrendChart
-                    weeks={series.weeks}
+                <div className="pm-pad">
+                  <TrendChart
+                    buckets={series.weeks}
+                    series={trendSeriesMeta.map((m) => ({ ...m, values: series.weeks.map((w) => w[m.key]) }))}
                     locale={locale}
-                    labels={{
-                      sent: tr("invii confermati", "confirmed sends"),
-                      replies: tr("risposte recruiter", "recruiter replies"),
-                      chart: tr("Invii confermati e risposte recruiter per settimana, ultime 8 settimane", "Confirmed sends and recruiter replies per week, last 8 weeks"),
-                    }}
+                    ariaLabel={tr("Invii confermati e risposte recruiter per settimana, ultime 8 settimane", "Confirmed sends and recruiter replies per week, last 8 weeks")}
                   />
-                  <p className="dash-muted dash-trend-note">{tr("Ultime 8 settimane (finestre di 7 giorni fino a oggi) · invii con prova di consegna e risposte dei recruiter", "Last 8 weeks (7-day windows up to today) · sends with delivery evidence and recruiter replies")}</p>
+                  <p className="pm-muted pm-trend-note">{tr("Ultime 8 settimane (finestre di 7 giorni fino a oggi) · invii con prova di consegna e risposte dei recruiter", "Last 8 weeks (7-day windows up to today) · sends with delivery evidence and recruiter replies")}</p>
                 </div>
               ) : (
                 <Empty icon={TrendingUp} title={tr("Nessuno storico ancora", "No history yet")} text={tr("Quando arrivano invii confermati e risposte, qui vedi l’andamento delle ultime 8 settimane.", "Once confirmed sends and replies arrive, the last 8 weeks show up here.")} />
@@ -350,23 +314,23 @@ export default async function DashboardPage() {
             </section>
 
             {/* Activity */}
-            <section className="dash-card" aria-labelledby="dash-activity-title">
-              <header className="dash-card-head">
+            <section className="pm-card" aria-labelledby="dash-activity-title">
+              <header className="pm-card-head">
                 <h2 id="dash-activity-title"><Clock size={15} strokeWidth={1.75} aria-hidden /> {tr("Attività recente", "Recent activity")}</h2>
               </header>
               {activity.length > 0 ? (
-                <ol className="dash-timeline">
+                <ol className="pm-timeline">
                   {activity.map((app) => (
                     <li key={app.id}>
-                      <Link href={`/applications/${app.id}`} className="dash-tl-row">
-                        <span className={`dash-tl-dot tone-${app.stage ? STAGE_TONE[app.stage] : "neutral"}`} aria-hidden />
+                      <Link href={`/applications/${app.id}`} className="pm-tl-row">
+                        <span className={`pm-tl-dot tone-${app.stage ? STAGE_TONE[app.stage] : "neutral"}`} aria-hidden />
                         <Avatar name={app.job.company ?? ""} />
-                        <span className="dash-row-text">
+                        <span className="pm-row-text">
                           <strong>{app.job.company}</strong>
                           <small>{app.job.title}</small>
                         </span>
                         {app.stage && <Pill tone={STAGE_TONE[app.stage]}>{STAGE_LABEL[app.stage][lang]}</Pill>}
-                        <time className="dash-time" dateTime={app.createdAt.toISOString()}>{formatRelativeTime(app.createdAt, locale)}</time>
+                        <time className="pm-time" dateTime={app.createdAt.toISOString()}>{formatRelativeTime(app.createdAt, locale)}</time>
                       </Link>
                     </li>
                   ))}
@@ -379,13 +343,13 @@ export default async function DashboardPage() {
 
           <aside className="dash-side" aria-label={tr("Profilo e documenti", "Profile and documents")}>
             {/* CV */}
-            <section className="dash-card" aria-labelledby="dash-cv-title">
-              <header className="dash-card-head">
+            <section className="pm-card" aria-labelledby="dash-cv-title">
+              <header className="pm-card-head">
                 <h2 id="dash-cv-title"><FileText size={15} strokeWidth={1.75} aria-hidden /> {tr("Il tuo CV", "Your CV")}</h2>
-                {hasCv && <Link href="/cv" className="dash-link">{tr("Modifica", "Edit")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>}
+                {hasCv && <Link href="/cv" className="pm-link">{tr("Modifica", "Edit")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>}
               </header>
               {hasCv ? (
-                <div className="dash-pad">
+                <div className="pm-pad">
                   <Link href="/cv" className="dash-cv-sheet" aria-label={tr("Apri e modifica il tuo CV", "Open and edit your CV")}>
                     {cvName && <div className="dash-cv-name">{cvName}</div>}
                     {(cvProfile?.title || cvProfile?.city) && (
@@ -413,7 +377,7 @@ export default async function DashboardPage() {
                     <span className="dash-cv-overlay" aria-hidden>{tr("Modifica", "Edit")}</span>
                   </Link>
                   {latestCv && (
-                    <p className="dash-muted dash-cv-file">
+                    <p className="pm-muted dash-cv-file">
                       {latestCv.originalFilename} · {tr("caricato il", "uploaded")}{" "}
                       {latestCv.createdAt.toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short", year: "numeric" })}
                     </p>
@@ -425,10 +389,10 @@ export default async function DashboardPage() {
             </section>
 
             {/* Profile */}
-            <section className="dash-card" aria-labelledby="dash-profile-title">
-              <header className="dash-card-head">
+            <section className="pm-card" aria-labelledby="dash-profile-title">
+              <header className="pm-card-head">
                 <h2 id="dash-profile-title"><UserRound size={15} strokeWidth={1.75} aria-hidden /> {tr("Il tuo profilo", "Your profile")}</h2>
-                <span className="dash-count">{profileDone}/{profileChecklist.length}</span>
+                <span className="pm-count">{profileDone}/{profileChecklist.length}</span>
               </header>
               <div className="dash-meter" aria-hidden><span style={{ width: `${(profileDone / profileChecklist.length) * 100}%` }} /></div>
               <ul className="dash-checklist">
@@ -445,68 +409,48 @@ export default async function DashboardPage() {
             </section>
 
             {/* Interviews */}
-            <section className="dash-card" aria-labelledby="dash-interviews-title">
-              <header className="dash-card-head">
+            <section className="pm-card" aria-labelledby="dash-interviews-title">
+              <header className="pm-card-head">
                 <h2 id="dash-interviews-title"><CalendarCheck size={15} strokeWidth={1.75} aria-hidden /> {tr("Colloqui", "Interviews")}</h2>
-                {interviews > 0 && <Link href="/interviews" className="dash-link">{tr("Vedi tutti", "View all")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>}
+                {interviews > 0 && <Link href="/interviews" className="pm-link">{tr("Vedi tutti", "View all")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>}
               </header>
               {recentInterviews.length > 0 ? (
-                <ul className="dash-list">
+                <ul className="pm-list">
                   {recentInterviews.map((iv) => (
                     <li key={iv.id}>
-                      <Link href={`/applications/${iv.id}`} className="dash-row">
+                      <Link href={`/applications/${iv.id}`} className="pm-row">
                         <Avatar name={iv.job.company ?? ""} />
-                        <span className="dash-row-text">
+                        <span className="pm-row-text">
                           <strong>{iv.job.company}</strong>
                           <small>{iv.job.title}</small>
                         </span>
-                        {iv.lastReplyAt && <time className="dash-time" dateTime={iv.lastReplyAt.toISOString()}>{formatRelativeTime(iv.lastReplyAt, locale)}</time>}
+                        {iv.lastReplyAt && <time className="pm-time" dateTime={iv.lastReplyAt.toISOString()}>{formatRelativeTime(iv.lastReplyAt, locale)}</time>}
                       </Link>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="dash-muted dash-pad">{tr("Nessun invito a colloquio per ora. Gli inviti dei recruiter compaiono qui.", "No interview invites yet. Recruiter invites show up here.")}</p>
+                <p className="pm-muted pm-pad">{tr("Nessun invito a colloquio per ora. Gli inviti dei recruiter compaiono qui.", "No interview invites yet. Recruiter invites show up here.")}</p>
               )}
             </section>
 
             {/* Discover */}
-            <section className="dash-card" aria-labelledby="dash-discover-title">
-              <header className="dash-card-head">
+            <section className="pm-card" aria-labelledby="dash-discover-title">
+              <header className="pm-card-head">
                 <h2 id="dash-discover-title"><Compass size={15} strokeWidth={1.75} aria-hidden /> {tr("Scopri", "Discover")}</h2>
               </header>
-              <div className="dash-pad dash-discover">
+              <div className="pm-pad dash-discover">
                 <div>
                   <div className="dash-discover-count">{opportunities.toLocaleString(en ? "en-GB" : "it-IT")}</div>
-                  <div className="dash-muted">{tr("offerte aperte aggiornate negli ultimi 30 giorni", "open roles refreshed in the last 30 days")}</div>
+                  <div className="pm-muted">{tr("offerte aperte aggiornate negli ultimi 30 giorni", "open roles refreshed in the last 30 days")}</div>
                 </div>
-                <Link href="/discover" className="dash-btn-ghost">{tr("Esplora", "Browse")} <ArrowRight size={14} strokeWidth={1.75} aria-hidden /></Link>
+                <Link href="/discover" className="pm-btn-ghost">{tr("Esplora", "Browse")} <ArrowRight size={14} strokeWidth={1.75} aria-hidden /></Link>
               </div>
             </section>
           </aside>
         </div>
       </div>
     </>
-  );
-}
-
-function Pill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
-  return <span className={`dash-pill tone-${tone}`}><span className="dash-dot" aria-hidden />{children}</span>;
-}
-
-function Avatar({ name }: { name: string }) {
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "·";
-  return <span className="dash-avatar" aria-hidden>{initials}</span>;
-}
-
-function Empty({ icon: EmptyIcon, title, text, cta }: { icon: LucideIcon; title: string; text: string; cta?: { href: string; label: string } }) {
-  return (
-    <div className="dash-empty">
-      <span className="dash-empty-icon"><EmptyIcon size={18} strokeWidth={1.75} aria-hidden /></span>
-      <strong>{title}</strong>
-      <p>{text}</p>
-      {cta && <Link href={cta.href} className="dash-btn-ghost">{cta.label}</Link>}
-    </div>
   );
 }
 

@@ -115,7 +115,12 @@ async function main() {
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },
     "next/link": { default: "Link" }, "next-intl/server": { getLocale: async () => "it", getTranslations: async () => (key: string) => key },
     "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/dashboard-metrics-shared": metrics,
-    "lucide-react": lucide, "./dashboard.css": {}, "./sparkline": { Sparkline: "Sparkline" }, "./weekly-trend-chart": { WeeklyTrendChart: "WeeklyTrendChart" },
+    "lucide-react": lucide, "./dashboard.css": {},
+    "@/components/ui-premium/sparkline": { Sparkline: "Sparkline" },
+    "@/components/ui-premium/trend-chart": { TrendChart: "TrendChart", TrendLegend: "TrendLegend" },
+    "@/components/ui-premium/pill": { Pill: "Pill" }, "@/components/ui-premium/avatar": { Avatar: "Avatar" },
+    "@/components/ui-premium/empty-state": { EmptyState: "EmptyState" }, "@/components/ui-premium/status-bar": { StatusBar: "StatusBar" },
+    "@/components/ui-premium/tone": load("src/components/ui-premium/tone.ts", {}),
     "@/lib/session": { getCurrentUser: async () => ({ id: "owner", email: "owner@example.test", name: "Owner", welcomeSeenAt: new Date(), emailVerified: new Date(), subscriptionStatus: "active" }) },
     "@/lib/attention-repository": { getAttentionQueue: async () => ({ items: [], unread: 0, unknownRead: 0, drafts: 0, limited: false }) },
     "@/components/attention-queue": { AttentionQueue: "AttentionQueue" },
@@ -133,6 +138,10 @@ async function main() {
     "auto-apply-readiness": ["AutoApplyReadinessCard"],
   };
   for (const [path, names] of Object.entries(components)) dependencies[`@/components/${path}`] = Object.fromEntries(names.map((name) => [name, name]));
+  // The real KPI card renders the number the test reads.
+  dependencies["@/components/ui-premium/kpi-card"] = load("src/components/ui-premium/kpi-card.tsx", {
+    "react/jsx-runtime": dependencies["react/jsx-runtime"], "next/link": { default: "Link" },
+  });
   const dashboard = load("src/app/(app)/dashboard/page.tsx", dependencies);
   const rendered = await dashboard.default();
   assert.equal(pages, 2, "Dashboard evidence query paginates instead of silently truncating totals");
@@ -141,12 +150,13 @@ async function main() {
   const walk = (node: any) => {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) { node.forEach(walk); return; }
+    if (typeof node.type === "function") { walk(node.type(node.props)); return; }
     const kpi = node.props?.["data-kpi"];
     if (kpi) {
       const find = (n: any): any => {
         if (!n || typeof n !== "object") return null;
         if (Array.isArray(n)) { for (const c of n) { const hit = find(c); if (hit) return hit; } return null; }
-        return n.props?.className === "dash-kpi-value" ? n : find(n.props?.children);
+        return n.props?.className === "pm-kpi-value" ? n : find(n.props?.children);
       };
       kpis[kpi] = find(node.props.children).props.children;
     }

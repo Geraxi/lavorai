@@ -94,7 +94,7 @@ async function main() {
   assert.equal(sum(series.weeks.map((w: any) => w.sent)), 4, "8-week sends include the 40-day-old one, exclude the 70-day-old one");
   assert.equal(series.weeks[7].sent, 2); assert.equal(series.weeks[6].sent, 1);
   assert.equal(series.weeks[7].end, "2026-10-19"); assert.equal(series.weeks[0].start, "2026-08-25");
-  const chart = load("src/app/(app)/dashboard/chart-path.ts", {});
+  const chart = load("src/components/ui-premium/chart-path.ts", {});
   assert.equal(chart.niceMax(0), 1); assert.equal(chart.niceMax(2), 2); assert.equal(chart.niceMax(3), 5); assert.equal(chart.niceMax(11), 20);
   const flat = chart.monotonePath([{ x: 0, y: 100 }, { x: 50, y: 100 }, { x: 100, y: 100 }]);
   assert.ok(flat.split(/[ ,MC]+/).filter(Boolean).every((v: string, i: number) => i % 2 === 0 || Number(v) === 100), "flat zero series stays on the baseline (no overshoot)");
