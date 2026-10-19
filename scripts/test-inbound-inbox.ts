@@ -108,10 +108,29 @@ async function testPage(messages: InboxMessage[]) {
     "@/components/gmail-inbox-view": { GmailInboxView: "InboxView" },
     "@/lib/gmail-client": { hasGmailConnected: async (userId: string) => { assert.equal(userId, "owner"); connectionCalls++; return false; } },
     "@/lib/inbox-repository": { getInboxMessages: async (userId: string) => { assert.equal(userId, "owner"); messageCalls++; return messages; } },
+    "@/components/design/topbar": { AppTopbar: "AppTopbar" },
+    "@/lib/dashboard-metrics-shared": {
+      countUnreadJobMessages: loadModule("src/lib/inbox-counts.ts", {}).countUnreadJobMessages,
+      getRecruiterReplies: async (userId: string) => { assert.equal(userId, "owner"); return 3; },
+      getDraftReplies: async (userId: string) => { assert.equal(userId, "owner"); return 0; },
+    },
+    "lucide-react": new Proxy({}, { get: (_t, name) => String(name) }),
+    "./inbox.css": {},
   });
   const page = await api.default();
-  assert.equal(page.props.children.props.gmailConnected, false);
-  assert.equal(page.props.children.props.messages.length, messages.length, "No Gmail connection must not blank the inbox or discard cached Gmail");
+  const find = (node: any, type: unknown): any => {
+    if (!node || typeof node !== "object") return null;
+    if (Array.isArray(node)) { for (const n of node) { const hit = find(n, type); if (hit) return hit; } return null; }
+    if (node.type === type) return node;
+    return find(node.props?.children, type);
+  };
+  const view = find(page, "InboxView");
+  assert.ok(view, "Inbox renders the mailbox view");
+  assert.equal(view.props.gmailConnected, false);
+  assert.equal(view.props.messages.length, messages.length, "No Gmail connection must not blank the inbox or discard cached Gmail");
+  const stat = (key: string) => find(page.props.children, "section")?.props.children.find((d: any) => d.props["data-stat"] === key);
+  assert.ok(find(page, "AppTopbar"), "Inbox has the standard top bar");
+  assert.ok(stat("replies") && stat("unread") && stat("drafts"), "Replies, unread and drafts are separate stats");
   authenticated = false;
   await assert.rejects(api.default(), /redirect:\/login\?next=\/inbox/);
   assert.equal(messageCalls, 1, "No inbox query before auth");
@@ -125,6 +144,8 @@ function componentDependencies(react: unknown, router: unknown, fetch: unknown) 
       react, "react/jsx-runtime": jsx,
       "lucide-react": new Proxy({}, { get: () => () => null }),
       "./design/inbox-mailbox.css": {},
+      "./design/inbox-premium.css": {},
+      "@/lib/inbox-counts": loadModule("src/lib/inbox-counts.ts", {}),
       "next/navigation": { useRouter: () => router, useSearchParams: () => new URLSearchParams() },
       "next/link": { __esModule: true, default: ({ children, ...props }: any) => React.createElement("a", props, children) },
       sonner: { toast: { error() {}, success() {} } },
