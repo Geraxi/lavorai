@@ -66,6 +66,8 @@ async function main() {
     findMany: async (query: any) => {
       assert.equal(query.where.userId, "owner");
       if (query.select.interviewSessions) return [];
+      // Time-series read (sparklines/trend): owner-scoped, covered by test-dashboard-time-series.
+      if (query.select.submittedAt && query.where.OR?.[0]?.submittedAt) return [];
       if (query.where.OR) {
         // Interview invites: evidence only (recruiter reply kind or user-declared status); practice sessions never count.
         assert.equal(JSON.stringify(query.where.OR), JSON.stringify([{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }]));
@@ -100,6 +102,8 @@ async function main() {
       return 1;
     },
   },
+  applicationReply: { findMany: async (query: any) => { assert.equal(query.where.application.userId, "owner"); return []; } },
+  gmailMessage: { findMany: async (query: any) => { assert.equal(query.where.userId, "owner"); return []; } },
   job: { count: async (query: any) => { assert.equal(query.where.dismissals.none.userId, "owner"); assert.equal(query.where.closedAt, null); return 7; } },
   cVDocument: { findFirst: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
   cVProfile: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
@@ -111,7 +115,7 @@ async function main() {
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },
     "next/link": { default: "Link" }, "next-intl/server": { getLocale: async () => "it", getTranslations: async () => (key: string) => key },
     "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/dashboard-metrics-shared": metrics,
-    "lucide-react": lucide, "./dashboard.css": {},
+    "lucide-react": lucide, "./dashboard.css": {}, "./sparkline": { Sparkline: "Sparkline" }, "./weekly-trend-chart": { WeeklyTrendChart: "WeeklyTrendChart" },
     "@/lib/session": { getCurrentUser: async () => ({ id: "owner", email: "owner@example.test", name: "Owner", welcomeSeenAt: new Date(), emailVerified: new Date(), subscriptionStatus: "active" }) },
     "@/lib/attention-repository": { getAttentionQueue: async () => ({ items: [], unread: 0, unknownRead: 0, drafts: 0, limited: false }) },
     "@/components/attention-queue": { AttentionQueue: "AttentionQueue" },
@@ -139,8 +143,12 @@ async function main() {
     if (Array.isArray(node)) { node.forEach(walk); return; }
     const kpi = node.props?.["data-kpi"];
     if (kpi) {
-      const value = (node.props.children as any[]).find((child) => child?.props?.className === "dash-kpi-value");
-      kpis[kpi] = value.props.children;
+      const find = (n: any): any => {
+        if (!n || typeof n !== "object") return null;
+        if (Array.isArray(n)) { for (const c of n) { const hit = find(c); if (hit) return hit; } return null; }
+        return n.props?.className === "dash-kpi-value" ? n : find(n.props?.children);
+      };
+      kpis[kpi] = find(node.props.children).props.children;
     }
     if (node.props?.["data-stage"]) stageCounts[node.props["data-stage"]] = node.props["data-count"];
     walk(node.props?.children);

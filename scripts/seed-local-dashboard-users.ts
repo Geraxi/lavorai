@@ -1,6 +1,9 @@
 /**
  * Local-only seed for dashboard screenshots / manual QA.
  *
+ * Populated users get ~8 weeks of history (delivered sends, replies, interviews)
+ * so the dashboard sparklines and weekly trend have real timestamps.
+ *
  * Creates three password-login users (password: "LocalTest123!"):
  *   - test-dashboard@lavorai.test  populated (make it admin locally via ADMIN_EMAILS)
  *   - test-empty@lavorai.test      no applications, no CV
@@ -60,6 +63,16 @@ const JOBS = [
   { externalId: "local-dash-6", title: "Lead Product Designer", company: "Tlon", location: "Roma" },
   { externalId: "local-dash-7", title: "Design Systems Designer", company: "Musixmatch", location: "Bologna" },
   { externalId: "local-dash-8", title: "Product Designer", company: "Shopfully", location: "Bologna", closed: true },
+  // Older (delivered) applications spread over ~8 weeks for the trend visuals.
+  { externalId: "local-dash-9", title: "UX Designer", company: "Fabrick", location: "Milano" },
+  { externalId: "local-dash-10", title: "Product Designer", company: "Scalapay", location: "Milano" },
+  { externalId: "local-dash-11", title: "UI Designer", company: "Casavo", location: "Milano" },
+  { externalId: "local-dash-12", title: "Product Designer", company: "Moneyfarm", location: "Milano" },
+  { externalId: "local-dash-13", title: "Senior Product Designer", company: "Treatwell", location: "Remoto" },
+  { externalId: "local-dash-14", title: "Product Designer", company: "Yoox", location: "Bologna" },
+  { externalId: "local-dash-15", title: "UX Researcher", company: "Subito", location: "Milano" },
+  { externalId: "local-dash-16", title: "Product Designer", company: "Igloo", location: "Remoto" },
+  { externalId: "local-dash-17", title: "Visual Designer", company: "Wonderflow", location: "Remoto" },
 ];
 
 async function seedJobs() {
@@ -120,6 +133,32 @@ async function seedPopulated(userId: string, email: string, firstName: string, l
     });
     return app;
   };
+
+  const reply = async (applicationId: string, kind: string, d: number, read: boolean, subject: string) => {
+    await prisma.applicationReply.create({
+      data: { applicationId, fromAddress: "talent@company.example", subject, kind, bodyText: subject, isHuman: true,
+        receivedAt: daysAgo(d), attentionTrackedAt: daysAgo(d), readAt: read ? daysAgo(d - 0.5) : null, provider: "resend",
+        providerMessageId: `msg_${rnd()}`, directRecipient: true },
+    });
+    await prisma.application.update({ where: { id: applicationId },
+      data: { lastReplyKind: kind, lastReplyAt: daysAgo(d), replyCount: { increment: 1 }, ...(kind === "colloquio" ? { userStatus: "colloquio" } : {}) } });
+  };
+
+  // Older history: delivered sends across ~8 weeks, with a few recruiter replies.
+  const wonderflow = await delivered("Wonderflow", 53);
+  await delivered("Igloo", 47);
+  const subito = await delivered("Subito", 44);
+  await reply(subito.id, "rifiutata", 40, true, "Esito candidatura");
+  const yoox = await delivered("Yoox", 38);
+  await reply(yoox.id, "rifiutata", 33, true, "Aggiornamento sulla candidatura");
+  const treatwell = await delivered("Treatwell", 31);
+  await reply(treatwell.id, "colloquio", 25, true, "Primo colloquio");
+  await delivered("Moneyfarm", 26);
+  const casavo = await delivered("Casavo", 20);
+  await reply(casavo.id, "risposta", 17, true, "Domanda sulla disponibilità");
+  await delivered("Scalapay", 16);
+  await delivered("Fabrick", 9);
+  await reply(wonderflow.id, "rifiutata", 46, true, "Posizione chiusa");
 
   // Delivery-confirmed + interview invite (read)
   const satispay = await delivered("Satispay", 12);

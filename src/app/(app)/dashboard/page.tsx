@@ -14,6 +14,7 @@ import {
   MapPin,
   MessageSquare,
   Send,
+  TrendingUp,
   Trophy,
   UserRound,
   type LucideIcon,
@@ -36,7 +37,10 @@ import {
   getOffers,
   getInterviewInvites,
   getOpenOpportunities,
+  getDashboardTimeSeries,
 } from "@/lib/dashboard-metrics-shared";
+import { Sparkline } from "./sparkline";
+import { WeeklyTrendChart } from "./weekly-trend-chart";
 import "./dashboard.css";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -99,6 +103,7 @@ export default async function DashboardPage() {
     attention,
     recentInterviews,
     recentActivity,
+    series,
   ] = await Promise.all([
     getConfirmedSubmissions(user.id),
     getRecruiterReplies(user.id),
@@ -143,6 +148,7 @@ export default async function DashboardPage() {
         job: { select: { title: true, company: true } },
       },
     }),
+    getDashboardTimeSeries(user.id).catch(() => null),
   ]);
 
   // ── Progress by journey stage ────────────────────────────────────────
@@ -160,6 +166,8 @@ export default async function DashboardPage() {
   stageCounts.set("sent", confirmed);
   stageCounts.set("unverified", Math.max(0, unverifiedRaw - confirmed));
   const stages = STAGE_ORDER.map((stage) => ({ stage, count: stageCounts.get(stage) ?? 0 })).filter((s) => s.count > 0);
+  const stageTotal = stages.reduce((sum, s) => sum + s.count, 0) || 1;
+  const trendHasData = !!series && series.weeks.some((w) => w.sent > 0 || w.replies > 0);
 
   const activity = recentActivity.map((app) => {
     let stage = journeyStage(app.status);
@@ -192,11 +200,11 @@ export default async function DashboardPage() {
         : { href: "/discover", title: tr("Scegli il prossimo ruolo", "Choose your next role"), detail: tr("Esplora le offerte aperte.", "Explore open roles.") };
   const next = items[0] ?? fallbackNext;
 
-  const kpis: { key: string; label: string; value: number; hint: string; href: string; icon: LucideIcon }[] = [
-    { key: "confirmed", label: tr("Invii confermati", "Confirmed sends"), value: confirmed, hint: tr("con prova di consegna", "with delivery evidence"), href: "/applications?filter=sent", icon: Send },
-    { key: "replies", label: tr("Risposte recruiter", "Recruiter replies"), value: replies, hint: tr("candidature con risposta", "applications with a reply"), href: "/inbox", icon: MessageSquare },
-    { key: "interviews", label: tr("Colloqui", "Interviews"), value: interviews, hint: tr("inviti ricevuti", "invites received"), href: "/interviews", icon: CalendarCheck },
-    { key: "offers", label: tr("Offerte", "Offers"), value: offers, hint: tr("segnate da te", "marked by you"), href: "/applications?filter=offerta", icon: Trophy },
+  const kpis: { key: string; label: string; value: number; hint: string; href: string; icon: LucideIcon; daily: number[] | null; noHistory?: string }[] = [
+    { key: "confirmed", label: tr("Invii confermati", "Confirmed sends"), value: confirmed, hint: tr("con prova di consegna", "with delivery evidence"), href: "/applications?filter=sent", icon: Send, daily: series?.daily.confirmed ?? null },
+    { key: "replies", label: tr("Risposte recruiter", "Recruiter replies"), value: replies, hint: tr("candidature con risposta", "applications with a reply"), href: "/inbox", icon: MessageSquare, daily: series?.daily.replies ?? null },
+    { key: "interviews", label: tr("Colloqui", "Interviews"), value: interviews, hint: tr("inviti ricevuti", "invites received"), href: "/interviews", icon: CalendarCheck, daily: series?.daily.interviews ?? null },
+    { key: "offers", label: tr("Offerte", "Offers"), value: offers, hint: tr("segnate da te", "marked by you"), href: "/applications?filter=offerta", icon: Trophy, daily: null, noHistory: tr("storico non disponibile", "no history available") },
   ];
 
   return (
@@ -209,13 +217,22 @@ export default async function DashboardPage() {
 
       <div className="dash">
         <section className="dash-kpis" aria-label={tr("Indicatori principali", "Key metrics")}>
-          {kpis.map(({ key, label, value, hint, href, icon: KpiIcon }) => (
+          {kpis.map(({ key, label, value, hint, href, icon: KpiIcon, daily, noHistory }) => (
             <Link key={key} href={href} className="dash-kpi" data-kpi={key}>
               <div className="dash-kpi-top">
                 <span className="dash-chip-icon"><KpiIcon size={14} strokeWidth={1.75} aria-hidden /></span>
                 <span className="dash-kpi-label">{label}</span>
               </div>
-              <div className="dash-kpi-value">{value.toLocaleString(en ? "en-GB" : "it-IT")}</div>
+              <div className="dash-kpi-body">
+                <div className="dash-kpi-value">{value.toLocaleString(en ? "en-GB" : "it-IT")}</div>
+                <Sparkline
+                  id={key}
+                  daily={daily}
+                  tone={key === "confirmed" ? "green" : "neutral"}
+                  emptyLabel={noHistory ?? tr("storico insufficiente", "not enough history")}
+                  ariaLabel={tr(`${label}: andamento cumulativo negli ultimi 30 giorni`, `${label}: cumulative trend over the last 30 days`)}
+                />
+              </div>
               <div className="dash-kpi-hint">{hint}</div>
             </Link>
           ))}
@@ -269,6 +286,20 @@ export default async function DashboardPage() {
               </header>
               {stages.length > 0 ? (
                 <>
+                  <div className="dash-statusbar-wrap">
+                    <div className="dash-statusbar" role="img" aria-label={stages.map(({ stage, count }) => `${STAGE_LABEL[stage][lang]} ${count}`).join(", ")}>
+                      {stages.map(({ stage, count }) => (
+                        <span key={stage} className={`tone-${STAGE_TONE[stage]}`} style={{ flexGrow: count }} />
+                      ))}
+                    </div>
+                    <ul className="dash-legend" aria-hidden>
+                      {stages.map(({ stage, count }) => (
+                        <li key={stage} className={`tone-${STAGE_TONE[stage]}`}>
+                          <span className="dash-dot" />{STAGE_LABEL[stage][lang]}<b>{Math.round((count / stageTotal) * 100)}%</b>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                   <div className="dash-stages">
                     {stages.map(({ stage, count }) => (
                       <Link key={stage} href="/applications" className={`dash-stage tone-${STAGE_TONE[stage]}`} data-stage={stage} data-count={count}>
@@ -284,6 +315,37 @@ export default async function DashboardPage() {
                 </>
               ) : (
                 <Empty icon={Briefcase} title={tr("Nessuna candidatura", "No applications yet")} text={tr("Quando prepariamo o inviamo una candidatura, la vedi qui per stato.", "When we prepare or send an application, it shows up here by status.")} cta={{ href: "/discover", label: tr("Esplora offerte", "Browse jobs") }} />
+              )}
+            </section>
+
+            {/* Weekly trend */}
+            <section className="dash-card" aria-labelledby="dash-trend-title">
+              <header className="dash-card-head">
+                <h2 id="dash-trend-title"><TrendingUp size={15} strokeWidth={1.75} aria-hidden /> {tr("Andamento settimanale", "Weekly trend")}</h2>
+                {trendHasData && (
+                  <ul className="dash-legend is-head" aria-hidden>
+                    <li><span className="dash-legend-swatch is-sent" />{tr("Invii confermati", "Confirmed sends")}</li>
+                    <li><span className="dash-legend-swatch is-replies" />{tr("Risposte recruiter", "Recruiter replies")}</li>
+                  </ul>
+                )}
+              </header>
+              {series === null ? (
+                <p className="dash-muted dash-pad">{tr("Andamento non disponibile. Ricarica la pagina per riprovare.", "Trend unavailable. Reload the page to try again.")}</p>
+              ) : trendHasData ? (
+                <div className="dash-pad">
+                  <WeeklyTrendChart
+                    weeks={series.weeks}
+                    locale={locale}
+                    labels={{
+                      sent: tr("invii confermati", "confirmed sends"),
+                      replies: tr("risposte recruiter", "recruiter replies"),
+                      chart: tr("Invii confermati e risposte recruiter per settimana, ultime 8 settimane", "Confirmed sends and recruiter replies per week, last 8 weeks"),
+                    }}
+                  />
+                  <p className="dash-muted dash-trend-note">{tr("Ultime 8 settimane (finestre di 7 giorni fino a oggi) · invii con prova di consegna e risposte dei recruiter", "Last 8 weeks (7-day windows up to today) · sends with delivery evidence and recruiter replies")}</p>
+                </div>
+              ) : (
+                <Empty icon={TrendingUp} title={tr("Nessuno storico ancora", "No history yet")} text={tr("Quando arrivano invii confermati e risposte, qui vedi l’andamento delle ultime 8 settimane.", "Once confirmed sends and replies arrive, the last 8 weeks show up here.")} />
               )}
             </section>
 

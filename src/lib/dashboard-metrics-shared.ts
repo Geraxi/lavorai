@@ -17,7 +17,7 @@
  */
 
 import { prisma } from "@/lib/db";
-import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
+import { applicationEvidenceDate, deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
 
 /**
  * Confirmed submissions (evidence-backed only)
@@ -418,5 +418,194 @@ export async function getAllDashboardMetrics(userId: string) {
     unverified,
     draftReplies,
     recentApplications,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Time series for dashboard visuals (sparklines + weekly trend)
+// ─────────────────────────────────────────────────────────────────────────
+
+/** Days are bucketed in the product's home time zone so "today" matches the user. */
+export const DASHBOARD_TIME_ZONE = "Europe/Rome";
+export const SPARKLINE_DAYS = 30;
+export const TREND_WEEKS = 8;
+const RECRUITER_REPLY_KINDS = ["risposta", "colloquio", "rifiutata"];
+
+const dayFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: DASHBOARD_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** Calendar-day number (days since epoch) of `date` in the dashboard time zone. */
+export function zonedDayNumber(date: Date): number {
+  const [y, m, d] = dayFormatter.format(date).split("-").map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000);
+}
+
+function dayNumberToIso(day: number): string {
+  return new Date(day * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Per-day event counts for the last `days` calendar days, oldest first, today last. */
+export function bucketDaily(dates: Date[], now: Date, days = SPARKLINE_DAYS): number[] {
+  const today = zonedDayNumber(now);
+  const first = today - (days - 1);
+  const out = new Array<number>(days).fill(0);
+  for (const date of dates) {
+    const day = zonedDayNumber(date);
+    if (day >= first && day <= today) out[day - first]++;
+  }
+  return out;
+}
+
+/**
+ * Rolling 7-day windows ending today, oldest first. Rolling windows (instead
+ * of calendar weeks) avoid a misleading dip for the current, partial week.
+ */
+export function trendWeekStarts(now: Date, weeks = TREND_WEEKS): number[] {
+  const today = zonedDayNumber(now);
+  return Array.from({ length: weeks }, (_, i) => today - 6 - (weeks - 1 - i) * 7);
+}
+
+export function bucketWeekly(dates: Date[], now: Date, weeks = TREND_WEEKS): number[] {
+  const starts = trendWeekStarts(now, weeks);
+  const today = zonedDayNumber(now);
+  const out = new Array<number>(weeks).fill(0);
+  for (const date of dates) {
+    const day = zonedDayNumber(date);
+    if (day < starts[0] || day > today) continue;
+    out[Math.min(weeks - 1, Math.floor((day - starts[0]) / 7))]++;
+  }
+  return out;
+}
+
+export interface DashboardTimeSeries {
+  /** Daily counts, last 30 days (oldest first). */
+  daily: { confirmed: number[]; replies: number[]; interviews: number[] };
+  /** Offers are user-declared (userStatus) and carry no timestamp: no history exists. */
+  offersHistoryAvailable: false;
+  /** Rolling 7-day windows (start/end inclusive, YYYY-MM-DD), oldest first; the last ends today. */
+  weeks: { start: string; end: string; sent: number; replies: number }[];
+}
+
+/**
+ * Evidence-backed event dates for the dashboard visuals, scoped to one user.
+ *
+ * - Confirmed sends: applications whose delivery evidence is confirmed (same
+ *   rule as getConfirmedSubmissions), dated with applicationEvidenceDate.
+ * - Recruiter replies: human, non-security-code replies of recruiter kinds
+ *   from ApplicationReply and GmailMessage. The same reply can exist in both
+ *   channels, so events are de-duplicated per application per day.
+ * - Interviews: first "colloquio" reply per application.
+ */
+export async function getDashboardTimeSeries(userId: string, now: Date = new Date()): Promise<DashboardTimeSeries> {
+  const weekStarts = trendWeekStarts(now);
+  const firstDay = Math.min(weekStarts[0], zonedDayNumber(now) - (SPARKLINE_DAYS - 1));
+  // One day of margin: zone offsets never exceed 24h.
+  const since = new Date((firstDay - 1) * 86_400_000);
+
+  const confirmedDates: Date[] = [];
+  let cursor: string | undefined;
+  while (true) {
+    const applications = await prisma.application.findMany({
+      where: {
+        userId,
+        OR: [
+          { submittedAt: { gte: since } },
+          { completedAt: { gte: since } },
+          { createdAt: { gte: since } },
+          { emailAttempts: { some: { createdAt: { gte: since } } } },
+        ],
+      },
+      orderBy: { id: "asc" },
+      take: 200,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        submittedVia: true,
+        submitConfirmation: true,
+        submissionReceiptJson: true,
+        submittedAt: true,
+        completedAt: true,
+        createdAt: true,
+        emailAttempts: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { status: true, providerEmailId: true, acceptedAt: true, createdAt: true },
+        },
+      },
+    });
+    for (const application of applications) {
+      if (application.userId !== userId) continue;
+      if (!isConfirmedDelivery(deliveryEvidence(application))) continue;
+      const date = applicationEvidenceDate(application);
+      if (date >= since && date <= now) confirmedDates.push(date);
+    }
+    if (applications.length < 200) break;
+    cursor = applications[applications.length - 1].id;
+  }
+
+  const [appReplies, gmailReplies] = await Promise.all([
+    prisma.applicationReply.findMany({
+      where: {
+        application: { userId },
+        isHuman: true,
+        isSecurityCode: false,
+        kind: { in: RECRUITER_REPLY_KINDS },
+        receivedAt: { gte: since, lte: now },
+      },
+      orderBy: { receivedAt: "asc" },
+      take: 2000,
+      select: { applicationId: true, receivedAt: true, kind: true },
+    }),
+    prisma.gmailMessage.findMany({
+      where: {
+        userId,
+        applicationId: { not: null },
+        isHuman: true,
+        kind: { in: RECRUITER_REPLY_KINDS },
+        date: { gte: since, lte: now },
+      },
+      orderBy: { date: "asc" },
+      take: 2000,
+      select: { applicationId: true, date: true, kind: true },
+    }),
+  ]);
+
+  const replyEvents = [
+    ...appReplies.map((r) => ({ applicationId: r.applicationId, date: r.receivedAt, kind: r.kind })),
+    ...gmailReplies.map((r) => ({ applicationId: r.applicationId as string, date: r.date, kind: r.kind })),
+  ].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const seenReplyDays = new Set<string>();
+  const replyDates: Date[] = [];
+  const interviewApps = new Set<string>();
+  const interviewDates: Date[] = [];
+  for (const event of replyEvents) {
+    const key = `${event.applicationId}:${zonedDayNumber(event.date)}`;
+    if (!seenReplyDays.has(key)) {
+      seenReplyDays.add(key);
+      replyDates.push(event.date);
+    }
+    if (event.kind === "colloquio" && !interviewApps.has(event.applicationId)) {
+      interviewApps.add(event.applicationId);
+      interviewDates.push(event.date);
+    }
+  }
+
+  const sentWeekly = bucketWeekly(confirmedDates, now);
+  const repliesWeekly = bucketWeekly(replyDates, now);
+  return {
+    daily: {
+      confirmed: bucketDaily(confirmedDates, now),
+      replies: bucketDaily(replyDates, now),
+      interviews: bucketDaily(interviewDates, now),
+    },
+    offersHistoryAvailable: false,
+    weeks: weekStarts.map((start, i) => ({ start: dayNumberToIso(start), end: dayNumberToIso(start + 6), sent: sentWeekly[i], replies: repliesWeekly[i] })),
   };
 }
