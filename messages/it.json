@@ -167,13 +167,13 @@
     "discover": "Discover"
   },
   "discoverPage": {
-    "title": "Discover",
+    "title": "Scopri",
     "breadcrumb": "Lavoro",
     "heading": "Scorri le opportunità",
-    "subtitle": "{count} offerte filtrate per te. Swipe a destra per candidarti, a sinistra per saltare.",
+    "subtitle": "{count, plural, =0 {Nessuna offerta in linea con le tue preferenze} =1 {1 offerta in linea con le tue preferenze} other {# offerte in linea con le tue preferenze}}, ultimi 14 giorni.",
     "apply": "Candidati",
     "skip": "Salta",
-    "hintKeyboard": "← skip · → candidati · oppure trascina la card",
+    "hintKeyboard": "← salta · → candidati · oppure trascina la card",
     "queueRemaining": "{count} ancora in coda",
     "emptyTitle": "Fine della coda!",
     "emptyBody": "Hai visto tutte le offerte disponibili per ora. Ne cerchiamo di nuove più volte al giorno: torna più tardi.",
@@ -183,7 +183,8 @@
     "networkError": "Errore di rete.",
     "applied": "Richiesta di candidatura salvata per {title}. Controlla lo stato in Candidature.",
     "fullDescription": "Descrizione completa",
-    "openOriginal": "Apri annuncio originale"
+    "openOriginal": "Apri annuncio originale",
+    "subtitleCapped": "{count} offerte in linea con le tue preferenze, ultimi 14 giorni. Qui le {shown} più recenti."
   },
   "pricing": {
     "eyebrow": "Prezzi",

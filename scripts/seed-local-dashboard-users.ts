@@ -209,7 +209,34 @@ async function seedPopulated(userId: string, email: string, firstName: string, l
   });
 }
 
+
+// Fresh open roles for Scopri (Discover): no applications, ATS-style source so
+// they pass the Discover filters. URLs are on example.test (never reachable).
+const DISCOVER_JOBS = [
+  { title: "Product Designer", company: "Satispay", location: "Milano", salaryMin: 38000, salaryMax: 48000, remote: false },
+  { title: "Senior Product Designer", company: "Bending Spoons", location: "Milano", salaryMin: 55000, salaryMax: 70000, remote: false },
+  { title: "Product Designer, Growth", company: "Qonto", location: "Remoto", salaryMin: 45000, salaryMax: 58000, remote: true },
+  { title: "Product Designer – Design System", company: "Fatture in Cloud", location: "Bergamo", salaryMin: null, salaryMax: null, remote: false },
+  { title: "Lead Product Designer", company: "Cortilia", location: "Milano", salaryMin: 60000, salaryMax: 75000, remote: false },
+  { title: "Product Designer (Mobile)", company: "Tannico", location: "Remoto", salaryMin: 40000, salaryMax: 50000, remote: true },
+];
+async function seedDiscoverJobs() {
+  for (const [i, j] of DISCOVER_JOBS.entries()) {
+    const externalId = `local-discover-${i + 1}`;
+    const data = {
+      externalId, source: "greenhouse", title: j.title, company: j.company,
+      location: j.remote ? "Remoto, Italia" : `${j.location}, Italia`,
+      description: `${j.company} cerca un ${j.title} per il team prodotto. Lavorerai su user research, prototipazione in Figma, design system e test di usabilità con PM e sviluppatori. Richiesti 3+ anni di esperienza in product design su prodotti digitali consumer o B2B, portfolio con casi studio, ottimo italiano e buon inglese.`,
+      url: `https://example.test/discover/${externalId}`, contractType: "permanent", remote: j.remote, category: "design",
+      salaryMin: j.salaryMin, salaryMax: j.salaryMax, postedAt: daysAgo(1 + i), cachedAt: daysAgo(0.5), closedAt: null,
+    };
+    await prisma.job.upsert({ where: { externalId_source: { externalId, source: "greenhouse" } }, update: data, create: data });
+  }
+}
+
 async function main() {
+  await seedDiscoverJobs();
+  if (process.argv.includes("--discover-only")) { console.log("Seeded Discover jobs only."); return; }
   const jobs = await seedJobs();
   const populated = await makeUser("test-dashboard@lavorai.test", "Marco Rossi");
   await seedPopulated(populated.id, populated.email, "Marco", "Rossi", jobs);

@@ -104,14 +104,29 @@ async function main() {
   },
   applicationReply: { findMany: async (query: any) => { assert.equal(query.where.application.userId, "owner"); return []; } },
   gmailMessage: { findMany: async (query: any) => { assert.equal(query.where.userId, "owner"); return []; } },
-  job: { count: async (query: any) => { assert.equal(query.where.dismissals.none.userId, "owner"); assert.equal(query.where.closedAt, null); return 7; } },
+  job: { findMany: async (query: any) => {
+    // getMatchingOpportunities: owner-scoped, open, not dismissed, not already applied.
+    assert.equal(query.where.dismissals.none.userId, "owner"); assert.equal(query.where.closedAt, null);
+    assert.equal(query.where.NOT.applications.some.userId, "owner");
+    return [
+      ...Array.from({ length: 5 }, (_, i) => ({ id: `j${i}`, title: "Product Designer", company: `Co ${i}`, description: "", salaryMin: null, salaryMax: null })),
+      { id: "avoid", title: "Product Designer", company: "Avoid Co", description: "", salaryMin: null, salaryMax: null },
+      { id: "role", title: "Backend Engineer", company: "Other", description: "", salaryMin: null, salaryMax: null },
+    ];
+  } },
+  userPreferences: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return { rolesJson: JSON.stringify(["Product Designer"]), salaryMin: 0, matchMin: 0 }; } },
+  user: { findUnique: async (query: any) => { assert.equal(query.where.id, "owner"); return { avoidCompanies: "Avoid Co", cvProfile: null }; } },
   cVDocument: { findFirst: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
   cVProfile: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
   };
   const element = (type: unknown, props: unknown) => ({ type, props });
   const uiStatus = load("src/lib/ui-application-status.ts", {});
   const stageModule = load("src/lib/application-stage.ts", { "@/lib/application-evidence": evidence, "@/lib/ui-application-status": uiStatus });
-  const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/application-stage": stageModule, "@/lib/ui-application-status": uiStatus, "@/lib/inbox-counts": load("src/lib/inbox-counts.ts", {}) });
+  const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/application-stage": stageModule, "@/lib/ui-application-status": uiStatus, "@/lib/inbox-counts": load("src/lib/inbox-counts.ts", {}),
+    "@/lib/cv-profile-types": { rowToProfile: (row: unknown) => row },
+    "@/lib/match-score": { quickMatchScore: () => 100 },
+    "@/lib/role-match": load("src/lib/role-match.ts", {}) });
+  assert.equal(await metrics.getMatchingOpportunityCount("owner"), 5, "Scopri/Dashboard opportunities apply roles and avoided companies");
   const lucide = new Proxy({}, { get: (_target, name) => String(name), has: () => true });
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },

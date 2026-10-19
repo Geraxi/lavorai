@@ -36,7 +36,7 @@ import {
   getRecruiterReplies,
   getOffers,
   getInterviewInvites,
-  getOpenOpportunities,
+  getMatchingOpportunityCount,
   getDashboardTimeSeries,
 } from "@/lib/dashboard-metrics-shared";
 import { Sparkline } from "@/components/ui-premium/sparkline";
@@ -87,7 +87,7 @@ export default async function DashboardPage() {
     getRecruiterReplies(user.id),
     getInterviewInvites(user.id),
     getOffers(user.id),
-    getOpenOpportunities(user.id),
+    getMatchingOpportunityCount(user.id),
     prisma.cVDocument.findFirst({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -423,7 +423,7 @@ export default async function DashboardPage() {
               <div className="pm-pad dash-discover">
                 <div>
                   <div className="dash-discover-count">{opportunities.toLocaleString(en ? "en-GB" : "it-IT")}</div>
-                  <div className="pm-muted">{tr("offerte aperte aggiornate negli ultimi 30 giorni", "open roles refreshed in the last 30 days")}</div>
+                  <div className="pm-muted">{tr("offerte aperte in linea con le tue preferenze, ultimi 14 giorni", "open roles matching your preferences, last 14 days")}</div>
                 </div>
                 <Link href="/discover" className="pm-btn-ghost">{tr("Esplora", "Browse")} <ArrowRight size={14} strokeWidth={1.75} aria-hidden /></Link>
               </div>
