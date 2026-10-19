@@ -1,168 +1,62 @@
 import Link from "next/link";
-import { Lock } from "lucide-react";
+import { ArrowRight, Check, Lock } from "lucide-react";
 import { FEATURE_LABELS, TIERS, type PremiumFeature } from "@/lib/billing";
+import "@/components/ui-premium/premium-gate.css";
+
+/** "[icon] Text {soon}" (pricing copy) → plain text + "in arrivo" flag. */
+export function parseFeature(raw: string): { text: string; soon: boolean } {
+  const soon = /\{soon\}/i.test(raw);
+  const text = raw.replace(/^\s*\[[a-z-]+\]\s*/i, "").replace(/\s*\{soon\}\s*/gi, " ").trim();
+  return { text, soon };
+}
 
 /**
- * In-page paywall component. Mostrato come content principale della
- * pagina quando un utente free/pro tenta di accedere a una feature
- * Pro+. NON un dialog modale — è la pagina che sta visitando, così
- * vede chiaramente cosa sta per sbloccare invece di un popup.
+ * In-page paywall for Pro+ features: a matte card inside the page, not a
+ * modal, so the user sees what the feature is. Green only on the CTA.
  */
 export function PremiumGate({
   feature,
   isLoggedIn,
+  compact = false,
 }: {
   feature: PremiumFeature;
   isLoggedIn: boolean;
+  compact?: boolean;
 }) {
   const meta = FEATURE_LABELS[feature];
   const tier = TIERS.pro_plus;
-
+  // Italian formatting: "€39,99/mese" (catalog stores "€39.99" + "/ mese").
+  const price = `${tier.priceDisplay.replace(/(\d)\.(\d{2})\b/, "$1,$2")}${tier.priceSuffix.replace(/\/\s+/, "/")}`;
   return (
-    <div
-      style={{
-        maxWidth: 760,
-        margin: "60px auto",
-        padding: "0 24px",
-        textAlign: "center",
-      }}
-    >
-      <div
-        style={{
-          display: "inline-block",
-          padding: "5px 11px",
-          borderRadius: 999,
-          background: "hsl(var(--primary) / 0.12)",
-          color: "hsl(var(--primary))",
-          fontSize: 11,
-          fontWeight: 700,
-          letterSpacing: "0.14em",
-          textTransform: "uppercase",
-          marginBottom: 18,
-        }}
-      >
-        <Lock size={12} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginRight: 6 }} />Pro+ · {tier.priceDisplay}
-        {tier.priceSuffix}
+    <section className={`pm-card pm-gate${compact ? " is-compact" : ""}`} aria-labelledby={`gate-${feature}`}>
+      <div className="pm-gate-head">
+        <span className="pm-gate-badge"><Lock size={12} aria-hidden /> Pro+ · {price}</span>
+        <h2 id={`gate-${feature}`}>{meta.name}</h2>
+        <p className="pm-muted">{meta.blurb}</p>
       </div>
-
-      <h1
-        style={{
-          fontSize: 36,
-          fontWeight: 700,
-          letterSpacing: "-0.025em",
-          lineHeight: 1.15,
-          margin: "0 0 14px",
-        }}
-      >
-        {meta.name}
-      </h1>
-
-      <p
-        style={{
-          fontSize: 16,
-          color: "var(--fg-muted)",
-          lineHeight: 1.6,
-          margin: "0 auto 32px",
-          maxWidth: 600,
-        }}
-      >
-        {meta.blurb}
-      </p>
-
-      <div
-        style={{
-          padding: "26px 28px",
-          borderRadius: 18,
-          background:
-            "linear-gradient(180deg, hsl(var(--primary) / 0.10), hsl(var(--primary) / 0.02) 60%)",
-          border: "1px solid hsl(var(--primary) / 0.35)",
-          textAlign: "left",
-          marginBottom: 24,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 11,
-            fontWeight: 700,
-            textTransform: "uppercase",
-            letterSpacing: "0.14em",
-            color: "hsl(var(--primary))",
-            marginBottom: 12,
-            textAlign: "center",
-          }}
-        >
-          Cosa sblocchi con Pro+
-        </div>
-        <ul
-          style={{
-            listStyle: "none",
-            padding: 0,
-            margin: 0,
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 10,
-          }}
-          className="pg-feature-list"
-        >
-          {tier.features.map((f, i) => (
-            <li
-              key={i}
-              style={{
-                fontSize: 13.5,
-                lineHeight: 1.5,
-                display: "flex",
-                gap: 8,
-                color: "var(--fg)",
-              }}
-            >
-              <span
-                style={{
-                  flexShrink: 0,
-                  color: "hsl(var(--primary))",
-                  fontWeight: 700,
-                  marginTop: 1,
-                }}
-              >
-                ✓
-              </span>
-              <span>{f}</span>
-            </li>
-          ))}
+      <div className="pm-gate-body">
+        <span className="pm-eyebrow">Cosa include Pro+</span>
+        <ul className="pm-gate-list">
+          {tier.features.map((raw, i) => {
+            const f = parseFeature(raw);
+            return (
+              <li key={i}>
+                <Check size={14} strokeWidth={2} aria-hidden />
+                <span>{f.text}{f.soon && <span className="pm-gate-soon">in arrivo</span>}</span>
+              </li>
+            );
+          })}
         </ul>
-        <style>{`
-          @media (max-width: 600px) {
-            .pg-feature-list { grid-template-columns: 1fr !important; }
-          }
-        `}</style>
       </div>
-
-      <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
-        <Link
-          href={isLoggedIn ? "/pricing?upgrade=pro_plus" : "/signup?plan=pro_plus"}
-          className="ds-btn ds-btn-primary"
-          style={{ padding: "13px 26px", fontSize: 14.5 }}
-        >
-          Sblocca Pro+ a €39.99/mese →
-        </Link>
-        <Link
-          href="/pricing"
-          className="ds-btn"
-          style={{ padding: "13px 22px", fontSize: 14 }}
-        >
-          Confronta i piani
-        </Link>
+      <div className="pm-gate-foot">
+        <div className="pm-gate-actions">
+          <Link href={isLoggedIn ? "/pricing?upgrade=pro_plus" : "/signup?plan=pro_plus"} className="pm-btn-primary">
+            Passa a Pro+ <ArrowRight size={14} aria-hidden />
+          </Link>
+          <Link href="/pricing" className="pm-btn-ghost">Confronta i piani</Link>
+        </div>
+        <p className="pm-muted">Disdici quando vuoi · IVA inclusa · Pagamento via Stripe</p>
       </div>
-
-      <p
-        style={{
-          marginTop: 18,
-          fontSize: 11.5,
-          color: "var(--fg-subtle)",
-          lineHeight: 1.55,
-        }}
-      >
-        Cancelli quando vuoi · IVA inclusa · Pagamento via Stripe
-      </p>
-    </div>
+    </section>
   );
 }

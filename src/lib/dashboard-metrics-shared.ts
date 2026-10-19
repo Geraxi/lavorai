@@ -773,3 +773,17 @@ export async function getMatchingOpportunities(userId: string) {
 export async function getMatchingOpportunityCount(userId: string): Promise<number> {
   return (await getMatchingOpportunities(userId)).total;
 }
+
+/**
+ * Interview applications (same rule as getInterviewInvites): user marked
+ * "colloquio" or the latest reply was classified as an interview invite.
+ * Used by: Colloqui page, Dashboard "Colloqui" card.
+ */
+export async function getInterviewApplications(userId: string, take = 20) {
+  return await prisma.application.findMany({
+    where: { userId, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }] },
+    orderBy: [{ lastReplyAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
+    take,
+    select: { id: true, userStatus: true, lastReplyAt: true, lastReplyKind: true, job: { select: { title: true, company: true, location: true } } },
+  });
+}

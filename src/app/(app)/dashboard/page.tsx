@@ -167,7 +167,7 @@ export default async function DashboardPage() {
   const kpis: { key: string; label: string; value: number; hint: string; href: string; icon: LucideIcon; daily: number[] | null; noHistory?: string }[] = [
     { key: "confirmed", label: tr("Invii confermati", "Confirmed sends"), value: confirmed, hint: tr("con prova di consegna", "with delivery evidence"), href: "/applications?filter=sent", icon: Send, daily: series?.daily.confirmed ?? null },
     { key: "replies", label: tr("Risposte recruiter", "Recruiter replies"), value: replies, hint: tr("candidature con risposta", "applications with a reply"), href: "/inbox", icon: MessageSquare, daily: series?.daily.replies ?? null },
-    { key: "interviews", label: tr("Colloqui", "Interviews"), value: interviews, hint: tr("inviti ricevuti", "invites received"), href: "/interviews", icon: CalendarCheck, daily: series?.daily.interviews ?? null },
+    { key: "interviews", label: tr("Colloqui", "Interviews"), value: interviews, hint: tr("inviti ricevuti", "invites received"), href: "/interview", icon: CalendarCheck, daily: series?.daily.interviews ?? null },
     { key: "offers", label: tr("Offerte", "Offers"), value: offers, hint: tr("segnate da te", "marked by you"), href: "/applications?filter=offerta", icon: Trophy, daily: null, noHistory: tr("storico non disponibile", "no history available") },
   ];
 
@@ -393,7 +393,7 @@ export default async function DashboardPage() {
             <section className="pm-card" aria-labelledby="dash-interviews-title">
               <header className="pm-card-head">
                 <h2 id="dash-interviews-title"><CalendarCheck size={15} strokeWidth={1.75} aria-hidden /> {tr("Colloqui", "Interviews")}</h2>
-                {interviews > 0 && <Link href="/interviews" className="pm-link">{tr("Vedi tutti", "View all")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>}
+                {interviews > 0 && <Link href="/interview" className="pm-link">{tr("Vedi tutti", "View all")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>}
               </header>
               {recentInterviews.length > 0 ? (
                 <ul className="pm-list">
