@@ -4,9 +4,14 @@
  *  - loginUrl: pagina dove mandare il browser headed
  *  - loggedInUrlPattern: regex che matcha URL "autenticato" (post-login)
  *  - applyEntrypoint: come rilevare il job apply button (tbd per portale)
+ *
+ * LinkedIn è stato rimosso: l'auto-apply server-side viola i ToS di LinkedIn
+ * e rischia il ban degli account utente. La discovery LinkedIn (Apify) resta
+ * attiva, ma il submit avviene solo sui portali ATS esterni supportati.
+ * LinkedIn tornerà come estensione browser assistita (user-in-the-loop).
  */
 
-export type PortalId = "infojobs" | "linkedin" | "indeed" | "subito";
+export type PortalId = "infojobs" | "indeed" | "subito";
 
 export interface PortalConfig {
   id: PortalId;
@@ -27,13 +32,6 @@ export const PORTALS: Record<PortalId, PortalConfig> = {
     label: "InfoJobs",
     loginUrl: "https://www.infojobs.it/candidate/login/",
     loggedInUrlPattern: /infojobs\.it\/(candidate\/home|panel|dashboard)/i,
-    defaultUserAgent: REALISTIC_UA,
-  },
-  linkedin: {
-    id: "linkedin",
-    label: "LinkedIn",
-    loginUrl: "https://www.linkedin.com/login",
-    loggedInUrlPattern: /linkedin\.com\/(feed|in|jobs|mynetwork)/i,
     defaultUserAgent: REALISTIC_UA,
   },
   indeed: {

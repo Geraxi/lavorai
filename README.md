@@ -93,7 +93,7 @@ prisma/
 | | Free | Pro €19.99/mese | Pro+ €39.99/mese |
 |---|---|---|---|
 | Candidature mensili | 3 totali | 50/mese | **illimitate** |
-| Portali auto-apply | 0 | 1 a scelta | **tutti** (LinkedIn, InfoJobs, Indeed, Subito) |
+| Portali ATS supportati | Greenhouse, Lever, Ashby, Workable e altri | Tutti gli ATS supportati | **Tutti gli ATS supportati** |
 | CV optimization | ✓ | ✓ | ✓ multi-variante |
 | Cover letter | ✓ | ✓ | ✓ personalizzata |
 | Formato | DOCX | DOCX | DOCX + PDF + Europass |
@@ -231,7 +231,7 @@ End-to-end verificato in locale con 1 candidatura reale completa:
 CV upload → parseCV → optimizeCV (OpenAI Responses API) → DOCX generati → worker → /applications mostra stato, ATS score e suggerimenti.
 
 **Prossimi sprint**:
-- Sprint 6: Portal linking UI rebuilt in app shell (LinkedIn/InfoJobs/Indeed/Subito)
-- Sprint 7: Real Playwright selectors testati su job reali
-- Sprint 8: Chrome extension (complemento/alternativa a Path A)
+- Sprint 6: Chrome extension assisted apply per LinkedIn (user-in-the-loop, no server-side login)
+- Sprint 7: Real Playwright selectors testati su job reali ATS
+- Sprint 8: Portal linking UI per job board italiani (InfoJobs, Indeed, Subito) se richiesto
 - Sprint 9: i18n + internazionalizzazione mercato EU
