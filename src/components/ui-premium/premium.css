@@ -29,7 +29,14 @@
   --pm-radius: 14px;
   --pm-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --pm-page: #08090a;
-  --pm-sidebar: #0a0b0c;
+  --pm-sidebar: linear-gradient(180deg, #0e2a1f 0%, #0b1f17 100%);
+  --pm-sidebar-fg: #e8f2ed;
+  --pm-sidebar-fg-muted: rgba(232, 242, 237, 0.72);
+  --pm-sidebar-fg-faint: rgba(232, 242, 237, 0.48);
+  --pm-sidebar-border: rgba(255, 255, 255, 0.08);
+  --pm-sidebar-active-bg: rgba(62, 207, 142, 0.14);
+  --pm-sidebar-active-border: rgba(62, 207, 142, 0.24);
+  --pm-sidebar-active-indicator: #3ecf8e;
 }
 
 [data-theme="light"] .lavorai-app-shell,
@@ -53,7 +60,14 @@
   --pm-neutral: #646a73;
   --pm-neutral-weak: rgba(15, 16, 18, 0.05);
   --pm-page: #f7f8f8;
-  --pm-sidebar: #fbfbfb;
+  --pm-sidebar: linear-gradient(180deg, #e3f1e9 0%, #d6ecdf 100%);
+  --pm-sidebar-fg: #0d3d28;
+  --pm-sidebar-fg-muted: rgba(13, 61, 40, 0.68);
+  --pm-sidebar-fg-faint: rgba(13, 61, 40, 0.42);
+  --pm-sidebar-border: rgba(13, 61, 40, 0.10);
+  --pm-sidebar-active-bg: rgba(15, 159, 99, 0.12);
+  --pm-sidebar-active-border: rgba(15, 159, 99, 0.24);
+  --pm-sidebar-active-indicator: #0f9f63;
 }
 
 .pm-card.pm-card-featured {
@@ -79,6 +93,9 @@
   border-radius: var(--pm-radius);
   box-shadow: var(--pm-highlight);
   overflow: hidden;
+  /* Slight translucency to show aurora shader behind, while keeping text readable */
+  background: color-mix(in srgb, var(--pm-card) 90%, transparent);
+  backdrop-filter: blur(0px);
 }
 
 .pm-card-head {
@@ -138,7 +155,7 @@
   gap: 14px;
   min-height: 140px;
   padding: 20px 22px;
-  background: var(--pm-card);
+  background: color-mix(in srgb, var(--pm-card) 90%, transparent);
   border: 1px solid var(--pm-line);
   border-radius: var(--pm-radius);
   box-shadow: var(--pm-highlight);

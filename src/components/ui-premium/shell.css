@@ -22,11 +22,12 @@
   --primary-weak: rgba(62, 207, 142, 0.12);
   --primary-fg-ds: #04130b;
   --primary-foreground: 150 70% 5%;
-  --sidebar-bg: var(--pm-sidebar);
 }
 
-.lavorai-app-shell.product-workspace .lavorai-main { background: var(--pm-page); }
-.lavorai-app-shell.product-workspace { background: var(--pm-page) !important; color: var(--pm-fg) !important; }
+/* The aurora canvas is fixed at z-index:-10 behind the shell; shell and main must be
+   transparent or they paint over it. The page colour stays on <body> as the base. */
+.lavorai-app-shell.product-workspace .lavorai-main { background: transparent !important; }
+.lavorai-app-shell.product-workspace { background: transparent !important; color: var(--pm-fg) !important; }
 
 /* ── Sidebar ──────────────────────────────────────────────────────────── */
 .lavorai-app-shell .pm-sidebar {
@@ -39,7 +40,8 @@
   overflow-x: hidden;
   padding: 14px 10px 12px;
   background: var(--pm-sidebar);
-  border-right: 1px solid var(--pm-line);
+  border-right: 1px solid var(--pm-sidebar-border);
+  color: var(--pm-sidebar-fg);
   scrollbar-width: thin;
 }
 .lavorai-sidebar-drawer .pm-sidebar { height: auto; min-height: calc(100dvh - 48px); position: static; border-right: 0; }
@@ -53,7 +55,7 @@
   font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--pm-faint);
+  color: var(--pm-sidebar-fg-faint);
 }
 
 .lavorai-app-shell .pm-sidebar .pm-nav-item {
@@ -67,7 +69,7 @@
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--pm-muted) !important;
+  color: var(--pm-sidebar-fg-muted) !important;
   font: inherit;
   font-size: 13.5px;
   font-weight: 450;
@@ -78,28 +80,31 @@
 }
 .lavorai-app-shell .pm-sidebar .pm-nav-item::after { display: none; }
 .lavorai-app-shell .pm-sidebar .pm-nav-item svg { flex: none; opacity: 0.8; }
-.lavorai-app-shell .pm-sidebar .pm-nav-item:hover { color: var(--pm-fg-2) !important; background: rgba(255, 255, 255, 0.03); }
+.lavorai-app-shell .pm-sidebar .pm-nav-item:hover { 
+  color: var(--pm-sidebar-fg) !important; 
+  background: rgba(255, 255, 255, 0.05); 
+}
 .lavorai-app-shell .pm-sidebar .pm-nav-item[aria-current="page"] {
-  color: var(--pm-fg) !important;
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--pm-line);
-  box-shadow: var(--pm-highlight);
+  color: var(--pm-sidebar-fg) !important;
+  background: var(--pm-sidebar-active-bg);
+  border-color: var(--pm-sidebar-active-border);
+  box-shadow: inset 3px 0 0 var(--pm-sidebar-active-indicator), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .lavorai-app-shell .pm-sidebar .pm-nav-item[aria-current="page"] svg { opacity: 1; }
 .pm-nav-label { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.pm-nav-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--pm-faint); }
-.pm-nav-item[aria-current="page"] .pm-nav-count { color: var(--pm-muted); }
+.pm-nav-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--pm-sidebar-fg-faint); }
+.pm-nav-item[aria-current="page"] .pm-nav-count { color: var(--pm-sidebar-fg-muted); }
 
 .pm-sidebar-foot { margin-top: auto; padding-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 .pm-sidebar-card {
   padding: 4px;
-  border: 1px solid var(--pm-line);
+  border: 1px solid var(--pm-sidebar-border);
   border-radius: 10px;
-  background: var(--pm-card);
-  box-shadow: var(--pm-highlight);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
-.lavorai-app-shell .pm-sidebar-card .ds-btn { border: 0 !important; background: transparent !important; color: var(--pm-fg-2) !important; font-size: 12.5px; }
-.lavorai-app-shell .pm-sidebar-card .ds-btn:hover { background: rgba(255, 255, 255, 0.03) !important; }
+.lavorai-app-shell .pm-sidebar-card .ds-btn { border: 0 !important; background: transparent !important; color: var(--pm-sidebar-fg) !important; font-size: 12.5px; }
+.lavorai-app-shell .pm-sidebar-card .ds-btn:hover { background: rgba(255, 255, 255, 0.06) !important; }
 
 .pm-sidebar-user {
   display: flex;
@@ -111,11 +116,11 @@
   text-decoration: none;
   transition: background-color 0.15s var(--pm-ease);
 }
-.pm-sidebar-user:hover { background: rgba(255, 255, 255, 0.03); }
+.pm-sidebar-user:hover { background: rgba(255, 255, 255, 0.05); }
 .pm-sidebar-user-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.pm-sidebar-user-text strong { font-size: 13px; font-weight: 500; color: var(--pm-fg); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.pm-sidebar-user-text small { font-size: 12px; color: var(--pm-muted); }
-.pm-sidebar-user-go { color: var(--pm-faint); flex: none; }
+.pm-sidebar-user-text strong { font-size: 13px; font-weight: 500; color: var(--pm-sidebar-fg); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pm-sidebar-user-text small { font-size: 12px; color: var(--pm-sidebar-fg-muted); }
+.pm-sidebar-user-go { color: var(--pm-sidebar-fg-faint); flex: none; }
 
 /* ── Top bar ──────────────────────────────────────────────────────────── */
 .lavorai-app-shell.product-workspace .pm-topbar {
@@ -204,8 +209,8 @@
   .lavorai-app-shell.product-workspace .pm-topbar { position: static; padding: 10px 16px !important; min-height: 48px; }
   .lavorai-app-shell .lavorai-main { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
   .lavorai-app-shell .lavorai-sidebar-backdrop { background: rgba(0, 0, 0, 0.6); }
-  .lavorai-app-shell .lavorai-sidebar-drawer { background: var(--pm-sidebar); border-right: 1px solid var(--pm-line); }
-  .lavorai-app-shell .lavorai-drawer-close { background: var(--pm-sidebar) !important; border-bottom: 1px solid var(--pm-line) !important; color: var(--pm-fg-2) !important; font-size: 13px; }
+  .lavorai-app-shell .lavorai-sidebar-drawer { background: var(--pm-sidebar); border-right: 1px solid var(--pm-sidebar-border); }
+  .lavorai-app-shell .lavorai-drawer-close { background: var(--pm-sidebar) !important; border-bottom: 1px solid var(--pm-sidebar-border) !important; color: var(--pm-sidebar-fg) !important; font-size: 13px; }
 
   .lavorai-app-shell .lavorai-mobile-bottom-nav {
     position: fixed;
@@ -218,7 +223,7 @@
     height: calc(60px + env(safe-area-inset-bottom));
     padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left));
     background: var(--pm-sidebar);
-    border-top: 1px solid var(--pm-line);
+    border-top: 1px solid var(--pm-sidebar-border);
   }
   .lavorai-app-shell .lavorai-mobile-nav-item {
     position: relative;
@@ -230,7 +235,7 @@
     gap: 4px;
     border: 0;
     background: transparent;
-    color: var(--pm-faint);
+    color: var(--pm-sidebar-fg-faint);
     font: inherit;
     font-size: 10.5px;
     font-weight: 500;
@@ -240,8 +245,8 @@
     transition: color 0.15s var(--pm-ease);
   }
   .lavorai-app-shell .lavorai-mobile-nav-item span { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .lavorai-app-shell .lavorai-mobile-nav-item:hover { color: var(--pm-fg-2); }
-  .lavorai-app-shell .lavorai-mobile-nav-item[aria-current="page"] { color: var(--pm-fg); }
+  .lavorai-app-shell .lavorai-mobile-nav-item:hover { color: var(--pm-sidebar-fg-muted); }
+  .lavorai-app-shell .lavorai-mobile-nav-item[aria-current="page"] { color: var(--pm-sidebar-fg); }
   .lavorai-app-shell .lavorai-mobile-nav-item[aria-current="page"]::before {
     content: "";
     position: absolute;
@@ -251,9 +256,9 @@
     height: 2px;
     margin-left: -10px;
     border-radius: 0 0 2px 2px;
-    background: var(--pm-fg);
+    background: var(--pm-sidebar-active-indicator);
   }
-  .lavorai-app-shell .lavorai-mobile-nav-item:focus-visible { outline: 2px solid var(--pm-green); outline-offset: -4px; border-radius: 8px; }
+  .lavorai-app-shell .lavorai-mobile-nav-item:focus-visible { outline: 2px solid var(--pm-sidebar-active-indicator); outline-offset: -4px; border-radius: 8px; }
 }
 
 /* ── App-wide notices (onboarding, consent) ───────────────────────────── */
@@ -306,3 +311,35 @@
    page's top bar (both are direct children of the flex-column main). */
 .lavorai-app-shell .lavorai-main > .lavorai-mobile-topbar { order: -2; }
 .lavorai-app-shell .lavorai-main > .pm-topbar { order: -1; }
+
+/* ── Page container (shared by every app page) ────────────────────────────
+ * Page content sits next to the sidebar with one consistent gutter and grows
+ * to a sensible max width, instead of each page centering its own narrow
+ * column in the leftover space. Applied to whatever a page renders as its
+ * root inside the main column; the top bar, mobile chrome, drawers and the
+ * full-bleed Inbox are excluded. !important is needed because some legacy
+ * page roots set max-width/margin/padding inline or with !important. */
+.lavorai-app-shell {
+  --pm-gutter: 32px;
+  --pm-content-max: 1320px;
+}
+@media (max-width: 1023px) { .lavorai-app-shell { --pm-gutter: 24px; } }
+@media (max-width: 640px) { .lavorai-app-shell { --pm-gutter: 16px; } }
+
+.lavorai-app-shell .lavorai-main > :not(.lavorai-mobile-topbar, .pm-topbar, .pm-notice, .ds-drawer, .ds-drawer-backdrop, .inbox-page, script, style, template) {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: calc(var(--pm-content-max) + 2 * var(--pm-gutter)) !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: var(--pm-gutter) !important;
+  padding-right: var(--pm-gutter) !important;
+}
+/* Top bar and app notices line up with the same gutter. */
+.lavorai-app-shell .lavorai-main > .pm-topbar { padding-left: var(--pm-gutter); padding-right: var(--pm-gutter); }
+.lavorai-app-shell .lavorai-main:not(:has(.inbox-page)) > .pm-notice {
+  width: auto;
+  max-width: var(--pm-content-max);
+  margin-left: var(--pm-gutter);
+  margin-right: var(--pm-gutter);
+}
