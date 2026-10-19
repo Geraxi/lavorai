@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, Search } from "lucide-react";
-import { ThemeToggle } from "@/components/design/theme-toggle";
+import { ThemePill } from "@/components/design/theme-toggle";
 import { useLocale } from "next-intl";
 
 export interface TopbarProps {
@@ -39,7 +39,7 @@ export function AppTopbar({ title, breadcrumb, actions }: TopbarProps) {
           <kbd>⌘K</kbd>
         </button>
         {actions}
-        <ThemeToggle compact locale={en ? "en" : "it"} />
+        <ThemePill locale={en ? "en" : "it"} />
       </div>
     </div>
   );
