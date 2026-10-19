@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Icon } from "@/components/design/icon";
+import { Moon, Sun } from "lucide-react";
 
 type Theme = "light" | "dark";
 const KEY = "lavorai-theme";
@@ -45,7 +45,7 @@ export function ThemeToggle({ compact = true, fullWidth = false, locale = "it" }
   return (
     <button
       type="button"
-      className="ds-btn ds-btn-sm"
+      className={`ds-btn ds-btn-sm pm-theme-toggle${compact ? " is-icon" : ""}`}
       onClick={() => {
         applyTheme(next);
         setTheme(next);
@@ -54,7 +54,7 @@ export function ThemeToggle({ compact = true, fullWidth = false, locale = "it" }
       title={label}
       style={{ opacity: ready ? 1 : 0.6, gap: 6, ...(fullWidth ? { width: "100%", justifyContent: "center" } : {}) }}
     >
-      <Icon name={theme === "light" ? "sun" : "sparkles"} size={13} />
+      {theme === "light" ? <Moon size={14} strokeWidth={1.75} aria-hidden /> : <Sun size={14} strokeWidth={1.75} aria-hidden />}
       {!compact && label}
     </button>
   );

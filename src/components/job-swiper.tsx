@@ -4,7 +4,7 @@ import { MatchExplanation } from "@/components/match-explanation";
 import type { MatchExplanation as Explanation } from "@/lib/match-explanation";
 import { jobSourceLabel } from "@/lib/job-source-label";
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { Heart, Sparkles, Target } from "lucide-react";
+import { Heart, Send, Target, X } from "lucide-react";
 import { motion, AnimatePresence, useMotionValue, useTransform, type PanInfo } from "motion/react";
 import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
@@ -66,9 +66,9 @@ function portalOf(url: string): string {
 
 type DiscoverJob = JobRow & { matchScore?: number | null; explanation?: Explanation };
 
-export function DiscoverHeading({ count }: { count: number }) {
+export function DiscoverHeading({ count, shown = count }: { count: number; shown?: number }) {
   const t = useTranslations("discoverPage");
-  return <header className="workspace-heading"><div><div className="workspace-eyebrow">Discover / LavorAI</div><h1>{t("heading")}</h1><p>{t("subtitle", { count })}</p></div></header>;
+  return <header className="pm-page-head"><div><h1>{t("heading")}</h1><p className="pm-muted">{shown < count ? t("subtitleCapped", { count, shown }) : t("subtitle", { count })}</p></div></header>;
 }
 
 export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
@@ -211,24 +211,27 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
 
   if (!currentJob) {
     const filteredOut = remoteOnly && jobs.some(job => !skipped.has(job.id));
-    return <section className="workspace-panel" style={{ padding: 32, textAlign: "center" }}>
-      <Target size={38} aria-hidden style={{ margin: "0 auto 16px", color: "var(--primary-ds)" }} />
-      <a className="fit-link" href="/discover?dismissed=1">{tr("Annunci esclusi · ripristina", "Dismissed listings · restore")}</a><h2 style={{ fontSize: 22 }}>{filteredOut ? tr("Nessun ruolo remoto in questa selezione", "No remote roles in this selection") : jobs.length === 0 ? tr("Nessuna offerta trovata", "No jobs found") : tr("Hai visto tutte le offerte", "You have reviewed this selection")}</h2>
-      <p className="workspace-muted">{filteredOut ? tr("Ci sono altri ruoli disponibili. Rimuovi il filtro per vederli.", "Other roles are available. Clear the filter to see them.") : tr("Rivedi le preferenze di ricerca o esplora gli annunci disponibili.", "Review your search preferences or explore available listings.")}</p>
-      <div className="workspace-toolbar" style={{ justifyContent: "center", marginTop: 18 }}>
-        {remoteOnly && <button className="ds-btn" onClick={() => setRemoteOnly(false)}>{tr("Mostra tutti i ruoli", "Show all roles")}</button>}
-        <a className="ds-btn ds-btn-primary" href="/preferences">{tr("Modifica preferenze", "Edit preferences")}</a>
-        <a className="ds-btn" href="/jobs">{tr("Esplora annunci", "Browse jobs")}</a>
+    return <section className="pm-card pm-empty discover-empty">
+      <span className="pm-chip-icon"><Target size={16} strokeWidth={1.75} aria-hidden /></span>
+      <h2>{filteredOut ? tr("Nessun ruolo remoto in questa selezione", "No remote roles in this selection") : jobs.length === 0 ? tr("Nessuna offerta in linea con le tue preferenze", "No jobs match your preferences") : tr("Hai visto tutte le offerte", "You have reviewed this selection")}</h2>
+      <p className="pm-muted">{filteredOut ? tr("Ci sono altri ruoli disponibili. Rimuovi il filtro per vederli.", "Other roles are available. Clear the filter to see them.") : tr("Ne cerchiamo di nuove più volte al giorno. Nel frattempo puoi allargare le preferenze o sfogliare tutti gli annunci.", "We look for new roles several times a day. Meanwhile, widen your preferences or browse all listings.")}</p>
+      <div className="discover-empty-actions">
+        {remoteOnly && <button type="button" className="pm-btn-ghost" onClick={() => setRemoteOnly(false)}>{tr("Mostra tutti i ruoli", "Show all roles")}</button>}
+        <a className="pm-btn-primary" href="/preferences">{tr("Modifica preferenze", "Edit preferences")}</a>
+        <a className="pm-btn-ghost" href="/jobs">{tr("Sfoglia gli annunci", "Browse jobs")}</a>
       </div>
+      <a className="pm-link discover-restore" href="/discover?dismissed=1">{tr("Annunci esclusi · ripristina", "Dismissed listings · restore")}</a>
     </section>;
   }
 
   return (
     <>
-      <div className="workspace-toolbar">
-        <button type="button" className={`ds-btn${!remoteOnly ? " ds-btn-primary" : ""}`} aria-pressed={!remoteOnly} onClick={() => setRemoteOnly(false)}>{tr("Tutti i ruoli", "All roles")} ({jobs.length})</button>
-        <button type="button" className={`ds-btn${remoteOnly ? " ds-btn-primary" : ""}`} aria-pressed={remoteOnly} onClick={() => setRemoteOnly(true)}>{tr("Solo remoto", "Remote only")} ({jobs.filter(j => j.remote).length})</button>
-        <a className="ds-btn" href="/preferences"><Icon name="filter" size={13} /> {tr("Preferenze di ricerca", "Search preferences")}</a>
+      <div className="discover-toolbar">
+        <div className="pm-seg" role="group" aria-label={tr("Filtra", "Filter")}>
+          <button type="button" aria-pressed={!remoteOnly} onClick={() => setRemoteOnly(false)}>{tr("Tutti i ruoli", "All roles")} <span className="discover-seg-count">{jobs.length}</span></button>
+          <button type="button" aria-pressed={remoteOnly} onClick={() => setRemoteOnly(true)}>{tr("Solo remoto", "Remote only")} <span className="discover-seg-count">{jobs.filter(j => j.remote).length}</span></button>
+        </div>
+        <a className="pm-btn-ghost" href="/preferences"><Icon name="filter" size={13} /> {tr("Preferenze di ricerca", "Search preferences")}</a>
         <div className="discover-selection"><span>{t("queueRemaining", { count: queue.length })}</span><span>{jobs.filter(j => saved.has(j.id)).length} {tr("salvati su questo dispositivo", "saved on this device")}</span></div>
       </div>
       <div className="discover-layout">
@@ -239,12 +242,12 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
               onSwipe={(dir) => { if (dir === "right") apply(currentJob); else skip(currentJob.id); }}
               onTap={() => setDetailJob(currentJob)} />
           </div>
-          <div className="workspace-toolbar discover-actions">
-            <button type="button" className="ds-btn" onClick={() => skip(currentJob.id)} disabled={!!animatingId} aria-label={tr("Non pertinente", "Not relevant")}><Icon name="x" size={16} /> {tr("Non pertinente", "Not relevant")}</button>
-            <button type="button" className="ds-btn" onClick={() => setDetailJob(currentJob)}>{tr("Dettagli", "Details")}</button>
-            <button type="button" className="ds-btn ds-btn-primary" onClick={() => apply(currentJob)} disabled={!!animatingId} aria-label={t("apply")}><Icon name="send" size={16} /> {t("apply")}</button>
+          <div className="discover-actions">
+            <button type="button" className="pm-btn-ghost" onClick={() => skip(currentJob.id)} disabled={!!animatingId} aria-label={tr("Non pertinente", "Not relevant")}><Icon name="x" size={16} /> {tr("Non pertinente", "Not relevant")}</button>
+            <button type="button" className="pm-btn-ghost" onClick={() => setDetailJob(currentJob)}>{tr("Dettagli", "Details")}</button>
+            <button type="button" className="pm-btn-primary" onClick={() => apply(currentJob)} disabled={!!animatingId} aria-label={t("apply")}><Icon name="send" size={16} /> {t("apply")}</button>
           </div>
-          <p className="workspace-muted" style={{ textAlign: "center" }}>{tr("← esclude questo annuncio · → candidati · esclusioni ripristinabili", "← dismisses this listing · → apply · dismissals can be restored")}</p>
+          <p className="pm-muted discover-hint">{tr("← esclude questo annuncio · → candidati · esclusioni ripristinabili", "← dismisses this listing · → apply · dismissals can be restored")}</p>
         </div>
         <aside className="workspace-stack">
           {currentJob.explanation && <MatchExplanation explanation={currentJob.explanation} en={en} />}
@@ -325,8 +328,9 @@ function SwipeCard({
   onSwipe: (dir: "left" | "right") => void;
   onTap: () => void;
 }) {
+  const en = useLocale() === "en";
   const x = useMotionValue(0);
-  const rotate = useTransform(x, [-200, 0, 200], [-14, 0, 14]);
+  const rotate = useTransform(x, [-200, 0, 200], [-8, 0, 8]);
   // Overlay verde/rosso che appare quando draggi
   const applyOverlayOpacity = useTransform(x, [0, 120], [0, 1]);
   const skipOverlayOpacity = useTransform(x, [-120, 0], [1, 0]);
@@ -343,7 +347,7 @@ function SwipeCard({
   const exitAnimation = isAnimatingOut
     ? {
         x: animDir === "right" ? 600 : animDir === "left" ? -600 : 0,
-        rotate: animDir === "right" ? 25 : animDir === "left" ? -25 : 0,
+        rotate: animDir === "right" ? 12 : animDir === "left" ? -12 : 0,
         opacity: 0,
       }
     : {};
@@ -368,49 +372,12 @@ function SwipeCard({
       whileTap={{ cursor: "grabbing" }}
     >
       <JobCardSurface job={job} isSaved={isSaved} onToggleSave={onToggleSave}>
-        {/* Overlay "APPLY" verde quando draghi a destra */}
-        <motion.div
-          aria-hidden
-          style={{
-            position: "absolute",
-            top: 24,
-            left: 24,
-            padding: "8px 16px",
-            border: "3px solid hsl(var(--primary))",
-            color: "hsl(var(--primary))",
-            fontWeight: 700,
-            fontSize: 18,
-            letterSpacing: "0.08em",
-            borderRadius: 8,
-            transform: "rotate(-12deg)",
-            opacity: applyOverlayOpacity,
-            background: "hsl(var(--primary) / 0.1)",
-            pointerEvents: "none",
-          }}
-        >
-          APPLY <Sparkles size={16} aria-hidden style={{ display: "inline-block", verticalAlign: "-0.15em", marginLeft: 4 }} />
+        {/* Drag hints: hairline labels, fade in with the drag distance */}
+        <motion.div aria-hidden className="discover-stamp is-apply" style={{ opacity: applyOverlayOpacity }}>
+          <Send size={13} strokeWidth={2} aria-hidden /> {en ? "Apply" : "Candidati"}
         </motion.div>
-        {/* Overlay "SKIP" rosso/grigio quando draghi a sinistra */}
-        <motion.div
-          aria-hidden
-          style={{
-            position: "absolute",
-            top: 24,
-            right: 24,
-            padding: "8px 16px",
-            border: "3px solid var(--fg-subtle)",
-            color: "var(--fg-muted)",
-            fontWeight: 700,
-            fontSize: 18,
-            letterSpacing: "0.08em",
-            borderRadius: 8,
-            transform: "rotate(12deg)",
-            opacity: skipOverlayOpacity,
-            background: "var(--bg-sunken)",
-            pointerEvents: "none",
-          }}
-        >
-          SKIP
+        <motion.div aria-hidden className="discover-stamp is-skip" style={{ opacity: skipOverlayOpacity }}>
+          <X size={13} strokeWidth={2} aria-hidden /> {en ? "Skip" : "Salta"}
         </motion.div>
       </JobCardSurface>
     </motion.div>
@@ -552,9 +519,9 @@ function JobCardSurface({
     {onToggleSave && <button type="button" className="discover-save" aria-pressed={isSaved} aria-label={isSaved ? tr("Rimuovi dai preferiti", "Remove from saved") : tr("Salva nei preferiti", "Save job")}
       onClick={e => { e.stopPropagation(); onToggleSave(); }} onPointerDown={e => e.stopPropagation()}><Heart size={18} fill={isSaved ? "currentColor" : "none"} /></button>}
     <div>
-      {job.matchScore != null && <span className="workspace-chip" style={{ marginBottom: 10 }}>{job.matchScore}% {tr("match stimato dal CV", "estimated CV match")}</span>}
+      {job.matchScore != null && <span className="discover-match" title={tr("Stima dal CV, non una valutazione del recruiter", "CV-based estimate, not a recruiter assessment")}><b>{job.matchScore}%</b> {tr("match stimato dal CV", "estimated CV match")}</span>}
       <h2>{job.title}</h2>
-      <p style={{ marginTop: 8, color: salary ? "var(--primary-ds)" : "var(--fg-muted)" }}>{salary || tr("Retribuzione non indicata", "Salary not specified")}</p>
+      <p className={`discover-salary${salary ? "" : " is-missing"}`}>{salary || tr("Retribuzione non indicata", "Salary not specified")}</p>
     </div>
     <div className="discover-tags">
       {job.remote && <span>{tr("Remoto", "Remote")}</span>}

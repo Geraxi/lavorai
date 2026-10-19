@@ -26,6 +26,7 @@ export type JourneyStage =
   | "approved"
   | "manual"
   | "in_flight"
+  | "submitted"
   | "sent"
   | "unverified"
   | "stopped";
@@ -64,7 +65,22 @@ export const STAGE_LABEL: Record<JourneyStage, { it: string; en: string; hint: {
   approved: { it: "Approvate", en: "Approved", hint: { it: "In coda di invio", en: "Queued for sending" } },
   manual: { it: "Da completare", en: "Needs your action", hint: { it: "Risposte, accesso o invio manuale", en: "Answers, sign-in or manual sending" } },
   in_flight: { it: "Invio in corso", en: "Sending", hint: { it: "In attesa dell'esito", en: "Waiting for the outcome" } },
+  submitted: { it: "Inviate, consegna in attesa", en: "Sent, delivery pending", hint: { it: "Accettate dal provider email, consegna non ancora confermata", en: "Accepted by the email provider, delivery not confirmed yet" } },
   sent: { it: "Inviate con prova", en: "Sent with evidence", hint: { it: "Ricevuta ATS o consegna email", en: "ATS receipt or email delivery" } },
   unverified: { it: "Esito da verificare", en: "Outcome unverified", hint: { it: "Nessuna prova di consegna", en: "No delivery evidence" } },
   stopped: { it: "Non inviate", en: "Not sent", hint: { it: "Fermate prima dell'invio", en: "Stopped before sending" } },
+};
+
+/** Singular label for one application row (lists, tables, drawers). */
+export const STAGE_ROW_LABEL: Record<JourneyStage, { it: string; en: string }> = {
+  preparing: { it: "In preparazione", en: "Being prepared" },
+  prepared: { it: "Pronta da rivedere", en: "Ready to review" },
+  awaiting_approval: { it: "Da approvare", en: "Awaiting approval" },
+  approved: { it: "Approvata", en: "Approved" },
+  manual: { it: "Da completare", en: "Needs your action" },
+  in_flight: { it: "Invio in corso", en: "Sending" },
+  submitted: { it: "Inviata, consegna in attesa", en: "Sent, delivery pending" },
+  sent: { it: "Consegna confermata", en: "Delivery confirmed" },
+  unverified: { it: "Esito da verificare", en: "Outcome unverified" },
+  stopped: { it: "Non inviata", en: "Not sent" },
 };

@@ -1,6 +1,8 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { applicationDeliveryView } from "./application-delivery-view";
 import { pipelineLane, type PipelineLane } from "./application-pipeline";
+import { applicationStage, isInterviewEvidence } from "./application-stage";
+import type { JourneyStage } from "./ui-application-status";
 
 export const evidenceSelect = {
   id: true, createdAt: true, status: true, userStatus: true, lastReplyKind: true,
@@ -10,7 +12,7 @@ export const evidenceSelect = {
 } satisfies Prisma.ApplicationSelect;
 
 type Database = Pick<PrismaClient, "application" | "$queryRaw">;
-export type IndexRow = { id: string; stage: PipelineLane; pending: boolean; confirmed: boolean; interview: boolean; offer: boolean };
+export type IndexRow = { id: string; stage: PipelineLane; journey: JourneyStage | null; pending: boolean; confirmed: boolean; interview: boolean; offer: boolean };
 type Entry = { revision: string; expires: number; rows: Promise<IndexRow[] | null>; size: number };
 const caches = new WeakMap<Database, Map<string, Entry>>();
 const MAX_ROWS = 50_000;
@@ -44,6 +46,19 @@ export function applicationIndexRevisionQuery(filter: { userId: string; since: D
         (j.title ILIKE ${pattern} OR j.company ILIKE ${pattern} OR j.location ILIKE ${pattern}))` : Prisma.empty}`;
 }
 
+/** Canonical per-row classification shared by the cached index and the cold
+ * fallback scan. Journey stage, confirmation and interview evidence come from
+ * the shared stage rules (src/lib/application-stage.ts, re-exported by
+ * dashboard-metrics-shared), so Candidature counts match the dashboard. */
+export function indexRow(app: { id: string; status: string; userStatus: string | null; lastReplyKind: string | null; submittedVia: string | null;
+  submitConfirmation: string | null; submissionReceiptJson: string | null; emailAttempts: { status: string; providerEmailId: string | null }[] },
+  delivery: ReturnType<typeof applicationDeliveryView>): IndexRow {
+  const journey = applicationStage(app);
+  return { id: app.id, stage: pipelineLane({ ...app, delivery }), journey,
+    pending: !["confirmed", "delivered", "manual"].includes(delivery.phase),
+    confirmed: journey === "sent", interview: isInterviewEvidence(app), offer: app.userStatus === "offerta" };
+}
+
 /** Cache compact IDs/classifications only, isolated by client, owner and filters.
  * Pages, view and lane deliberately share the same verified index. A cold
  * instance is correct; concurrent fills coalesce; failures are never cached. */
@@ -74,8 +89,7 @@ export async function applicationListIndex(db: Database, where: Prisma.Applicati
       }] } : where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: EVIDENCE_BATCH_SIZE, select: evidenceSelect });
       for (const app of batch) {
         const delivery = applicationDeliveryView(app);
-        rows.push({ id: app.id, stage: pipelineLane({ ...app, delivery }), pending: !["confirmed", "delivered", "manual"].includes(delivery.phase),
-          confirmed: ["confirmed", "delivered"].includes(delivery.phase), interview: app.userStatus === "colloquio", offer: app.userStatus === "offerta" });
+        rows.push(indexRow(app, delivery));
       }
       // Concurrent inserts cannot let a cache entry grow without bound.
       if (rows.length > MAX_ROWS) { if (cache.get(key) === entry) cache.delete(key); return null; }

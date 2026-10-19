@@ -6,12 +6,11 @@ import { AppTopbar } from "@/components/design/topbar";
 import { JobSwiper, DiscoverHeading } from "@/components/job-swiper";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
-import { rowToProfile } from "@/lib/cv-profile-types";
 import { discoverMatchScore } from "@/lib/discover-match-score";
-import { quickMatchScore } from "@/lib/match-score";
-import { titleMatchesAnyRole } from "@/lib/role-match";
+import { getMatchingOpportunities } from "@/lib/dashboard-metrics-shared";
+import "./discover.css";
 
-export const metadata: Metadata = { title: "Discover" };
+export const metadata: Metadata = { title: "Scopri" };
 export const dynamic = "force-dynamic";
 
 /**
@@ -34,88 +33,9 @@ export default async function DiscoverPage({ searchParams }: { searchParams?: Pr
     return <><AppTopbar title={t("title")} /><div className="workspace-page"><DismissedJobs jobs={dismissed.map(d => d.job)} en={(await getLocale()) === "en"} /></div></>;
   }
 
-  const [prefs, full] = await Promise.all([
-    prisma.userPreferences.findUnique({
-      where: { userId: user.id },
-      select: {
-        rolesJson: true,
-        locationsJson: true,
-        salaryMin: true,
-        matchMin: true,
-      },
-    }),
-    prisma.user.findUnique({
-      where: { id: user.id },
-      select: {
-        avoidCompanies: true,
-        cvProfile: true,
-      },
-    }),
-  ]);
-
-  // Parse user preferences
-  const prefRoles: string[] = (() => {
-    try {
-      const arr = JSON.parse(prefs?.rolesJson ?? "[]");
-      return Array.isArray(arr)
-        ? arr.filter((x) => typeof x === "string")
-        : [];
-    } catch {
-      return [];
-    }
-  })();
-  const userSalaryMin = prefs?.salaryMin ?? 0;
-  const matchMin = prefs?.matchMin ?? 0;
-  const avoidSet = new Set(
-    (full?.avoidCompanies ?? "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean),
-  );
-  const userProfile = full?.cvProfile ? rowToProfile(full.cvProfile) : null;
-
-  // Pesca dalla cache: ultimi 14 giorni, fino a 300 job, ordinati per data
-  const jobsRaw = await prisma.job.findMany({
-    where: {
-      closedAt: null,
-      dismissals: { none: { userId: user.id } },
-      cachedAt: { gte: new Date(Date.now() - 14 * 86400_000) },
-      source: {
-        in: ["greenhouse", "lever", "ashby", "smartrecruiters", "linkedin"],
-      },
-      // Escludi job già candidati dall'utente
-      NOT: {
-        applications: {
-          some: {
-            userId: user.id,
-            status: { in: ["success", "queued", "optimizing", "applying"] },
-          },
-        },
-      },
-    },
-    orderBy: { postedAt: "desc" },
-    take: 300,
-  });
-
-  // Applica gli stessi filtri di /jobs
-  const jobs = jobsRaw
-    .filter((j) => {
-      if (prefRoles.length > 0 && !titleMatchesAnyRole(j.title, prefRoles))
-        return false;
-      if (j.company && avoidSet.has(j.company.toLowerCase())) return false;
-      if (userSalaryMin) {
-        const top = j.salaryMax ?? j.salaryMin ?? 0;
-        if (top > 0 && top < userSalaryMin) return false;
-      }
-      if (matchMin > 0 && userProfile) {
-        const score = quickMatchScore(
-          userProfile,
-          `${j.title}\n${j.company ?? ""}\n${j.description}`,
-        );
-        if (score < matchMin) return false;
-      }
-      return true;
-    })
+  // Same definition as the Dashboard "Scopri" card (dashboard-metrics-shared).
+  const { total, jobs: matching, profile: userProfile } = await getMatchingOpportunities(user.id);
+  const jobs = matching
     .slice(0, 50)
     .map((j) => ({
       explanation: explainMatch(userProfile, j.description),
@@ -136,8 +56,8 @@ export default async function DiscoverPage({ searchParams }: { searchParams?: Pr
   return (
     <>
       <AppTopbar title={t("title")} breadcrumb={t("breadcrumb")} />
-      <div className="workspace-page workspace-discover">
-        <DiscoverHeading count={jobs.length} />
+      <div className="workspace-page workspace-discover pm-discover">
+        <DiscoverHeading count={total} shown={jobs.length} />
 
         <JobSwiper jobs={jobs} />
       </div>

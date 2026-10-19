@@ -3,7 +3,10 @@ import { applicationDeliveryView } from "./application-delivery-view";
 import { pipelineLane, type PipelineLane } from "./application-pipeline";
 import { APPLICATION_LANES, BOARD_PAGE_SIZE, TABLE_PAGE_SIZE, pageWindow } from "./application-pagination";
 
-import { applicationListIndex, evidenceSelect } from "./application-list-index";
+import { applicationListIndex, evidenceSelect, indexRow, type IndexRow } from "./application-list-index";
+import { applicationStage, emptyStageCounts, needsUserAction } from "./application-stage";
+import type { JourneyStage } from "./ui-application-status";
+import { STAGE_LABEL } from "./ui-application-status";
 
 const detailSelect = {
   ...evidenceSelect, portal: true, errorMessage: true, atsScore: true, suggestionsJson: true,
@@ -27,7 +30,7 @@ function serialize(a: Detail) {
     hasCvPdf: Boolean(a.cvPdfPath), cvLanguage: a.cvLanguage, userStatus: a.userStatus,
     viewedAt: a.viewedAt?.toISOString() ?? null, submittedVia: a.submittedVia, submittedAt: a.submittedAt?.toISOString() ?? null,
     lastReplyAt: a.lastReplyAt?.toISOString() ?? null, replyCount: a.replyCount, lastReplyKind: a.lastReplyKind,
-    submitConfirmation: a.submitConfirmation, delivery: applicationDeliveryView(a),
+    submitConfirmation: a.submitConfirmation, delivery: applicationDeliveryView(a), stage: applicationStage(a),
     deliveryRecipient: a.emailAttempts[0]?.recipient ?? null, job: a.job,
   };
 }
@@ -49,7 +52,7 @@ const before = (cursor: { createdAt: Date; id: string }): Prisma.ApplicationWher
   OR: [{ createdAt: { lt: cursor.createdAt } }, { createdAt: cursor.createdAt, id: { lt: cursor.id } }],
 });
 
-async function exportPage(db: Pick<PrismaClient, "application">, where: Prisma.ApplicationWhereInput, lane: PipelineLane | "all", asOf: Date, after: ExportCursor | null) {
+async function exportPage(db: Pick<PrismaClient, "application">, where: Prisma.ApplicationWhereInput, lane: PipelineLane | "all", journey: JourneyStage | "action" | "all", asOf: Date, after: ExportCursor | null) {
   let cursor = after ? { createdAt: new Date(after.createdAt), id: after.id } : undefined;
   const ids: string[] = [];
   let nextCursor: string | null = null;
@@ -58,7 +61,7 @@ async function exportPage(db: Pick<PrismaClient, "application">, where: Prisma.A
       orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100, select: evidenceSelect });
     for (const app of batch) {
       cursor = app;
-      if (lane === "all" || pipelineLane({ ...app, delivery: applicationDeliveryView(app) }) === lane) ids.push(app.id);
+      if ((lane === "all" || pipelineLane({ ...app, delivery: applicationDeliveryView(app) }) === lane) && journeyMatches(journey, applicationStage(app))) ids.push(app.id);
       if (ids.length === 50) {
         nextCursor = Buffer.from(JSON.stringify({ createdAt: app.createdAt.toISOString(), id: app.id, asOf: asOf.toISOString() })).toString("base64url");
         break;
@@ -69,6 +72,11 @@ async function exportPage(db: Pick<PrismaClient, "application">, where: Prisma.A
   const details = ids.length ? await db.application.findMany({ where: { ...where, id: { in: ids } }, select: detailSelect, take: ids.length }) : [];
   const byId = new Map(details.map(app => [app.id, app]));
   return { applications: ids.flatMap(id => { const app = byId.get(id); return app ? [serialize(app)] : []; }), nextCursor };
+}
+
+const JOURNEY_FILTERS = Object.keys(STAGE_LABEL) as JourneyStage[];
+function journeyMatches(filter: JourneyStage | "action" | "all", stage: JourneyStage | null) {
+  return filter === "all" || (filter === "action" ? needsUserAction(stage) : stage === filter);
 }
 
 /** Read-only, owner-scoped pagination. Stage membership needs the canonical
@@ -91,6 +99,8 @@ export async function listApplications(db: Pick<PrismaClient, "application"> & P
     : range === "month" ? new Date(asOf.getTime() - 30 * 86400_000) : null;
   const search = (params.get("search") ?? "").trim().slice(0, 200);
   const lane = APPLICATION_LANES.includes(params.get("lane") as PipelineLane) ? params.get("lane") as PipelineLane : "all";
+  const stageParam = params.get("stage");
+  const journey: JourneyStage | "action" | "all" = stageParam === "action" ? "action" : JOURNEY_FILTERS.includes(stageParam as JourneyStage) ? stageParam as JourneyStage : "all";
   const view = params.get("view") === "board" ? "board" : params.get("view") === "attention" ? "attention" : "table";
   const size = view === "table" ? positiveInteger(params.get("pageSize"), TABLE_PAGE_SIZE, 50) : BOARD_PAGE_SIZE;
   const where: Prisma.ApplicationWhereInput = {
@@ -98,17 +108,23 @@ export async function listApplications(db: Pick<PrismaClient, "application"> & P
     ...(params.get("includeAll") === "1" ? { status: { not: "diagnostic" } } : { status: "success", submittedVia: { not: null } }),
     ...(search ? { job: { OR: ["company", "title", "location"].map(field => ({ [field]: { contains: search, mode: "insensitive" } })) } } : {}),
   };
-  if (exporting) return exportPage(db, where, lane, asOf, after);
+  if (exporting) return exportPage(db, where, lane, journey, asOf, after);
   const windows = Object.fromEntries(APPLICATION_LANES.map(key => [key, pageWindow(positiveInteger(params.get(`${key}Page`), 1), BOARD_PAGE_SIZE)])) as Record<PipelineLane, ReturnType<typeof pageWindow>>;
   const table = pageWindow(positiveInteger(params.get("page"), 1), size);
-  const summary = { confirmed: 0, attention: 0, interviews: 0, offers: 0, pending: 0 };
-  const add = (row: { id: string; stage: PipelineLane; pending: boolean; confirmed: boolean; interview: boolean; offer: boolean }) => {
+  // Counts ignore the lane/stage filters (they label the filter chips) but
+  // respect range and search. With range "all" and no search they equal the
+  // dashboard's shared metrics (same per-row rules).
+  const summary = { confirmed: 0, attention: 0, interviews: 0, offers: 0, pending: 0, actionNeeded: 0, total: 0, stages: emptyStageCounts() };
+  const add = (row: IndexRow) => {
+    if (row.journey) { summary.stages[row.journey]++; summary.total++; }
+    if (needsUserAction(row.journey)) summary.actionNeeded++;
     if (row.confirmed) summary.confirmed++;
     if (row.stage === "attention") summary.attention++;
     if (row.interview) summary.interviews++;
     if (row.offer) summary.offers++;
-    if (row.pending && (lane === "all" || lane === row.stage)) summary.pending++;
-    if (lane === "all" || lane === row.stage) {
+    const visible = (lane === "all" || lane === row.stage) && journeyMatches(journey, row.journey);
+    if (row.pending && visible) summary.pending++;
+    if (visible) {
       windows[row.stage].add(row.id);
       if (view !== "attention" || row.pending) table.add(row.id);
     }
@@ -124,11 +140,7 @@ export async function listApplications(db: Pick<PrismaClient, "application"> & P
         orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 100, select: evidenceSelect,
       });
       for (const app of batch) {
-        const delivery = applicationDeliveryView(app);
-        add({ id: app.id, stage: pipelineLane({ ...app, delivery }),
-          pending: !["confirmed", "delivered", "manual"].includes(delivery.phase),
-          confirmed: ["confirmed", "delivered"].includes(delivery.phase),
-          interview: app.userStatus === "colloquio", offer: app.userStatus === "offerta" });
+        add(indexRow(app, applicationDeliveryView(app)));
       }
       if (batch.length < 100) break;
       cursor = batch[batch.length - 1];

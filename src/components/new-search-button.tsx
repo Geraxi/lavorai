@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Icon } from "@/components/design/icon";
+import { Plus } from "lucide-react";
 import { NewSearchDialog } from "@/components/new-search-dialog";
 
 export function NewSearchButton({ locale = "it" }: { locale?: string }) {
@@ -10,10 +10,10 @@ export function NewSearchButton({ locale = "it" }: { locale?: string }) {
     <>
       <button
         type="button"
-        className="ds-btn"
+        className="ds-btn pm-topbar-btn"
         onClick={() => setOpen(true)}
       >
-        <Icon name="plus" size={14} /> {locale === "en" ? "New search" : "Nuova ricerca"}
+        <Plus size={14} strokeWidth={1.75} aria-hidden /> {locale === "en" ? "New search" : "Nuova ricerca"}
       </button>
       <NewSearchDialog locale={locale} open={open} onClose={() => setOpen(false)} />
     </>

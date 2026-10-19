@@ -57,7 +57,8 @@ export type IconName =
   | "reply"
   | "corner-up-right"
   | "trash-2"
-  | "file-text";
+  | "file-text"
+  | "alert-circle";
 
 export interface IconProps extends Omit<SVGProps<SVGSVGElement>, "name"> {
   name: IconName;
@@ -434,6 +435,14 @@ export function Icon({ name, size = 16, ...rest }: IconProps) {
       return (
         <svg {...common}>
           <path d="M12 5v14M19 12l-7 7-7-7" />
+        </svg>
+      );
+    case "alert-circle":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v4" />
+          <path d="M12 16h.01" />
         </svg>
       );
     default:

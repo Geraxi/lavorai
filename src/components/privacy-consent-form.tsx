@@ -21,11 +21,11 @@ export function PrivacyConsentForm({ recorded, locale = "it" }: { recorded: bool
     } catch { setError(true); }
     finally { inFlight.current = false; setBusy(false); }
   }
-  return <form onSubmit={submit} className="flex flex-col gap-4">
+  return <form onSubmit={submit} className="flex flex-col gap-3 pm-form-text">
     <p>{en ? "Application processing requires your privacy consent. Saving it does not grant consent for a specific application or confirm delivery. Previously consented queued applications remain subject to all delivery checks."
       : "Per elaborare le candidature serve il tuo consenso privacy. Salvarlo non autorizza una specifica candidatura e non conferma un invio. Le candidature già autorizzate e in coda restano soggette a tutti i controlli di invio."}</p>
-    <a href="/privacy" className="underline">{en ? "Read the privacy notice" : "Leggi l’informativa privacy"}</a>
-    {saved ? <p role="status">{en ? "Privacy consent recorded." : "Consenso privacy registrato."}</p> : <>
+    <a href="/privacy" className="pm-link">{en ? "Read the privacy notice" : "Leggi l’informativa privacy"}</a>
+    {saved ? <p role="status" className="pm-status-ok"><span className="pm-dot tone-green" aria-hidden /> {en ? "Privacy consent recorded." : "Consenso privacy registrato."}</p> : <>
       <label className="flex items-start gap-3"><input type="checkbox" checked={checked} onChange={event => setChecked(event.target.checked)} disabled={busy} />
         <span>{en ? "I have read the privacy notice and consent to the processing of my personal data for the LavorAI service." : "Ho letto l’informativa privacy e acconsento al trattamento dei miei dati personali per il servizio LavorAI."}</span></label>
       <button className="ds-btn self-start" type="submit" disabled={!checked || busy}>{busy ? (en ? "Saving…" : "Salvataggio…") : (en ? "Save privacy consent" : "Salva consenso privacy")}</button>

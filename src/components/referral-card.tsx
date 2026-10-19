@@ -98,7 +98,7 @@ export function ReferralCard() {
               <button
                 type="button"
                 onClick={copyLink}
-                className="ds-btn ds-btn-accent"
+                className="ds-btn"
                 style={{ padding: "8px 14px", fontSize: 13, flexShrink: 0 }}
               >
                 <Icon name="check" size={12} /> Copia
@@ -154,7 +154,7 @@ function Stat({
         style={{
           fontSize: 22,
           fontWeight: 700,
-          color: tone === "good" ? "hsl(var(--primary))" : "var(--fg)",
+          color: "var(--fg)",
           marginTop: 2,
           fontFeatureSettings: '"tnum"',
         }}

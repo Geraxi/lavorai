@@ -128,15 +128,20 @@
     "confirmMessage": "LavorAI preparerà CV e lettera su misura per ogni annuncio. Le candidature seguono la modalità di invio scelta nelle preferenze.",
     "confirmAll": "Candidati a tutte",
     "cancel": "Annulla",
-    "toastSent": "{count} inviate",
+    "toastSent": "{count} in coda",
     "toastAwaitingConsent": "{count} in attesa consenso",
     "toastSkippedMatch": "{count} saltate (match < {pct}%)",
     "toastRemaining": "{count} rimaste nel piano",
     "noneSent": "Nessuna candidatura inviata.",
-    "batchProgress": "Batch {current}/{total} · {sent} inviate"
+    "batchProgress": "Batch {current}/{total} · {sent} inviate",
+    "listLabel": "Offerte",
+    "queuedNote": "{count, plural, =1 {1 richiesta salvata} other {# richieste salvate}}: le trovi in Candidature.",
+    "noSalary": "RAL non indicata",
+    "details": "Dettagli",
+    "alreadyApplied": "Già candidato"
   },
   "jobsPage": {
-    "title": "Job board",
+    "title": "Offerte di lavoro",
     "breadcrumb": "Lavoro",
     "compatiblePositions": "{count} posizioni compatibili",
     "matchAtLeast": "match ≥ {pct}%",
@@ -148,7 +153,18 @@
     "remoteOnly": "Solo remoto",
     "search": "Cerca",
     "noResults": "Nessun annuncio trovato",
-    "noResultsHint": "Prova a rimuovere qualche filtro o a modificare le tue preferenze."
+    "noResultsHint": "Prova a rimuovere qualche filtro o a modificare le tue preferenze.",
+    "forYouCount": "{count, plural, =0 {Nessuna offerta in linea con le tue preferenze} =1 {1 offerta in linea con le tue preferenze} other {# offerte in linea con le tue preferenze}}, ultimi 14 giorni · stesso conteggio di Dashboard e Scopri",
+    "forYouLabel": "Per te",
+    "searchLabel": "Risultati della ricerca",
+    "searchCount": "{count, plural, =1 {1 risultato} other {# risultati}} per la tua ricerca",
+    "forYouTab": "Per te",
+    "searchTab": "Cerca",
+    "modeLabel": "Vista",
+    "protectedLabel": "Categorie protette (L. 68/99)",
+    "noForYou": "Nessuna offerta in linea con le tue preferenze",
+    "noForYouHint": "Allarga ruoli, retribuzione o soglia di match, oppure cerca tra tutti gli annunci.",
+    "forYouDefinition": "«Per te»: annunci aperti aggiornati negli ultimi 14 giorni da portali supportati, non esclusi e non già candidati, filtrati per ruoli, aziende escluse, retribuzione e match minimo. La ricerca usa invece i tuoi criteri e può includere altri annunci."
   },
   "appShell": {
     "sectionWork": "Lavoro",
@@ -167,13 +183,13 @@
     "discover": "Discover"
   },
   "discoverPage": {
-    "title": "Discover",
+    "title": "Scopri",
     "breadcrumb": "Lavoro",
     "heading": "Scorri le opportunità",
-    "subtitle": "{count} offerte filtrate per te. Swipe a destra per candidarti, a sinistra per saltare.",
+    "subtitle": "{count, plural, =0 {Nessuna offerta in linea con le tue preferenze} =1 {1 offerta in linea con le tue preferenze} other {# offerte in linea con le tue preferenze}}, ultimi 14 giorni.",
     "apply": "Candidati",
     "skip": "Salta",
-    "hintKeyboard": "← skip · → candidati · oppure trascina la card",
+    "hintKeyboard": "← salta · → candidati · oppure trascina la card",
     "queueRemaining": "{count} ancora in coda",
     "emptyTitle": "Fine della coda!",
     "emptyBody": "Hai visto tutte le offerte disponibili per ora. Ne cerchiamo di nuove più volte al giorno: torna più tardi.",
@@ -183,7 +199,8 @@
     "networkError": "Errore di rete.",
     "applied": "Richiesta di candidatura salvata per {title}. Controlla lo stato in Candidature.",
     "fullDescription": "Descrizione completa",
-    "openOriginal": "Apri annuncio originale"
+    "openOriginal": "Apri annuncio originale",
+    "subtitleCapped": "{count} offerte in linea con le tue preferenze, ultimi 14 giorni. Qui le {shown} più recenti."
   },
   "pricing": {
     "eyebrow": "Prezzi",

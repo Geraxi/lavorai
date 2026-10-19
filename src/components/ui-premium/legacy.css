@@ -1,0 +1,124 @@
+/*
+ * Premium layer for legacy design-system primitives (ds-btn, ds-section-card,
+ * ds-input, ds-chip) still used by the Profilo/Lavoro pages that were not
+ * rebuilt on ui-premium components. Loaded after shell.css; scoped to the app
+ * shell so marketing pages keep their look. Uses --pm-* tokens, so the light
+ * theme follows the token overrides in premium.css.
+ */
+.lavorai-app-shell.product-workspace .ds-btn {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  transform: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.lavorai-app-shell.product-workspace .ds-btn:not(.ds-btn-primary):not(.ds-btn-accent) {
+  background: transparent;
+  border: 1px solid var(--pm-line);
+  color: var(--pm-fg-2);
+  box-shadow: none;
+}
+.lavorai-app-shell.product-workspace .ds-btn:not(.ds-btn-primary):not(.ds-btn-accent):hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--pm-fg);
+  transform: none;
+  box-shadow: none;
+}
+.lavorai-app-shell.product-workspace :is(.ds-btn-primary, .ds-btn-accent) {
+  background: var(--pm-green);
+  border: 1px solid transparent;
+  color: #07130d;
+  box-shadow: none;
+  filter: none;
+}
+.lavorai-app-shell.product-workspace :is(.ds-btn-primary, .ds-btn-accent):hover {
+  background: #52d89b;
+  color: #07130d;
+  box-shadow: none;
+  transform: none;
+}
+.lavorai-app-shell.product-workspace :is(.ds-btn-primary, .ds-btn-accent):disabled { opacity: 0.55; }
+.lavorai-app-shell.product-workspace .ds-btn-danger,
+.lavorai-app-shell.product-workspace .ds-btn.is-danger { color: #f08b8b; border-color: rgba(240, 139, 139, 0.3); }
+
+.lavorai-app-shell.product-workspace .ds-section-card {
+  background: var(--pm-card);
+  border: 1px solid var(--pm-line);
+  border-radius: 14px;
+  box-shadow: var(--pm-highlight);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.lavorai-app-shell.product-workspace .ds-section-card:hover { transform: none; box-shadow: var(--pm-highlight); }
+.lavorai-app-shell.product-workspace .ds-section-head { padding: 14px 20px; border-bottom: 1px solid var(--pm-line); }
+.lavorai-app-shell.product-workspace .ds-section-head-title { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--pm-fg); }
+.lavorai-app-shell.product-workspace .ds-section-head-title svg { color: var(--pm-muted); }
+
+.lavorai-app-shell.product-workspace :is(.ds-input, .ds-select, .ds-textarea) {
+  background: var(--pm-inset);
+  border: 1px solid var(--pm-line);
+  border-radius: 8px;
+  color: var(--pm-fg);
+  box-shadow: none;
+  font-size: 13px;
+}
+.lavorai-app-shell.product-workspace :is(.ds-input, .ds-select, .ds-textarea)::placeholder { color: var(--pm-faint); }
+.lavorai-app-shell.product-workspace :is(.ds-input, .ds-select, .ds-textarea):focus {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
+  outline: none;
+}
+[data-theme="light"] .lavorai-app-shell.product-workspace :is(.ds-input, .ds-select, .ds-textarea):focus { border-color: rgba(15, 16, 18, 0.25); }
+
+.lavorai-app-shell.product-workspace .ds-chip {
+  background: transparent;
+  border: 1px solid var(--pm-line);
+  color: var(--pm-fg-2);
+  box-shadow: none;
+  font-weight: 500;
+}
+.lavorai-app-shell.product-workspace .ds-chip-green { color: var(--pm-green); border-color: rgba(62, 207, 142, 0.3); background: transparent; }
+.lavorai-app-shell.product-workspace .ds-chip-amber { color: var(--pm-amber); border-color: rgba(240, 180, 80, 0.3); background: transparent; }
+.lavorai-app-shell.product-workspace .ds-chip-red { color: #f08b8b; border-color: rgba(240, 139, 139, 0.3); background: transparent; }
+.lavorai-app-shell.product-workspace .ds-chip-blue { color: var(--pm-fg-2); border-color: var(--pm-line); background: transparent; }
+
+/* Legacy page headings (workspace-heading / eyebrow) */
+.lavorai-app-shell.product-workspace .workspace-eyebrow { color: var(--pm-faint); letter-spacing: 0.04em; font-weight: 500; }
+
+.lavorai-app-shell .pm-form-text p, .lavorai-app-shell .pm-form-text label { margin: 0; font-size: 13px; line-height: 1.55; color: var(--pm-fg-2); }
+.lavorai-app-shell .pm-status-ok { display: inline-flex; align-items: center; gap: 8px; color: var(--pm-fg-2); }
+.lavorai-app-shell .pm-form-text input[type="checkbox"] { accent-color: var(--pm-green); margin-top: 3px; }
+
+/* Saved state of a save button: quiet status, not a CTA. */
+.lavorai-app-shell.product-workspace .ds-btn.pm-saved:disabled { opacity: 1; color: var(--pm-muted); border-color: var(--pm-line); background: transparent; cursor: default; }
+.lavorai-app-shell.product-workspace .ds-btn.pm-saved svg { color: var(--pm-green); }
+
+/* Segmented toggle groups */
+.lavorai-app-shell.product-workspace .ds-toggle-group { background: var(--pm-inset); border: 1px solid var(--pm-line); border-radius: 8px; padding: 2px; gap: 2px; }
+.lavorai-app-shell.product-workspace .ds-toggle-group button { border-radius: 6px; color: var(--pm-muted); font-size: 12px; min-height: 28px; }
+.lavorai-app-shell.product-workspace .ds-toggle-group button:hover { color: var(--pm-fg-2); }
+.lavorai-app-shell.product-workspace .ds-toggle-group button.active { background: rgba(255, 255, 255, 0.08); color: var(--pm-fg); box-shadow: var(--pm-highlight); }
+[data-theme="light"] .lavorai-app-shell.product-workspace .ds-toggle-group button.active { background: #ffffff; box-shadow: 0 1px 2px rgba(15, 16, 18, 0.08); }
+
+/* Choice cards (e.g. Preferenze → Come candidarsi): neutral selection + green dot. */
+.lavorai-app-shell .pm-choice { position: relative; text-align: left; padding: 12px 14px; border: 1px solid var(--pm-line); border-radius: 10px; background: transparent; color: var(--pm-fg-2); cursor: pointer; transition: border-color .15s, background .15s; }
+.lavorai-app-shell .pm-choice:hover { border-color: rgba(255, 255, 255, 0.14); }
+.lavorai-app-shell .pm-choice.is-active { border-color: rgba(255, 255, 255, 0.24); background: rgba(255, 255, 255, 0.03); color: var(--pm-fg); }
+.lavorai-app-shell .pm-choice.is-active::after { content: ""; position: absolute; top: 14px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--pm-green); }
+[data-theme="light"] .lavorai-app-shell .pm-choice.is-active { border-color: rgba(15, 16, 18, 0.3); background: rgba(15, 16, 18, 0.02); }
+
+/* File picker (CV upload) */
+.lavorai-app-shell .pm-file { position: relative; display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border: 1px dashed rgba(255, 255, 255, 0.14); border-radius: 10px; background: var(--pm-inset); color: var(--pm-muted); font-size: 13px; cursor: pointer; transition: border-color .15s; }
+.lavorai-app-shell .pm-file:hover, .lavorai-app-shell .pm-file:focus-within { border-color: rgba(255, 255, 255, 0.28); }
+.lavorai-app-shell .pm-file.has-file { border-style: solid; color: var(--pm-fg); }
+.lavorai-app-shell .pm-file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.lavorai-app-shell .pm-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lavorai-app-shell .pm-file-action { color: var(--pm-fg-2); font-size: 12px; font-weight: 500; padding: 4px 10px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 7px; }
+[data-theme="light"] .lavorai-app-shell .pm-file { border-color: rgba(15, 16, 18, 0.18); }
+
+/* Il tuo CV: the page itself is the upload step, so the onboarding notice is redundant there. */
+.lavorai-main:has(.cv-empty) .pm-notice[data-notice="onboarding-cv"] { display: none; }

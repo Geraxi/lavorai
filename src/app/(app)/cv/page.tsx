@@ -73,9 +73,9 @@ export default async function CVPage() {
 function EmptyCV() {
   return (
     <div
-      className="ds-card"
+      className="pm-card cv-empty"
       style={{
-        padding: "56px 28px",
+        padding: "48px 28px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",

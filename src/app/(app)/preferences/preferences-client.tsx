@@ -194,8 +194,8 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
             type="button"
             onClick={save}
             disabled={isPending || !dirty}
-            className="ds-btn ds-btn-accent"
-            style={{ padding: "9px 16px", fontSize: 13 }}
+            className={dirty || isPending ? "ds-btn ds-btn-accent" : "ds-btn pm-saved"}
+            aria-live="polite"
           >
             {isPending ? (
               <>
@@ -234,10 +234,10 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                 >
                   {(
                     [
-                      { id: "off", title: "Off", sub: "Nessun invio", icon: "pause-circle" as const },
+                      { id: "off", title: "Disattivato", sub: "Nessun invio", icon: "pause-circle" as const },
                       { id: "manual", title: "Manuale", sub: "Chiede sempre conferma", icon: "check" as const },
                       { id: "hybrid", title: "Ibrido", sub: `Auto se match ≥ ${matchMin}%`, icon: "sparkles" as const },
-                      { id: "auto", title: "Full auto", sub: "Candida da solo", icon: "zap" as const },
+                      { id: "auto", title: "Automatico", sub: "Candida da solo", icon: "zap" as const },
                     ] as const
                   ).map((opt) => {
                     const active = autoMode === opt.id;
@@ -249,16 +249,8 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                           setAutoMode(opt.id);
                           mark();
                         }}
-                        className="ds-pref-card"
-                        style={{
-                          textAlign: "left",
-                          padding: 12,
-                          cursor: "pointer",
-                          border: active
-                            ? "1.5px solid var(--primary-ds)"
-                            : "1px solid var(--border-ds)",
-                          background: active ? "var(--primary-weak)" : "var(--bg)",
-                        }}
+                        aria-pressed={active}
+                        className={`ds-pref-card pm-choice${active ? " is-active" : ""}`}
                       >
                         <div
                           className="flex items-center gap-1.5"
@@ -313,10 +305,12 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                     <div>
                       <label className="ds-label">Match minimo</label>
                       <div className="ds-toggle-group" style={{ display: "flex", width: "100%" }}>
-                        {MATCH_STEPS.map((v) => (
+                        {/* Show the saved value even when it is not one of the presets (e.g. 60%). */}
+                        {[...new Set([...MATCH_STEPS, matchMin])].sort((a, b) => a - b).map((v) => (
                           <button
                             key={v}
                             type="button"
+                            aria-pressed={v === matchMin}
                             className={v === matchMin ? "active" : undefined}
                             style={{ flex: 1 }}
                             onClick={() => {

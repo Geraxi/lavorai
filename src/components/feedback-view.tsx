@@ -49,7 +49,7 @@ export function FeedbackView({ locale, standalone = false, pdfEnabled = false }:
   return <section className="feedback-root">
     {!standalone && <AppTopbar title={c.title} />}
     <div className="feedback-page">
-      <header className="feedback-heading"><div className="workspace-eyebrow">LavorAI · {c.title}</div><h1>{c.heading}</h1><p>{c.intro}</p></header>
+      <header className="feedback-heading"><h1>{c.heading}</h1><p>{c.intro}</p></header>
       <div className="feedback-columns">
         <form className="report-panel feedback-form" onSubmit={submit} aria-label={c.title}>
           <div className="report-scroll">
@@ -59,7 +59,7 @@ export function FeedbackView({ locale, standalone = false, pdfEnabled = false }:
                 {(["feedback", "bug"] as const).map(value => <label key={value} className={category === value ? "selected" : ""}><input type="radio" name="category" value={value} checked={category === value} onChange={() => setCategory(value)} />{value === "bug" ? <Bug size={18} aria-hidden /> : <MessageSquare size={18} aria-hidden />}<span><strong>{c[value]}</strong><small>{value === "bug" ? c.bugHint : c.feedbackHint}</small></span></label>)}
               </div></fieldset>
               <label className="report-field" htmlFor="report-subject"><span>{c.subject} <small>{subject.length}/120</small></span><input id="report-subject" name="subject" required minLength={3} maxLength={120} value={subject} onChange={e => setSubject(e.target.value)} aria-describedby="report-subject-hint" /><small id="report-subject-hint">{c.subjectHint}</small></label>
-              <label className="report-field" htmlFor="report-description"><span>{c.description} <small>{description.length}/4,000</small></span><textarea id="report-description" name="description" required minLength={10} maxLength={4000} rows={5} value={description} onChange={e => setDescription(e.target.value)} aria-describedby="report-description-hint report-privacy" /><small id="report-description-hint">{c.descriptionHint}</small></label>
+              <label className="report-field" htmlFor="report-description"><span>{c.description} <small>{description.length}/{locale === "en" ? "4,000" : "4.000"}</small></span><textarea id="report-description" name="description" required minLength={10} maxLength={4000} rows={5} value={description} onChange={e => setDescription(e.target.value)} aria-describedby="report-description-hint report-privacy" /><small id="report-description-hint">{c.descriptionHint}</small></label>
               <label className="report-field" htmlFor="report-page"><span>{c.context}</span><select id="report-page" value={pageContext} onChange={e => setPageContext(e.target.value)} aria-describedby="report-context-hint"><option value="">{c.noContext}</option>{REPORT_PAGES.map(value => <option key={value} value={value}>{c.pages[value]}</option>)}</select><small id="report-context-hint">{c.contextHint}</small></label>
               <AttachmentPicker pdfEnabled={pdfEnabled} files={files} onChange={setFiles} onError={setError} locale={locale} />
             </fieldset>
@@ -77,7 +77,8 @@ export function FeedbackView({ locale, standalone = false, pdfEnabled = false }:
           <div className="report-scroll" aria-busy={isLoading}>
             {loadError ? <ReportLoadError error={loadError} locale={locale} retry={() => void mutate()} /> : isLoading ? <p role="status" className="report-empty">{c.loading}</p> : !data?.reports.length ? <p className="report-empty">{c.empty}</p> : data.reports.map(report => <details className="report-entry" key={report.id}><summary><ReportMeta report={report} locale={locale} /><h3>{report.subject}</h3></summary><ReportBody report={report} locale={locale} onChanged={() => void mutate()} /></details>)}
           </div>
-          <ReportPagination page={page} hasMore={data?.hasMore ?? false} disabled={isLoading} onPage={setPage} locale={locale} />
+          {/* No dead "Precedente / Successiva" controls when there is a single page. */}
+          {(page > 1 || data?.hasMore) && <ReportPagination page={page} hasMore={data?.hasMore ?? false} disabled={isLoading} onPage={setPage} locale={locale} />}
         </section>
       </div>
     </div>

@@ -128,12 +128,17 @@
     "confirmMessage": "LavorAI will prepare a tailored CV and cover letter for each posting. Applications follow the sending mode set in your preferences.",
     "confirmAll": "Apply to all",
     "cancel": "Cancel",
-    "toastSent": "{count} sent",
+    "toastSent": "{count} queued",
     "toastAwaitingConsent": "{count} awaiting consent",
     "toastSkippedMatch": "{count} skipped (match < {pct}%)",
     "toastRemaining": "{count} left in your plan",
     "noneSent": "No applications sent.",
-    "batchProgress": "Batch {current}/{total} · {sent} sent"
+    "batchProgress": "Batch {current}/{total} · {sent} sent",
+    "listLabel": "Jobs",
+    "queuedNote": "{count, plural, =1 {1 request saved} other {# requests saved}}: see Applications.",
+    "noSalary": "Salary not listed",
+    "details": "Details",
+    "alreadyApplied": "Already applied"
   },
   "jobsPage": {
     "title": "Job board",
@@ -148,7 +153,18 @@
     "remoteOnly": "Remote only",
     "search": "Search",
     "noResults": "No openings found",
-    "noResultsHint": "Try removing a filter or adjusting your preferences."
+    "noResultsHint": "Try removing a filter or adjusting your preferences.",
+    "forYouCount": "{count, plural, =0 {No open roles match your preferences} =1 {1 open role matches your preferences} other {# open roles match your preferences}}, last 14 days · same count as Dashboard and Discover",
+    "forYouLabel": "For you",
+    "searchLabel": "Search results",
+    "searchCount": "{count, plural, =1 {1 result} other {# results}} for your search",
+    "forYouTab": "For you",
+    "searchTab": "Search",
+    "modeLabel": "View",
+    "protectedLabel": "Protected categories (L. 68/99)",
+    "noForYou": "No open roles match your preferences",
+    "noForYouHint": "Widen roles, salary or match threshold, or search all listings.",
+    "forYouDefinition": "\"For you\": open listings refreshed in the last 14 days from supported portals, not dismissed or applied to, filtered by roles, avoided companies, salary and minimum match. Search uses your own criteria and may include other listings."
   },
   "appShell": {
     "sectionWork": "Work",
@@ -170,7 +186,7 @@
     "title": "Discover",
     "breadcrumb": "Work",
     "heading": "Swipe through opportunities",
-    "subtitle": "{count} openings filtered for you. Swipe right to apply, left to skip.",
+    "subtitle": "{count, plural, =0 {No open roles match your preferences} =1 {1 open role matches your preferences} other {# open roles match your preferences}}, last 14 days.",
     "apply": "Apply",
     "skip": "Skip",
     "hintKeyboard": "← skip · → apply · or drag the card",
@@ -183,7 +199,8 @@
     "networkError": "Network error.",
     "applied": "Application request saved for {title}. Check its status in Applications.",
     "fullDescription": "Full description",
-    "openOriginal": "Open original posting"
+    "openOriginal": "Open original posting",
+    "subtitleCapped": "{count} open roles match your preferences, last 14 days. Showing the {shown} newest."
   },
   "pricing": {
     "eyebrow": "Pricing",

@@ -79,3 +79,40 @@
 .support-nav { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--border-ds); font-size: 13px; }
 .support-nav a { text-decoration: underline; text-underline-offset: 4px; }
 @media (max-width: 1023px) { .support-shell > main { flex: none; min-height: auto; }.support-nav { padding: 10px 12px; }.support-shell .feedback-root { width: 100%; } }
+
+/* ── Premium dark pass (batch 2): support shell only; admin triage untouched. ── */
+.support-shell.pm-scope { background: var(--pm-page); color: var(--pm-fg); }
+.support-shell .support-nav { padding: 12px 24px; border-bottom-color: var(--pm-line); }
+.support-shell .support-back { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: var(--pm-fg); text-decoration: none; font-size: 12.5px; font-weight: 500; }
+.support-shell .support-back:hover { border-color: rgba(255,255,255,.22); }
+.support-shell .feedback-root { width: 100%; }
+.support-shell .feedback-page { width: 100%; max-width: 1200px; margin: 0 auto; padding: 28px 24px; }
+.support-shell .feedback-heading h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.support-shell .feedback-heading p { color: var(--pm-muted); }
+.support-shell .report-panel { background: var(--pm-card); border-color: var(--pm-line); border-radius: 14px; box-shadow: var(--pm-highlight); }
+.support-shell .report-field small, .support-shell .report-muted, .support-shell .report-type small, .support-shell .report-form-footer small, .support-shell .report-empty, .support-shell .report-privacy { color: var(--pm-muted); }
+.support-shell .report-field, .support-shell .report-type legend { font-weight: 500; color: var(--pm-fg-2); }
+.support-shell .report-type-options label { border-color: var(--pm-line); border-radius: 10px; }
+.support-shell .report-type-options label:hover { border-color: rgba(255,255,255,.16); }
+.support-shell .report-type-options label.selected { border-color: rgba(255,255,255,.26); background: rgba(255,255,255,.035); }
+.support-shell .report-type-options input { accent-color: var(--pm-green); }
+.support-shell .report-type-options svg { color: var(--pm-muted); }
+.support-shell .report-type-options label.selected svg { color: var(--pm-fg); }
+.support-shell .report-type strong { font-weight: 500; color: var(--pm-fg); }
+.support-shell :is(input:not([type=radio]):not([type=file]), textarea, select) { background: var(--pm-inset); border-color: var(--pm-line); border-radius: 8px; color: var(--pm-fg); }
+.support-shell :is(input, textarea, select):focus { border-color: rgba(255,255,255,.24); outline: none; }
+.support-shell :is(button, a, input, textarea, select, summary):focus-visible { outline-color: rgba(255,255,255,.5); }
+.support-shell .report-attach-button { border-color: rgba(255,255,255,.12); font-weight: 500; font-size: 12.5px; padding: 7px 12px; }
+.support-shell .report-attach-button:hover { border-color: rgba(255,255,255,.22); }
+.support-shell .report-privacy svg { color: var(--pm-faint); }
+.support-shell .report-form-footer, .support-shell .report-history > header, .support-shell .report-entry, .support-shell .report-pagination { border-color: var(--pm-line); }
+.support-shell .report-primary { background: var(--pm-green); color: #06140d; font-weight: 600; border-radius: 8px; padding: 8px 14px; }
+.support-shell .report-history h2 { font-weight: 500; }
+.support-shell .report-entry summary::after { color: var(--pm-muted); }
+.support-shell .report-badge { background: transparent; border: 1px solid var(--pm-line); border-radius: 999px; }
+.support-shell .report-status-resolved { color: var(--pm-green); }
+.support-shell .report-success { background: var(--pm-card); border: 1px solid var(--pm-line); color: var(--pm-fg); }
+.support-shell .report-notice:not(.report-success) { background: var(--pm-amber-weak); color: var(--pm-fg); }
+@media (max-width: 1023px) { .support-shell .feedback-page { padding: 20px 12px 28px; } .support-shell .support-nav { padding: 10px 12px; } }
+.support-shell .support-nav .ds-btn { background: transparent; border: 1px solid rgba(255,255,255,.12); color: var(--pm-fg-2); box-shadow: none; border-radius: 8px; }
+.support-shell .support-nav .ds-btn:hover { border-color: rgba(255,255,255,.22); color: var(--pm-fg); }

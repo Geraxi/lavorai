@@ -6,6 +6,7 @@ import { AppTopbar } from "@/components/design/topbar";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, ChevronDown, ChevronRight, CircleCheck, FileQuestion, LockKeyhole, Search, ShieldCheck, Sparkles, Users, Zap } from "lucide-react";
 import { displayOption, displayQuestion } from "@/lib/question-display-language";
+import { EmptyState } from "@/components/ui-premium/empty-state";
 
 interface ApplicationExample { id: string; company: string; title: string; location?: string | null; description?: string | null; url?: string }
 interface Question {
@@ -178,9 +179,9 @@ export function QuestionsView() {
   return <>
     <AppTopbar title="Domande" breadcrumb="Lavoro" />
     <main className="qa-page">
-      <header className="qa-header">
-        <div><span className="qa-eyebrow">Il tuo profilo candidature</span><h1>{view === "focus" ? "Una risposta alla volta" : view === "review" ? "Verifica le tue risposte" : "Domande per le candidature"}</h1><p>Riutilizziamo i fatti espliciti da CV, profilo, preferenze e risposte verificate. I dati discordanti richiedono conferma. Consensi e dichiarazioni restano legati alla candidatura indicata. Salvare non avvia l’invio.</p></div>
-        {waiting > 0 && <Link className="qa-waiting" href="/applications"><BriefcaseBusiness size={17} aria-hidden />{waiting} {waiting === 1 ? "candidatura in attesa" : "candidature in attesa"}<ChevronRight size={15} aria-hidden /></Link>}
+      <header className="qa-header pm-page-head">
+        <div><h1>{view === "focus" ? "Una risposta alla volta" : view === "review" ? "Verifica le tue risposte" : "Domande per le candidature"}</h1><p>Riutilizziamo i fatti espliciti da CV, profilo, preferenze e risposte verificate; i dati discordanti richiedono conferma. Ogni risposta resta legata alla candidatura indicata. Salvare non avvia l’invio.</p></div>
+        {waiting > 0 && <Link className="qa-waiting" href="/applications" data-metric="needs-answers"><BriefcaseBusiness size={15} aria-hidden />{waiting} {waiting === 1 ? "candidatura in attesa" : "candidature in attesa"}<ChevronRight size={15} aria-hidden /></Link>}
       </header>
 
       {notice && <div className="qa-notice" role="status">{notice}<button type="button" onClick={() => setNotice("")} aria-label="Chiudi avviso">×</button></div>}
@@ -193,7 +194,7 @@ export function QuestionsView() {
         {!application.canResume && application.guidance?.href && <Link className="underline" href={application.guidance.href}>{application.guidance.label}</Link>}
         {application.canResume && <button type="button" disabled={saving || hasUnsavedAnswers(application.applicationId)} onClick={() => void confirmResume(application)}>Conferma ripresa di questa candidatura</button>}
       </div>)}
-      {loading ? <div className="qa-empty" role="status">Caricamento delle domande…</div> : loadError ? <div className="qa-empty" role="alert"><h2>Impossibile caricare le domande</h2><p>Le risposte salvate restano disponibili. Riprova a caricare la sezione.</p><button type="button" className="qa-primary" onClick={() => void retryLoad()}>Riprova</button></div> : total === 0 ? <div className="qa-empty"><CircleCheck size={35} aria-hidden /><h2>Nessuna domanda in sospeso</h2><p>Quando una candidatura richiederà una risposta, la troverai qui.</p><Link href="/applications">Vai alle candidature <ArrowRight size={16} aria-hidden /></Link></div> : <>
+      {loading ? <div className="qa-empty" role="status">Caricamento delle domande…</div> : loadError ? <div className="qa-empty" role="alert"><h2>Impossibile caricare le domande</h2><p>Le risposte salvate restano disponibili. Riprova a caricare la sezione.</p><button type="button" className="qa-primary" onClick={() => void retryLoad()}>Riprova</button></div> : total === 0 ? <section className="pm-card"><EmptyState icon={CircleCheck} title="Nessuna domanda in sospeso" text="Quando un form di candidatura chiede qualcosa a cui solo tu puoi rispondere, la domanda compare qui." cta={{ href: "/applications", label: "Vai alle candidature" }} /></section> : <>
         {view === "focus" && focused ? <div className="qa-focus-layout">
           <section className="qa-focus-main">
             <button className="qa-back" type="button" onClick={() => setView("pending")}><ArrowLeft size={16} aria-hidden /> Tutte le domande</button>
@@ -218,7 +219,7 @@ export function QuestionsView() {
             {view === "review" && cvSuggestions.length > 0 && <div className="qa-batch"><div><strong>{cvSuggestions.length} {cvSuggestions.length === 1 ? "risposta trovata" : "risposte trovate"} nel CV</strong><span>Controllale prima di usarle nelle candidature.</span></div><button type="button" className="qa-primary" disabled={saving} onClick={() => void save(cvSuggestions)}>{saving ? "Salvataggio…" : "Conferma quelle dal CV"}<ArrowRight size={15} aria-hidden /></button></div>}
             {pending.length > 0 && view === "pending" && <button type="button" className="qa-start" onClick={() => { setFocusId(pending[0].id); setView("focus"); }}>Rispondi una domanda alla volta <ArrowRight size={16} aria-hidden /></button>}
           </section>
-          <aside className="qa-aside"><div className="qa-aside-card"><div className="qa-aside-heading"><Sparkles size={19} aria-hidden /><h3>I tuoi progressi</h3></div><div className="qa-ring" style={{ background: `conic-gradient(#6cefd1 ${progress * 3.6}deg, #2b3943 0)` }}><span>{progress}%</span></div><p><strong>{answeredCount} di {total}</strong> risposte disponibili</p><div className="qa-aside-rule" /><p><strong>{waiting}</strong> {waiting === 1 ? "candidatura attende" : "candidature attendono"} una o più risposte.</p></div><div className="qa-aside-card"><div className="qa-aside-heading"><Users size={19} aria-hidden /><h3>Per categoria</h3></div>{categories.map((category) => { const rows = questions.filter((question) => categoryFor(question.label).key === category.key); if (!rows.length) return null; const count = rows.filter((question) => Boolean(question.answer.trim())).length; return <div className="qa-category-progress" key={category.key}><span>{category.label}</span><small>{count}/{rows.length}</small><div><i style={{ width: `${Math.round(count / rows.length * 100)}%` }} /></div></div>; })}</div><div className="qa-privacy"><LockKeyhole size={17} aria-hidden /> Le risposte sono legate alla singola candidatura e alle opzioni esatte del form.</div></aside>
+          <aside className="qa-aside"><div className="qa-aside-card"><div className="qa-aside-heading"><Sparkles size={19} aria-hidden /><h3>I tuoi progressi</h3></div><div className="qa-big-number">{progress}%<small>{answeredCount} di {total} risposte</small></div><div className="qa-aside-rule" /><p><strong>{waiting}</strong> {waiting === 1 ? "candidatura attende" : "candidature attendono"} una o più risposte.</p></div><div className="qa-aside-card"><div className="qa-aside-heading"><Users size={19} aria-hidden /><h3>Per categoria</h3></div>{categories.map((category) => { const rows = questions.filter((question) => categoryFor(question.label).key === category.key); if (!rows.length) return null; const count = rows.filter((question) => Boolean(question.answer.trim())).length; return <div className="qa-category-progress" key={category.key}><span>{category.label}</span><small>{count}/{rows.length}</small><div><i style={{ width: `${Math.round(count / rows.length * 100)}%` }} /></div></div>; })}</div><div className="qa-privacy"><LockKeyhole size={17} aria-hidden /> Le risposte sono legate alla singola candidatura e alle opzioni esatte del form.</div></aside>
         </div>}
       </>}
     </main>

@@ -116,7 +116,7 @@ export default async function SettingsPage() {
               icon={<Icon name="zap" size={14} />}
               title="Piano"
               actions={
-                <span className="ds-chip ds-chip-green">
+                <span className="ds-chip">
                   {trial.status === "active" ? "Pro · prova" : cfg.name}
                 </span>
               }
@@ -177,12 +177,12 @@ export default async function SettingsPage() {
           <ReferralCard />
 
           <SectionCard id="privacy-consent">
-            <SectionHead title={user.locale === "en" ? "Privacy consent" : "Consenso privacy"} />
+            <SectionHead icon={<Icon name="eye" size={14} />} title={user.locale === "en" ? "Privacy consent" : "Consenso privacy"} />
             <SectionBody><PrivacyConsentForm recorded={Boolean(me?.privacyConsentAt)} locale={user.locale} /></SectionBody>
           </SectionCard>
 
           <SectionCard id="cookie-settings">
-            <SectionHead title={user.locale === "en" ? "Cookies & advertising" : "Cookie e pubblicità"} />
+            <SectionHead icon={<Icon name="settings" size={14} />} title={user.locale === "en" ? "Cookies & advertising" : "Cookie e pubblicità"} />
             <SectionBody>
               <div className="flex items-center justify-between gap-4">
                 <p style={{ fontSize: 12.5, color: "var(--fg-muted)", margin: 0 }}>
@@ -190,7 +190,7 @@ export default async function SettingsPage() {
                     ? "Choose separately whether to allow analytics and advertising tools (Meta Pixel, Google). You can withdraw at any time."
                     : "Scegli separatamente se consentire strumenti di analisi e pubblicità (Meta Pixel, Google). Puoi revocare il consenso in qualsiasi momento."}
                 </p>
-                <CookieSettingsLink className="ds-btn ds-btn-sm" style={{ padding: "6px 12px", border: "1px solid var(--border-ds)", whiteSpace: "nowrap" }} />
+                <CookieSettingsLink className="ds-btn ds-btn-sm" style={{ whiteSpace: "nowrap" }} />
               </div>
             </SectionBody>
           </SectionCard>

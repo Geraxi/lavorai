@@ -56,3 +56,17 @@ assert.equal(aggregatePerformance([{ ...base, submissionReceiptJson: "{}" }], 7,
 assert.equal(aggregatePerformance([{ ...base, replies: [{ receivedAt: reply, kind: "colloquio", isHuman: true, isSecurityCode: true }] }], 7, now).replied, 0);
 assert.equal(aggregatePerformance([{ ...email("accepted"), replies: [{ receivedAt: reply, kind: "risposta", isHuman: true }] }, human], 7, now).responseRate, 100, "Numerator and denominator must use the same confirmed cohort");
 console.log("Analytics: structured receipt boundary, legacy preservation, accepted vs delivered, failure/OTP exclusions and cohort rate passed.");
+{
+  // Europe/Rome calendar days: 23:30 UTC on 22 Sep is already 23 Sep in Rome (UTC+2).
+  const at = (d: Date): PerformanceApplication => ({ ...base, submittedAt: d, completedAt: d, submissionReceiptJson: JSON.stringify({ version: 1, provider: "greenhouse", kind: "dom", capturedAt: d.toISOString(), jobId: "12345", signal: "new_receipt_and_form_removed" }) });
+  const rome = aggregatePerformance([at(new Date("2026-09-22T23:30:00Z"))], 7, now, "Europe/Rome");
+  assert.equal(rome.buckets.at(-1)?.sent, 1, "late-evening UTC send lands on the next Rome day");
+  assert.equal(rome.buckets.at(-1)?.date.toISOString().slice(0, 10), "2026-09-23");
+  assert.equal(analyticsPeriod(7, now, "Europe/Rome").start.toISOString(), "2026-09-16T22:00:00.000Z", "period starts at Rome midnight");
+  assert.equal(aggregatePerformance([at(new Date("2026-09-16T22:30:00Z"))], 7, now, "Europe/Rome").buckets[0].sent, 1, "early Rome morning of day 1 is inside");
+  assert.equal(aggregatePerformance([at(new Date("2026-09-16T21:30:00Z"))], 7, now, "Europe/Rome").sent, 0, "Rome evening before day 1 is outside");
+  // Match segments: ≥ 70 vs < 70.
+  const seg = aggregatePerformance([{ ...base, match: 70 }, { ...base, match: 69 }], 7, now).segments;
+  assert.deepEqual(seg.map(s => s.count), [1, 1]);
+  console.log("Analytics: Europe/Rome day boundaries and match segments passed.");
+}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { dailyApplicationLimit } from "@/lib/billing";
+import { getApplicationTotal } from "@/lib/dashboard-metrics-shared";
 
 export const runtime = "nodejs";
 
@@ -20,7 +21,7 @@ export async function GET() {
     return NextResponse.json({ applicationsCount: 0, autoApplyToday: 0, autoApplyRemaining: 0 });
   }
   const [applicationsCount, todayCount, prefs] = await Promise.all([
-    prisma.application.count({ where: { userId: user.id, status: { not: "diagnostic" } } }),
+    getApplicationTotal(user.id),
     prisma.application.count({
       where: {
         userId: user.id,
