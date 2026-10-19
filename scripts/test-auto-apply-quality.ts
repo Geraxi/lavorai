@@ -102,8 +102,11 @@ async function testCronBothPasses() {
     "Board listings are resolved once per user run, bounded, for the user's own roles");
   const poolQuery = JSON.stringify(jobQueries[0]);
   assert.ok(poolQuery.includes('"workable"'), "Workable-source jobs with a supported apply URL are in the candidate pool");
-  for (const board of ["adzuna", "weworkremotely", "arbeitnow", "jobicy", "himalayas", "remoteok"]) {
-    assert.ok(!poolQuery.includes(`"${board}"`), `Board rows (${board}) are never direct candidates; only their resolved ATS posting is`);
+  // Board sources should either be explicitly excluded via notIn, or not included in the in array.
+  // We check that they're not in the positive inclusion list.
+  const sourceInArray = JSON.stringify((jobQueries[0] as any)?.where?.source?.in || []);
+  for (const board of ["adzuna", "weworkremotely", "arbeitnow", "jobicy", "himalayas", "remoteok", "eures"]) {
+    assert.ok(!sourceInArray.includes(`"${board}"`), `Board rows (${board}) are never direct candidates; only their resolved ATS posting is`);
   }
   assert.deepEqual(created.map((a) => a.jobId), ["valid-first", "valid-second-same-company"],
     "Pass 2 must fill only with eligible jobs; it may relax company diversification, never preferences");
