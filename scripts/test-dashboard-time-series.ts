@@ -72,7 +72,7 @@ const db = {
 };
 const uiStatus = load("src/lib/ui-application-status.ts", {});
 const stageModule = load("src/lib/application-stage.ts", { "@/lib/application-evidence": evidence, "@/lib/ui-application-status": uiStatus });
-const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/application-stage": stageModule, "@/lib/ui-application-status": uiStatus });
+const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/application-stage": stageModule, "@/lib/ui-application-status": uiStatus, "@/lib/inbox-counts": load("src/lib/inbox-counts.ts", {}) });
 
 async function main() {
   // Pure bucketing

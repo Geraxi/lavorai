@@ -111,7 +111,7 @@ async function main() {
   const element = (type: unknown, props: unknown) => ({ type, props });
   const uiStatus = load("src/lib/ui-application-status.ts", {});
   const stageModule = load("src/lib/application-stage.ts", { "@/lib/application-evidence": evidence, "@/lib/ui-application-status": uiStatus });
-  const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/application-stage": stageModule, "@/lib/ui-application-status": uiStatus });
+  const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/application-stage": stageModule, "@/lib/ui-application-status": uiStatus, "@/lib/inbox-counts": load("src/lib/inbox-counts.ts", {}) });
   const lucide = new Proxy({}, { get: (_target, name) => String(name), has: () => true });
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },

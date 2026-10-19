@@ -1,0 +1,32 @@
+/* Inbox page frame: top bar, summary strip, then the mailbox. */
+.inbox-page { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; }
+.inbox-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px 24px 0;
+  flex: none;
+}
+.inbox-stat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--pm-line);
+  border-radius: 12px;
+  background: var(--pm-card);
+  box-shadow: var(--pm-highlight);
+}
+.inbox-stat-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inbox-stat-top { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 500; color: var(--pm-fg-2); }
+.inbox-stat-top b { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; color: var(--pm-fg); font-variant-numeric: tabular-nums; }
+.inbox-stat small { font-size: 12px; color: var(--pm-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+@media (max-width: 1023px) { .inbox-stats { padding: 12px 12px 0; } }
+@media (max-width: 640px) {
+  .inbox-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .inbox-stat { flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px; }
+  .inbox-stat .pm-chip-icon { display: none; }
+  .inbox-stat-top { flex-direction: column; align-items: flex-start; gap: 0; font-size: 12px; }
+  .inbox-stat small { display: none; }
+}

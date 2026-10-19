@@ -193,28 +193,26 @@ export async function getOpenOpportunities(userId: string): Promise<number> {
 }
 
 /**
- * Unread messages (attention queue count)
- * 
- * Counts ApplicationReply messages that:
- * - Are from recruiters (isHuman=true)
- * - Are not security codes (isSecurityCode=false)
- * - Are relevant kinds (risposta, colloquio, rifiutata)
- * - Have not been read (readAt=null)
- * 
- * Used by: Dashboard attention queue, Inbox
- * Time window: All time (until read)
+ * Unread messages
+ *
+ * Job-related messages (LavorAI replies + Gmail mail matched to the job
+ * search) whose read state is known and unread, from the same recent window
+ * the Inbox shows (200 per source). Unknown historical read state is not
+ * counted. Same predicate as the Inbox header and the attention queue
+ * (src/lib/inbox-counts.ts).
+ *
+ * Used by: Dashboard metrics API, Inbox
+ * Time window: recent inbox window (until read)
  */
 export async function getUnreadMessages(userId: string): Promise<number> {
-  return await prisma.applicationReply.count({
-    where: {
-      application: { userId },
-      isHuman: true,
-      isSecurityCode: false,
-      kind: { in: ["risposta", "colloquio", "rifiutata"] },
-      readAt: null,
-    },
-  });
+  const [{ getInboxMessages }, { countUnreadJobMessages }] = await Promise.all([
+    import("@/lib/inbox-repository"),
+    import("@/lib/inbox-counts"),
+  ]);
+  return countUnreadJobMessages(await getInboxMessages(userId));
 }
+
+export { countUnreadJobMessages, isUnreadJobMessage } from "@/lib/inbox-counts";
 
 /**
  * Actions needed (blocking user actions)

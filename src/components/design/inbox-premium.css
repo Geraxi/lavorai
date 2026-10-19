@@ -1,0 +1,140 @@
+/*
+ * Premium surface for the mailbox (loaded after inbox-mailbox.css).
+ * Matte cards with hairlines, neutral selection, green only for the unread
+ * dot and the send CTA. Layout and behaviour are unchanged.
+ */
+.lavorai-app-shell .mail-workspace { background: transparent; }
+.lavorai-app-shell .mail-layout { gap: 16px; padding: 16px 24px 0; }
+.lavorai-app-shell :is(.mail-list-pane, .mail-reader, .mail-context) {
+  background: var(--pm-card);
+  border: 1px solid var(--pm-line);
+  border-radius: var(--pm-radius);
+  box-shadow: var(--pm-highlight);
+}
+.lavorai-app-shell .mail-list-heading h1 { font-size: 14px; font-weight: 500; color: var(--pm-fg); }
+.lavorai-app-shell .mail-list-heading .mail-count {
+  background: transparent;
+  border: 1px solid var(--pm-line);
+  color: var(--pm-muted);
+  font-weight: 500;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.lavorai-app-shell .mail-list-heading .mail-count.has-unread { color: var(--pm-fg); border-color: var(--pm-line-strong); }
+.lavorai-app-shell .mail-search { background: var(--pm-inset); border: 1px solid var(--pm-line); border-radius: 8px; color: var(--pm-faint); }
+.lavorai-app-shell .mail-search:focus-within { border-color: var(--pm-line-strong); }
+.lavorai-app-shell .mail-search input { font-size: 12.5px; }
+
+/* Folders + category filters: quiet segmented chips, never green. */
+.lavorai-app-shell .mail-folders > button { color: var(--pm-muted); border-radius: 6px; font-size: 12px; }
+.lavorai-app-shell .mail-folders > button:hover { color: var(--pm-fg-2); }
+.lavorai-app-shell .mail-folders > button[aria-current] { background: rgba(255, 255, 255, 0.06); color: var(--pm-fg); font-weight: 500; }
+.lavorai-app-shell .mail-filters button {
+  background: transparent;
+  border: 1px solid var(--pm-line);
+  border-radius: 999px;
+  color: var(--pm-muted);
+  font-size: 11.5px;
+  padding: 4px 10px;
+}
+.lavorai-app-shell .mail-filters button:hover { color: var(--pm-fg-2); border-color: var(--pm-line-strong); }
+.lavorai-app-shell .mail-filters button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.06); color: var(--pm-fg); border-color: var(--pm-line-strong); }
+
+/* Message rows: hairline separated list, neutral selection, unread dot. */
+.lavorai-app-shell .mail-message-list { padding: 0; border-top: 1px solid var(--pm-line); }
+.lavorai-app-shell .mail-row {
+  position: relative;
+  margin: 0;
+  padding: 12px 14px 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--pm-line);
+  border-radius: 0;
+  background: transparent;
+  transition: background-color 0.15s;
+}
+.lavorai-app-shell .mail-row:hover { background: rgba(255, 255, 255, 0.025); }
+.lavorai-app-shell .mail-row[aria-pressed="true"] { background: rgba(255, 255, 255, 0.05); box-shadow: inset 2px 0 0 var(--pm-fg-2); }
+.lavorai-app-shell .mail-row[data-unread="true"]::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 24px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--pm-green);
+}
+.lavorai-app-shell .mail-row .mail-row-top strong { font-weight: 500; color: var(--pm-fg-2); }
+.lavorai-app-shell .mail-row[data-unread="true"] .mail-row-top strong { font-weight: 600; color: var(--pm-fg); }
+.lavorai-app-shell .mail-subject { color: var(--pm-fg-2); font-size: 12.5px; }
+.lavorai-app-shell .mail-row[data-unread="true"] .mail-subject { color: var(--pm-fg); }
+.lavorai-app-shell .mail-preview { color: var(--pm-muted); }
+.lavorai-app-shell .mail-row-top time { color: var(--pm-faint); }
+.lavorai-app-shell .mail-row-bottom { color: var(--pm-muted); }
+.lavorai-app-shell .mail-avatar {
+  background: var(--pm-inset);
+  border: 1px solid var(--pm-line);
+  color: var(--pm-fg-2);
+  border-radius: 8px;
+  font-weight: 600;
+}
+.lavorai-app-shell .mail-label {
+  background: transparent;
+  border: 1px solid var(--pm-line);
+  color: var(--pm-fg-2);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.lavorai-app-shell .mail-pagination { border-top: 1px solid var(--pm-line); }
+
+/* Reader */
+.lavorai-app-shell .mail-reader-heading { background: transparent; border-bottom: 1px solid var(--pm-line); padding: 14px 16px; }
+.lavorai-app-shell .mail-contact > strong { color: var(--pm-fg); font-weight: 500; }
+.lavorai-app-shell .mail-contact-role { color: var(--pm-muted); }
+.lavorai-app-shell .mail-application,
+.lavorai-app-shell .mail-attention-controls button,
+.lavorai-app-shell .mail-reply-button {
+  background: transparent;
+  border: 1px solid var(--pm-line-strong);
+  border-radius: 8px;
+  color: var(--pm-fg-2);
+}
+.lavorai-app-shell .mail-application:hover,
+.lavorai-app-shell .mail-attention-controls button:hover { color: var(--pm-fg); background: rgba(255, 255, 255, 0.03); }
+.lavorai-app-shell .mail-attention-controls { border-bottom: 1px solid var(--pm-line); color: var(--pm-muted); padding: 10px 16px; }
+.lavorai-app-shell .mail-thread-subject { color: var(--pm-faint); }
+.lavorai-app-shell .mail-letter { background: var(--pm-inset); border: 1px solid var(--pm-line); border-radius: 12px; }
+.lavorai-app-shell .mail-letter-outgoing { background: rgba(255, 255, 255, 0.04); }
+.lavorai-app-shell .mail-letter-outgoing header strong,
+.lavorai-app-shell .mail-letter-outgoing time { color: var(--pm-fg); }
+.lavorai-app-shell .mail-body { color: var(--pm-fg-2); }
+.lavorai-app-shell .mail-compose-dock { background: transparent; border-top: 1px solid var(--pm-line); }
+.lavorai-app-shell .mail-compose { background: var(--pm-inset); border: 1px solid var(--pm-line); border-radius: 10px; box-shadow: none; }
+.lavorai-app-shell .mail-compose > header { color: var(--pm-fg-2); }
+.lavorai-app-shell .mail-send { background: var(--pm-green); border-color: var(--pm-green); color: #04130b; border-radius: 8px; font-weight: 600; }
+.lavorai-app-shell .mail-notice { border-left-color: var(--pm-amber) !important; color: var(--pm-fg-2); }
+
+/* Context column */
+.lavorai-app-shell .mail-context { padding: 14px; gap: 12px; }
+.lavorai-app-shell .mail-context-title { font-size: 13px; font-weight: 500; color: var(--pm-fg); }
+.lavorai-app-shell .mail-context-card { background: var(--pm-inset); border: 1px solid var(--pm-line); border-radius: 10px; }
+.lavorai-app-shell .mail-context-accent,
+.lavorai-app-shell .mail-context-cyan { color: var(--pm-fg-2); }
+.lavorai-app-shell .mail-context-cyan { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.lavorai-app-shell .mail-facts > div { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--pm-line); }
+.lavorai-app-shell .mail-facts strong,
+.lavorai-app-shell .mail-facts > div + div strong { color: var(--pm-fg); font-weight: 500; }
+.lavorai-app-shell .mail-context-link { color: var(--pm-fg-2); }
+.lavorai-app-shell .mail-context-link:hover { color: var(--pm-fg); }
+.lavorai-app-shell .mail-footnote { color: var(--pm-faint); padding: 10px 24px 16px; }
+.lavorai-app-shell .mail-mobile-sync { color: var(--pm-fg-2); }
+
+[data-theme="light"] .lavorai-app-shell .mail-row:hover { background: rgba(15, 16, 18, 0.025); }
+[data-theme="light"] .lavorai-app-shell .mail-row[aria-pressed="true"] { background: rgba(15, 16, 18, 0.04); }
+[data-theme="light"] .lavorai-app-shell .mail-folders > button[aria-current],
+[data-theme="light"] .lavorai-app-shell .mail-filters button[aria-pressed="true"] { background: rgba(15, 16, 18, 0.05); }
+
+@media (max-width: 1023px) { .lavorai-app-shell .mail-layout { padding: 12px; gap: 12px; } }
+@media (max-width: 700px) { .lavorai-app-shell .mail-layout { padding: 12px 12px 0; } }
+@media (prefers-reduced-motion: reduce) { .lavorai-app-shell .mail-row { transition: none; } }
+@media (min-width: 1300px) { .lavorai-app-shell .mail-layout { grid-template-columns: 310px minmax(0, 1fr) 260px; } }
