@@ -25,7 +25,7 @@ import {
   getOpenOpportunities,
   getActionsNeeded,
 } from "@/lib/dashboard-metrics-shared";
-import "./dashboard-redesign.css";
+import "./dashboard.css";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -138,9 +138,17 @@ export default async function DashboardPage() {
 
   const cvProfile = cvProfileRow ? rowToProfile(cvProfileRow) : null;
 
+  // Profile completeness checklist
+  const profileChecklist = [
+    { label: en ? "Email verified" : "Email verificata", done: user.emailVerified, href: "/settings" },
+    { label: en ? "CV uploaded" : "CV caricato", done: !!latestCv, href: "/cv" },
+    { label: en ? "Preferences set" : "Preferenze impostate", done: !!onboarding?.hasSetPreferences, href: "/preferences" },
+    { label: en ? "Access card" : "Carta di accesso", done: false, href: "/settings" },
+  ];
+
   return (
     <>
-      <WelcomeModal />
+      <WelcomeModal show={false} />
       <DashboardLiveRefresh />
       <PostLoginCheckout />
       
@@ -154,30 +162,70 @@ export default async function DashboardPage() {
         <div className="dashboard-main">
           {/* Top KPIs (single row, no duplication) */}
           <div className="dashboard-kpis">
-            <Kpi
-              label={en ? "Confirmed submissions" : "Invii confermati"}
-              value={String(confirmed)}
-              index={0}
-            />
-            <Kpi
-              label={en ? "Recruiter replies" : "Risposte recruiter"}
-              value={String(replies)}
-              index={1}
-            />
-            <Kpi
-              label={en ? "Interviews" : "Colloqui"}
-              value={String(interviews)}
-              index={2}
-            />
-            <Kpi
-              label={en ? "Offers" : "Offerte"}
-              value={String(offers)}
-              index={3}
-            />
+            <Link href="/applications?filter=sent" className="kpi-link">
+              <Kpi
+                label={en ? "Confirmed submissions" : "Invii confermati"}
+                value={String(confirmed)}
+                index={0}
+              />
+            </Link>
+            <Link href="/inbox" className="kpi-link">
+              <Kpi
+                label={en ? "Recruiter replies" : "Risposte recruiter"}
+                value={String(replies)}
+                index={1}
+              />
+            </Link>
+            <Link href="/interviews" className="kpi-link">
+              <Kpi
+                label={en ? "Interviews" : "Colloqui"}
+                value={String(interviews)}
+                index={2}
+              />
+            </Link>
+            <Link href="/applications?filter=offerta" className="kpi-link">
+              <Kpi
+                label={en ? "Offers" : "Offerte"}
+                value={String(offers)}
+                index={3}
+              />
+            </Link>
           </div>
 
-          {/* Needs Attention (blocking actions) */}
+          {/* Next Step Highlight */}
           {actionsNeeded > 0 && attention && attention.items.length > 0 && (
+            <SectionCard className="next-step-highlight">
+              <SectionHead
+                title={
+                <span className="flex items-center gap-2">
+                  <Icon name="arrow-right" size={18} />
+                  {en ? "Next Step" : "Il prossimo passo"}
+                </span>
+                }
+              />
+              <SectionBody>
+                <div className="next-step-content">
+                  <div className="next-step-primary">
+                    {attention.items[0] && (
+                      <Link href={attention.items[0].href} className="next-step-card">
+                        <div className="next-step-icon">
+                          <Icon name="alert-circle" size={24} />
+                        </div>
+                        <div className="next-step-info">
+                          <div className="next-step-title">{attention.items[0].title}</div>
+                          <div className="next-step-description">{attention.items[0].detail}</div>
+                        </div>
+                        <Icon name="chevron-right" size={20} />
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </SectionBody>
+            </SectionCard>
+          )}
+
+          {/* Needs Attention (blocking actions) */}
+          {actionsNeeded > 1 && attention && attention.items.length > 1 && (
             <SectionCard className="needs-attention-card">
               <SectionHead
                 title={
@@ -194,13 +242,13 @@ export default async function DashboardPage() {
             </SectionCard>
           )}
 
-          {/* Application Status Breakdown */}
+          {/* Application Progress (Avanzamento candidature) */}
           <SectionCard>
             <SectionHead
               title={
                 <span className="flex items-center gap-2">
                   <Icon name="briefcase" size={18} />
-                  {en ? "Application Status" : "Stato candidature"}
+                  {en ? "Application Progress" : "Avanzamento candidature"}
                 </span>
               }
               actions={
@@ -214,18 +262,33 @@ export default async function DashboardPage() {
               }
             />
             <SectionBody>
-              <div className="status-grid">
-                {["prepared", "approved", "in_flight", "sent", "stopped"].map((stage) => {
+              <div className="progress-tiles">
+                {(["prepared", "approved", "in_flight", "sent", "stopped", "failed", "unverified"] as const).map((stage) => {
                   const count = stageCounts.get(stage as JourneyStage) ?? 0;
                   if (count === 0) return null;
                   
+                  const stageConfig = {
+                    prepared: { icon: "edit", color: "blue" },
+                    approved: { icon: "check", color: "green" },
+                    in_flight: { icon: "clock", color: "amber" },
+                    sent: { icon: "send", color: "green" },
+                    stopped: { icon: "pause-circle", color: "gray" },
+                    failed: { icon: "x", color: "red" },
+                    unverified: { icon: "alert-circle", color: "amber" },
+                  }[stage as string] ?? { icon: "circle", color: "gray" };
+                  
                   return (
-                    <div key={stage} className="status-item">
-                      <div className="status-count">{count}</div>
-                      <div className="status-label">
-                        {STAGE_LABEL[stage as JourneyStage]?.[locale as "it" | "en"] ?? stage}
+                    <Link key={stage} href="/applications" className={`progress-tile progress-tile-${stageConfig.color}`}>
+                      <div className="progress-tile-icon">
+                        <Icon name={stageConfig.icon as any} size={20} />
                       </div>
-                    </div>
+                      <div className="progress-tile-content">
+                        <div className="progress-tile-count">{count}</div>
+                        <div className="progress-tile-label">
+                          {STAGE_LABEL[stage as JourneyStage]?.[locale as "it" | "en"] ?? stage}
+                        </div>
+                      </div>
+                    </Link>
                   );
                 })}
               </div>
@@ -314,7 +377,7 @@ export default async function DashboardPage() {
                 )
               }
             />
-            <SectionBody>
+            <SectionBody className="cv-sidebar-body">
               {latestCv ? (
                 <div className="cv-card">
                   <div className="cv-thumbnail">
@@ -355,6 +418,33 @@ export default async function DashboardPage() {
                   ctaHref="/cv"
                 />
               )}
+            </SectionBody>
+          </SectionCard>
+
+          {/* Profile Completeness */}
+          <SectionCard>
+            <SectionHead
+              title={
+                <span className="flex items-center gap-2">
+                  <Icon name="user" size={18} />
+                  {en ? "Profile" : "Il tuo profilo"}
+                  <span className="profile-progress-badge">
+                    {profileChecklist.filter(item => item.done).length}/{profileChecklist.length}
+                  </span>
+                </span>
+              }
+            />
+            <SectionBody>
+              <div className="profile-checklist">
+                {profileChecklist.map((item, idx) => (
+                  <Link key={idx} href={item.href} className="checklist-item">
+                    <div className={`checklist-check ${item.done ? 'done' : 'pending'}`}>
+                      <Icon name={item.done ? "check" : "circle"} size={14} />
+                    </div>
+                    <span className="checklist-label">{item.label}</span>
+                  </Link>
+                ))}
+              </div>
             </SectionBody>
           </SectionCard>
 
@@ -414,29 +504,31 @@ export default async function DashboardPage() {
             </SectionCard>
           )}
 
-          {/* Opportunities (compact link to Discover) */}
-          <SectionCard>
-            <SectionHead
-              title={
-                <span className="flex items-center gap-2">
-                  <Icon name="target" size={18} />
-                  {en ? "Opportunities" : "Opportunità"}
-                </span>
-              }
-            />
-            <SectionBody>
-              <div className="opportunities-summary">
-                <div className="opp-count">{opportunities}</div>
-                <div className="opp-label">
-                  {en ? "open positions matching your profile" : "posizioni aperte compatibili"}
+          {/* Discover Opportunities */}
+          {opportunities > 0 && (
+            <SectionCard>
+              <SectionHead
+                title={
+                  <span className="flex items-center gap-2">
+                    <Icon name="search" size={18} />
+                    {en ? "Discover" : "Scopri"}
+                  </span>
+                }
+              />
+              <SectionBody>
+                <div className="opportunities-summary">
+                  <div className="opp-count">{opportunities}</div>
+                  <div className="opp-label">
+                    {en ? "open positions matching your profile" : "posizioni aperte compatibili"}
+                  </div>
+                  <Link href="/discover" className="ds-btn ds-btn-primary ds-btn-sm">
+                    <Icon name="arrow-right" size={14} />
+                    {en ? "Browse jobs" : "Esplora"}
+                  </Link>
                 </div>
-                <Link href="/discover" className="ds-btn ds-btn-primary ds-btn-sm">
-                  <Icon name="search" size={14} />
-                  {en ? "Browse opportunities" : "Esplora opportunità"}
-                </Link>
-              </div>
-            </SectionBody>
-          </SectionCard>
+              </SectionBody>
+            </SectionCard>
+          )}
         </div>
       </div>
     </>

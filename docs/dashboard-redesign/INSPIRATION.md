@@ -1,540 +1,124 @@
-# Dashboard Design Inspiration
+# Dashboard Redesign — Design Inspiration
 
-**Date**: 2026-10-19  
-**Purpose**: Document specific patterns borrowed from best-in-class SaaS dashboards
-
----
-
-## Reference Products
-
-- **Linear** (linear.app) - Issue tracking, project management
-- **Vercel** (vercel.com/dashboard) - Deployment platform
-- **Stripe** (dashboard.stripe.com) - Payment infrastructure
-- **Mercury** (mercury.com) - Banking platform
-- **Arc** (arc.net) - Browser (new tab page)
-- **Raycast** (raycast.com) - Command palette, extensions
-- **Attio** (attio.com) - CRM platform
+**Goal**: Premium, calm, tech-focused dashboard (Linear/Vercel/Stripe/Mercury aesthetic)  
+**Palette**: Matte black/charcoal, restrained green accents, fine borders, no neon glow  
+**Motion**: Restrained only — fade/slide-in on load, hover lift, number count-up, respects `prefers-reduced-motion`
 
 ---
 
-## 1. Card Anatomy (Linear, Stripe)
+## Inspiration Sources
 
-### Structure
-```
-┌─────────────────────────────────────┐
-│ Icon  Title               Badge     │ ← Header (16px padding)
-│                                     │
-│ Primary content (24-32px padding)  │ ← Body
-│ • Metrics in grid                   │
-│ • List items with hover states      │
-│ • Clear hierarchy                   │
-│                                     │
-│ Action link →                       │ ← Footer (subtle, right-aligned)
-└─────────────────────────────────────┘
-```
+### 1. 21st.dev — Polished React/shadcn Components
+**URL**: https://21st.dev  
+**Key Observations**:
+- **Card treatments**: Clean cards with subtle borders (`1px solid var(--border)`), no heavy shadows
+- **Stat tiles**: Compact metric cards with large numbers (28-32px), small labels (11-12px uppercase), icon accent in corner
+- **Hover states**: Minimal border color shift + 2-3px translateY lift + subtle shadow increase
+- **Spacing**: Generous padding (18-24px in cards), consistent 12-16px gaps in grids
+- **Typography**: Clear hierarchy with 32/16/14/13/12px scale, -0.02em letter-spacing on large numbers
+- **Empty states**: Centered icon (40px, muted color), title + description + optional CTA button
 
-### CSS Pattern
-```css
-.card {
-  background: var(--bg-elev);
-  border: 1px solid var(--border-ds);
-  border-radius: 12px;
-  padding: 0;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-  transition: box-shadow 0.2s, border-color 0.2s;
-}
-
-.card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  border-color: var(--border-hover);
-}
-
-.card-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-ds);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.card-body {
-  padding: 24px 20px;
-}
-
-.card-footer {
-  padding: 14px 20px;
-  border-top: 1px solid var(--border-ds);
-  display: flex;
-  justify-content: flex-end;
-}
-```
-
-**LavorAI Usage**:
-- Needs Attention card
-- Application Status card
-- CV/Documents card
-- Interviews card
+**Concrete patterns adopted**:
+- ✅ `.dashboard-kpis` grid with `repeat(4, 1fr)` → `repeat(2, 1fr)` on tablet → `1fr` on mobile
+- ✅ KPI cards: 26px value, 11.5px uppercase label, subtle hover lift with border shift
+- ✅ Progress tiles: Icon + count + label in horizontal layout, color-coded (blue/green/amber/gray/red)
+- ✅ Empty states: 40px icon, 15px title, 13px description, centered, max-width: 280px
+- ✅ Section cards: `background: rgba(255,255,255,0.03)`, `border: 1px solid rgba(255,255,255,0.08)`, 2rem radius
 
 ---
 
-## 2. Spacing Scale (Linear, Vercel)
+### 2. motionsites.ai — Tasteful Motion
+**URL**: https://motionsites.ai  
+**Key Observations**:
+- **Load animations**: Staggered fade + slide-in (0-40px translateY), 400-600ms duration, ease-out timing
+- **Hover micro-interactions**: Quick 140-200ms transitions, subtle scale (1.02-1.05), shadow expansion
+- **Number animations**: Count-up from 0 to target over 800-1200ms with eased timing function
+- **Scroll reveals**: Elements fade in as they enter viewport (IntersectionObserver or motion/react `useInView`)
+- **Respects motion preferences**: All animations wrapped in `@media (prefers-reduced-motion: reduce) { transition: none; }`
 
-**4-based scale** (multiples of 4px):
-
-| Token | Value | Usage |
-|-------|-------|-------|
-| `xs` | 4px | Icon-to-text gap, tight inline spacing |
-| `sm` | 8px | Between related items in a list |
-| `md` | 12px | Default card border-radius |
-| `base` | 16px | Card padding (header/footer) |
-| `lg` | 20px | Card horizontal padding |
-| `xl` | 24px | Card body padding, section spacing |
-| `2xl` | 32px | Between major sections |
-
-**LavorAI CSS Variables**:
-```css
-:root {
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 12px;
-  --space-base: 16px;
-  --space-lg: 20px;
-  --space-xl: 24px;
-  --space-2xl: 32px;
-}
-```
+**Concrete patterns adopted**:
+- ✅ KPI staggered entrance: `delay: index * 0.08` (80ms stagger), 550ms duration, ease-out curve
+- ✅ Number count-up: Framer Motion `animate(motionValue, target, { duration: 1.1, ease: [0.22, 1, 0.36, 1] })`
+- ✅ Hover lift on cards: `whileHover={{ y: -2 }}`, 350ms cubic-bezier(0.22, 1, 0.36, 1)
+- ✅ Timeline items: Fade in with `useInView`, no animation if `prefers-reduced-motion`
+- ✅ Initial load: `initial={{ opacity: 0, y: 16 }}`, `animate={{ opacity: 1, y: 0 }}` on viewport entry
 
 ---
 
-## 3. Typography (Linear, Stripe, Mercury)
+### 3. godly.design — Top-Tier Web Design
+**URL**: https://godly.design  
+**Key Observations**:
+- **Premium matte aesthetic**: Flat colors, no gradients except subtle ambient radial fades in backgrounds
+- **Fine 1px borders**: Separation by tone first (background steps), borders second (hairline accents)
+- **Restrained color**: Accent color (green) used sparingly — active states, CTAs, evidence indicators only
+- **Generous whitespace**: 24-32px vertical rhythm, cards never crammed, breathing room between sections
+- **Consistent icon family**: Single outline icon set (Lucide in our case), 1.5-1.6px stroke, 16-18px size
+- **Typography discipline**: 2-3 font weights max (400 regular, 500 medium, 600 semibold), tight line-height (1.2-1.4)
 
-### Hierarchy
-```css
-/* Page title (Dashboard) */
-.page-title {
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-/* Section title (Needs Attention, Interviews) */
-.section-title {
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1.3;
-}
-
-/* Card title */
-.card-title {
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-/* Body text */
-.body-text {
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 1.5;
-  color: var(--fg);
-}
-
-/* Subtle text (metadata, timestamps) */
-.text-subtle {
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.4;
-  color: var(--fg-subtle);
-}
-
-/* Small caps (KPI labels) */
-.label-caps {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--fg-muted);
-}
-```
-
-**Constraints**:
-- Font family: System stack (already in product-workspace.css)
-- No font sizes below 11px (accessibility)
-- Negative letter-spacing only on 600+ weight titles
+**Concrete patterns adopted**:
+- ✅ Matte black base: `--bg: #0a0b0b`, `--bg-elev: rgba(255,255,255,0.04)`, no blue cast
+- ✅ Green accent: `--primary-ds: oklch(0.55 0.20 155)`, used only for active/hover/evidence states
+- ✅ Fine borders: `--border-ds: rgba(255,255,255,0.08)`, `--border-strong: rgba(255,255,255,0.16)`
+- ✅ Section spacing: 24px gap between cards, 18px internal card padding, 12-16px component gaps
+- ✅ Lucide icons: Consistent 16-18px size, 1.6px stroke (via globals), used in every section head
+- ✅ Typography: 32px page title, 16px section titles, 13-14px body, 12px metadata, 11px labels
 
 ---
 
-## 4. Icon Style (Linear, Arc)
+## Applied Design Decisions
 
-**Lucide Icons** (consistent outline, 1.5px stroke):
+### Layout (Desktop 1440px)
+- **KPI row**: Full-width 4-column grid (`repeat(4, 1fr)`), 16px gap, compact cards with icon + value + label
+- **2-column grid**: Main content (`1fr`) + sidebar (`380px`), 24px gap
+- **Main column**: Next step highlight → Attention queue → Progress tiles → Recent activity timeline
+- **Sidebar column**: CV card → Profile checklist → Upcoming interviews → Opportunities summary
 
-| Context | Size | Stroke | Color |
-|---------|------|--------|-------|
-| Card header | 18px | 1.5px | `var(--fg-muted)` |
-| List item | 16px | 1.5px | `var(--fg-subtle)` |
-| Inline badge | 14px | 1.5px | `var(--fg-subtle)` |
-| Button icon | 16px | 1.5px | inherit |
+### Layout (Tablet 768px)
+- **KPI row**: 2x2 grid (`repeat(2, 1fr)`), 12px gap
+- **Main + sidebar**: Single column (`1fr`), sidebar becomes multi-column auto-fit grid
 
-**One family rule**: All icons must be Lucide outline style. No mixing with filled icons.
+### Layout (Mobile 375px)
+- **KPI row**: 2x2 compact grid or single column if space tight
+- **Everything**: Single column, 16px padding, bottom nav clearance (add `pb-20` to main container)
 
-**LavorAI Icon Component** (already exists):
-```tsx
-<Icon name="inbox" size={18} />
-```
+### Motion (Restrained)
+1. **KPI entrance**: Staggered fade + slide-in, 80ms per card, 550ms duration, `cubic-bezier(0.22, 1, 0.36, 1)`
+2. **Number count-up**: Animate from 0 → target over 1.1s, same easing, tabular numbers (`font-feature-settings: "tnum"`)
+3. **Card hover**: `translateY(-2px)`, border color shift, shadow increase, 350ms duration
+4. **Timeline items**: Fade in on scroll with `useInView` (once), no animation if reduced motion
+5. **All animations**: Wrapped in `@media (prefers-reduced-motion: reduce) { transition: none; transform: none; }`
 
-Available icons:
-- `inbox`, `send`, `check-circle`, `alert-circle`, `clock`
-- `briefcase`, `file-text`, `user`, `calendar`
-- `trending-up`, `bar-chart`, `target`
-- `chevron-right`, `external-link`, `plus`
+### Typography
+- **Page title**: 32px, 650 weight, -0.035em spacing (removed — we use topbar instead)
+- **Section heads**: 16px title with icon, 500 weight, inline actions (13px)
+- **KPI value**: 26px, 600 weight, -0.02em spacing, tabular numbers
+- **KPI label**: 11.5px, 500 weight, uppercase, 0.04em spacing, muted color
+- **Card body**: 13-14px, 400 weight, 1.4 line-height
+- **Metadata/timestamps**: 12px, muted color, monospace for time values
 
----
-
-## 5. Empty States (Stripe, Mercury)
-
-### Pattern
-```
-┌─────────────────────────────────────┐
-│                                     │
-│         [Icon 40px, muted]          │ ← Centered
-│                                     │
-│     No [items] yet                  │ ← 15px, semi-bold
-│     [Helpful one-line context]      │ ← 13px, subtle
-│                                     │
-│        [Primary CTA button]         │ ← Optional
-│                                     │
-└─────────────────────────────────────┘
-```
-
-**Examples**:
-- No unread messages → "All caught up"
-- No interviews → "No upcoming interviews"
-- No applications → "Start applying" CTA
-
-**Style**:
-```css
-.empty-state {
-  padding: 48px 24px;
-  text-align: center;
-  color: var(--fg-subtle);
-}
-
-.empty-state-icon {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto 16px;
-  opacity: 0.4;
-}
-
-.empty-state-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: var(--fg);
-}
-
-.empty-state-description {
-  font-size: 13px;
-  color: var(--fg-subtle);
-  max-width: 280px;
-  margin: 0 auto 20px;
-}
-```
+### Color Usage (Restrained Green)
+- **Primary (green)**: Active nav, hover borders, evidence indicators, CTAs, primary buttons
+- **Amber**: Warnings, in-flight states, attention badge
+- **Red**: Errors, failed states, destructive actions
+- **Gray/muted**: Default state, borders, metadata, disabled
+- **NO**: Neon glow, heavy glass (backdrop-filter on cards), repeated rainbow accents
 
 ---
 
-## 6. Compact Timelines (Linear, Attio)
+## Files Modified
+- `src/app/(app)/dashboard/page.tsx` — main dashboard page structure
+- `src/app/(app)/dashboard/dashboard.css` — all dashboard-specific styles
+- `src/components/design/kpi.tsx` — KPI component with motion
+- `docs/dashboard-redesign/INSPIRATION.md` — this file
 
-### Structure
-```
-┌─────────────────────────────────────┐
-│ ● Event title          2h ago       │ ← 14px text, 8px dot
-│ ○ Event title          1d ago       │ ← Hollow = older/less important
-│ ○ Event title          3d ago       │
-│                                     │
-│ View all activity →                 │ ← Footer link
-└─────────────────────────────────────┘
-```
-
-**CSS**:
-```css
-.timeline-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 0;
-}
-
-.timeline-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--primary);
-  flex-shrink: 0;
-}
-
-.timeline-dot.hollow {
-  background: transparent;
-  border: 2px solid var(--border-ds);
-}
-
-.timeline-content {
-  flex: 1;
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.timeline-timestamp {
-  font-size: 12px;
-  color: var(--fg-subtle);
-  flex-shrink: 0;
-}
-```
-
-**LavorAI Usage**:
-- Recent activity: "Applied to [company]", "Recruiter replied", "Interview scheduled"
-- Limit: Latest 5 events
-- Relative timestamps: "2h ago", "1d ago", "3d ago"
-
----
-
-## 7. Responsive Grid (Vercel, Raycast)
-
-### Desktop (1440px+)
-```
-┌─────────────────────────────────────────────────────────┐
-│ [Main column 66%]         [Sidebar 33%]                 │
-│ ┌──────────────────────┐  ┌──────────────┐            │
-│ │ Needs Attention      │  │ CV Thumbnail │            │
-│ └──────────────────────┘  └──────────────┘            │
-│ ┌──────────────────────┐  ┌──────────────┐            │
-│ │ Application Status   │  │ Interviews   │            │
-│ └──────────────────────┘  └──────────────┘            │
-│ ┌──────────────────────┐  ┌──────────────┐            │
-│ │ Activity Timeline    │  │ Opportunities│            │
-│ └──────────────────────┘  └──────────────┘            │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Tablet (768px)
-```
-┌─────────────────────────────┐
-│ [Single column]             │
-│ ┌─────────────────────────┐ │
-│ │ CV Thumbnail (compact)  │ │
-│ └─────────────────────────┘ │
-│ ┌─────────────────────────┐ │
-│ │ Needs Attention         │ │
-│ └─────────────────────────┘ │
-│ ┌─────────────────────────┐ │
-│ │ Application Status      │ │
-│ └─────────────────────────┘ │
-│ ...                         │
-└─────────────────────────────┘
-```
-
-### Mobile (375px)
-```
-┌───────────────┐
-│ [Full width]  │
-│ ┌───────────┐ │
-│ │ Compact   │ │
-│ │ cards     │ │
-│ └───────────┘ │
-│ ┌───────────┐ │
-│ │ Stacked   │ │
-│ └───────────┘ │
-└───────────────┘
-```
-
-**CSS Grid**:
-```css
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 24px;
-}
-
-@media (max-width: 1024px) {
-  .dashboard-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 640px) {
-  .dashboard-grid {
-    gap: 16px;
-  }
-}
-```
-
----
-
-## 8. KPI Display (Stripe, Mercury)
-
-### Structure
-```
-┌─────────────────────────────────────┐
-│ 12          ↑ 20%                   │ ← Large number + trend
-│ Confirmed submissions               │ ← Label
-└─────────────────────────────────────┘
-```
-
-**CSS**:
-```css
-.kpi-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.kpi-value {
-  font-size: 32px;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.kpi-trend {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--success);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.kpi-label {
-  font-size: 13px;
-  color: var(--fg-subtle);
-  font-weight: 500;
-}
-```
-
-**LavorAI Usage**:
-- Confirmed submissions (not "invii confermati" - use evidence count)
-- Recruiter replies (not "con risposte" - use distinct count)
-- Interviews scheduled
-- Offers received
-
-**NO duplicated KPIs**: Each metric shown once, with clear definition.
-
----
-
-## 9. Hover States (Linear, Arc)
-
-**Subtle, fast transitions**:
-```css
-.interactive-card {
-  cursor: pointer;
-  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.interactive-card:hover {
-  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
-  border-color: var(--border-hover);
-  transform: translateY(-1px);
-}
-
-.link-subtle {
-  color: var(--fg-subtle);
-  text-decoration: none;
-  transition: color 0.15s;
-}
-
-.link-subtle:hover {
-  color: var(--fg);
-}
-
-.button-ghost {
-  background: transparent;
-  border: 1px solid var(--border-ds);
-  transition: all 0.15s;
-}
-
-.button-ghost:hover {
-  background: var(--bg-subtle);
-  border-color: var(--border-hover);
-}
-```
-
----
-
-## 10. Focus States (Accessibility)
-
-**Keyboard navigation** (Linear pattern):
-```css
-.focusable:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-
-/* Remove default browser outline */
-.focusable:focus {
-  outline: none;
-}
-```
-
----
-
-## Design Tokens Summary
-
-```css
-:root {
-  /* Spacing */
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 12px;
-  --space-base: 16px;
-  --space-lg: 20px;
-  --space-xl: 24px;
-  --space-2xl: 32px;
-
-  /* Border radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 12px;
-
-  /* Shadows */
-  --shadow-card: 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.08);
-  --shadow-card-active: 0 6px 16px rgba(0,0,0,0.12);
-
-  /* Transitions */
-  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-```
-
----
-
-## Constraints Applied
-
-**MUST HAVE**:
-- ✅ Matte black/charcoal background (no globe)
-- ✅ Restrained green accents (`#00efa0` / `#059669`)
-- ✅ One outline icon family (Lucide)
-- ✅ 1px borders (not heavy)
-- ✅ Generous spacing (24-32px card padding)
-- ✅ Responsive 1440/768/375
-- ✅ No personal greeting
-- ✅ No neon/chrome/excessive glass
-
-**MUST NOT HAVE**:
-- ❌ Globe map (removed)
-- ❌ Duplicated KPIs (single source)
-- ❌ Admin UI for customers (server-hidden)
-- ❌ Fabricated data (evidence-backed only)
-- ❌ Confusing status labels (clear lifecycle)
-
----
-
-**References**: Linear issue tracker, Vercel deployment dashboard, Stripe payments dashboard, Mercury banking interface, Arc browser new tab, Raycast command palette, Attio CRM workspace.
-
-**Implementation**: `src/app/(app)/dashboard/page-redesign.tsx` and `dashboard-redesign.css`
+## Testing Checklist
+- [ ] Desktop 1440px populated: KPIs in 4-col row, 2-col grid layout visible
+- [ ] Desktop 1440px empty user: Empty states render correctly, no data errors
+- [ ] Desktop 1440px non-admin: Admin links hidden, user metrics only
+- [ ] Tablet 768px populated: KPIs 2x2, main + sidebar in 1 column
+- [ ] Mobile 375px populated: KPIs 2x2 or 1 col, full-page scroll, bottom nav clearance
+- [ ] Motion respects `prefers-reduced-motion: reduce`
+- [ ] Numbers count up on first view, not on every scroll
+- [ ] Hover states work on cards, timeline items, checklist items
+- [ ] All data from `dashboard-metrics-shared.ts`, no fabricated counts
+- [ ] TypeScript compiles, tests pass, build succeeds
