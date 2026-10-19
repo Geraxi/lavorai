@@ -81,7 +81,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasInterviewCopilot: false,
     features: [
       "50 candidature al mese",
-      "Invio su tua conferma, o automatico se lo attivi, sui portali supportati",
+      "Invio su tua conferma, o automatico se lo attivi, sugli ATS pubblici supportati (Greenhouse, Lever, Ashby, Workable e altri)",
       "CV optimization AI",
       "Cover letter AI",
       "Formato DOCX",
@@ -111,7 +111,7 @@ export const TIERS: Record<Tier, TierConfig> = {
       "[target] Founder Interview Coach (Opportunity Analyzer + Equity + Vocab)",
       "[sparkles] Interview Copilot live con teleprompter + audio capture {soon}",
       "Candidature illimitate",
-      "Tutti gli ATS supportati (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee e altri), con invio automatico opzionale",
+      "Tutti gli ATS pubblici supportati (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee e altri), con invio automatico opzionale",
       "CV optimization AI multi-variante",
       "Cover letter AI personalizzata",
       "Formato DOCX, PDF e Europass",
