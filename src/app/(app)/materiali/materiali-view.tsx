@@ -46,7 +46,7 @@ const sent = materialSent;
 const review = (item: MaterialItem) => ["failed", "needs_answers", "awaiting_consent"].includes(item.status) || ["accepted", "unconfirmed", "failed", "manual"].includes(item.delivery?.phase ?? "") || (item.status === "success" && !sent(item));
 const ready = (item: MaterialItem) => !sent(item) && !review(item) && (item.hasPdf || item.hasDocx);
 const date = (value: string, locale = "it") => new Date(value).toLocaleDateString(locale === "en" ? "en-GB" : "it-IT", { day: "numeric", month: "short", year: "numeric" });
-const language = (value: string | null) => value?.toLowerCase() === "en" ? "EN" : value?.toLowerCase() === "it" ? "IT" : "—";
+const language = (value: string | null) => value?.toLowerCase() === "en" ? "EN" : value?.toLowerCase() === "it" ? "IT" : null;
 
 function status(item: MaterialItem): { text: string; tone: "mint" | "amber" | "blue" } {
   if (sent(item)) return { text: "Invio confermato", tone: "mint" };
@@ -57,15 +57,16 @@ function status(item: MaterialItem): { text: string; tone: "mint" | "amber" | "b
   return { text: ready(item) ? "Pronto" : "In preparazione", tone: "blue" };
 }
 
+// Match is shown as a plain number (no gauge): same reading as the rest of the app.
 function Match({ value, large = false }: { value: number | null; large?: boolean }) {
-  const tr = (text: string) => materialText(locale, text);
   const locale = useLocale();
-  if (value == null) return <span className="mat-match-empty">{tr("Match non calcolato")}</span>;
-  const score = Math.max(0, Math.min(100, value));
+  const tr = (text: string) => materialText(locale, text);
+  if (value == null) return <span className="mat-match-empty" title={tr("Match non calcolato")}>{large ? tr("Match non calcolato") : "Match —"}</span>;
+  const score = Math.max(0, Math.min(100, Math.round(value)));
   return (
-    <div className={`mat-match ${large ? "mat-match-large" : ""}`} style={{ background: `conic-gradient(var(--mat-mint) ${score * 3.6}deg, var(--mat-track) 0)` }} aria-label={`Match ${score}%`}>
-      <span>{score}%</span>
-    </div>
+    <span className={`mat-match-num ${large ? "is-large" : ""}`} aria-label={`Match ${score}%`}>
+      <small>Match</small> {score}%
+    </span>
   );
 }
 
@@ -142,10 +143,12 @@ export function MaterialiView({ items, total }: { items: MaterialItem[]; total: 
   }, [items, query, filter, lang, sort]);
   const selected = visible.find((item) => item.id === selectedId) ?? visible[0] ?? null;
   const latest = items[0]?.createdAt;
+  const cvCount = items.filter((item) => item.hasPdf || item.hasDocx).length;
+  const one = (n: number, it: string, en: string, many: string) => (n === 1 ? (locale === "en" ? en : it) : tr(many));
 
   return (
     <>
-    <AppTopbar title={tr("CV per posizione")} />
+    <AppTopbar title={tr("CV per posizione")} breadcrumb={locale === "en" ? "Work" : "Lavoro"} />
     <div className="mat-page">
       <header className="mat-header">
         <div>
@@ -156,9 +159,9 @@ export function MaterialiView({ items, total }: { items: MaterialItem[]; total: 
       </header>
 
       <section className="mat-summary" aria-label={tr("Riepilogo documenti")}>
-        <div className="mat-summary-item"><FileText size={22} aria-hidden /><div><strong>{total.toLocaleString(locale)}</strong><span>{tr("pacchetti")}</span></div></div>
-        <div className="mat-summary-item"><FileCheck2 size={22} aria-hidden /><div><strong>{items.filter((item) => item.hasPdf || item.hasDocx).length.toLocaleString(locale)}</strong><span>{tr("CV disponibili")}{total > items.length ? (locale === "en" ? " in recent packages" : " nei più recenti") : ""}</span></div></div>
-        <div className="mat-summary-item"><Send size={22} aria-hidden /><div><strong>{counts.sent.toLocaleString(locale)}</strong><span>{tr("inviati")}{total > items.length ? (locale === "en" ? " in recent packages" : " nei più recenti") : ""}</span></div></div>
+        <div className="mat-summary-item"><FileText size={22} aria-hidden /><div><strong>{total.toLocaleString(locale)}</strong><span>{total === 1 ? (locale === "en" ? "package" : "pacchetto") : tr("pacchetti")}</span></div></div>
+        <div className="mat-summary-item"><FileCheck2 size={22} aria-hidden /><div><strong>{cvCount.toLocaleString(locale)}</strong><span>{one(cvCount, "CV disponibile", "Available CV", "CV disponibili")}{total > items.length ? (locale === "en" ? " in recent packages" : " nei più recenti") : ""}</span></div></div>
+        <div className="mat-summary-item"><Send size={22} aria-hidden /><div><strong>{counts.sent.toLocaleString(locale)}</strong><span>{one(counts.sent, "inviato", "confirmed submission", "inviati")}{total > items.length ? (locale === "en" ? " in recent packages" : " nei più recenti") : ""}</span></div></div>
         <div className="mat-summary-item mat-summary-update"><Clock3 size={22} aria-hidden /><div><strong>{latest ? date(latest, locale) : "—"}</strong><span>{tr("ultimo pacchetto creato")}</span></div></div>
       </section>
 
@@ -188,7 +191,7 @@ export function MaterialiView({ items, total }: { items: MaterialItem[]; total: 
                   const itemStatus = status(item);
                   return <button type="button" key={item.id} className={`mat-list-row ${selected?.id === item.id ? "is-selected" : ""}`} onClick={() => { setSelectedId(item.id); setTab("cv"); }} aria-current={selected?.id === item.id ? "true" : undefined}>
                     <CompanyLogo company={item.company} color={companyColor(item.company)} size={42} rounded={10} url={item.jobUrl} />
-                    <span className="mat-list-copy"><strong>{item.title}</strong><span>{item.company}</span><small>{date(item.createdAt, locale)} <span aria-hidden>·</span> {language(item.language)}</small></span>
+                    <span className="mat-list-copy"><strong>{item.title}</strong><span>{item.company}</span><small>{date(item.createdAt, locale)}{language(item.language) ? <> <span aria-hidden>·</span> {language(item.language)}</> : null}</small></span>
                     <span className="mat-list-end"><Match value={item.match} /><span className={`mat-status mat-${itemStatus.tone}`}>{tr(itemStatus.text)}</span></span>
                   </button>;
                 })}

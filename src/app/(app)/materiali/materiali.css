@@ -330,3 +330,101 @@
 .cvd-collapsed button:hover { color: var(--cvd-fg); }
 .cvd-foot { margin: 0; color: var(--cvd-muted); font-size: 11.5px; }
 @media (max-width: 420px) { .cvd { padding: 14px; } .cvd-lines { font-size: 12.5px; max-height: 60vh; } }
+
+/* ── Premium dark pass (batch 2): pm tokens, no mint, no glow, no gauge. ── */
+.lavorai-app-shell.product-workspace .mat-page {
+  --mat-mint: var(--pm-fg); --mat-mint-ink: #08090a; --mat-track: var(--pm-line);
+  --mat-panel: var(--pm-card); --mat-panel-raised: var(--pm-inset);
+  --mat-line: var(--pm-line); --mat-muted: var(--pm-muted);
+  padding: 28px 24px 40px; max-width: 1280px;
+}
+.lavorai-app-shell.product-workspace .mat-page::before { display: none; }
+.lavorai-app-shell.product-workspace .mat-page :is(button, a, input, select):focus-visible { outline-color: rgba(255,255,255,.5); }
+.lavorai-app-shell.product-workspace .mat-header { margin-bottom: 20px; }
+.lavorai-app-shell.product-workspace .mat-header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--pm-fg); }
+.lavorai-app-shell.product-workspace .mat-header p { font-size: 13px; color: var(--pm-muted); }
+/* Header CTA is secondary (the page's primary is opening a package): ghost. */
+.lavorai-app-shell.product-workspace .mat-new { background: transparent; color: var(--pm-fg); border: 1px solid rgba(255,255,255,.12); font-weight: 500; font-size: 12.5px; min-height: 34px; }
+.lavorai-app-shell.product-workspace .mat-new:hover { border-color: rgba(255,255,255,.22); filter: none; transform: none; }
+.lavorai-app-shell.product-workspace .mat-detail-actions .mat-primary { background: var(--pm-green); color: #06140d; border: 0; font-weight: 600; font-size: 12.5px; min-height: 34px; box-shadow: none; }
+.lavorai-app-shell.product-workspace .mat-detail-actions .mat-primary:hover { filter: brightness(1.06); transform: none; }
+
+.lavorai-app-shell.product-workspace .mat-summary { gap: 12px; margin-bottom: 16px; }
+.lavorai-app-shell.product-workspace .mat-summary-item { background: var(--pm-card); border: 1px solid var(--pm-line); border-radius: 14px; padding: 14px 16px; min-height: 0; box-shadow: var(--pm-highlight); }
+.lavorai-app-shell.product-workspace .mat-summary-item > svg { color: var(--pm-faint); width: 16px; height: 16px; }
+.lavorai-app-shell.product-workspace .mat-summary-item strong { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--pm-fg); }
+.lavorai-app-shell.product-workspace .mat-summary-update strong { font-size: 14px; }
+.lavorai-app-shell.product-workspace .mat-summary-item span { color: var(--pm-muted); font-size: 12px; }
+
+/* Filters as pm-seg */
+.lavorai-app-shell.product-workspace .mat-filters { background: var(--pm-inset); border: 1px solid var(--pm-line); border-radius: 9px; padding: 2px; gap: 2px; }
+.lavorai-app-shell.product-workspace .mat-filters button { min-height: 28px; border: 0; border-radius: 7px; color: var(--pm-muted); font-size: 12px; font-weight: 500; }
+.lavorai-app-shell.product-workspace .mat-filters button:hover { color: var(--pm-fg-2); }
+.lavorai-app-shell.product-workspace .mat-controls .mat-filters button.is-active { background: rgba(255,255,255,.08); color: var(--pm-fg); font-weight: 500; box-shadow: var(--pm-highlight); }
+.lavorai-app-shell.product-workspace .mat-search, .lavorai-app-shell.product-workspace .mat-select { background: var(--pm-inset); border-color: var(--pm-line); border-radius: 8px; }
+
+.lavorai-app-shell.product-workspace :is(.mat-list, .mat-detail) { background: var(--pm-card); border: 1px solid var(--pm-line); border-radius: 14px; box-shadow: var(--pm-highlight); }
+.lavorai-app-shell.product-workspace .mat-list-heading { color: var(--pm-muted); font-weight: 500; }
+.lavorai-app-shell.product-workspace .mat-list-row { border: 1px solid transparent; border-radius: 10px; background: transparent; }
+.lavorai-app-shell.product-workspace .mat-list-row:hover { background: rgba(255,255,255,.025); }
+.lavorai-app-shell.product-workspace .mat-list-row.is-selected { border-color: rgba(255,255,255,.12); background: rgba(255,255,255,.04); }
+.lavorai-app-shell.product-workspace .mat-list-copy strong { font-weight: 500; color: var(--pm-fg); }
+
+/* Match as a number */
+.lavorai-app-shell .mat-match-num { display: inline-flex; align-items: baseline; gap: 4px; color: var(--pm-fg); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lavorai-app-shell .mat-match-num small { color: var(--pm-muted); font-size: 11px; font-weight: 500; }
+.lavorai-app-shell .mat-match-num.is-large { font-size: 16px; }
+.lavorai-app-shell.product-workspace .mat-match-empty { color: var(--pm-faint); font-size: 11.5px; max-width: none; white-space: nowrap; text-align: right; }
+
+/* Status: neutral pill, dot carries the tone */
+.lavorai-app-shell.product-workspace .mat-status { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--pm-line); background: transparent; color: var(--pm-fg-2); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.lavorai-app-shell.product-workspace .mat-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--pm-faint); }
+.lavorai-app-shell.product-workspace .mat-status.mat-mint::before { background: var(--pm-green); }
+.lavorai-app-shell.product-workspace .mat-status.mat-amber::before { background: var(--pm-amber); }
+
+/* Journey: green only for steps backed by evidence */
+.lavorai-app-shell.product-workspace .mat-journey { background: transparent; border: 1px solid var(--pm-line); border-radius: 10px; }
+.lavorai-app-shell.product-workspace .mat-step { color: var(--pm-faint); }
+.lavorai-app-shell.product-workspace .mat-step.is-done { color: var(--pm-fg-2); }
+.lavorai-app-shell.product-workspace .mat-step.is-done svg { color: var(--pm-green); }
+.lavorai-app-shell.product-workspace .mat-step span { background: transparent; border-color: var(--pm-line); }
+
+.lavorai-app-shell.product-workspace .mat-detail-tabs { border-bottom: 1px solid var(--pm-line); }
+.lavorai-app-shell.product-workspace .mat-detail-tabs button { color: var(--pm-muted); font-weight: 500; }
+.lavorai-app-shell.product-workspace .mat-detail-tabs button.is-active { color: var(--pm-fg); border-bottom-color: var(--pm-fg); font-weight: 500; }
+
+/* Preview: real documents keep the paper look; empty/error states stay dark. */
+.lavorai-app-shell.product-workspace .mat-preview { box-shadow: none; border-radius: 10px; }
+.lavorai-app-shell.product-workspace .mat-preview:has(> .mat-preview-fallback, > .mat-job-paper) { background: var(--pm-inset); border: 1px solid var(--pm-line); color: var(--pm-fg-2); }
+.lavorai-app-shell.product-workspace .mat-preview :is(.mat-preview-fallback, .mat-job-paper) > svg { color: var(--pm-faint); }
+.lavorai-app-shell.product-workspace .mat-preview :is(.mat-preview-fallback, .mat-job-paper) h3 { color: var(--pm-fg); font-weight: 500; }
+.lavorai-app-shell.product-workspace .mat-preview :is(.mat-preview-fallback, .mat-job-paper) p,
+.lavorai-app-shell.product-workspace .mat-preview .mat-job-paper > span { color: var(--pm-muted); }
+.lavorai-app-shell.product-workspace .mat-preview .mat-job-paper a { color: var(--pm-fg); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(255,255,255,.25); }
+
+.lavorai-app-shell.product-workspace .mat-document-aside { background: transparent; border: 1px solid var(--pm-line); border-radius: 12px; }
+.lavorai-app-shell.product-workspace .mat-aside-label { color: var(--pm-faint); font-weight: 600; letter-spacing: .08em; }
+.lavorai-app-shell.product-workspace .mat-download { background: transparent; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; color: var(--pm-fg); font-weight: 500; }
+.lavorai-app-shell.product-workspace .mat-download:hover { border-color: rgba(255,255,255,.22); color: var(--pm-fg); }
+.lavorai-app-shell.product-workspace .mat-download svg { color: var(--pm-muted); }
+.lavorai-app-shell.product-workspace .mat-aside-state strong { color: var(--pm-fg); }
+.lavorai-app-shell.product-workspace .mat-aside-state.mat-amber svg { color: var(--pm-amber); }
+.lavorai-app-shell.product-workspace .mat-aside-state.mat-mint svg { color: var(--pm-green); }
+.lavorai-app-shell.product-workspace .mat-aside-next { color: var(--pm-fg); font-weight: 500; }
+
+.lavorai-app-shell.product-workspace .mat-empty { background: var(--pm-card); border: 1px solid var(--pm-line); border-radius: 14px; }
+.lavorai-app-shell.product-workspace .mat-empty-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--pm-inset); border: 1px solid var(--pm-line); color: var(--pm-muted); }
+.lavorai-app-shell.product-workspace .mat-empty .mat-primary { background: transparent; color: var(--pm-fg); border: 1px solid rgba(255,255,255,.12); font-weight: 500; box-shadow: none; }
+.lavorai-app-shell.product-workspace .mat-empty h2 { font-size: 16px; font-weight: 500; color: var(--pm-fg); }
+.lavorai-app-shell.product-workspace .mat-empty p { color: var(--pm-muted); font-size: 13px; }
+
+@media (max-width: 700px) {
+  .lavorai-app-shell.product-workspace .mat-page { padding: 20px 12px 32px; }
+  .lavorai-app-shell.product-workspace .mat-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.lavorai-app-shell.product-workspace .mat-list-row { grid-template-columns: 32px minmax(0, 1fr) auto; }
+.lavorai-app-shell.product-workspace .mat-list-end { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+@media (max-width: 1100px) {
+  /* Mobile list is a horizontal rail; a single package should use the full width. */
+  .lavorai-app-shell.product-workspace .mat-list-row:only-child { flex-basis: 100%; }
+}
