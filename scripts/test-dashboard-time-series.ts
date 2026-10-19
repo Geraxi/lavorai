@@ -70,7 +70,9 @@ const db = {
     },
   },
 };
-const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence });
+const uiStatus = load("src/lib/ui-application-status.ts", {});
+const stageModule = load("src/lib/application-stage.ts", { "@/lib/application-evidence": evidence, "@/lib/ui-application-status": uiStatus });
+const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/application-stage": stageModule, "@/lib/ui-application-status": uiStatus });
 
 async function main() {
   // Pure bucketing

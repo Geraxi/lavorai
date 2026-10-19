@@ -109,7 +109,9 @@ async function main() {
   cVProfile: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
   };
   const element = (type: unknown, props: unknown) => ({ type, props });
-  const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence });
+  const uiStatus = load("src/lib/ui-application-status.ts", {});
+  const stageModule = load("src/lib/application-stage.ts", { "@/lib/application-evidence": evidence, "@/lib/ui-application-status": uiStatus });
+  const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/application-stage": stageModule, "@/lib/ui-application-status": uiStatus });
   const lucide = new Proxy({}, { get: (_target, name) => String(name), has: () => true });
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },
@@ -169,7 +171,9 @@ async function main() {
   assert.equal(kpis.interviews, "1", "Interviews count recruiter/user evidence only");
   assert.equal(kpis.offers, "1", "Manual offer status remains intact");
   assert.equal(stageCounts.sent, 2, "Progress 'sent' uses the evidence-backed count, not raw success rows");
-  assert.equal(stageCounts.unverified, 6, "Success rows without evidence stay 'outcome unverified'");
+  assert.equal(stageCounts.submitted, 1, "Provider-accepted email is 'sent, delivery pending', not confirmed");
+  assert.equal(stageCounts.stopped, 1, "A bounced email is not sent");
+  assert.equal(stageCounts.unverified, 199, "Success rows without evidence (legacy, unverified portal, mock) stay 'outcome unverified'");
   console.log("PASS dashboard owner isolation, complete bounded pagination, real receipt/delivery evidence and source-row response counts.");
 
   const globe = load("src/lib/dashboard-globe-data.ts", {

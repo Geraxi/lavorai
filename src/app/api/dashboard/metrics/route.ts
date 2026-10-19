@@ -12,9 +12,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
-import { journeyStage, type JourneyStage } from "@/lib/ui-application-status";
+import type { JourneyStage } from "@/lib/ui-application-status";
 import {
   getAllDashboardMetrics,
+  getApplicationStageCounts,
   getUnreadMessages,
   getDraftReplies,
 } from "@/lib/dashboard-metrics-shared";
@@ -33,7 +34,7 @@ interface DashboardMetrics {
     interviews: number;
     offers: number;
   };
-  progress: Record<JourneyStage | "unverified", number>;
+  progress: Record<JourneyStage, number>;
   opportunities: {
     open: number;
     compatible: number;
@@ -63,19 +64,15 @@ export async function GET(request: NextRequest) {
   // Use shared metrics for consistency across dashboard, applications, inbox, analytics
   const [
     sharedMetrics,
-    statusGroups,
+    stageData,
     newJobsCount,
     unreadCount,
     drafts,
   ] = await Promise.all([
     getAllDashboardMetrics(user.id),
     
-    // Progress stages (computed here as it's UI-specific grouping)
-    prisma.application.groupBy({
-      by: ["status"],
-      where: { userId: user.id, status: { not: "diagnostic" } },
-      _count: { _all: true },
-    }),
+    // Progress stages: evidence-aware, same function as the dashboard page
+    getApplicationStageCounts(user.id),
     
     // New jobs (last 48h)
     prisma.job.count({
@@ -90,27 +87,7 @@ export async function GET(request: NextRequest) {
     getDraftReplies(user.id),
   ]);
 
-  // Aggregate progress stages (same logic as dashboard)
-  const stageCounts = new Map<JourneyStage | "unverified", number>();
-  for (const group of statusGroups) {
-    const stage = journeyStage(group.status);
-    if (!stage || stage === "unverified" || stage === "sent") continue;
-    stageCounts.set(stage, (stageCounts.get(stage) ?? 0) + group._count._all);
-  }
-  stageCounts.set("sent", sharedMetrics.confirmed);
-  stageCounts.set("unverified", sharedMetrics.unverified);
-
-  const progress: Record<JourneyStage | "unverified", number> = {
-    preparing: stageCounts.get("preparing") ?? 0,
-    prepared: stageCounts.get("prepared") ?? 0,
-    awaiting_approval: stageCounts.get("awaiting_approval") ?? 0,
-    approved: stageCounts.get("approved") ?? 0,
-    manual: stageCounts.get("manual") ?? 0,
-    in_flight: stageCounts.get("in_flight") ?? 0,
-    sent: stageCounts.get("sent") ?? 0,
-    unverified: stageCounts.get("unverified") ?? 0,
-    stopped: stageCounts.get("stopped") ?? 0,
-  };
+  const progress = stageData.stages;
 
   const metrics: DashboardMetrics = {
     userId: user.id,

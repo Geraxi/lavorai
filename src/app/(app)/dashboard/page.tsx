@@ -29,10 +29,10 @@ import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
 import { prisma } from "@/lib/db";
 import { rowToProfile } from "@/lib/cv-profile-types";
-import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
-import { journeyStage, STAGE_LABEL, type JourneyStage } from "@/lib/ui-application-status";
+import { STAGE_LABEL } from "@/lib/ui-application-status";
 import {
-  getConfirmedSubmissions,
+  applicationStage,
+  getApplicationStageCounts,
   getRecruiterReplies,
   getOffers,
   getInterviewInvites,
@@ -70,12 +70,11 @@ export default async function DashboardPage() {
   const lang = en ? "en" : "it";
 
   const [
-    confirmed,
+    stageData,
     replies,
     interviews,
     offers,
     opportunities,
-    statusGroups,
     latestCv,
     cvProfileRow,
     onboarding,
@@ -84,16 +83,11 @@ export default async function DashboardPage() {
     recentActivity,
     series,
   ] = await Promise.all([
-    getConfirmedSubmissions(user.id),
+    getApplicationStageCounts(user.id),
     getRecruiterReplies(user.id),
     getInterviewInvites(user.id),
     getOffers(user.id),
     getOpenOpportunities(user.id),
-    prisma.application.groupBy({
-      by: ["status"],
-      where: { userId: user.id, status: { not: "diagnostic" } },
-      _count: { _all: true },
-    }),
     prisma.cVDocument.findFirst({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
@@ -131,20 +125,11 @@ export default async function DashboardPage() {
   ]);
 
   // ── Progress by journey stage ────────────────────────────────────────
-  // "success" alone is NOT delivery: only evidence-backed sends count as
-  // "sent"; the remaining success rows stay "outcome unverified".
-  const stageCounts = new Map<JourneyStage, number>();
-  let totalApplications = 0;
-  for (const group of statusGroups) {
-    totalApplications += group._count._all;
-    const stage = journeyStage(group.status);
-    if (!stage) continue;
-    stageCounts.set(stage, (stageCounts.get(stage) ?? 0) + group._count._all);
-  }
-  const unverifiedRaw = stageCounts.get("unverified") ?? 0;
-  stageCounts.set("sent", confirmed);
-  stageCounts.set("unverified", Math.max(0, unverifiedRaw - confirmed));
-  const stages = STAGE_ORDER.map((stage) => ({ stage, count: stageCounts.get(stage) ?? 0 })).filter((s) => s.count > 0);
+  // Evidence-aware stages from the shared metrics module: "success" alone is
+  // NOT delivery; "sent" is the same number as the "Invii confermati" KPI.
+  const { total: totalApplications, stages: stageCounts } = stageData;
+  const confirmed = stageCounts.sent;
+  const stages = STAGE_ORDER.map((stage) => ({ stage, count: stageCounts[stage] })).filter((s) => s.count > 0);
   const trendHasData = !!series && series.weeks.some((w) => w.sent > 0 || w.replies > 0);
 
   const trendSeriesMeta = [
@@ -152,11 +137,7 @@ export default async function DashboardPage() {
     { key: "replies" as const, label: tr("Risposte recruiter", "Recruiter replies"), tone: "neutral" as const },
   ];
 
-  const activity = recentActivity.map((app) => {
-    let stage = journeyStage(app.status);
-    if (stage === "unverified" && isConfirmedDelivery(deliveryEvidence(app))) stage = "sent";
-    return { ...app, stage };
-  });
+  const activity = recentActivity.map((app) => ({ ...app, stage: applicationStage(app) }));
 
   const cvProfile = cvProfileRow ? rowToProfile(cvProfileRow) : null;
   const hasCv = !!latestCv || !!cvProfile;

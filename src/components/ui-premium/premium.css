@@ -557,3 +557,67 @@
 @media (prefers-reduced-motion: reduce) {
   .pm-trend-fade { animation: none; }
 }
+
+/* ── Page layout (shared by every redesigned page) ─────────────────────── */
+.pm-page {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px 32px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--pm-fg);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+.pm-page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.pm-page-head h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em; color: var(--pm-fg); }
+.pm-page-head p { margin: 4px 0 0; font-size: 13px; color: var(--pm-muted); }
+.pm-page-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lavorai-app-shell .pm-page-actions .ds-btn {
+  height: 32px;
+  min-height: 32px;
+  border: 1px solid var(--pm-line-strong) !important;
+  border-radius: 8px;
+  background: transparent !important;
+  color: var(--pm-fg) !important;
+  font-size: 12.5px;
+  box-shadow: none !important;
+}
+.pm-btn-ghost:disabled { opacity: 0.45; cursor: not-allowed; }
+button.pm-btn-ghost, button.pm-btn-primary { font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer; }
+
+/* Segmented control */
+.pm-seg {
+  display: inline-flex;
+  height: 32px;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--pm-line);
+  border-radius: 8px;
+  background: var(--pm-inset);
+}
+.pm-seg button {
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--pm-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+.pm-seg button:hover { color: var(--pm-fg-2); }
+.pm-seg button[aria-pressed="true"] { background: rgba(255, 255, 255, 0.07); color: var(--pm-fg); box-shadow: var(--pm-highlight); }
+[data-theme="light"] .pm-seg button[aria-pressed="true"] { background: #ffffff; box-shadow: 0 1px 2px rgba(15, 16, 18, 0.08); }
+.pm-seg button:focus-visible { outline: 2px solid var(--pm-green); outline-offset: 1px; }
+
+@media (max-width: 1023px) { .pm-page { padding: 24px 20px 40px; } }
+@media (max-width: 640px) {
+  .pm-page { padding: 20px 16px 32px; gap: 16px; }
+  .pm-page-head { align-items: flex-start; }
+  .pm-page-head h1 { font-size: 20px; }
+}

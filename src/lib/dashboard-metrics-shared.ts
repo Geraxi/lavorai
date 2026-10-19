@@ -18,6 +18,18 @@
 
 import { prisma } from "@/lib/db";
 import { applicationEvidenceDate, deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
+import { ACTION_STAGES, applicationStage, emptyStageCounts, type StageCounts } from "@/lib/application-stage";
+import { STATUS_STAGE } from "@/lib/ui-application-status";
+
+export {
+  ACTION_STAGES,
+  applicationStage,
+  emptyStageCounts,
+  isInterviewEvidence,
+  isOffer,
+  needsUserAction,
+  type StageCounts,
+} from "@/lib/application-stage";
 
 /**
  * Confirmed submissions (evidence-backed only)
@@ -206,34 +218,73 @@ export async function getUnreadMessages(userId: string): Promise<number> {
 
 /**
  * Actions needed (blocking user actions)
- * 
- * Counts applications that require user intervention:
- * - Awaiting approval (status: awaiting_consent)
- * - Needs answers (status: needs_answers with pending questions)
- * 
- * Excludes:
- * - Queued/optimizing (system is working, user doesn't need to act)
- * - Failed/cancelled (already stopped, no action possible)
- * - Success/sent (already submitted, no action needed)
- * 
- * Used by: Dashboard attention queue, Questions
+ *
+ * Applications whose journey stage needs the user: "Da approvare"
+ * (awaiting_consent) and "Da completare" (ready_to_apply, needs_answers,
+ * needs_session). Same definition as the Candidature "Da fare" filter and
+ * the dashboard progress stages, so the numbers match across pages.
+ *
+ * Excludes queued/optimizing (system working), failed/cancelled and sent.
+ *
+ * Used by: Dashboard metrics API, Candidature
  * Time window: Current (active blockers)
  */
 export async function getActionsNeeded(userId: string): Promise<number> {
-  const [awaitingApproval, needsAnswers] = await Promise.all([
-    prisma.application.count({
-      where: { userId, status: "awaiting_consent" },
-    }),
-    prisma.application.count({
-      where: {
-        userId,
-        status: "needs_answers",
-        pendingQuestionsJson: { not: null }, // Has actual questions to answer
-      },
-    }),
-  ]);
+  const statuses = Object.entries(STATUS_STAGE)
+    .filter(([, stage]) => ACTION_STAGES.includes(stage))
+    .map(([status]) => status);
+  return await prisma.application.count({ where: { userId, status: { in: statuses } } });
+}
 
-  return awaitingApproval + needsAnswers;
+/**
+ * Applications by journey stage, with delivery evidence applied
+ * (see applicationStage). One scan, paginated 200 per batch.
+ *
+ * total = every non-diagnostic application (the sidebar/Candidature total).
+ * stages.sent equals getConfirmedSubmissions for the same user.
+ *
+ * Used by: Dashboard progress, dashboard metrics API, Candidature filters
+ * Time window: All time
+ */
+export async function getApplicationStageCounts(userId: string): Promise<{ total: number; stages: StageCounts }> {
+  const stages = emptyStageCounts();
+  let total = 0;
+  let cursor: string | undefined;
+  while (true) {
+    const applications = await prisma.application.findMany({
+      where: { userId, status: { not: "diagnostic" } },
+      orderBy: { id: "asc" },
+      take: 200,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        submittedVia: true,
+        submitConfirmation: true,
+        submissionReceiptJson: true,
+        emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true, acceptedAt: true } },
+      },
+    });
+    for (const application of applications) {
+      if (application.userId !== userId) continue;
+      const stage = applicationStage(application);
+      if (!stage) continue;
+      total++;
+      stages[stage]++;
+    }
+    if (applications.length < 200) break;
+    cursor = applications[applications.length - 1].id;
+  }
+  return { total, stages };
+}
+
+/**
+ * Total applications (all non-diagnostic rows, any stage).
+ * Used by: sidebar count, Candidature header.
+ */
+export async function getApplicationTotal(userId: string): Promise<number> {
+  return await prisma.application.count({ where: { userId, status: { not: "diagnostic" } } });
 }
 
 /**
