@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Icon } from "@/components/design/icon";
 import {
@@ -140,8 +140,8 @@ export function CVBuilder({ initial }: { initial: CVProfile }) {
             type="button"
             onClick={save}
             disabled={isPending || !dirty}
-            className="ds-btn ds-btn-accent"
-            style={{ fontSize: 13 }}
+            className={dirty || isPending ? "ds-btn ds-btn-accent" : "ds-btn pm-saved"}
+            aria-live="polite"
           >
             {isPending ? (<><Icon name="refresh" size={13} /> Salvo...</>) : dirty ? (<><Icon name="check" size={13} /> Salva</>) : (<><Icon name="check" size={13} /> Salvato</>)}
           </button>
@@ -279,6 +279,14 @@ function PhotoUploader() {
   const [hasPhoto, setHasPhoto] = useState(true);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // The <img> can fail before hydration, in which case React never sees
+  // onError and the browser paints the broken-image alt text. Re-check on mount.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth === 0) setHasPhoto(false);
+  }, [photoUrl]);
 
   async function onChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -337,6 +345,7 @@ function PhotoUploader() {
         {hasPhoto ? (
           /* eslint-disable-next-line @next/next/no-img-element */
           <img
+            ref={imgRef}
             src={photoUrl}
             alt="Foto profilo"
             style={{ width: "100%", height: "100%", objectFit: "cover" }}

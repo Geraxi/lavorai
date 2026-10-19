@@ -110,3 +110,15 @@
 .lavorai-app-shell .pm-choice.is-active { border-color: rgba(255, 255, 255, 0.24); background: rgba(255, 255, 255, 0.03); color: var(--pm-fg); }
 .lavorai-app-shell .pm-choice.is-active::after { content: ""; position: absolute; top: 14px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--pm-green); }
 [data-theme="light"] .lavorai-app-shell .pm-choice.is-active { border-color: rgba(15, 16, 18, 0.3); background: rgba(15, 16, 18, 0.02); }
+
+/* File picker (CV upload) */
+.lavorai-app-shell .pm-file { position: relative; display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border: 1px dashed rgba(255, 255, 255, 0.14); border-radius: 10px; background: var(--pm-inset); color: var(--pm-muted); font-size: 13px; cursor: pointer; transition: border-color .15s; }
+.lavorai-app-shell .pm-file:hover, .lavorai-app-shell .pm-file:focus-within { border-color: rgba(255, 255, 255, 0.28); }
+.lavorai-app-shell .pm-file.has-file { border-style: solid; color: var(--pm-fg); }
+.lavorai-app-shell .pm-file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.lavorai-app-shell .pm-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lavorai-app-shell .pm-file-action { color: var(--pm-fg-2); font-size: 12px; font-weight: 500; padding: 4px 10px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 7px; }
+[data-theme="light"] .lavorai-app-shell .pm-file { border-color: rgba(15, 16, 18, 0.18); }
+
+/* Il tuo CV: the page itself is the upload step, so the onboarding notice is redundant there. */
+.lavorai-main:has(.cv-empty) .pm-notice[data-notice="onboarding-cv"] { display: none; }
