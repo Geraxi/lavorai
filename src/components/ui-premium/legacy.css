@@ -92,3 +92,21 @@
 .lavorai-app-shell .pm-form-text p, .lavorai-app-shell .pm-form-text label { margin: 0; font-size: 13px; line-height: 1.55; color: var(--pm-fg-2); }
 .lavorai-app-shell .pm-status-ok { display: inline-flex; align-items: center; gap: 8px; color: var(--pm-fg-2); }
 .lavorai-app-shell .pm-form-text input[type="checkbox"] { accent-color: var(--pm-green); margin-top: 3px; }
+
+/* Saved state of a save button: quiet status, not a CTA. */
+.lavorai-app-shell.product-workspace .ds-btn.pm-saved:disabled { opacity: 1; color: var(--pm-muted); border-color: var(--pm-line); background: transparent; cursor: default; }
+.lavorai-app-shell.product-workspace .ds-btn.pm-saved svg { color: var(--pm-green); }
+
+/* Segmented toggle groups */
+.lavorai-app-shell.product-workspace .ds-toggle-group { background: var(--pm-inset); border: 1px solid var(--pm-line); border-radius: 8px; padding: 2px; gap: 2px; }
+.lavorai-app-shell.product-workspace .ds-toggle-group button { border-radius: 6px; color: var(--pm-muted); font-size: 12px; min-height: 28px; }
+.lavorai-app-shell.product-workspace .ds-toggle-group button:hover { color: var(--pm-fg-2); }
+.lavorai-app-shell.product-workspace .ds-toggle-group button.active { background: rgba(255, 255, 255, 0.08); color: var(--pm-fg); box-shadow: var(--pm-highlight); }
+[data-theme="light"] .lavorai-app-shell.product-workspace .ds-toggle-group button.active { background: #ffffff; box-shadow: 0 1px 2px rgba(15, 16, 18, 0.08); }
+
+/* Choice cards (e.g. Preferenze → Come candidarsi): neutral selection + green dot. */
+.lavorai-app-shell .pm-choice { position: relative; text-align: left; padding: 12px 14px; border: 1px solid var(--pm-line); border-radius: 10px; background: transparent; color: var(--pm-fg-2); cursor: pointer; transition: border-color .15s, background .15s; }
+.lavorai-app-shell .pm-choice:hover { border-color: rgba(255, 255, 255, 0.14); }
+.lavorai-app-shell .pm-choice.is-active { border-color: rgba(255, 255, 255, 0.24); background: rgba(255, 255, 255, 0.03); color: var(--pm-fg); }
+.lavorai-app-shell .pm-choice.is-active::after { content: ""; position: absolute; top: 14px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--pm-green); }
+[data-theme="light"] .lavorai-app-shell .pm-choice.is-active { border-color: rgba(15, 16, 18, 0.3); background: rgba(15, 16, 18, 0.02); }
