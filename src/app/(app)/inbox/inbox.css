@@ -30,3 +30,7 @@
   .inbox-stat-top { flex-direction: column; align-items: flex-start; gap: 0; font-size: 12px; }
   .inbox-stat small { display: none; }
 }
+
+/* App-wide notices (e.g. "Carica il tuo CV") align with the full-bleed stats strip. */
+.lavorai-main:has(.inbox-page) > .pm-notice { width: auto; max-width: none; margin: 16px 24px 0; }
+@media (max-width: 1023px) { .lavorai-main:has(.inbox-page) > .pm-notice { margin: 12px 12px 0; } }
