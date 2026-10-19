@@ -31,6 +31,7 @@ const PROTECTED_PREFIXES = [
   "/analytics",
   "/inbox",
   "/settings",
+  "/admin",
 ];
 
 export async function proxy(request: NextRequest) {
@@ -57,6 +58,30 @@ export async function proxy(request: NextRequest) {
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("next", pathname);
       response = NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // ── Admin route protection ─────────────────────────────────────────
+  // Block /admin/* routes for non-admins (security: prevent direct URL access)
+  if (!response && pathname.startsWith("/admin")) {
+    const secureCookie = request.cookies.getAll().some(({ name }) => name.startsWith("__Secure-authjs.session-token"));
+    const token = await getToken({ req: request, secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET, secureCookie });
+    if (token?.sub) {
+      let user;
+      try {
+        user = await prisma.user.findUnique({ where: { id: token.sub }, select: accessUserSelect });
+      } catch (error) {
+        console.error("[proxy] admin access lookup failed", {
+          code: error && typeof error === "object" && "code" in error ? error.code : "unknown",
+        });
+        return accessUnavailableResponse(pathname);
+      }
+      // Redirect non-admins to dashboard (fail secure)
+      if (user && !isAdmin(user.email)) {
+        return pathname.startsWith("/api/admin")
+          ? NextResponse.json({ error: "admin_required", message: "Admin access required" }, { status: 403 })
+          : NextResponse.redirect(new URL("/dashboard", request.url));
+      }
     }
   }
 

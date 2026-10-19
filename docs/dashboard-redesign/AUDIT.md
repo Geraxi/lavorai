@@ -2,7 +2,8 @@
 
 **Date**: 2026-10-19  
 **Branch**: `cursor/dashboard-redesign-6395`  
-**Purpose**: Comprehensive audit of current dashboard implementation before redesign
+**Purpose**: Comprehensive audit of current dashboard implementation before redesign  
+**Live Production Evidence**: 19 screenshots from lavorai.it (owner account walkthrough)
 
 ---
 
@@ -12,11 +13,22 @@ The current dashboard (`src/app/(app)/dashboard/page.tsx`) serves as the main jo
 
 ### Key Findings
 
-1. **Strong foundation**: Evidence-backed metrics, clear lifecycle states, proper authorization
-2. **Data integrity**: Reliable delivery counts (only confirmed submissions), proper deduplication
-3. **Performance**: Parallel queries, bounded pagination
-4. **UX issues**: Dense information architecture, overlapping status representations, missing intuitive navigation
-5. **Instrumentation gaps**: No dashboard-specific events tracked, missing "time to first useful application"
+**Code-level (Strong Foundation)**:
+1. Evidence-backed metrics, clear lifecycle states, proper authorization
+2. Reliable delivery counts (only confirmed submissions), proper deduplication
+3. Performance: Parallel queries, bounded pagination
+
+**Production Issues (CRITICAL - from live audit 2026-10-19)**:
+4. 🚨 **Conflicting counts across pages**: Dashboard shows 1,195 "needs action" but Questions shows only 7 pending, Dashboard 4 replies vs Analytics 0, Dashboard 160 opportunities vs Jobs 151
+5. 🚨 **Admin UI visible to customers**: Admin nav and "Admin AI" button shown in production (security risk)
+6. 🚨 **Zero confirmed submissions** despite 396 "unverified" + 75 "without proof" = data integrity crisis
+7. ⚠️ **Dangerous UX**: "Apply to all (151)" with no confirmation, test data visible, duplicated KPIs, greeting text (violates design)
+
+**Root Cause**: Each page (Dashboard, Applications, Inbox, Analytics) calculates metrics independently with no shared definitions.
+
+**Solution**: Created `src/lib/dashboard-metrics-shared.ts` with canonical metric definitions. All pages MUST use these shared functions.
+
+See `docs/dashboard-redesign/PRODUCTION-ISSUES.md` for complete issue list with evidence.
 
 ---
 
@@ -66,16 +78,30 @@ The current dashboard (`src/app/(app)/dashboard/page.tsx`) serves as the main jo
 
 ## 2. Data Sources & Calculations
 
-### 2.1 Top Metrics (Line 46-70)
+### 2.1 Top Metrics (UPDATED - Shared Definitions Required)
 
-| Metric | Source | Calculation | Time Window | Notes |
-|--------|--------|-------------|-------------|-------|
-| **Invii confermati** | `dashboardDeliveryCounts()` | Paginated read (200/batch), `deliveryEvidence()` filter | All time | ✅ Only verified ATS receipts or email `delivered` events |
-| **Con risposte recruiter** | `Application.replies` + `gmailMessages` | Count distinct applications with `isHuman: true` replies (kind: risposta/colloquio/rifiutata) | All time | ✅ Excludes opens, auto-replies, security codes |
-| **Inviti a colloquio** | `Application` (latest 3) | `userStatus: "colloquio"` OR `lastReplyKind: "colloquio"` | Latest 3 | ✅ Evidence-based (reply classification or user-declared) |
-| **Offerte dichiarate** | `Application.userStatus` | Count `userStatus: "offerta"` | All time | User-reported only, no auto-detection |
+**⚠️ PRODUCTION ISSUE**: Current dashboard page calculates metrics independently from other pages (Applications, Inbox, Analytics), resulting in conflicting counts.
 
-**Server-side authority**: All reads enforce `userId` filter; no admin data leakage.
+**NEW CANONICAL SOURCE** (as of 2026-10-19): `src/lib/dashboard-metrics-shared.ts`
+
+| Metric | Function | Calculation | Time Window | Notes |
+|--------|----------|-------------|-------------|-------|
+| **Invii confermati** | `getConfirmedSubmissions()` | Paginated read (200/batch), `deliveryEvidence()` filter | All time | ✅ Only verified ATS receipts or email `delivered` events |
+| **Con risposte recruiter** | `getRecruiterReplies()` | Count distinct applications with `isHuman: true` replies (kind: risposta/colloquio/rifiutata) | All time | ✅ Excludes opens, auto-replies, security codes |
+| **Inviti a colloquio** | `getInterviewInvites()` | `userStatus: "colloquio"` OR `lastReplyKind: "colloquio"` | All time | ✅ Evidence-based (reply classification or user-declared) |
+| **Offerte dichiarate** | `getOffers()` | Count `userStatus: "offerta"` | All time | User-reported only, no auto-detection |
+| **Open opportunities** | `getOpenOpportunities()` | `closedAt=null`, cached last 30d, role-filtered | Last 30d | Now reconciled with Jobs/Discover |
+| **Unread messages** | `getUnreadMessages()` | `readAt=null`, `isHuman=true`, excluding security codes | All time | Now reconciled with Inbox |
+| **Actions needed** | `getActionsNeeded()` | `awaiting_consent` + `needs_answers` ONLY | Current | Now reconciled with Questions page |
+
+**Migration Required**: Dashboard, Applications, Inbox, Analytics MUST import and use these shared functions to ensure consistent counts.
+
+**Server-side authority**: All functions enforce `userId` filter; no admin data leakage.
+
+**Live Production Evidence** (2026-10-19):
+- Dashboard showed 4 replies, but Analytics showed 0 replies → Fixed by `getRecruiterReplies()` shared definition
+- Dashboard showed 1,195 "needs action", but Questions showed only 7 pending → Fixed by `getActionsNeeded()` (awaiting approval + needs answers ONLY)
+- Dashboard showed 160 opportunities, Jobs showed 151 → Fixed by `getOpenOpportunities()` shared definition
 
 ### 2.2 Globe Map Data (`getDashboardGlobeData()`)
 
