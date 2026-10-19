@@ -14,3 +14,64 @@
 @media(max-width:760px){.qa-page{padding:20px 16px 32px}.qa-layout,.qa-focus-layout{grid-template-columns:1fr}.qa-header{display:block}.qa-waiting{margin-top:17px}.qa-aside{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.qa-privacy{grid-column:1/-1}.qa-focus-aside{margin-top:0}.qa-row-head{grid-template-columns:28px minmax(0,1fr) 17px;gap:9px;padding:12px}.qa-impact-count{display:none}.qa-row-body{padding:0 12px 15px 48px}}
 @media(max-width:520px){.qa-aside{grid-template-columns:1fr}.qa-tabs{width:100%}.qa-tabs button{flex:1;padding:7px 5px;font-size:11px}.qa-tabs button span{margin-left:4px}.qa-row-actions,.qa-focus-actions{flex-direction:column}.qa-row-actions>* ,.qa-focus-actions>*{width:100%}.qa-options{grid-template-columns:1fr}}
 @media(max-width:520px){.qa-batch{align-items:stretch;flex-direction:column}.qa-batch button{width:100%}}
+
+/* ── Premium dark pass (batch 2) ─────────────────────────────────────── */
+.lavorai-app-shell .qa-page { --qa-mint: var(--pm-fg); --qa-line: var(--pm-line); --qa-muted: var(--pm-muted); --qa-panel: var(--pm-card); max-width: 1200px; padding: 28px 24px 48px; }
+.lavorai-app-shell .qa-page :is(button, a, input, textarea):focus-visible { outline-color: rgba(255,255,255,.5); }
+.lavorai-app-shell .qa-header { align-items: flex-start; margin-bottom: 20px; }
+.lavorai-app-shell .qa-header h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.lavorai-app-shell .qa-header p { max-width: 720px; font-size: 13px; color: var(--pm-muted); }
+.lavorai-app-shell .qa-waiting { padding: 8px 12px; border-color: rgba(255,255,255,.12); border-radius: 8px; color: var(--pm-fg); font-weight: 500; }
+.lavorai-app-shell .qa-waiting svg:first-child { color: var(--pm-amber); }
+.lavorai-app-shell .qa-notice { border-color: var(--pm-line); background: var(--pm-card); border-radius: 12px; }
+.lavorai-app-shell .qa-overview strong { font-weight: 600; }
+.lavorai-app-shell .qa-overview > span { color: var(--pm-fg-2); font-weight: 500; font-variant-numeric: tabular-nums; }
+.lavorai-app-shell .qa-progress { height: 4px; background: var(--pm-inset); }
+.lavorai-app-shell .qa-progress > span { background: var(--pm-green); }
+.lavorai-app-shell .qa-tabs { gap: 2px; padding: 2px; background: var(--pm-inset); border: 1px solid var(--pm-line); border-radius: 9px; }
+.lavorai-app-shell .qa-tabs button { min-height: 30px; padding: 4px 12px; border: 0; border-radius: 7px; background: transparent; color: var(--pm-muted); font-weight: 500; }
+.lavorai-app-shell .qa-tabs button.is-active { background: rgba(255,255,255,.08); color: var(--pm-fg); font-weight: 500; box-shadow: var(--pm-highlight); }
+.lavorai-app-shell .qa-tabs button span { background: rgba(255,255,255,.06); color: var(--pm-fg-2); font-variant-numeric: tabular-nums; }
+.lavorai-app-shell .qa-search { border-radius: 8px; background: var(--pm-inset); }
+.lavorai-app-shell .qa-search input { height: 34px; }
+.lavorai-app-shell .qa-list { background: var(--pm-card); border-radius: 14px; box-shadow: var(--pm-highlight); }
+.lavorai-app-shell .qa-row.is-expanded { background: rgba(255,255,255,.02); }
+.lavorai-app-shell .qa-row-head { min-height: 64px; }
+.lavorai-app-shell .qa-row-head:hover { background: rgba(255,255,255,.02); }
+.lavorai-app-shell .qa-number { width: 24px; height: 24px; background: transparent; border: 1px solid var(--pm-line); color: var(--pm-muted); font-size: 11px; font-weight: 500; }
+.lavorai-app-shell .qa-category { color: var(--pm-muted); font-weight: 500; }
+.lavorai-app-shell .qa-question { font-weight: 500; }
+.lavorai-app-shell .qa-options label { border-color: var(--pm-line); background: transparent; }
+.lavorai-app-shell .qa-options label:hover { border-color: rgba(255,255,255,.18); }
+.lavorai-app-shell .qa-options label.is-selected { border-color: rgba(255,255,255,.28); background: rgba(255,255,255,.04); color: var(--pm-fg); }
+.lavorai-app-shell .qa-options label:focus-within { outline-color: rgba(255,255,255,.5); }
+.lavorai-app-shell .is-selected .qa-radio { border: 5px solid var(--pm-green); }
+.lavorai-app-shell .qa-input { background: var(--pm-inset); border-color: var(--pm-line); border-radius: 8px; }
+.lavorai-app-shell .qa-context { border-left-color: var(--pm-line); background: transparent; }
+.lavorai-app-shell .qa-context > span { color: var(--pm-faint); font-weight: 600; }
+.lavorai-app-shell .qa-primary { min-height: 34px; padding: 7px 14px; border-radius: 8px; background: var(--pm-green); color: #06140d; font-weight: 600; }
+.lavorai-app-shell .qa-secondary { min-height: 34px; border-color: rgba(255,255,255,.12); border-radius: 8px; background: transparent; color: var(--pm-fg); }
+.lavorai-app-shell .qa-start { min-height: 34px; padding: 7px 14px; border: 1px solid rgba(255,255,255,.12); border-radius: 8px; background: transparent; color: var(--pm-fg); font-weight: 500; }
+.lavorai-app-shell .qa-aside-card, .lavorai-app-shell .qa-focus-aside { background: var(--pm-card); border-radius: 14px; box-shadow: var(--pm-highlight); }
+.lavorai-app-shell .qa-aside-heading svg, .lavorai-app-shell .qa-privacy svg, .lavorai-app-shell .qa-private > svg { color: var(--pm-faint); }
+.lavorai-app-shell .qa-aside-heading h3 { font-weight: 500; }
+.lavorai-app-shell .qa-big-number { margin: 16px 0 8px; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--pm-fg); }
+.lavorai-app-shell .qa-big-number small { margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--pm-muted); }
+.lavorai-app-shell .qa-category-progress > div { height: 4px; background: var(--pm-inset); }
+.lavorai-app-shell .qa-category-progress i { background: rgba(255,255,255,.4); }
+.lavorai-app-shell .qa-batch, .lavorai-app-shell .qa-impact { border-color: var(--pm-line); background: var(--pm-card); }
+.lavorai-app-shell .qa-impact svg { color: var(--pm-amber); }
+.lavorai-app-shell .qa-impact strong { color: var(--pm-fg); }
+.lavorai-app-shell .qa-focus-main h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.lavorai-app-shell .qa-empty svg { color: var(--pm-faint); }
+.lavorai-app-shell .qa-empty a { color: var(--pm-fg); }
+@media (max-width: 760px) { .lavorai-app-shell .qa-page { padding: 20px 12px 32px; } }
+/* List hugs its rows (still shrinks and scrolls inside the fit-to-viewport layout). */
+.lavorai-app-shell.product-workspace .qa-list { flex: 0 1 auto; }
+.lavorai-app-shell.product-workspace .qa-layout { align-items: start; }
+.lavorai-app-shell .qa-start { align-self: flex-start; width: auto; margin-top: 14px; font-size: 12.5px; }
+@media (max-width: 520px) {
+  .lavorai-app-shell .qa-tabs { flex-wrap: nowrap; }
+  .lavorai-app-shell .qa-tabs button { white-space: nowrap; padding: 4px 6px; font-size: 11.5px; }
+  .lavorai-app-shell .qa-tabs button span { margin-left: 4px; padding: 2px 5px; }
+}
