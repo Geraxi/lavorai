@@ -38,7 +38,10 @@ export function TrendChart({
   const W = 100;
   const H = 100;
   const n = buckets.length;
-  const max = niceMax(Math.max(0, ...series.flatMap((s) => s.values)));
+  const peak = Math.max(0, ...series.flatMap((s) => s.values));
+  // Counts are integers: keep the mid tick integral too (no "0.5" on small data).
+  let max = niceMax(peak);
+  if (series.every((s) => s.values.every(Number.isInteger)) && !Number.isInteger(max / 2)) max = Math.max(2, Math.ceil(max / 2) * 2);
   const ticks = [0, max / 2, max];
   const x = (i: number) => (n === 1 ? W / 2 : (i / (n - 1)) * W);
   const y = (v: number) => H - (v / max) * H;

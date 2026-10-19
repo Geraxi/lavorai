@@ -658,3 +658,54 @@ export async function getDashboardTimeSeries(userId: string, now: Date = new Dat
     weeks: weekStarts.map((start, i) => ({ start: dayNumberToIso(start), end: dayNumberToIso(start + 6), sent: sentWeekly[i], replies: repliesWeekly[i] })),
   };
 }
+
+/**
+ * Analisi cohort: applications whose delivery evidence date falls inside the
+ * selected period (7/30/90 calendar days, Europe/Rome), aggregated with aggregatePerformance.
+ * Period-scoped by definition, so it is NOT the same number as the all-time
+ * dashboard KPIs; the Analisi page labels it "nel periodo" and shows the
+ * all-time recruiter replies (getRecruiterReplies) only as reference.
+ * `matchScore` lets the page plug in the CV-based estimate without this
+ * module importing the CV profile code.
+ */
+export async function getAnalyticsCohort(
+  userId: string,
+  days: number,
+  matchScore: (title: string, description: string) => number | null = () => null,
+  now = new Date(),
+) {
+  const { aggregatePerformance, analyticsPeriod } = await import("@/lib/analytics-performance");
+  const period = analyticsPeriod(days, now, DASHBOARD_TIME_ZONE);
+  const applications = await prisma.application.findMany({
+    where: {
+      userId,
+      AND: [{ OR: [{ submittedVia: { not: null } }, { emailAttempts: { some: {} } }] }],
+      OR: [
+        { submittedAt: { gte: period.start, lte: now } },
+        { submittedAt: null, completedAt: { gte: period.start, lte: now } },
+        { submittedAt: null, completedAt: null, createdAt: { gte: period.start, lte: now } },
+        { submittedAt: null, emailAttempts: { some: { createdAt: { gte: period.start, lte: now } } } },
+      ],
+    },
+    select: {
+      status: true, submittedVia: true, submitConfirmation: true, submissionReceiptJson: true,
+      createdAt: true, completedAt: true, submittedAt: true,
+      userStatus: true, lastReplyAt: true, lastReplyKind: true, cvDocxPath: true, cvPdfPath: true,
+      emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true, acceptedAt: true, createdAt: true } },
+      replies: { where: { isSecurityCode: false }, select: { receivedAt: true, kind: true, isHuman: true, isSecurityCode: true } },
+      gmailMessages: { where: { userId }, select: { date: true, kind: true, isHuman: true } },
+      job: { select: { title: true, description: true } },
+      session: { select: { title: true } },
+    },
+  });
+  return aggregatePerformance(
+    applications.map((a) => ({
+      ...a,
+      role: a.session?.title?.trim() || a.job.title,
+      match: a.job.description.trim() ? matchScore(a.job.title, a.job.description) : null,
+    })),
+    period.days,
+    now,
+    DASHBOARD_TIME_ZONE,
+  );
+}

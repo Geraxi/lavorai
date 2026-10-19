@@ -615,6 +615,18 @@ button.pm-btn-ghost, button.pm-btn-primary { font: inherit; font-size: 12.5px; f
 [data-theme="light"] .pm-seg button[aria-pressed="true"] { background: #ffffff; box-shadow: 0 1px 2px rgba(15, 16, 18, 0.08); }
 .pm-seg button:focus-visible { outline: 2px solid var(--pm-green); outline-offset: 1px; }
 
+
+/* pm-seg with links (server-rendered filters) */
+.pm-seg a {
+  display: inline-flex; align-items: center;
+  padding: 0 10px; border-radius: 6px;
+  color: var(--pm-muted); font-size: 12.5px; font-weight: 500; text-decoration: none;
+}
+.pm-seg a:hover { color: var(--pm-fg-2); }
+.pm-seg a[aria-current="page"] { background: rgba(255, 255, 255, 0.07); color: var(--pm-fg); box-shadow: var(--pm-highlight); }
+[data-theme="light"] .pm-seg a[aria-current="page"] { background: #ffffff; box-shadow: 0 1px 2px rgba(15, 16, 18, 0.08); }
+.pm-seg a:focus-visible { outline: 2px solid var(--pm-green); outline-offset: 1px; }
+
 @media (max-width: 1023px) { .pm-page { padding: 24px 20px 40px; } }
 @media (max-width: 640px) {
   .pm-page { padding: 20px 16px 32px; gap: 16px; }

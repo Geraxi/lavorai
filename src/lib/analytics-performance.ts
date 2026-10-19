@@ -1,12 +1,28 @@
 import { applicationEvidenceDate, deliveryEvidence, isConfirmedDelivery, type DeliveryEvidenceInput } from "@/lib/application-evidence";
 
-/** Cohort analytics: confirmed applications sent during a UTC calendar period. */
+/** Cohort analytics: confirmed applications sent during a calendar period (UTC by default; the Analisi page uses Europe/Rome). */
 export const HUMAN_REPLY_KINDS = ["risposta", "colloquio", "rifiutata"];
 const DAY = 86_400_000;
-export function analyticsPeriod(days: number, now = new Date()) {
+/** Calendar-day number (days since epoch) of `date` in `timeZone`. */
+export function dayNumberIn(date: Date, timeZone = "UTC"): number {
+  if (timeZone === "UTC") return Math.floor(+date / DAY);
+  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date).split("-").map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / DAY);
+}
+/** First instant of calendar day `day` in `timeZone`. */
+function startOfDayIn(day: number, timeZone: string): Date {
+  const guess = day * DAY;
+  if (timeZone === "UTC") return new Date(guess);
+  // Shift by the zone offset at that moment (exact for whole-hour zones like Europe/Rome).
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(guess));
+  const get = (t: string) => Number(parts.find(p => p.type === t)!.value);
+  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"));
+  return new Date(guess - (asUtc - guess));
+}
+export function analyticsPeriod(days: number, now = new Date(), timeZone = "UTC") {
   const count = [7, 30, 90].includes(days) ? days : 30;
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  return { days: count, start: new Date(today - (count - 1) * DAY), end: now };
+  const today = dayNumberIn(now, timeZone);
+  return { days: count, timeZone, firstDay: today - (count - 1), start: startOfDayIn(today - (count - 1), timeZone), end: now };
 }
 export type PerformanceApplication = DeliveryEvidenceInput & {
   status: string; submittedVia: string | null; submitConfirmation: string | null;
@@ -17,9 +33,10 @@ export type PerformanceApplication = DeliveryEvidenceInput & {
   cvDocxPath: string | null; cvPdfPath: string | null;
   role: string; match: number | null;
 };
-export function aggregatePerformance(applications: PerformanceApplication[], days: number, now = new Date()) {
-  const period = analyticsPeriod(days, now);
-  const buckets = Array.from({ length: period.days }, (_, i) => ({ date: new Date(+period.start + i * DAY), sent: 0, replies: 0 }));
+export function aggregatePerformance(applications: PerformanceApplication[], days: number, now = new Date(), timeZone = "UTC") {
+  const period = analyticsPeriod(days, now, timeZone);
+  const buckets = Array.from({ length: period.days }, (_, i) => ({ date: new Date((period.firstDay + i) * DAY), sent: 0, replies: 0 }));
+  const dayIndex = (d: Date) => dayNumberIn(d, timeZone) - period.firstDay;
   const cohort = applications.map(a => ({ ...a, evidence: deliveryEvidence(a), sentAt: applicationEvidenceDate(a) }))
     .filter(a => +a.sentAt >= +period.start && +a.sentAt <= +now);
   const rows = cohort.filter(a => isConfirmedDelivery(a.evidence))
@@ -32,8 +49,8 @@ export function aggregatePerformance(applications: PerformanceApplication[], day
       return { ...a, sentAt, responseAt, interview: a.userStatus === "colloquio" || human.some(r => r.kind === "colloquio") };
     }).filter(a => +a.sentAt >= +period.start && +a.sentAt <= +now);
   for (const a of rows) {
-    buckets[Math.floor((+a.sentAt - +period.start) / DAY)].sent++;
-    if (a.responseAt) buckets[Math.floor((+a.responseAt - +period.start) / DAY)].replies++;
+    buckets[dayIndex(a.sentAt)].sent++;
+    if (a.responseAt) buckets[dayIndex(a.responseAt)].replies++;
   }
   const replied = rows.filter(a => a.responseAt).length;
   const matched = rows.filter(a => a.match !== null);
@@ -43,7 +60,7 @@ export function aggregatePerformance(applications: PerformanceApplication[], day
     return { role, sent: group.length, replies: group.filter(a => a.responseAt).length, match: mean(group.flatMap(a => a.match === null ? [] : [a.match])) };
   }).sort((a, b) => b.sent - a.sent);
   const segments = [true, false].map(high => {
-    const group = matched.filter(a => high ? a.match! > 70 : a.match! <= 70);
+    const group = matched.filter(a => high ? a.match! >= 70 : a.match! < 70);
     const responses = group.filter(a => a.responseAt).length;
     return { count: group.length, responses, rate: group.length ? responses / group.length * 100 : null };
   });
