@@ -126,6 +126,7 @@ async function testWorkableSearch() {
   const probed: string[] = [];
   const { items, stats } = await fetchWorkableSearchJobs([{ what: "Motion Designer", where: "United States" }], {
     fetchImpl, accountFeed: async (slug) => { probed.push(slug); return (feeds[slug] ?? null) as never; }, concurrency: 1,
+    requireItalianJobs: false,
   });
   assert.equal(requested.length, 1);
   assert.equal(stats.companies, 2, "Non-matching titles are dropped before resolution");

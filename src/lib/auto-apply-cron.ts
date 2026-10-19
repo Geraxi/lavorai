@@ -445,8 +445,9 @@ async function processUser(
           "breezy",
           "pinpoint",
         ],
-        // Explicitly exclude sources with ToS conflicts
-        notIn: ["eures", "weworkremotely"],
+        // Board sources (weworkremotely, arbeitnow, etc.) and ToS-restricted
+        // sources (eures) are not included in the pool: they're either resolved
+        // to their canonical ATS posting via board-apply-resolver or disabled.
       },
       // URL canoniche vanilla: gli adapter Playwright funzionano solo
       // sui domini ATS noti. Aziende con career page custom
