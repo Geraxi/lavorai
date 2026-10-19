@@ -102,6 +102,8 @@ export interface WorkableSearchOptions {
   deadline?: number;
   fetchImpl?: typeof fetch;
   accountFeed?: (slug: string) => Promise<WorkableJob[] | null>;
+  /** When true, keep only accounts with >=1 Italian job (country Italy/Italia/IT). */
+  requireItalianJobs?: boolean;
 }
 
 export async function fetchWorkableSearchJobs(
@@ -114,6 +116,7 @@ export async function fetchWorkableSearchJobs(
   const deadline = opts.deadline ?? Date.now() + 90_000;
   const fetchImpl = opts.fetchImpl ?? fetch;
   const accountFeed = opts.accountFeed ?? ((slug: string) => fetchWorkableAccountRaw(slug, timeoutMs));
+  const requireItalianJobs = opts.requireItalianJobs ?? true;
   const stats: WorkableSearchStats = { queries: 0, hits: 0, companies: 0, resolved: 0, unresolved: 0, items: 0 };
 
   // 1. Search: keep only hits whose title carries every token of the role.
@@ -151,11 +154,15 @@ export async function fetchWorkableSearchJobs(
         const raw = await accountFeed(slug);
         if (!raw?.length) continue;
         // Keep account only if it has >=1 job AND at least one job with country Italy.
-        const hasItalianJob = raw.some((job) => {
-          const country = (job.location?.country ?? "").toLowerCase();
-          return country === "italy" || country === "italia" || country === "it";
-        });
-        if (!hasItalianJob) continue;
+        // This filter is enabled by default for production (Italian job market focus)
+        // but can be disabled via requireItalianJobs: false (e.g., for tests).
+        if (requireItalianJobs) {
+          const hasItalianJob = raw.some((job) => {
+            const country = (job.location?.country ?? "").toLowerCase();
+            return country === "italy" || country === "italia" || country === "it";
+          });
+          if (!hasItalianJob) continue;
+        }
         const matched = c.hits.filter((hit) => raw.some((r) => sameWorkablePosting(hit, r)));
         if (!matched.length) continue;
         seenSlugs.add(slug);

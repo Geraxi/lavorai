@@ -65,8 +65,6 @@ async function testResolveDestination() {
     "https://www.arbeitnow.com/r/acme-1": { status: 301, location: "https://boards.greenhouse.io/acme/jobs/4567890" },
     "https://www.arbeitnow.com/jobs/companies/custom/role-2/apply": { status: 302, location: "https://custom.example/careers/role-2" },
     "https://www.arbeitnow.com/jobs/companies/gone/role-3/apply": { status: 404 },
-    "https://weworkremotely.com/remote-jobs/zapier-sr-motion-designer": { status: 200, body: `<a id="job-cta-alt" href="https://jobs.ashbyhq.com/zapier/c0582311-18cb-4415-9c86-79014f1b74f6">Apply now</a>` },
-    "https://weworkremotely.com/remote-jobs/gone": { status: 404 },
   }, calls);
   const r1 = await resolveBoardApplyDestination({ source: "arbeitnow", url: listing }, fetchImpl);
   assert.equal(r1.kind, "ats");
@@ -76,9 +74,9 @@ async function testResolveDestination() {
   assert.deepEqual(await resolveBoardApplyDestination({ source: "arbeitnow", url: "https://www.arbeitnow.com/jobs/companies/custom/role-2" }, fetchImpl),
     { kind: "unsupported", reason: "destination_not_supported_ats" }, "Off-board non-ATS destinations are not followed further");
   assert.equal((await resolveBoardApplyDestination({ source: "arbeitnow", url: "https://www.arbeitnow.com/jobs/companies/gone/role-3" }, fetchImpl)).kind, "unsupported");
-  const r3 = await resolveBoardApplyDestination({ source: "weworkremotely", url: "https://weworkremotely.com/remote-jobs/zapier-sr-motion-designer" }, fetchImpl);
-  assert.equal(r3.kind === "ats" && r3.posting.tenant, "zapier");
-  assert.equal((await resolveBoardApplyDestination({ source: "weworkremotely", url: "https://weworkremotely.com/remote-jobs/gone" }, fetchImpl)).kind, "unsupported");
+  // weworkremotely is no longer resolvable due to ToS restrictions (disabled in commit df2a068)
+  assert.deepEqual(await resolveBoardApplyDestination({ source: "weworkremotely", url: "https://weworkremotely.com/remote-jobs/zapier-sr-motion-designer" }, fetchImpl),
+    { kind: "unsupported", reason: "source_not_resolvable" }, "weworkremotely is disabled due to ToS");
   const before = calls.length;
   // Sources we must not (WAF, login gate, robots) or cannot resolve: no request at all.
   for (const [source, url] of [["adzuna", "https://www.adzuna.it/details/5919310613"], ["jobicy", "https://jobicy.com/jobs/155561-sr-motion-designer"],
@@ -118,7 +116,7 @@ function testCanonical() {
 async function testResolvePass() {
   const now = new Date("2026-10-17T20:00:00.000Z");
   const rows = [
-    { id: "wwr-1", source: "weworkremotely", url: "https://weworkremotely.com/remote-jobs/zapier-sr-motion-designer", company: "Zapier" },
+    // weworkremotely removed: no longer resolvable due to ToS (commit df2a068)
     { id: "an-1", source: "arbeitnow", url: "https://www.arbeitnow.com/jobs/companies/gismart/a", company: "Gismart" },
     { id: "an-2", source: "arbeitnow", url: "https://www.arbeitnow.com/jobs/companies/custom/b", company: "Custom" },
     { id: "an-3", source: "arbeitnow", url: "https://www.arbeitnow.com/jobs/companies/racy/c", company: "Racy" },
@@ -146,17 +144,13 @@ async function testResolvePass() {
     url: `https://jobs.ashbyhq.com/${posting.tenant}/${posting.postingId}`,
   });
   const stats = await resolveBoardListingsForRoles(["Motion Designer", "3D"], { now, db, resolve, canonical, limit: 50 });
-  assert.deepEqual(stats, { attempted: 4, promoted: 1, existing: 2, unsupported: 1 });
-  assert.equal(created.length, 1);
-  assert.equal(created[0].source, "ashby");
-  assert.equal(created[0].url, "https://jobs.ashbyhq.com/zapier/c0582311-18cb-4415-9c86-79014f1b74f6");
-  assert.equal(created[0].company, "Zapier");
-  assert.equal(created[0].closedAt, undefined, "Created rows are open; existing sync-owned rows are never updated or reopened");
-  assert.deepEqual(marked.map((m) => m.where.id).sort(), ["an-1", "an-2", "an-3", "wwr-1"], "Every attempted board row records its lookup time");
+  assert.deepEqual(stats, { attempted: 3, promoted: 0, existing: 2, unsupported: 1 });
+  assert.equal(created.length, 0, "All resolutions were either existing or unsupported");
+  assert.deepEqual(marked.map((m) => m.where.id).sort(), ["an-1", "an-2", "an-3"], "Every attempted board row records its lookup time");
   assert.ok(marked.every((m) => +m.data.recruiterScrapedAt === +now && Object.keys(m.data).length === 1));
   const q = queries[0];
   assert.equal(q.take, 20, "Hard cap on lookups per call");
-  assert.deepEqual(q.where.source, { in: ["weworkremotely", "arbeitnow"] });
+  assert.deepEqual(q.where.source, { in: ["arbeitnow"] }, "Only arbeitnow is resolvable; weworkremotely disabled");
   assert.equal(q.where.closedAt, null);
   assert.equal(+q.where.OR[1].recruiterScrapedAt.lt, +now - BOARD_RESOLUTION_TTL_MS, "Re-check at most once per TTL");
   assert.deepEqual(q.where.AND[0].OR.length, 1, "Role tokens shorter than 3 chars are ignored like the pool query");
