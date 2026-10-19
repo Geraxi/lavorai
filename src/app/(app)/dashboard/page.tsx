@@ -1,11 +1,25 @@
-import { AttentionQueue } from "@/components/attention-queue";
-import { getAttentionQueue } from "@/lib/attention-repository";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getLocale, getTranslations } from "next-intl/server";
+import { getLocale } from "next-intl/server";
+import {
+  ArrowRight,
+  Briefcase,
+  CalendarCheck,
+  Check,
+  ChevronRight,
+  CircleAlert,
+  Clock,
+  Compass,
+  FileText,
+  MapPin,
+  MessageSquare,
+  Send,
+  Trophy,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
+import { getAttentionQueue } from "@/lib/attention-repository";
 import { AppTopbar } from "@/components/design/topbar";
-import { Icon } from "@/components/design/icon";
-import { CompanyLogo } from "@/components/design/company-logo";
 import { WelcomeModal } from "@/components/welcome-modal";
 import { DashboardLiveRefresh } from "@/components/dashboard-live-refresh";
 import { PostLoginCheckout } from "@/components/post-login-checkout";
@@ -14,16 +28,14 @@ import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
 import { prisma } from "@/lib/db";
 import { rowToProfile } from "@/lib/cv-profile-types";
+import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
 import { journeyStage, STAGE_LABEL, type JourneyStage } from "@/lib/ui-application-status";
-import { SectionCard, SectionHead, SectionBody } from "@/components/design/section-card";
-import { Kpi } from "@/components/design/kpi";
 import {
   getConfirmedSubmissions,
   getRecruiterReplies,
   getOffers,
   getInterviewInvites,
   getOpenOpportunities,
-  getActionsNeeded,
 } from "@/lib/dashboard-metrics-shared";
 import "./dashboard.css";
 
@@ -31,34 +43,55 @@ export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
 /**
- * Dashboard Redesign (2026-10-19)
- * 
- * Purpose: Job-seeker overview answering "What's happening, what needs attention, what should I do next?"
- * Design: Linear/Vercel/Stripe-inspired polished cards, matte black, restrained green, one icon family.
- * Evidence: Production audit revealed greeting, globe, duplicated KPIs, conflicting counts — all fixed.
- * 
- * NO: greeting, globe, duplicated KPIs, admin UI for customers, fabricated data
- * YES: honest metrics, clear next actions, responsive 1440/768/375, evidence-backed counts
+ * Dashboard (redesign 2026-10).
+ *
+ * Answers "what's happening, what needs me, what's next" with evidence-backed
+ * counts only: a full-width row of 4 KPIs, then a main column (to-do, progress,
+ * activity) and a ~1/3 sidebar (CV, profile, interviews, discover).
+ * No greeting, no globe, no fabricated numbers, no admin UI.
  */
-export default async function DashboardPage() {
-  const [t, locale, user] = await Promise.all([
-    getTranslations("dashboardPage"),
-    getLocale(),
-    getCurrentUser(),
-  ]);
 
+/** Display order of journey stages in the progress card. */
+const STAGE_ORDER: JourneyStage[] = [
+  "awaiting_approval",
+  "manual",
+  "preparing",
+  "prepared",
+  "approved",
+  "in_flight",
+  "sent",
+  "unverified",
+  "stopped",
+];
+
+type Tone = "green" | "amber" | "red" | "neutral";
+
+const STAGE_TONE: Record<JourneyStage, Tone> = {
+  preparing: "neutral",
+  prepared: "neutral",
+  awaiting_approval: "amber",
+  approved: "neutral",
+  manual: "amber",
+  in_flight: "neutral",
+  sent: "green",
+  unverified: "amber",
+  stopped: "red",
+};
+
+export default async function DashboardPage() {
+  const [locale, user] = await Promise.all([getLocale(), getCurrentUser()]);
   if (!user) return null;
 
   const en = locale === "en";
+  const tr = (it: string, english: string) => (en ? english : it);
+  const lang = en ? "en" : "it";
 
-  // Fetch all data in parallel (shared metrics ensure consistency with other pages)
   const [
     confirmed,
     replies,
     interviews,
     offers,
     opportunities,
-    actionsNeeded,
     statusGroups,
     latestCv,
     cvProfileRow,
@@ -72,78 +105,98 @@ export default async function DashboardPage() {
     getInterviewInvites(user.id),
     getOffers(user.id),
     getOpenOpportunities(user.id),
-    getActionsNeeded(user.id),
-    
-    // Application status breakdown (for progress section)
     prisma.application.groupBy({
       by: ["status"],
       where: { userId: user.id, status: { not: "diagnostic" } },
       _count: { _all: true },
     }),
-    
-    // CV info
     prisma.cVDocument.findFirst({
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
       select: { originalFilename: true, createdAt: true },
     }),
     prisma.cVProfile.findUnique({ where: { userId: user.id } }),
-    
-    // Onboarding state
     getOnboardingState(user.id),
-    
-    // Attention queue
     getAttentionQueue(user.id, locale).catch(() => null),
-    
-    // Recent interviews (latest 3)
     prisma.application.findMany({
-      where: {
-        userId: user.id,
-        OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }],
-      },
+      where: { userId: user.id, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }] },
       orderBy: { lastReplyAt: "desc" },
       take: 3,
-      select: {
-        id: true,
-        createdAt: true,
-        lastReplyAt: true,
-        userStatus: true,
-        lastReplyKind: true,
-        job: { select: { title: true, company: true } },
-      },
+      select: { id: true, lastReplyAt: true, job: { select: { title: true, company: true } } },
     }),
-    
-    // Recent activity (latest 5 applications)
     prisma.application.findMany({
       where: { userId: user.id, status: { not: "diagnostic" } },
       orderBy: { createdAt: "desc" },
-      take: 5,
+      take: 6,
       select: {
         id: true,
         createdAt: true,
         status: true,
+        submittedVia: true,
+        submitConfirmation: true,
+        submissionReceiptJson: true,
+        emailAttempts: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { status: true, providerEmailId: true, acceptedAt: true },
+        },
         job: { select: { title: true, company: true } },
       },
     }),
   ]);
 
-  // Calculate progress breakdown (prepared, approved, sent, etc.)
+  // ── Progress by journey stage ────────────────────────────────────────
+  // "success" alone is NOT delivery: only evidence-backed sends count as
+  // "sent"; the remaining success rows stay "outcome unverified".
   const stageCounts = new Map<JourneyStage, number>();
+  let totalApplications = 0;
   for (const group of statusGroups) {
+    totalApplications += group._count._all;
     const stage = journeyStage(group.status);
-    if (!stage || stage === "unverified" || stage === "sent") continue;
+    if (!stage) continue;
     stageCounts.set(stage, (stageCounts.get(stage) ?? 0) + group._count._all);
   }
+  const unverifiedRaw = stageCounts.get("unverified") ?? 0;
   stageCounts.set("sent", confirmed);
+  stageCounts.set("unverified", Math.max(0, unverifiedRaw - confirmed));
+  const stages = STAGE_ORDER.map((stage) => ({ stage, count: stageCounts.get(stage) ?? 0 })).filter((s) => s.count > 0);
+
+  const activity = recentActivity.map((app) => {
+    let stage = journeyStage(app.status);
+    if (stage === "unverified" && isConfirmedDelivery(deliveryEvidence(app))) stage = "sent";
+    return { ...app, stage };
+  });
 
   const cvProfile = cvProfileRow ? rowToProfile(cvProfileRow) : null;
+  const hasCv = !!latestCv || !!cvProfile;
+  const cvName = [cvProfile?.firstName, cvProfile?.lastName].filter(Boolean).join(" ") || user.name || "";
 
-  // Profile completeness checklist
+  const hasAccessCard = user.subscriptionStatus === "active" || user.subscriptionStatus === "trialing";
   const profileChecklist = [
-    { label: en ? "Email verified" : "Email verificata", done: user.emailVerified, href: "/settings" },
-    { label: en ? "CV uploaded" : "CV caricato", done: !!latestCv, href: "/cv" },
-    { label: en ? "Preferences set" : "Preferenze impostate", done: !!onboarding?.hasSetPreferences, href: "/preferences" },
-    { label: en ? "Access card" : "Carta di accesso", done: false, href: "/settings" },
+    { label: tr("Email verificata", "Email verified"), done: !!user.emailVerified, href: "/settings" },
+    { label: tr("CV caricato", "CV uploaded"), done: hasCv, href: "/cv" },
+    { label: tr("Preferenze impostate", "Preferences set"), done: !!onboarding?.hasSetPreferences, href: "/preferences" },
+    { label: tr("Metodo di pagamento", "Payment method"), done: hasAccessCard, href: "/settings" },
+  ];
+  const profileDone = profileChecklist.filter((i) => i.done).length;
+
+  // ── To-do: real attention items, else the next onboarding step ───────
+  const items = attention?.items ?? [];
+  const rest = items.slice(1, 5);
+  const fallbackNext = !onboarding?.hasVerifiedEmail
+    ? { href: "/verify-email", title: tr("Verifica la tua email", "Verify your email"), detail: tr("Serve per inviare candidature a tuo nome.", "Needed to send applications on your behalf.") }
+    : !onboarding?.hasUploadedCv
+      ? { href: "/cv", title: tr("Carica il tuo CV", "Upload your CV"), detail: tr("È la base di ogni candidatura su misura.", "It is the base of every tailored application.") }
+      : !onboarding?.hasSetPreferences
+        ? { href: "/preferences", title: tr("Imposta le preferenze", "Set your preferences"), detail: tr("Ruoli, città e tipo di contratto.", "Roles, cities and contract type.") }
+        : { href: "/discover", title: tr("Scegli il prossimo ruolo", "Choose your next role"), detail: tr("Esplora le offerte aperte.", "Explore open roles.") };
+  const next = items[0] ?? fallbackNext;
+
+  const kpis: { key: string; label: string; value: number; hint: string; href: string; icon: LucideIcon }[] = [
+    { key: "confirmed", label: tr("Invii confermati", "Confirmed sends"), value: confirmed, hint: tr("con prova di consegna", "with delivery evidence"), href: "/applications?filter=sent", icon: Send },
+    { key: "replies", label: tr("Risposte recruiter", "Recruiter replies"), value: replies, hint: tr("candidature con risposta", "applications with a reply"), href: "/inbox", icon: MessageSquare },
+    { key: "interviews", label: tr("Colloqui", "Interviews"), value: interviews, hint: tr("inviti ricevuti", "invites received"), href: "/interviews", icon: CalendarCheck },
+    { key: "offers", label: tr("Offerte", "Offers"), value: offers, hint: tr("segnate da te", "marked by you"), href: "/applications?filter=offerta", icon: Trophy },
   ];
 
   return (
@@ -151,439 +204,258 @@ export default async function DashboardPage() {
       <WelcomeModal show={false} />
       <DashboardLiveRefresh />
       <PostLoginCheckout />
-      
-      <AppTopbar
-        title={en ? "Dashboard" : "Dashboard"}
-        actions={<NewSearchButton />}
-      />
 
-      <div className="dashboard-redesign">
-        {/* Main column */}
-        <div className="dashboard-main">
-          {/* Top KPIs (single row, no duplication) */}
-          <div className="dashboard-kpis">
-            <Link href="/applications?filter=sent" className="kpi-link">
-              <Kpi
-                label={en ? "Confirmed submissions" : "Invii confermati"}
-                value={String(confirmed)}
-                index={0}
-              />
-            </Link>
-            <Link href="/inbox" className="kpi-link">
-              <Kpi
-                label={en ? "Recruiter replies" : "Risposte recruiter"}
-                value={String(replies)}
-                index={1}
-              />
-            </Link>
-            <Link href="/interviews" className="kpi-link">
-              <Kpi
-                label={en ? "Interviews" : "Colloqui"}
-                value={String(interviews)}
-                index={2}
-              />
-            </Link>
-            <Link href="/applications?filter=offerta" className="kpi-link">
-              <Kpi
-                label={en ? "Offers" : "Offerte"}
-                value={String(offers)}
-                index={3}
-              />
-            </Link>
-          </div>
+      <AppTopbar title="Dashboard" actions={<NewSearchButton locale={locale} />} />
 
-          {/* Next Step Highlight */}
-          {actionsNeeded > 0 && attention && attention.items.length > 0 && (
-            <SectionCard className="next-step-highlight">
-              <SectionHead
-                title={
-                <span className="flex items-center gap-2">
-                  <Icon name="arrow-right" size={18} />
-                  {en ? "Next Step" : "Il prossimo passo"}
-                </span>
-                }
-              />
-              <SectionBody>
-                <div className="next-step-content">
-                  <div className="next-step-primary">
-                    {attention.items[0] && (
-                      <Link href={attention.items[0].href} className="next-step-card">
-                        <div className="next-step-icon">
-                          <Icon name="alert-circle" size={24} />
-                        </div>
-                        <div className="next-step-info">
-                          <div className="next-step-title">{attention.items[0].title}</div>
-                          <div className="next-step-description">{attention.items[0].detail}</div>
-                        </div>
-                        <Icon name="chevron-right" size={20} />
-                      </Link>
-                    )}
-                  </div>
+      <div className="dash">
+        <section className="dash-kpis" aria-label={tr("Indicatori principali", "Key metrics")}>
+          {kpis.map(({ key, label, value, hint, href, icon: KpiIcon }) => (
+            <Link key={key} href={href} className="dash-kpi" data-kpi={key}>
+              <div className="dash-kpi-top">
+                <span className="dash-chip-icon"><KpiIcon size={14} strokeWidth={1.75} aria-hidden /></span>
+                <span className="dash-kpi-label">{label}</span>
+              </div>
+              <div className="dash-kpi-value">{value.toLocaleString(en ? "en-GB" : "it-IT")}</div>
+              <div className="dash-kpi-hint">{hint}</div>
+            </Link>
+          ))}
+        </section>
+
+        <div className="dash-grid">
+          <div className="dash-main">
+            {/* Next step (featured) */}
+            <section className="dash-card dash-next" aria-labelledby="dash-next-title">
+              <div className="dash-next-body">
+                <div className="dash-next-text">
+                  <div className="dash-eyebrow"><span className="dash-dot tone-green" aria-hidden /> {tr("Il prossimo passo", "Your next step")}</div>
+                  <h2 id="dash-next-title">{attention === null ? tr("Attività non disponibili", "Activity unavailable") : next.title}</h2>
+                  <p>{attention === null ? tr("Ricarica la pagina per riprovare.", "Reload the page to try again.") : next.detail}</p>
                 </div>
-              </SectionBody>
-            </SectionCard>
-          )}
-
-          {/* Needs Attention (blocking actions) */}
-          {actionsNeeded > 1 && attention && attention.items.length > 1 && (
-            <SectionCard className="needs-attention-card">
-              <SectionHead
-                title={
-                  <span className="flex items-center gap-2">
-                    <Icon name="alert-circle" size={18} />
-                    {en ? "Needs Attention" : "Richiede attenzione"}
-                    <span className="attention-badge">{actionsNeeded}</span>
-                  </span>
-                }
-              />
-              <SectionBody>
-                <AttentionQueue queue={attention} locale={locale} state={onboarding} />
-              </SectionBody>
-            </SectionCard>
-          )}
-
-          {/* Application Progress (Avanzamento candidature) */}
-          <SectionCard>
-            <SectionHead
-              title={
-                <span className="flex items-center gap-2">
-                  <Icon name="briefcase" size={18} />
-                  {en ? "Application Progress" : "Avanzamento candidature"}
-                </span>
-              }
-              actions={
-                <Link
-                  href="/applications"
-                  className="section-link"
-                >
-                  {en ? "View all" : "Vedi tutte"}
-                  <Icon name="chevron-right" size={14} />
+                <Link href={attention === null ? "/dashboard" : next.href} className="dash-btn-primary">
+                  {attention === null ? tr("Riprova", "Retry") : tr("Apri", "Open")} <ArrowRight size={14} strokeWidth={2} aria-hidden />
                 </Link>
-              }
-            />
-            <SectionBody>
-              <div className="progress-tiles">
-                {(["prepared", "approved", "in_flight", "sent", "stopped", "failed", "unverified"] as const).map((stage) => {
-                  const count = stageCounts.get(stage as JourneyStage) ?? 0;
-                  if (count === 0) return null;
-                  
-                  const stageConfig = {
-                    prepared: { icon: "edit", color: "blue" },
-                    approved: { icon: "check", color: "green" },
-                    in_flight: { icon: "clock", color: "amber" },
-                    sent: { icon: "send", color: "green" },
-                    stopped: { icon: "pause-circle", color: "gray" },
-                    failed: { icon: "x", color: "red" },
-                    unverified: { icon: "alert-circle", color: "amber" },
-                  }[stage as string] ?? { icon: "circle", color: "gray" };
-                  
-                  return (
-                    <Link key={stage} href="/applications" className={`progress-tile progress-tile-${stageConfig.color}`}>
-                      <div className="progress-tile-icon">
-                        <Icon name={stageConfig.icon as any} size={20} />
-                      </div>
-                      <div className="progress-tile-content">
-                        <div className="progress-tile-count">{count}</div>
-                        <div className="progress-tile-label">
-                          {STAGE_LABEL[stage as JourneyStage]?.[locale as "it" | "en"] ?? stage}
-                        </div>
-                      </div>
-                    </Link>
-                  );
-                })}
               </div>
+            </section>
 
-              {stageCounts.size === 0 && (
-                <EmptyState
-                  icon="briefcase"
-                  title={en ? "No applications yet" : "Nessuna candidatura"}
-                  description={
-                    en
-                      ? "Start applying to opportunities that match your profile"
-                      : "Inizia a candidarti per opportunità in linea con il tuo profilo"
-                  }
-                  ctaLabel={en ? "Browse jobs" : "Esplora offerte"}
-                  ctaHref="/discover"
-                />
-              )}
-            </SectionBody>
-          </SectionCard>
-
-          {/* Recent Activity Timeline */}
-          <SectionCard>
-            <SectionHead
-              title={
-                <span className="flex items-center gap-2">
-                  <Icon name="clock" size={18} />
-                  {en ? "Recent Activity" : "Attività recente"}
-                </span>
-              }
-            />
-            <SectionBody>
-              {recentActivity.length > 0 ? (
-                <div className="activity-timeline">
-                  {recentActivity.map((app) => (
-                    <Link
-                      key={app.id}
-                      href={`/applications/${app.id}`}
-                      className="timeline-item"
-                    >
-                      <div className="timeline-dot" />
-                      <div className="timeline-content">
-                        <div className="timeline-title">
-                          {en ? "Applied to" : "Candidatura inviata"}
-                          {" "}
-                          <strong>{app.job.company}</strong>
-                        </div>
-                        <div className="timeline-subtitle">{app.job.title}</div>
-                      </div>
-                      <div className="timeline-timestamp">
-                        {formatRelativeTime(app.createdAt, locale)}
-                      </div>
-                    </Link>
+            {/* Remaining to-do items */}
+            {rest.length > 0 && (
+              <section className="dash-card" aria-labelledby="dash-todo-title">
+                <header className="dash-card-head">
+                  <h2 id="dash-todo-title"><CircleAlert size={15} strokeWidth={1.75} aria-hidden /> {tr("Richiede attenzione", "Needs attention")}</h2>
+                  <Link href="/inbox" className="dash-link">{tr("Apri inbox", "Open inbox")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>
+                </header>
+                <ul className="dash-list">
+                  {rest.map((item) => (
+                    <li key={item.id}>
+                      <Link href={item.href} className="dash-row">
+                        <span className="dash-row-text">
+                          <strong>{item.title}</strong>
+                          <small>{item.detail}</small>
+                        </span>
+                        {item.unread === true && <Pill tone="amber">{tr("Non letto", "Unread")}</Pill>}
+                        <ChevronRight size={15} strokeWidth={1.75} aria-hidden className="dash-row-go" />
+                      </Link>
+                    </li>
                   ))}
-                </div>
-              ) : (
-                <EmptyState
-                  icon="clock"
-                  title={en ? "No recent activity" : "Nessuna attività recente"}
-                  description={
-                    en
-                      ? "Your application activity will appear here"
-                      : "La tua attività di candidatura apparirà qui"
-                  }
-                />
-              )}
-            </SectionBody>
-          </SectionCard>
-        </div>
+                </ul>
+              </section>
+            )}
 
-        {/* Sidebar */}
-        <div className="dashboard-sidebar">
-          {/* CV/Documents */}
-          <SectionCard>
-            <SectionHead
-              title={
-                <span className="flex items-center gap-2">
-                  <Icon name="file-text" size={18} />
-                  {en ? "Your CV" : "Il tuo CV"}
-                </span>
-              }
-              actions={
-                latestCv && (
-                  <Link href="/cv" className="section-link-sm">
-                    {en ? "Edit" : "Modifica"}
-                  </Link>
-                )
-              }
-            />
-            <SectionBody className="cv-sidebar-body">
-              {latestCv ? (
-                <div className="cv-card">
-                  <div className="cv-thumbnail">
-                    <Icon name="file-text" size={32} />
-                  </div>
-                  <div className="cv-info">
-                    <div className="cv-filename">{latestCv.originalFilename}</div>
-                    <div className="cv-meta">
-                      {en ? "Updated" : "Aggiornato"}{" "}
-                      {new Date(latestCv.createdAt).toLocaleDateString(locale)}
-                    </div>
-                  </div>
-                  {cvProfile && (
-                    <div className="cv-profile-summary">
-                      <div className="cv-profile-item">
-                        <Icon name="briefcase" size={14} />
-                        {cvProfile.title || (en ? "No role set" : "Ruolo non impostato")}
-                      </div>
-                      {cvProfile.city && (
-                        <div className="cv-profile-item">
-                          <Icon name="map-pin" size={14} />
-                          {cvProfile.city}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <EmptyState
-                  icon="file-text"
-                  title={en ? "No CV uploaded" : "Nessun CV caricato"}
-                  description={
-                    en
-                      ? "Upload your CV to start applying"
-                      : "Carica il tuo CV per iniziare a candidarti"
-                  }
-                  ctaLabel={en ? "Upload CV" : "Carica CV"}
-                  ctaHref="/cv"
-                />
-              )}
-            </SectionBody>
-          </SectionCard>
-
-          {/* Profile Completeness */}
-          <SectionCard>
-            <SectionHead
-              title={
-                <span className="flex items-center gap-2">
-                  <Icon name="user" size={18} />
-                  {en ? "Profile" : "Il tuo profilo"}
-                  <span className="profile-progress-badge">
-                    {profileChecklist.filter(item => item.done).length}/{profileChecklist.length}
-                  </span>
-                </span>
-              }
-            />
-            <SectionBody>
-              <div className="profile-checklist">
-                {profileChecklist.map((item, idx) => (
-                  <Link key={idx} href={item.href} className="checklist-item">
-                    <div className={`checklist-check ${item.done ? 'done' : 'pending'}`}>
-                      <Icon name={item.done ? "check" : "circle"} size={14} />
-                    </div>
-                    <span className="checklist-label">{item.label}</span>
-                  </Link>
-                ))}
-              </div>
-            </SectionBody>
-          </SectionCard>
-
-          {/* Upcoming Interviews */}
-          {interviews > 0 && (
-            <SectionCard>
-              <SectionHead
-                title={
-                  <span className="flex items-center gap-2">
-                    <Icon name="calendar" size={18} />
-                    {en ? "Upcoming Interviews" : "Prossimi colloqui"}
-                  </span>
-                }
-                actions={
-                  <Link href="/interviews" className="section-link-sm">
-                    {en ? "View all" : "Vedi tutti"}
-                  </Link>
-                }
-              />
-              <SectionBody>
-                {recentInterviews.length > 0 ? (
-                  <div className="interview-list">
-                    {recentInterviews.map((interview) => (
-                      <Link
-                        key={interview.id}
-                        href={`/applications/${interview.id}`}
-                        className="interview-item"
-                      >
-                        <CompanyLogo
-                          company={interview.job.company ?? ""}
-                          size={32}
-                        />
-                        <div className="interview-info">
-                          <div className="interview-company">{interview.job.company}</div>
-                          <div className="interview-role">{interview.job.title}</div>
-                          {interview.lastReplyAt && (
-                            <div className="interview-time">
-                              {formatRelativeTime(interview.lastReplyAt, locale)}
-                            </div>
-                          )}
-                        </div>
+            {/* Progress */}
+            <section className="dash-card" aria-labelledby="dash-progress-title">
+              <header className="dash-card-head">
+                <h2 id="dash-progress-title"><Briefcase size={15} strokeWidth={1.75} aria-hidden /> {tr("Avanzamento candidature", "Application progress")}</h2>
+                <Link href="/applications" className="dash-link">{tr("Vedi tutte", "View all")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>
+              </header>
+              {stages.length > 0 ? (
+                <>
+                  <div className="dash-stages">
+                    {stages.map(({ stage, count }) => (
+                      <Link key={stage} href="/applications" className={`dash-stage tone-${STAGE_TONE[stage]}`} data-stage={stage} data-count={count}>
+                        <span className="dash-stage-label"><span className={`dash-dot tone-${STAGE_TONE[stage]}`} aria-hidden />{STAGE_LABEL[stage][lang]}</span>
+                        <span className="dash-stage-count">{count}</span>
+                        <span className="dash-stage-hint">{STAGE_LABEL[stage].hint[lang]}</span>
                       </Link>
                     ))}
                   </div>
-                ) : (
-                  <EmptyState
-                    icon="calendar"
-                    title={en ? "No upcoming interviews" : "Nessun colloquio"}
-                    description={
-                      en
-                        ? "Interview invites will appear here"
-                        : "Gli inviti ai colloqui appariranno qui"
-                    }
-                  />
-                )}
-              </SectionBody>
-            </SectionCard>
-          )}
+                  <p className="dash-muted dash-foot">
+                    {totalApplications} {tr("candidature in totale · contiamo come inviate solo quelle con ricevuta ATS o consegna email", "applications in total · only those with an ATS receipt or email delivery count as sent")}
+                  </p>
+                </>
+              ) : (
+                <Empty icon={Briefcase} title={tr("Nessuna candidatura", "No applications yet")} text={tr("Quando prepariamo o inviamo una candidatura, la vedi qui per stato.", "When we prepare or send an application, it shows up here by status.")} cta={{ href: "/discover", label: tr("Esplora offerte", "Browse jobs") }} />
+              )}
+            </section>
 
-          {/* Discover Opportunities */}
-          {opportunities > 0 && (
-            <SectionCard>
-              <SectionHead
-                title={
-                  <span className="flex items-center gap-2">
-                    <Icon name="search" size={18} />
-                    {en ? "Discover" : "Scopri"}
-                  </span>
-                }
-              />
-              <SectionBody>
-                <div className="opportunities-summary">
-                  <div className="opp-count">{opportunities}</div>
-                  <div className="opp-label">
-                    {en ? "open positions matching your profile" : "posizioni aperte compatibili"}
-                  </div>
-                  <Link href="/discover" className="ds-btn ds-btn-primary ds-btn-sm">
-                    <Icon name="arrow-right" size={14} />
-                    {en ? "Browse jobs" : "Esplora"}
+            {/* Activity */}
+            <section className="dash-card" aria-labelledby="dash-activity-title">
+              <header className="dash-card-head">
+                <h2 id="dash-activity-title"><Clock size={15} strokeWidth={1.75} aria-hidden /> {tr("Attività recente", "Recent activity")}</h2>
+              </header>
+              {activity.length > 0 ? (
+                <ol className="dash-timeline">
+                  {activity.map((app) => (
+                    <li key={app.id}>
+                      <Link href={`/applications/${app.id}`} className="dash-tl-row">
+                        <span className={`dash-tl-dot tone-${app.stage ? STAGE_TONE[app.stage] : "neutral"}`} aria-hidden />
+                        <Avatar name={app.job.company ?? ""} />
+                        <span className="dash-row-text">
+                          <strong>{app.job.company}</strong>
+                          <small>{app.job.title}</small>
+                        </span>
+                        {app.stage && <Pill tone={STAGE_TONE[app.stage]}>{STAGE_LABEL[app.stage][lang]}</Pill>}
+                        <time className="dash-time" dateTime={app.createdAt.toISOString()}>{formatRelativeTime(app.createdAt, locale)}</time>
+                      </Link>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <Empty icon={Clock} title={tr("Nessuna attività recente", "No recent activity")} text={tr("Qui compariranno le tue candidature più recenti.", "Your latest applications will appear here.")} />
+              )}
+            </section>
+          </div>
+
+          <aside className="dash-side" aria-label={tr("Profilo e documenti", "Profile and documents")}>
+            {/* CV */}
+            <section className="dash-card" aria-labelledby="dash-cv-title">
+              <header className="dash-card-head">
+                <h2 id="dash-cv-title"><FileText size={15} strokeWidth={1.75} aria-hidden /> {tr("Il tuo CV", "Your CV")}</h2>
+                {hasCv && <Link href="/cv" className="dash-link">{tr("Modifica", "Edit")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>}
+              </header>
+              {hasCv ? (
+                <div className="dash-pad">
+                  <Link href="/cv" className="dash-cv-sheet" aria-label={tr("Apri e modifica il tuo CV", "Open and edit your CV")}>
+                    {cvName && <div className="dash-cv-name">{cvName}</div>}
+                    {(cvProfile?.title || cvProfile?.city) && (
+                      <div className="dash-cv-role">
+                        {cvProfile?.title}
+                        {cvProfile?.title && cvProfile?.city ? " · " : ""}
+                        {cvProfile?.city && <><MapPin size={11} strokeWidth={1.75} aria-hidden /> {cvProfile.city}</>}
+                      </div>
+                    )}
+                    {cvProfile?.summary && <p className="dash-cv-summary">{cvProfile.summary}</p>}
+                    {cvProfile && cvProfile.experiences.length > 0 && (
+                      <ul className="dash-cv-exp">
+                        {cvProfile.experiences.slice(0, 3).map((exp, i) => (
+                          <li key={i}>
+                            <strong>{exp.role || tr("Ruolo", "Role")}</strong>
+                            <span>{[exp.company, [exp.startDate, exp.endDate].filter(Boolean).join(" – ")].filter(Boolean).join(" · ")}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {cvProfile && cvProfile.skills.length > 0 && (
+                      <div className="dash-cv-skills">{cvProfile.skills.slice(0, 6).map((s) => <span key={s.name}>{s.name}</span>)}</div>
+                    )}
+                    <span className="dash-cv-lines" aria-hidden>{Array.from({ length: 14 }, (_, i) => <i key={i} />)}</span>
+                    <span className="dash-cv-overlay" aria-hidden>{tr("Modifica", "Edit")}</span>
                   </Link>
+                  {latestCv && (
+                    <p className="dash-muted dash-cv-file">
+                      {latestCv.originalFilename} · {tr("caricato il", "uploaded")}{" "}
+                      {latestCv.createdAt.toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short", year: "numeric" })}
+                    </p>
+                  )}
                 </div>
-              </SectionBody>
-            </SectionCard>
-          )}
+              ) : (
+                <Empty icon={FileText} title={tr("Nessun CV caricato", "No CV uploaded")} text={tr("Carica il CV per iniziare a candidarti.", "Upload your CV to start applying.")} cta={{ href: "/cv", label: tr("Carica CV", "Upload CV") }} />
+              )}
+            </section>
+
+            {/* Profile */}
+            <section className="dash-card" aria-labelledby="dash-profile-title">
+              <header className="dash-card-head">
+                <h2 id="dash-profile-title"><UserRound size={15} strokeWidth={1.75} aria-hidden /> {tr("Il tuo profilo", "Your profile")}</h2>
+                <span className="dash-count">{profileDone}/{profileChecklist.length}</span>
+              </header>
+              <div className="dash-meter" aria-hidden><span style={{ width: `${(profileDone / profileChecklist.length) * 100}%` }} /></div>
+              <ul className="dash-checklist">
+                {profileChecklist.map((item) => (
+                  <li key={item.label}>
+                    <Link href={item.href} className={`dash-check${item.done ? " is-done" : ""}`}>
+                      <span className="dash-check-box">{item.done && <Check size={12} strokeWidth={2.25} aria-hidden />}</span>
+                      <span>{item.label}</span>
+                      {!item.done && <ChevronRight size={14} strokeWidth={1.75} aria-hidden className="dash-check-go" />}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {/* Interviews */}
+            <section className="dash-card" aria-labelledby="dash-interviews-title">
+              <header className="dash-card-head">
+                <h2 id="dash-interviews-title"><CalendarCheck size={15} strokeWidth={1.75} aria-hidden /> {tr("Colloqui", "Interviews")}</h2>
+                {interviews > 0 && <Link href="/interviews" className="dash-link">{tr("Vedi tutti", "View all")} <ChevronRight size={14} strokeWidth={1.75} aria-hidden /></Link>}
+              </header>
+              {recentInterviews.length > 0 ? (
+                <ul className="dash-list">
+                  {recentInterviews.map((iv) => (
+                    <li key={iv.id}>
+                      <Link href={`/applications/${iv.id}`} className="dash-row">
+                        <Avatar name={iv.job.company ?? ""} />
+                        <span className="dash-row-text">
+                          <strong>{iv.job.company}</strong>
+                          <small>{iv.job.title}</small>
+                        </span>
+                        {iv.lastReplyAt && <time className="dash-time" dateTime={iv.lastReplyAt.toISOString()}>{formatRelativeTime(iv.lastReplyAt, locale)}</time>}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="dash-muted dash-pad">{tr("Nessun invito a colloquio per ora. Gli inviti dei recruiter compaiono qui.", "No interview invites yet. Recruiter invites show up here.")}</p>
+              )}
+            </section>
+
+            {/* Discover */}
+            <section className="dash-card" aria-labelledby="dash-discover-title">
+              <header className="dash-card-head">
+                <h2 id="dash-discover-title"><Compass size={15} strokeWidth={1.75} aria-hidden /> {tr("Scopri", "Discover")}</h2>
+              </header>
+              <div className="dash-pad dash-discover">
+                <div>
+                  <div className="dash-discover-count">{opportunities.toLocaleString(en ? "en-GB" : "it-IT")}</div>
+                  <div className="dash-muted">{tr("offerte aperte aggiornate negli ultimi 30 giorni", "open roles refreshed in the last 30 days")}</div>
+                </div>
+                <Link href="/discover" className="dash-btn-ghost">{tr("Esplora", "Browse")} <ArrowRight size={14} strokeWidth={1.75} aria-hidden /></Link>
+              </div>
+            </section>
+          </aside>
         </div>
       </div>
     </>
   );
 }
 
-/**
- * Empty state component (Stripe/Mercury pattern)
- */
-function EmptyState({
-  icon,
-  title,
-  description,
-  ctaLabel,
-  ctaHref,
-}: {
-  icon: string;
-  title: string;
-  description: string;
-  ctaLabel?: string;
-  ctaHref?: string;
-}) {
+function Pill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
+  return <span className={`dash-pill tone-${tone}`}><span className="dash-dot" aria-hidden />{children}</span>;
+}
+
+function Avatar({ name }: { name: string }) {
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("") || "·";
+  return <span className="dash-avatar" aria-hidden>{initials}</span>;
+}
+
+function Empty({ icon: EmptyIcon, title, text, cta }: { icon: LucideIcon; title: string; text: string; cta?: { href: string; label: string } }) {
   return (
-    <div className="empty-state">
-      <div className="empty-state-icon">
-        <Icon name={icon as any} size={40} />
-      </div>
-      <div className="empty-state-title">{title}</div>
-      <div className="empty-state-description">{description}</div>
-      {ctaLabel && ctaHref && (
-        <Link href={ctaHref} className="ds-btn ds-btn-primary ds-btn-sm">
-          {ctaLabel}
-        </Link>
-      )}
+    <div className="dash-empty">
+      <span className="dash-empty-icon"><EmptyIcon size={18} strokeWidth={1.75} aria-hidden /></span>
+      <strong>{title}</strong>
+      <p>{text}</p>
+      {cta && <Link href={cta.href} className="dash-btn-ghost">{cta.label}</Link>}
     </div>
   );
 }
 
-/**
- * Format relative time (Linear/Arc pattern)
- */
 function formatRelativeTime(date: Date | string, locale: string): string {
-  const now = Date.now();
-  const then = new Date(date).getTime();
-  const diff = now - then;
-  
-  const minutes = Math.floor(diff / 60000);
+  const diff = Date.now() - new Date(date).getTime();
+  const minutes = Math.max(0, Math.floor(diff / 60000));
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
-  
   const en = locale === "en";
-  
-  if (minutes < 60) return en ? `${minutes}m ago` : `${minutes}m fa`;
-  if (hours < 24) return en ? `${hours}h ago` : `${hours}h fa`;
-  if (days < 7) return en ? `${days}d ago` : `${days}g fa`;
-  
-  return new Date(date).toLocaleDateString(locale, { month: "short", day: "numeric" });
+  if (minutes < 60) return en ? `${minutes}m ago` : `${minutes} min fa`;
+  if (hours < 24) return en ? `${hours}h ago` : `${hours} h fa`;
+  if (days < 7) return en ? `${days}d ago` : `${days} g fa`;
+  return new Date(date).toLocaleDateString(en ? "en-GB" : "it-IT", { month: "short", day: "numeric" });
 }

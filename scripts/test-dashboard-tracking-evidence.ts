@@ -72,7 +72,9 @@ async function main() {
         assert.equal(query.select.interviewSessions, undefined);
         return [];
       }
-      assert.equal(query.take, 200); assert.equal(query.select.emailAttempts.take, 1); assert.equal(query.select.submissionReceiptJson, true);
+      assert.equal(query.select.emailAttempts.take, 1); assert.equal(query.select.submissionReceiptJson, true);
+      // Recent-activity list: a small, owner-scoped page that reads the same delivery evidence.
+      if (query.take !== 200) return fixture.filter((row) => row.userId === "owner").slice(0, query.take);
       pages++;
       const start = query.cursor ? fixture.findIndex((row) => row.id === query.cursor.id) + 1 : 0;
       if (query.cursor) assert.equal(query.skip, 1);
@@ -86,6 +88,10 @@ async function main() {
     count: async (query: any) => {
       assert.equal(query.where.userId, "owner");
       if (query.where.userStatus === "offerta") return 1;
+      if (query.where.OR?.[0]?.userStatus === "colloquio") {
+        assert.equal(JSON.stringify(query.where.OR), JSON.stringify([{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }]));
+        return 1;
+      }
       assert.equal(query.where.OR[0].replies.some.isHuman, true);
       assert.equal(query.where.OR[0].replies.some.isSecurityCode, false);
       assert.equal(query.where.OR[1].gmailMessages.some.userId, "owner");
@@ -94,15 +100,19 @@ async function main() {
       return 1;
     },
   },
+  job: { count: async (query: any) => { assert.equal(query.where.dismissals.none.userId, "owner"); assert.equal(query.where.closedAt, null); return 7; } },
   cVDocument: { findFirst: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
   cVProfile: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
   };
   const element = (type: unknown, props: unknown) => ({ type, props });
+  const metrics = load("src/lib/dashboard-metrics-shared.ts", { "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence });
+  const lucide = new Proxy({}, { get: (_target, name) => String(name), has: () => true });
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },
     "next/link": { default: "Link" }, "next-intl/server": { getLocale: async () => "it", getTranslations: async () => (key: string) => key },
-    "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence,
-    "@/lib/session": { getCurrentUser: async () => ({ id: "owner", email: "owner@example.test", name: "Owner", welcomeSeenAt: new Date() }) },
+    "@/lib/db": { prisma: db }, "@/lib/application-evidence": evidence, "@/lib/dashboard-metrics-shared": metrics,
+    "lucide-react": lucide, "./dashboard.css": {},
+    "@/lib/session": { getCurrentUser: async () => ({ id: "owner", email: "owner@example.test", name: "Owner", welcomeSeenAt: new Date(), emailVerified: new Date(), subscriptionStatus: "active" }) },
     "@/lib/attention-repository": { getAttentionQueue: async () => ({ items: [], unread: 0, unknownRead: 0, drafts: 0, limited: false }) },
     "@/components/attention-queue": { AttentionQueue: "AttentionQueue" },
     "@/lib/onboarding": { getOnboardingState: async () => ({ hasUploadedCv: true, hasSetPreferences: true, hasFirstApplication: true }) },
@@ -122,19 +132,26 @@ async function main() {
   const dashboard = load("src/app/(app)/dashboard/page.tsx", dependencies);
   const rendered = await dashboard.default();
   assert.equal(pages, 2, "Dashboard evidence query paginates instead of silently truncating totals");
-  const summaries: any[] = [];
+  const kpis: Record<string, unknown> = {};
+  const stageCounts: Record<string, number> = {};
   const walk = (node: any) => {
     if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) { node.forEach(walk); return; }
-    if (node.props?.role === "listitem") summaries.push(node);
+    const kpi = node.props?.["data-kpi"];
+    if (kpi) {
+      const value = (node.props.children as any[]).find((child) => child?.props?.className === "dash-kpi-value");
+      kpis[kpi] = value.props.children;
+    }
+    if (node.props?.["data-stage"]) stageCounts[node.props["data-stage"]] = node.props["data-count"];
     walk(node.props?.children);
   };
   walk(rendered);
-  assert.equal(summaries[0].props.children[0].props.children, 2, "Only real delivered email + verified portal receipt count");
-  assert.equal(summaries[0].props.children[2].props.children[0], 1, "Provider accepted gets a distinct pending-delivery label");
-  assert.equal(summaries[1].props.children[0].props.children, 1);
-  assert.equal(summaries[1].props.children[1].props.children, "Con risposte recruiter");
-  assert.equal(summaries[3].props.children[0].props.children, 1, "Manual offer status remains intact");
+  assert.equal(kpis.confirmed, "2", "Only real delivered email + verified portal receipt count");
+  assert.equal(kpis.replies, "1", "Recruiter replies come from human, non-security-code source rows");
+  assert.equal(kpis.interviews, "1", "Interviews count recruiter/user evidence only");
+  assert.equal(kpis.offers, "1", "Manual offer status remains intact");
+  assert.equal(stageCounts.sent, 2, "Progress 'sent' uses the evidence-backed count, not raw success rows");
+  assert.equal(stageCounts.unverified, 6, "Success rows without evidence stay 'outcome unverified'");
   console.log("PASS dashboard owner isolation, complete bounded pagination, real receipt/delivery evidence and source-row response counts.");
 
   const globe = load("src/lib/dashboard-globe-data.ts", {
