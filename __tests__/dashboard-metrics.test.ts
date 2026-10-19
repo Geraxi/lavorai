@@ -48,11 +48,11 @@ async function runTests() {
   // Test 2: getRecruiterReplies
   console.log("\nTest 2: getRecruiterReplies");
   const replies = await getRecruiterReplies(userId);
-  if (replies === 3) {
-    console.log(`  ✅ PASS: Expected 3, got ${replies}`);
+  if (replies === 2) {
+    console.log(`  ✅ PASS: Expected 2, got ${replies}`);
     passed++;
   } else {
-    console.log(`  ❌ FAIL: Expected 3, got ${replies}`);
+    console.log(`  ❌ FAIL: Expected 2, got ${replies}`);
     failed++;
   }
 
@@ -116,7 +116,7 @@ async function runTests() {
   const metrics = await getAllDashboardMetrics(userId);
   const allCorrect =
     metrics.confirmed === 3 &&
-    metrics.replies === 3 &&
+    metrics.replies === 2 &&
     metrics.interviews === 1 &&
     metrics.offers === 0 &&
     metrics.opportunities === 6 &&

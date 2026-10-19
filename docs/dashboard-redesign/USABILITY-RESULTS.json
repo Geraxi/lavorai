@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-10-19T10:00:24.789Z",
+  "results": [
+    {
+      "task": "Find needs attention items",
+      "success": true,
+      "details": "Found section with 1 items",
+      "time": "Instant (prominent red badge at top when present)"
+    },
+    {
+      "task": "View application status",
+      "success": true,
+      "details": "Found 2 status categories",
+      "time": "Instant (main column, below KPIs)"
+    },
+    {
+      "task": "Check recent activity",
+      "success": true,
+      "details": "Found 5 recent applications",
+      "time": "Instant (main column, clear timeline pattern)"
+    },
+    {
+      "task": "View CV details",
+      "success": true,
+      "details": "Found CV: CV_Marco_Rossi_2026.pdf",
+      "time": "Instant (sidebar, top position)"
+    },
+    {
+      "task": "Browse opportunities",
+      "success": true,
+      "details": "Found 6 opportunities with link to Discover",
+      "time": "Instant (sidebar, clear CTA)"
+    }
+  ],
+  "adminNavHidden": true,
+  "allTasksPassed": true
+}
