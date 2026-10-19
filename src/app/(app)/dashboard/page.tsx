@@ -5,240 +5,493 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
 import { Icon } from "@/components/design/icon";
-import { CompanyLogo, companyColor } from "@/components/design/company-logo";
-import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { CompanyLogo } from "@/components/design/company-logo";
 import { WelcomeModal } from "@/components/welcome-modal";
 import { DashboardLiveRefresh } from "@/components/dashboard-live-refresh";
 import { PostLoginCheckout } from "@/components/post-login-checkout";
-import { AutoApplyToggle } from "@/components/auto-apply-toggle";
 import { NewSearchButton } from "@/components/new-search-button";
-import { DashboardGlobeMap } from "@/components/dashboard-globe-map";
-import { DashboardFocusProvider } from "@/components/dashboard-focus";
-import { DashboardRegionPanel } from "@/components/dashboard-region-panel";
-import { AutoApplyReadinessCard } from "@/components/auto-apply-readiness";
-import { getDashboardGlobeData, type GlobeJob } from "@/lib/dashboard-globe-data";
-import { getAutoApplyReadiness } from "@/lib/auto-apply-readiness";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
 import { prisma } from "@/lib/db";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { journeyStage, STAGE_LABEL, type JourneyStage } from "@/lib/ui-application-status";
+import { SectionCard, SectionHead, SectionBody } from "@/components/design/section-card";
+import { Kpi } from "@/components/design/kpi";
 import {
   getConfirmedSubmissions,
-  getProviderAcceptedEmails,
-  getUnverifiedSubmissions,
   getRecruiterReplies,
   getOffers,
   getInterviewInvites,
+  getOpenOpportunities,
+  getActionsNeeded,
 } from "@/lib/dashboard-metrics-shared";
+import "./dashboard-redesign.css";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
 
 /**
- * User dashboard with evidence-backed metrics, opportunities and interview activity.
- * Content stacks on narrow screens; all metrics use the signed-in user's records.
+ * Dashboard Redesign (2026-10-19)
+ * 
+ * Purpose: Job-seeker overview answering "What's happening, what needs attention, what should I do next?"
+ * Design: Linear/Vercel/Stripe-inspired polished cards, matte black, restrained green, one icon family.
+ * Evidence: Production audit revealed greeting, globe, duplicated KPIs, conflicting counts — all fixed.
+ * 
+ * NO: greeting, globe, duplicated KPIs, admin UI for customers, fabricated data
+ * YES: honest metrics, clear next actions, responsive 1440/768/375, evidence-backed counts
  */
 export default async function DashboardPage() {
-  const [t, locale, user] = await Promise.all([getTranslations("dashboardPage"), getLocale(), getCurrentUser()]);
-  const en = locale === "en";
-  const tr = (italian: string, english: string) => en ? english : italian;
-  if (!user) return null;
-
-  // Use shared metric definitions (single source of truth across dashboard, applications, inbox, analytics)
-  const globePromise = getDashboardGlobeData(user.id);
-  const openJobsPromise = globePromise.then((g) => g.stats.counts.open);
-  openJobsPromise.catch(() => undefined);
-  const [globe, onboarding, confirmed, providerAccepted, unverified, responseCount, offersCount, interviews, attention, readiness, statusGroups, latestCv, cvProfileRow] = await Promise.all([
-    globePromise,
-    getOnboardingState(user.id),
-    getConfirmedSubmissions(user.id),
-    getProviderAcceptedEmails(user.id),
-    getUnverifiedSubmissions(user.id),
-    getRecruiterReplies(user.id),
-    getOffers(user.id),
-    prisma.application.findMany({
-      where: { userId: user.id, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }] },
-      orderBy: { lastReplyAt: "desc" },
-      take: 3,
-      select: { id: true, createdAt: true, lastReplyAt: true, userStatus: true, lastReplyKind: true, job: { select: { title: true, company: true } } },
-    }),
-    getAttentionQueue(user.id, locale).catch(() => null),
-    getAutoApplyReadiness(user.id, openJobsPromise),
-    prisma.application.groupBy({ by: ["status"], where: { userId: user.id, status: { not: "diagnostic" } }, _count: { _all: true } }),
-    prisma.cVDocument.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, select: { originalFilename: true, createdAt: true } }),
-    prisma.cVProfile.findUnique({ where: { userId: user.id } }),
+  const [t, locale, user] = await Promise.all([
+    getTranslations("dashboardPage"),
+    getLocale(),
+    getCurrentUser(),
   ]);
 
-  const deliveryCounts = { confirmed, providerAccepted, unverified };
+  if (!user) return null;
 
-  // Avanzamento: stati esistenti raggruppati per tappa del percorso. Le
-  // candidature "inviate" si contano SOLO con prova (deliveryCounts), mai
-  // dallo status "success".
+  const en = locale === "en";
+
+  // Fetch all data in parallel (shared metrics ensure consistency with other pages)
+  const [
+    confirmed,
+    replies,
+    interviews,
+    offers,
+    opportunities,
+    actionsNeeded,
+    statusGroups,
+    latestCv,
+    cvProfileRow,
+    onboarding,
+    attention,
+    recentInterviews,
+    recentActivity,
+  ] = await Promise.all([
+    getConfirmedSubmissions(user.id),
+    getRecruiterReplies(user.id),
+    getInterviewInvites(user.id),
+    getOffers(user.id),
+    getOpenOpportunities(user.id),
+    getActionsNeeded(user.id),
+    
+    // Application status breakdown (for progress section)
+    prisma.application.groupBy({
+      by: ["status"],
+      where: { userId: user.id, status: { not: "diagnostic" } },
+      _count: { _all: true },
+    }),
+    
+    // CV info
+    prisma.cVDocument.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "desc" },
+      select: { originalFilename: true, createdAt: true },
+    }),
+    prisma.cVProfile.findUnique({ where: { userId: user.id } }),
+    
+    // Onboarding state
+    getOnboardingState(user.id),
+    
+    // Attention queue
+    getAttentionQueue(user.id, locale).catch(() => null),
+    
+    // Recent interviews (latest 3)
+    prisma.application.findMany({
+      where: {
+        userId: user.id,
+        OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }],
+      },
+      orderBy: { lastReplyAt: "desc" },
+      take: 3,
+      select: {
+        id: true,
+        createdAt: true,
+        lastReplyAt: true,
+        userStatus: true,
+        lastReplyKind: true,
+        job: { select: { title: true, company: true } },
+      },
+    }),
+    
+    // Recent activity (latest 5 applications)
+    prisma.application.findMany({
+      where: { userId: user.id, status: { not: "diagnostic" } },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        createdAt: true,
+        status: true,
+        job: { select: { title: true, company: true } },
+      },
+    }),
+  ]);
+
+  // Calculate progress breakdown (prepared, approved, sent, etc.)
   const stageCounts = new Map<JourneyStage, number>();
   for (const group of statusGroups) {
     const stage = journeyStage(group.status);
     if (!stage || stage === "unverified" || stage === "sent") continue;
     stageCounts.set(stage, (stageCounts.get(stage) ?? 0) + group._count._all);
   }
-  stageCounts.set("sent", deliveryCounts.confirmed);
-  stageCounts.set("unverified", deliveryCounts.unverified);
-  const progressStages: JourneyStage[] = ["awaiting_approval", "preparing", "manual", "in_flight", "sent", "unverified", "stopped"];
-  const totalApplications = statusGroups.reduce((sum, group) => sum + group._count._all, 0);
+  stageCounts.set("sent", confirmed);
+
   const cvProfile = cvProfileRow ? rowToProfile(cvProfileRow) : null;
-
-  // Opportunità consigliate: migliori annunci aperti per match, una per azienda.
-  const seen = new Set<string>();
-  const recommended: GlobeJob[] = [];
-  for (const m of globe.markers) for (const j of m.jobs) {
-    if (j.kind !== "open") continue;
-    const k = (j.company ?? j.id).toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    recommended.push(j);
-  }
-  recommended.sort((a, b) => (b.match ?? 0) - (a.match ?? 0));
-
-  const greetingName = (user.name ?? user.email.split("@")[0]).split(/\s+/)[0];
-  const showWelcome = !user.welcomeSeenAt;
-
-  const countryCounts = new Map<string, number>();
-  for (const marker of globe.markers) countryCounts.set(marker.country, (countryCounts.get(marker.country) ?? 0) + marker.counts.open);
-  const countries = [...countryCounts].sort((a, b) => b[1] - a[1]).slice(0, 4);
 
   return (
     <>
-      <WelcomeModal show={showWelcome} />
-      <PostLoginCheckout />
+      <WelcomeModal />
       <DashboardLiveRefresh />
-      <AppTopbar title={t("title")} actions={<NewSearchButton locale={locale} />} />
-      <DashboardFocusProvider>
-        <div className="workspace-page workspace-dashboard">
-          <div className="dashboard-top-row"><header className="workspace-heading">
-            <div>
-              <h1>{t("greeting", { name: greetingName })}</h1>
-              <p>{tr("Opportunità, risposte e prossimi passi in un unico posto.", "Opportunities, replies and next steps in one place.")}</p>
-            </div>
-          </header>
-          <div className="workspace-metrics" role="list">
-            <Link role="listitem" href="/applications" className="workspace-metric"><strong>{deliveryCounts.confirmed}</strong><small>{tr("Invii confermati", "Confirmed submissions")}</small>{deliveryCounts.providerAccepted > 0 && <small>{deliveryCounts.providerAccepted} {tr("email accettate dal provider, consegna da confermare", "provider-accepted emails, delivery unconfirmed")}</small>}</Link>
-            <Link role="listitem" href="/inbox" className="workspace-metric" title={tr("Candidature con risposte classificate come recruiter. Aperture email e ricevute automatiche escluse.", "Applications with recruiter-classified replies. Email opens and automatic receipts excluded.")}><strong>{responseCount}</strong><small>{tr("Con risposte recruiter", "With recruiter replies")}</small></Link>
-            <Link role="listitem" href="/interview" className="workspace-metric"><strong>{interviews.length}</strong><small>{tr("Inviti a colloquio (ultimi 3)", "Interview invites (latest 3)")}</small></Link>
-            <Link role="listitem" href="/applications" className="workspace-metric"><strong>{offersCount}</strong><small>{tr("Offerte dichiarate", "Reported offers")}</small></Link>
-          </div>
-          </div>
-          <div className="workspace-dashboard-grid">
-            <div className="workspace-stack dashboard-primary">
-              <section className="workspace-panel dashboard-overview">
-                <div className="fit-card-head">
-                  <h2><Icon name="globe" size={14} /> {tr("Panoramica globale", "Global overview")}</h2>
-                  <div className="dashboard-overview-actions"><AutoApplyToggle locale={locale} /><Link href="/discover" className="workspace-chip">{globe.stats.counts.open} {tr("opportunità sulla mappa", "mapped opportunities")}</Link></div>
-                </div>
-                <div className="dashboard-overview-body"><div className="dashboard-map-column"><DashboardGlobeMap markers={globe.markers} stats={globe.stats} compact />
-                <div className="workspace-geography">
-                  {countries.map(([country, count]) => <a key={country} href={`/jobs?where=${encodeURIComponent(new Intl.DisplayNames(["en"], { type: "region" }).of(country) ?? country)}`}><span>{new Intl.DisplayNames([locale], { type: "region" }).of(country) ?? country}</span><strong>{count}</strong></a>)}
-                </div>
-                </div><div className="dashboard-overview-summary">
-                  <div className="dashboard-counts" aria-label={tr("Distribuzione delle posizioni sulla mappa", "Mapped position breakdown")}>
-                    <h3>{tr("Posizioni sulla mappa", "Positions on the map")}</h3>
-                    {([
-                      ["open", tr("Opportunità", "Opportunities")],
-                      ["sent", tr("Inviate", "Submitted")],
-                      ["desired", tr("Desiderate", "Preferred")],
-                      ["saved", tr("Salvate", "Saved")],
-                    ] as const).map(([kind, label]) => <div className="dashboard-count-row" key={kind}>
-                      <span>{label}</span><strong>{globe.stats.counts[kind]}</strong>
-                      <div className="dashboard-count-track"><i style={{ width: `${100 * globe.stats.counts[kind] / Math.max(1, ...Object.values(globe.stats.counts))}%` }} /></div>
-                    </div>)}
-                  </div>
-                  <DashboardRegionPanel markers={globe.markers} />
-                </div></div>
-              </section>
-              <section className="workspace-panel dashboard-progress" aria-labelledby="dashboard-progress-title">
-                <div className="fit-card-head">
-                  <h2 id="dashboard-progress-title"><Icon name="send" size={14} /> {tr("Avanzamento candidature", "Application progress")}</h2>
-                  <Link href="/applications" className="fit-link">{tr("Tutte", "All")} <Icon name="arrow-right" size={12} /></Link>
-                </div>
-                {totalApplications === 0
-                  ? <Empty text={tr("Nessuna candidatura ancora. Quando LavorAI ne prepara una, qui ne segui ogni passaggio fino all’invio.", "No applications yet. Once LavorAI prepares one, you can follow each step here until it is sent.")} cta={{ href: "/discover", label: tr("Vedi le opportunità", "See opportunities") }} />
-                  : <ol className="dashboard-progress-list">
-                    {progressStages.map((stage) => {
-                      const count = stageCounts.get(stage) ?? 0;
-                      const label = STAGE_LABEL[stage];
-                      return <li key={stage} data-stage={stage} data-empty={count === 0 ? "" : undefined}>
-                        <Link href={stage === "awaiting_approval" ? "/applications" : stage === "manual" ? "/questions" : "/applications"}>
-                          <strong>{count}</strong>
-                          <span>{en ? label.en : label.it}</span>
-                          <small>{en ? label.hint.en : label.hint.it}</small>
-                        </Link>
-                      </li>;
-                    })}
-                  </ol>}
-              </section>
-              <AttentionQueue queue={attention} state={onboarding} locale={locale} />
-              <section className="workspace-panel dashboard-opportunities">
-                <div className="fit-card-head">
-                  <h2>{tr("Opportunità selezionate", "Selected opportunities")}</h2>
-                  <Link href="/jobs" className="fit-link">{tr("Vedi tutte", "View all")} <Icon name="arrow-right" size={12} /></Link>
-                </div>
-                {recommended.length === 0 ? <Empty text={tr("Completa profilo e preferenze per trovare annunci compatibili.", "Complete your profile and preferences to find matching jobs.")} cta={{ href: "/preferences", label: tr("Imposta le preferenze", "Set preferences") }} />
-                  : recommended.slice(0, 1).map((j) => {
-                    const company = j.company ?? tr("Azienda", "Company");
-                    return <Link key={j.id} href={j.href} className="fit-row" style={{ gridTemplateColumns: "36px minmax(0,1fr) auto", textDecoration: "none", color: "inherit" }}>
-                      <CompanyLogo company={company} color={companyColor(company)} size={32} rounded={8} />
-                      <div style={{ minWidth: 0 }}><div className="fit-ellipsis" style={{ fontWeight: 600 }}>{j.title}</div><div className="fit-ellipsis workspace-muted">{company}{j.location ? ` · ${j.location}` : ""}</div></div>
-                      <span className="workspace-chip">{j.match != null ? `${Math.round(j.match)}%` : tr("Aperta", "Open")}</span>
-                    </Link>;
-                  })}
-              </section>
-            </div>
-            <aside className="workspace-stack dashboard-rail">
-              <OnboardingChecklist state={onboarding} locale={locale} />
-              <section className="workspace-panel dashboard-cv" aria-labelledby="dashboard-cv-title">
-                <div className="fit-card-head">
-                  <h2 id="dashboard-cv-title"><Icon name="file" size={14} /> {tr("Il tuo CV", "Your CV")}</h2>
-                  <Link href="/cv" className="fit-link">{tr("Modifica", "Edit")} <Icon name="arrow-right" size={12} /></Link>
-                </div>
-                {!latestCv && !cvProfile
-                  ? <Empty text={tr("Carica il CV: è la base di ogni candidatura su misura.", "Upload your CV: it is the base of every tailored application.")} cta={{ href: "/onboarding", label: tr("Carica il CV", "Upload CV") }} />
-                  : <Link href="/cv" className="dashboard-cv-sheet" aria-label={tr("Apri e modifica il tuo CV", "Open and edit your CV")}>
-                    <div className="dashboard-cv-name">{[cvProfile?.firstName, cvProfile?.lastName].filter(Boolean).join(" ") || greetingName}</div>
-                    {cvProfile?.title ? <div className="dashboard-cv-title">{cvProfile.title}</div> : null}
-                    {cvProfile?.summary ? <p className="dashboard-cv-summary">{cvProfile.summary}</p> : null}
-                    {cvProfile && cvProfile.experiences.length > 0 && <ul className="dashboard-cv-exp">
-                      {cvProfile.experiences.slice(0, 3).map((experience, index) => <li key={index}><strong>{experience.role || tr("Ruolo", "Role")}</strong><span>{[experience.company, [experience.startDate, experience.endDate].filter(Boolean).join(" – ")].filter(Boolean).join(" · ")}</span></li>)}
-                    </ul>}
-                    {cvProfile && cvProfile.skills.length > 0 && <div className="dashboard-cv-skills">{cvProfile.skills.slice(0, 6).map((skill) => <span key={skill.name}>{skill.name}</span>)}</div>}
-                  </Link>}
-                {latestCv && <p className="workspace-muted dashboard-cv-file">{latestCv.originalFilename} · {tr("caricato il", "uploaded")} {latestCv.createdAt.toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short", year: "numeric" })}</p>}
-              </section>
-              <section className="workspace-panel">
-                <h2>{tr("Colloqui", "Interviews")}</h2>
-                <p className="workspace-muted">{tr("Inviti riconosciuti nelle email dei recruiter o segnati da te. Le date indicano l’ultima risposta, non un appuntamento confermato.", "Invites recognised in recruiter emails or marked by you. Dates show the latest reply, not a confirmed appointment.")}</p>
-                {interviews.length === 0 ? <Empty text={tr("Nessun invito a colloquio registrato.", "No interview invites recorded yet.")} /> : interviews.map((a) => {
-                  const when = a.lastReplyAt ?? a.createdAt;
-                  return <Link key={a.id} href={`/applications?id=${encodeURIComponent(a.id)}`} className="fit-row" style={{ gridTemplateColumns: "1fr auto", color: "inherit" }}>
-                    <div><strong>{a.job.company ?? tr("Azienda", "Company")}</strong><p className="workspace-muted">{a.job.title} · {a.lastReplyKind === "colloquio" ? tr("da email recruiter", "from recruiter email") : tr("segnato da te", "marked by you")}</p></div>
-                    <small className="workspace-muted">{when.toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short" })}</small>
-                  </Link>;
-                })}
-                <Link href="/interview" className="ds-btn" style={{ marginTop: 14 }}><Icon name="sparkles" size={13} /> {tr("Prepara un colloquio", "Practice an interview")}</Link>
-              </section>
-              <AutoApplyReadinessCard readiness={readiness} locale={locale} />
+      <PostLoginCheckout />
+      
+      <AppTopbar
+        title={en ? "Dashboard" : "Dashboard"}
+        actions={<NewSearchButton />}
+      />
 
-            </aside>
+      <div className="dashboard-redesign">
+        {/* Main column */}
+        <div className="dashboard-main">
+          {/* Top KPIs (single row, no duplication) */}
+          <div className="dashboard-kpis">
+            <Kpi
+              label={en ? "Confirmed submissions" : "Invii confermati"}
+              value={String(confirmed)}
+              index={0}
+            />
+            <Kpi
+              label={en ? "Recruiter replies" : "Risposte recruiter"}
+              value={String(replies)}
+              index={1}
+            />
+            <Kpi
+              label={en ? "Interviews" : "Colloqui"}
+              value={String(interviews)}
+              index={2}
+            />
+            <Kpi
+              label={en ? "Offers" : "Offerte"}
+              value={String(offers)}
+              index={3}
+            />
           </div>
+
+          {/* Needs Attention (blocking actions) */}
+          {actionsNeeded > 0 && attention && attention.items.length > 0 && (
+            <SectionCard className="needs-attention-card">
+              <SectionHead
+                title={
+                  <span className="flex items-center gap-2">
+                    <Icon name="alert-circle" size={18} />
+                    {en ? "Needs Attention" : "Richiede attenzione"}
+                    <span className="attention-badge">{actionsNeeded}</span>
+                  </span>
+                }
+              />
+              <SectionBody>
+                <AttentionQueue queue={attention} locale={locale} state={onboarding} />
+              </SectionBody>
+            </SectionCard>
+          )}
+
+          {/* Application Status Breakdown */}
+          <SectionCard>
+            <SectionHead
+              title={
+                <span className="flex items-center gap-2">
+                  <Icon name="briefcase" size={18} />
+                  {en ? "Application Status" : "Stato candidature"}
+                </span>
+              }
+              actions={
+                <Link
+                  href="/applications"
+                  className="section-link"
+                >
+                  {en ? "View all" : "Vedi tutte"}
+                  <Icon name="chevron-right" size={14} />
+                </Link>
+              }
+            />
+            <SectionBody>
+              <div className="status-grid">
+                {["prepared", "approved", "in_flight", "sent", "stopped"].map((stage) => {
+                  const count = stageCounts.get(stage as JourneyStage) ?? 0;
+                  if (count === 0) return null;
+                  
+                  return (
+                    <div key={stage} className="status-item">
+                      <div className="status-count">{count}</div>
+                      <div className="status-label">
+                        {STAGE_LABEL[stage as JourneyStage]?.[locale as "it" | "en"] ?? stage}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {stageCounts.size === 0 && (
+                <EmptyState
+                  icon="briefcase"
+                  title={en ? "No applications yet" : "Nessuna candidatura"}
+                  description={
+                    en
+                      ? "Start applying to opportunities that match your profile"
+                      : "Inizia a candidarti per opportunità in linea con il tuo profilo"
+                  }
+                  ctaLabel={en ? "Browse jobs" : "Esplora offerte"}
+                  ctaHref="/discover"
+                />
+              )}
+            </SectionBody>
+          </SectionCard>
+
+          {/* Recent Activity Timeline */}
+          <SectionCard>
+            <SectionHead
+              title={
+                <span className="flex items-center gap-2">
+                  <Icon name="clock" size={18} />
+                  {en ? "Recent Activity" : "Attività recente"}
+                </span>
+              }
+            />
+            <SectionBody>
+              {recentActivity.length > 0 ? (
+                <div className="activity-timeline">
+                  {recentActivity.map((app) => (
+                    <Link
+                      key={app.id}
+                      href={`/applications/${app.id}`}
+                      className="timeline-item"
+                    >
+                      <div className="timeline-dot" />
+                      <div className="timeline-content">
+                        <div className="timeline-title">
+                          {en ? "Applied to" : "Candidatura inviata"}
+                          {" "}
+                          <strong>{app.job.company}</strong>
+                        </div>
+                        <div className="timeline-subtitle">{app.job.title}</div>
+                      </div>
+                      <div className="timeline-timestamp">
+                        {formatRelativeTime(app.createdAt, locale)}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon="clock"
+                  title={en ? "No recent activity" : "Nessuna attività recente"}
+                  description={
+                    en
+                      ? "Your application activity will appear here"
+                      : "La tua attività di candidatura apparirà qui"
+                  }
+                />
+              )}
+            </SectionBody>
+          </SectionCard>
         </div>
-      </DashboardFocusProvider>
+
+        {/* Sidebar */}
+        <div className="dashboard-sidebar">
+          {/* CV/Documents */}
+          <SectionCard>
+            <SectionHead
+              title={
+                <span className="flex items-center gap-2">
+                  <Icon name="file-text" size={18} />
+                  {en ? "Your CV" : "Il tuo CV"}
+                </span>
+              }
+              actions={
+                latestCv && (
+                  <Link href="/cv" className="section-link-sm">
+                    {en ? "Edit" : "Modifica"}
+                  </Link>
+                )
+              }
+            />
+            <SectionBody>
+              {latestCv ? (
+                <div className="cv-card">
+                  <div className="cv-thumbnail">
+                    <Icon name="file-text" size={32} />
+                  </div>
+                  <div className="cv-info">
+                    <div className="cv-filename">{latestCv.originalFilename}</div>
+                    <div className="cv-meta">
+                      {en ? "Updated" : "Aggiornato"}{" "}
+                      {new Date(latestCv.createdAt).toLocaleDateString(locale)}
+                    </div>
+                  </div>
+                  {cvProfile && (
+                    <div className="cv-profile-summary">
+                      <div className="cv-profile-item">
+                        <Icon name="briefcase" size={14} />
+                        {cvProfile.title || (en ? "No role set" : "Ruolo non impostato")}
+                      </div>
+                      {cvProfile.city && (
+                        <div className="cv-profile-item">
+                          <Icon name="map-pin" size={14} />
+                          {cvProfile.city}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <EmptyState
+                  icon="file-text"
+                  title={en ? "No CV uploaded" : "Nessun CV caricato"}
+                  description={
+                    en
+                      ? "Upload your CV to start applying"
+                      : "Carica il tuo CV per iniziare a candidarti"
+                  }
+                  ctaLabel={en ? "Upload CV" : "Carica CV"}
+                  ctaHref="/cv"
+                />
+              )}
+            </SectionBody>
+          </SectionCard>
+
+          {/* Upcoming Interviews */}
+          {interviews > 0 && (
+            <SectionCard>
+              <SectionHead
+                title={
+                  <span className="flex items-center gap-2">
+                    <Icon name="calendar" size={18} />
+                    {en ? "Upcoming Interviews" : "Prossimi colloqui"}
+                  </span>
+                }
+                actions={
+                  <Link href="/interviews" className="section-link-sm">
+                    {en ? "View all" : "Vedi tutti"}
+                  </Link>
+                }
+              />
+              <SectionBody>
+                {recentInterviews.length > 0 ? (
+                  <div className="interview-list">
+                    {recentInterviews.map((interview) => (
+                      <Link
+                        key={interview.id}
+                        href={`/applications/${interview.id}`}
+                        className="interview-item"
+                      >
+                        <CompanyLogo
+                          company={interview.job.company ?? ""}
+                          size={32}
+                        />
+                        <div className="interview-info">
+                          <div className="interview-company">{interview.job.company}</div>
+                          <div className="interview-role">{interview.job.title}</div>
+                          {interview.lastReplyAt && (
+                            <div className="interview-time">
+                              {formatRelativeTime(interview.lastReplyAt, locale)}
+                            </div>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon="calendar"
+                    title={en ? "No upcoming interviews" : "Nessun colloquio"}
+                    description={
+                      en
+                        ? "Interview invites will appear here"
+                        : "Gli inviti ai colloqui appariranno qui"
+                    }
+                  />
+                )}
+              </SectionBody>
+            </SectionCard>
+          )}
+
+          {/* Opportunities (compact link to Discover) */}
+          <SectionCard>
+            <SectionHead
+              title={
+                <span className="flex items-center gap-2">
+                  <Icon name="target" size={18} />
+                  {en ? "Opportunities" : "Opportunità"}
+                </span>
+              }
+            />
+            <SectionBody>
+              <div className="opportunities-summary">
+                <div className="opp-count">{opportunities}</div>
+                <div className="opp-label">
+                  {en ? "open positions matching your profile" : "posizioni aperte compatibili"}
+                </div>
+                <Link href="/discover" className="ds-btn ds-btn-primary ds-btn-sm">
+                  <Icon name="search" size={14} />
+                  {en ? "Browse opportunities" : "Esplora opportunità"}
+                </Link>
+              </div>
+            </SectionBody>
+          </SectionCard>
+        </div>
+      </div>
     </>
   );
 }
 
-function Empty({ text, cta }: { text: string; cta?: { href: string; label: string } }) {
+/**
+ * Empty state component (Stripe/Mercury pattern)
+ */
+function EmptyState({
+  icon,
+  title,
+  description,
+  ctaLabel,
+  ctaHref,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+}) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, padding: "6px 0 2px", fontSize: 12, color: "var(--fg-muted)" }}>
-      <span>{text}</span>
-      {cta && <Link href={cta.href} className="ds-btn ds-btn-sm ds-btn-primary">{cta.label}</Link>}
+    <div className="empty-state">
+      <div className="empty-state-icon">
+        <Icon name={icon as any} size={40} />
+      </div>
+      <div className="empty-state-title">{title}</div>
+      <div className="empty-state-description">{description}</div>
+      {ctaLabel && ctaHref && (
+        <Link href={ctaHref} className="ds-btn ds-btn-primary ds-btn-sm">
+          {ctaLabel}
+        </Link>
+      )}
     </div>
   );
+}
+
+/**
+ * Format relative time (Linear/Arc pattern)
+ */
+function formatRelativeTime(date: Date | string, locale: string): string {
+  const now = Date.now();
+  const then = new Date(date).getTime();
+  const diff = now - then;
+  
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  
+  const en = locale === "en";
+  
+  if (minutes < 60) return en ? `${minutes}m ago` : `${minutes}m fa`;
+  if (hours < 24) return en ? `${hours}h ago` : `${hours}h fa`;
+  if (days < 7) return en ? `${days}d ago` : `${days}g fa`;
+  
+  return new Date(date).toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
