@@ -321,7 +321,8 @@
  * page roots set max-width/margin/padding inline or with !important. */
 .lavorai-app-shell {
   --pm-gutter: 32px;
-  --pm-content-max: 1320px;
+  /* No cap: pages fill the width next to the sidebar; gutters stay. */
+  --pm-content-max: none;
 }
 @media (max-width: 1023px) { .lavorai-app-shell { --pm-gutter: 24px; } }
 @media (max-width: 640px) { .lavorai-app-shell { --pm-gutter: 16px; } }
@@ -329,7 +330,7 @@
 .lavorai-app-shell .lavorai-main > :not(.lavorai-mobile-topbar, .pm-topbar, .pm-notice, .ds-drawer, .ds-drawer-backdrop, .inbox-page, script, style, template) {
   box-sizing: border-box;
   width: 100% !important;
-  max-width: calc(var(--pm-content-max) + 2 * var(--pm-gutter)) !important;
+  max-width: none !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
   padding-left: var(--pm-gutter) !important;
@@ -339,7 +340,12 @@
 .lavorai-app-shell .lavorai-main > .pm-topbar { padding-left: var(--pm-gutter); padding-right: var(--pm-gutter); }
 .lavorai-app-shell .lavorai-main:not(:has(.inbox-page)) > .pm-notice {
   width: auto;
-  max-width: var(--pm-content-max);
+  max-width: none;
   margin-left: var(--pm-gutter);
   margin-right: var(--pm-gutter);
 }
+/* Notices rendered inside a page (e.g. Candidature approval banner) span the page. */
+.lavorai-app-shell .lavorai-main > * .pm-notice { width: 100%; max-width: none; margin-left: 0; margin-right: 0; box-sizing: border-box; }
+/* Wide screens: stage tiles fill the row; long descriptive copy keeps a readable measure. */
+.lavorai-app-shell .dash-stages { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.lavorai-app-shell :is(.discover-card, .pm-card) :is(p, .pm-prose) { max-width: 90ch; }
