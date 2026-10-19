@@ -306,3 +306,35 @@
    page's top bar (both are direct children of the flex-column main). */
 .lavorai-app-shell .lavorai-main > .lavorai-mobile-topbar { order: -2; }
 .lavorai-app-shell .lavorai-main > .pm-topbar { order: -1; }
+
+/* ── Page container (shared by every app page) ────────────────────────────
+ * Page content sits next to the sidebar with one consistent gutter and grows
+ * to a sensible max width, instead of each page centering its own narrow
+ * column in the leftover space. Applied to whatever a page renders as its
+ * root inside the main column; the top bar, mobile chrome, drawers and the
+ * full-bleed Inbox are excluded. !important is needed because some legacy
+ * page roots set max-width/margin/padding inline or with !important. */
+.lavorai-app-shell {
+  --pm-gutter: 32px;
+  --pm-content-max: 1320px;
+}
+@media (max-width: 1023px) { .lavorai-app-shell { --pm-gutter: 24px; } }
+@media (max-width: 640px) { .lavorai-app-shell { --pm-gutter: 16px; } }
+
+.lavorai-app-shell .lavorai-main > :not(.lavorai-mobile-topbar, .pm-topbar, .pm-notice, .ds-drawer, .ds-drawer-backdrop, .inbox-page, script, style, template) {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: calc(var(--pm-content-max) + 2 * var(--pm-gutter)) !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-left: var(--pm-gutter) !important;
+  padding-right: var(--pm-gutter) !important;
+}
+/* Top bar and app notices line up with the same gutter. */
+.lavorai-app-shell .lavorai-main > .pm-topbar { padding-left: var(--pm-gutter); padding-right: var(--pm-gutter); }
+.lavorai-app-shell .lavorai-main:not(:has(.inbox-page)) > .pm-notice {
+  width: auto;
+  max-width: var(--pm-content-max);
+  margin-left: var(--pm-gutter);
+  margin-right: var(--pm-gutter);
+}
