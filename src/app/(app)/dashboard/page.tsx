@@ -21,9 +21,16 @@ import { getAutoApplyReadiness } from "@/lib/auto-apply-readiness";
 import { getCurrentUser } from "@/lib/session";
 import { getOnboardingState } from "@/lib/onboarding";
 import { prisma } from "@/lib/db";
-import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { journeyStage, STAGE_LABEL, type JourneyStage } from "@/lib/ui-application-status";
+import {
+  getConfirmedSubmissions,
+  getProviderAcceptedEmails,
+  getUnverifiedSubmissions,
+  getRecruiterReplies,
+  getOffers,
+  getInterviewInvites,
+} from "@/lib/dashboard-metrics-shared";
 
 export const metadata: Metadata = { title: "Dashboard" };
 export const dynamic = "force-dynamic";
@@ -38,26 +45,19 @@ export default async function DashboardPage() {
   const tr = (italian: string, english: string) => en ? english : italian;
   if (!user) return null;
 
-  // Tutte le letture partono insieme: anche la readiness, che prima
-  // aspettava la fine del globo per conoscere il numero di job aperti.
+  // Use shared metric definitions (single source of truth across dashboard, applications, inbox, analytics)
   const globePromise = getDashboardGlobeData(user.id);
   const openJobsPromise = globePromise.then((g) => g.stats.counts.open);
-  openJobsPromise.catch(() => undefined); // l'errore emerge già da globePromise
-  const [globe, onboarding, deliveryCounts, responseCount, offersCount, interviews, attention, readiness, statusGroups, latestCv, cvProfileRow] = await Promise.all([
+  openJobsPromise.catch(() => undefined);
+  const [globe, onboarding, confirmed, providerAccepted, unverified, responseCount, offersCount, interviews, attention, readiness, statusGroups, latestCv, cvProfileRow] = await Promise.all([
     globePromise,
     getOnboardingState(user.id),
-    dashboardDeliveryCounts(user.id),
-    // Count applications with an actual recruiter-classified source row once,
-    // even when the same response is present in both connected mail channels.
-    prisma.application.count({ where: { userId: user.id, OR: [
-      { replies: { some: { isHuman: true, isSecurityCode: false, kind: { in: ["risposta", "colloquio", "rifiutata"] } } } },
-      { gmailMessages: { some: { userId: user.id, isHuman: true, kind: { in: ["risposta", "colloquio", "rifiutata"] } } } },
-    ] } }),
-    prisma.application.count({ where: { userId: user.id, userStatus: "offerta" } }),
+    getConfirmedSubmissions(user.id),
+    getProviderAcceptedEmails(user.id),
+    getUnverifiedSubmissions(user.id),
+    getRecruiterReplies(user.id),
+    getOffers(user.id),
     prisma.application.findMany({
-      // Solo colloqui con evidenza: risposta recruiter classificata come
-      // invito a colloquio, oppure stato dichiarato dall'utente. Le sessioni
-      // di preparazione (interviewSessions) NON sono colloqui e non contano.
       where: { userId: user.id, OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }] },
       orderBy: { lastReplyAt: "desc" },
       take: 3,
@@ -69,6 +69,8 @@ export default async function DashboardPage() {
     prisma.cVDocument.findFirst({ where: { userId: user.id }, orderBy: { createdAt: "desc" }, select: { originalFilename: true, createdAt: true } }),
     prisma.cVProfile.findUnique({ where: { userId: user.id } }),
   ]);
+
+  const deliveryCounts = { confirmed, providerAccepted, unverified };
 
   // Avanzamento: stati esistenti raggruppati per tappa del percorso. Le
   // candidature "inviate" si contano SOLO con prova (deliveryCounts), mai
@@ -230,32 +232,6 @@ export default async function DashboardPage() {
       </DashboardFocusProvider>
     </>
   );
-}
-
-/** Read bounded pages, rather than loading every attempt or trusting legacy
- * status strings. Every page is owner-scoped and each application counts once.
- */
-async function dashboardDeliveryCounts(userId: string): Promise<{ confirmed: number; providerAccepted: number; unverified: number }> {
-  let confirmed = 0; let providerAccepted = 0; let unverified = 0; let cursor: string | undefined;
-  while (true) {
-    const applications = await prisma.application.findMany({
-      where: { userId }, orderBy: { id: "asc" }, take: 200,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      select: { id: true, userId: true, status: true, submittedVia: true, submitConfirmation: true, submissionReceiptJson: true,
-        emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true, acceptedAt: true } },
-      },
-    });
-    for (const application of applications) {
-      if (application.userId !== userId) continue;
-      const evidence = deliveryEvidence(application);
-      if (isConfirmedDelivery(evidence)) confirmed++;
-      else if (evidence === "provider_accepted") providerAccepted++;
-      else if (application.status === "success") unverified++;
-    }
-    if (applications.length < 200) break;
-    cursor = applications[applications.length - 1].id;
-  }
-  return { confirmed, providerAccepted, unverified };
 }
 
 function Empty({ text, cta }: { text: string; cta?: { href: string; label: string } }) {

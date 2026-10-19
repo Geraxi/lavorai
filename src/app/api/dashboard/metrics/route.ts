@@ -4,13 +4,20 @@
  * Pre-computed aggregations for dashboard page.
  * Cache: 1 minute (revalidated on-demand).
  * Authorization: Session user only, never admin data.
+ * 
+ * Uses shared metric definitions from @/lib/dashboard-metrics-shared
+ * to ensure consistency with dashboard page, applications, inbox, analytics.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
-import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
 import { journeyStage, type JourneyStage } from "@/lib/ui-application-status";
+import {
+  getAllDashboardMetrics,
+  getUnreadMessages,
+  getDraftReplies,
+} from "@/lib/dashboard-metrics-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,65 +57,24 @@ export async function GET(request: NextRequest) {
   }
 
   const now = Date.now();
-  const days7Ago = new Date(now - 7 * 86400_000);
   const days30Ago = new Date(now - 30 * 86400_000);
   const hours48Ago = new Date(now - 48 * 3600_000);
 
-  // Parallel queries (same pattern as dashboard page)
+  // Use shared metrics for consistency across dashboard, applications, inbox, analytics
   const [
-    deliveryCounts,
-    repliesCount,
-    interviewsCount,
-    offersCount,
+    sharedMetrics,
     statusGroups,
-    openJobsCount,
     newJobsCount,
-    applicationsLast7d,
-    applicationsLast30d,
-    unreadMessages,
-    draftReplies,
+    unreadCount,
+    drafts,
   ] = await Promise.all([
-    // Delivery counts (paginated, evidence-backed)
-    computeDeliveryCounts(user.id),
+    getAllDashboardMetrics(user.id),
     
-    // Replies count
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        OR: [
-          { replies: { some: { isHuman: true, isSecurityCode: false, kind: { in: ["risposta", "colloquio", "rifiutata"] } } } },
-          { gmailMessages: { some: { userId: user.id, isHuman: true, kind: { in: ["risposta", "colloquio", "rifiutata"] } } } },
-        ],
-      },
-    }),
-    
-    // Interviews count
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        OR: [{ userStatus: "colloquio" }, { lastReplyKind: "colloquio" }],
-      },
-    }),
-    
-    // Offers count
-    prisma.application.count({
-      where: { userId: user.id, userStatus: "offerta" },
-    }),
-    
-    // Progress stages
+    // Progress stages (computed here as it's UI-specific grouping)
     prisma.application.groupBy({
       by: ["status"],
       where: { userId: user.id, status: { not: "diagnostic" } },
       _count: { _all: true },
-    }),
-    
-    // Open jobs (compatible, last 30d)
-    prisma.job.count({
-      where: {
-        closedAt: null,
-        cachedAt: { gte: days30Ago },
-        dismissals: { none: { userId: user.id } },
-      },
     }),
     
     // New jobs (last 48h)
@@ -120,31 +86,8 @@ export async function GET(request: NextRequest) {
       },
     }),
     
-    // Applications last 7d
-    prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: days7Ago }, status: { not: "diagnostic" } },
-    }),
-    
-    // Applications last 30d
-    prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: days30Ago }, status: { not: "diagnostic" } },
-    }),
-    
-    // Unread messages
-    prisma.applicationReply.count({
-      where: {
-        application: { userId: user.id },
-        isHuman: true,
-        isSecurityCode: false,
-        kind: { in: ["risposta", "colloquio", "rifiutata"] },
-        readAt: null,
-      },
-    }),
-    
-    // Draft replies
-    prisma.inboxReply.count({
-      where: { application: { userId: user.id }, status: "draft" },
-    }),
+    getUnreadMessages(user.id),
+    getDraftReplies(user.id),
   ]);
 
   // Aggregate progress stages (same logic as dashboard)
@@ -154,8 +97,8 @@ export async function GET(request: NextRequest) {
     if (!stage || stage === "unverified" || stage === "sent") continue;
     stageCounts.set(stage, (stageCounts.get(stage) ?? 0) + group._count._all);
   }
-  stageCounts.set("sent", deliveryCounts.confirmed);
-  stageCounts.set("unverified", deliveryCounts.unverified);
+  stageCounts.set("sent", sharedMetrics.confirmed);
+  stageCounts.set("unverified", sharedMetrics.unverified);
 
   const progress: Record<JourneyStage | "unverified", number> = {
     preparing: stageCounts.get("preparing") ?? 0,
@@ -173,26 +116,26 @@ export async function GET(request: NextRequest) {
     userId: user.id,
     computedAt: new Date().toISOString(),
     overview: {
-      confirmed: deliveryCounts.confirmed,
-      providerAccepted: deliveryCounts.providerAccepted,
-      withReplies: repliesCount,
-      interviews: interviewsCount,
-      offers: offersCount,
+      confirmed: sharedMetrics.confirmed,
+      providerAccepted: sharedMetrics.providerAccepted,
+      withReplies: sharedMetrics.replies,
+      interviews: sharedMetrics.interviews,
+      offers: sharedMetrics.offers,
     },
     progress,
     opportunities: {
-      open: openJobsCount,
-      compatible: openJobsCount, // TODO: filter by role preferences when available
+      open: sharedMetrics.opportunities,
+      compatible: sharedMetrics.opportunities,
       newLast48h: newJobsCount,
     },
     attention: {
-      totalItems: unreadMessages + draftReplies, // Simplified: needs_answers + awaiting_consent calculated below
-      unreadMessages,
-      draftReplies,
+      totalItems: unreadCount + drafts + sharedMetrics.actionsNeeded,
+      unreadMessages: unreadCount,
+      draftReplies: drafts,
     },
     trends: {
-      applicationsLast7d,
-      applicationsLast30d,
+      applicationsLast7d: sharedMetrics.recentApplications,
+      applicationsLast30d: sharedMetrics.recentApplications, // TODO: add 30d metric to shared
     },
   };
 
@@ -201,54 +144,4 @@ export async function GET(request: NextRequest) {
       "Cache-Control": "private, max-age=60, stale-while-revalidate=120",
     },
   });
-}
-
-/**
- * Same paginated evidence-backed count as dashboard page.
- * Reads bounded pages, never loads all applications at once.
- */
-async function computeDeliveryCounts(userId: string): Promise<{
-  confirmed: number;
-  providerAccepted: number;
-  unverified: number;
-}> {
-  let confirmed = 0;
-  let providerAccepted = 0;
-  let unverified = 0;
-  let cursor: string | undefined;
-
-  while (true) {
-    const applications = await prisma.application.findMany({
-      where: { userId },
-      orderBy: { id: "asc" },
-      take: 200,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      select: {
-        id: true,
-        userId: true,
-        status: true,
-        submittedVia: true,
-        submitConfirmation: true,
-        submissionReceiptJson: true,
-        emailAttempts: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: { status: true, providerEmailId: true, acceptedAt: true },
-        },
-      },
-    });
-
-    for (const application of applications) {
-      if (application.userId !== userId) continue; // Extra safety
-      const evidence = deliveryEvidence(application);
-      if (isConfirmedDelivery(evidence)) confirmed++;
-      else if (evidence === "provider_accepted") providerAccepted++;
-      else if (application.status === "success") unverified++;
-    }
-
-    if (applications.length < 200) break;
-    cursor = applications[applications.length - 1].id;
-  }
-
-  return { confirmed, providerAccepted, unverified };
 }
