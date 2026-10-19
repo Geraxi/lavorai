@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     : `Ruolo target: ${parsed.data.targetRole}\n\nPersonalizza CV e lettera per questo ruolo. Evidenzia esclusivamente le esperienze e le competenze verificabili nel CV originale; non inventare risultati o aziende.`;
 
   try {
-    const result = await optimizeCV({ cvText: cvText.slice(0, 24000), jobPosting });
+    const result = await optimizeCV({ cvText: cvText.slice(0, 24000), jobPosting, jobLang: "it" });
     await prisma.user.update({ where: { id: user.id }, data: { demoGeneratedAt: new Date() } });
     await recordConversionEvent(AnalyticsEvent.ONBOARDING_DEMO_VIEWED, {
       userId: user.id,

@@ -24,7 +24,7 @@ async function run(options: { missing?: boolean; challengeRemains?: boolean; fil
   } as unknown as Page;
   const result = await submitWithSecurityCode(page, "test", new Date(), async () => {
     polls++;
-    return options.missing || polls === 1 ? [] : [{ fromAddress: "no-reply@greenhouse.io", subject: "Security code for application", bodyText: "Copy and paste this code: YqOsq2bB" }];
+    return options.missing || polls === 1 ? [] : [{ fromAddress: "no-reply@greenhouse.io", subject: "Security code for application", bodyText: "Copy and paste this code: YqOsq2bB", receivedAt: new Date() }];
   });
   return { result, filled, clicks, polls };
 }

@@ -104,9 +104,12 @@ export async function POST(request: NextRequest) {
 
     // 2. OpenAI → CV ottimizzato + cover letter
     const { data: formData2 } = parsedForm;
+    const { detectLanguage } = await import("@/lib/lang-detect");
+    const jobLang = detectLanguage(formData2.jobPosting);
     const result = await optimizeCV({
       cvText,
       jobPosting: formData2.jobPosting,
+      jobLang,
     });
 
     // 3. Genera DOCX
