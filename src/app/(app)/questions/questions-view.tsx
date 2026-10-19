@@ -80,6 +80,7 @@ export function QuestionsView() {
   const [view, setView] = useState<View>("pending");
   const [focusId, setFocusId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [blockedExpanded, setBlockedExpanded] = useState(false);
   const [query, setQuery] = useState("");
   const [notice, setNotice] = useState("");
   const [locale, setLocale] = useState("it");
@@ -185,15 +186,70 @@ export function QuestionsView() {
       </header>
 
       {notice && <div className="qa-notice" role="status">{notice}<button type="button" onClick={() => setNotice("")} aria-label="Chiudi avviso">×</button></div>}
-      {!loading && continuations.map(application => <div className="qa-notice qa-continuation-notice" key={application.applicationId}>
-        <span><strong>{application.company} · {application.title}</strong><br />{application.canResume
-          ? hasUnsavedAnswers(application.applicationId) ? "Salva le risposte modificate prima di confermare la ripresa." : "Le risposte sono disponibili e la pausa prima dell’invio è verificata. Conferma per rimettere questa candidatura in coda."
-          : application.guidance ? application.guidance.detail
-          : application.reason === "answers_incomplete" ? "Completa o chiarisci le risposte prima di confermare la ripresa."
-          : "Risposte salvabili. Ripresa bloccata: manca una prova verificabile della pausa prima dell’invio oppure la candidatura non è idonea. Non verrà ritentata automaticamente."}</span>
-        {!application.canResume && application.guidance?.href && <Link className="underline" href={application.guidance.href}>{application.guidance.label}</Link>}
-        {application.canResume && <button type="button" disabled={saving || hasUnsavedAnswers(application.applicationId)} onClick={() => void confirmResume(application)}>Conferma ripresa di questa candidatura</button>}
-      </div>)}
+      {!loading && (() => {
+        const blocked = continuations.filter(app => !app.canResume && (!app.guidance || (!app.reason || app.reason === "answers_incomplete")));
+        const otherContinuations = continuations.filter(app => app.canResume || (app.guidance && app.reason && app.reason !== "answers_incomplete"));
+        
+        return <>
+          {blocked.length > 0 && (
+            <div className="qa-notice qa-continuation-notice">
+              <span>
+                <strong>{blocked.length} {blocked.length === 1 ? "candidatura con ripresa bloccata" : "candidature con ripresa bloccata"}</strong><br />
+                Risposte salvabili. Ripresa bloccata: manca una prova verificabile della pausa prima dell'invio oppure la candidatura non è idonea. Non verrà ritentata automaticamente.
+              </span>
+              <button 
+                type="button" 
+                onClick={() => setBlockedExpanded(!blockedExpanded)}
+                style={{ marginLeft: "auto", padding: "4px 10px", fontSize: "13px", display: "flex", alignItems: "center", gap: "6px" }}
+              >
+                {blockedExpanded ? "Nascondi" : "Mostra"} {blocked.length > 1 && `(${blocked.length})`}
+                <ChevronDown size={14} style={{ transform: blockedExpanded ? "rotate(180deg)" : "none", transition: "transform 0.2s" }} />
+              </button>
+              {blockedExpanded && (
+                <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid var(--border-ds)", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {blocked.map(app => (
+                    <Link 
+                      key={app.applicationId}
+                      href={`/applications?id=${encodeURIComponent(app.applicationId)}&includeAll=1`}
+                      style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        gap: "10px", 
+                        padding: "8px 10px", 
+                        borderRadius: "8px", 
+                        background: "var(--bg-sunken)",
+                        border: "1px solid var(--border-ds)",
+                        textDecoration: "none",
+                        color: "inherit",
+                        fontSize: "13px"
+                      }}
+                    >
+                      <CompanyLogo company={app.company} color={companyColor(app.company)} size={28} rounded={6} />
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <strong style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.company}</strong>
+                        <small style={{ color: "var(--fg-muted)", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.title}</small>
+                      </span>
+                      <span style={{ fontSize: "12px", color: "var(--fg-muted)", flexShrink: 0 }}>Rivedi →</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {otherContinuations.map(application => (
+            <div className="qa-notice qa-continuation-notice" key={application.applicationId}>
+              <span><strong>{application.company} · {application.title}</strong><br />{application.canResume
+                ? hasUnsavedAnswers(application.applicationId) ? "Salva le risposte modificate prima di confermare la ripresa." : "Le risposte sono disponibili e la pausa prima dell'invio è verificata. Conferma per rimettere questa candidatura in coda."
+                : application.guidance ? application.guidance.detail
+                : application.reason === "answers_incomplete" ? "Completa o chiarisci le risposte prima di confermare la ripresa."
+                : "Risposte salvabili. Ripresa bloccata: manca una prova verificabile della pausa prima dell'invio oppure la candidatura non è idonea. Non verrà ritentata automaticamente."}</span>
+              {!application.canResume && application.guidance?.href && <Link className="underline" href={application.guidance.href}>{application.guidance.label}</Link>}
+              {application.canResume && <button type="button" disabled={saving || hasUnsavedAnswers(application.applicationId)} onClick={() => void confirmResume(application)}>Conferma ripresa di questa candidatura</button>}
+            </div>
+          ))}
+        </>;
+      })()}
       {loading ? <div className="qa-empty" role="status">Caricamento delle domande…</div> : loadError ? <div className="qa-empty" role="alert"><h2>Impossibile caricare le domande</h2><p>Le risposte salvate restano disponibili. Riprova a caricare la sezione.</p><button type="button" className="qa-primary" onClick={() => void retryLoad()}>Riprova</button></div> : total === 0 ? <section className="pm-card"><EmptyState icon={CircleCheck} title="Nessuna domanda in sospeso" text="Quando un form di candidatura chiede qualcosa a cui solo tu puoi rispondere, la domanda compare qui." cta={{ href: "/applications", label: "Vai alle candidature" }} /></section> : <>
         {view === "focus" && focused ? <div className="qa-focus-layout">
           <section className="qa-focus-main">
