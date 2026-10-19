@@ -76,7 +76,9 @@ async function main() {
   console.log(`    → ${cvText.length} caratteri estratti`);
 
   console.log("🧠  Chiamo Claude (può richiedere 30-60s)...");
-  const result = await optimizeCV({ cvText, jobPosting });
+  const { detectLanguage } = await import("../src/lib/lang-detect");
+  const jobLang = detectLanguage(jobPosting);
+  const result = await optimizeCV({ cvText, jobPosting, jobLang });
 
   console.log("\n✅  Risultato JSON:\n");
   console.log(JSON.stringify(result, null, 2));
