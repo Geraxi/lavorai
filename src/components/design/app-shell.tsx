@@ -10,6 +10,7 @@ import { Menu, UserRound, X } from "lucide-react";
 import { navIcon } from "@/components/ui-premium/nav-icons";
 import { workspaceNavigation, isWorkspaceRouteActive } from "@/lib/workspace-navigation";
 import { useModalFocus } from "./use-modal-focus";
+import { ShaderAuroraVeil } from "@/components/ui/shader-aurora-veil";
 import "./user-workspace.css";
 import "./product-workspace.css";
 import "@/components/ui-premium/premium.css";
@@ -58,8 +59,12 @@ export function AppShell({
         color: "var(--fg)",
         fontSize: 14,
         minHeight: "100vh",
+        position: "relative",
       }}
     >
+      {/* Aurora veil shader background */}
+      <ShaderAuroraVeil intensity={0.7} />
+
       {/* Desktop sidebar */}
       <div className="lavorai-sidebar-desktop">
         <AppSidebar {...sidebarProps} />
