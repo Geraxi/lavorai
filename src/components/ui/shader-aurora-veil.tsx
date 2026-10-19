@@ -308,7 +308,8 @@ export function ShaderAuroraVeil({ intensity = 0.7, className }: ShaderAuroraVei
   if (useFallback) {
     return (
       <div
-        className={cn("fixed inset-0 -z-10", className)}
+        aria-hidden="true"
+        className={cn("pointer-events-none fixed inset-0 -z-10", className)}
         style={{
           background:
             document.documentElement.getAttribute("data-theme") === "light"
@@ -322,7 +323,8 @@ export function ShaderAuroraVeil({ intensity = 0.7, className }: ShaderAuroraVei
   return (
     <canvas
       ref={canvasRef}
-      className={cn("fixed inset-0 -z-10", className)}
+      aria-hidden="true"
+        className={cn("pointer-events-none fixed inset-0 -z-10", className)}
       style={{ width: "100%", height: "100%" }}
     />
   );

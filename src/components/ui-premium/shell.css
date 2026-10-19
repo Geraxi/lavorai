@@ -24,8 +24,10 @@
   --primary-foreground: 150 70% 5%;
 }
 
-.lavorai-app-shell.product-workspace .lavorai-main { background: var(--pm-page); }
-.lavorai-app-shell.product-workspace { background: var(--pm-page) !important; color: var(--pm-fg) !important; }
+/* The aurora canvas is fixed at z-index:-10 behind the shell; shell and main must be
+   transparent or they paint over it. The page colour stays on <body> as the base. */
+.lavorai-app-shell.product-workspace .lavorai-main { background: transparent !important; }
+.lavorai-app-shell.product-workspace { background: transparent !important; color: var(--pm-fg) !important; }
 
 /* ── Sidebar ──────────────────────────────────────────────────────────── */
 .lavorai-app-shell .pm-sidebar {
