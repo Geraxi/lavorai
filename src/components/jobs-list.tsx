@@ -5,12 +5,8 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { Icon } from "@/components/design/icon";
+import { Briefcase, Check, ChevronRight } from "lucide-react";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
-import {
-  SectionBody,
-  SectionCard,
-} from "@/components/design/section-card";
 import { PaywallDialog } from "@/components/paywall-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
@@ -31,6 +27,14 @@ export interface JobRow {
   protectedCategory?: boolean;
 }
 
+function formatSalaryRange(min: number | null, max: number | null): string {
+  const k = (v: number) => `€${Math.round((v >= 10 && v < 500 ? v * 1000 : v) / 1000)}k`;
+  if (min && max) return `${k(min)}–${k(max).slice(1)}`;
+  if (min) return `${k(min)}+`;
+  if (max) return `fino a ${k(max)}`;
+  return "";
+}
+
 function portalOf(url: string): string {
   const u = url.toLowerCase();
   if (u.includes("linkedin")) return "linkedin";
@@ -42,7 +46,7 @@ function portalOf(url: string): string {
   return "other";
 }
 
-export function JobsList({ jobs }: { jobs: JobRow[] }) {
+export function JobsList({ jobs, label, alreadyApplied = [] }: { jobs: JobRow[]; label?: string; alreadyApplied?: string[] }) {
   const t = useTranslations("jobsList");
   const router = useRouter();
   const [applyingId, setApplyingId] = useState<string | null>(null);
@@ -52,9 +56,10 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
   const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
 
+  const priorIds = useMemo(() => new Set(alreadyApplied), [alreadyApplied]);
   const remainingJobs = useMemo(
-    () => jobs.filter((j) => !appliedIds.has(j.id)),
-    [jobs, appliedIds],
+    () => jobs.filter((j) => !appliedIds.has(j.id) && !priorIds.has(j.id)),
+    [jobs, appliedIds, priorIds],
   );
 
   async function applyOne(job: JobRow) {
@@ -213,167 +218,56 @@ export function JobsList({ jobs }: { jobs: JobRow[] }) {
 
   return (
     <>
-      {/* Batch action bar */}
-      <div
-        className="mb-4 flex items-center justify-between rounded-lg border p-3"
-        style={{
-          background: "var(--bg-elev)",
-          borderColor: "var(--border-ds)",
-        }}
-      >
-        <div style={{ fontSize: 13 }}>
-          <span style={{ fontWeight: 600 }}>{remainingJobs.length}</span>{" "}
-          <span style={{ color: "var(--fg-muted)" }}>
-            posizioni compatibili
-            {appliedIds.size > 0
-              ? ` · ${appliedIds.size} già in coda`
-              : ""}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={askApplyAll}
-          disabled={batchLoading || remainingJobs.length === 0}
-          className="ds-btn ds-btn-accent"
-          style={{ padding: "8px 14px", fontSize: 13 }}
-        >
-          {batchLoading ? (
-            <>
-              <Icon name="refresh" size={13} /> {t("sending")}
-            </>
-          ) : (
-            <>
-              <Icon name="sparkles" size={13} /> {t("applyToAll", { count: remainingJobs.length })}
-            </>
-          )}
-        </button>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-          gap: 12,
-        }}
-      >
-        {jobs.map((j) => {
-          const color = companyColor(j.company ?? j.title);
-          const isApplied = appliedIds.has(j.id);
-          const isApplying = applyingId === j.id;
-          return (
-            <SectionCard
-              key={j.id}
-              className="h-full transition-colors hover:border-[var(--fg)]"
-            >
-              <SectionBody>
-                <Link
-                  href={`/jobs/${j.id}`}
-                  className="block"
-                  style={{ color: "inherit", textDecoration: "none" }}
-                >
-                  <div className="flex items-start gap-2.5">
-                    <CompanyLogo
-                      company={j.company ?? j.title}
-                      color={color}
-                      size={34}
-                     url={j.url} />
-                    <div className="min-w-0 flex-1">
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          letterSpacing: "-0.01em",
-                        }}
-                      >
-                        {j.title}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12.5,
-                          color: "var(--fg-muted)",
-                          marginTop: 1,
-                        }}
-                      >
-                        {j.company ?? "—"}
-                      </div>
-                    </div>
-                    {j.protectedCategory && (
-                      <span className="ds-chip ds-chip-blue" title="Riservato/prioritario categorie protette, L. 68/99">L. 68/99</span>
-                    )}
-                    {j.remote && (
-                      <span className="ds-chip ds-chip-green">{t("remote")}</span>
-                    )}
-                  </div>
-                  <div
-                    className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1"
-                    style={{ fontSize: 11.5, color: "var(--fg-muted)" }}
-                  >
-                    {j.location && (
-                      <span className="inline-flex items-center gap-1">
-                        <Icon name="map-pin" size={11} /> {j.location}
-                      </span>
-                    )}
-                    {j.contractType && (
-                      <span className="inline-flex items-center gap-1">
-                        <Icon name="clock" size={11} />{" "}
-                        {j.contractType === "permanent"
-                          ? t("permanent")
-                          : j.contractType}
-                      </span>
-                    )}
-                    {(j.salaryMin || j.salaryMax) && (
-                      <span
-                        className="mono inline-flex items-center gap-1"
-                        style={{ color: "var(--fg)" }}
-                      >
-                        <Icon name="euro" size={11} />
-                        {j.salaryMin
-                          ? `€${Math.round(j.salaryMin / 1000)}k`
-                          : ""}
-                        {j.salaryMin && j.salaryMax ? "–" : ""}
-                        {j.salaryMax
-                          ? `€${Math.round(j.salaryMax / 1000)}k`
-                          : ""}
-                      </span>
-                    )}
-                  </div>
-                  <p
-                    className="mt-2 line-clamp-2"
-                    style={{
-                      fontSize: 12.5,
-                      color: "var(--fg-muted)",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    {j.description}
-                  </p>
+      <section className="pm-card jobs-card" aria-label={label ?? t("listLabel")}>
+        <header className="pm-card-head">
+          <h2><Briefcase size={15} strokeWidth={1.75} aria-hidden /> {label ?? t("listLabel")} <span className="pm-count">{jobs.length}</span></h2>
+          <button
+            type="button"
+            onClick={askApplyAll}
+            disabled={batchLoading || remainingJobs.length === 0}
+            className="pm-btn-ghost"
+          >
+            {batchLoading ? t("sending") : t("applyToAll", { count: remainingJobs.length })}
+          </button>
+        </header>
+        {appliedIds.size > 0 && <p className="pm-muted jobs-queued-note">{t("queuedNote", { count: appliedIds.size })}</p>}
+        <ul className="pm-list jobs-list">
+          {jobs.map((j) => {
+            const isApplied = appliedIds.has(j.id);
+            const isPrior = priorIds.has(j.id);
+            const isApplying = applyingId === j.id;
+            const salary = formatSalaryRange(j.salaryMin, j.salaryMax);
+            return (
+              <li key={j.id} className="jobs-row">
+                <Link href={`/jobs/${j.id}`} className="jobs-row-main">
+                  <CompanyLogo company={j.company ?? j.title} color={companyColor(j.company ?? j.title)} size={32} url={j.url} />
+                  <span className="jobs-row-text">
+                    <strong>{j.title}</strong>
+                    <small>{[j.company, j.location].filter(Boolean).join(" · ") || "—"}</small>
+                  </span>
                 </Link>
-                <button
-                  type="button"
-                  onClick={() => applyOne(j)}
-                  disabled={isApplying || isApplied || batchLoading}
-                  className="ds-btn ds-btn-primary mt-3 w-full"
-                  style={{ padding: "7px 10px", fontSize: 12.5 }}
-                >
-                  {isApplied ? (
-                    <>
-                      <Icon name="check" size={12} /> {t("queued")}
-                    </>
-                  ) : isApplying ? (
-                    <>
-                      <Icon name="refresh" size={12} /> {t("sendingShort")}
-                    </>
-                  ) : (
-                    <>
-                      <Icon name="sparkles" size={12} /> {t("apply")}
-                    </>
-                  )}
-                </button>
-              </SectionBody>
-            </SectionCard>
-          );
-        })}
-      </div>
+                <span className="jobs-row-meta">
+                  {j.remote && <span className="pm-pill tone-neutral">{t("remote")}</span>}
+                  {j.protectedCategory && <span className="pm-pill tone-neutral" title="Riservato/prioritario categorie protette, L. 68/99">L. 68/99</span>}
+                  {j.contractType && <span className="jobs-row-fact">{j.contractType === "permanent" ? t("permanent") : j.contractType}</span>}
+                  <span className={`jobs-row-fact${salary ? " is-strong" : ""}`}>{salary || t("noSalary")}</span>
+                </span>
+                <span className="jobs-row-actions">
+                  {isPrior ? <Link href="/applications" className="pm-btn-ghost is-muted">{t("alreadyApplied")}</Link> : <button
+                    type="button"
+                    onClick={() => applyOne(j)}
+                    disabled={isApplying || isApplied || batchLoading}
+                    className={isApplied ? "pm-btn-ghost is-done" : "pm-btn-ghost"}
+                  >
+                    {isApplied ? <><Check size={13} aria-hidden /> {t("queued")}</> : isApplying ? t("sendingShort") : t("apply")}
+                  </button>}
+                  <Link href={`/jobs/${j.id}`} className="jobs-row-go" aria-label={t("details")}><ChevronRight size={16} aria-hidden /></Link>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
       <PaywallDialog
         open={paywallOpen}
         onClose={() => setPaywallOpen(false)}

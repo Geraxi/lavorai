@@ -716,7 +716,7 @@ export async function getAnalyticsCohort(
  * Open jobs (closedAt = null) refreshed in the last 14 days from the
  * supported ATS sources, not dismissed and not already applied to by the
  * user, then filtered by the user's preferences: preferred roles, companies
- * to avoid, minimum salary and minimum match score. At most the newest
+ * to avoid, minimum salary (stored in €k) and minimum match score. At most the newest
  * MATCHING_SCAN jobs are scanned. `total` is the full filtered count;
  * `jobs` is the newest-first list (callers slice it, e.g. Scopri shows 50).
  */
@@ -738,7 +738,10 @@ export async function getMatchingOpportunities(userId: string) {
     const arr = JSON.parse(prefs?.rolesJson ?? "[]");
     roles = Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : [];
   } catch { roles = []; }
-  const salaryMin = prefs?.salaryMin ?? 0;
+  // Preferences store the minimum salary in thousands (30 = €30k), like the
+  // auto-apply rule; job salaries may be stored as 30 or 30000.
+  const salaryMin = (prefs?.salaryMin ?? 0) * 1000;
+  const annual = (v: number) => (v >= 10 && v < 500 ? Math.round(v * 1000) : v);
   const matchMin = prefs?.matchMin ?? 0;
   const avoid = new Set((full?.avoidCompanies ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
   const profile = full?.cvProfile ? rowToProfile(full.cvProfile) : null;
@@ -757,7 +760,7 @@ export async function getMatchingOpportunities(userId: string) {
     if (roles.length > 0 && !titleMatchesAnyRole(j.title, roles)) return false;
     if (j.company && avoid.has(j.company.toLowerCase())) return false;
     if (salaryMin) {
-      const top = j.salaryMax ?? j.salaryMin ?? 0;
+      const top = annual(j.salaryMax ?? j.salaryMin ?? 0);
       if (top > 0 && top < salaryMin) return false;
     }
     if (matchMin > 0 && profile && quickMatchScore(profile, `${j.title}\n${j.company ?? ""}\n${j.description}`) < matchMin) return false;

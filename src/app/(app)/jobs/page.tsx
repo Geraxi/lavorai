@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { AppTopbar } from "@/components/design/topbar";
-import { Icon } from "@/components/design/icon";
-import {
-  SectionBody,
-  SectionCard,
-} from "@/components/design/section-card";
+import Link from "next/link";
+import { MapPin, Search, SearchX } from "lucide-react";
+import { EmptyState } from "@/components/ui-premium/empty-state";
+import { getMatchingOpportunities, getMatchingOpportunityCount } from "@/lib/dashboard-metrics-shared";
+import "./jobs.css";
 import { JobsList, type JobRow } from "@/components/jobs-list";
 import { searchAndCacheJobs } from "@/lib/jobs-repo";
 import { getCurrentUser } from "@/lib/session";
@@ -15,10 +15,10 @@ import { quickMatchScore } from "@/lib/match-score";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { PROTECTED_SEARCH_PHRASES } from "@/lib/protected-category";
 
-export const metadata: Metadata = { title: "Job board" };
+export const metadata: Metadata = { title: "Offerte di lavoro" };
 export const dynamic = "force-dynamic";
 
-type SearchParams = Promise<{ what?: string; where?: string; remote?: string; protected?: string }>;
+type SearchParams = Promise<{ what?: string; where?: string; remote?: string; protected?: string; mode?: string }>;
 
 function safeParseArray(json: string): string[] {
   try {
@@ -82,6 +82,21 @@ export default async function JobsPage({
   // Categorie protette (L. 68/99): esplicito via ?protected=1|0, altrimenti
   // dalla preferenza dell'utente.
   const protectedOnly = sp.protected != null ? sp.protected === "1" : prefProtected;
+
+  // Default view (no explicit search): exactly the "per te" set shared with
+  // Dashboard and Scopri, so the three pages show the same number.
+  const isSearch = sp.mode === "search" || !!(sp.what || sp.where || sp.remote || sp.protected != null || prefProtected);
+  if (user && !isSearch) {
+    const matching = await getMatchingOpportunities(user.id);
+    return (
+      <JobsFrame title={t("title")} breadcrumb={t("breadcrumb")} subtitle={`${t("forYouCount", { count: matching.total })}`} what="" where="" remoteOnly={false} protectedOnly={false} t={t} isSearch={false} forYou={matching.total}>
+        {matching.total > 0
+          ? <JobsList jobs={matching.jobs.map(toRow)} label={t("forYouLabel")} />
+          : <JobsEmpty title={t("noForYou")} text={t("noForYouHint")} />}
+      </JobsFrame>
+    );
+  }
+  const forYou = user ? await getMatchingOpportunityCount(user.id) : 0;
 
   // Se l'utente ha esplicitamente cercato (sp.what), usa solo quello.
   // Altrimenti, se ha preferenze multi-ruolo, query una volta per ciascun
@@ -192,154 +207,74 @@ export default async function JobsPage({
       }
       return true;
     })
-    .map((j) => ({
-      id: j.id,
-      title: j.title,
-      company: j.company,
-      location: j.location,
-      description: j.description,
-      url: j.url,
-      contractType: j.contractType,
-      remote: j.remote,
-      salaryMin: j.salaryMin,
-      salaryMax: j.salaryMax,
-      protectedCategory: j.protectedCategory,
-    }));
+    .map(toRow);
 
+  // Mark roles the user already applied to (search can include them).
+  const applied = user && jobs.length
+    ? new Set((await prisma.application.findMany({ where: { userId: user.id, jobId: { in: jobs.map((j) => j.id) } }, select: { jobId: true } })).map((a) => a.jobId))
+    : new Set<string>();
+  const summary = [
+    t("searchCount", { count: jobs.length }),
+    matchMin > 0 ? t("matchAtLeast", { pct: matchMin }) : null,
+    belowMatchCount > 0 ? t("hiddenBelowThreshold", { count: belowMatchCount }) : null,
+    roleMismatchCount > 0 ? t("outOfRole", { count: roleMismatchCount }) : null,
+  ].filter(Boolean).join(" · ");
+  return (
+    <JobsFrame title={t("title")} breadcrumb={t("breadcrumb")} subtitle={summary} what={what} where={where} remoteOnly={remoteOnly} protectedOnly={protectedOnly} t={t} isSearch forYou={forYou}>
+      {jobs.length > 0
+        ? <JobsList jobs={jobs} label={t("searchLabel")} alreadyApplied={[...applied]} />
+        : <JobsEmpty title={t("noResults")} text={t("noResultsHint")} />}
+    </JobsFrame>
+  );
+}
+
+type Row = { id: string; title: string; company: string | null; location: string | null; description: string; url: string; contractType: string | null; remote: boolean; salaryMin: number | null; salaryMax: number | null; protectedCategory?: boolean };
+function toRow(j: Row): JobRow {
+  return { id: j.id, title: j.title, company: j.company, location: j.location, description: j.description, url: j.url, contractType: j.contractType, remote: j.remote, salaryMin: j.salaryMin, salaryMax: j.salaryMax, protectedCategory: j.protectedCategory };
+}
+
+function JobsEmpty({ title, text }: { title: string; text: string }) {
+  return (
+    <section className="pm-card">
+      <EmptyState icon={SearchX} title={title} text={text} cta={{ href: "/preferences", label: "Modifica preferenze" }} />
+    </section>
+  );
+}
+
+function JobsFrame({ title, breadcrumb, subtitle, what, where, remoteOnly, protectedOnly, isSearch, forYou, t, children }: {
+  title: string; breadcrumb: string; subtitle: string; what: string; where: string; remoteOnly: boolean; protectedOnly: boolean;
+  isSearch: boolean; forYou: number; t: Awaited<ReturnType<typeof getTranslations<"jobsPage">>>; children: React.ReactNode;
+}) {
   return (
     <>
-      <AppTopbar title={t("title")} breadcrumb={t("breadcrumb")} />
-      <div
-        className="jobs-page"
-        style={{
-          padding: "24px 32px 80px",
-          maxWidth: 1480,
-          width: "100%",
-          margin: "0 auto",
-        }}
-      >
-        <div className="mb-6">
-          <h1
-            style={{
-              fontSize: 26,
-              fontWeight: 600,
-              letterSpacing: "-0.022em",
-              margin: 0,
-            }}
-          >
-            {t("title")}
-          </h1>
-          <p style={{ fontSize: 15, color: "var(--fg-muted)", marginTop: 6 }}>
-            {!sp.what && prefRoles.length > 0
-              ? `${t("compatiblePositions", { count: jobs.length })}${matchMin > 0 ? ` (${t("matchAtLeast", { pct: matchMin })})` : ""}${belowMatchCount > 0 ? ` · ${t("hiddenBelowThreshold", { count: belowMatchCount })}` : ""}${roleMismatchCount > 0 ? ` · ${t("outOfRole", { count: roleMismatchCount })}` : ""}`
-              : t("foundPositions", { count: jobs.length })}
-          </p>
-        </div>
-
-        <form
-          className="jobs-search-form mb-5 flex items-center gap-2 rounded border p-2"
-          style={{
-            background: "var(--bg-elev)",
-            borderColor: "var(--border-ds)",
-          }}
-        >
-          <div className="relative flex-1">
-            <Icon
-              name="search"
-              size={14}
-              style={{
-                position: "absolute",
-                left: 11,
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "var(--fg-subtle)",
-              }}
-            />
-            <input
-              name="what"
-              defaultValue={what}
-              className="ds-input"
-              placeholder={t("searchPlaceholder")}
-              style={{ paddingLeft: 32 }}
-            />
+      <AppTopbar title={title} breadcrumb={breadcrumb} />
+      <div className="pm-page jobs-page">
+        <header className="pm-page-head">
+          <div>
+            <h1>{title}</h1>
+            <p className="pm-muted">{subtitle}</p>
           </div>
-          <div className="relative" style={{ width: 240 }}>
-            <Icon
-              name="map-pin"
-              size={14}
-              style={{
-                position: "absolute",
-                left: 11,
-                top: "50%",
-                transform: "translateY(-50%)",
-                color: "var(--fg-subtle)",
-              }}
-            />
-            <input
-              name="where"
-              defaultValue={where}
-              className="ds-input"
-              placeholder={t("locationPlaceholder")}
-              style={{ paddingLeft: 32 }}
-            />
-          </div>
-          <label
-            className="flex items-center gap-1.5 px-2"
-            style={{ fontSize: 12, color: "var(--fg-muted)" }}
-          >
-            <input
-              type="checkbox"
-              name="remote"
-              value="1"
-              defaultChecked={remoteOnly}
-            />{" "}
-            {t("remoteOnly")}
+          <nav className="pm-seg" aria-label={t("modeLabel")}>
+            <Link href="/jobs" aria-current={!isSearch ? "page" : undefined}>{t("forYouTab")} <span className="jobs-seg-count">{forYou}</span></Link>
+            <Link href="/jobs?mode=search" aria-current={isSearch ? "page" : undefined}>{t("searchTab")}</Link>
+          </nav>
+        </header>
+        <form className="pm-card jobs-search" action="/jobs">
+          <input type="hidden" name="mode" value="search" />
+          <label className="jobs-field">
+            <Search size={14} aria-hidden />
+            <input name="what" defaultValue={what} className="ds-input" placeholder={t("searchPlaceholder")} aria-label={t("searchPlaceholder")} />
           </label>
-          <label
-            className="flex items-center gap-1.5 px-2"
-            style={{ fontSize: 12, color: "var(--fg-muted)" }}
-            title="Solo annunci riservati o prioritari per le categorie protette (L. 68/99)"
-          >
-            <input
-              type="checkbox"
-              name="protected"
-              value="1"
-              defaultChecked={protectedOnly}
-            />{" "}
-            Categorie protette (L. 68/99)
+          <label className="jobs-field is-where">
+            <MapPin size={14} aria-hidden />
+            <input name="where" defaultValue={where} className="ds-input" placeholder={t("locationPlaceholder")} aria-label={t("locationPlaceholder")} />
           </label>
-          <button type="submit" className="ds-btn ds-btn-primary">
-            {t("search")}
-          </button>
+          <label className="jobs-check"><input type="checkbox" name="remote" value="1" defaultChecked={remoteOnly} /> {t("remoteOnly")}</label>
+          <label className="jobs-check" title="Solo annunci riservati o prioritari per le categorie protette (L. 68/99)"><input type="checkbox" name="protected" value="1" defaultChecked={protectedOnly} /> {t("protectedLabel")}</label>
+          <button type="submit" className="pm-btn-ghost">{t("search")}</button>
         </form>
-
-        {jobs.length > 0 ? (
-          <JobsList jobs={jobs} />
-        ) : (
-          <SectionCard>
-            <SectionBody>
-              <div style={{ textAlign: "center", padding: "40px 20px" }}>
-                <Icon
-                  name="inbox"
-                  size={28}
-                  style={{ color: "var(--fg-subtle)" }}
-                />
-                <div style={{ marginTop: 12, fontWeight: 500 }}>
-                  {t("noResults")}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12.5,
-                    color: "var(--fg-muted)",
-                    marginTop: 4,
-                  }}
-                >
-                  {t("noResultsHint")}
-                </div>
-              </div>
-            </SectionBody>
-          </SectionCard>
-        )}
+        {children}
+        <p className="pm-muted jobs-foot">{t("forYouDefinition")}</p>
       </div>
     </>
   );

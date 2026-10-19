@@ -112,9 +112,13 @@ async function main() {
       ...Array.from({ length: 5 }, (_, i) => ({ id: `j${i}`, title: "Product Designer", company: `Co ${i}`, description: "", salaryMin: null, salaryMax: null })),
       { id: "avoid", title: "Product Designer", company: "Avoid Co", description: "", salaryMin: null, salaryMax: null },
       { id: "role", title: "Backend Engineer", company: "Other", description: "", salaryMin: null, salaryMax: null },
+      // Preferences store €k: 30 = €30k. 25000 and "25" (k) are both below it; 38000 passes.
+      { id: "low", title: "Product Designer", company: "Low Pay", description: "", salaryMin: 20000, salaryMax: 25000 },
+      { id: "lowk", title: "Product Designer", company: "Low Pay K", description: "", salaryMin: null, salaryMax: 25 },
+      { id: "ok", title: "Product Designer", company: "Fair Pay", description: "", salaryMin: 38000, salaryMax: null },
     ];
   } },
-  userPreferences: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return { rolesJson: JSON.stringify(["Product Designer"]), salaryMin: 0, matchMin: 0 }; } },
+  userPreferences: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return { rolesJson: JSON.stringify(["Product Designer"]), salaryMin: 30, matchMin: 0 }; } },
   user: { findUnique: async (query: any) => { assert.equal(query.where.id, "owner"); return { avoidCompanies: "Avoid Co", cvProfile: null }; } },
   cVDocument: { findFirst: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
   cVProfile: { findUnique: async (query: any) => { assert.equal(query.where.userId, "owner"); return null; } },
@@ -126,7 +130,7 @@ async function main() {
     "@/lib/cv-profile-types": { rowToProfile: (row: unknown) => row },
     "@/lib/match-score": { quickMatchScore: () => 100 },
     "@/lib/role-match": load("src/lib/role-match.ts", {}) });
-  assert.equal(await metrics.getMatchingOpportunityCount("owner"), 5, "Scopri/Dashboard opportunities apply roles and avoided companies");
+  assert.equal(await metrics.getMatchingOpportunityCount("owner"), 6, "Scopri/Dashboard/Jobs opportunities apply roles, avoided companies and the €k salary minimum");
   const lucide = new Proxy({}, { get: (_target, name) => String(name), has: () => true });
   const dependencies: Record<string, unknown> = {
     "react/jsx-runtime": { jsx: element, jsxs: element, Fragment: "Fragment" },
