@@ -1,3 +1,4 @@
+import { resolveAdapterByUrl, noAdapterMessageFor } from "@/lib/ats-adapter-resolution";
 import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
@@ -26,7 +27,6 @@ import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { humanContext, launchBrowser } from "@/lib/browser";
 import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
-import { findPortalAdapter } from "@/lib/portal-adapters";
 import { receiptJobId, hasVerifiedSubmissionReceipt } from "@/lib/submission-receipt";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
 import {
@@ -416,12 +416,10 @@ async function processApplicationRun(
   // Prova il match sull'URL canonico (Job.url) PRIMA di quello risolto:
   // alcuni ATS (Greenhouse) redirigono a career page custom dove il form
   // non è raggiungibile. L'URL canonico porta al form puro dell'ATS.
-  let adapterUrl = app.job.url;
-  let adapter = portalSubmitEnabled ? findPortalAdapter(app.job.url) : null;
-  if (!adapter && portalSubmitEnabled) {
-    adapter = findPortalAdapter(resolvedUrl);
-    if (adapter) adapterUrl = resolvedUrl;
-  }
+  // Risoluzione per host URL: app.portal è un'etichetta storica e non decide.
+  const resolvedAdapter = portalSubmitEnabled ? resolveAdapterByUrl([app.job.url, resolvedUrl]) : null;
+  const adapter = resolvedAdapter?.adapter ?? null;
+  const adapterUrl = resolvedAdapter?.url ?? app.job.url;
 
   if (adapter) {
     const canonicalJobId = receiptJobId(adapter.id, app.job.url);
@@ -839,6 +837,7 @@ async function processApplicationRun(
         workToken,
         portal: app.portal,
         jobUrl: app.job.url,
+        portalSubmitEnabled,
         userSessions: app.user.portalSessions,
         cvPath,
         clPath,
@@ -1018,6 +1017,7 @@ interface AutoSubmitInput {
   cvPath: string;
   clPath: string;
   jobTitle: string;
+  portalSubmitEnabled?: boolean;
 }
 
 async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
@@ -1047,8 +1047,8 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
       where: { id: applicationId, startedAt: input.workToken, status: "ready_to_apply" },
       data: {
         status: "ready_to_apply",
-        errorMessage:
-          "Questo portale non è supportato per invio automatico. Apri l'annuncio e candidati manualmente — CV e lettera sono pronti nella sezione Materiali.",
+        // ATS supportato per host (adapter non riuscito/disattivato) ≠ portale non supportato.
+        errorMessage: noAdapterMessageFor(jobUrl, { portalSubmitEnabled: input.portalSubmitEnabled ?? true }),
         completedAt: new Date(),
       },
     });
