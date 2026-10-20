@@ -33,7 +33,12 @@ function classify(status: number): ProviderSendError["kind"] {
   return REJECTED.has(status) ? "rejected" : "unknown";
 }
 
-export const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.metadata", "openid", "email"];
+/**
+ * gmail.send (invio) + gmail.readonly (già richiesto dal progetto Google per l'Inbox,
+ * copre threads.get format=metadata usato per i rimbalzi). Niente gmail.metadata:
+ * non serve accanto a readonly e aggiungerebbe un altro scope restricted da verificare.
+ */
+export const GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send", "https://www.googleapis.com/auth/gmail.readonly", "openid", "email"];
 export const GRAPH_SCOPES = ["offline_access", "User.Read", "Mail.Send", "Mail.ReadWrite"];
 
 export function gmailClient(accessToken: string, f: Fetch = fetch): MailboxClient {

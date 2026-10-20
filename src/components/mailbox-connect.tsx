@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { toast } from "sonner";
 import { Mail, Unplug, ShieldCheck, FlaskConical } from "lucide-react";
 import "./mailbox.css";
+import { connectAction } from "@/lib/mailbox/connect-ui";
 
 type Status = {
   connections: { provider: "gmail" | "outlook"; email: string; status: string }[];
@@ -27,7 +28,7 @@ export function MailboxConnect({ notice }: { notice?: string | null }) {
   const NOTICE: Record<string, string> = {
     connected: "Casella collegata. Ogni invio richiederà comunque la tua approvazione.",
     denied: "Collegamento annullato: nessun permesso concesso.",
-    missing_scope: "Permesso di invio non concesso: senza di esso non possiamo inviare dalla tua casella.",
+    missing_scope: "Permessi incompleti: servono sia l'invio sia la lettura dei thread (per rilevare i rimbalzi). Ricollega e lascia selezionati entrambi.",
     not_configured: "Collegamento non ancora disponibile su questo server.",
     error: "Collegamento non riuscito. Riprova.",
   };
@@ -38,21 +39,26 @@ export function MailboxConnect({ notice }: { notice?: string | null }) {
       <ul className="mbx-list">
         {(["gmail", "outlook"] as const).map((p) => {
           const c = data?.connections.find((x) => x.provider === p);
+          const action = connectAction(p, data);
+          // Provider non configurato e mai collegato (es. Outlook senza app Azure): niente riga "Non collegata".
+          const status = c ? `${c.email}${c.status !== "active" ? " · da ricollegare" : " · collegata"}` : action === "soon" ? "Arriverà a breve" : action === "unavailable" ? "Non disponibile su questo server" : "Non collegata";
           return (
             <li key={p} className="mbx-row">
               <span className="mbx-icon"><Mail size={16} strokeWidth={1.75} aria-hidden /></span>
               <span className="mbx-text">
                 <strong>{NAME[p]}</strong>
-                <small>{c ? `${c.email}${c.status !== "active" ? " · da ricollegare" : " · collegata"}` : "Non collegata"}</small>
+                <small>{status}</small>
               </span>
-              {c && c.status === "active"
-                ? <button type="button" className="pm-btn-ghost" disabled={busy === p} onClick={() => disconnect(p)}><Unplug size={13} strokeWidth={1.75} aria-hidden /> Scollega</button>
-                : <a className={`pm-btn-ghost${data && !data.configured[p] ? " is-disabled" : ""}`} href={`/api/mailbox/connect?provider=${p}`} aria-disabled={data ? !data.configured[p] : undefined}>{c ? "Ricollega" : "Collega"}</a>}
+              {action === "disconnect" && <button type="button" className="pm-btn-ghost" disabled={busy === p} onClick={() => disconnect(p)}><Unplug size={13} strokeWidth={1.75} aria-hidden /> Scollega</button>}
+              {(action === "connect" || action === "reconnect") && <a className="pm-btn-ghost" href={`/api/mailbox/connect?provider=${p}`}>{action === "reconnect" ? "Ricollega" : "Collega"}</a>}
+              {action === "soon" && <span className="pm-pill tone-neutral mbx-soon">Presto disponibile</span>}
+              {action === "unavailable" && <span className="pm-pill tone-neutral mbx-soon">Non disponibile</span>}
+              {action === "loading" && <span className="mbx-soon" aria-hidden />}
             </li>
           );
         })}
       </ul>
-      <p className="mbx-foot"><ShieldCheck size={13} strokeWidth={1.75} aria-hidden /> Chiediamo solo il permesso di inviare e di leggere le intestazioni dei thread delle candidature (per rilevare email rimbalzate). Puoi scollegare in qualsiasi momento.</p>
+      <p className="mbx-foot"><ShieldCheck size={13} strokeWidth={1.75} aria-hidden /> Chiediamo il permesso di inviare e di leggere la posta: leggiamo solo mittente e oggetto dei thread delle candidature inviate, per rilevare email rimbalzate. Puoi scollegare in qualsiasi momento.</p>
       {data && !data.mode.live && <p className="mbx-foot"><FlaskConical size={13} strokeWidth={1.75} aria-hidden /> Ambiente di prova: gli invii sono simulati e nessuna email esce dal server.</p>}
     </div>
   );

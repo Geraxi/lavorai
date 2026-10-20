@@ -35,3 +35,4 @@
   .mbx-item > :nth-child(3), .mbx-item > :nth-child(4) { grid-column: 2; }
   .mbx-files { justify-content: flex-start; }
 }
+.mbx-soon { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; font-size: 12px; color: var(--fg-subtle, #7d838a); white-space: nowrap; }

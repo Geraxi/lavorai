@@ -9,7 +9,8 @@ import { resolveSendMode } from "../src/lib/mailbox/send-guard";
 import { buildMime, encodeHeader, assertSafeAddress } from "../src/lib/mailbox/mime";
 import { canTransition, evaluateDelivery, isBounceMessage, type ThreadMessage } from "../src/lib/mailbox/delivery-state";
 import { gmailClient, graphClient, ProviderSendError } from "../src/lib/mailbox/providers";
-import { signState, verifyState, hasSendScope, authorizeUrl } from "../src/lib/mailbox/oauth";
+import { signState, verifyState, hasSendScope, hasRequiredScopes, authorizeUrl } from "../src/lib/mailbox/oauth";
+import { GMAIL_SCOPES } from "../src/lib/mailbox/providers";
 
 // --- send guard -------------------------------------------------------------
 assert.deepEqual(resolveSendMode({ NODE_ENV: "test", MAILBOX_SEND_LIVE: "true" }), { live: false, reason: "test_env" });
@@ -127,7 +128,23 @@ async function main() {
   assert.ok(hasSendScope("gmail", "openid https://www.googleapis.com/auth/gmail.send") && !hasSendScope("gmail", "gmail.readonly"));
   assert.ok(hasSendScope("outlook", "Mail.Send User.Read"));
   const u = new URL(authorizeUrl("gmail", "http://localhost/cb", "st", { GOOGLE_CLIENT_ID: "cid" }));
-  assert.match(u.searchParams.get("scope") ?? "", /gmail\.send/);
+  assert.equal(u.searchParams.get("scope"), "https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly openid email");
+  assert.ok(!GMAIL_SCOPES.some((s) => s.includes("gmail.metadata")), "gmail.metadata must not be requested");
+  const G = "https://www.googleapis.com/auth/";
+  assert.ok(hasRequiredScopes("gmail", `openid ${G}gmail.send ${G}gmail.readonly email`));
+  assert.ok(hasRequiredScopes("gmail", `${G}gmail.send ${G}gmail.metadata`), "legacy metadata connections still valid");
+  assert.ok(!hasRequiredScopes("gmail", `${G}gmail.send`), "send without thread read is rejected");
+  assert.ok(!hasRequiredScopes("gmail", `${G}gmail.readonly`), "read without send is rejected");
+  assert.ok(hasRequiredScopes("outlook", "Mail.Send Mail.ReadWrite User.Read offline_access") && !hasRequiredScopes("outlook", "Mail.Send"));
+  {
+    // Lettura thread con readonly: format=metadata, solo intestazioni necessarie, nessun corpo.
+    const { f, calls } = fakeFetch([{ status: 200, body: { messages: [] } }]);
+    await gmailClient("t", f).readThread({ providerMessageId: "gm1", providerThreadId: "th1", internetMessageId: null });
+    const tu = new URL(calls[0].url);
+    assert.equal(tu.pathname, "/gmail/v1/users/me/threads/th1");
+    assert.equal(tu.searchParams.get("format"), "metadata");
+    assert.deepEqual(tu.searchParams.getAll("metadataHeaders"), ["From", "Subject", "Date", "Content-Type"]);
+  }
   assert.equal(u.searchParams.get("access_type"), "offline");
   const m = new URL(authorizeUrl("outlook", "http://localhost/cb", "st", { MS_CLIENT_ID: "mid" }));
   assert.match(m.searchParams.get("scope") ?? "", /Mail\.Send/);

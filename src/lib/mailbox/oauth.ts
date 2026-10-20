@@ -80,6 +80,16 @@ export function refreshAccessToken(provider: MailboxProvider, refreshToken: stri
   return tokenRequest(provider, { refresh_token: refreshToken, grant_type: "refresh_token" }, f, env);
 }
 
+/**
+ * Gmail: servono invio E lettura thread (rimbalzi). Con il consenso granulare l'utente può
+ * deselezionarne uno: senza lettura non potremmo mai confermare né rilevare rimbalzi.
+ * Accetta anche gmail.metadata per le connessioni create prima del passaggio a readonly.
+ */
+export function hasRequiredScopes(provider: MailboxProvider, scope: string): boolean {
+  if (!hasSendScope(provider, scope)) return false;
+  return provider === "gmail" ? /gmail\.(readonly|metadata)\b/.test(scope) || /mail\.google\.com/.test(scope) : /mail\.readwrite/i.test(scope);
+}
+
 /** Verifica che lo scope di invio sia stato davvero concesso (l'utente può deselezionarlo). */
 export function hasSendScope(provider: MailboxProvider, scope: string): boolean {
   return provider === "gmail" ? /gmail\.send/.test(scope) : /mail\.send/i.test(scope);
