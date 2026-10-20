@@ -15,6 +15,13 @@ export function deliveryEvidence(application: DeliveryEvidenceInput): DeliveryEv
   if (application.submittedVia === "mock_demo" || ["DRY_RUN", "UNCONFIRMED"].includes(application.submitConfirmation ?? "")) return "excluded";
   const attempt = application.emailAttempts?.[0];
   if (application.status === "failed") return "delivery_problem";
+  // Invio dalla casella dell'utente (Gmail/Graph): evidenza = id provider + esito controllo rimbalzi.
+  if (application.submittedVia?.startsWith("mailbox_")) {
+    if (application.submitConfirmation === "MAILBOX_BOUNCED") return "delivery_problem";
+    if (application.submitConfirmation === "MAILBOX_NO_BOUNCE") return "confirmed_email";
+    if (application.submitConfirmation === "MAILBOX_ACCEPTED") return "provider_accepted";
+    return "legacy_unverified";
+  }
   if ((application.submittedVia === "email_recruiter" || !application.submittedVia) && attempt) {
     if (["failed", "bounced", "complained"].includes(attempt.status)) return "delivery_problem";
     if (attempt.providerEmailId && attempt.status === "delivered") return "confirmed_email";

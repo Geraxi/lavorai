@@ -234,6 +234,21 @@ export function deriveApplicationLifecycle(
     excludedFromMetrics = true;
     status = "draft";
     messageOverride = { it: "Anteprima o test: nessuna candidatura inviata.", en: "Preview or test: nothing was sent." };
+  } else if (input.submittedVia?.startsWith("mailbox_")) {
+    // Invio dalla casella dell'utente: mai "confermato" senza id provider + finestra rimbalzi superata.
+    const at = iso(input.submittedAt ?? input.completedAt ?? null);
+    if (input.submitConfirmation === "MAILBOX_BOUNCED") {
+      status = "failed"; failureReason = "email_bounced";
+      evidence = { ...noEvidence, ats: "email", at, snippet: "Bounce (DSN) found in the mailbox thread" };
+    } else if (input.submitConfirmation === "MAILBOX_NO_BOUNCE") {
+      status = "confirmed_submitted";
+      evidence = { ...noEvidence, type: "email_delivered", ats: "email", at, snippet: "Sent from the user's mailbox; no bounce in the thread after the observation window" };
+    } else if (input.submitConfirmation === "MAILBOX_ACCEPTED") {
+      status = "submitted_unverified"; nextAction = "wait";
+      evidence = { ...noEvidence, type: "email_accepted", ats: "email", at, snippet: "Accepted by the user's mail provider; bounce window still open" };
+    } else {
+      status = "submitted_unverified"; nextAction = "verify_on_portal";
+    }
   } else if (attempt && (input.submittedVia === "email_recruiter" || !input.submittedVia)) {
     const at = iso(attempt.lastEventAt ?? attempt.acceptedAt ?? attempt.createdAt ?? null);
     if (["failed", "bounced", "complained"].includes(attempt.status)) {
