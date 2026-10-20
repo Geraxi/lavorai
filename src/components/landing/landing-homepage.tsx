@@ -15,6 +15,7 @@ import { CinematicHero } from "./cinematic-hero";
 import { SectionLeadMagnet } from "@/components/sections/lead-magnet-banner";
 import { Reveal } from "./landing-reveal";
 import { ProblemSection } from "./problem-section";
+import { GhostScannerSection } from "./ghost-scanner-section";
 import { GlowCard, GlowGrid } from "@/components/ui/glow-card";
 import { AnalyticsEvent, trackEvent } from "@/lib/analytics";
 import { TIERS } from "@/lib/billing";
@@ -222,6 +223,8 @@ export function LandingHomepage() {
           </GlowGrid>
         </div>
       </section>
+
+      <GhostScannerSection l={l} />
 
       <div className={styles.leadMagnet}><SectionLeadMagnet /></div>
 
