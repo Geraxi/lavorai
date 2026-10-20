@@ -31,6 +31,24 @@ import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
  */
 
 const PER_USER_RUN_CAP = 5;
+
+/** Età massima (giorni) di un annuncio per l'auto-apply. Env AUTO_APPLY_MAX_JOB_AGE_DAYS (1-365, default 30). */
+export const DEFAULT_MAX_JOB_AGE_DAYS = 30;
+export function maxJobAgeDays(env: Record<string, string | undefined> = typeof process === "undefined" ? {} : process.env): number {
+  const n = Number.parseInt(env.AUTO_APPLY_MAX_JOB_AGE_DAYS ?? "", 10);
+  return Number.isFinite(n) && n >= 1 && n <= 365 ? n : DEFAULT_MAX_JOB_AGE_DAYS;
+}
+/** Filtro Prisma: job aperto e recente. Senza postedAt si usa cachedAt (prima vista). */
+export function jobFreshnessWhere(now = new Date(), days = maxJobAgeDays()) {
+  const cutoff = new Date(now.getTime() - days * 86_400_000);
+  return {
+    closedAt: null,
+    OR: [
+      { postedAt: { gte: cutoff } },
+      { postedAt: null, cachedAt: { gte: cutoff } },
+    ],
+  };
+}
 /** Total wall-clock for board apply-link lookups in one cron run. */
 const BOARD_RESOLUTION_RUN_BUDGET_MS = 60_000;
 /** Same, for a single-user (onboarding) run. */
@@ -487,6 +505,9 @@ async function processUser(
       // Product Innovation". Il post-filter titleMatchesAnyRole con
       // stemming garantisce ulteriore precisione.
       AND: [
+        // Staleness: annunci vecchi sono quasi sempre chiusi ("Annuncio non
+        // più online"): non sprecare crediti AI né quota giornaliera.
+        jobFreshnessWhere(),
         {
           OR: roleTitleTokenGroups(roles).map((toks) => ({
             AND: toks
