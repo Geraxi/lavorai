@@ -22,11 +22,13 @@ import { Suspense } from "react";
 import { PostCheckoutRefresh } from "@/components/post-checkout-refresh";
 import { PrivacyConsentForm } from "@/components/privacy-consent-form";
 import { CookieSettingsLink } from "@/components/cookie-settings-link";
+import { MailboxConnect } from "@/components/mailbox-connect";
 
 export const metadata: Metadata = { title: "Impostazioni" };
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams?: Promise<{ mailbox?: string }> }) {
+  const mailboxNotice = (await searchParams)?.mailbox ?? null;
   const user = await getCurrentUser();
   if (!user) return null;
 
@@ -98,6 +100,13 @@ export default async function SettingsPage() {
                   <p id="account-name-note" className="workspace-muted" style={{ marginTop: 6 }}>Nome associato all’account.</p>
                 </div>
               </div>
+            </SectionBody>
+          </SectionCard>
+
+          <SectionCard id="mailbox">
+            <SectionHead icon={<Icon name="send" size={14} />} title="Casella per inviare le candidature" />
+            <SectionBody>
+              <MailboxConnect notice={mailboxNotice} />
             </SectionBody>
           </SectionCard>
 

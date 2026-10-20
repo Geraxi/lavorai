@@ -172,6 +172,7 @@ model User {
   conversionEvents ConversionEvent[]
   gmailMessages  GmailMessage[]
   jobDismissals  JobDismissal[]
+  mailboxConnections MailboxConnection[]
 
   // Referral: ogni utente ha un codice univoco da condividere; referredById
   // punta a chi l'ha invitato (se applicabile). Reward gestito a parte
@@ -705,6 +706,7 @@ model Application {
   gmailMessages     GmailMessage[]
   emailAttempts     ApplicationEmailAttempt[]
   inboxReplies      InboxReply[]
+  mailboxSends      MailboxSend[]
 
   @@index([userId, createdAt])
   @@index([sessionId])
@@ -1021,4 +1023,72 @@ model AiUsageEvent {
 
   @@index([createdAt])
   @@index([applicationId])
+}
+
+/// Casella email DELL'UTENTE collegata per inviare candidature a suo nome
+/// (Gmail API gmail.send / Microsoft Graph Mail.Send). Token cifrati AES-GCM
+/// (src/lib/crypto.ts). Separata da Account (login Google, sola lettura).
+model MailboxConnection {
+  id               String    @id @default(cuid())
+  userId           String
+  /// "gmail" | "outlook"
+  provider         String
+  email            String
+  accessTokenEnc   String    @db.Text
+  refreshTokenEnc  String?   @db.Text
+  expiresAt        DateTime?
+  scopes           String
+  /// "active" | "revoked" | "error"
+  status           String    @default("active")
+  lastError        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+}
+
+/// Un invio di candidatura dalla casella dell'utente. Stati (vedi
+/// src/lib/mailbox/delivery-state.ts): prepared → approved → submitted →
+/// delivery_confirmed | failed; "unverified" se l'esito non è determinabile.
+/// Mai "delivery_confirmed" senza evidenza (id provider + nessun rimbalzo
+/// rilevato nel thread dopo la finestra di osservazione).
+model MailboxSend {
+  id                String    @id @default(cuid())
+  applicationId     String
+  userId            String
+  provider          String
+  fromAddress       String
+  recipient         String
+  /// Provenienza del destinatario (JSON compatto, mai il corpo della pagina).
+  recipientProvenanceJson String? @db.Text
+  subject           String
+  bodyText          String    @db.Text
+  attachmentsJson   String    @db.Text
+  state             String    @default("prepared")
+  approvedAt        DateTime?
+  /// Claim anti-doppio-invio: valorizzato atomicamente prima della chiamata al provider.
+  sendClaimedAt     DateTime?
+  submittedAt       DateTime?
+  providerMessageId String?
+  providerThreadId  String?
+  internetMessageId String?
+  /// true = invio simulato (non-production o guardia attiva): nessuna email reale.
+  dryRun            Boolean   @default(false)
+  lastCheckedAt     DateTime?
+  checkCount        Int       @default(0)
+  confirmedAt       DateTime?
+  failedAt          DateTime?
+  failureReason     String?
+  /// Evidenza compatta del rimbalzo (mittente/oggetto del DSN), mai il corpo.
+  bounceEvidenceJson String?  @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, createdAt])
+  @@index([userId, state])
+  @@index([state, submittedAt])
 }

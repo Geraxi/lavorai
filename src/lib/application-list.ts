@@ -15,6 +15,8 @@ const detailSelect = {
   emailAttempts: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1,
     select: { status: true, providerEmailId: true, acceptedAt: true, recipient: true } },
   job: { select: { id: true, title: true, company: true, location: true, url: true, source: true } },
+  mailboxSends: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1,
+    select: { state: true, dryRun: true, provider: true, recipient: true, failureReason: true } },
 } satisfies Prisma.ApplicationSelect;
 type Detail = Prisma.ApplicationGetPayload<{ select: typeof detailSelect }>;
 const positiveInteger = (value: string | null, fallback: number, maximum = 1_000_000) =>
@@ -31,7 +33,9 @@ function serialize(a: Detail) {
     viewedAt: a.viewedAt?.toISOString() ?? null, submittedVia: a.submittedVia, submittedAt: a.submittedAt?.toISOString() ?? null,
     lastReplyAt: a.lastReplyAt?.toISOString() ?? null, replyCount: a.replyCount, lastReplyKind: a.lastReplyKind,
     submitConfirmation: a.submitConfirmation, delivery: applicationDeliveryView(a), stage: applicationStage(a),
-    deliveryRecipient: a.emailAttempts[0]?.recipient ?? null, job: a.job,
+    deliveryRecipient: a.emailAttempts[0]?.recipient ?? a.mailboxSends?.[0]?.recipient ?? null, job: a.job,
+    // Optional chaining: test fixtures and legacy mocks may omit the relation.
+    mailbox: a.mailboxSends?.[0] ?? null,
   };
 }
 

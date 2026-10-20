@@ -25,6 +25,8 @@ import { Avatar } from "@/components/ui-premium/avatar";
 import { EmptyState } from "@/components/ui-premium/empty-state";
 import { STAGE_ORDER, STAGE_TONE } from "@/components/ui-premium/tone";
 import "./applications.css";
+import { MailboxDeliveryBadge, type MailboxBadgeData } from "@/components/mailbox-delivery-badge";
+import "@/components/mailbox.css";
 
 interface ApiApplication {
   id: string;
@@ -50,6 +52,7 @@ interface ApiApplication {
   delivery: DeliveryView;
   stage: JourneyStage | null;
   deliveryRecipient: string | null;
+  mailbox?: MailboxBadgeData | null;
   job: {
     id: string;
     title: string;
@@ -92,6 +95,7 @@ interface Row {
   ghostingDays?: number;
   delivery?: DeliveryView;
   deliveryRecipient?: string | null;
+  mailbox?: MailboxBadgeData | null;
   journey?: JourneyStage | null;
 }
 
@@ -178,6 +182,7 @@ export default function ApplicationsPage() {
       ghostingDays,
       delivery: deliveryCopy(a.delivery, en ? "en" : "it"),
       deliveryRecipient: a.deliveryRecipient,
+      mailbox: a.mailbox ?? null,
       journey: a.stage,
     };
   };
@@ -299,6 +304,9 @@ export default function ApplicationsPage() {
               ))}
             </div>
             <AutoApplyToggle locale={lang} />
+            <a href="/applications/invio" className="pm-btn-ghost">
+              <Send size={14} strokeWidth={1.75} aria-hidden /> {tr("Approva invii", "Approve sends")}
+            </a>
             <a href="/applications/new" className="pm-btn-ghost">
               <Plus size={14} strokeWidth={1.75} aria-hidden /> {tr("Importa", "Import")}
             </a>
@@ -418,8 +426,8 @@ export default function ApplicationsPage() {
                         </span>
                       </span>
                       <span role="cell" className="apps-cell-stage">
-                        {a.journey ? <Pill tone={STAGE_TONE[a.journey]} title={a.delivery?.detail}>{STAGE_ROW_LABEL[a.journey][lang]}</Pill> : <span className="pm-muted">—</span>}
-                        {a.delivery && a.journey && a.delivery.label.toLowerCase() !== STAGE_ROW_LABEL[a.journey][lang].toLowerCase() && a.journey !== "awaiting_approval" && <small className="apps-evidence">{a.delivery.label}</small>}
+                        {a.mailbox ? <MailboxDeliveryBadge data={a.mailbox} lang={lang} /> : a.journey ? <Pill tone={STAGE_TONE[a.journey]} title={a.delivery?.detail}>{STAGE_ROW_LABEL[a.journey][lang]}</Pill> : <span className="pm-muted">—</span>}
+                        {!a.mailbox && a.delivery && a.journey && a.delivery.label.toLowerCase() !== STAGE_ROW_LABEL[a.journey][lang].toLowerCase() && a.journey !== "awaiting_approval" && <small className="apps-evidence">{a.delivery.label}</small>}
                       </span>
                       <span role="cell" className={`apps-cell-reply${reply ? "" : " is-empty"}`}>{reply ?? "—"}</span>
                       <span role="cell" className="pm-time">{a.applied}</span>

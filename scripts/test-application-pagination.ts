@@ -18,6 +18,7 @@ const records = Array.from({length: 723}, (_, i) => ({
   submissionReceiptJson: i % 6 === 0 ? receipt : i % 6 === 1 ? "{malformed" : null,
   lastReplyKind: i % 6 === 2 ? "risposta" : null,
   emailAttempts: i % 17 === 0 ? [{id:'email',createdAt:now,status:"bounced", providerEmailId:"proof",acceptedAt:now,recipient:"recruiter@example.test"}] : [],
+  mailboxSends: [],
   job: {id:"job-"+i,title:`Engineer ${i}`,company:i % 7 === 0 ? "Needle company" : "Example",location:"Milano",source:"greenhouse",url:"https://example.test"},
   errorMessage: null, atsScore: null, suggestionsJson: i === 1 ? "bad-json" : "[]", completedAt: null,
   coverLetterText: "Large body deliberately excluded from evidence scans".repeat(50), cvDocxPath: null, coverLetterPath: null, cvPdfPath:null,
