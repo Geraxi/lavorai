@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
+import { roleTitleTokenGroups } from "@/lib/role-query";
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
 import { dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
@@ -58,6 +59,9 @@ interface RunStats {
   skippedSessionPaused: number;
   skippedEmploymentMismatch: number;
   skippedLocationMismatch: number;
+  skippedLocationUnverified: number;
+  skippedSalaryMismatch: number;
+  candidatesFetched: number;
   errors: number;
 }
 
@@ -75,6 +79,9 @@ function emptyRunStats(): RunStats {
     skippedSessionPaused: 0,
     skippedEmploymentMismatch: 0,
     skippedLocationMismatch: 0,
+    skippedLocationUnverified: 0,
+    skippedSalaryMismatch: 0,
+    candidatesFetched: 0,
     errors: 0,
   };
 }
@@ -481,10 +488,8 @@ async function processUser(
       // stemming garantisce ulteriore precisione.
       AND: [
         {
-          OR: roles.slice(0, 5).map((r) => ({
-            AND: r
-              .split(/\s+/)
-              .filter((tok) => tok.length >= 3)
+          OR: roleTitleTokenGroups(roles).map((toks) => ({
+            AND: toks
               .map((tok) => ({
                 title: { contains: tok, mode: "insensitive" as const },
               })),
@@ -508,6 +513,7 @@ async function processUser(
     take: 200, // pesca largo, poi diversifichiamo per azienda lato app
   });
 
+  stats.candidatesFetched += jobs.length;
   if (jobs.length === 0) return;
 
   // Diversificazione: per ogni candidatura già consegnata dall'utente,
@@ -663,7 +669,9 @@ async function processUser(
 
     const preferenceMismatch = autoApplyPreferenceMismatch(job, prefs, locationPrefs);
     if (preferenceMismatch) {
-      if (preferenceMismatch.startsWith("location")) stats.skippedLocationMismatch++;
+      if (preferenceMismatch === "location") stats.skippedLocationMismatch++;
+      if (preferenceMismatch === "location_unverified") stats.skippedLocationUnverified++;
+      if (preferenceMismatch === "salary") stats.skippedSalaryMismatch++;
       if (preferenceMismatch === "employment") stats.skippedEmploymentMismatch++;
       continue;
     }
