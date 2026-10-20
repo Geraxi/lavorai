@@ -88,6 +88,7 @@ async function testCronBothPasses() {
       isApplicationAccessPaused: () => false, requiresPaymentMethodBeforeApp: () => false,
     },
     "@/lib/role-match": { titleMatchesAnyRole: () => true },
+    "@/lib/role-query": { roleTitleTokenGroups: (roles: string[]) => roles.map((r) => r.split(/\s+/).filter((t) => t.length >= 3)) },
     "@/lib/auto-apply-self-heal": { runSelfHeal: async () => { throw new Error("Unexpected self-heal"); } },
     "@/lib/conversion-events": { recordConversionEvent: async () => {} },
     "@/lib/analytics": { AnalyticsEvent: { APPLICATION_CREATED: "application_created" } },
