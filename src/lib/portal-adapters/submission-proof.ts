@@ -43,7 +43,27 @@ const ASHBY_OPERATIONS: Record<string, string[]> = {
   applytojobposting: ["applyToJobPosting", "ApplyToJobPosting"],
   jobboardapplicationformsubmit: ["jobBoardApplicationFormSubmit", "JobBoardApplicationFormSubmit"],
   apijobboardapplicationformsubmit: ["jobBoardApplicationFormSubmit", "apiJobBoardApplicationFormSubmit", "ApiJobBoardApplicationFormSubmit"],
+  // The mutation the public jobs.ashbyhq.com form actually sends (verified in
+  // the live frontend bundle, Oct 2026). Without it no Ashby click could ever
+  // produce an HTTP receipt, so every real submit ended as UNCONFIRMED.
+  apisubmitsingleapplicationformaction: ["submitSingleApplicationFormAction"],
+  apisubmitapplicationformaction: ["submitApplicationFormAction"],
 };
+/** Ashby form-action result: FormSubmitSuccess is the server's definitive
+ * acceptance; FormRender means the form came back (validation errors). */
+function ashbyFormActionResult(result: unknown): "success" | "rejected" | null {
+  const record = asRecord(result);
+  const form = asRecord(record?.applicationFormResult);
+  if (!record || !form) return null;
+  const block = asRecord(record.messages)?.blockMessageForCandidateHtml;
+  if (typeof block === "string" && block.trim()) return "rejected";
+  if (form.__typename === "FormSubmitSuccess") return "success";
+  return "rejected";
+}
+function ashbyRequestId(postData: string | null): string | undefined {
+  const variables = asRecord(asRecord(parseJson(postData))?.variables);
+  return safeIdentifier(variables?.applicationRequestId);
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
@@ -147,7 +167,7 @@ function hasApplicationError(value: unknown, depth = 0): boolean {
   const obj = asRecord(value);
   if (!obj) return false;
   return Object.entries(obj).some(([key, v]) => {
-    if (/^(?:errors?|validationErrors|fieldErrors|userErrors|errorMessage)$/i.test(key)) {
+    if (/^(?:errors?|validationErrors|fieldErrors|formErrors|userErrors|errorMessages?)$/i.test(key)) {
       if (Array.isArray(v)) return v.length > 0;
       if (asRecord(v)) return Object.keys(v as object).length > 0;
       return v !== false && v != null && v !== "";
@@ -183,7 +203,15 @@ export function verifySubmissionResponse(provider: string, jobUrl: string, respo
     const data = asRecord(asRecord(body)?.data);
     result = proof.responseKeys.map((key) => data?.[key]).find((v) => v != null);
   }
-  const success = successSignal(result, provider);
+  let success = successSignal(result, provider);
+  if (provider === "ashby") {
+    const form = ashbyFormActionResult(result);
+    if (form === "rejected") return { rejected: true };
+    if (form === "success") {
+      const receiptId = ashbyRequestId(response.postData);
+      success = receiptId ? { signal: "form_submit_success", receiptId } : { signal: "form_submit_success" };
+    }
+  }
   if (!success) return { rejected: false };
   // Endpoint only, no query strings, tokens, request payload or response text.
   const endpoint = new URL(response.url);

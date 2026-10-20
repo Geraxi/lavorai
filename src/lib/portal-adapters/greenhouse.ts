@@ -236,7 +236,12 @@ export const greenhouseAdapter: PortalAdapter = {
           return !answer || !completesApplicationQuestion({ ...question, options: question.options ?? [] }, answer);
         });
         if (missing.length) {
-          if (!await input.onPreTransmissionPause(missing)) return { ok: false, status: "submission_unconfirmed", error: "Pausa non verificabile. Nessun dato candidato inserito; controlla lo stato prima di riprovare." };
+          // Nothing has been typed, uploaded or sent at this point, so the
+          // outcome is NEVER "unconfirmed". If no resumable proof could be
+          // recorded (e.g. automatic rows without per-application consent),
+          // still surface the questions honestly as needs_answers.
+          if (!await input.onPreTransmissionPause(missing)) return { ok: false, status: "needs_user_input", pendingQuestions: missing,
+            error: `${missing.length} risposte richieste. Nessun dato inserito nel portale; serve la tua approvazione per riprendere questa candidatura.` };
           return { ok: false, status: "needs_user_input", pendingQuestions: missing,
             error: `${missing.length} risposte richieste. Pausa verificata prima di inserire dati o allegati nel portale.` };
         }

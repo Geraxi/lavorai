@@ -16,11 +16,11 @@ export function parseVerifiedSubmissionReceipt(json: string | null | undefined, 
     if (receipt.receiptId != null && !identifier(receipt.receiptId)) return null;
     if (receipt.kind === "dom") return receipt.signal === "new_receipt_and_form_removed" ? receipt : null;
     if (receipt.kind !== "http" || !Number.isInteger(receipt.httpStatus) || receipt.httpStatus < 200 || receipt.httpStatus >= 300
-      || !["application_id", "application_accepted", "application_receipt_message"].includes(receipt.signal)
+      || !["application_id", "application_accepted", "application_receipt_message", "form_submit_success"].includes(receipt.signal)
       || (receipt.signal === "application_id" && !receipt.receiptId)) return null;
     if (receipt.provider === "ashby") {
-      if (typeof receipt.operation !== "string" || !["applytojobposting", "jobboardapplicationformsubmit", "apijobboardapplicationformsubmit"].includes(receipt.operation.toLowerCase())) return null;
-    } else if (receipt.operation !== "application.create") return null;
+      if (typeof receipt.operation !== "string" || !["applytojobposting", "jobboardapplicationformsubmit", "apijobboardapplicationformsubmit", "apisubmitsingleapplicationformaction", "apisubmitapplicationformaction", "applicationform.submit"].includes(receipt.operation.toLowerCase())) return null;
+    } else if (receipt.operation !== "application.create" && receipt.operation !== "job_board_api.application.create") return null;
     const endpoint = new URL(receipt.endpoint);
     if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) return null;
     const domains: Record<string, string[]> = { ashby: ["ashbyhq.com"], greenhouse: ["greenhouse.io"], lever: ["lever.co"],

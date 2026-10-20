@@ -623,11 +623,6 @@ async function processApplicationRun(
       return; // in attesa delle risposte utente
     }
 
-    // Captcha: il form è pronto ma c'è un reCAPTCHA che blocca l'invio
-    // automatico (per design). Comportamento per modalità:
-    //   - hybrid / manual → handoff: avvisiamo l'utente "completa tu in 1 click"
-    //   - full auto → l'utente vuole zero coinvolgimento → saltiamo in
-    //     silenzio (niente email che lo disturba), marcato CAPTCHA.
     if (outcome.status === "job_closed") {
       // L'adapter ha visto la pagina "Job not found": chiudi nel pool e non
       // passare al fallback email (nessuna azienda da contattare).
@@ -646,28 +641,25 @@ async function processApplicationRun(
     }
 
     if (outcome.status === "captcha") {
-      const mode = app.user.preferences?.autoApplyMode ?? "manual";
-      const handoff = mode !== "auto"; // hybrid/manual = chiedi all'utente
+      // Never a silent skip, in any mode: route to the manual queue + notify.
+      const { captchaHandoff } = await import("@/lib/captcha-handoff");
+      const handoff = captchaHandoff({ mode: app.user.preferences?.autoApplyMode, company: app.job.company,
+        adapterLabel: adapter.label, detail: outcome.error });
       await prisma.application.updateMany({
         where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
         data: {
-          status: "ready_to_apply",
-          submitConfirmation: "CAPTCHA",
-          errorMessage: handoff
-            ? "Questo annuncio ha un captcha che impedisce l'invio automatico. CV e risposte sono pronti — apri il link e completa captcha + invio (1 minuto)."
-            : "Saltato: l'annuncio ha un captcha (non auto-inviabile in modalità full-auto).",
-          canaryLog:
-            "canary" in outcome && outcome.canary
-              ? JSON.stringify(outcome.canary)
-              : JSON.stringify({ captcha: true, mode, at: new Date().toISOString() }),
+          status: handoff.status,
+          submitConfirmation: handoff.submitConfirmation,
+          errorMessage: handoff.errorMessage,
+          canaryLog: "canary" in outcome && outcome.canary ? JSON.stringify(outcome.canary) : handoff.canaryLog,
         },
       });
-      if (handoff) {
+      if (handoff.notifyUser) {
         await notifyApplicationManual(applicationId).catch((err) =>
           console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
         );
       }
-      return; // l'utente completa a mano (hybrid/manual) o saltato (auto)
+      return; // the user completes captcha + submit by hand
     }
 
     // se l'adapter non ci è riuscito (form cambiato / captcha / …) proseguiamo
