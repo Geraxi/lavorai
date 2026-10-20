@@ -66,10 +66,17 @@ lettura o risposta. Un "Delay" DSN non chiude lo stato. Claim atomico `sendClaim
 
 **Google (Gmail)**: Google Cloud Console → progetto esistente del login Google →
 - Abilita *Gmail API*.
-- OAuth consent screen: aggiungi gli scope `https://www.googleapis.com/auth/gmail.send` (sensitive) e
-  `https://www.googleapis.com/auth/gmail.metadata` (restricted, serve per leggere i thread e rilevare i rimbalzi).
-  In produzione richiedono la **verifica Google**; gli scope restricted richiedono anche la valutazione di sicurezza
-  (CASA). Finché non verificato: modalità Testing con utenti di test (max 100).
+- OAuth consent screen: scope `https://www.googleapis.com/auth/gmail.send` (sensitive, da aggiungere) e
+  `https://www.googleapis.com/auth/gmail.readonly` (restricted, **già richiesto** dal progetto per l'Inbox e in
+  verifica). `gmail.metadata` **non** viene richiesto: `readonly` copre già la lettura dei thread per i rimbalzi
+  (`users.threads.get?format=metadata`, solo intestazioni From/Subject/Date/Content-Type; nessun corpo salvato).
+  In produzione serve la **verifica Google** (gmail.send va aggiunto alla verifica in corso); lo scope restricted
+  richiede anche la valutazione di sicurezza (CASA). Finché non verificato: modalità Testing con utenti di test (max 100).
+- Al callback verifichiamo gli scope concessi: con il consenso granulare l'utente può deselezionarne uno; senza
+  `gmail.send` **e** `gmail.readonly` il collegamento viene rifiutato (`missing_scope`), perché senza lettura non
+  potremmo mai rilevare rimbalzi né confermare la consegna.
+- Le caselle collegate prima di questa modifica con `gmail.metadata` funzionano ancora (metadata basta per
+  `format=metadata`); al prossimo ricollegamento ottengono `gmail.readonly`.
 - Credenziali OAuth client "Web": redirect URI `https://<dominio>/api/mailbox/callback/gmail` (+ `http://localhost:3000/...` per dev).
 - Env: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (già presenti per il login).
 

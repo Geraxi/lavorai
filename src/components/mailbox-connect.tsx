@@ -27,7 +27,7 @@ export function MailboxConnect({ notice }: { notice?: string | null }) {
   const NOTICE: Record<string, string> = {
     connected: "Casella collegata. Ogni invio richiederà comunque la tua approvazione.",
     denied: "Collegamento annullato: nessun permesso concesso.",
-    missing_scope: "Permesso di invio non concesso: senza di esso non possiamo inviare dalla tua casella.",
+    missing_scope: "Permessi incompleti: servono sia l'invio sia la lettura dei thread (per rilevare i rimbalzi). Ricollega e lascia selezionati entrambi.",
     not_configured: "Collegamento non ancora disponibile su questo server.",
     error: "Collegamento non riuscito. Riprova.",
   };
@@ -52,7 +52,7 @@ export function MailboxConnect({ notice }: { notice?: string | null }) {
           );
         })}
       </ul>
-      <p className="mbx-foot"><ShieldCheck size={13} strokeWidth={1.75} aria-hidden /> Chiediamo solo il permesso di inviare e di leggere le intestazioni dei thread delle candidature (per rilevare email rimbalzate). Puoi scollegare in qualsiasi momento.</p>
+      <p className="mbx-foot"><ShieldCheck size={13} strokeWidth={1.75} aria-hidden /> Chiediamo il permesso di inviare e di leggere la posta: leggiamo solo mittente e oggetto dei thread delle candidature inviate, per rilevare email rimbalzate. Puoi scollegare in qualsiasi momento.</p>
       {data && !data.mode.live && <p className="mbx-foot"><FlaskConical size={13} strokeWidth={1.75} aria-hidden /> Ambiente di prova: gli invii sono simulati e nessuna email esce dal server.</p>}
     </div>
   );
