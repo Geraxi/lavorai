@@ -42,3 +42,11 @@
   .jobs-page .pm-seg { align-self: flex-start; }
 }
 .jobs-row-actions .pm-btn-ghost.is-muted { color: var(--pm-faint); }
+
+/* Ghost-job scanner: badge discreto + filtro. */
+.ghost-pill { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.jobs-ghost-filter { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; margin-right: 10px; font-size: 12px; color: var(--pm-muted); cursor: pointer; white-space: nowrap; }
+.jobs-ghost-filter input { accent-color: var(--pm-green); }
+.ghost-reasons { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--pm-muted); }
+.ghost-reasons ul { margin: 0; padding-left: 16px; }
+.ghost-reasons small { color: var(--pm-faint); }

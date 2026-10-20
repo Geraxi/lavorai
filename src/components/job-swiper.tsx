@@ -1,5 +1,6 @@
 "use client";
 
+import { GhostBadge } from "@/components/ghost-badge";
 import { MatchExplanation } from "@/components/match-explanation";
 import type { MatchExplanation as Explanation } from "@/lib/match-explanation";
 import { jobSourceLabel } from "@/lib/job-source-label";
@@ -530,6 +531,7 @@ function JobCardSurface({
     </div>
     {skills.length > 0 && <div><div className="workspace-eyebrow">{tr("Competenze citate nell'annuncio", "Skills mentioned in the job")}</div><div className="discover-tags">{skills.map(skill => <span key={skill}>{skill}</span>)}</div></div>}
     {description && <div className="discover-description">{description.length > 420 ? description.slice(0, 420) + "…" : description}</div>}
+    {job.ghost && job.ghost.level !== "basso" && <div className="discover-ghost"><GhostBadge result={job.ghost} /></div>}
     <div className="discover-facts"><div><small>{tr("Sede", "Location")}</small><strong>{job.location || tr("Non indicata", "Not specified")}</strong></div><div><small>{tr("Contratto", "Contract")}</small><strong>{job.contractType === "permanent" ? tr("Indeterminato", "Permanent") : job.contractType || tr("Non indicato", "Not specified")}</strong></div><div><small>{tr("Pubblicato", "Posted")}</small><strong>{job.postedAt ? new Date(job.postedAt).toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short" }) : "—"}</strong></div></div>
     <p className="workspace-muted discover-footnote">{tr("Apri i dettagli per leggere la descrizione completa.", "Open details to read the full description.")}</p>
     {children}

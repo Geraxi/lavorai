@@ -1,4 +1,5 @@
 import { explainMatch } from "@/lib/match-explanation";
+import { scoreGhostJobs } from "@/lib/ghost-job-server";
 import { DismissedJobs } from "@/components/dismissed-jobs";
 import type { Metadata } from "next";
 import { getLocale, getTranslations } from "next-intl/server";
@@ -35,8 +36,9 @@ export default async function DiscoverPage({ searchParams }: { searchParams?: Pr
 
   // Same definition as the Dashboard "Scopri" card (dashboard-metrics-shared).
   const { total, jobs: matching, profile: userProfile } = await getMatchingOpportunities(user.id);
-  const jobs = matching
-    .slice(0, 50)
+  const top = matching.slice(0, 50);
+  const ghost = await scoreGhostJobs(top);
+  const jobs = top
     .map((j) => ({
       explanation: explainMatch(userProfile, j.description),
       matchScore: discoverMatchScore(userProfile, `${j.title}\n${j.company ?? ""}\n${j.description}`),
@@ -51,6 +53,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams?: Pr
       salaryMin: j.salaryMin,
       salaryMax: j.salaryMax,
       postedAt: j.postedAt,
+      ghost: ghost.get(j.id),
     }));
 
   return (

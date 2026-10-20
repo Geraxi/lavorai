@@ -105,3 +105,4 @@
   .lavorai-app-shell .pm-discover .discover-actions .pm-btn-ghost, .lavorai-app-shell .pm-discover .discover-actions .pm-btn-primary { padding: 0 10px; }
 }
 .lavorai-app-shell .pm-discover .discover-empty-actions > * { height: 32px; display: inline-flex; align-items: center; padding: 0 14px; }
+.discover-ghost { margin: 6px 0 2px; }

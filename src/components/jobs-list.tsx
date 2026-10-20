@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
-import { Briefcase, Check, ChevronRight } from "lucide-react";
+import { Briefcase, Check, ChevronRight, EyeOff } from "lucide-react";
+import { GhostBadge } from "@/components/ghost-badge";
+import type { GhostJobResult } from "@/lib/ghost-job";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import { PaywallDialog } from "@/components/paywall-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -25,6 +27,8 @@ export interface JobRow {
   postedAt?: Date | null;
   /** Annuncio per categorie protette (L. 68/99). */
   protectedCategory?: boolean;
+  /** Rischio "annuncio fantasma" (src/lib/ghost-job.ts). */
+  ghost?: GhostJobResult;
 }
 
 function formatSalaryRange(min: number | null, max: number | null): string {
@@ -56,6 +60,9 @@ export function JobsList({ jobs, label, alreadyApplied = [] }: { jobs: JobRow[];
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
   const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
 
+  const [hideGhost, setHideGhost] = useState(false);
+  const ghostHigh = useMemo(() => jobs.filter((j) => j.ghost?.level === "alto").length, [jobs]);
+  const visibleJobs = useMemo(() => (hideGhost ? jobs.filter((j) => j.ghost?.level !== "alto") : jobs), [jobs, hideGhost]);
   const priorIds = useMemo(() => new Set(alreadyApplied), [alreadyApplied]);
   const remainingJobs = useMemo(
     () => jobs.filter((j) => !appliedIds.has(j.id) && !priorIds.has(j.id)),
@@ -220,7 +227,13 @@ export function JobsList({ jobs, label, alreadyApplied = [] }: { jobs: JobRow[];
     <>
       <section className="pm-card jobs-card" aria-label={label ?? t("listLabel")}>
         <header className="pm-card-head">
-          <h2><Briefcase size={15} strokeWidth={1.75} aria-hidden /> {label ?? t("listLabel")} <span className="pm-count">{jobs.length}</span></h2>
+          <h2><Briefcase size={15} strokeWidth={1.75} aria-hidden /> {label ?? t("listLabel")} <span className="pm-count">{visibleJobs.length}</span></h2>
+          {ghostHigh > 0 && (
+            <label className="jobs-ghost-filter" title="Nasconde gli annunci con rischio alto di essere fantasma">
+              <input type="checkbox" checked={hideGhost} onChange={(e) => setHideGhost(e.target.checked)} />
+              <EyeOff size={13} strokeWidth={1.75} aria-hidden /> Nascondi sospetti ({ghostHigh})
+            </label>
+          )}
           <button
             type="button"
             onClick={askApplyAll}
@@ -232,7 +245,7 @@ export function JobsList({ jobs, label, alreadyApplied = [] }: { jobs: JobRow[];
         </header>
         {appliedIds.size > 0 && <p className="pm-muted jobs-queued-note">{t("queuedNote", { count: appliedIds.size })}</p>}
         <ul className="pm-list jobs-list">
-          {jobs.map((j) => {
+          {visibleJobs.map((j) => {
             const isApplied = appliedIds.has(j.id);
             const isPrior = priorIds.has(j.id);
             const isApplying = applyingId === j.id;
@@ -247,6 +260,7 @@ export function JobsList({ jobs, label, alreadyApplied = [] }: { jobs: JobRow[];
                   </span>
                 </Link>
                 <span className="jobs-row-meta">
+                  {j.ghost && <GhostBadge result={j.ghost} />}
                   {j.remote && <span className="pm-pill tone-neutral">{t("remote")}</span>}
                   {j.protectedCategory && <span className="pm-pill tone-neutral" title="Riservato/prioritario categorie protette, L. 68/99">L. 68/99</span>}
                   {j.contractType && <span className="jobs-row-fact">{j.contractType === "permanent" ? t("permanent") : j.contractType}</span>}

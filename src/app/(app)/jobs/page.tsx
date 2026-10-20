@@ -14,6 +14,7 @@ import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { PROTECTED_SEARCH_PHRASES } from "@/lib/protected-category";
+import { scoreGhostJobs } from "@/lib/ghost-job-server";
 
 export const metadata: Metadata = { title: "Offerte di lavoro" };
 export const dynamic = "force-dynamic";
@@ -91,7 +92,7 @@ export default async function JobsPage({
     return (
       <JobsFrame title={t("title")} breadcrumb={t("breadcrumb")} subtitle={`${t("forYouCount", { count: matching.total })}`} what="" where="" remoteOnly={false} protectedOnly={false} t={t} isSearch={false} forYou={matching.total}>
         {matching.total > 0
-          ? <JobsList jobs={matching.jobs.map(toRow)} label={t("forYouLabel")} />
+          ? <JobsList jobs={await withGhost(matching.jobs.map(toRow))} label={t("forYouLabel")} />
           : <JobsEmpty title={t("noForYou")} text={t("noForYouHint")} />}
       </JobsFrame>
     );
@@ -222,15 +223,22 @@ export default async function JobsPage({
   return (
     <JobsFrame title={t("title")} breadcrumb={t("breadcrumb")} subtitle={summary} what={what} where={where} remoteOnly={remoteOnly} protectedOnly={protectedOnly} t={t} isSearch forYou={forYou}>
       {jobs.length > 0
-        ? <JobsList jobs={jobs} label={t("searchLabel")} alreadyApplied={[...applied]} />
+        ? <JobsList jobs={await withGhost(jobs)} label={t("searchLabel")} alreadyApplied={[...applied]} />
         : <JobsEmpty title={t("noResults")} text={t("noResultsHint")} />}
     </JobsFrame>
   );
 }
 
-type Row = { id: string; title: string; company: string | null; location: string | null; description: string; url: string; contractType: string | null; remote: boolean; salaryMin: number | null; salaryMax: number | null; protectedCategory?: boolean };
-function toRow(j: Row): JobRow {
-  return { id: j.id, title: j.title, company: j.company, location: j.location, description: j.description, url: j.url, contractType: j.contractType, remote: j.remote, salaryMin: j.salaryMin, salaryMax: j.salaryMax, protectedCategory: j.protectedCategory };
+type Row = { id: string; title: string; company: string | null; location: string | null; description: string; url: string; contractType: string | null; remote: boolean; salaryMin: number | null; salaryMax: number | null; protectedCategory?: boolean; postedAt?: Date | null; closedAt?: Date | null; source?: string | null };
+type GhostRow = JobRow & { closedAt?: Date | null; source?: string | null };
+function toRow(j: Row): GhostRow {
+  return { id: j.id, title: j.title, company: j.company, location: j.location, description: j.description, url: j.url, contractType: j.contractType, remote: j.remote, salaryMin: j.salaryMin, salaryMax: j.salaryMax, protectedCategory: j.protectedCategory, postedAt: j.postedAt ?? null, closedAt: j.closedAt ?? null, source: j.source ?? null };
+}
+
+/** Aggiunge il rischio "annuncio fantasma" (vedi src/lib/ghost-job.ts). */
+async function withGhost(rows: GhostRow[]): Promise<JobRow[]> {
+  const scores = await scoreGhostJobs(rows.map((r) => ({ ...r, postedAt: r.postedAt ?? null })));
+  return rows.map(({ closedAt: _c, source: _s, ...r }) => ({ ...r, ghost: scores.get(r.id) }));
 }
 
 function JobsEmpty({ title, text }: { title: string; text: string }) {
