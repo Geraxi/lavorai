@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { quickMatchScore, skillVariants, splitRoles, canonicalRole } from "../src/lib/match-score";
-import { roleTitleTokenGroups } from "../src/lib/role-query";
+import { roleTitleTokenGroups, titleTokenWhere } from "../src/lib/role-query";
+import { titleMatchesRole } from "../src/lib/role-match";
 
 // Synthetic profile with the same SHAPE as a rich real CV that scored 0-1/100:
 // 29 skills (some with parentheses / ".js" / multi-word), a composite "·" title,
@@ -63,10 +64,17 @@ function testRoleQuery() {
   assert(keys.includes("react native developer"), "6th role is queried");
   assert(!keys.includes("senior ios engineer"), "superset of another role is redundant");
   assert.equal(keys.filter((k) => k === "machine learning engineer").length, 1, "duplicates merged");
-  // "AI Engineer" has only one >=3-char token ("engineer"), as in the old query: it subsumes every *Engineer role.
-  assert.deepEqual(roleTitleTokenGroups(["AI Engineer", "iOS Engineer"]).map((g) => g.join(" ")), ["Engineer"]);
+  // "AI" is a meaningful acronym: "AI Engineer" must not collapse to "Engineer" (every engineering job).
+  assert.deepEqual(roleTitleTokenGroups(["AI Engineer", "iOS Engineer"]).map((g) => g.join(" ")), ["AI Engineer", "iOS Engineer"]);
+  assert.equal(titleMatchesRole("Software Engineer, Trust & Safety", "AI Engineer"), false, "AI Engineer is not any engineer");
+  assert.equal(titleMatchesRole("Senior AI Engineer", "AI Engineer"), true);
+  assert.equal(titleMatchesRole("Forward-Deployed AI Engineer - Internship", "AI Engineer"), true);
+  assert.equal(titleMatchesRole("Email Marketing Engineer", "AI Engineer"), false, "acronym is a whole word");
+  const aiWhere = JSON.stringify(titleTokenWhere("AI"));
+  assert(!aiWhere.includes('"contains":"AI"'), "2-letter tokens are never a bare substring filter");
+  assert.deepEqual(titleTokenWhere("Engineer"), { title: { contains: "Engineer", mode: "insensitive" } });
   assert(roleTitleTokenGroups(Array.from({ length: 100 }, (_, i) => `Role${i} Engineer${i}`)).length <= 40, "bounded");
-  assert.deepEqual(roleTitleTokenGroups(["QA", "  "]), [], "roles without >=3-char tokens are ignored, as before");
+  assert.deepEqual(roleTitleTokenGroups(["  ", "x"]), [], "roles without significant tokens are ignored");
 }
 
 testScaling();

@@ -5,7 +5,8 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
-import { roleTitleTokenGroups } from "@/lib/role-query";
+import { roleTitleTokenGroups, titleTokenWhere } from "@/lib/role-query";
+import { searchRoleTitles } from "@/lib/auto-apply-roles";
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
 import { dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
@@ -338,41 +339,16 @@ async function processUser(
     orderBy: { createdAt: "asc" },
   });
 
-  // UNION delle source: i ruoli da cercare sono l'unione di
-  // (a) titles delle sessioni attive non piene, e
-  // (b) preferences.rolesJson scelti dall'utente in onboarding/preferenze.
-  // Le sessioni servono per il tracking (sentCount/targetCount/customContext).
-  // I ruoli senza sessione associata vengono comunque applicati e useranno
-  // il fallback `resolveSession()` per assegnare una sessione virtuale.
-  const rolesSet = new Map<string, string>(); // lowercase -> display
+  // Ruoli da cercare: preferences.rolesJson (ruoli salvati) e basta; i titoli
+  // delle sessioni attive servono solo da fallback filtrato se rolesJson è
+  // vuoto (vedi auto-apply-roles). Le sessioni restano per il tracking
+  // (sentCount/targetCount); i ruoli senza sessione usano resolveSession().
+  const rolesSet = searchRoleTitles(prefs.rolesJson, activeSessions);
   const sessionByRole = new Map<string, (typeof activeSessions)[number]>();
-
   for (const s of activeSessions) {
-    if (s.sentCount >= s.targetCount) continue; // round già pieno
-    const t = (s.title ?? s.label).trim();
-    if (!t) continue;
-    // Skip session "garbage" con titolo concatenato `category · role`
-    // generato da una vecchia versione: inquina roleTerms e abbassa
-    // quickMatchScore. I round puliti hanno solo il role title.
-    if (t.includes("·")) continue;
-    const key = t.toLowerCase();
-    if (!rolesSet.has(key)) rolesSet.set(key, t);
-    sessionByRole.set(key, s);
-  }
-
-  try {
-    const arr = JSON.parse(prefs.rolesJson);
-    if (Array.isArray(arr)) {
-      for (const r of arr) {
-        if (typeof r !== "string") continue;
-        const t = r.trim();
-        if (!t) continue;
-        const key = t.toLowerCase();
-        if (!rolesSet.has(key)) rolesSet.set(key, t);
-      }
-    }
-  } catch {
-    /* noop */
+    if (s.sentCount >= s.targetCount) continue;
+    const key = (s.title ?? s.label).trim().toLowerCase();
+    if (rolesSet.has(key)) sessionByRole.set(key, s);
   }
 
   const roles: string[] = Array.from(rolesSet.values());
@@ -510,10 +486,7 @@ async function processUser(
         jobFreshnessWhere(),
         {
           OR: roleTitleTokenGroups(roles).map((toks) => ({
-            AND: toks
-              .map((tok) => ({
-                title: { contains: tok, mode: "insensitive" as const },
-              })),
+            AND: toks.map(titleTokenWhere),
           })),
         },
       ],
