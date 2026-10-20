@@ -106,3 +106,43 @@
 }
 .lavorai-app-shell .pm-discover .discover-empty-actions > * { height: 32px; display: inline-flex; align-items: center; padding: 0 14px; }
 .discover-ghost { margin: 6px 0 2px; }
+
+/* ── Square Tinder-style card (feat/scopri-square-card) ─────────────────
+   Card is ~square/slightly portrait, centred in the main column; header and
+   filter tabs above stay left-aligned. Two stacked layers peek out below. */
+.lavorai-app-shell .pm-discover .discover-main { align-items: center; }
+.lavorai-app-shell .pm-discover .discover-deck {
+  width: 100%; max-width: 460px; height: auto; aspect-ratio: 460 / 500; margin: 0 auto 14px;
+}
+.lavorai-app-shell .pm-discover .discover-deck::before { content: none; }
+.pm-discover .discover-deck-layer {
+  position: absolute; inset: 0; border-radius: 18px; border: 1px solid var(--pm-line);
+  background: var(--pm-card); pointer-events: none; transform-origin: 50% 100%;
+}
+.pm-discover .discover-deck-layer.is-mid { z-index: 2; transform: translateY(8px) scale(.96); opacity: .8; }
+.pm-discover .discover-deck-layer.is-back { z-index: 1; transform: translateY(16px) scale(.92); opacity: .5; }
+.lavorai-app-shell .pm-discover .discover-card {
+  position: relative; gap: 10px; padding: 20px; border-radius: 18px; min-height: 0;
+}
+.lavorai-app-shell .pm-discover .discover-card-heading { gap: 10px; }
+.lavorai-app-shell .pm-discover .discover-card-heading strong { font-size: 13.5px; }
+.lavorai-app-shell .pm-discover .discover-card-heading p { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lavorai-app-shell .pm-discover .discover-card-heading > div { min-width: 0; }
+.lavorai-app-shell .pm-discover .discover-card h2 { font-size: 20px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pm-discover .discover-match { margin-bottom: 8px; }
+.pm-discover .discover-salary { margin-top: 4px; font-size: 13.5px; }
+.lavorai-app-shell .pm-discover .discover-description { font-size: 12.5px; line-height: 1.55; -webkit-line-clamp: 4; flex: 0 1 auto; min-height: 0; }
+.lavorai-app-shell .pm-discover .discover-ghost { margin: 0; }
+.lavorai-app-shell .pm-discover .discover-facts > div { padding: 8px 10px; min-width: 0; }
+.lavorai-app-shell .pm-discover .discover-facts strong { display: block; font-size: 12px; }
+.lavorai-app-shell .pm-discover .discover-card .discover-save { top: 18px; right: 18px; width: 30px; height: 30px; }
+.lavorai-app-shell .pm-discover .discover-actions { margin-top: 22px; width: 100%; max-width: 460px; justify-content: center; }
+.lavorai-app-shell .pm-discover .discover-hint { max-width: 460px; }
+[data-theme="light"] .pm-discover .discover-deck-layer { background: #f4f4f2; }
+[data-theme="light"] .lavorai-app-shell .pm-discover .discover-card { box-shadow: 0 1px 2px rgba(15,16,18,.04), 0 10px 28px rgba(15,16,18,.08); }
+@media (max-width: 640px) {
+  .lavorai-app-shell .pm-discover .discover-deck { max-width: none; height: auto; aspect-ratio: 358 / 440; min-height: 420px; }
+  .lavorai-app-shell .pm-discover .discover-card { padding: 16px; gap: 9px; }
+  .lavorai-app-shell .pm-discover .discover-card h2 { font-size: 18px; }
+  .lavorai-app-shell .pm-discover .discover-actions { max-width: none; }
+}

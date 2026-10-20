@@ -238,6 +238,8 @@ export function JobSwiper({ jobs }: { jobs: DiscoverJob[] }) {
       <div className="discover-layout">
         <div className="discover-main">
           <div className="discover-deck">
+            {queue.length > 2 && <div aria-hidden className="discover-deck-layer is-back" />}
+            {queue.length > 1 && <div aria-hidden className="discover-deck-layer is-mid" />}
             <SwipeCard key={currentJob.id} job={currentJob} isAnimatingOut={animatingId === currentJob.id} animDir={animDir}
               isSaved={saved.has(currentJob.id)} onToggleSave={() => toggleSave(currentJob.id, currentJob.title)}
               onSwipe={(dir) => { if (dir === "right") apply(currentJob); else skip(currentJob.id); }}
@@ -416,71 +418,7 @@ function relativeDateLabel(d: Date | null | undefined): string | null {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
-/**
- * Estrae 2-3 tech/skill keywords dalla description per mostrarli come
- * pill colorate. Whitelist ampia di skill tech comuni; ordina per
- * frequenza, cap a 3 pill per non affollare.
- */
-const SKILL_VOCAB = [
-  "React",
-  "TypeScript",
-  "JavaScript",
-  "Node",
-  "Python",
-  "Go",
-  "Rust",
-  "Java",
-  "Kotlin",
-  "Swift",
-  "Ruby",
-  "PHP",
-  "AWS",
-  "GCP",
-  "Azure",
-  "Kubernetes",
-  "Docker",
-  "Terraform",
-  "PostgreSQL",
-  "MongoDB",
-  "Redis",
-  "GraphQL",
-  "REST",
-  "Next.js",
-  "Vue",
-  "Angular",
-  "Figma",
-  "Sketch",
-  "Tailwind",
-  "AI",
-  "ML",
-  "LLM",
-  "SaaS",
-  "B2B",
-  "Fintech",
-  "DevOps",
-  "Frontend",
-  "Backend",
-  "Full-stack",
-  "Mobile",
-  "iOS",
-  "Android",
-  "UX",
-  "UI",
-];
 
-function extractSkills(description: string): string[] {
-  const clean = cleanHtmlText(description);
-  const found = new Map<string, number>();
-  for (const skill of SKILL_VOCAB) {
-    const re = new RegExp(`\\b${skill.replace(".", "\\.")}\\b`, "gi");
-    const matches = clean.match(re);
-    if (matches && matches.length > 0) found.set(skill, matches.length);
-  }
-  return Array.from(found.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([k]) => k);
-}
 
 /**
  * UI Tinder-style: minimal text, pill-heavy. Solo info strutturate,
@@ -509,12 +447,11 @@ function JobCardSurface({
 }) {
   const en = useLocale() === "en";
   const tr = (it: string, english: string) => en ? english : it;
-  const skills = useMemo(() => extractSkills(job.description), [job.description]);
   const description = useMemo(() => cleanHtmlText(job.description).replace(/\s+/g, " ").trim(), [job.description]);
   const salary = formatSalary(job.salaryMin, job.salaryMax);
   return <article className="discover-card">
     <div className="discover-card-heading">
-      <CompanyLogo company={job.company ?? job.title} color={companyColor(job.company ?? job.title)} size={42} rounded={10} />
+      <CompanyLogo company={job.company ?? job.title} color={companyColor(job.company ?? job.title)} size={36} rounded={9} />
       <div><strong>{job.company ?? tr("Azienda non indicata", "Company not specified")}</strong><p className="workspace-muted">{job.location ?? tr("Sede non indicata", "Location not specified")}</p></div>
     </div>
     {onToggleSave && <button type="button" className="discover-save" aria-pressed={isSaved} aria-label={isSaved ? tr("Rimuovi dai preferiti", "Remove from saved") : tr("Salva nei preferiti", "Save job")}
@@ -524,16 +461,9 @@ function JobCardSurface({
       <h2>{job.title}</h2>
       <p className={`discover-salary${salary ? "" : " is-missing"}`}>{salary || tr("Retribuzione non indicata", "Salary not specified")}</p>
     </div>
-    <div className="discover-tags">
-      {job.remote && <span>{tr("Remoto", "Remote")}</span>}
-      {job.contractType && <span>{job.contractType === "permanent" ? tr("Tempo indeterminato", "Permanent") : job.contractType}</span>}
-      {jobSourceLabel(job.url) && <span>{jobSourceLabel(job.url)}</span>}
-    </div>
-    {skills.length > 0 && <div><div className="workspace-eyebrow">{tr("Competenze citate nell'annuncio", "Skills mentioned in the job")}</div><div className="discover-tags">{skills.map(skill => <span key={skill}>{skill}</span>)}</div></div>}
     {description && <div className="discover-description">{description.length > 420 ? description.slice(0, 420) + "…" : description}</div>}
     {job.ghost && job.ghost.level !== "basso" && <div className="discover-ghost"><GhostBadge result={job.ghost} /></div>}
     <div className="discover-facts"><div><small>{tr("Sede", "Location")}</small><strong>{job.location || tr("Non indicata", "Not specified")}</strong></div><div><small>{tr("Contratto", "Contract")}</small><strong>{job.contractType === "permanent" ? tr("Indeterminato", "Permanent") : job.contractType || tr("Non indicato", "Not specified")}</strong></div><div><small>{tr("Pubblicato", "Posted")}</small><strong>{job.postedAt ? new Date(job.postedAt).toLocaleDateString(en ? "en-GB" : "it-IT", { day: "numeric", month: "short" }) : "—"}</strong></div></div>
-    <p className="workspace-muted discover-footnote">{tr("Apri i dettagli per leggere la descrizione completa.", "Open details to read the full description.")}</p>
     {children}
   </article>;
 }
