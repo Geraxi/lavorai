@@ -9,8 +9,6 @@ import type {
 } from "./types";
 import type { Page } from "playwright";
 import { detectBlockingCaptcha } from "./captcha";
-import { resolveCandidateFact } from "../candidate-facts";
-import { completesApplicationQuestion, resolveScopedQuestionAnswer } from "../application-question-answers";
 
 /**
  * Canary helper: scatta uno screenshot della page corrente e lo
@@ -221,33 +219,9 @@ export const greenhouseAdapter: PortalAdapter = {
       // has received no candidate field, search value, CV or cover letter.
       // Do not move this below any fill/upload (modern forms can autosave).
       if (input.onPreTransmissionPause) {
-        const { inspectRequiredQuestions } = await import("./ai-answer");
-        const { buildAnswerContext } = await import("./web-form");
-        const context = buildAnswerContext(input);
-        const questions = await inspectRequiredQuestions(page);
-        const missing = questions.filter(question => {
-          const scoped = resolveScopedQuestionAnswer(input.storedAnswers, question);
-          if (scoped.conflict) return true;
-          const fact = scoped.answer ? null : resolveCandidateFact(question, context, true);
-          const answer = scoped.answer ?? fact?.answer;
-          // A factual search value can be tried later; it never selects a
-          // choice now. The filler still verifies the resulting exact option.
-          if (!scoped.answer && fact?.answer && question.kind === "react-select") return false;
-          return !answer || !completesApplicationQuestion({ ...question, options: question.options ?? [] }, answer);
-        });
-        if (missing.length) {
-          // Nothing has been typed, uploaded or sent at this point, so the
-          // outcome is NEVER "unconfirmed". If no resumable proof could be
-          // recorded (e.g. automatic rows without per-application consent),
-          // still surface the questions honestly as needs_answers.
-          if (!await input.onPreTransmissionPause(missing)) return { ok: false, status: "needs_user_input", pendingQuestions: missing,
-            error: `${missing.length} risposte richieste. Nessun dato inserito nel portale; serve la tua approvazione per riprendere questa candidatura.` };
-          return { ok: false, status: "needs_user_input", pendingQuestions: missing,
-            error: `${missing.length} risposte richieste. Pausa verificata prima di inserire dati o allegati nel portale.` };
-        }
-        // Durable, one-way boundary before the first candidate data can leave
-        // this process, including on-change autosave and asynchronous uploads.
-        if (!input.beforeCandidateData || !await input.beforeCandidateData()) return { ok: false, status: "submission_unconfirmed", error: "Invio fermato dai controlli attuali prima di inserire dati nel portale." };
+        const { blankFormPause } = await import("./blank-form-pause");
+        const stop = await blankFormPause(page, input, "Greenhouse");
+        if (stop) return stop;
       }
       // Fallback obbligatorio: se profile.email è vuoto (il parser AI non
       // l'ha estratto dal CV), uso l'email dell'account. Senza email il

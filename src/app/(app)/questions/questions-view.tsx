@@ -204,7 +204,7 @@ export function QuestionsView() {
               : application.reason === "answers_incomplete" ? "Completa o chiarisci le risposte prima di confermare la ripresa."
               : "Risposte salvabili. Ripresa bloccata: manca una prova verificabile della pausa prima dell’invio oppure la candidatura non è idonea. Non verrà ritentata automaticamente."}</span>
             {!application.canResume && application.guidance?.href && <Link className="underline" href={application.guidance.href}>{application.guidance.label}</Link>}
-            {application.canResume && <button type="button" disabled={saving || hasUnsavedAnswers(application.applicationId)} onClick={() => void confirmResume(application)}>Conferma ripresa di questa candidatura</button>}
+            {application.canResume && <button type="button" disabled={saving || hasUnsavedAnswers(application.applicationId)} onClick={() => void confirmResume(application)} title="Confermando le risposte autorizzi l’invio di questa sola candidatura">Conferma risposte e autorizza l’invio di questa candidatura</button>}
           </div>
         );
         return <>

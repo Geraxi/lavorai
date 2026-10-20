@@ -1,4 +1,4 @@
-import { answerContinuationIneligibility, answerConfirmationDigest, continuationDigest, continuationSelect, parseAnswerContinuation, type AnswerContinuation } from "./application-answer-continuation";
+import { answerContinuationIneligibility, answerConfirmationDigest, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
 import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
 import { parseAnswers } from "./application-answers";
 import { completesApplicationQuestion, resolveExplicitApplicationAnswer, parseApplicationQuestion } from "./application-question-answers";
@@ -268,13 +268,15 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || row.status !== "applying" || row.submitConfirmation !== SUBMISSION_STARTED) return false;
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
-    if (boundary !== "final_submit" && channel !== "portal_greenhouse") return false;
+    const staged = STAGED_CHANNELS.includes(channel);
+    if (boundary === "verification_submit" && channel !== "portal_greenhouse") return false;
+    if (boundary !== "final_submit" && !staged) return false;
     // Continuations are one-way: blank inspection -> candidate data -> final
     // submit -> optional security-code submit. Each boundary is consumed once.
     if (continuation) {
       if (boundary === "candidate_data") {
         if (continuation.candidateDataStartedAt || continuation.finalSubmitStarted || continuation.verificationSubmitStarted) return false;
-      } else if (channel === "portal_greenhouse") {
+      } else if (staged) {
         if (!continuation.candidateDataStartedAt || continuation.verificationSubmitStarted) return false;
         if (boundary === "final_submit" && continuation.finalSubmitStarted) return false;
         if (boundary === "verification_submit" && !continuation.finalSubmitStarted) return false;
@@ -360,7 +362,7 @@ export async function completeApplicationSubmission(
 
 /** Read-only validation never refunds, replaces or deletes a reservation. */
 async function continuationReservationMatches(tx: Prisma.TransactionClient, row: WorkerGateRow, proof: AnswerContinuation): Promise<boolean> {
-  if (!["portal_recruitee", "portal_greenhouse"].includes(proof.channel)) return false;
+  if (!CONTINUATION_CHANNELS.includes(proof.channel)) return false;
   const subjectKey = submissionSubjectKey(row.userId, row.jobId);
   const reservations = await tx.applicationSubmissionReservation.findMany({ where: { OR: [{ applicationId: row.id }, { subjectKey }] } });
   if (!reservations.length || reservations.some(r => r.applicationId !== row.id || r.subjectKey !== subjectKey
@@ -381,6 +383,10 @@ export function continuationDestination(channel: string, value: string): string 
       const native = /^(?:boards|job-boards|jobs)\.greenhouse\.io$/i.test(url.hostname);
       const posting = native ? url.pathname.match(/\/jobs\/(\d+)(?:\/|$)/)?.[1] ?? (url.pathname === "/embed/job_app" ? url.searchParams.get("token") : null) : url.searchParams.get("gh_jid");
       return posting && /^\d+$/.test(posting) ? `greenhouse:${posting}` : null;
+    }
+    if (channel === "portal_ashby") {
+      const posting = /(^|\.)ashbyhq\.com$/i.test(url.hostname) ? receiptJobId("ashby", value) : null;
+      return posting ? `ashby:${posting.toLowerCase()}` : null;
     }
     const posting = receiptJobId("recruitee", value);
     return channel === "portal_recruitee" && posting ? `${url.origin}/o/${posting}` : null;
@@ -420,12 +426,16 @@ async function destinationIsUnique(tx: Prisma.TransactionClient, row: WorkerGate
 /** Called only by the audited adapter wrapper after it returned before its sole
  * candidate POST, or Greenhouse's blank-form callback before any personal data.
  * Old NOT_SUBMITTED rows and post-upload pauses get no attestation. */
-export async function attestAnswerPause(id: string, token: Date, channel: string, pendingQuestionsJson: string, jobUrl: string, db: DB = prisma, evidence?: "greenhouse_blank_form_v1"): Promise<boolean> {
-  if (channel !== "portal_recruitee" && !(channel === "portal_greenhouse" && evidence === "greenhouse_blank_form_v1")) return false;
+export async function attestAnswerPause(id: string, token: Date, channel: string, pendingQuestionsJson: string, jobUrl: string, db: DB = prisma, evidence?: PreTransmissionEvidence): Promise<boolean> {
+  if (channel !== "portal_recruitee" && !(BLANK_FORM_EVIDENCE[channel] && evidence === BLANK_FORM_EVIDENCE[channel])) return false;
   return (await withLockedApplication(id, db, async (tx, row) => {
-    // Continuations bind to explicit per-application consent; automatic rows
-    // without it simply stay in needs_answers for the user.
-    if (!row?.consentGrantedAt) return false;
+    // Rows without per-application consent get a consent-PENDING proof: the
+    // candidate's confirmation of these answers on Domande grants it
+    // (queueAnswerContinuation). Only blank-form pauses qualify, i.e. nothing
+    // reached the portal; Recruitee's post-fill pause still needs prior consent.
+    if (!row) return false;
+    const consentPending = !row.consentGrantedAt;
+    if (consentPending && channel === "portal_recruitee") return false;
     if (!row || row.job.url !== jobUrl || row.status !== "applying" || row.startedAt?.getTime() !== +token
       || row.submitConfirmation !== SUBMISSION_STARTED || rolloutApplicationIneligibility(row)
       || row.submittedAt || row.submittedVia || row.submissionReceiptJson || row.completedAt
@@ -438,9 +448,10 @@ export async function attestAnswerPause(id: string, token: Date, channel: string
     const proof: AnswerContinuation = {
       version: 1, applicationId: id, userId: row.userId, jobId: row.jobId, jobUrl: row.job.url,
       attemptStartedAt: previous?.attemptStartedAt ?? token.toISOString(), workToken: token.toISOString(), channel,
-      consentGrantedAt: row.consentGrantedAt!.toISOString(), pendingHash: continuationDigest(pendingQuestionsJson),
+      consentGrantedAt: consentPending ? null : row.consentGrantedAt!.toISOString(),
+      consentSource: consentPending ? "answers" : "explicit", pendingHash: continuationDigest(pendingQuestionsJson),
       pausedAt: new Date().toISOString(), phase: "paused", confirmedAt: null, finalSubmitStarted: false,
-      ...(channel === "portal_greenhouse" ? { preTransmissionEvidence: evidence } : {}),
+      ...(BLANK_FORM_EVIDENCE[channel] ? { preTransmissionEvidence: evidence } : {}),
     };
     if (!await continuationReservationMatches(tx, row, proof)) return false;
     await tx.application.update({ where: { id }, data: {
@@ -460,9 +471,13 @@ export async function queueAnswerContinuation(input: {
     if (!row || row.userId !== input.userId) return "application_not_found";
     if (!row.answerContinuationJson) return "continuation_proof_missing";
     if (row.userProvidedAnswersJson !== input.expectedAnswersJson) return "questions_changed_reload";
-    const reason = answerContinuationIneligibility(row, "paused", row.job.url) ?? currentWorkerIneligibility(row);
-    if (reason) return reason;
-    const proof = parseAnswerContinuation(row.answerContinuationJson)!;
+    const proof = parseAnswerContinuation(row.answerContinuationJson);
+    // Confirming the answers IS the per-application consent when the proof
+    // was recorded consent-pending. Evaluate the current gates as if granted.
+    const grantsConsent = proof?.consentGrantedAt === null && proof.consentSource === "answers" && !row.consentGrantedAt;
+    const consentAt = grantsConsent ? new Date(Math.max(Date.now(), Date.parse(proof!.pausedAt))) : row.consentGrantedAt;
+    const reason = answerContinuationIneligibility(row, "paused", row.job.url) ?? currentWorkerIneligibility({ ...row, consentGrantedAt: consentAt });
+    if (reason || !proof) return reason ?? "continuation_proof_missing";
     if (!await continuationReservationMatches(tx, row, proof)) return "continuation_reservation_mismatch";
     if (!await capacityAvailable(tx, row)) return "session_capacity_reached";
     let pending: unknown;
@@ -480,10 +495,16 @@ export async function queueAnswerContinuation(input: {
       const answer = explicit.answer ?? fact?.answer;
       if (!answer || !completesApplicationQuestion(question, answer)) return fact?.conflict ? "answer_conflict" : "answers_incomplete";
     }
-    await tx.application.update({ where: { id: row.id }, data: {
+    const confirmedAt = grantsConsent ? consentAt!.toISOString() : new Date().toISOString();
+    // Compare-and-set on the consent we evaluated: a concurrent grant/revoke reloads.
+    const changed = await tx.application.updateMany({ where: { id: row.id, consentGrantedAt: row.consentGrantedAt, answerContinuationJson: row.answerContinuationJson }, data: {
       status: "queued", errorMessage: null,
-      answerContinuationJson: JSON.stringify({ ...proof, phase: "queued", confirmedAt: new Date().toISOString() }),
+      ...(grantsConsent ? { consentGrantedAt: consentAt } : {}),
+      answerContinuationJson: JSON.stringify({ ...proof, phase: "queued", confirmedAt,
+        ...(grantsConsent ? { consentGrantedAt: consentAt!.toISOString(), consentSource: "answers", consentNote: ANSWERS_CONSENT_NOTE } : {}) }),
     } });
+    if (changed.count !== 1) return "questions_changed_reload";
+    if (grantsConsent) console.log(`[consent] ${row.id} consentGrantedAt=${consentAt!.toISOString()} source=domande_answers`);
     return "queued";
   })) ?? "application_not_found";
 }

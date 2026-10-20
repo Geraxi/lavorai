@@ -2,6 +2,7 @@ import { resolveAdapterByUrl, noAdapterMessageFor } from "@/lib/ats-adapter-reso
 import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
+import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS } from "@/lib/application-answer-continuation";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { optimizeCV } from "@/lib/claude";
@@ -1884,25 +1885,30 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     let candidateDataEntered = false;
     let verificationEntered = false;
     let pauseEntered = false;
+    // Greenhouse and Ashby pause on the untouched form (resumable proof).
+    const stagedChannel = `portal_${adapter.id}`;
+    const staged = STAGED_CHANNELS.includes(stagedChannel);
     const audit: import("@/lib/portal-adapters/ai-answer").GivenAnswer[] = [];
     const outcome = await adapter.apply(page, {
       profile,
       beforeSubmit: () => {
-        if (finalBoundaryEntered || pauseEntered || (adapter.id === "greenhouse" && !candidateDataEntered)) return Promise.resolve(false);
+        if (finalBoundaryEntered || pauseEntered || (staged && !candidateDataEntered)) return Promise.resolve(false);
         finalBoundaryEntered = true;
         return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, `portal_${adapter.id}`);
       },
-      ...(adapter.id === "greenhouse" ? {
+      ...(staged ? {
         onPreTransmissionPause: (questions: import("./portal-adapters/types").PendingQuestion[]) => {
           if (candidateDataEntered || finalBoundaryEntered || pauseEntered) return Promise.resolve(false);
           pauseEntered = true;
-          return attestAnswerPause(applicationId, input.workToken, "portal_greenhouse", JSON.stringify(questions), jobUrl, undefined, "greenhouse_blank_form_v1");
+          return attestAnswerPause(applicationId, input.workToken, stagedChannel, JSON.stringify(questions), jobUrl, undefined, BLANK_FORM_EVIDENCE[stagedChannel]);
         },
         beforeCandidateData: () => {
           if (candidateDataEntered || finalBoundaryEntered || pauseEntered) return Promise.resolve(false);
           candidateDataEntered = true;
-          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, "portal_greenhouse", "candidate_data");
+          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, stagedChannel, "candidate_data");
         },
+      } : {}),
+      ...(adapter.id === "greenhouse" ? {
         beforeVerificationSubmit: () => {
           if (!candidateDataEntered || !finalBoundaryEntered || verificationEntered || pauseEntered) return Promise.resolve(false);
           verificationEntered = true;
