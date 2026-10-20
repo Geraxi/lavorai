@@ -96,6 +96,15 @@ export const ashbyAdapter: PortalAdapter = {
     }
 
     try {
+      // Resumable blank-form pause (same contract as Greenhouse): inspect the
+      // required custom questions BEFORE any fill or CV upload. Ashby uploads
+      // the CV to its API as soon as the file is attached.
+      if (input.onPreTransmissionPause) {
+        await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => void 0);
+        const { blankFormPause } = await import("./blank-form-pause");
+        const stop = await blankFormPause(page, input, "Ashby");
+        if (stop) return stop;
+      }
       const fullName = [input.profile.firstName, input.profile.lastName]
         .filter(Boolean)
         .join(" ")
