@@ -78,8 +78,12 @@ function stem(t: string): string {
   return t;
 }
 
-function significantTokens(s: string): string[] {
-  return tokenize(s).filter((t) => t.length >= 3 && !STOPWORDS.has(t));
+/** Two-letter role acronyms that carry the meaning of a title: without them
+ * "AI Engineer" reduced to "Engineer" and matched every engineering job. */
+export const ROLE_ACRONYMS = new Set(["ai", "ml", "ui", "ux", "qa", "bi", "ki", "ia", "ar", "vr"]);
+
+export function significantTokens(s: string): string[] {
+  return tokenize(s).filter((t) => (t.length >= 3 || ROLE_ACRONYMS.has(t)) && !STOPWORDS.has(t));
 }
 
 /**
