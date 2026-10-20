@@ -25,6 +25,13 @@ function testBareRemoteIsRemoteFromHome() {
   assert.equal(locationPreferenceMismatch(loc("Remote · EMEA"), jose), "location", "EMEA-only stays ineligible for a US user");
   assert.equal(locationPreferenceMismatch(loc("Remote · Canada"), jose), "location");
   assert.equal(locationPreferenceMismatch(loc("Remote · Remote"), jose), "location_unverified", "No scope evidence stays unverified");
+  // Alan on Workable: "Anywhere in France · France" is France-only, not worldwide.
+  const owner = ["Milano", "Roma", "Remoto"];
+  assert.equal(locationPreferenceMismatch(loc("Anywhere in France · France"), owner), "location", "Country-scoped anywhere is not worldwide");
+  assert.equal(locationPreferenceMismatch(loc("Anywhere in Belgium · Belgium", false), owner), "location");
+  assert.equal(locationPreferenceMismatch(loc("Anywhere in Italy · Italy"), owner), null, "Anywhere in the home country stays eligible");
+  assert.equal(locationPreferenceMismatch(loc("Remote, Global"), owner), null, "Global remote stays eligible");
+  assert.equal(locationPreferenceMismatch(loc("Anywhere"), owner), null, "Bare anywhere stays worldwide");
   assert.equal(locationPreferenceMismatch(loc("Remote · US"), ["Remote"]), "location", "Bare Remote without a home country never satisfies a region");
   // Region stated in the posting text for a bare "Remote" field.
   assert.equal(locationPreferenceMismatch(loc("Remote", true, "This is a remote (US only) position."), jose), null);

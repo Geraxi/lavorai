@@ -175,7 +175,9 @@ export function locationPreferenceMismatch(
     .map((part) => part.trim()).filter(Boolean))).join(", ");
   if (!location) return "location_unverified";
   const remote = job.remote || /\b(remot[eo]|fully remote|anywhere|worldwide)\b/i.test(location);
-  let worldwide = /\b(anywhere|worldwide|global|work from anywhere)\b/i.test(location);
+  // "Anywhere in France" is remote within one country, not worldwide: only a
+  // bare "anywhere" (not followed by "in <place>") opens the job to everyone.
+  let worldwide = /\b(anywhere(?!\s+in\s)|worldwide|global)\b/i.test(location);
   const bareRemote = remote && !worldwide && /^(?:fully\s+)?remot[eo]\s*$/i.test(location);
   // A bare "Remote" field: read the scope the posting itself states.
   let scopedFromText = false;
