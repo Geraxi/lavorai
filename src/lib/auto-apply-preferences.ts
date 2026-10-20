@@ -171,13 +171,18 @@ export function locationPreferenceMismatch(
   // Aggregators join location parts with "·" ("Remote · Remote",
   // "Remote · EMEA"). Split and de-duplicate so a doubled bare "Remote" is
   // classified like a bare "Remote" (unverified), never as a region.
-  let location = Array.from(new Set((job.location ?? "").toLowerCase().split(/\s*·\s*/)
-    .map((part) => part.trim()).filter(Boolean))).join(", ");
+  const parts = Array.from(new Set((job.location ?? "").toLowerCase().split(/\s*·\s*/)
+    .map((part) => part.trim()).filter(Boolean)));
+  // "Anywhere in France, Belgium, Spain · European Union" (Ashby): the
+  // "anywhere in" part lists the countries; the other parts are only the
+  // board's region rollup and must not widen the scope to the whole EU.
+  const anywhereIn = parts.map((part) => part.match(/^anywhere in\s+(?!(?:the\s+)?world\b)(.+)$/)?.[1]).find(Boolean);
+  let location = anywhereIn ?? parts.join(", ");
   if (!location) return "location_unverified";
-  const remote = job.remote || /\b(remot[eo]|fully remote|anywhere|worldwide)\b/i.test(location);
+  const remote = job.remote || !!anywhereIn || /\b(remot[eo]|fully remote|anywhere|worldwide)\b/i.test(location);
   // "Anywhere in France" is remote within one country, not worldwide: only a
   // bare "anywhere" (not followed by "in <place>") opens the job to everyone.
-  let worldwide = /\b(anywhere(?!\s+in\s)|worldwide|global)\b/i.test(location);
+  let worldwide = /\b(anywhere(?!\s+in\s+(?!(?:the\s+)?world\b))|worldwide|global)\b/i.test(location);
   const bareRemote = remote && !worldwide && /^(?:fully\s+)?remot[eo]\s*$/i.test(location);
   // A bare "Remote" field: read the scope the posting itself states.
   let scopedFromText = false;

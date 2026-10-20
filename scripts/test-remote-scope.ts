@@ -32,6 +32,10 @@ function testBareRemoteIsRemoteFromHome() {
   assert.equal(locationPreferenceMismatch(loc("Anywhere in Italy · Italy"), owner), null, "Anywhere in the home country stays eligible");
   assert.equal(locationPreferenceMismatch(loc("Remote, Global"), owner), null, "Global remote stays eligible");
   assert.equal(locationPreferenceMismatch(loc("Anywhere"), owner), null, "Bare anywhere stays worldwide");
+  assert.equal(locationPreferenceMismatch(loc("Remote · Anywhere in the World"), owner), null, "Anywhere in the world stays worldwide");
+  assert.equal(locationPreferenceMismatch(loc("Anywhere in France, Belgium, Spain · European Union", false), owner), "location", "Listed countries scope the job; the EU rollup does not widen it");
+  assert.equal(locationPreferenceMismatch(loc("Anywhere in Italy, Spain · European Union", false), owner), null);
+  assert.equal(locationPreferenceMismatch(loc("Anywhere in Europe · Europe", false), owner), null);
   assert.equal(locationPreferenceMismatch(loc("Remote · US"), ["Remote"]), "location", "Bare Remote without a home country never satisfies a region");
   // Region stated in the posting text for a bare "Remote" field.
   assert.equal(locationPreferenceMismatch(loc("Remote", true, "This is a remote (US only) position."), jose), null);
