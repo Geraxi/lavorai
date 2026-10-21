@@ -1,5 +1,6 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { cleanHtmlText } from "./html-clean";
+import { fillMissingDescriptions, type FetchLike } from "./posting-description";
 
 /**
  * Workable public jobs API. Niente auth.
@@ -94,12 +95,20 @@ export function mapWorkableAccountJobs(jobs: WorkableJob[], slug: string, compan
     .filter((j): j is JobListItem => j !== null);
 }
 
+/** Detail requests per account per sync (bounded: one request per posting). */
+const DETAIL_LIMIT = 150;
+
 export async function fetchWorkableJobs(
   slug: string,
   companyName?: string,
+  opts: { fetchImpl?: FetchLike } = {},
 ): Promise<JobListItem[]> {
   const jobs = await fetchWorkableAccountRaw(slug);
-  return jobs ? mapWorkableAccountJobs(jobs, slug, companyName) : [];
+  if (!jobs) return [];
+  const items = mapWorkableAccountJobs(jobs, slug, companyName);
+  // The v3 account feed has no description: read each posting's detail.
+  await fillMissingDescriptions(items as unknown as Array<{ source: string; url: string; externalId: string; sourceSlug: string; description: string }>, { limit: DETAIL_LIMIT, concurrency: 4, fetchImpl: opts.fetchImpl });
+  return items;
 }
 
 export async function fetchWorkableMulti(
