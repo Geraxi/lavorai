@@ -206,7 +206,7 @@ async function main() {
       } },
       userPreferences: { findUnique: async () => null }, cVProfile: { findUnique: async () => null },
     } },
-    "@/lib/application-evidence": evidence, "@/lib/city-centroids": { matchCity: () => ({ key: "milan", name: "Milan", cc: "IT", lat: 45, lng: 9 }) },
+    "@/lib/application-evidence": evidence, "@/lib/city-centroids": { matchCity: () => ({ key: "milan", name: "Milan", cc: "IT", lat: 45, lng: 9 }) }, "@/lib/scrapers/ats-companies": { seedCompanyCountry: () => null },
     "@/lib/match-score": { quickMatchScore: () => 60 }, "@/lib/cv-profile-types": { rowToProfile: () => null },
     "@/lib/role-match": { titleMatchesAnyRole: () => true },
     "@/lib/globe-geometry": load("src/lib/globe-geometry.ts", {}),

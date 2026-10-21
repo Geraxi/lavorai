@@ -185,3 +185,20 @@ export const JOIN_COMPANIES: AtsCompany[] = [
   { slug: "cygridio", name: "Cygrid", country: "DE" },
   { slug: "atmoearth", name: "atmo", country: "DE" },
 ];
+
+const SEEDS_BY_SOURCE: Record<string, AtsCompany[]> = {
+  greenhouse: GREENHOUSE_COMPANIES, lever: LEVER_COMPANIES, ashby: ASHBY_COMPANIES,
+  workable: WORKABLE_COMPANIES, smartrecruiters: SMARTRECRUITERS_COMPANIES, recruitee: RECRUITEE_COMPANIES,
+  personio: PERSONIO_COMPANIES, teamtailor: TEAMTAILOR_COMPANIES, bamboohr: BAMBOOHR_COMPANIES,
+  breezy: BREEZY_COMPANIES, pinpoint: PINPOINT_COMPANIES, join: JOIN_COMPANIES,
+};
+
+/** Curated, hand-verified country of a seeded board (the market the board
+ * was seeded for: "octoenergy" on Lever is Octopus Energy Italia → IT).
+ * Null for discovered tenants: no reliable country is known for them. */
+export function seedCompanyCountry(source: string | null | undefined, slug: string | null | undefined): string | null {
+  if (!source || !slug) return null;
+  const key = slug.trim().toLowerCase();
+  const hit = SEEDS_BY_SOURCE[source]?.find((c) => c.slug.toLowerCase() === key);
+  return hit?.country?.toUpperCase() ?? null;
+}
