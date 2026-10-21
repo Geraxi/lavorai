@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { autoApplyPreferenceMismatch, homeCountries, locationPreferenceMismatch, remoteScopeFromDescription } from "../src/lib/auto-apply-preferences";
 import { ashbyLocation, fetchAshbyJobs } from "../src/lib/scrapers/ashby";
+import { seedCompanyCountry } from "../src/lib/scrapers/ats-companies";
 import { quickMatchScore } from "../src/lib/match-score";
 import { fetchWorkableAccountRaw } from "../src/lib/scrapers/workable";
 import { fetchWorkableSearchJobs, sameWorkablePosting, workableSearchWheres, workableSlugCandidates } from "../src/lib/scrapers/workable-search";
@@ -25,6 +26,27 @@ function testBareRemoteIsRemoteFromHome() {
   assert.equal(locationPreferenceMismatch(loc("Remote · EMEA"), jose), "location", "EMEA-only stays ineligible for a US user");
   assert.equal(locationPreferenceMismatch(loc("Remote · Canada"), jose), "location");
   assert.equal(locationPreferenceMismatch(loc("Remote · Remote"), jose), "location_unverified", "No scope evidence stays unverified");
+  // Bare "Remote" + curated EU board country (seedCompanyCountry) → remote from the EU.
+  {
+    const it = ["Milano", "Roma", "Remoto"];
+    assert.equal(seedCompanyCountry("ashby", "lexroom"), "IT");
+    assert.equal(seedCompanyCountry("ashby", "LEXROOM"), "IT", "Slug lookup is case-insensitive");
+    assert.equal(seedCompanyCountry("ashby", "some-discovered-tenant"), null);
+    assert.equal(locationPreferenceMismatch(loc("Remote"), it, { companyCountry: "IT" }), null, "Italian board, Italian remote user");
+    assert.equal(locationPreferenceMismatch(loc("Remote"), it, { companyCountry: "DE" }), null, "EU board, EU remote user");
+    assert.equal(locationPreferenceMismatch(loc("Remote"), it, { companyCountry: "EU" }), null);
+    assert.equal(locationPreferenceMismatch(loc("Remote"), it, { companyCountry: "US" }), "location_unverified", "US board stays unverified");
+    assert.equal(locationPreferenceMismatch(loc("Remote"), it, { companyCountry: "UK" }), "location_unverified", "Non-EU Europe stays unverified");
+    assert.equal(locationPreferenceMismatch(loc("Remote"), it), "location_unverified", "No country signal → unverified");
+    assert.equal(locationPreferenceMismatch(loc("Remote"), ["Milano"], { companyCountry: "IT" }), "location_unverified", "Only users who want remote");
+    assert.equal(locationPreferenceMismatch(loc("Remote"), ["Milano"], { companyCountry: "IT", acceptsRemote: true }), null, "Remote work mode counts");
+    assert.equal(locationPreferenceMismatch(loc("Remote"), jose, { companyCountry: "DE" }), "location_unverified", "US user: EU board is no signal");
+    assert.equal(locationPreferenceMismatch(loc("Remote", true, "Candidates must be based in the US."), it, { companyCountry: "DE" }), "location", "An explicit restriction still wins");
+    assert.equal(locationPreferenceMismatch(loc("Remote · United States"), it, { companyCountry: "DE" }), "location", "A stated region still wins");
+    const base = { title: "Full-Stack Engineer", contractType: null, description: "", salaryMin: null, salaryMax: null, location: "Remote", remote: true };
+    assert.equal(autoApplyPreferenceMismatch({ ...base, source: "ashby", sourceSlug: "lexroom" }, { employmentType: "both", salaryMin: 0, sourcesJson: '["remoto"]' }, it), null);
+    assert.equal(autoApplyPreferenceMismatch({ ...base, source: "ashby", sourceSlug: "elevenlabs" }, { employmentType: "both", salaryMin: 0, sourcesJson: '["remoto"]' }, it), "location_unverified");
+  }
   // Alan on Workable: "Anywhere in France · France" is France-only, not worldwide.
   const owner = ["Milano", "Roma", "Remoto"];
   assert.equal(locationPreferenceMismatch(loc("Anywhere in France · France"), owner), "location", "Country-scoped anywhere is not worldwide");

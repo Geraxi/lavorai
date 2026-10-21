@@ -1,12 +1,18 @@
 import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
-import { autoApplyPreferenceMismatch, parsePreferenceList, isAvoidedCompany } from "@/lib/auto-apply-preferences";
+import { autoApplyPreferenceMismatch, parsePreferenceList, isAvoidedCompany, locationPreferenceMismatch } from "@/lib/auto-apply-preferences";
 import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { roleTitleTokenGroups, titleTokenWhere } from "@/lib/role-query";
 import { searchRoleTitles } from "@/lib/auto-apply-roles";
+import { DESCRIPTION_SOURCES, fillMissingDescriptions } from "@/lib/scrapers/posting-description";
+
+/** Public detail fetches to fill empty descriptions: per user, per run, and time. */
+const DESCRIPTION_BACKFILL_PER_USER = 15;
+const DESCRIPTION_BACKFILL_PER_RUN = 60;
+const DESCRIPTION_BACKFILL_BUDGET_MS = 20_000;
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
 import { dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
@@ -81,6 +87,7 @@ interface RunStats {
   skippedLocationUnverified: number;
   skippedSalaryMismatch: number;
   candidatesFetched: number;
+  descriptionsBackfilled: number;
   errors: number;
 }
 
@@ -101,6 +108,7 @@ function emptyRunStats(): RunStats {
     skippedLocationUnverified: 0,
     skippedSalaryMismatch: 0,
     candidatesFetched: 0,
+    descriptionsBackfilled: 0,
     errors: 0,
   };
 }
@@ -509,6 +517,28 @@ async function processUser(
 
   stats.candidatesFetched += jobs.length;
   if (jobs.length === 0) return;
+
+  // Lazy description backfill (Workable/SmartRecruiters/Breezy rows synced
+  // before the scrapers read the detail endpoint): an empty description
+  // scores ~0 and hides eligibility sentences. Only jobs that can still pass
+  // (title matches a role, location not already excluded), bounded per run.
+  const backfillLimit = Math.min(DESCRIPTION_BACKFILL_PER_USER, DESCRIPTION_BACKFILL_PER_RUN - stats.descriptionsBackfilled);
+  if (backfillLimit > 0) {
+    const eligible = jobs.filter((j) => !j.description?.trim() && DESCRIPTION_SOURCES.has(j.source)
+      && titleMatchesAnyRole(j.title, roles) && locationPreferenceMismatch(j, locationPrefs) !== "location");
+    try {
+      const filled = await fillMissingDescriptions(eligible, {
+        limit: backfillLimit, concurrency: 4, timeoutMs: 8_000,
+        deadline: Date.now() + DESCRIPTION_BACKFILL_BUDGET_MS,
+      });
+      for (const j of filled) {
+        await prisma.job.update({ where: { id: j.id }, data: { description: j.description } }).catch(() => {});
+      }
+      stats.descriptionsBackfilled += filled.length;
+    } catch (err) {
+      console.warn("[auto-apply-cron] description backfill failed (non-fatal)", err);
+    }
+  }
 
   // Diversificazione: per ogni candidatura già consegnata dall'utente,
   // contiamo quanti invii ha già ricevuto ciascuna azienda. Sortiamo i

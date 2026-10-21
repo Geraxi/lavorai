@@ -1,11 +1,12 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { cleanHtmlText } from "./html-clean";
+import { fetchPostingDescription, type FetchLike } from "./posting-description";
 import { isEuRelevant, runPool } from "./feed-utils";
 
 /**
  * Breezy HR — ogni career portal espone un JSON pubblico:
  *   https://<slug>.breezy.hr/json            (lista posizioni)
- *   https://<slug>.breezy.hr/json/position/<id>  (dettaglio con description)
+ *   https://<slug>.breezy.hr/p/<friendly_id>  (pagina: JobPosting ld+json con description)
  * Form pubblico: https://<slug>.breezy.hr/p/<friendly_id>/apply
  * I tenant arrivano dalla discovery sugli URL già in pool (tenant-discovery).
  */
@@ -25,10 +26,11 @@ interface BreezyPosition {
   description?: string;
 }
 
-export async function fetchBreezyJobs(slug: string, companyName?: string): Promise<JobListItem[]> {
+export async function fetchBreezyJobs(slug: string, companyName?: string, opts: { fetchImpl?: FetchLike } = {}): Promise<JobListItem[]> {
   const base = `https://${slug}.breezy.hr`;
+  const fetchImpl = opts.fetchImpl ?? fetch;
   try {
-    const res = await fetch(`${base}/json`, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
+    const res = await fetchImpl(`${base}/json`, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return [];
     const ct = res.headers.get("content-type") ?? "";
     if (!ct.includes("json")) return [];
@@ -42,10 +44,9 @@ export async function fetchBreezyJobs(slug: string, companyName?: string): Promi
       const remote = !!p.location?.is_remote || /remote/i.test(loc ?? "");
       let description = cleanHtmlText(p.description ?? "");
       if (!description) {
-        try {
-          const d = await fetch(`${base}/json/position/${id}`, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
-          if (d.ok) description = cleanHtmlText(((await d.json()) as BreezyPosition).description ?? "");
-        } catch { /* dettaglio non disponibile */ }
+        // The list JSON has no description and /json/position/<id> redirects
+        // to the portal home: read the posting page's JobPosting ld+json.
+        description = (await fetchPostingDescription({ source: "breezy", url: p.url ?? `${base}/p/${id}`, externalId: String(id), sourceSlug: slug }, { fetchImpl })) ?? "";
       }
       description = description.slice(0, 2000);
       if (!isEuRelevant(`${loc ?? ""} ${remote ? "remote" : ""}`, description)) continue;

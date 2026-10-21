@@ -2,6 +2,7 @@
  * Location is job-location evidence, never evidence of citizenship/work authorization.
  */
 import { matchCity } from "@/lib/city-centroids";
+import { seedCompanyCountry } from "@/lib/scrapers/ats-companies";
 export function parsePreferenceList(raw: string | null | undefined): string[] | null {
   try {
     const values: unknown = JSON.parse(raw ?? "");
@@ -143,6 +144,8 @@ export interface LocationMatchOptions {
    * their home country is a place they want to work even when the location
    * list holds only towns. */
   acceptsRemote?: boolean;
+  /** Curated country of the company's board (seedCompanyCountry), if known. */
+  companyCountry?: string | null;
 }
 
 /** "(Bangkok - Based, Relocation Provided)", "London-based": a place the
@@ -228,7 +231,16 @@ export function locationPreferenceMismatch(
     // preference's region ("Candidates must be based in the US").
     if (remotePref && aliases && bareRemote && restrictions) return null;
   }
-  if (bareRemote && !scopedFromText && !restrictions) return "location_unverified";
+  if (bareRemote && !scopedFromText && !restrictions) {
+    // A bare "Remote" from a company whose board is curated as EU-based is
+    // remote from the EU for a user who wants remote and lives in the EU.
+    // Discovered tenants have no reliable country: they stay unverified.
+    const cc = opts.companyCountry?.toUpperCase();
+    const wantsRemote = hasRemotePref || !!opts.acceptsRemote;
+    const homeEu = homeCountries(prefs).some((h) => EU_COUNTRIES.has(h));
+    if (wantsRemote && homeEu && cc && (cc === "EU" || EU_COUNTRIES.has(cc))) return null;
+    return "location_unverified";
+  }
   return "location";
 }
 
@@ -252,11 +264,11 @@ export function annualSalaryEur(value: number | null | undefined): number {
 
 export function autoApplyPreferenceMismatch(
   job: { location: string | null; remote: boolean; title: string; contractType: string | null;
-    description: string; salaryMin: number | null; salaryMax: number | null },
+    description: string; salaryMin: number | null; salaryMax: number | null; source?: string; sourceSlug?: string | null },
   prefs: { employmentType: string; salaryMin: number; sourcesJson?: string | null }, locationPrefs: string[],
 ): "location" | "location_unverified" | "employment" | "salary" | null {
   const acceptsRemote = parsePreferenceList(prefs.sourcesJson)?.some((mode) => mode.toLowerCase() === "remoto") ?? false;
-  const locationReason = locationPreferenceMismatch(job, locationPrefs, { acceptsRemote });
+  const locationReason = locationPreferenceMismatch(job, locationPrefs, { acceptsRemote, companyCountry: seedCompanyCountry(job.source, job.sourceSlug) });
   if (locationReason) return locationReason;
   const employment = prefs.employmentType ?? "employee";
   if (employment !== "both") {

@@ -1,5 +1,6 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { cleanHtmlText } from "./html-clean";
+import { fillMissingDescriptions, type FetchLike } from "./posting-description";
 
 /**
  * SmartRecruiters public posting API. Nessuna auth richiesta.
@@ -45,10 +46,12 @@ interface SrPosting {
 export async function fetchSmartRecruitersJobs(
   companyId: string,
   companyName?: string,
+  opts: { fetchImpl?: FetchLike } = {},
 ): Promise<JobListItem[]> {
+  const fetchImpl = opts.fetchImpl ?? fetch;
   const url = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(companyId)}/postings?limit=100`;
   try {
-    const res = await fetch(url, {
+    const res = await fetchImpl(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 LavorAI/1.0 jobs-sync",
         Accept: "application/json",
@@ -62,9 +65,12 @@ export async function fetchSmartRecruitersJobs(
     const data = (await res.json()) as { content?: SrPosting[] };
     const jobs = Array.isArray(data.content) ? data.content : [];
     const display = companyName ?? prettySlug(companyId);
-    return jobs
+    const items = jobs
       .map((j) => mapJob(j, display, companyId))
       .filter((j): j is JobListItem => j !== null);
+    // The list endpoint omits jobAd: read each posting's detail (bounded).
+    await fillMissingDescriptions(items as unknown as Array<{ source: string; url: string; externalId: string; sourceSlug: string; description: string }>, { limit: 100, concurrency: 4, fetchImpl });
+    return items;
   } catch (err) {
     console.warn(`[smartrec] ${companyId} fetch failed`, err);
     return [];

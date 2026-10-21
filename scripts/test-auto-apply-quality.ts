@@ -27,6 +27,7 @@ function loadModule(path: string, dependencies: Record<string, unknown>, globals
 }
 
 async function testCronBothPasses() {
+  const backfillCalls: number[] = [];
   const created: Array<Record<string, any>> = [];
   const queued: string[] = [];
   const resolverCalls: Array<{ roles: string[]; limit: number }> = [];
@@ -66,7 +67,7 @@ async function testCronBothPasses() {
     },
   };
   // Pure gazetteer data (city → country) used for remote-from-home scope.
-  const preferenceHelpers = loadModule("src/lib/auto-apply-preferences.ts", { "@/lib/city-centroids": await import("../src/lib/city-centroids") });
+  const preferenceHelpers = loadModule("src/lib/auto-apply-preferences.ts", { "@/lib/city-centroids": await import("../src/lib/city-centroids"), "@/lib/scrapers/ats-companies": await import("../src/lib/scrapers/ats-companies") });
   // Retain algorithm regression coverage behind an explicitly mocked legacy gate.
   // Production manual-only blocking is exercised in test-manual-rollout-producers.
   const api = loadModule("src/lib/auto-apply-cron.ts", {
@@ -89,6 +90,13 @@ async function testCronBothPasses() {
     },
     "@/lib/role-match": { titleMatchesAnyRole: () => true },
     "@/lib/auto-apply-roles": await import("../src/lib/auto-apply-roles"),
+    "@/lib/scrapers/posting-description": {
+      DESCRIPTION_SOURCES: new Set(["workable", "smartrecruiters", "breezy"]),
+      fillMissingDescriptions: async (jobs: unknown[], opts: { limit: number; deadline: number }) => {
+        assert.ok(opts.limit > 0 && opts.limit <= 15 && opts.deadline <= Date.now() + 20_000, "Backfill is bounded per user and in time");
+        backfillCalls.push(jobs.length); return [];
+      },
+    },
     "@/lib/role-query": { titleTokenWhere: (await import("../src/lib/role-query")).titleTokenWhere, roleTitleTokenGroups: (roles: string[]) => roles.map((r) => r.split(/\s+/).filter((t) => t.length >= 3)) },
     "@/lib/auto-apply-self-heal": { runSelfHeal: async () => { throw new Error("Unexpected self-heal"); } },
     "@/lib/conversion-events": { recordConversionEvent: async () => {} },
@@ -100,6 +108,7 @@ async function testCronBothPasses() {
     } },
   });
   const stats = await api.runAutoApplyForUser(user.id);
+  assert.ok(backfillCalls.length <= 1, "At most one bounded backfill per user");
   assert.deepEqual(resolverCalls, [{ roles: ["Product Designer"], limit: 6 }],
     "Board listings are resolved once per user run, bounded, for the user's own roles");
   const poolQuery = JSON.stringify(jobQueries[0]);
