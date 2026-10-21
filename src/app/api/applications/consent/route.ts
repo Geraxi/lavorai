@@ -6,6 +6,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
+import { createLivenessGate, livenessMaxChecksFromEnv } from "@/lib/auto-apply-liveness-gate";
+import { checkJobUrlLiveness, JOB_CLOSED_HELD_MESSAGE, markJobClosed } from "@/lib/job-liveness";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -58,13 +60,24 @@ export async function POST(request: NextRequest) {
       ...cohort,
       ...(parsed.data.ids ? { id: { in: parsed.data.ids } } : {}),
     },
-    select: { id: true },
+    select: { id: true, job: { select: { id: true, url: true } } },
   });
 
+  // Bounded pre-consent liveness check: a closed posting is never queued.
+  const gate = createLivenessGate({ check: checkJobUrlLiveness, markClosed: markJobClosed, maxChecks: livenessMaxChecksFromEnv() });
   let enqueued = 0;
+  let closed = 0;
   for (const a of apps) {
     try {
       if (rolloutCreationBlocked()) break;
+      if (await gate.verdict(a.job) === "closed") {
+        const marked = await prisma.application.updateMany({
+          where: { id: a.id, userId: user.id, status: "awaiting_consent", ...cohort },
+          data: { status: "failed", submitConfirmation: "JOB_CLOSED", completedAt: new Date(), errorMessage: JOB_CLOSED_HELD_MESSAGE },
+        });
+        closed += marked.count;
+        continue;
+      }
       const changed = await prisma.application.updateMany({
         where: { id: a.id, userId: user.id, status: "awaiting_consent", ...cohort },
         data: { status: "queued", consentGrantedAt: new Date() },
@@ -76,5 +89,5 @@ export async function POST(request: NextRequest) {
       console.error("[consent] enqueue failed for", a.id, err);
     }
   }
-  return NextResponse.json({ ok: true, enqueued });
+  return NextResponse.json({ ok: true, enqueued, closed });
 }

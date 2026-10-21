@@ -99,6 +99,8 @@ async function testCronBothPasses() {
     },
     "@/lib/role-query": { titleTokenWhere: (await import("../src/lib/role-query")).titleTokenWhere, roleTitleTokenGroups: (roles: string[]) => roles.map((r) => r.split(/\s+/).filter((t) => t.length >= 3)) },
     "@/lib/auto-apply-self-heal": { runSelfHeal: async () => { throw new Error("Unexpected self-heal"); } },
+    "@/lib/auto-apply-liveness-gate": await import("../src/lib/auto-apply-liveness-gate"),
+    "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "live", reason: "test", checkedAt: new Date() }), markJobClosed: async () => { throw new Error("Unexpected close"); } },
     "@/lib/conversion-events": { recordConversionEvent: async () => {} },
     "@/lib/analytics": { AnalyticsEvent: { APPLICATION_CREATED: "application_created" } },
     "@/lib/board-apply-resolver": { resolveBoardListingsForRoles: async (roles: string[], opts: { limit: number; deadline: number }) => {

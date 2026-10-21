@@ -1,3 +1,5 @@
+import { createLivenessGate, livenessMaxChecksFromEnv, type LivenessGate } from "@/lib/auto-apply-liveness-gate";
+import { checkJobUrlLiveness, markJobClosed } from "@/lib/job-liveness";
 import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { autoApplyPreferenceMismatch, parsePreferenceList, isAvoidedCompany, locationPreferenceMismatch } from "@/lib/auto-apply-preferences";
@@ -86,6 +88,7 @@ interface RunStats {
   skippedLocationMismatch: number;
   skippedLocationUnverified: number;
   skippedSalaryMismatch: number;
+  skippedJobClosed: number;
   candidatesFetched: number;
   descriptionsBackfilled: number;
   errors: number;
@@ -107,10 +110,15 @@ function emptyRunStats(): RunStats {
     skippedLocationMismatch: 0,
     skippedLocationUnverified: 0,
     skippedSalaryMismatch: 0,
+    skippedJobClosed: 0,
     candidatesFetched: 0,
     descriptionsBackfilled: 0,
     errors: 0,
   };
+}
+
+function newLivenessGate(): LivenessGate {
+  return createLivenessGate({ check: checkJobUrlLiveness, markClosed: markJobClosed, maxChecks: livenessMaxChecksFromEnv() });
 }
 
 export async function runAutoApplyCron(): Promise<RunStats> {
@@ -134,6 +142,8 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   }
 
   const stats = emptyRunStats();
+  // One bounded liveness budget per cron run, shared by all users.
+  const livenessGate = newLivenessGate();
 
   // Utenti in modalità auto O hybrid con CV + preferenze.
   // - "auto":   creiamo candidature "queued" e le mandiamo subito in coda.
@@ -194,7 +204,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   for (const user of eligibleUsers) {
     try {
       stats.usersProcessed++;
-      await processUser(user, stats, todayStart, monthStart, resolutionDeadline);
+      await processUser(user, stats, todayStart, monthStart, resolutionDeadline, livenessGate);
     } catch (err) {
       console.error(`[auto-apply-cron] user ${user.id} errored`, err);
       stats.errors++;
@@ -280,7 +290,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   try {
     stats.usersProcessed = 1;
-    await processUser(user, stats, todayStart, monthStart, Date.now() + BOARD_RESOLUTION_USER_BUDGET_MS);
+    await processUser(user, stats, todayStart, monthStart, Date.now() + BOARD_RESOLUTION_USER_BUDGET_MS, newLivenessGate());
   } catch (err) {
     console.error(`[runAutoApplyForUser] ${userId} errored`, err);
     stats.errors++;
@@ -313,6 +323,7 @@ async function processUser(
   todayStart: Date,
   monthStart: Date,
   resolutionDeadline: number,
+  livenessGate: LivenessGate = newLivenessGate(),
 ): Promise<void> {
   if (!user.preferences || !user.cvProfile) return;
   const prefs = user.preferences;
@@ -764,6 +775,12 @@ async function processUser(
       continue;
     }
 
+    // Never queue or ask consent for a posting the company already closed.
+    if (await livenessGate.verdict(job) === "closed") {
+      stats.skippedJobClosed++;
+      continue;
+    }
+
     const portal = portalOf(job.url);
 
     try {
@@ -861,6 +878,11 @@ async function processUser(
         });
         if (legacy.status === "paused") continue;
         sessionId = legacy.id;
+      }
+
+      if (await livenessGate.verdict(job) === "closed") {
+        stats.skippedJobClosed++;
+        continue;
       }
 
       try {

@@ -12,6 +12,7 @@ import * as prerequisites from "../src/lib/application-prerequisites";
 let forbiddenAccesses = 0;
 const noAccess = new Proxy({}, { get() { forbiddenAccesses++; throw new Error("Unexpected external dependency access"); } });
 const json = (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 });
+import * as liveness from "../src/lib/auto-apply-liveness-gate";
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-rollout": rollout,
@@ -25,6 +26,8 @@ function load(path: string, extra: Record<string, any> = {}) {
     "@/lib/application-worker": { processApplication: async () => { throw new Error("Unexpected worker execution"); } },
     "@/lib/application-queue": { enqueueApplication: async () => { throw new Error("Unexpected queue publication"); } },
     "next/server": { NextResponse: { json, redirect: (location: string) => ({ status: 307, location }) } },
+    "@/lib/auto-apply-liveness-gate": liveness,
+    "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "unknown", reason: "test_no_network" }), markJobClosed: async () => {}, JOB_CLOSED_HELD_MESSAGE: "closed" },
     zod: { z }, ...extra,
   };
   const module = { exports: {} as Record<string, any> };
@@ -51,7 +54,7 @@ function row(id: string, overrides: Record<string, any> = {}) {
   return { id, userId: "owner", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
     answerContinuationJson: null, retryCount: 0, startedAt: null, completedAt: null, submittedAt: null, submittedVia: null,
     submitConfirmation: null, canaryLog: null, answersUsedJson: null, viewedAt: null,
-    lastReplyAt: null, replyCount: 0, userStatus: null, ...overrides };
+    lastReplyAt: null, replyCount: 0, userStatus: null, job: { id: `job-${id}`, url: `https://jobs.example.invalid/${id}` }, ...overrides };
 }
 function match(value: any, condition: any): boolean {
   if (condition === null || typeof condition !== "object" || condition instanceof Date) {
@@ -212,6 +215,24 @@ async function testConsentCohort() {
   assert.equal((await route.POST({ json: async () => ({ ids: ["historical", "boundary"] }) })).body.enqueued, 0);
   assert.equal(db.counts().writes, 1);
 }
+async function testConsentSkipsClosedPosting() {
+  enable();
+  const db = database([row("closed", { status: "awaiting_consent", consentGrantedAt: null }), row("open", { status: "awaiting_consent", consentGrantedAt: null })]);
+  const queued: string[] = [], closedJobs: string[] = [];
+  const route = load("src/app/api/applications/consent/route.ts", {
+    "@/lib/db": { prisma: db.prisma },
+    "@/lib/application-queue": { enqueueApplication: async (id: string) => { queued.push(id); } },
+    "@/lib/job-liveness": { JOB_CLOSED_HELD_MESSAGE: "closed",
+      checkJobUrlLiveness: async (url: string) => ({ state: url.endsWith("/closed") ? "closed" : "live", reason: "test" }),
+      markJobClosed: async (id: string) => { closedJobs.push(id); } },
+  });
+  const response = await route.POST({ json: async () => ({}) });
+  assert.equal(response.body.enqueued, 1); assert.equal(response.body.closed, 1);
+  assert.deepEqual(queued, ["open"]); assert.deepEqual(closedJobs, ["job-closed"]);
+  assert.equal(db.rows[0].status, "failed"); assert.equal(db.rows[0].submitConfirmation, "JOB_CLOSED");
+  assert.equal(db.rows[0].consentGrantedAt, null, "closed posting never receives consent");
+  assert.equal(db.rows[1].status, "queued");
+}
 async function testExplicitCreation() {
   enable();
   for (const routeName of ["apply", "apply-batch"]) {
@@ -281,7 +302,7 @@ async function main() {
   const original = { ...process.env };
   process.env.CRON_SECRET = "fixture-cron";
   try {
-    await testBlockedEntrypoints(); await testClaimsAndQueue(); await testAutomaticClaimsAndQueue(); await testConsentCohort();
+    await testBlockedEntrypoints(); await testClaimsAndQueue(); await testAutomaticClaimsAndQueue(); await testConsentCohort(); await testConsentSkipsClosedPosting();
     await testExplicitCreation(); await testReadOnlyAndPreferences();
     assert.equal(forbiddenAccesses, 0);
     console.log("PASS sending producers: automatic producers blocked only when closed/manual_only; retry/reset/replay entrypoints blocked in every mode; automatic-mode claims admit fresh auto rows only; fresh claims/queue/consent only; explicit single/batch enabled; historical records/preferences preserved. Hermetic, no DB/network/provider calls.");
