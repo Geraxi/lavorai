@@ -9,6 +9,7 @@ import { StructuredData } from "@/components/structured-data";
 import { TrackPageView } from "@/components/track-page-view";
 import { TrackReferral } from "@/components/track-referral";
 import { TrackAttribution } from "@/components/track-attribution";
+import { GOOGLE_CONSENT_DEFAULT } from "@/lib/consent/google-tag";
 import { TrackingPixels } from "@/components/tracking-pixels";
 import { RegistrationConversion } from "@/components/registration-conversion";
 import { Analytics } from "@vercel/analytics/next";
@@ -119,6 +120,7 @@ export default async function RootLayout({
       className={`${inter.variable} ${jetbrains.variable}`}
       suppressHydrationWarning
     >
+      <head><script dangerouslySetInnerHTML={{ __html: GOOGLE_CONSENT_DEFAULT }} /></head>
       <body className="min-h-screen antialiased">
         {/* JSON-LD structured data: Organization + WebSite +
             SoftwareApplication. Renderizzato server-side per essere
@@ -127,7 +129,7 @@ export default async function RootLayout({
         <NextIntlClientProvider locale={locale} messages={messages}>
           <Providers>
             {children}
-            {/* Meta CompleteRegistration one-shot; needs SessionProvider. */}
+            {/* Meta + Google signup one-shot; needs SessionProvider. */}
             <RegistrationConversion />
           </Providers>
           <TrackPageView />
@@ -135,9 +137,8 @@ export default async function RootLayout({
           <TrackAttribution />
           <Toaster richColors position="top-center" />
           <CookieBanner />
-          {/* Meta Pixel + Google Ads + GA4 — solo se ENV NEXT_PUBLIC_*
-              impostate + consenso per finalità (analisi / pubblicità) in
-              vigore per la regione. Vedi tracking-pixels.tsx. */}
+          {/* Meta Pixel + Google Ads + GA4 — consenso esplicito per finalità.
+              Meta/GA configurabili tramite ENV; Ads usa il tag LavorAI. */}
           <TrackingPixels />
           <Analytics />
         </NextIntlClientProvider>

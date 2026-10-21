@@ -92,7 +92,7 @@ export function getServerConsentSnapshot(): ConsentSnapshot {
 export function hasConsent(purpose: ConsentPurpose): boolean {
   if (typeof window === "undefined") return false;
   start();
-  return snapshot.effective[purpose];
+  return effectiveConsent(answersFromStorage(safeGet(CONSENT_STORAGE_KEY), safeGet(LEGACY_CONSENT_KEY)), snapshot.region)[purpose];
 }
 
 function visitorId(): string {

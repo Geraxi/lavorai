@@ -10,8 +10,7 @@ import { OPEN_COOKIE_SETTINGS_EVENT, type ConsentChoice } from "@/lib/consent/st
 
 /**
  * Consent banner + preferences dialog.
- * - Shown automatically only where consent is required (EU/EEA, UK, CH) or the
- *   region could not be resolved, until both purposes are answered.
+ * - Shown in every region until both purposes are answered.
  * - Accept and Reject have identical styling and weight.
  * - Analytics and advertising are separate choices.
  * - "Cookie settings" (footer, settings page, privacy page) reopens the

@@ -22,6 +22,7 @@ async function newContext(browser, country) {
   const consentPosts = [];
   await context.route("**/*", async (route) => {
     const url = route.request().url();
+    if (/google|doubleclick/.test(new URL(url).hostname)) return route.fulfill({ status: 200, contentType: "application/javascript", body: "/* blocked in test */" });
     if (isMeta(url)) {
       meta.push(url);
       return route.fulfill({ status: 200, contentType: "application/javascript", body: "/* inert local stub */" });
@@ -112,14 +113,14 @@ try {
     await context.close();
   }
 
-  // 5. US: no banner, pixel may run; explicit refusal honoured.
+  // 5. US: banner, explicit consent required; explicit refusal honoured.
   {
     const { context, meta } = await newContext(browser, "US");
     const page = await context.newPage();
     await page.goto(PAGE, { waitUntil: "load", timeout: 100000 });
     await settle(page);
-    assert.equal(await banner(page).count(), 0, "US: no banner");
-    assert.equal(meta.filter((u) => u.includes("fbevents.js")).length, 1, "US: pixel loads without banner");
+    assert.equal(await banner(page).count(), 1, "US: banner");
+    assert.equal(meta.filter((u) => u.includes("fbevents.js")).length, 0, "US: no pixel without consent");
     await context.close();
 
     const refused = await newContext(browser, "US");
@@ -128,7 +129,7 @@ try {
     await p2.goto(PAGE, { waitUntil: "load", timeout: 100000 });
     await settle(p2);
     assert.deepEqual(refused.meta, [], "US with explicit refusal: zero Meta requests");
-    results.push("US: no banner, pixel allowed; explicit refusal → 0 Meta requests");
+    results.push("US: banner, pixel blocked; explicit refusal → 0 Meta requests");
     await refused.context.close();
   }
 } finally {
