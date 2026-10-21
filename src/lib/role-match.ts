@@ -45,8 +45,24 @@ const STOPWORDS = new Set([
   "contract",
 ]);
 
-function tokenize(s: string): string[] {
+/** "Full-Stack"/"Full Stack"/"Fullstack" are one word for matching. */
+export function canonicalCompounds(s: string): string {
   return s
+    .replace(/\bfull[\s-]?stack\b/gi, "fullstack")
+    .replace(/\bfront[\s-]?end\b/gi, "frontend")
+    .replace(/\bback[\s-]?end\b/gi, "backend");
+}
+
+/** Developer, Dev and Engineer name the same job in titles ("Full-Stack
+ * Developer" = "Fullstack Engineer"). "Engineering"/"Development" are not
+ * included: they are departments ("Engineering Manager"). */
+export const ENGINEER_SYNONYMS = new Set([
+  "engineer", "engineers", "developer", "developers", "dev", "devs",
+  "sviluppatore", "sviluppatori", "sviluppatrice", "programmer", "programmers",
+]);
+
+function tokenize(s: string): string[] {
+  return canonicalCompounds(s)
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
@@ -94,8 +110,9 @@ export function significantTokens(s: string): string[] {
 export function titleMatchesRole(title: string, role: string): boolean {
   const roleTokens = significantTokens(role);
   if (roleTokens.length === 0) return false;
-  const titleStems = new Set(tokenize(title).map(stem));
-  return roleTokens.every((rt) => titleStems.has(stem(rt)));
+  const key = (t: string) => (ENGINEER_SYNONYMS.has(t) ? "#engineer" : stem(t));
+  const titleStems = new Set(tokenize(title).map(key));
+  return roleTokens.every((rt) => titleStems.has(key(rt)));
 }
 
 /** True se almeno uno dei ruoli combacia col titolo. */

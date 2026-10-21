@@ -72,7 +72,25 @@ function testRoleQuery() {
   assert.equal(titleMatchesRole("Email Marketing Engineer", "AI Engineer"), false, "acronym is a whole word");
   const aiWhere = JSON.stringify(titleTokenWhere("AI"));
   assert(!aiWhere.includes('"contains":"AI"'), "2-letter tokens are never a bare substring filter");
-  assert.deepEqual(titleTokenWhere("Engineer"), { title: { contains: "Engineer", mode: "insensitive" } });
+  assert.deepEqual(titleTokenWhere("Founding"), { title: { contains: "Founding", mode: "insensitive" } });
+  // Developer = Dev = Engineer, in the DB query and in the title matcher.
+  const engWhere = JSON.stringify(titleTokenWhere("Developer"));
+  assert(engWhere.includes('"contains":"engineer"') && engWhere.includes('"contains":"developer"'), "Developer queries Engineer too");
+  assert.deepEqual(titleTokenWhere("Engineer"), titleTokenWhere("Developer"));
+  assert(!engWhere.includes('"contains":"dev"'), "Dev is a whole word, not a substring (DevOps)");
+  assert(JSON.stringify(titleTokenWhere("Full-Stack")).includes('"contains":"fullstack"'));
+  for (const [title, role, want] of [
+    ["Fullstack Software Engineer (x/f/m) - Internal Agentic AI Platform", "Full-Stack Developer", true],
+    ["Full-Stack Engineer - ElevenMusic", "Full-Stack Developer", true],
+    ["Senior Full Stack Developer", "Full-Stack Engineer", true],
+    ["Full-Stack Dev", "Full-Stack Engineer", true],
+    ["Sviluppatore Full-Stack", "Full-Stack Developer", true],
+    ["Founding Developer", "Founding Engineer", true],
+    ["AI Developer", "AI Engineer", true],
+    ["DevOps Engineer", "Full-Stack Developer", false],
+    ["Engineering Manager, Full-Stack", "Full-Stack Developer", false],
+    ["Full-Stack Designer", "Full-Stack Developer", false],
+  ] as const) assert.equal(titleMatchesRole(title, role), want, `${title} ~ ${role}`);
   assert(roleTitleTokenGroups(Array.from({ length: 100 }, (_, i) => `Role${i} Engineer${i}`)).length <= 40, "bounded");
   assert.deepEqual(roleTitleTokenGroups(["  ", "x"]), [], "roles without significant tokens are ignored");
 }
