@@ -76,20 +76,11 @@ export function effectiveConsent(answers: ConsentAnswers, region: RegionState): 
   if (region.status === "pending") {
     return { analytics: false, advertising: false, showBanner: false, ready: false };
   }
-  if (region.requiresConsent) {
-    return {
-      analytics: answers.analytics === "granted",
-      advertising: answers.advertising === "granted",
-      showBanner: answers.analytics === null || answers.advertising === null,
-      ready: true,
-    };
-  }
-  // Consent not legally required here: optional tools may run without a
-  // banner, but an explicit refusal is always honoured.
+  // Optional tracking requires an explicit current choice in every region.
   return {
-    analytics: answers.analytics !== "denied",
-    advertising: answers.advertising !== "denied",
-    showBanner: false,
+    analytics: answers.analytics === "granted",
+    advertising: answers.advertising === "granted",
+    showBanner: answers.analytics === null || answers.advertising === null,
     ready: true,
   };
 }

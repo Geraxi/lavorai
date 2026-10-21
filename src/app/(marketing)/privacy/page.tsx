@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: "Informativa privacy",
   alternates: { canonical: "/privacy" },
   description:
-    "Informativa privacy di LavorAI. Come gestiamo i dati personali, i cookie (incluso Meta Pixel), e i diritti GDPR.",
+    "Informativa privacy di LavorAI. Come gestiamo i dati personali, i cookie (inclusi Meta Pixel e Google Ads), e i diritti GDPR.",
 };
 
 export default function PrivacyPage() {
@@ -88,7 +88,7 @@ export default function PrivacyPage() {
               <li>
                 <strong>Consenso (art. 6.1.a GDPR e art. 122 Codice
                 Privacy)</strong>: cookie e strumenti facoltativi di analisi e
-                pubblicità, incluso Meta Pixel (vedi sezione 5).
+                pubblicità, inclusi Meta Pixel e Google Ads (vedi sezione 5).
               </li>
             </ul>
           </section>
@@ -128,7 +128,7 @@ export default function PrivacyPage() {
           </section>
 
           <section id="cookie">
-            <h2 className="text-xl font-semibold">5. Cookie, analisi e pubblicità (Meta Pixel)</h2>
+            <h2 className="text-xl font-semibold">5. Cookie, analisi e pubblicità (Meta Pixel e Google Ads)</h2>
             <p>
               Usiamo cookie tecnici necessari per accesso, sicurezza e lingua.
               Gli strumenti facoltativi si attivano solo secondo le tue scelte,
@@ -166,13 +166,20 @@ export default function PrivacyPage() {
               ), che può comportare trasferimenti verso gli Stati Uniti.
             </p>
             <p>
-              <strong>Le tue scelte</strong>: nello Spazio economico europeo,
-              nel Regno Unito e in Svizzera (e quando non riusciamo a
-              determinare la regione) gli strumenti di analisi e pubblicità
-              restano disattivati finché non li accetti; puoi accettare o
-              rifiutare con la stessa facilità. Altrove possono essere attivi
-              per impostazione predefinita, ma il tuo rifiuto viene sempre
-              rispettato. Puoi cambiare idea o revocare il consenso in qualsiasi
+              <strong>Google Ads</strong> (Google Ireland Ltd): solo dopo il consenso
+              pubblicità carichiamo il tag, anche su /signup, per misurare il
+              completamento della registrazione. Usiamo un identificativo casuale
+              dell’evento uguale a quello di Meta per evitare duplicati. Google
+              può ricevere il codice del clic sull’annuncio (gclid), dati tecnici
+              del browser e cookie pubblicitari (es. _gcl_au e _gcl_aw).
+              Non inviamo nome, email, telefono, CV o candidature a Google;
+              le conversioni avanzate sono disattivate. Informativa del fornitore:{" "}
+              <a href="https://business.safety.google/privacy/" target="_blank" rel="noopener noreferrer">privacy di Google per le aziende</a>.
+            </p>
+            <p>
+              <strong>Le tue scelte</strong>: in tutte le regioni gli strumenti
+              facoltativi di analisi e pubblicità restano disattivati finché non
+              li accetti separatamente; puoi accettare o rifiutare con la stessa facilità. Puoi cambiare idea o revocare il consenso in qualsiasi
               momento da <CookieSettingsLink className="underline" /> (link
               nel piè di pagina e nelle Impostazioni dell&apos;account): la
               revoca ha effetto immediato, anche nelle altre schede aperte, e
@@ -250,7 +257,7 @@ export default function PrivacyPage() {
           </section>
 
           <p className="text-xs text-muted-foreground">
-            Ultimo aggiornamento: 18 ottobre 2026.
+            Ultimo aggiornamento: 21 ottobre 2026.
           </p>
         </div>
       </main>

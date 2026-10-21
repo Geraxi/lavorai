@@ -6,10 +6,11 @@ import { usePathname } from "next/navigation";
 import { useConsent } from "@/components/consent/use-consent";
 import { hasConsent } from "@/lib/consent/client-store";
 import { loadMetaPixel, trackCompleteRegistration, type PixelDocument, type PixelWindow } from "@/lib/consent/meta-pixel";
+import { syncGoogleConsent, trackGoogleRegistration, type GoogleWindow } from "@/lib/consent/google-tag";
 import { claimAndSendRegistration } from "@/lib/consent/registration-claim";
 
 /**
- * Sends Meta `CompleteRegistration` at most once per real new account.
+ * Sends Meta `CompleteRegistration` and Google Ads signup at most once per real new account.
  *
  * Runs on the first authenticated page view of a browser session, after the
  * consent region is resolved. The server hands out the opaque eventId only
@@ -34,14 +35,14 @@ export function RegistrationConversion() {
     if (status !== "authenticated" || !userId || !effective.ready) return;
     if (ran.current === userId) return;
     ran.current = userId;
-    const win = window as unknown as PixelWindow;
+    const win = window as unknown as PixelWindow & GoogleWindow;
     const doc = document as unknown as PixelDocument;
     let local: Storage | null = null;
     let session: Storage | null = null;
     try { local = window.localStorage; session = window.sessionStorage; } catch { /* blocked */ }
     void claimAndSendRegistration({
       userId,
-      advertisingAllowed: () => Boolean(pixelId) && hasConsent("advertising"),
+      advertisingAllowed: () => hasConsent("advertising"),
       post: (path, body) => fetch(path, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -51,9 +52,16 @@ export function RegistrationConversion() {
       local,
       session,
       send: (eventId) => {
-        if (!pixelId || !hasConsent("advertising")) return false;
-        loadMetaPixel(win, doc, pixelId);
-        return trackCompleteRegistration(win, eventId, () => hasConsent("advertising"));
+        if (!hasConsent("advertising")) return false;
+        // Both destinations use the SAME server claim. Neither depends on the other.
+        syncGoogleConsent(win, doc, hasConsent("analytics"), true, process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim());
+        const googleSent = trackGoogleRegistration(win, eventId, () => hasConsent("advertising"));
+        let metaSent = false;
+        if (pixelId && hasConsent("advertising")) {
+          loadMetaPixel(win, doc, pixelId);
+          metaSent = trackCompleteRegistration(win, eventId, () => hasConsent("advertising"));
+        }
+        return googleSent || metaSent;
       },
     });
   }, [onAuthPage, status, userId, effective.ready, pixelId]);

@@ -95,7 +95,7 @@ function testConsentGating() {
   assert.deepEqual(effectiveConsent(none, pending), { analytics: false, advertising: false, showBanner: false, ready: false }, "nothing before region known");
   assert.deepEqual(effectiveConsent(none, eu), { analytics: false, advertising: false, showBanner: true, ready: true }, "EU default deny + banner");
   assert.deepEqual(effectiveConsent(none, unknown), { analytics: false, advertising: false, showBanner: true, ready: true }, "unresolved default deny + banner");
-  assert.deepEqual(effectiveConsent(none, us), { analytics: true, advertising: true, showBanner: false, ready: true }, "elsewhere: no banner");
+  assert.deepEqual(effectiveConsent(none, us), { analytics: false, advertising: false, showBanner: true, ready: true }, "all regions require an explicit choice");
   assert.equal(effectiveConsent({ analytics: "denied", advertising: "denied" }, us).advertising, false, "explicit refusal honoured elsewhere");
   assert.equal(effectiveConsent({ analytics: "granted", advertising: null }, eu).advertising, false, "unanswered advertising is not acceptance");
   assert.equal(effectiveConsent({ analytics: "granted", advertising: null }, eu).showBanner, true);
