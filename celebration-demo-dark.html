@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="it" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Celebration - Dark Mode</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #08090a;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    :root {
+      --pm-card: #0f1112;
+      --pm-line: rgba(255, 255, 255, 0.07);
+      --pm-fg: #ededef;
+      --pm-fg-2: #b4b8bf;
+      --pm-muted: #8a8f98;
+      --pm-green: #3ecf8e;
+      --pm-radius: 14px;
+      --pm-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .celebration-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(8, 9, 10, 0.92);
+      backdrop-filter: blur(8px);
+    }
+
+    .celebration-modal {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      padding: 40px 32px;
+      border-radius: var(--pm-radius);
+      border: 1px solid var(--pm-line);
+      background: var(--pm-card);
+      box-shadow: 
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .celebration-header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .celebration-title {
+      font-size: 28px;
+      font-weight: 600;
+      line-height: 1.2;
+      color: var(--pm-fg);
+      margin: 0 0 12px;
+    }
+
+    .celebration-subtitle {
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--pm-muted);
+      margin: 0;
+    }
+
+    .celebration-features {
+      list-style: none;
+      margin: 0 0 32px;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .celebration-feature {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14.5px;
+      line-height: 1.5;
+      color: var(--pm-fg-2);
+    }
+
+    .celebration-feature-icon {
+      flex-shrink: 0;
+      margin-top: 2px;
+      color: var(--pm-green);
+    }
+
+    .celebration-cta {
+      width: 100%;
+      height: 48px;
+      padding: 0 24px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--pm-green);
+      color: #0d1f17;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s var(--pm-ease);
+    }
+
+    .celebration-cta:hover {
+      background: #4cd999;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(62, 207, 142, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <div class="celebration-overlay">
+    <div class="celebration-modal">
+      <div class="celebration-header">
+        <h1 class="celebration-title">Benvenuto in LavorAI Pro+</h1>
+        <p class="celebration-subtitle">
+          Grazie per aver scelto LavorAI. Ora hai accesso a tutte le funzionalità premium.
+        </p>
+      </div>
+
+      <ul class="celebration-features">
+        <li class="celebration-feature">
+          <svg class="celebration-feature-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="10" fill="currentColor" opacity="0.12" />
+            <path d="M14 7L8.5 12.5L6 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>Founder Interview Coach (Opportunity Analyzer + Equity + Vocab)</span>
+        </li>
+        <li class="celebration-feature">
+          <svg class="celebration-feature-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="10" fill="currentColor" opacity="0.12" />
+            <path d="M14 7L8.5 12.5L6 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>Interview Copilot live con teleprompter + audio capture</span>
+        </li>
+        <li class="celebration-feature">
+          <svg class="celebration-feature-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="10" fill="currentColor" opacity="0.12" />
+            <path d="M14 7L8.5 12.5L6 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>Candidature illimitate</span>
+        </li>
+      </ul>
+
+      <button class="celebration-cta">
+        Inizia a candidarti
+      </button>
+    </div>
+  </div>
+</body>
+</html>
