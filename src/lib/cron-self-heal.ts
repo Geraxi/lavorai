@@ -1,7 +1,8 @@
-import { automaticApplicationsBlocked, historicalRetriesBlocked } from "@/lib/application-rollout";
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { backfillMissingCvProfiles } from "@/lib/cv-profile-ensure";
 import { recheckLivenessHeldApplications } from "@/lib/held-application-release";
+import { reconcileApplicationSentNotifications } from "@/lib/application-sent-notification";
 import { recoverStuckApplications } from "@/lib/application-claim";
 
 /**
@@ -42,7 +43,16 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
     livenessClosed: 0,
   };
 
-  if (applicationsPaused() || automaticApplicationsBlocked()) return report;
+  if (applicationsPaused()) return report;
+
+  // Resume only proof-backed notifications after a crash; never resubmit applications.
+  try {
+    await reconcileApplicationSentNotifications();
+  } catch {
+    console.error("[self-heal] notification reconciliation failed");
+  }
+
+  if (automaticApplicationsBlocked()) return report;
 
   // ---------- 1. Create missing/empty CV profiles from the uploaded CV ----------
   // Bounded + idempotent (see cv-profile-ensure.ts); replaces the old
@@ -67,8 +77,8 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
   }
 
   // ---------- 2. Shared evidence-aware recovery ----------
-  // Stale-claim recovery stays suspended with the other replay paths.
-  if (!historicalRetriesBlocked()) try {
+  // Recovery admits only pristine pre-preparation queued leases; historical replay stays blocked.
+  try {
     report.appsRecoveredSafely = await recoverStuckApplications();
   } catch {
     report.appsFailed++;

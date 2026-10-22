@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
-import { hasGmailConnected } from "@/lib/gmail-client";
+import { getGmailConnectionStatus } from "@/lib/gmail-client";
 
 /**
  * GET /api/gmail/status
@@ -14,9 +14,9 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const connected = await hasGmailConnected(user.id);
+    const status = await getGmailConnectionStatus(user.id);
 
-    return NextResponse.json({ connected });
+    return NextResponse.json(status);
   } catch (error) {
     console.error("[api/gmail/status] Error:", error);
     return NextResponse.json(

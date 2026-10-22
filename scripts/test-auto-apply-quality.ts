@@ -75,6 +75,7 @@ async function testCronBothPasses() {
     "@/lib/application-pause": { applicationsPaused: () => false },
     "@/lib/auto-apply-preferences": preferenceHelpers,
     "@/lib/db": { prisma },
+    "@/lib/application-create": { createFreshApplication: (args: { data: Record<string, unknown> }) => prisma.application.create(args) },
     "@/lib/admin-user-actions": { monthlyQuotaSince: () => new Date(0) },
     "@/lib/cv-profile-types": { rowToProfile: () => ({ experiences: [], skills: [], title: "Product Designer", summary: "" }) },
     "@/lib/match-score": { quickMatchScore: (profile: { experiences: unknown[] }) => {

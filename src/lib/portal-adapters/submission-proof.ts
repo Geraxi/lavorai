@@ -301,7 +301,7 @@ export async function observeSubmission(page: Page, provider: string, jobUrl: st
   const captcha = await detectBlockingCaptcha(page);
   const codeVisible = await page.locator(SECURITY_CODE_FIELD).first().isVisible().catch(() => false);
   if (captcha.blocking || codeVisible) {
-    return { response, outcome: { ok: false, status: captcha.blocking ? "captcha" : "submission_unconfirmed", error: "Il portale richiede una verifica prima di confermare la ricezione. Non reinviare automaticamente la candidatura." } };
+    return { response, outcome: { ok: false, status: "submission_unconfirmed", error: "Il portale richiede una verifica dopo il tentativo di invio. Ricezione non confermata: apri il portale ufficiale e verifica l’esito prima di procedere. Non reinviare automaticamente la candidatura." } };
   }
   const proofs = responses.map((r) => verifySubmissionResponse(provider, jobUrl, r));
   // A validation/challenge response cannot be rescued by generic DOM text.

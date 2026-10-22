@@ -1,3 +1,4 @@
+import { createFreshApplication } from "@/lib/application-create";
 import { createLivenessGate, livenessMaxChecksFromEnv, type LivenessGate } from "@/lib/auto-apply-liveness-gate";
 import { checkJobUrlLiveness, markJobClosed } from "@/lib/job-liveness";
 import { automaticApplicationsBlocked } from "@/lib/application-rollout";
@@ -154,6 +155,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     where: {
       suspendedAt: null,
       emailVerified: { not: null },
+      privacyConsentAt: { not: null },
       onboardedAt: { not: null },
       seniority: { not: null },
       englishLevel: { not: null },
@@ -173,6 +175,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
       id: true,
       email: true,
       tier: true,
+      subscriptionStatus: true,
       trialEndsAt: true, trialGraceEndsAt: true,
       createdAt: true,
       avoidCompanies: true,
@@ -245,6 +248,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       id: userId,
       suspendedAt: null,
       emailVerified: { not: null },
+      privacyConsentAt: { not: null },
       onboardedAt: { not: null },
       seniority: { not: null },
       englishLevel: { not: null },
@@ -264,6 +268,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       id: true,
       email: true,
       tier: true,
+      subscriptionStatus: true,
       trialEndsAt: true, trialGraceEndsAt: true,
       createdAt: true,
       avoidCompanies: true,
@@ -303,6 +308,7 @@ async function processUser(
     id: string;
     email: string;
     tier: string;
+    subscriptionStatus: string | null;
     trialEndsAt: Date | null;
     trialGraceEndsAt: Date | null;
     createdAt: Date;
@@ -784,7 +790,7 @@ async function processUser(
     const portal = portalOf(job.url);
 
     try {
-      const app = await prisma.application.create({
+      const app = await createFreshApplication({
         data: {
           userId: user.id,
           jobId: job.id,
@@ -886,7 +892,7 @@ async function processUser(
       }
 
       try {
-        const app = await prisma.application.create({
+        const app = await createFreshApplication({
           data: {
             userId: user.id,
             jobId: job.id,

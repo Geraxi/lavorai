@@ -29,6 +29,7 @@ import { createApplicationsWorker } from "./src/lib/bullmq-queue";
 import { processApplication } from "./src/lib/application-worker";
 import { claimApplication, findClaimableQueued } from "./src/lib/application-claim";
 import { applicationRolloutConfig, automaticApplicationsBlocked } from "./src/lib/application-rollout";
+import { createAutoApplyTick, parseAutoApplyHours } from "./src/lib/auto-apply-schedule";
 import { applicationsPaused } from "./src/lib/application-pause";
 
 async function main(): Promise<void> {
@@ -104,33 +105,31 @@ async function main(): Promise<void> {
   // alle ore UTC in AUTO_APPLY_HOURS (default "8,12,16"). Vercel Hobby non
   // permette cron più frequenti di 1/giorno, quindi la cadenza promessa in
   // dashboard vive qui. Disattivabile con WORKER_AUTO_APPLY_CRON=false.
+  let autoApplyTimer: ReturnType<typeof setInterval> | undefined;
   if ((process.env.WORKER_AUTO_APPLY_CRON ?? "true") !== "false") {
-    const hours = (process.env.AUTO_APPLY_HOURS ?? "8,12,16")
-      .split(",")
-      .map((h) => Number(h.trim()))
-      .filter((h) => Number.isInteger(h) && h >= 0 && h < 24);
-    let lastRunKey = "";
+    const hours = parseAutoApplyHours(process.env.AUTO_APPLY_HOURS);
     console.log(`[worker] auto-apply scheduler attivo alle ore UTC ${hours.join(",")}`);
-    setInterval(async () => {
-      const now = new Date();
-      const key = `${now.toISOString().slice(0, 10)}T${now.getUTCHours()}`;
-      if (!hours.includes(now.getUTCHours()) || now.getUTCMinutes() > 4 || key === lastRunKey) return;
-      lastRunKey = key;
-      try {
-        // Users who uploaded a CV but never opened /cv had no CVProfile and
-        // were skipped by the job below; create theirs first (bounded).
-        const { backfillMissingCvProfiles } = await import("./src/lib/cv-profile-ensure");
-        await backfillMissingCvProfiles({ max: 100, budgetMs: 10 * 60_000 })
-          .catch((err) => console.error("[worker] CV profile backfill failed", err instanceof Error ? err.message : err));
-        const { runAutoApplyCron } = await import("./src/lib/auto-apply-cron");
-        const t0 = Date.now();
-        const stats = await runAutoApplyCron();
-        console.log(`[worker] auto-apply cron ${Date.now() - t0}ms`, stats);
-        console.log(`[worker] auto-apply funnel candidates=${stats.candidatesFetched} location=${stats.skippedLocationMismatch} locationUnverified=${stats.skippedLocationUnverified} contract=${stats.skippedEmploymentMismatch} salary=${stats.skippedSalaryMismatch} title=${stats.skippedRoleMismatch} score=${stats.skippedMatchThreshold} enqueued=${stats.applicationsEnqueued} awaitingConsent=${stats.applicationsAwaitingConsent}`);
-      } catch (err) {
-        console.error("[worker] auto-apply cron failed", err);
-      }
-    }, 60_000);
+    const tick = createAutoApplyTick({
+      hours, blocked: () => applicationsPaused() || automaticApplicationsBlocked(),
+      run: async () => {
+        try {
+          // Users who uploaded a CV but never opened /cv had no CVProfile and
+          // were skipped by the job below; create theirs first (bounded).
+          const { backfillMissingCvProfiles } = await import("./src/lib/cv-profile-ensure");
+          await backfillMissingCvProfiles({ max: 100, budgetMs: 10 * 60_000 })
+            .catch((err) => console.error("[worker] CV profile backfill failed", err instanceof Error ? err.message : err));
+          const { runAutoApplyCron } = await import("./src/lib/auto-apply-cron");
+          const t0 = Date.now();
+          const stats = await runAutoApplyCron();
+          console.log(`[worker] auto-apply cron ${Date.now() - t0}ms`, stats);
+          console.log(`[worker] auto-apply funnel candidates=${stats.candidatesFetched} location=${stats.skippedLocationMismatch} locationUnverified=${stats.skippedLocationUnverified} contract=${stats.skippedEmploymentMismatch} salary=${stats.skippedSalaryMismatch} title=${stats.skippedRoleMismatch} score=${stats.skippedMatchThreshold} enqueued=${stats.applicationsEnqueued} awaitingConsent=${stats.applicationsAwaitingConsent}`);
+        } catch (err) {
+          console.error("[worker] auto-apply cron failed", err);
+        }
+      },
+    });
+    void tick();
+    autoApplyTimer = setInterval(() => void tick(), 60_000);
   }
 
   // Rows held on a temporary "job availability couldn't be checked" result are
@@ -150,6 +149,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     console.log(`[worker] ${signal} received, draining...`);
     clearInterval(pollTimer);
+    if (autoApplyTimer) clearInterval(autoApplyTimer);
     clearInterval(livenessTimer);
     if (worker) await worker.close();
     console.log("[worker] closed cleanly");

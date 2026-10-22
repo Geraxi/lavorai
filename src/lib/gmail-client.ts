@@ -16,6 +16,30 @@ import { applyReplyToApplication } from "@/lib/apply-reply-to-application";
 import { isLikelyJobMail, matchToApplication } from "@/lib/gmail-match";
 import { extractGmailBody, type GmailPart } from "@/lib/gmail-body";
 
+/** Login scopes do not authorize reading message bodies. Metadata is insufficient. */
+export function hasGmailReadScope(scope: string | null | undefined): boolean {
+  return (scope ?? "").split(/\s+/).some(value => [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://mail.google.com/",
+  ].includes(value));
+}
+
+type GmailAccount = { scope?: string | null; access_token?: string | null;
+  refresh_token?: string | null; expires_at?: number | null } | null;
+
+export function gmailConnectionState(account: GmailAccount, now = Date.now()) {
+  if (!account) return "not_connected" as const;
+  if (!hasGmailReadScope(account.scope)) return "scope_missing" as const;
+  if (!(account.refresh_token || (account.access_token && account.expires_at
+    && account.expires_at * 1000 > now + 60_000))) return "reconnect_required" as const;
+  return "authorized" as const;
+}
+
+export function gmailAccountConnected(account: GmailAccount, now = Date.now()): boolean {
+  return gmailConnectionState(account, now) === "authorized";
+}
+
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1";
 
 interface GmailMessage {
@@ -38,12 +62,12 @@ interface GmailListResponse {
 export async function getGmailAccessToken(userId: string): Promise<string | null> {
   const account = await prisma.account.findFirst({
     where: { userId, provider: "google" },
-    select: { access_token: true, refresh_token: true, expires_at: true },
+    select: { access_token: true, refresh_token: true, expires_at: true, scope: true },
   });
-  if (!account?.access_token) return null;
+  if (!account || !gmailAccountConnected(account)) return null;
 
   const now = Math.floor(Date.now() / 1000);
-  if (account.expires_at && account.expires_at > now + 60) {
+  if (account.access_token && account.expires_at && account.expires_at > now + 60) {
     return account.access_token;
   }
 
@@ -80,7 +104,7 @@ export async function getGmailAccessToken(userId: string): Promise<string | null
     });
 
     return newAccessToken;
-  } catch (err) {
+  } catch {
     console.error("[gmail] Token refresh failed");
     return null;
   }
@@ -203,7 +227,7 @@ export async function syncGmailMessages(
   try {
     const accessToken = await getGmailAccessToken(userId);
     if (!accessToken) {
-      return { synced: 0, skipped: 0, error: "No Gmail access token (not connected)" };
+      return { synced: 0, skipped: 0, error: "Gmail non autorizzato o sessione scaduta. Ricollega Gmail per sincronizzare le risposte." };
     }
 
     const listResponse = await fetchGmailMessages(accessToken, maxMessages);
@@ -257,16 +281,21 @@ export async function syncGmailMessages(
     }
 
     return { synced, skipped };
-  } catch (err) {
+  } catch {
     console.error("[gmail] Sync failed");
     return { synced, skipped, error: "Gmail synchronization failed; please retry." };
   }
 }
 
-export async function hasGmailConnected(userId: string): Promise<boolean> {
+export async function getGmailConnectionStatus(userId: string) {
   const account = await prisma.account.findFirst({
     where: { userId, provider: "google" },
-    select: { access_token: true, refresh_token: true },
+    select: { access_token: true, refresh_token: true, expires_at: true, scope: true },
   });
-  return !!(account?.access_token || account?.refresh_token);
+  const state = gmailConnectionState(account);
+  return { connected: state === "authorized", state };
+}
+
+export async function hasGmailConnected(userId: string): Promise<boolean> {
+  return (await getGmailConnectionStatus(userId)).connected;
 }

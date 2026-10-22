@@ -100,7 +100,7 @@ async function testBlockedEntrypoints() {
     assert.equal(await load("src/lib/trial-quota.ts").reserveTrialApplication("owner", "old"), false);
     assert.equal((await load("src/lib/cron-self-heal.ts").runCronSelfHeal()).appsRecoveredSafely, 0);
     }
-    const claim = load("src/lib/application-claim.ts");
+    const claim = load("src/lib/application-claim.ts", { "@/lib/db": { prisma: { application: { findMany: async () => [] } } } });
     assert.equal(await claim.recoverStuckApplications(), 0);
     await claim.resetClaim("old");
     const request = { headers: new Headers({ authorization: "Bearer fixture-cron" }), json: async () => ({}) };
@@ -177,7 +177,7 @@ async function testAutomaticClaimsAndQueue() {
   for (const fixture of fixtures.slice(2)) assert.equal(await claims.claimApplication(fixture.id), false, fixture.id);
   const results = await Promise.all([claims.claimApplication("auto"), claims.claimApplication("auto")]);
   assert.equal(results.filter(Boolean).length, 1, "Automatic claim is atomic");
-  assert.equal(await claims.recoverStuckApplications(), 0, "Stale-claim recovery stays suspended in automatic mode");
+  assert.equal(await claims.recoverStuckApplications(), 0, "Historical/evidenced claims remain frozen; pristine lease recovery is covered separately");
   const queueDb = database(fixtures);
   const queued: string[] = [];
   process.env.QUEUE_MODE = "bullmq"; process.env.REDIS_URL = "redis://synthetic.invalid";
@@ -237,8 +237,9 @@ async function testExplicitCreation() {
   enable();
   for (const routeName of ["apply", "apply-batch"]) {
     for (const mode of ["manual", "hybrid", "auto"]) {
+     for (const closedAt of [null, new Date()]) {
       const created: any[] = [], published: string[] = [];
-      const job = { id: "selected", title: "Engineer", category: "Engineering", url: "https://jobs.example.invalid/selected", description: "Role", company: "Example" };
+      const job = { closedAt, id: "selected", title: "Engineer", category: "Engineering", url: "https://jobs.example.invalid/selected", description: "Role", company: "Example" };
       const prisma = {
         application: { count: async () => 0, findFirst: async () => null, findMany: async () => [],
           create: async ({ data }: any) => { created.push(data); return { id: "new", ...data }; } },
@@ -248,6 +249,7 @@ async function testExplicitCreation() {
         user: { findUnique: async () => ({ avoidCompanies: null }) },
       };
       const route = load(`src/app/api/applications/${routeName}/route.ts`, {
+        "@/lib/application-create": { createFreshApplication: (args: any) => prisma.application.create(args) },
         "@/lib/db": { prisma }, "@/lib/admin-user-actions": { monthlyQuotaSince: () => start },
         "@/lib/billing": { requiresPaymentMethodBeforeApp: () => false, effectiveTier: () => "pro", getLimits: () => ({ monthlyApplications: 100 }), dailyApplicationLimit: () => 10 },
         "@/lib/rate-limit": { applyLimiter: { limit: async () => ({ success: true }) }, applyBatchLimiter: { limit: async () => ({ success: true }) } },
@@ -257,6 +259,16 @@ async function testExplicitCreation() {
         "@/lib/application-queue": { enqueueApplication: async (id: string, options: any) => { assert.equal(options.preserveClaim, true); published.push(id); } },
       });
       const response = await route.POST({ json: async () => routeName === "apply" ? { jobId: "selected", portal: "other" } : { jobIds: ["selected"] } });
+      if (closedAt) {
+        assert.equal(created.length, 0); assert.deepEqual(published, []);
+        if (routeName === "apply") {
+          assert.equal(response.status, 409); assert.equal(response.body.error, "job_closed");
+        } else {
+          assert.equal(response.status, 200); assert.equal(response.body.closed, 1);
+          assert.equal(response.body.excludedByCompany, 0);
+        }
+        continue;
+      }
       assert.equal(response.status, 200, `${routeName}/${mode}`); assert.equal(created.length, 1);
       assert.ok(created[0].createdAt > start);
       if (created[0].status === "queued") {
@@ -268,6 +280,7 @@ async function testExplicitCreation() {
       }
     }
   }
+}
 }
 async function testReadOnlyAndPreferences() {
   enable();
@@ -298,12 +311,32 @@ async function testReadOnlyAndPreferences() {
   assert.match(bullmq, /attempts: historicalRetriesBlocked\(\) \? 1 : 3/);
   assert.match(bullmq, /maxStalledCount: historicalRetriesBlocked\(\) \? 0 : 1/);
 }
+async function testAutoProducerEligibility() {
+  enable(); process.env.APPLICATION_SENDING_MODE = "automatic";
+  let queried = 0;
+  const inspect = ({ where, select }: any) => {
+    queried++;
+    assert.equal(where.privacyConsentAt.not, null, "missing privacy never enters automatic candidate pool");
+    assert.equal(where.emailVerified.not, null);
+    assert.equal(select.subscriptionStatus, true, "paid trial status reaches billing gate");
+  };
+  const cron = load("src/lib/auto-apply-cron.ts", {
+    "@/lib/db": { prisma: { user: {
+      findMany: async (query: any) => { inspect(query); return []; },
+      findUnique: async (query: any) => { inspect(query); return null; },
+    } } },
+    "@/lib/auto-apply-self-heal": { runSelfHeal: async () => ({ garbageSessionsArchived: 0, stuckAppsRequeued: 0, matchMinAutoLowered: [], creditExhaustedUsers: [] }) },
+    "@/lib/daily-summary": { runDailySummary: async () => ({}) },
+  });
+  await cron.runAutoApplyCron(); await cron.runAutoApplyForUser("synthetic");
+  assert.equal(queried, 2);
+}
 async function main() {
   const original = { ...process.env };
   process.env.CRON_SECRET = "fixture-cron";
   try {
     await testBlockedEntrypoints(); await testClaimsAndQueue(); await testAutomaticClaimsAndQueue(); await testConsentCohort(); await testConsentSkipsClosedPosting();
-    await testExplicitCreation(); await testReadOnlyAndPreferences();
+    await testExplicitCreation(); await testReadOnlyAndPreferences(); await testAutoProducerEligibility();
     assert.equal(forbiddenAccesses, 0);
     console.log("PASS sending producers: automatic producers blocked only when closed/manual_only; retry/reset/replay entrypoints blocked in every mode; automatic-mode claims admit fresh auto rows only; fresh claims/queue/consent only; explicit single/batch enabled; historical records/preferences preserved. Hermetic, no DB/network/provider calls.");
   } finally {

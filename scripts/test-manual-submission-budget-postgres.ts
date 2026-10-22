@@ -175,6 +175,65 @@ async function main() {
     assert.equal(waited.budgetDay.toISOString().slice(0, 10), simulatedNow.toISOString().slice(0, 10));
     assert.equal(clockReads, 1);
     console.log("PASS PostgreSQL: a transaction waiting across simulated midnight reads the clock only after the real global lock is released.");
+    const { createFreshApplication } = await import("../src/lib/application-create");
+    const legacy = await make("creation-legacy", { createdAt: new Date(0), status: "failed" });
+    await assert.rejects(createFreshApplication({ data: { userId: legacy.userId, jobId: legacy.jobId, portal: "synthetic" } }, db), /prior_application_exists/);
+    assert.deepEqual(await db.application.findUniqueOrThrow({ where: { id: legacy.id } }), legacy, "Existing history remains byte-for-byte unchanged");
+    const freshJob = await db.job.create({ data: { externalId: "creation-race", source: "synthetic", title: "Synthetic", description: "Synthetic", url: "https://boards.greenhouse.io/acme/jobs/456" } });
+    const data = { userId: legacy.userId, jobId: freshJob.id, portal: "synthetic", consentGrantedAt: new Date() };
+    const races = await Promise.allSettled(Array.from({ length: 12 }, () => createFreshApplication({ data }, db!)));
+    const winners = races.filter((r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof createFreshApplication>>> => r.status === "fulfilled");
+    assert.equal(winners.length, 1);
+    for (const result of races) if (result.status === "rejected") assert.match(String(result.reason), /prior_application_exists/);
+    assert.equal(await db.application.count({ where: { userId: data.userId, jobId: data.jobId } }), 1);
+    const winning = winners[0].value;
+    const work = await reserve(winning.id); assert.ok(work);
+    process.env.APPLY_GLOBAL_DAILY_CAP = "100";
+    let simulatedTransmissions = 0;
+    const submissions = await Promise.all(Array.from({ length: 12 }, async () => {
+      const allowed = await begin(winning.id, work, undefined, "portal_greenhouse");
+      if (allowed) simulatedTransmissions++;
+      return allowed;
+    }));
+    assert.equal(submissions.filter(Boolean).length, 1); assert.equal(simulatedTransmissions, 1);
+    assert.equal(await db.applicationSubmissionReservation.count({ where: { applicationId: winning.id } }), 1);
+    assert.equal(await begin(winning.id, work, undefined, "email_recruiter"), false, "Another channel cannot replay uncertain transmission");
+    console.log("PASS PostgreSQL: 12 concurrent creators yield one untouched new row; legacy preserved; 12 concurrent begin calls authorize exactly one simulated transmission and one durable reservation, cross-channel replay denied.");
+    // Historical/imported sibling rows can predate the fresh-creation lock.
+    const siblingToken = new Date();
+    const siblingA = await make("sibling-race", { status: "optimizing", startedAt: siblingToken });
+    await db.job.update({ where: { id: siblingA.jobId }, data: { url: "https://jobs.ashbyhq.com/fixture/11111111-1111-4111-8111-111111111111" } });
+    const siblingB = await db.application.create({ data: { userId: siblingA.userId, jobId: siblingA.jobId, portal: "synthetic", status: "optimizing", startedAt: siblingToken, consentGrantedAt: new Date() } });
+    const siblingResults = await Promise.all([begin(siblingA.id, siblingToken, undefined, "portal_ashby"), begin(siblingB.id, siblingToken, undefined, "email_recruiter")]);
+    assert.equal(siblingResults.filter(Boolean).length, 1, "Concurrent sibling/cross-channel fences authorize one transmission");
+    assert.equal(await db.applicationSubmissionReservation.count({ where: { subjectKey: submissionSubjectKey(siblingA.userId, siblingA.jobId) } }), 1);
+    console.log("PASS PostgreSQL: pre-existing sibling rows race across portal/email channels, exactly one begin and durable subject reservation wins.");
+    for (const quota of ["daily", "monthly"] as const) {
+      const seed = await make(`quota-${quota}`);
+      await db.userPreferences.update({ where: { userId: seed.userId }, data: { dailyCap: quota === "daily" ? 2 : 100 } });
+      if (quota === "monthly") await db.application.createMany({ data: Array.from({ length: 48 }, (_, i) => ({
+        id: `monthly-history-${i}`, userId: seed.userId, jobId: seed.jobId, portal: "synthetic", status: "queued",
+      })) });
+      // Failed/diagnostic rows retain the existing non-consuming semantics.
+      await db.application.createMany({ data: ["failed", "diagnostic"].map(status => ({
+        userId: seed.userId, jobId: seed.jobId, portal: "synthetic", status,
+      })) });
+      const prior = await db.application.findMany({ where: { userId: seed.userId }, orderBy: { id: "asc" } });
+      const destinations = await Promise.all(["manual", "auto"].map(mode => db!.job.create({ data: {
+        externalId: `quota-${quota}-${mode}`, source: "synthetic", title: "Synthetic", description: "Synthetic", url: `https://example.invalid/${quota}/${mode}`,
+      } })));
+      const explicitConsent = new Date();
+      const attempts = await Promise.allSettled(destinations.map((job, i) => createFreshApplication({ data: {
+        userId: seed.userId, jobId: job.id, portal: "synthetic", consentGrantedAt: i === 0 ? explicitConsent : null,
+      } }, db!)));
+      assert.equal(attempts.filter(r => r.status === "fulfilled").length, 1, `${quota}: exactly one remaining slot`);
+      for (const result of attempts) if (result.status === "rejected") assert.match(String(result.reason), quota === "daily" ? /daily_limit/ : /paywall/);
+      const created = await db.application.findMany({ where: { userId: seed.userId, jobId: { in: destinations.map(job => job.id) } } });
+      assert.equal(created.length, 1);
+      assert.equal(created[0].consentGrantedAt?.getTime() ?? null, created[0].jobId === destinations[0].id ? +explicitConsent : null);
+      assert.deepEqual(await db.application.findMany({ where: { id: { in: prior.map(row => row.id) } }, orderBy: { id: "asc" } }), prior);
+      console.log(`PASS PostgreSQL: ${quota} residual one, manual/auto different jobs race, one creation only, consent/history preserved, failed/diagnostic excluded.`);
+    }
     console.log("ALL MANUAL SUBMISSION BUDGET POSTGRES CHECKS PASSED. No external sends or production access.");
   } finally { if (db) await db.$disconnect(); if (pg) await pg.stop(); await rm(dir, { recursive: true, force: true }); }
 }

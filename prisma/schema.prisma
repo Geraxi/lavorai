@@ -689,6 +689,8 @@ model Application {
   /// Popolato SOLO quando status=success E submitConfirmation=DETECTED*.
   /// Usato per UX onesta "Nessuna risposta dopo N giorni" (ghosting).
   submittedAt     DateTime?
+  /// Atomic notification intent for completions handled by this version; null on legacy successes.
+  sentNotificationRequiredAt DateTime?
   /// Ultimo check status recruiter (per rate-limit check giornalieri).
   /// On unsent queued rows held for an unverifiable posting it records the
   /// FIRST liveness re-check (held-application-release.ts backoff bound).
@@ -705,6 +707,7 @@ model Application {
   replies           ApplicationReply[]
   gmailMessages     GmailMessage[]
   emailAttempts     ApplicationEmailAttempt[]
+  sentNotification  ApplicationSentNotification?
   inboxReplies      InboxReply[]
   mailboxSends      MailboxSend[]
 
@@ -1091,4 +1094,19 @@ model MailboxSend {
   @@index([applicationId, createdAt])
   @@index([userId, state])
   @@index([state, submittedAt])
+}
+
+/// Retry only the notification, never the employer application. Immutable payload.
+model ApplicationSentNotification {
+  applicationId String @id
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  payloadJson String @db.Text
+  status String @default("pending")
+  firstAttemptAt DateTime?
+  leaseUntil DateTime?
+  leaseToken String?
+  providerEmailId String?
+  error String?
+  sentAt DateTime?
+  createdAt DateTime @default(now())
 }

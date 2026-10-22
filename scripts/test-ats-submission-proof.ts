@@ -161,6 +161,7 @@ class MockPage extends EventEmitter {
       first: () => locator, nth: () => locator,
       count: async () => isCaptcha ? (this.captchaVisible ? 1 : 0) : 1,
       isVisible: async () => isCode ? this.codeVisible : isCaptcha ? this.captchaVisible : true,
+      inputValue: async () => /email/i.test(selector) ? "private@example.test" : "Test Applicant",
       waitFor: async () => {}, fill: async () => {}, check: async () => {}, setInputFiles: async () => {},
       scrollIntoViewIfNeeded: async () => {}, click: async () => {}, innerText: async () => "",
     };
@@ -213,7 +214,7 @@ async function testClickObservation() {
   assert.equal((await observeSubmission(page.asPage(), "ashby", job, () => page.click())).outcome.status, "captcha");
   assert.equal(page.clicks, 0, "Interactive captcha must stay user-owned");
   page = new MockPage(); page.events = [{ response: accepted }];
-  assert.equal((await observeSubmission(page.asPage(), "ashby", job, async () => { await page.click(); page.captchaVisible = true; })).outcome.status, "captcha");
+  assert.equal((await observeSubmission(page.asPage(), "ashby", job, async () => { await page.click(); page.captchaVisible = true; })).outcome.status, "submission_unconfirmed");
   assert.equal(page.clicks, 1, "A challenge appearing after submit must not trigger a second click");
   page = new MockPage(); page.events = [{ response: accepted }]; page.codeVisible = true;
   assert.equal((await observeSubmission(page.asPage(), "ashby", job, () => page.click())).outcome.ok, false, "OTP prompt is not acceptance");

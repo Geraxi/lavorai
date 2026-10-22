@@ -114,21 +114,21 @@ export const ashbyAdapter: PortalAdapter = {
 
       // Ashby usa un singolo "Name" o due field separati. Provo entrambi.
       const nameField = page.locator(
-        'input[name="_systemfield_name"], input[aria-label*="Full name" i]',
+        'input[name="_systemfield_name"], input[aria-label*="Full name" i], input[aria-label="Name" i]',
       );
+      if (!fullName || !emailToUse) return { ok: false, status: "missing_field", error: "Nome o email mancanti: completa il profilo prima di proseguire." };
       if ((await nameField.count()) > 0) {
-        await nameField.first().fill(fullName).catch(() => void 0);
+        await nameField.first().fill(fullName);
+        if ((await nameField.first().inputValue()).trim() !== fullName) throw new Error("Nome Ashby non compilato correttamente; nessun upload effettuato.");
       } else {
         await page
           .locator('input[aria-label*="First name" i]')
           .first()
-          .fill(input.profile.firstName || "")
-          .catch(() => void 0);
+          .fill(input.profile.firstName || "");
         await page
           .locator('input[aria-label*="Last name" i]')
           .first()
-          .fill(input.profile.lastName || "")
-          .catch(() => void 0);
+          .fill(input.profile.lastName || "");
       }
 
       await page
@@ -136,8 +136,7 @@ export const ashbyAdapter: PortalAdapter = {
           'input[name="_systemfield_email"], input[type="email"], input[aria-label*="Email" i]',
         )
         .first()
-        .fill(emailToUse)
-        .catch(() => void 0);
+        .fill(emailToUse);
 
       if (phoneToUse) {
         await page
@@ -159,6 +158,12 @@ export const ashbyAdapter: PortalAdapter = {
           .first()
           .fill(li.url)
           .catch(() => void 0);
+      }
+
+      // Fail before uploading personal documents when essential fields did not stick.
+      const identityReady = await page.locator('input[type="email"], input[name="_systemfield_email"], input[aria-label*="Email" i]').first().inputValue();
+      if (!fullName || !emailToUse || identityReady.trim() !== emailToUse.trim()) {
+        return { ok: false, status: "missing_field", error: "Nome o email Ashby mancanti/non compilati. Completa dal portale ufficiale." };
       }
 
       // Upload CV — Ashby usa input[type="file"] (spesso hidden, dietro un

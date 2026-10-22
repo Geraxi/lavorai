@@ -21,7 +21,7 @@ const messages: Array<Record<string, any>> = [];
 const apps = [{ id: "owned", userId: "owner", replyCount: 0, lastReplyAt: null as Date | null, userStatus: null }, { id: "other", userId: "someone-else", replyCount: 0, lastReplyAt: null, userStatus: null }];
 let failProjection = true;
 const tx = {
-  account: { findFirst: async () => ({ access_token: "synthetic-only", expires_at: Math.floor(Date.now() / 1000) + 3600 }) },
+  account: { findFirst: async () => ({ scope: "https://www.googleapis.com/auth/gmail.readonly", access_token: "synthetic-only", expires_at: Math.floor(Date.now() / 1000) + 3600 }) },
   gmailMessage: {
     findUnique: async ({ where: { userId_gmailMessageId: key } }: any) => messages.find((row) => row.userId === key.userId && row.gmailMessageId === key.gmailMessageId),
     create: async ({ data }: any) => { messages.push(data); return data; },
@@ -58,6 +58,18 @@ const gmail = load("src/lib/gmail-client.ts", {
   } },
 });
 async function main() {
+  const valid = { scope: "https://www.googleapis.com/auth/gmail.readonly", refresh_token: "fixture" };
+  assert.equal(gmail.gmailAccountConnected(valid), true);
+  assert.equal(gmail.gmailConnectionState(null), "not_connected");
+  assert.equal(gmail.gmailConnectionState({ scope: "openid email profile" }), "scope_missing");
+  assert.equal(gmail.gmailConnectionState({ scope: valid.scope }), "reconnect_required");
+  assert.equal(gmail.gmailConnectionState(valid), "authorized");
+  assert.equal(gmail.gmailAccountConnected({ ...valid, scope: "openid email profile" }), false);
+  assert.equal(gmail.gmailAccountConnected({ ...valid, scope: "https://www.googleapis.com/auth/gmail.readonly.fake" }), false);
+  assert.equal(gmail.gmailAccountConnected({ ...valid, scope: "https://www.googleapis.com/auth/gmail.metadata" }), false);
+  assert.equal(gmail.gmailAccountConnected({ scope: valid.scope, access_token: "expired", expires_at: 1 }), false);
+  assert.equal(gmail.gmailAccountConnected({ scope: valid.scope }), false);
+
   const input = { userId: "owner", gmailMessageId: "gmail-one", threadId: "thread", applicationId: "owned", label: "Response",
     parsed: { from: "recruiter@example.test", to: "owner@example.test", subject: "Interview", date: new Date("2026-10-13T12:00:00Z"), bodyText: "Can we schedule an interview?", snippet: "Interview" },
     classified: { kind: "colloquio", isHuman: true },

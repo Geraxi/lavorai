@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: Hit auto-apply endpoint
         run: |
-          curl -sS -o /tmp/out -w "HTTP %{http_code} in %{time_total}s\n" \
+          curl --fail-with-body --connect-timeout 15 --max-time 320 -sS -o /tmp/out -w "HTTP %{http_code} in %{time_total}s\n" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             https://lavorai.it/api/cron/auto-apply
           echo "--- response body ---"

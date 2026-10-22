@@ -31,6 +31,15 @@ for (const patch of [{ suspendedAt: now }, { privacyConsentAt: null }, { emailVe
   { pausedUntil: new Date(+now + 86400000) }, { preferences: { ...base.user.preferences, autoApplyMode: "off" } }]) {
   assert.notEqual(currentWorkerIneligibility({ ...base, user: { ...base.user, ...patch } }), null);
 }
+// Fresh read-only diagnosis: recovering a pre-send claim does not restore entitlement.
+for (const mode of ["auto", "manual"]) {
+  const canceled = { ...base, startedAt: new Date(), user: { ...base.user,
+    tier: "free", subscriptionStatus: "canceled", createdAt: new Date("2026-10-01T00:00:00Z"),
+    currentPeriodEnd: null, trialEndsAt: null, trialGraceEndsAt: null,
+    preferences: { ...base.user.preferences, autoApplyMode: mode },
+  } };
+  assert.notEqual(currentWorkerIneligibility(canceled), null, "claim recovery and explicit consent never bypass current canceled/expired access");
+}
 assert.equal(currentWorkerIneligibility({ ...base, job: { ...base.job, closedAt: now } }), "job_closed");
 assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, avoidCompanies: "  ACME  " } }), "company_avoided");
 for (const mode of ["manual", "hybrid"]) {

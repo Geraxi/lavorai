@@ -1,3 +1,4 @@
+import { createFreshApplication } from "@/lib/application-create";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { applicationPrerequisiteBlock } from "@/lib/application-prerequisites";
@@ -184,13 +185,14 @@ export async function POST(request: NextRequest) {
         .map((s) => s.trim().toLowerCase())
         .filter(Boolean),
     );
+    const closed = jobs.filter((job) => job.closedAt !== null && job.closedAt !== undefined).length;
     const toApply = jobs.filter(
       (j) =>
-        !alreadySet.has(j.id) &&
+        !j.closedAt && !alreadySet.has(j.id) &&
         !(j.company && avoidSet.has(j.company.toLowerCase())),
     );
     const excludedByCompany =
-      jobs.length - alreadySet.size - toApply.length;
+      jobs.filter((j) => !j.closedAt && !alreadySet.has(j.id) && j.company && avoidSet.has(j.company.toLowerCase())).length;
 
     const capped = toApply.slice(0, Math.min(remainingToday, remainingQuota));
 
@@ -251,7 +253,7 @@ export async function POST(request: NextRequest) {
         // Recheck immediately before creation, including each selected batch job.
         if (rolloutCreationBlocked()) break;
         const createdAt = new Date();
-        const application = await prisma.application.create({
+        const application = await createFreshApplication({
           data: {
             userId: user.id,
             jobId: job.id,
@@ -289,6 +291,7 @@ export async function POST(request: NextRequest) {
       awaitingConsent,
       skipped: jobs.length - capped.length,
       alreadyApplied: alreadySet.size,
+      closed,
       excludedByCompany,
       belowThreshold,
       matchMin,

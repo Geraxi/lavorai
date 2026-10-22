@@ -2,6 +2,7 @@ import { answerContinuationIneligibility, continuationSelect } from "./applicati
 import { applicationRolloutConfig, historicalRetriesBlocked, rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
+import { submissionSubjectKey } from "@/lib/application-submission-budget";
 import { hasPotentialSubmission } from "@/lib/application-worker-gates";
 
 /**
@@ -15,7 +16,7 @@ import { hasPotentialSubmission } from "@/lib/application-worker-gates";
  * Una candidatura è "prendibile" se è `queued` e non è stata presa da nessuno
  * (`startedAt` null), creata dopo il cutoff storico e ammessa dalla policy
  * (consenso esplicito, oppure modalità auto dell'utente in modalità automatica).
- * Le prese vecchie restano ferme: nessun recupero/replay automatico.
+ * Solo i lease queued pre-preparazione provatamente intatti sono recuperabili.
  */
 
 export const STALE_CLAIM_MS = 20 * 60_000;
@@ -56,7 +57,9 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
  * torna queued; applying resta riservata per verifica, senza replay automatico.
  */
 export async function recoverStuckApplications(): Promise<number> {
-  if (applicationsPaused() || historicalRetriesBlocked()) return 0;
+  if (applicationsPaused()) return 0;
+  const queuedRecovered = await recoverPrePreparationClaims();
+  if (historicalRetriesBlocked()) return queuedRecovered;
   const stale = new Date(Date.now() - STALE_CLAIM_MS);
   const stuck = await prisma.application.findMany({
     where: {
@@ -69,7 +72,7 @@ export async function recoverStuckApplications(): Promise<number> {
       viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true },
     take: 50,
   });
-  let recovered = 0;
+  let recovered = queuedRecovered;
   for (const app of stuck) {
     // A timed-out applying worker may already have delivered. Never replay it.
     // Even pre-marker legacy applying rows require manual outcome verification.
@@ -89,7 +92,56 @@ export async function recoverStuckApplications(): Promise<number> {
   return recovered;
 }
 
-/** Read-only polling. Historical rows, stale claims and automatic recovery stay frozen. */
+/** Only a pristine queued lease can be released. Absence of a receipt alone is
+ * never enough: prepared documents, continuation, hold/error, attempts and the
+ * immutable reservation ledger all exclude recovery. Row locking serializes this
+ * with reserveApplicationWork, which accepts queued only and issues a new token.
+ * Ordinary consent/billing/privacy gates still run on the next preparation. */
+export async function recoverPrePreparationClaims(now = new Date()): Promise<number> {
+  if (applicationsPaused() || rolloutCreationBlocked()) return 0;
+  const pristine = {
+    status: "queued", completedAt: null, retryCount: 0,
+    submittedAt: null, submittedVia: null, submitConfirmation: null,
+    submissionReceiptJson: null, answerContinuationJson: null,
+    cvDocxPath: null, cvPdfPath: null, coverLetterPath: null,
+    canaryLog: null, answersUsedJson: null, errorMessage: null,
+    viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+    emailAttempts: { none: {} },
+  } as const;
+  const stale = new Date(+now - STALE_CLAIM_MS);
+  let recovered = 0;
+  let afterId: string | undefined;
+  // Keyset pages advance past historical rows and immutable reservations too.
+  // A permanently excluded first page must not starve later eligible leases.
+  while (recovered < 50) {
+    const candidates = await prisma.application.findMany({
+      where: { ...pristine, startedAt: { lt: stale }, ...(afterId ? { id: { gt: afterId } } : {}) },
+      select: { id: true, userId: true, jobId: true, startedAt: true,
+        createdAt: true, consentGrantedAt: true, retryCount: true }, take: 50, orderBy: { id: "asc" },
+    });
+    if (!candidates.length) break;
+    afterId = candidates[candidates.length - 1].id;
+    for (const candidate of candidates) {
+      if (recovered >= 50) break;
+      if (rolloutApplicationIneligibility(candidate, now)) continue;
+      recovered += await prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM "Application" WHERE id = ${candidate.id} FOR UPDATE`;
+        const reserved = await tx.applicationSubmissionReservation.findFirst({ where: { OR: [
+          { applicationId: candidate.id }, { subjectKey: submissionSubjectKey(candidate.userId, candidate.jobId) },
+        ] }, select: { id: true } });
+        if (reserved) return 0;
+        const result = await tx.application.updateMany({ where: {
+          ...pristine, id: candidate.id, startedAt: candidate.startedAt,
+          createdAt: candidate.createdAt, consentGrantedAt: candidate.consentGrantedAt,
+        }, data: { startedAt: null } });
+        return result.count;
+      });
+    }
+  }
+  return recovered;
+}
+
+/** Read-only polling. Does not steal claims or replay historical attempts. */
 export async function findClaimableQueued(limit: number): Promise<string[]> {
   if (applicationsPaused() || rolloutCreationBlocked()) return [];
   const config = applicationRolloutConfig();

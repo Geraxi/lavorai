@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     // Sync each user with rate limiting
     for (const account of usersWithGoogle) {
       // Skip suspended users
-      if (account.user.suspendedAt) {
+      if (account.user.suspendedAt || !await hasGmailConnected(account.userId)) {
         continue;
       }
 

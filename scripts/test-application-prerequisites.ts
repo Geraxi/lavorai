@@ -23,7 +23,7 @@ for (const route of ["apply", "apply-batch", "consent"]) {
   const source = readFileSync(`src/app/api/applications/${route}/route.ts`, "utf8");
   const gate = source.indexOf("applicationPrerequisiteBlock(user)");
   assert.ok(gate > 0, `${route} checks prerequisites`);
-  for (const write of ["prisma.application.create", "prisma.application.updateMany", "enqueueApplication("]) {
+  for (const write of ["createFreshApplication(", "prisma.application.create", "prisma.application.updateMany", "enqueueApplication("]) {
     const at = source.indexOf(write, source.indexOf("export async function POST"));
     if (at > 0) assert.ok(gate < at, `${route}: prerequisite gate precedes ${write}`);
   }

@@ -344,7 +344,9 @@ export async function completeApplicationSubmission(
     // that same attempt is still recorded once, without ever replaying it.
     const changed = await tx.application.updateMany({ where: {
       id, startedAt: token, status: row.status, submitConfirmation: row.submitConfirmation,
-    }, data: { ...data, status: "success" } });
+    }, data: { ...data, status: "success", sentNotificationRequiredAt: new Date() } });
+    // Intent commits atomically with the receipt/outcome. Reconciliation can
+    // rebuild a missing outbox row after a crash; legacy completions have no intent.
     if (changed.count !== 1) return false;
     if (row.session) {
       const successes = await tx.application.count({ where: { sessionId: row.session.id, status: "success" } });

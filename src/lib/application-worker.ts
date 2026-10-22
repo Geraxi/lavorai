@@ -3,6 +3,7 @@ import { applicationsPaused, assertApplicationsRunning } from "@/lib/application
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
 import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS } from "@/lib/application-answer-continuation";
+import { queueApplicationSentNotification } from "@/lib/application-sent-notification";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { optimizeCV } from "@/lib/claude";
@@ -1253,7 +1254,7 @@ async function shouldSuppressForCooldown(
   }
 }
 
-async function notifyApplicationSent(applicationId: string): Promise<void> {
+export async function notifyApplicationSent(applicationId: string): Promise<void> {
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -1271,7 +1272,7 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
       confirmation: app.submitConfirmation ?? "unknown",
     },
     dedupeKey: `first_application_delivered:${app.userId}`,
-  });
+  }).catch(() => console.error("[worker] delivery analytics unavailable; notification remains independent"));
 
   // Cooldown 2h: burst di N success in pochi minuti = 1 sola email
   // individuale; le successive vengono raccolte dal daily_summary. Case
@@ -1299,7 +1300,6 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
     return;
   }
 
-  const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
 
   const locale = app.user.locale === "en" ? "en" : "it";
@@ -1336,14 +1336,10 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
             : `Abbiamo inviato la tua candidatura per "${jobTitle}" via email all'indirizzo di recruiting di ${company}. L'accettazione del provider non conferma la consegna o una risposta del recruiter. Controlla questo invio prima di candidarti di nuovo.`
       }\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`;
 
-  await sendWithinQuota("application_sent", app.user.email, async () => {
-    await resend.emails.send({
-      from,
-      to: app.user.email,
-      subject,
-      html: renderSentEmail({ firstName, jobTitle, company, jobUrl, locale, level }),
-      text: textBody,
-    });
+  await queueApplicationSentNotification(applicationId, {
+    from, to: app.user.email, subject,
+    html: renderSentEmail({ firstName, jobTitle, company, jobUrl, locale, level }),
+    text: textBody,
   });
 }
 

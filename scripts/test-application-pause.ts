@@ -67,7 +67,7 @@ async function main() {
         assert.equal((await api.POST({ headers: new Headers({ authorization: `Bearer ${process.env.CRON_SECRET}` }) })).status, 503);
       }
     } finally { if (previousCron === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = previousCron; }
-    // Removing the broad pause never implicitly re-enables historical recovery.
+    // Removing the broad pause admits the shared pre-preparation-only recovery.
     if (readFileSync("src/lib/cron-self-heal.ts", "utf8").includes("appsRecoveredSafely")) {
       process.env.APPLICATIONS_PAUSED = "false";
       let safeRecoveryCalls = 0;
@@ -75,8 +75,8 @@ async function main() {
         "@/lib/db": { prisma: { user: { findMany: async () => [] } } },
         "@/lib/application-claim": { recoverStuckApplications: async () => { safeRecoveryCalls++; return 2; } },
       });
-      assert.equal((await heal.runCronSelfHeal()).appsRecoveredSafely, 0);
-      assert.equal(safeRecoveryCalls, 0);
+      assert.equal((await heal.runCronSelfHeal()).appsRecoveredSafely, 2);
+      assert.equal(safeRecoveryCalls, 1);
       assert(!readFileSync("src/lib/cron-self-heal.ts", "utf8").includes("prisma.application.update"));
       process.env.APPLICATIONS_PAUSED = "true";
     }

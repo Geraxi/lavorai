@@ -1,3 +1,4 @@
+import { createFreshApplication } from "@/lib/application-create";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { applicationPrerequisiteBlock } from "@/lib/application-prerequisites";
@@ -169,6 +170,9 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       );
     }
+    if (job.closedAt) return NextResponse.json({
+      error: "job_closed", message: "L’annuncio risulta chiuso. Scegli un’altra offerta.",
+    }, { status: 409 });
     type Mode = "off" | "manual" | "hybrid" | "auto";
     const mode: Mode = (prefs?.autoApplyMode as Mode) ?? "manual";
 
@@ -225,7 +229,7 @@ export async function POST(request: NextRequest) {
     // Recheck immediately before creation, including each selected batch job.
     if (rolloutCreationBlocked()) return NextResponse.json({ error: "application_rollout_closed" }, { status: 503 });
     const createdAt = new Date();
-    const application = await prisma.application.create({
+    const application = await createFreshApplication({
       data: {
         userId: user.id,
         jobId,
@@ -260,6 +264,12 @@ export async function POST(request: NextRequest) {
         dailyLimit - usedToday - 1,
     });
   } catch (err) {
+    if (err instanceof Error && err.message === "prior_application_exists") return NextResponse.json({
+      error: "prior_application_exists", message: "Esiste già una candidatura per questo annuncio.",
+    }, { status: 409 });
+    if (err instanceof Error && ["daily_limit", "paywall"].includes(err.message)) return NextResponse.json({
+      error: err.message, message: "Limite candidature raggiunto. La richiesta non ha creato un’altra candidatura.",
+    }, { status: err.message === "daily_limit" ? 429 : 402 });
     console.error("[api/applications/apply]", err);
     return NextResponse.json(
       {
