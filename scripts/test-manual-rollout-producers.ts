@@ -13,6 +13,7 @@ let forbiddenAccesses = 0;
 const noAccess = new Proxy({}, { get() { forbiddenAccesses++; throw new Error("Unexpected external dependency access"); } });
 const json = (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 });
 import * as liveness from "../src/lib/auto-apply-liveness-gate";
+import * as paidPriority from "../src/lib/paid-priority";
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-rollout": rollout,
@@ -27,6 +28,7 @@ function load(path: string, extra: Record<string, any> = {}) {
     "@/lib/application-queue": { enqueueApplication: async () => { throw new Error("Unexpected queue publication"); } },
     "next/server": { NextResponse: { json, redirect: (location: string) => ({ status: 307, location }) } },
     "@/lib/auto-apply-liveness-gate": liveness,
+    "@/lib/paid-priority": paidPriority,
     "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "unknown", reason: "test_no_network" }), markJobClosed: async () => {}, JOB_CLOSED_HELD_MESSAGE: "closed" },
     zod: { z }, ...extra,
   };

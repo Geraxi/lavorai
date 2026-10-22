@@ -23,6 +23,7 @@ import { runSelfHeal } from "@/lib/auto-apply-self-heal";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
+import { sortByPaidPriority } from "@/lib/paid-priority";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -173,6 +174,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
       id: true,
       email: true,
       tier: true,
+      subscriptionStatus: true,
       trialEndsAt: true, trialGraceEndsAt: true,
       createdAt: true,
       avoidCompanies: true,
@@ -201,7 +203,10 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   // Board apply-link lookups share one bounded budget across the whole run
   // (route maxDuration is 300s); later users simply skip new lookups.
   const resolutionDeadline = Date.now() + BOARD_RESOLUTION_RUN_BUDGET_MS;
-  for (const user of eligibleUsers) {
+  // Paid Pro/Pro+ and active trials go first: the liveness-check budget and the
+  // board-resolution deadline are shared per run, so later users can be starved.
+  const orderedUsers = sortByPaidPriority(eligibleUsers, (u) => u, (u) => u.createdAt);
+  for (const user of orderedUsers) {
     try {
       stats.usersProcessed++;
       await processUser(user, stats, todayStart, monthStart, resolutionDeadline, livenessGate);
@@ -264,6 +269,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       id: true,
       email: true,
       tier: true,
+      subscriptionStatus: true,
       trialEndsAt: true, trialGraceEndsAt: true,
       createdAt: true,
       avoidCompanies: true,
