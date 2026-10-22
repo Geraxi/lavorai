@@ -1,6 +1,5 @@
-import { Resend } from "resend";
 import { prisma } from "@/lib/db";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { sendQueuedNotification } from "@/lib/email-outbox";
 import { isTestAccount } from "@/lib/admin";
 import { deliveryEvidence, type DeliveryEvidenceInput } from "@/lib/application-evidence";
 
@@ -87,14 +86,13 @@ export async function runDailySummary(opts?: { onlyEmail?: string; dryRun?: bool
     if (!apiKey) { result.details.push({ email: user.email, status: "no_resend_key", counts }); result.skipped++; continue; }
     try {
       const { subject, html, text } = renderSummary(user, activity);
-      const notification = await sendWithinQuota("daily_summary", user.email, async () => {
-        const response = await new Resend(apiKey).emails.send({
+      const notification = await sendQueuedNotification("daily_summary", user.email, async () => {
+        return {
           from: process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>", to: user.email, subject, html, text,
-        });
-        if (response.error || !response.data?.id) throw new Error("Daily summary was not accepted by the email provider.");
+        };
       });
       if (!notification.sent) {
-        result.details.push({ email: user.email, status: "quota_blocked", counts }); result.skipped++; continue;
+        result.details.push({ email: user.email, status: notification.reason ?? "pending", counts }); result.skipped++; continue;
       }
       result.details.push({ email: user.email, status: "accepted", counts }); result.sent++;
     } catch (error) {

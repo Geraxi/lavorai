@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes, createHash } from "node:crypto";
 import { z } from "zod";
-import { Resend } from "resend";
+import { Resend } from "@/lib/resend";
 import { prisma } from "@/lib/db";
 import { authLimiter } from "@/lib/rate-limit";
 import { checkOrigin } from "@/lib/csrf";

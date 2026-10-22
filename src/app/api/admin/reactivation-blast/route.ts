@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { sendQueuedNotification } from "@/lib/email-outbox";
 import { renderBrandEmail } from "@/lib/email-brand";
 
 export const runtime = "nodejs";
@@ -39,7 +38,7 @@ export async function POST(req: NextRequest) {
 
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
   const apiKey = process.env.RESEND_API_KEY;
-  const resend = apiKey ? new Resend(apiKey) : null;
+  const resend = !!apiKey;
   const from = process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>";
 
   // Fetch all eligible users (free, not suspended, email verified)
@@ -145,22 +144,21 @@ async function sendSegment(
   segment: string,
   user: { email: string },
   renderFn: () => { subject: string; html: string; text: string },
-  resend: InstanceType<typeof Resend>,
+  resend: boolean,
   from: string,
   stats: { sent: number; failed: number; errors: string[] }
 ) {
   try {
     const { subject, html, text } = renderFn();
     
-    const result = await sendWithinQuota("reactivation_blast", user.email, async () => {
-      const { error } = await resend.emails.send({
+    const result = await sendQueuedNotification("reactivation_blast", user.email, async () => {
+      return {
         from,
         to: user.email,
         subject,
         html,
         text,
-      });
-      if (error) throw new Error(JSON.stringify(error));
+      };
     });
 
     if (result.sent) {

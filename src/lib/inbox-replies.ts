@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Resend } from "resend";
+import { Resend } from "@/lib/resend";
 import { prisma } from "@/lib/db";
 import { emailTransaction, nextDeliveryStatus, DELIVERY_EVENT_STATUS } from "@/lib/application-delivery";
 import { inboundReplyAddress } from "@/lib/email";

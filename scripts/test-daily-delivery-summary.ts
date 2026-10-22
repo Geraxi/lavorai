@@ -45,7 +45,7 @@ function harness(options: HarnessOptions = {}) {
     } };
   }
   const dependencies: Record<string, unknown> = {
-    resend: { Resend },
+    "@/lib/resend": { Resend },
     "@/lib/application-evidence": { deliveryEvidence },
     "@/lib/admin": { isTestAccount: () => options.testAccount === true },
     "@/lib/db": { prisma: {
@@ -56,10 +56,12 @@ function harness(options: HarnessOptions = {}) {
       user: { findUnique: async () => ({ id: "owner", email: "owner@example.test", name: "<img> Owner", locale: options.locale ?? "en" }) },
       emailLog: { count: async (query: unknown) => { queries.cooldown = query; return options.cooldown ? 1 : 0; } },
     } },
-    "@/lib/email-quota": { sendWithinQuota: async (kind: string, to: string, callback: () => Promise<void>) => {
+    "@/lib/email-outbox": { sendQueuedNotification: async (kind: string, to: string, callback: () => Promise<any>) => {
       quotaCalls++; assert.equal(kind, "daily_summary"); assert.equal(to, "owner@example.test");
       if (options.quota === false) return { sent: false, reason: "daily quota" };
-      await callback(); successfulQuotaLogs++; return { sent: true, reason: null };
+      const response = await new Resend().emails.send(await callback());
+      if (response.error || !response.data?.id) throw Error("provider rejected");
+      successfulQuotaLogs++; return { sent: true, reason: null };
     } },
   };
   const source = ts.transpileModule(readFileSync("src/lib/daily-summary.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
@@ -114,7 +116,7 @@ async function main() {
     assert.notEqual(result.details[0].status, "accepted");
   }
   const quota = harness({ quota: false }); const quotaResult = await quota.run();
-  assert.equal(quotaResult.sent, 0); assert.equal(quotaResult.skipped, 1); assert.equal(quota.sent.length, 0); assert.equal(quotaResult.details[0].status, "quota_blocked");
+  assert.equal(quotaResult.sent, 0); assert.equal(quotaResult.skipped, 1); assert.equal(quota.sent.length, 0); assert.equal(quotaResult.details[0].status, "daily quota");
   for (const options of [{ cooldown: true }, { key: false }, { testAccount: true }, { rows: [applications[14], applications[15]] }]) {
     const h = harness(options); const result = await h.run(); assert.equal(result.sent, 0); assert.equal(h.sent.length, 0); assert.equal(result.skipped, 1);
   }

@@ -1,3 +1,4 @@
+import * as emailPolicy from "../src/lib/email-dispatch-policy";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
@@ -70,6 +71,7 @@ async function main() {
     ]) { row = { ...fixture(), ...mutation }; assert.equal(await canary.authorizeReleaseCanary(input), false); }
     row = fixture();
     const sender = load("src/lib/recruiter-delivery.ts", {
+      "@/lib/email-dispatch-policy": emailPolicy,
       "@/lib/application-pause": { applicationsPaused }, "@/lib/release-email-canary": canary,
     }).sendRecruiterEmailOnce;
     const events: string[] = [];

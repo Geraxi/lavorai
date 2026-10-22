@@ -1,3 +1,4 @@
+import * as emailPolicy from "../src/lib/email-dispatch-policy";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -29,10 +30,12 @@ const notificationDb = {
   },
 };
 const deps: Record<string, unknown> = {
+  "@/lib/email-dispatch-policy": emailPolicy,
+  "@/lib/email-context": { emailContext: { run: (_context: unknown, fn: () => unknown) => fn() } },
   "node:crypto": { randomUUID }, "@/lib/db": { prisma: notificationDb },
   "@/lib/submission-receipt": receipts, "@/lib/application-pause": { applicationsPaused: () => false },
   "@/lib/email-quota": { sendWithinQuota: quota },
-  resend: { Resend: class { emails = { send: async (payload: any, options: any) => {
+  "@/lib/resend": { Resend: class { emails = { send: async (payload: any, options: any) => {
     providerCalls++;
     await new Promise(resolve => setTimeout(resolve, 20));
     if (rejectProvider) return { error: { message: "synthetic rejection" } };
@@ -70,6 +73,7 @@ async function main() {
   });
   assert.equal(crashCalls, 1); assert.equal(await db.applicationSentNotification.count(), 0);
   const notify = async (id: string) => { assert.equal(id, "proved"); await notifications.queueApplicationSentNotification(id, payload); };
+  await db.applicationSentNotification.updateMany({ data: { nextAttemptAt: new Date(0) } });
   await Promise.all(Array.from({ length: 4 }, () => notifications.reconcileApplicationSentNotifications(notify)));
   assert.equal(providerCalls, 1); assert.equal(accepted.size, 1);
   assert.equal(await db.applicationSentNotification.count(), 1);
@@ -82,6 +86,7 @@ async function main() {
   await notifications.queueApplicationSentNotification("provider-crash", payload);
   assert.equal((await db.applicationSentNotification.findUniqueOrThrow({ where: { applicationId: "provider-crash" } })).status, "pending");
   const before = providerCalls;
+  await db.applicationSentNotification.updateMany({ data: { nextAttemptAt: new Date(0) } });
   await Promise.all(Array.from({ length: 4 }, () => notifications.reconcileApplicationSentNotifications(notify)));
   assert.equal(providerCalls, before + 1); assert.equal(accepted.size, 2);
   assert.equal((await db.applicationSentNotification.findUniqueOrThrow({ where: { applicationId: "provider-crash" } })).status, "sent");
@@ -93,6 +98,7 @@ async function main() {
   await notifications.queueApplicationSentNotification("rejected", payload);
   assert.equal((await db.applicationSentNotification.findUniqueOrThrow({ where: { applicationId: "rejected" } })).status, "pending");
   rejectProvider = false;
+  await db.applicationSentNotification.updateMany({ data: { nextAttemptAt: new Date(0) } });
   await notifications.reconcileApplicationSentNotifications(notify);
   assert.equal((await db.applicationSentNotification.findUniqueOrThrow({ where: { applicationId: "rejected" } })).status, "sent");
   assert.equal(accepted.size, 3);

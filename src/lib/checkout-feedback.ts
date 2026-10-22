@@ -1,8 +1,7 @@
-import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { renderBrandEmail } from "@/lib/email-brand";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { sendQueuedNotification } from "@/lib/email-outbox";
 
 const site = () => process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 const from = () => process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>";
@@ -85,13 +84,12 @@ export async function runCheckoutFeedbackCampaign(opts: { dryRun?: boolean } = {
       footnote: en ? "You will only receive this request once." : "Riceverai questa richiesta una sola volta.",
     });
     try {
-      const sent = await sendWithinQuota("checkout_feedback", user.email, async () => {
-        const { error } = await new Resend(apiKey).emails.send({
+      const sent = await sendQueuedNotification("checkout_feedback", user.email, async () => {
+        return {
           from: from(), to: user.email,
           subject: en ? "What stopped you from completing LavorAI?" : "Cosa ti ha fermato prima di completare LavorAI?",
           html: email.html, text: email.text,
-        });
-        if (error) throw new Error(JSON.stringify(error));
+        };
       });
       if (sent.sent) result.sent++; else result.skipped++;
       result.details.push({ email: user.email, status: sent.sent ? "sent" : (sent.reason ?? "skipped") });

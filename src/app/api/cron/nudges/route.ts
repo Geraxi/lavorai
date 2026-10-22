@@ -1,3 +1,4 @@
+import { drainEmailNotifications } from "@/lib/email-outbox";
 import { NextResponse, type NextRequest } from "next/server";
 import { runOnboardingNudges } from "@/lib/onboarding-nudge";
 import { runUpgradeNudges } from "@/lib/upgrade-nudge";
@@ -53,7 +54,9 @@ export async function GET(request: NextRequest) {
     runTrialNudges({}).catch((err) => ({ error: String(err) })),
     runCheckoutRecovery({}).catch((err) => ({ error: String(err) })),
   ]);
+  const emailQueue = await drainEmailNotifications().catch(err => ({ error: String(err) }));
   return NextResponse.json({
+    emailQueue,
     ok: true,
     ms: Date.now() - t0,
     sync,

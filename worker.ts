@@ -145,10 +145,27 @@ async function main(): Promise<void> {
     }
   }, livenessMs);
 
+  // Notification-only retry pump: never invokes an application submission.
+  let emailPumpRunning = false;
+  const emailPump = async () => {
+    if (emailPumpRunning) return;
+    emailPumpRunning = true;
+    try {
+      const { drainEmailNotifications } = await import("./src/lib/email-outbox");
+      const { retryPendingApplicationSentNotifications } = await import("./src/lib/application-sent-notification");
+      await retryPendingApplicationSentNotifications();
+      await drainEmailNotifications();
+    } catch (error) { console.error("[worker] notification retry failed", error instanceof Error ? error.message : "unknown"); }
+    finally { emailPumpRunning = false; }
+  };
+  const emailTimer = setInterval(() => void emailPump(), 30_000);
+  void emailPump();
+
   // Graceful shutdown
   const shutdown = async (signal: string) => {
     console.log(`[worker] ${signal} received, draining...`);
     clearInterval(pollTimer);
+    clearInterval(emailTimer);
     if (autoApplyTimer) clearInterval(autoApplyTimer);
     clearInterval(livenessTimer);
     if (worker) await worker.close();

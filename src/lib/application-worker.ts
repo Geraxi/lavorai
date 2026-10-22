@@ -4,7 +4,6 @@ import { parseScopedApplicationAnswers } from "@/lib/application-question-answer
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
 import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS } from "@/lib/application-answer-continuation";
 import { queueApplicationSentNotification } from "@/lib/application-sent-notification";
-import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { optimizeCV } from "@/lib/claude";
 import {
@@ -23,7 +22,7 @@ import { profileToRow, rowToProfile } from "@/lib/cv-profile-types";
 import { detectLanguage } from "@/lib/lang-detect";
 import { renderCVPdf } from "@/lib/cv-pdf";
 import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { sendQueuedNotification } from "@/lib/email-outbox";
 import { inboundReplyAddress } from "@/lib/email";
 import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { humanContext, launchBrowser } from "@/lib/browser";
@@ -924,13 +923,12 @@ async function sendApplicationEmail(input: {
     return;
   }
 
-  const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
   const firstName = (input.userName ?? "").split(/\s+/)[0] || "";
   const company = input.job.company ?? "l'azienda";
 
-  await sendWithinQuota("cv_ready", input.to, async () => {
-    await resend.emails.send({
+  await sendQueuedNotification("cv_ready", input.to, async () => {
+    return {
       from,
       to: input.to,
       subject: `CV pronto per "${input.job.title}" — ${company}`,
@@ -946,7 +944,7 @@ async function sendApplicationEmail(input: {
         { filename: "CV_Ottimizzato.docx", content: input.cvBuffer },
         { filename: "Lettera_Motivazionale.docx", content: input.clBuffer },
       ],
-    });
+    };
   });
 }
 
@@ -1462,7 +1460,6 @@ async function notifyApplicationManual(applicationId: string): Promise<void> {
     return;
   }
 
-  const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
 
   const locale = app.user.locale === "en" ? "en" : "it";
@@ -1475,15 +1472,15 @@ async function notifyApplicationManual(applicationId: string): Promise<void> {
       ? `Hi ${firstName},\n\nYour CV for "${jobTitle}" at ${company} is ready, but I couldn't submit it automatically (custom career page or non-standard form).\n\nOpen the job and click "Apply" — the files are already attached: ${jobUrl}\n\n— LavorAI`
       : `Ciao ${firstName},\n\nIl tuo CV per "${jobTitle}" presso ${company} è pronto, ma non sono riuscito a inviarlo in automatico (career page custom o form non standard).\n\nApri l'annuncio e clicca "Apply" — i file sono già allegati: ${jobUrl}\n\n— LavorAI`;
 
-  await sendWithinQuota("application_manual", app.user.email, async () => {
-    await resend.emails.send({
+  await sendQueuedNotification("application_manual", app.user.email, async () => {
+    return {
       from,
       to: app.user.email,
       subject,
       html: renderManualEmail({ firstName, jobTitle, company, jobUrl, locale }),
       text: textBody,
-    });
-  });
+    };
+  }, `manual/${app.id}`);
 }
 
 /**
@@ -1502,7 +1499,6 @@ async function notifyNeedsAnswers(applicationId: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return;
 
-  const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
   const firstName = (app.user.name ?? "").split(/\s+/)[0] || "";
@@ -1520,8 +1516,8 @@ async function notifyNeedsAnswers(applicationId: string): Promise<void> {
       ? `Hi ${firstName},\n\nThe application for "${jobTitle}" at ${company} has a few required questions only you can answer (e.g. work authorization, screening questions).\n\nAnswer them once here and we'll submit automatically (and reuse your answers next time): ${url}\n\n— LavorAI`
       : `Ciao ${firstName},\n\nLa candidatura per "${jobTitle}" presso ${company} ha alcune domande obbligatorie a cui solo tu puoi rispondere (es. diritto al lavoro, domande di screening).\n\nRispondi una volta qui e inviamo in automatico (e riusiamo le risposte la prossima volta): ${url}\n\n— LavorAI`;
 
-  await sendWithinQuota("application_manual", app.user.email, async () => {
-    await resend.emails.send({
+  await sendQueuedNotification("application_manual", app.user.email, async () => {
+    return {
       from,
       to: app.user.email,
       subject,
@@ -1533,8 +1529,8 @@ async function notifyNeedsAnswers(applicationId: string): Promise<void> {
   <p style="font-size:15px;line-height:1.6;color:#334155;">${locale === "en" ? "We reuse explicit facts when they agree. Review declarations for this application. Saving does not send it: confirm continuation separately when a safe pre-submission pause is verified." : "Riutilizziamo i fatti espliciti quando concordano. Verifica le dichiarazioni per questa candidatura. Salvare non invia: conferma la ripresa separatamente quando la pausa prima dell’invio è verificata."}</p>
   <div style="text-align:center;margin:28px 0;"><a href="${url}" style="display:inline-block;background:#16A34A;color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:600;">${locale === "en" ? "Answer the questions" : "Rispondi alle domande"}</a></div>
 </body></html>`,
-    });
-  });
+    };
+  }, `questions/${app.id}`);
 }
 
 function renderManualEmail(data: {

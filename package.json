@@ -56,7 +56,8 @@
     "test:feedback-files": "node --import tsx scripts/test-feedback-files.ts",
     "test:feedback-runtime": "node --import tsx scripts/test-feedback-reports.ts --runtime",
     "test:cv-fact-guard": "node --import tsx scripts/test-cv-fact-guard.ts",
-    "test:liveness-gate": "node --import tsx scripts/test-auto-apply-liveness-gate.ts"
+    "test:liveness-gate": "node --import tsx scripts/test-auto-apply-liveness-gate.ts",
+    "test:email-reliability-postgres": "node --import tsx scripts/test-email-reliability-postgres.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

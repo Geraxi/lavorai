@@ -6,7 +6,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { createAuthAdapter } from "@/lib/auth-adapter";
 import { allowGoogleSignIn, verifyGoogleSignInEmail } from "@/lib/google-auth";
-import { Resend } from "resend";
+import { Resend } from "@/lib/resend";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { moveFile } from "@/lib/storage";

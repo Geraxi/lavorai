@@ -1,3 +1,5 @@
+import { emailLimits, utcPeriods } from "@/lib/email-dispatch";
+import { emailContext } from "@/lib/email-context";
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 
@@ -12,31 +14,6 @@ import { prisma } from "@/lib/db";
  *  - logghiamo il fatto
  */
 
-const DEFAULT_DAILY = 95;
-const DEFAULT_MONTHLY = 2900;
-
-function limits(): { daily: number; monthly: number } {
-  const daily = Number(process.env.RESEND_DAILY_LIMIT ?? DEFAULT_DAILY);
-  const monthly = Number(process.env.RESEND_MONTHLY_LIMIT ?? DEFAULT_MONTHLY);
-  return {
-    daily: Number.isFinite(daily) && daily > 0 ? daily : DEFAULT_DAILY,
-    monthly: Number.isFinite(monthly) && monthly > 0 ? monthly : DEFAULT_MONTHLY,
-  };
-}
-
-function dayStart(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function monthStart(): Date {
-  const d = new Date();
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 /** Ritorna { allowed, reason } — allowed=false se siamo oltre il limite. */
 export async function canSendEmail(): Promise<{
   allowed: boolean;
@@ -46,10 +23,15 @@ export async function canSendEmail(): Promise<{
   daily: number;
   monthly: number;
 }> {
-  const { daily, monthly } = limits();
+  const { daily, monthly } = emailLimits();
+  const { day, month: monthDate } = utcPeriods(new Date());
+  const count = async (since: Date) => {
+    const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`SELECT COUNT(*) AS n FROM (SELECT id FROM "EmailReservation" WHERE "createdAt" >= ${since} UNION SELECT id FROM "EmailLog" WHERE "createdAt" >= ${since}) usage`;
+    return Number(rows[0].n);
+  };
   const [today, month] = await Promise.all([
-    prisma.emailLog.count({ where: { createdAt: { gte: dayStart() } } }),
-    prisma.emailLog.count({ where: { createdAt: { gte: monthStart() } } }),
+    count(day),
+    count(monthDate),
   ]);
   if (today >= daily) {
     return {
@@ -102,22 +84,9 @@ export type EmailKind =
   | "reactivation_blast"
   | "other";
 
-/** Marca un'email come effettivamente consegnata per il tracking quota. */
-export async function recordEmailSent(
-  kind: EmailKind,
-  to: string,
-): Promise<void> {
-  try {
-    await prisma.emailLog.create({ data: { kind, to } });
-  } catch (err) {
-    console.warn("[email-quota] log write failed", err);
-  }
-}
-
-/**
- * Helper unificato: verifica quota + invia + logga. Se bloccato ritorna
- * { sent: false, reason }. Il chiamante decide se loggare/avvisare.
- */
+/** Compatibility boundary for one-shot recruiter sends and the existing sent
+ * notification outbox. The shared Resend transport reserves quota and logs only
+ * validated provider acceptance. This function never retries its callback. */
 export async function sendWithinQuota(
   kind: EmailKind,
   to: string,
@@ -126,19 +95,6 @@ export async function sendWithinQuota(
   if (applicationsPaused() && ["cv_ready", "application_sent", "application_manual", "application_no_reply_yet", "daily_summary"].includes(kind)) {
     return { sent: false, reason: "applications_paused" };
   }
-  const q = await canSendEmail();
-  if (!q.allowed) {
-    console.warn(
-      `[email-quota] SKIP ${kind} → ${to} (${q.reason}; today=${q.today}/${q.daily} month=${q.month}/${q.monthly})`,
-    );
-    return { sent: false, reason: q.reason };
-  }
-  try {
-    await sendFn();
-    await recordEmailSent(kind, to);
-    return { sent: true, reason: null };
-  } catch (err) {
-    // Non registriamo il log se il send ha fallito → non conta verso la quota
-    throw err;
-  }
+  await emailContext.run({ kind, to }, sendFn);
+  return { sent: true, reason: null };
 }

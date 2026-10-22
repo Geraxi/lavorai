@@ -1,6 +1,5 @@
-import { Resend } from "resend";
 import { prisma } from "@/lib/db";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { sendQueuedNotification } from "@/lib/email-outbox";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { isTestAccount } from "@/lib/admin";
 import { esc, renderBrandEmail } from "@/lib/email-brand";
@@ -74,12 +73,13 @@ export async function runWeeklyDigest(opts?: {
   });
 
   const apiKey = process.env.RESEND_API_KEY;
-  const resend = apiKey ? new Resend(apiKey) : null;
+  const resend = !!apiKey;
   const cap = opts?.cap ?? DEFAULT_CAP;
   let sent = 0;
   let skipped = 0;
   let candidates = 0;
 
+  let admitted = 0;
   for (const u of users) {
     if (isTestAccount(u.email)) continue;
     if (!opts?.force && alreadySent.has(u.email.toLowerCase())) continue;
@@ -88,20 +88,20 @@ export async function runWeeklyDigest(opts?: {
     // Senza ruoli e senza match non c'è niente di utile da dire: skip.
     if (roles.length && matches.length === 0) continue;
     candidates++;
-    if (sent >= cap) { skipped++; details.push({ email: u.email, matches: matches.length, status: "cap" }); continue; }
+    if (admitted >= cap) { skipped++; details.push({ email: u.email, matches: matches.length, status: "cap" }); continue; }
     if (opts?.dryRun) { details.push({ email: u.email, matches: matches.length, status: "dry_run" }); continue; }
     if (!resend) { skipped++; details.push({ email: u.email, matches: matches.length, status: "no_resend_key" }); continue; }
     try {
-      const r = await sendWithinQuota(KIND, u.email, async () => {
+      admitted++;
+      const r = await sendQueuedNotification(KIND, u.email, async () => {
         const { subject, html, text } = renderDigest(u, roles, matches);
-        const { error } = await resend.emails.send({
+        return {
           from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>",
           to: u.email,
           subject,
           html,
           text,
-        });
-        if (error) throw new Error(JSON.stringify(error));
+        };
       });
       if (r.sent) { sent++; details.push({ email: u.email, matches: matches.length, status: "sent" }); }
       else { skipped++; details.push({ email: u.email, matches: matches.length, status: r.reason ?? "skipped" }); }

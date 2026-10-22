@@ -1,4 +1,5 @@
-import { Resend } from "resend";
+import { sendQueuedNotification } from "@/lib/email-outbox";
+import { Resend } from "@/lib/resend";
 
 let cachedClient: Resend | null = null;
 
@@ -169,14 +170,13 @@ export interface SendOptimizedCVEmailInput {
 
 export async function sendOptimizedCVEmail(
   input: SendOptimizedCVEmailInput,
-): Promise<void> {
-  const client = getClient();
+) {
   const siteUrl =
     process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   const loc: Locale = input.locale === "en" ? "en" : "it";
   const m = COPY[loc];
 
-  const { error } = await client.emails.send({
+  return sendQueuedNotification("cv_ready", input.to, async () => ({
     from: getFromAddress(),
     to: input.to,
     subject: m.subject,
@@ -191,14 +191,7 @@ export async function sendOptimizedCVEmail(
         content: input.coverLetterBuffer,
       },
     ],
-  });
-
-  if (error) {
-    console.error("[sendOptimizedCVEmail] Resend error", error);
-    throw new Error(
-      "Email send failed. Please retry in a few minutes or contact support.",
-    );
-  }
+  }), undefined, true);
 }
 
 function renderHtml(

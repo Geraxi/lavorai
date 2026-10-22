@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { CreateEmailOptions } from "resend";
+import type { CreateEmailOptions } from "@/lib/resend";
 import { prisma } from "@/lib/db";
 import { applicationsPaused } from "@/lib/application-pause";
 export { verifyProductionApplicationPause } from "@/lib/release-health";

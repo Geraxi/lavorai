@@ -1,7 +1,7 @@
 import { historicalRetriesBlocked } from "@/lib/application-rollout";
 import { prisma } from "@/lib/db";
 import { enqueueApplication } from "@/lib/application-queue";
-import { Resend } from "resend";
+import { Resend } from "@/lib/resend";
 import { recoverStuckApplications } from "@/lib/application-claim";
 
 /**

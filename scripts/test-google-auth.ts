@@ -91,7 +91,7 @@ async function main() {
     "next-auth/providers/credentials": { __esModule: true, default: (options: any) => options },
     "next-auth/providers/google": { __esModule: true, default: (options: any) => ({ ...options, id: "google", type: "oidc", account: () => ({}) }) },
     "@/lib/auth-adapter": { createAuthAdapter }, "@/lib/google-auth": googleAuth,
-    "resend": { Resend: class { constructor() { throw new Error("Unexpected email"); } } },
+    "@/lib/resend": { Resend: class { constructor() { throw new Error("Unexpected email"); } } },
     "bcryptjs": {}, "@/lib/db": { prisma: db }, "@/lib/storage": {},
     "@/lib/billing": billing, "node:crypto": await import("node:crypto"),
   };

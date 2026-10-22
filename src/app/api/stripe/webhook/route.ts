@@ -335,11 +335,10 @@ export async function POST(request: NextRequest) {
             try {
               const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
               const portal = await stripe().billingPortal.sessions.create({ customer: customerId, return_url: `${siteUrl}/settings` });
-              const { Resend } = await import("resend");
-              const { sendWithinQuota } = await import("@/lib/email-quota");
+              const { sendQueuedNotification } = await import("@/lib/email-outbox");
               const amount = inv.amount_due ? `${(inv.amount_due / 100).toFixed(2).replace(".", ",")} €` : "";
-              await sendWithinQuota("payment_failed", u.email, async () => {
-                await new Resend(process.env.RESEND_API_KEY).emails.send({
+              await sendQueuedNotification("payment_failed", u.email, async () => {
+                return {
                   from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>",
                   to: u.email,
                   subject: "Pagamento non riuscito — aggiorna la carta per non perdere il piano",
@@ -348,7 +347,7 @@ export async function POST(request: NextRequest) {
 <p>Stripe riproverà nei prossimi giorni, ma se la carta non è valida il piano tornerà a Free e le candidature automatiche si fermeranno.</p>
 <p><a href="${portal.url}" style="display:inline-block;padding:10px 16px;background:#16a34a;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Aggiorna la carta</a></p>
 <p style="color:#666;font-size:13px">Se hai già sistemato, ignora questa email. Per qualsiasi dubbio rispondi pure qui.</p>`,
-                });
+                };
               });
             } catch (e) {
               console.error("[stripe/webhook] payment_failed email error", e);

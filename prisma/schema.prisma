@@ -157,6 +157,7 @@ model User {
   accounts       Account[]
   sessions       Session[]
   portalSessions PortalSession[]
+  emailOutbox    EmailOutbox[]
   applications   Application[]
   cvDocuments    CVDocument[]
   preferences         UserPreferences?
@@ -1103,10 +1104,51 @@ model ApplicationSentNotification {
   payloadJson String @db.Text
   status String @default("pending")
   firstAttemptAt DateTime?
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
   leaseUntil DateTime?
   leaseToken String?
   providerEmailId String?
   error String?
   sentAt DateTime?
   createdAt DateTime @default(now())
+}
+
+/// Persistent notifications only. Never contains recruiter application sends.
+model EmailOutbox {
+  id String @id
+  dedupeKey String @unique
+  kind String
+  to String
+  userId String?
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payloadJson String @db.Text
+  priority Int @default(10)
+  status String @default("pending")
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now())
+  firstAttemptAt DateTime?
+  expiresAt DateTime
+  leaseToken String?
+  leaseUntil DateTime?
+  providerEmailId String?
+  error String?
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([status, nextAttemptAt, priority])
+}
+
+/// Conservative reservations include failed/uncertain requests; never released automatically.
+model EmailReservation {
+  id String @id
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
+
+/// One global dispatch lease for every process using the Resend account.
+model EmailDispatchGate {
+  id String @id
+  leaseToken String?
+  leaseUntil DateTime?
+  nextAt DateTime @default(now())
 }

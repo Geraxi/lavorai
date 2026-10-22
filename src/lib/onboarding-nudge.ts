@@ -1,6 +1,5 @@
-import { Resend } from "resend";
 import { prisma } from "@/lib/db";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { sendQueuedNotification } from "@/lib/email-outbox";
 import { isTestAccount } from "@/lib/admin";
 
 /**
@@ -15,7 +14,7 @@ import { isTestAccount } from "@/lib/admin";
  *  - mai agli account test/interni
  *  - max 1 nudge ogni NUDGE_COOLDOWN_DAYS per utente (dedup via EmailLog)
  *  - solo utenti registrati da almeno MIN_AGE_HOURS (non disturbiamo subito)
- *  - rispetta la quota email platform-wide (sendWithinQuota)
+ *  - rispetta la quota email platform-wide (sendQueuedNotification)
  */
 
 const NUDGE_COOLDOWN_DAYS = 5;
@@ -179,20 +178,18 @@ export async function runOnboardingNudges(opts?: {
       })),
     };
   }
-  const resend = new Resend(apiKey);
 
   for (const c of batch) {
     try {
-      const result = await sendWithinQuota("onboarding_nudge", c.email, async () => {
+      const result = await sendQueuedNotification("onboarding_nudge", c.email, async () => {
         const { subject, html, text } = renderNudge(c);
-        const { error } = await resend.emails.send({
+        return {
           from: process.env.RESEND_FROM_OVERRIDE ?? "LavorAI <noreply@lavorai.it>",
           to: c.email,
           subject,
           html,
           text,
-        });
-        if (error) throw new Error(JSON.stringify(error));
+        };
       });
       if (result.sent) {
         sent++;

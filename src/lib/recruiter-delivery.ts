@@ -1,6 +1,8 @@
+import { emailContext } from "@/lib/email-context";
+import { EmailDispatchError } from "@/lib/email-dispatch-policy";
 import { applicationsPaused } from "@/lib/application-pause";
 import { authorizeReleaseCanary } from "@/lib/release-email-canary";
-import { Resend, type CreateEmailOptions } from "resend";
+import { Resend, type CreateEmailOptions } from "@/lib/resend";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { createApplicationEmailAttempt, recordApplicationEmailAccepted, recordApplicationEmailUncertain } from "@/lib/application-delivery";
 
@@ -42,7 +44,7 @@ export async function sendRecruiterEmailOnce(input: {
     send: async (payload, key) => {
       const apiKey = process.env.RESEND_API_KEY;
       if (!apiKey) throw new Error("email_provider_not_configured");
-      return new Resend(apiKey).emails.send(payload, { idempotencyKey: key });
+      return emailContext.run({ ...emailContext.getStore()!, returnProviderErrors: true }, () => new Resend(apiKey).emails.send(payload, { idempotencyKey: key }));
     },
     ...overrides,
   };
@@ -95,7 +97,11 @@ export async function sendRecruiterEmailOnce(input: {
     });
     if (!quota.sent) return { kind: "not_sent", reason: "email_quota_unavailable" };
     return result;
-  } catch {
+  } catch (error) {
+    if (error instanceof EmailDispatchError && error.deferred) {
+      if (attemptId) await deps.uncertain(attemptId, true).catch(() => {});
+      return { kind: "not_sent", reason: error.message };
+    }
     if (result.kind === "not_sent" && ["provider_rejected", "current_gate_blocked"].includes(result.reason)) return result;
     // A duplicate/ambiguous attempt insert may refer to an already in-flight
     // send. Never release its fence by declaring this application not sent.

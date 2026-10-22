@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin, isTestAccount } from "@/lib/admin";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { sendQueuedNotification } from "@/lib/email-outbox";
 import { signOneClick } from "@/lib/one-click-token";
 import { renderBrandEmail } from "@/lib/email-brand";
 
@@ -31,7 +30,7 @@ export async function POST(req: NextRequest) {
   const targets = users.filter((u) => !isTestAccount(u.email) && !isAdmin(u.email) && u.preferences?.autoApplyMode !== "auto" && !already.has(u.email.toLowerCase()));
 
   const apiKey = process.env.RESEND_API_KEY;
-  const resend = apiKey ? new Resend(apiKey) : null;
+  const resend = !!apiKey;
   const details: { email: string; waiting: number; status: string }[] = [];
   let sent = 0;
   for (const u of targets) {
@@ -40,9 +39,8 @@ export async function POST(req: NextRequest) {
     const link = `${site}/api/preferences/activate-auto?t=${signOneClick(u.id, "activate_auto")}`;
     const { subject, html, text } = render(u, waiting, link, site);
     try {
-      const r = await sendWithinQuota("auto_apply_invite", u.email, async () => {
-        const { error } = await resend.emails.send({ from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>", to: u.email, subject, html, text });
-        if (error) throw new Error(JSON.stringify(error));
+      const r = await sendQueuedNotification("auto_apply_invite", u.email, async () => {
+        return { from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>", to: u.email, subject, html, text };
       });
       details.push({ email: u.email, waiting, status: r.sent ? "sent" : r.reason ?? "skipped" });
       if (r.sent) sent++;

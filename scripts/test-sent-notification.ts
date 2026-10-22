@@ -1,3 +1,4 @@
+import * as emailPolicy from "../src/lib/email-dispatch-policy";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -30,16 +31,19 @@ function matches(where: any) {
   });
 }
 const table = {
-  upsert: async ({ create }: any) => { row ??= { ...create, status: "pending", sentAt: null, firstAttemptAt: null, leaseUntil: null, leaseToken: null }; return row; },
+  upsert: async ({ create }: any) => { row ??= { ...create, status: "pending", attempts: 0, nextAttemptAt: new Date(0), sentAt: null, firstAttemptAt: null, leaseUntil: null, leaseToken: null }; return row; },
   findUnique: async () => row && { ...row },
   findMany: async () => row && !row.sentAt && ["pending", "sending"].includes(row.status) ? [{ applicationId: row.applicationId }] : [],
   updateMany: async ({ where, data }: any) => {
     if (data.status === "sent" && failWrite) { failWrite = false; throw Error("db after provider acceptance"); }
     if (!row || !matches(where)) return { count: 0 };
+    if (data.attempts?.increment) data = { ...data, attempts: row.attempts + data.attempts.increment };
     Object.assign(row, data); return { count: 1 };
   },
 };
 const deps: Record<string, any> = {
+  "@/lib/email-dispatch-policy": emailPolicy,
+  "@/lib/email-context": { emailContext: { run: (_context: unknown, fn: () => unknown) => fn() } },
   "node:crypto": { randomUUID: () => `lease-${Math.random()}` },
   "@/lib/db": { prisma: { application: { findUnique: async () => app,
     findMany: async ({ where, take }: any) => candidates.filter(candidate => (!where.id?.gt || candidate.id > where.id.gt)
@@ -49,7 +53,7 @@ const deps: Record<string, any> = {
   "@/lib/email-quota": { sendWithinQuota: async (_kind: string, _to: string, send: () => Promise<void>) => {
     try { clock += quotaDelay; await send(); return { sent: true }; } catch { return { sent: false, reason: "fixture_failure" }; }
   } },
-  resend: { Resend: class { emails = { send: async (payload: any, options: any) => {
+  "@/lib/resend": { Resend: class { emails = { send: async (payload: any, options: any) => {
     calls++; payloads.push(JSON.stringify(payload));
     if (fail) return { error: { message: "provider failure" } };
     if (!keys.has(options.idempotencyKey)) { accepted++; keys.add(options.idempotencyKey); }
@@ -73,9 +77,10 @@ async function main() {
   fail = true;
   await module.exports.queueApplicationSentNotification("a", payload);
   assert.equal(row.status, "pending"); assert.equal(row.sentAt, null);
-  fail = false; failWrite = true;
+  fail = false; failWrite = true; row.nextAttemptAt = new Date(0);
   await module.exports.retryApplicationSentNotification("a", now);
   assert.equal(row.status, "pending"); assert.equal(accepted, 1);
+  row.nextAttemptAt = new Date(0);
   await Promise.all([module.exports.retryApplicationSentNotification("a", now), module.exports.retryApplicationSentNotification("a", now)]);
   assert.equal(row.status, "sent"); assert.equal(accepted, 1, "stable key prevents second notification after acceptance/write crash");
   const before = calls;
@@ -84,12 +89,12 @@ async function main() {
   row = { ...row, sentAt: null, status: "pending", firstAttemptAt: new Date(+now - 24 * 3600_000) };
   await module.exports.retryApplicationSentNotification("a", now);
   assert.equal(row.status, "review_required"); assert.equal(calls, before);
-  row.status = "pending"; row.firstAttemptAt = new Date(+now - 22 * 3600_000);
+  row.nextAttemptAt = new Date(0); row.status = "pending"; row.firstAttemptAt = new Date(+now - 22 * 3600_000);
   row.leaseUntil = null; row.leaseToken = null; clock = +now; quotaDelay = 2 * 3600_000;
   await module.exports.retryApplicationSentNotification("a", now);
   assert.equal(row.status, "review_required", "quota wait crossing replay window stops at dispatch");
   assert.equal(row.leaseToken, null); assert.equal(calls, before);
-  row.status = "pending"; row.firstAttemptAt = null; clock = +now; quotaDelay = 6 * 60_000;
+  row.nextAttemptAt = new Date(0); row.status = "pending"; row.firstAttemptAt = null; clock = +now; quotaDelay = 6 * 60_000;
   await module.exports.retryApplicationSentNotification("a", now);
   assert.equal(calls, before, "expired lease cannot dispatch after quota wait");
   quotaDelay = 0; clock = +now;

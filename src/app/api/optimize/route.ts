@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
     // Per il free-tier /optimize l'utente non è ancora registrato →
     // basta leggere il cookie corrente.
     const localeCookie = request.cookies.get("NEXT_LOCALE")?.value;
-    await sendOptimizedCVEmail({
+    const emailDelivery = await sendOptimizedCVEmail({
       to: formData2.email,
       firstName,
       cvBuffer,
@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
       atsScore: result.atsScore,
       suggestions: result.suggestions,
       freeRemaining: Math.max(0, FREE_LIMIT - newCount),
+      emailStatus: emailDelivery.sent ? "sent" : emailDelivery.reason,
     });
     response.cookies.set(FREE_COOKIE, String(newCount), {
       httpOnly: true,

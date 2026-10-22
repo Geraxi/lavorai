@@ -1,8 +1,7 @@
-import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { renderBrandEmail } from "@/lib/email-brand";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { sendQueuedNotification } from "@/lib/email-outbox";
 import { isCheckoutRecoveryWindow } from "@/lib/lifecycle-cadence";
 
 const site = () => process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
@@ -70,13 +69,12 @@ export async function runCheckoutRecovery(opts?: { dryRun?: boolean }): Promise<
       footnote: en ? "No payment details are stored by LavorAI." : "LavorAI non conserva i dati di pagamento.",
     });
     try {
-      const sent = await sendWithinQuota("checkout_recovery", user.email, async () => {
-        const { error } = await new Resend(apiKey).emails.send({
+      const sent = await sendQueuedNotification("checkout_recovery", user.email, async () => {
+        return {
           from: from(), to: user.email,
           subject: en ? "Continue with Pro when you’re ready" : "Continua con Pro quando vuoi",
           html: email.html, text: email.text,
-        });
-        if (error) throw new Error(JSON.stringify(error));
+        };
       });
       if (sent.sent) result.sent++; else result.skipped++;
       result.details.push(`${user.email} checkout_recovery ${sent.sent ? "sent" : sent.reason}`);

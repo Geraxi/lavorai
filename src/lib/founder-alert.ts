@@ -1,4 +1,5 @@
-import { Resend } from "resend";
+import { emailContext } from "@/lib/email-context";
+import { Resend } from "@/lib/resend";
 import { prisma } from "@/lib/db";
 import { FOUNDER_EMAIL } from "@/lib/admin";
 
@@ -71,7 +72,7 @@ export async function alertFounder(
       process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>";
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 
-    const { error } = await resend.emails.send({
+    const { error } = await emailContext.run({ kind: "founder_alert", to: dedupKey }, () => resend.emails.send({
       from,
       to: FOUNDER_EMAIL,
       subject: `🚨 LavorAI alert: ${subject}`,
@@ -90,12 +91,9 @@ export async function alertFounder(
   <p style="font-size:13px;"><a href="${siteUrl}/admin" style="color:#16a34a;">Apri /admin →</a></p>
   <p style="font-size:11px;color:#94A3B8;">Dedup: max 1 ogni ${ALERT_COOLDOWN_HOURS}h per tipo.</p>
 </body></html>`,
-    });
+    }));
     if (error) return { sent: false, skipped: JSON.stringify(error) };
 
-    await prisma.emailLog.create({
-      data: { kind: "founder_alert", to: dedupKey },
-    });
     return { sent: true };
   } catch (e) {
     console.error("[founder-alert] failed", e);

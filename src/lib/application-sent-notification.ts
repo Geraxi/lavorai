@@ -1,6 +1,8 @@
+import { emailContext } from "@/lib/email-context";
+import { EmailDispatchError, emailBackoff, EMAIL_MAX_ATTEMPTS, providerFailure } from "@/lib/email-dispatch-policy";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
-import { Resend } from "resend";
+import { Resend } from "@/lib/resend";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { applicationsPaused } from "@/lib/application-pause";
 import { parseVerifiedSubmissionReceipt, receiptJobId } from "@/lib/submission-receipt";
@@ -40,8 +42,8 @@ export async function queueApplicationSentNotification(applicationId: string, pa
 export async function retryApplicationSentNotification(applicationId: string, now = new Date()) {
   if (applicationsPaused() || !process.env.RESEND_API_KEY) return false;
   const row = await prisma.applicationSentNotification.findUnique({ where: { applicationId } });
-  if (!row || row.sentAt || !["pending", "sending"].includes(row.status) || (row.leaseUntil && row.leaseUntil > now)) return false;
-  if (row.firstAttemptAt && +now - +row.firstAttemptAt >= RETRY_WINDOW_MS) {
+  if (!row || row.sentAt || !["pending", "sending"].includes(row.status) || (row.leaseUntil && row.leaseUntil > now) || row.nextAttemptAt > now) return false;
+  if (row.attempts >= EMAIL_MAX_ATTEMPTS || (row.firstAttemptAt && +now - +row.firstAttemptAt >= RETRY_WINDOW_MS)) {
     await prisma.applicationSentNotification.updateMany({ where: { applicationId, sentAt: null },
       data: { status: "review_required", error: "notification_idempotency_window_expired", leaseToken: null, leaseUntil: null } });
     return false;
@@ -65,20 +67,26 @@ export async function retryApplicationSentNotification(applicationId: string, no
       }
       const marked = await prisma.applicationSentNotification.updateMany({ where: {
         applicationId, leaseToken: token, status: "sending", sentAt: null, leaseUntil: { gt: dispatchAt },
-      }, data: { firstAttemptAt: row.firstAttemptAt ?? dispatchAt } });
+      }, data: { firstAttemptAt: row.firstAttemptAt ?? dispatchAt, attempts: { increment: 1 } } });
       if (marked.count !== 1) throw new Error("notification_lease_lost");
-      const response = await new Resend(process.env.RESEND_API_KEY!).emails.send(payload,
-        { idempotencyKey: `application-sent/${applicationId}` });
-      if (response.error || !response.data?.id) throw new Error("notification_provider_rejected");
+      const response = await emailContext.run({ kind: "application_sent", to: payload.to,
+        deadlineAt: Math.min(+(row.firstAttemptAt ?? dispatchAt) + RETRY_WINDOW_MS, +now + LEASE_MS) },
+        () => new Resend(process.env.RESEND_API_KEY!).emails.send(payload,
+          { idempotencyKey: `application-sent/${applicationId}` }));
+      if (response.error || !response.data?.id) throw providerFailure(response.error);
       const saved = await prisma.applicationSentNotification.updateMany({ where: { applicationId, leaseToken: token },
         data: { status: "sent", sentAt: now, providerEmailId: response.data.id, error: null, leaseUntil: null, leaseToken: null } });
       if (saved.count !== 1) throw new Error("notification_lease_lost");
     });
     if (!result.sent) throw new Error(result.reason ?? "notification_not_sent");
     return true;
-  } catch {
+  } catch (error) {
+    const deferred = error instanceof EmailDispatchError && error.deferred;
+    const permanent = error instanceof EmailDispatchError && !error.retryable;
     await prisma.applicationSentNotification.updateMany({ where: { applicationId, leaseToken: token },
-      data: { status: "pending", error: "notification_send_failed", leaseUntil: null, leaseToken: null } });
+      data: { status: error instanceof EmailDispatchError && error.reviewRequired ? "review_required" : permanent ? "failed" : "pending", error: "notification_send_failed", leaseUntil: null, leaseToken: null,
+        ...(deferred ? { attempts: row.attempts, firstAttemptAt: row.firstAttemptAt } : {}),
+        nextAttemptAt: new Date(+now + (deferred ? 1000 : emailBackoff(row.attempts + 1))) } });
     return false;
   }
 }
@@ -113,13 +121,19 @@ export async function reconcileApplicationSentNotifications(
       if (inspected >= 50) break;
     }
   }
+  const retried = await retryPendingApplicationSentNotifications();
+  return { inspected, retried };
+}
+
+/** Retry stored notification intents only, without historical reconciliation. */
+export async function retryPendingApplicationSentNotifications() {
   let retried = 0;
   const pending = await prisma.applicationSentNotification.findMany({ where: {
-    sentAt: null, status: { in: ["pending", "sending"] },
+    sentAt: null, status: { in: ["pending", "sending"] }, nextAttemptAt: { lte: new Date() },
     OR: [{ leaseUntil: null }, { leaseUntil: { lte: new Date() } }],
   }, select: { applicationId: true }, take: 50, orderBy: { createdAt: "asc" } });
   for (const row of pending) {
     if (await retryApplicationSentNotification(row.applicationId).catch(() => false)) retried++;
   }
-  return { inspected, retried };
+  return retried;
 }

@@ -1,7 +1,6 @@
-import { Resend } from "resend";
 import { trialState } from "@/lib/billing";
 import { prisma } from "@/lib/db";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { sendQueuedNotification } from "@/lib/email-outbox";
 import { isTestAccount } from "@/lib/admin";
 
 /**
@@ -193,20 +192,18 @@ export async function runUpgradeNudges(opts?: {
       details: batch.map((c) => ({ email: c.email, applications: c.applicationsCount, status: "no_resend_key" })),
     };
   }
-  const resend = new Resend(apiKey);
 
   for (const c of batch) {
     try {
-      const result = await sendWithinQuota("upgrade_nudge", c.email, async () => {
+      const result = await sendQueuedNotification("upgrade_nudge", c.email, async () => {
         const { subject, html, text } = renderUpgrade(c);
-        const { error } = await resend.emails.send({
+        return {
           from: process.env.RESEND_FROM_OVERRIDE ?? "LavorAI <noreply@lavorai.it>",
           to: c.email,
           subject,
           html,
           text,
-        });
-        if (error) throw new Error(JSON.stringify(error));
+        };
       });
       if (result.sent) {
         sent++;
