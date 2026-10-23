@@ -1,6 +1,9 @@
 name: Isolated worker container preflight
 on:
   workflow_dispatch:
+  push:
+    branches: [codex/release-integration-20261023]
+    paths: [.github/workflows/worker-container-preflight.yml]
 permissions:
   contents: read
 jobs:
