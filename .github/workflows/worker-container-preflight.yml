@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [codex/release-integration-20261023]
-    paths: [.github/workflows/worker-container-preflight.yml]
+    paths: [.github/workflows/worker-container-preflight.yml, Dockerfile.worker]
 permissions:
   contents: read
 jobs:

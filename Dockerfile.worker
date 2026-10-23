@@ -6,6 +6,9 @@ FROM mcr.microsoft.com/playwright:v1.59.1-jammy@sha256:8a0360d39d1973be506dd5900
 # Official Node release; hashes verified against nodejs.org SHASUMS256.txt.
 # Preserve Playwright browsers/OS libraries, replace the inherited Node runtime.
 RUN set -eu; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends xz-utils; \
+    rm -rf /var/lib/apt/lists/*; \
     case "$(uname -m)" in \
       x86_64) arch=x64; checksum=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6 ;; \
       aarch64) arch=arm64; checksum=dbabf7a1cbf947e6059ffad2c27b80041db97dea1e553b62afdee7f13fca336e ;; \
