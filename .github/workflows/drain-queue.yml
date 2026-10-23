@@ -1,0 +1,28 @@
+name: drain-queue backup
+
+# Backup del cron Vercel /api/cron/drain-queue (ogni 5 min).
+# Il claim atomico rende innocue le esecuzioni sovrapposte.
+# Richiede: Settings → Secrets → Actions → CRON_SECRET
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: drain-queue
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Hit drain-queue endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -sS --fail-with-body --max-time 320 \
+            -w "\nHTTP %{http_code} in %{time_total}s\n" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            https://lavorai.it/api/cron/drain-queue

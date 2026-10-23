@@ -23,6 +23,14 @@
     {
       "path": "/api/cron/mailbox-delivery",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/drain-queue",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/auto-apply",
+      "schedule": "0 8,9,12,13,16,17 * * *"
     }
   ]
 }

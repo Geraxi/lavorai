@@ -27,11 +27,21 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (applicationsPaused()) return NextResponse.json({ ok: true, paused: true, reason: "applications_paused" });
+  // Cron UTC 8,9,12,13,16,17: esegue solo quando a Roma sono le 10, 14 o 18
+  // (copre CET e CEST). Run manuali con X-Admin-Key bypassano il guard.
+  const romeHour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Rome", hour: "2-digit", hour12: false }).format(new Date()));
+  if (!xAdmin && ![10, 14, 18].includes(romeHour)) {
+    return NextResponse.json({ ok: true, skipped: true, reason: "outside_rome_send_window", romeHour });
+  }
   const t0 = Date.now();
   try {
     // Existing authenticated schedule also drains the durable user-reply outbox.
     const emailReconciliation = await reconcileAcceptedApplicationEmails(20);
     const replyForwards = await retryPendingReplyForwards(20);
+    // Utenti con CV ma senza CVProfile: backfill con budget breve (function 300s).
+    const { backfillMissingCvProfiles } = await import("@/lib/cv-profile-ensure");
+    await backfillMissingCvProfiles({ max: 20, budgetMs: 60_000 })
+      .catch((err) => console.error("[cron/auto-apply] CV profile backfill failed", err instanceof Error ? err.message : err));
     const stats = await runAutoApplyCron();
     const ms = Date.now() - t0;
     console.log(`[cron/auto-apply] ${ms}ms`, stats);
