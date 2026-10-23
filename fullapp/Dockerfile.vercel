@@ -7,7 +7,8 @@ FROM mcr.microsoft.com/playwright:v1.59.1-jammy@sha256:8a0360d39d1973be506dd5900
 # Preserve Playwright browsers/OS libraries, replace the inherited Node runtime.
 RUN set -eu; \
     apt-get update; \
-    apt-get install -y --no-install-recommends xz-utils; \
+    apt-get install -y --no-install-recommends xz-utils ca-certificates; \
+    update-ca-certificates; \
     rm -rf /var/lib/apt/lists/*; \
     case "$(uname -m)" in \
       x86_64) arch=x64; checksum=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6 ;; \

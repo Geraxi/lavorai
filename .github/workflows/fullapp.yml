@@ -35,4 +35,4 @@ jobs:
           -e AUTH_SECRET=isolated-fixture-not-a-real-secret
           -e DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:5432/fixture
           --entrypoint sh lavorai-fullapp
-          -c 'node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 8080 & server=$!; trap "kill $server" EXIT; node scripts/container-app-smoke.mjs'
+          -c 'node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 8080 & server=$!; trap "kill $server" EXIT; node --import tsx scripts/container-app-smoke.mjs'

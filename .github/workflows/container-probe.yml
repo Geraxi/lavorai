@@ -2,6 +2,7 @@ name: Isolated Next container probe
 on:
   push:
     branches: [codex/isolated-next-container-probe]
+    paths: ["app/**", "public/**", "Dockerfile.vercel", "package.json", "proxy.js", "next.config.mjs", "smoke.mjs", ".github/workflows/container-probe.yml"]
 permissions:
   contents: read
 jobs:
