@@ -29,7 +29,7 @@ export interface ConsentNotice {
   text: { it: ConsentNoticeText; en: ConsentNoticeText };
 }
 
-export const CONSENT_NOTICE_VERSION = "2026-10-18.meta-v1";
+export const CONSENT_NOTICE_VERSION = "2026-10-21.ads-v2";
 
 const NOTICE_2026_10_18: ConsentNotice = {
   version: "2026-10-18.meta-v1",
@@ -102,8 +102,39 @@ const NOTICE_2026_10_18: ConsentNotice = {
   },
 };
 
+const NOTICE_2026_10_21: ConsentNotice = {
+  ...NOTICE_2026_10_18,
+  version: CONSENT_NOTICE_VERSION,
+  publishedAt: "2026-10-21",
+  text: {
+    it: {
+      ...NOTICE_2026_10_18.text.it,
+      purposes: {
+        ...NOTICE_2026_10_18.text.it.purposes,
+        advertising: {
+          ...NOTICE_2026_10_18.text.it.purposes.advertising,
+          description: "Solo dopo il consenso, Meta Pixel e Google Ads misurano le registrazioni con un identificativo casuale dell’evento, dati tecnici e cookie pubblicitari. Google può leggere il codice del clic sull’annuncio (gclid) su /signup. Non inviamo nome, email, telefono, CV o candidature a Google e non usiamo le conversioni avanzate. Puoi revocare il consenso anche nelle altre schede aperte.",
+          recipients: "Meta (Meta Pixel), Google (Google Ads — misurazione conversioni)",
+        },
+      },
+    },
+    en: {
+      ...NOTICE_2026_10_18.text.en,
+      purposes: {
+        ...NOTICE_2026_10_18.text.en.purposes,
+        advertising: {
+          ...NOTICE_2026_10_18.text.en.purposes.advertising,
+          description: "Only after consent, Meta Pixel and Google Ads measure registrations using a random event ID, technical data and advertising cookies. Google can read the ad click identifier (gclid) on /signup. We do not send names, email addresses, phone numbers, CVs or applications to Google, and do not use enhanced conversions. Withdrawal also applies in other open tabs.",
+          recipients: "Meta (Meta Pixel), Google (Google Ads conversion measurement)",
+        },
+      },
+    },
+  },
+};
+
 export const CONSENT_NOTICES: Record<string, ConsentNotice> = {
   [NOTICE_2026_10_18.version]: NOTICE_2026_10_18,
+  [NOTICE_2026_10_21.version]: NOTICE_2026_10_21,
 };
 
 export function currentConsentNotice(): ConsentNotice {

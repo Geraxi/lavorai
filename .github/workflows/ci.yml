@@ -24,6 +24,8 @@ jobs:
           - 5432:5432
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: actions/setup-node@v4
         with:
@@ -40,6 +42,9 @@ jobs:
 
       - name: Typecheck
         run: npx tsc --noEmit
+
+      - name: Advertising consent and signup conversion regressions
+        run: npm run test:google-ads && npm run test:meta-consent && npm run test:google-auth
 
       - name: Credit retry and worker safety tests
         run: npm run test:credit-retry && npm run test:worker-gates
