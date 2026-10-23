@@ -1,6 +1,7 @@
 import { answerContinuationIneligibility, answerConfirmationDigest, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
 import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
 import { parseAnswers } from "./application-answers";
+import { isValidProof, portalProof, submittedWithProof, type SentProof } from "./proof-of-send";
 import { completesApplicationQuestion, resolveExplicitApplicationAnswer, parseApplicationQuestion } from "./application-question-answers";
 import { applicationsPaused } from "@/lib/application-pause";
 import { applicationRolloutConfig, rolloutApplicationIneligibility, ROLLOUT_BUDGET_HELD_MESSAGE } from "@/lib/application-rollout";
@@ -325,6 +326,14 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
   })) === true;
 }
 
+function canaryScreenshot(canaryLog: unknown): string | null {
+  if (typeof canaryLog !== "string") return null;
+  try {
+    const url = (JSON.parse(canaryLog) as { postSubmitScreenshotUrl?: unknown })?.postSubmitScreenshotUrl;
+    return typeof url === "string" ? url : null;
+  } catch { return null; }
+}
+
 /** No gap between releasing an in-flight slot and incrementing sentCount;
  * replaying a successful result is a no-op, including after notification errors.
  */
@@ -346,23 +355,28 @@ export async function completeApplicationSubmission(
       channel: typeof data.submittedVia === "string" ? data.submittedVia : "",
     }, select: { id: true } });
     if (!reservation) return false;
+    let proof: SentProof | null = null;
     if (data.submittedVia === "email_recruiter" && data.submitConfirmation === "EMAIL_SENT") {
       const attempt = await tx.applicationEmailAttempt.findUnique({
         where: { attemptKey: `application-${id}-${token.getTime()}` },
         select: { applicationId: true, providerEmailId: true, acceptedAt: true },
       });
       if (!attempt || attempt.applicationId !== id || !attempt.providerEmailId?.trim() || !attempt.acceptedAt) return false;
+      proof = { type: "email_provider_message_id", ref: attempt.providerEmailId.trim() };
     } else {
       if (typeof data.submittedVia !== "string" || !data.submittedVia.startsWith("portal_") || typeof data.submissionReceiptJson !== "string") return false;
       const receipt = parseVerifiedSubmissionReceipt(data.submissionReceiptJson, data.submittedVia);
       if (!receipt || receipt.jobId !== receiptJobId(receipt.provider, row.job.url)
         || Date.parse(receipt.capturedAt) < token.getTime() || Date.parse(receipt.capturedAt) > Date.now() + 60_000) return false;
+      proof = portalProof({ receipt, postSubmitScreenshotUrl: canaryScreenshot(data.canaryLog) });
     }
+    // Proof-of-send: without a recorded proof nothing is marked as sent.
+    if (!proof || !isValidProof(proof)) return false;
     // Recovery does not replace the owner token. A late, proved receipt from
     // that same attempt is still recorded once, without ever replaying it.
     const changed = await tx.application.updateMany({ where: {
       id, startedAt: token, status: row.status, submitConfirmation: row.submitConfirmation,
-    }, data: { ...data, status: "success" } });
+    }, data: { ...data, status: "success", ...submittedWithProof(proof, data.submittedAt instanceof Date ? data.submittedAt : new Date()) } });
     if (changed.count !== 1) return false;
     if (row.session) {
       const successes = await tx.application.count({ where: { sessionId: row.session.id, status: "success" } });

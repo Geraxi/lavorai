@@ -1,6 +1,7 @@
 import { resolveAdapterByUrl, noAdapterMessageFor } from "@/lib/ats-adapter-resolution";
 import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
+import { notSubmitted } from "@/lib/proof-of-send";
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
 import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS } from "@/lib/application-answer-continuation";
 import { Resend } from "resend";
@@ -534,6 +535,9 @@ async function processApplicationRun(
         // sapere retroattivamente lo stato delle vecchie candidature.
         submitConfirmation: isUnconfirmed ? "UNCONFIRMED" : confState,
         submissionReceiptJson: isConfirmed ? JSON.stringify(outcome.receipt) : null,
+        // Proof-of-send: confirmed rows get their proof inside
+        // completeApplicationSubmission; anything else is NOT sent.
+        ...(isUnconfirmed ? notSubmitted("needs_user", "portal_submit_without_receipt") : {}),
         // Persist canary log se l'adapter l'ha popolato (env CANARY_DEBUG=1).
         // Non sovrascriviamo se outcome.canary è undefined (run normale).
         ...("canary" in outcome && outcome.canary
@@ -565,6 +569,7 @@ async function processApplicationRun(
       await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } }, data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
         errorMessage: outcome.error,
+        ...notSubmitted("needs_user", `portal_${outcome.status}`),
         canaryLog: JSON.stringify(("canary" in outcome ? outcome.canary : null) ?? { adapterFailure: outcome.status, error: outcome.error }),
       } });
       return; // A missing receipt is not permission to submit the same application again.
@@ -813,6 +818,9 @@ async function processApplicationRun(
         data: {
           status: "ready_to_apply",
           submitConfirmation: delivered.kind === "not_sent" ? NOT_SUBMITTED : "UNCONFIRMED",
+          ...(delivered.kind === "not_sent"
+            ? notSubmitted("failed", "recruiter_email_not_sent")
+            : notSubmitted("needs_user", "recruiter_email_acceptance_unknown")),
           errorMessage: delivered.kind === "not_sent"
             ? "Email non inviata: canale non disponibile, quota o richiesta rifiutata. Nessun invio effettuato."
             : "Esito email non confermato. Verifica la consegna prima di ritentare per evitare un doppio invio.",

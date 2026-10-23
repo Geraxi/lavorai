@@ -689,6 +689,18 @@ model Application {
   /// Popolato SOLO quando status=success E submitConfirmation=DETECTED*.
   /// Usato per UX onesta "Nessuna risposta dopo N giorni" (ghosting).
   submittedAt     DateTime?
+  /// Proof-of-send (src/lib/proof-of-send.ts). Orthogonal to `status`:
+  /// sendStatus=submitted is ONLY written together with a recorded proof
+  /// (DB CHECK "Application_submitted_requires_proof"). Without proof the
+  /// row is needs_user (verify by hand) or failed, with sendFailureReason.
+  sendStatus        SendStatus     @default(not_sent)
+  sendFailureReason String?
+  sentProofType     SentProofType?
+  /// Gmail message id / ATS receipt id / screenshot URL / provider message id / InboundEmail id.
+  sentProofRef      String?
+  sentAt            DateTime?
+  /// Set when an ATS confirmation email ("abbiamo ricevuto la tua candidatura") is matched.
+  confirmedAt       DateTime?
   /// Ultimo check status recruiter (per rate-limit check giornalieri).
   /// On unsent queued rows held for an unverifiable posting it records the
   /// FIRST liveness re-check (held-application-release.ts backoff bound).
@@ -710,6 +722,29 @@ model Application {
 
   @@index([userId, createdAt])
   @@index([sessionId])
+  @@index([userId, sendStatus])
+}
+
+/// Stato di invio verificabile. "submitted" richiede sempre una prova.
+enum SendStatus {
+  not_sent
+  submitted
+  needs_user
+  failed
+}
+
+/// Tipo di prova che giustifica sendStatus=submitted.
+enum SentProofType {
+  /// Message id restituito da Gmail users.messages.send (casella utente).
+  gmail_message_id
+  /// Email di conferma dell'ATS ricevuta (InboundEmail / GmailMessage id).
+  ats_confirmation_email
+  /// Screenshot della pagina di successo (URL Blob).
+  success_page_screenshot
+  /// Ricevuta HTTP/DOM verificata dall'adapter ATS (submissionReceiptJson).
+  ats_submission_receipt
+  /// Id messaggio accettato da Resend / Microsoft Graph.
+  email_provider_message_id
 }
 
 model ApplicationSubmissionReservation {

@@ -19,7 +19,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prov
   if (!code) return back(req.nextUrl.searchParams.get("error") === "access_denied" ? "denied" : "error");
   try {
     const tokens = await exchangeCode(provider, code, `${req.nextUrl.origin}/api/mailbox/callback/${provider}`);
-    if (tokens.scope && !hasRequiredScopes(provider, tokens.scope)) return back("missing_scope");
+    // No scope string = cannot prove gmail.send was granted: fail closed.
+    if (!tokens.scope || !hasRequiredScopes(provider, tokens.scope)) return back("missing_scope");
     const email = (await fetchMailboxAddress(provider, tokens.accessToken)).trim().toLowerCase();
     if (!email) return back("error");
     const data = {
