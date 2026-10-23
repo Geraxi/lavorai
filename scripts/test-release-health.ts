@@ -81,7 +81,8 @@ async function main() {
       assert.match(health.headers.get(key)!, /no-store/);
     }
     const healthBody = await health.json();
-    assert.deepEqual(Object.keys(healthBody).sort(), ["applicationsPaused", "deploymentCommit", "nonce", "observedAt", "repairVersion"]);
+    assert.equal(healthBody.nodeVersion, process.versions.node);
+    assert.deepEqual(Object.keys(healthBody).sort(), ["applicationsPaused", "deploymentCommit", "nodeVersion", "nonce", "observedAt", "repairVersion"]);
     assert.equal(healthBody.applicationsPaused, true); assert.equal(healthBody.deploymentCommit, commit);
     assert.equal(healthBody.repairVersion, RELEASE_REPAIR_VERSION); assert.equal(healthBody.nonce, nonce);
     assert(Math.abs(healthBody.observedAt - originalNow()) < 5_000);
