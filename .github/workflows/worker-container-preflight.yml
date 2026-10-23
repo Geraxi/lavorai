@@ -1,0 +1,29 @@
+name: Isolated worker container preflight
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build worker without application secrets
+        run: docker build --file Dockerfile.worker --tag lavorai-worker-preflight .
+      - name: Verify Node and Chromium with network disabled
+        run: |
+          docker run --rm --network none --entrypoint node lavorai-worker-preflight -e '
+            const assert = require("node:assert/strict");
+            assert.equal(process.versions.node, "24.22.1");
+            (async () => {
+              const browser = await require("playwright").chromium.launch({ headless: true, args: ["--no-sandbox"] });
+              try {
+                const page = await browser.newPage();
+                await page.setContent("<title>offline-smoke</title><h1>local only</h1>");
+                assert.equal(await page.title(), "offline-smoke");
+                console.log(JSON.stringify({ node: process.versions.node, chromium: browser.version(), offlineSmoke: "passed" }));
+              } finally { await browser.close(); }
+            })().catch(error => { console.error(error); process.exitCode = 1; });'

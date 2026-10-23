@@ -1,3 +1,4 @@
+import { sendersPaused } from "../sender-hold";
 /**
  * Client minimi Gmail API e Microsoft Graph per inviare dalla casella
  * dell'utente e rileggere il thread (rimbalzi). `fetch` è iniettabile: i test
@@ -47,6 +48,7 @@ export function gmailClient(accessToken: string, f: Fetch = fetch): MailboxClien
   return {
     provider: "gmail",
     async send(mail) {
+      if (sendersPaused()) throw new ProviderSendError("rejected", null, "senders_paused");
       let res: Response;
       try {
         res = await f(`${base}/messages/send`, { method: "POST", headers: { ...auth, "Content-Type": "application/json" }, body: JSON.stringify({ raw: toBase64Url(buildMime(mail)) }) });
@@ -82,6 +84,7 @@ export function graphClient(accessToken: string, f: Fetch = fetch): MailboxClien
   return {
     provider: "outlook",
     async send(mail) {
+      if (sendersPaused()) throw new ProviderSendError("rejected", null, "senders_paused");
       // 1) bozza (restituisce id, conversationId, internetMessageId) 2) send.
       // /sendMail risponde 202 senza id: non darebbe evidenza tracciabile.
       let draft: Response;
@@ -103,6 +106,7 @@ export function graphClient(accessToken: string, f: Fetch = fetch): MailboxClien
       if (!draft.ok) throw new ProviderSendError(draft.status === 401 ? "auth" : "rejected", draft.status, `graph_draft_${draft.status}`);
       const d = await draft.json() as { id?: string; conversationId?: string; internetMessageId?: string };
       if (!d.id) throw new ProviderSendError("rejected", draft.status, "graph_missing_id");
+      if (sendersPaused()) throw new ProviderSendError("rejected", null, "senders_paused");
       let sent: Response;
       try {
         sent = await f(`${base}/messages/${encodeURIComponent(d.id)}/send`, { method: "POST", headers: auth });

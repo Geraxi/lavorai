@@ -1,3 +1,4 @@
+import { sendersPaused } from "./sender-hold";
 import { Resend as ProviderResend } from "resend";
 import { prisma } from "@/lib/db";
 import { emailContext } from "@/lib/email-context";
@@ -14,6 +15,7 @@ export class Resend extends ProviderResend {
     const request = this.fetchRequest.bind(this);
     this.fetchRequest = (path, options = {}) => request(path, { ...options, signal: AbortSignal.timeout(EMAIL_REQUEST_TIMEOUT_MS) });
     this.emails.send = async (payload, options) => {
+      if (sendersPaused()) throw new EmailDispatchError("senders_paused", true, true);
       const context = emailContext.getStore();
       const kind = context?.kind ?? "other";
       const recipients = Array.isArray(payload.to) ? payload.to : [payload.to];
@@ -30,6 +32,7 @@ export class Resend extends ProviderResend {
       }
       try {
         if (Date.now() + EMAIL_REQUEST_TIMEOUT_MS >= Math.min(+lease.until, context?.deadlineAt ?? Infinity)) throw new EmailDispatchError("email_dispatch_lease_expired", true, true);
+        if (sendersPaused()) throw new EmailDispatchError("senders_paused", true, true);
         const response = await original(payload, options);
         if (response.error && context?.returnProviderErrors) return response;
         if (response.error || !response.data?.id) throw providerFailure(response.error);

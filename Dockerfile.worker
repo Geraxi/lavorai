@@ -1,7 +1,23 @@
 # LavorAI worker — deployable su Railway / Render / Fly.
 # Base image Playwright include Chromium + dipendenze OS → no install headache.
 
-FROM mcr.microsoft.com/playwright:v1.59.1-jammy AS base
+FROM mcr.microsoft.com/playwright:v1.59.1-jammy@sha256:8a0360d39d1973be506dd59002904a774f6d697d4946c94063b3fd006461c8ff AS base
+
+# Official Node release; hashes verified against nodejs.org SHASUMS256.txt.
+# Preserve Playwright browsers/OS libraries, replace the inherited Node runtime.
+RUN set -eu; \
+    case "$(uname -m)" in \
+      x86_64) arch=x64; checksum=6c172a9ab6718f7b801fb5a7bd486af2ee5e32758086a04b84fcce2aa77095e6 ;; \
+      aarch64) arch=arm64; checksum=dbabf7a1cbf947e6059ffad2c27b80041db97dea1e553b62afdee7f13fca336e ;; \
+      *) echo "Unsupported worker architecture" >&2; exit 1 ;; \
+    esac; \
+    archive="node-v24.22.1-linux-${arch}.tar.xz"; \
+    curl --fail --silent --show-error --location "https://nodejs.org/dist/v24.22.1/${archive}" -o /tmp/node-worker.tar.xz; \
+    echo "${checksum}  /tmp/node-worker.tar.xz" | sha256sum --check -; \
+    tar -xJf /tmp/node-worker.tar.xz -C /usr/local --strip-components=1; \
+    rm /tmp/node-worker.tar.xz; \
+    test "$(node --version)" = "v24.22.1"
+ENV PATH="/usr/local/bin:${PATH}"
 WORKDIR /app
 
 # Solo le deps necessarie al worker (no dev deps)

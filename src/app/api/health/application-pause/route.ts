@@ -1,3 +1,4 @@
+import { sendersPaused } from "@/lib/sender-hold";
 import { applicationsPaused } from "@/lib/application-pause";
 import { applicationRolloutConfig } from "@/lib/application-rollout";
 import { RELEASE_COMMIT_PATTERN, RELEASE_NONCE_PATTERN, RELEASE_REPAIR_VERSION } from "@/lib/release-health";
@@ -31,6 +32,8 @@ export async function GET(request: Request): Promise<Response> {
     observedAt: Date.now(),
   }, { headers: {
     ...headers,
+    "X-Lavorai-Senders-Paused": String(sendersPaused()),
+    "X-Lavorai-Node-Version": process.versions.node,
     "X-Lavorai-Rollout-Mode": rollout.enabled ? rollout.mode! : "closed",
     "X-Lavorai-Rollout-Cap": rollout.dailyCap?.toString() ?? "0",
     "X-Lavorai-Rollout-Start": rollout.startedAt?.toISOString() ?? "unavailable",

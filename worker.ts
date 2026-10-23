@@ -1,3 +1,5 @@
+import { WorkerDrain } from "./src/lib/worker-drain";
+import { sendersPaused } from "./src/lib/sender-hold";
 /**
  * Worker standalone per processare candidature in background.
  *
@@ -30,12 +32,17 @@ import { processApplication } from "./src/lib/application-worker";
 import { claimApplication, findClaimableQueued } from "./src/lib/application-claim";
 import { applicationRolloutConfig, automaticApplicationsBlocked } from "./src/lib/application-rollout";
 import { createAutoApplyTick, parseAutoApplyHours } from "./src/lib/auto-apply-schedule";
+import { assertWorkerRuntime } from "./src/lib/worker-runtime";
 import { applicationsPaused } from "./src/lib/application-pause";
 
 async function main(): Promise<void> {
+  assertWorkerRuntime(process.versions.node);
+  console.log("[worker] runtime", JSON.stringify({ node: process.versions.node, commit: process.env.RAILWAY_GIT_COMMIT_SHA ?? "unknown" }));
+  const drain = new WorkerDrain();
   const rollout = applicationRolloutConfig();
   // Bounded public configuration only. Never log credentials or environment.
   console.log("[worker] application_sending_configuration", JSON.stringify({
+    sendersPaused: sendersPaused(),
     mode: rollout.enabled ? rollout.mode : "closed", reason: rollout.reason,
     globalDailyCap: rollout.dailyCap, historicalCutoff: rollout.startedAt?.toISOString() ?? null,
     automaticProducers: !automaticApplicationsBlocked(), applicationsPaused: applicationsPaused(),
@@ -52,13 +59,14 @@ async function main(): Promise<void> {
   if (queueMode === "bullmq" && process.env.REDIS_URL) {
     try {
       worker = createApplicationsWorker(async (job) => {
+        if (drain.stopping) throw new Error("worker_draining");
         const id = job.data.applicationId;
         if (!(await claimApplication(id))) {
           console.log(`[worker] job ${job.id} già preso in carico altrove, skip`);
           return;
         }
         console.log(`[worker] processing job ${job.id} (applicationId=${id})`);
-        await processApplication(id);
+        await drain.run(() => processApplication(id), true);
         console.log(`[worker] completed job ${job.id}`);
       });
       worker.on("failed", (job, err) => {
@@ -82,14 +90,15 @@ async function main(): Promise<void> {
   let active = 0;
   console.log(`[worker] polling DB ogni ${pollMs / 1000}s`);
   const poll = async () => {
-    if (active >= concurrency) return;
+    if (drain.stopping || applicationsPaused() || active >= concurrency) return;
     try {
       const ids = await findClaimableQueued(concurrency - active);
       for (const id of ids) {
+        if (drain.stopping || applicationsPaused()) break;
         if (!(await claimApplication(id))) continue;
         active++;
         console.log(`[worker] (poll) processing applicationId=${id} active=${active}`);
-        processApplication(id)
+        drain.run(() => processApplication(id), true)
           .then(() => console.log(`[worker] (poll) completed ${id}`))
           .catch((err) => console.error(`[worker] (poll) ${id} failed:`, err instanceof Error ? err.message : err))
           .finally(() => { active--; });
@@ -98,8 +107,9 @@ async function main(): Promise<void> {
       console.error("[worker] poll error:", err instanceof Error ? err.message : err);
     }
   };
-  void poll();
-  const pollTimer = setInterval(() => void poll(), pollMs);
+  const trackedPoll = () => { if (!drain.stopping) void drain.run(poll).catch(err => console.error("[worker] poll", err)); };
+  trackedPoll();
+  const pollTimer = setInterval(trackedPoll, pollMs);
 
   // Scheduler auto-apply nel worker (processo persistente): 3 batch/giorno
   // alle ore UTC in AUTO_APPLY_HOURS (default "8,12,16"). Vercel Hobby non
@@ -128,27 +138,29 @@ async function main(): Promise<void> {
         }
       },
     });
-    void tick();
-    autoApplyTimer = setInterval(() => void tick(), 60_000);
+    const trackedTick = () => { if (!drain.stopping) void drain.run(tick).catch(err => console.error("[worker] scheduler", err)); };
+    trackedTick();
+    autoApplyTimer = setInterval(trackedTick, 60_000);
   }
 
   // Rows held on a temporary "job availability couldn't be checked" result are
   // re-checked with backoff (held-application-release.ts). Never a replay:
   // only rows with zero prior-submission evidence; admission re-gates all.
   const livenessMs = Math.max(5 * 60_000, Number(process.env.LIVENESS_RECHECK_INTERVAL_MS ?? 30 * 60_000) || 30 * 60_000);
-  const livenessTimer = setInterval(async () => {
+  const livenessWork = async () => {
     try {
       const { recheckLivenessHeldApplications } = await import("./src/lib/held-application-release");
       await recheckLivenessHeldApplications({ limit: 25 });
     } catch (err) {
       console.error("[worker] liveness recheck failed", err instanceof Error ? err.message : err);
     }
-  }, livenessMs);
+  };
+  const livenessTimer = setInterval(() => { if (!drain.stopping && !applicationsPaused()) void drain.run(livenessWork).catch(err => console.error("[worker] liveness", err)); }, livenessMs);
 
   // Notification-only retry pump: never invokes an application submission.
   let emailPumpRunning = false;
   const emailPump = async () => {
-    if (emailPumpRunning) return;
+    if (emailPumpRunning || drain.stopping || sendersPaused()) return;
     emailPumpRunning = true;
     try {
       const { drainEmailNotifications } = await import("./src/lib/email-outbox");
@@ -158,17 +170,21 @@ async function main(): Promise<void> {
     } catch (error) { console.error("[worker] notification retry failed", error instanceof Error ? error.message : "unknown"); }
     finally { emailPumpRunning = false; }
   };
-  const emailTimer = setInterval(() => void emailPump(), 30_000);
-  void emailPump();
+  const trackedEmailPump = () => { if (!drain.stopping) void drain.run(emailPump).catch(err => console.error("[worker] email pump", err)); };
+  const emailTimer = setInterval(trackedEmailPump, 30_000);
+  trackedEmailPump();
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
-    console.log(`[worker] ${signal} received, draining...`);
+    if (drain.stopping) return;
+    drain.stopping = true;
+    console.log(`[worker] ${signal} received, draining... pending=${drain.pending}`);
     clearInterval(pollTimer);
     clearInterval(emailTimer);
     if (autoApplyTimer) clearInterval(autoApplyTimer);
     clearInterval(livenessTimer);
     if (worker) await worker.close();
+    await drain.close();
     console.log("[worker] closed cleanly");
     process.exit(0);
   };
