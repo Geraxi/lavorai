@@ -1,0 +1,38 @@
+name: Isolated full app container
+on:
+  push:
+    branches: [codex/isolated-next-container-probe]
+    paths: ['fullapp/**', '.github/workflows/fullapp.yml']
+permissions:
+  contents: read
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          path: harness
+      - uses: actions/checkout@v4
+        with:
+          ref: 911671a6c80a32687d7b0bf7f30bf76a416c884e
+          persist-credentials: false
+          path: app
+      - name: Preserve PR84 and install isolated harness
+        run: |
+          cd app
+          git apply --check ../harness/fullapp/banner.patch
+          git apply ../harness/fullapp/banner.patch
+          cp ../harness/fullapp/Dockerfile.vercel Dockerfile.vercel
+          cp ../harness/fullapp/.dockerignore .dockerignore
+          cp ../harness/fullapp/container-app-smoke.mjs scripts/container-app-smoke.mjs
+      - run: docker build -f app/Dockerfile.vercel -t lavorai-fullapp app
+      - name: Offline runtime checks
+        run: >-
+          docker run --network none --rm
+          -e SENDERS_PAUSED=true -e APPLICATIONS_PAUSED=true
+          -e AUTH_SECRET=isolated-fixture-not-a-real-secret
+          -e DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:5432/fixture
+          --entrypoint sh lavorai-fullapp
+          -c 'node node_modules/next/dist/bin/next start -H 0.0.0.0 -p 8080 & server=$!; trap "kill $server" EXIT; node scripts/container-app-smoke.mjs'

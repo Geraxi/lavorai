@@ -1,0 +1,126 @@
+diff --git a/src/app/globals.css b/src/app/globals.css
+index c7c8bb2..eea79a8 100644
+--- a/src/app/globals.css
++++ b/src/app/globals.css
+@@ -1803,3 +1803,77 @@ a.gd-chip:hover { border-color: hsl(var(--primary) / 0.6); }
+   .mat-detail-tabs[role="tablist"]::-webkit-scrollbar { display: none; }
+   .reference-workspace .mat-detail-tabs[role="tablist"] button, .mat-detail-tabs[role="tablist"] button { flex-shrink: 0; min-height: 44px; }
+ }
++
++/* ── Service Notice Banner ──────────────────────────────────────────────
++   Temporary site-wide notice shown above all content. Amber/yellow alert
++   style that works in both dark and light themes. Non-dismissible. */
++.service-notice-banner {
++  width: 100%;
++  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.12) 100%);
++  border-bottom: 1px solid rgba(251, 191, 36, 0.2);
++  padding: 12px 16px;
++  display: flex;
++  justify-content: center;
++  align-items: center;
++  position: relative;
++  z-index: 999;
++}
++
++.service-notice-content {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  max-width: 1200px;
++  width: 100%;
++}
++
++.service-notice-icon {
++  flex-shrink: 0;
++  color: rgb(251, 191, 36);
++}
++
++.service-notice-text {
++  font-size: 14px;
++  line-height: 1.5;
++  color: var(--fg);
++  margin: 0;
++}
++
++.service-notice-text strong {
++  font-weight: 600;
++  color: rgb(251, 191, 36);
++}
++
++/* Light theme adjustments */
++[data-theme="light"] .service-notice-banner {
++  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.15) 100%);
++  border-bottom-color: rgba(217, 119, 6, 0.25);
++}
++
++[data-theme="light"] .service-notice-icon {
++  color: rgb(217, 119, 6);
++}
++
++[data-theme="light"] .service-notice-text strong {
++  color: rgb(217, 119, 6);
++}
++
++/* Mobile responsive */
++@media (max-width: 640px) {
++  .service-notice-banner {
++    padding: 10px 16px;
++  }
++  
++  .service-notice-content {
++    gap: 10px;
++  }
++  
++  .service-notice-icon {
++    width: 16px;
++    height: 16px;
++  }
++  
++  .service-notice-text {
++    font-size: 13px;
++  }
++}
+diff --git a/src/app/layout.tsx b/src/app/layout.tsx
+index 5e6c745..6e26bb5 100644
+--- a/src/app/layout.tsx
++++ b/src/app/layout.tsx
+@@ -14,6 +14,7 @@ import { TrackingPixels } from "@/components/tracking-pixels";
+ import { RegistrationConversion } from "@/components/registration-conversion";
+ import { Analytics } from "@vercel/analytics/next";
+ import { assertEnvOrCrash } from "@/lib/env";
++import { ServiceNoticeBanner } from "@/components/service-notice-banner";
+ import "./globals.css";
+ 
+ // Fail-fast al PRIMO runtime request in prod se mancano env vars critiche.
+@@ -122,6 +123,7 @@ export default async function RootLayout({
+     >
+       <head><script dangerouslySetInnerHTML={{ __html: GOOGLE_CONSENT_DEFAULT }} /></head>
+       <body className="min-h-screen antialiased">
++        <ServiceNoticeBanner />
+         {/* JSON-LD structured data: Organization + WebSite +
+             SoftwareApplication. Renderizzato server-side per essere
+             visibile ai crawler senza richiedere JS. */}
+diff --git a/src/components/service-notice-banner.tsx b/src/components/service-notice-banner.tsx
+new file mode 100644
+index 0000000..eb23b53
+--- /dev/null
++++ b/src/components/service-notice-banner.tsx
+@@ -0,0 +1,18 @@
++import { AlertTriangle } from "lucide-react";
++
++const SERVICE_NOTICE_ENABLED = true;
++
++export function ServiceNoticeBanner() {
++  if (!SERVICE_NOTICE_ENABLED) return null;
++
++  return (
++    <div className="service-notice-banner">
++      <div className="service-notice-content">
++        <AlertTriangle className="service-notice-icon" size={18} strokeWidth={2} />
++        <p className="service-notice-text">
++          <strong>Avviso:</strong> i servizi di LavorAI saranno temporaneamente interrotti. Seguiranno maggiori informazioni a breve.
++        </p>
++      </div>
++    </div>
++  );
++}
