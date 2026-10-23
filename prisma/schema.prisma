@@ -173,6 +173,8 @@ model User {
   gmailMessages  GmailMessage[]
   jobDismissals  JobDismissal[]
   mailboxConnections MailboxConnection[]
+  userInbox      UserInbox?
+  inboundEmails  InboundEmail[]
 
   // Referral: ogni utente ha un codice univoco da condividere; referredById
   // punta a chi l'ha invitato (se applicabile). Reward gestito a parte
@@ -719,6 +721,7 @@ model Application {
   emailAttempts     ApplicationEmailAttempt[]
   inboxReplies      InboxReply[]
   mailboxSends      MailboxSend[]
+  inboundEmails     InboundEmail[]
 
   @@index([userId, createdAt])
   @@index([sessionId])
@@ -1126,4 +1129,63 @@ model MailboxSend {
   @@index([applicationId, createdAt])
   @@index([userId, state])
   @@index([state, submittedAt])
+}
+
+/// Indirizzo LavorAI per-utente (es. mario.rossi.k3f9@apply.lavorai.it), creato
+/// on demand. Usato come email candidato nei form ATS: conferme, OTP e
+/// risposte arrivano a /api/inbound/email.
+model UserInbox {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  /// Local part (lowercase, [a-z0-9.]).
+  slug       String    @unique
+  /// slug@domain, lowercase.
+  address    String    @unique
+  domain     String
+  disabledAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emails InboundEmail[]
+}
+
+enum InboundEmailCategory {
+  confirmation
+  incomplete
+  interview
+  rejection
+  other
+}
+
+/// Email ricevuta su un UserInbox. Contenuto troncato; mai inoltrato da qui.
+model InboundEmail {
+  id                String               @id @default(cuid())
+  inboxId           String
+  userId            String
+  provider          String
+  providerMessageId String
+  rfcMessageId      String?
+  fromAddress       String
+  toAddress         String
+  subject           String?
+  bodyText          String?              @db.Text
+  receivedAt        DateTime
+  category          InboundEmailCategory @default(other)
+  /// "rules" | "ai"
+  classifiedBy      String               @default("rules")
+  /// Codici OTP / verifica estratti (JSON array di stringhe).
+  codesJson         String               @default("[]")
+  /// Link estratti (JSON array di { url, kind: "verification" | "other" }).
+  linksJson         String               @default("[]") @db.Text
+  applicationId     String?
+  matchedAt         DateTime?
+  createdAt         DateTime             @default(now())
+
+  inbox       UserInbox    @relation(fields: [inboxId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerMessageId])
+  @@index([userId, receivedAt])
+  @@index([applicationId])
 }

@@ -6,6 +6,7 @@ import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmi
 import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS } from "@/lib/application-answer-continuation";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
+import { getUserInboxAddress } from "@/lib/inbound/service";
 import { optimizeCV } from "@/lib/claude";
 import {
   generateCoverLetterDocx,
@@ -1866,8 +1867,12 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     };
   }
   
-  const formEmail = inboundAlias ?? input.userEmail;
-  if (inboundAlias) profile.email = inboundAlias;
+  // Per-user LavorAI inbox (<slug>@apply.lavorai.it) when present: ATS
+  // confirmations land in /api/inbound/email and become proof-of-send.
+  // OTP portals keep the per-application alias (auto-OTP is keyed by appId).
+  const userInbox = portalNeedsOtp ? null : await getUserInboxAddress(prisma, userId).catch(() => null);
+  const formEmail = userInbox ?? inboundAlias ?? input.userEmail;
+  if (formEmail !== input.userEmail) profile.email = formEmail;
 
   // Scarica i file localmente se storage remoto (Blob/Supabase)
   const [cvLocalPath, clLocalPath] = await Promise.all([
