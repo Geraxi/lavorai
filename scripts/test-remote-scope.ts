@@ -110,6 +110,31 @@ function testRemoteWorkModeForTownPrefs() {
   assert.equal(autoApplyPreferenceMismatch(job, { employmentType: "employee", salaryMin: 25 }, matteo), "location");
 }
 
+function testBareRemoteJobVariations() {
+  // "Remote · Remote job" or "Remote, Remote" should be treated as bare "Remote" (scope unverified).
+  assert.equal(locationPreferenceMismatch(loc("Remote · Remote job"), jose), "location_unverified", "Remote job suffix: scope unverified");
+  assert.equal(locationPreferenceMismatch(loc("Remote, Remote"), jose), "location_unverified", "Duplicate Remote: scope unverified");
+  assert.equal(locationPreferenceMismatch(loc("Remote, Remote job"), jose), "location_unverified");
+  // With a curated board country, these should resolve the same as bare "Remote".
+  assert.equal(locationPreferenceMismatch(loc("Remote · Remote job"), ["Milano", "Remoto"], { companyCountry: "IT" }), null, "Italian board + remote user");
+  assert.equal(locationPreferenceMismatch(loc("Remote, Remote"), ["Milano", "Remoto"], { companyCountry: "IT" }), null);
+}
+
+function testCountryWideListingMatchesCityPreference() {
+  // A country-wide listing ("Italia", "Italy") should match users who chose Italian cities.
+  assert.equal(locationPreferenceMismatch(loc("Italia", false), matteo), null, "Italia matches Italian city preferences");
+  assert.equal(locationPreferenceMismatch(loc("Italy", false), matteo), null, "Italy (English) matches Italian city preferences");
+  assert.equal(locationPreferenceMismatch(loc("United States", false), jose), null, "United States matches US city Philadelphia");
+  assert.equal(locationPreferenceMismatch(loc("USA", false), jose), null, "USA matches US city");
+  // Should not match cities from other countries.
+  assert.equal(locationPreferenceMismatch(loc("France", false), matteo), "location", "French listing does not match Italian cities");
+  assert.equal(locationPreferenceMismatch(loc("Germany", false), matteo), "location", "German listing does not match Italian cities");
+  // Remote preferences should still require remote flag or work mode.
+  assert.equal(locationPreferenceMismatch(loc("Italia", false), ["Remoto"]), "location", "Country listing without remote flag does not match bare Remote preference");
+  // Remote + country listing will match if user has the city preference and acceptsRemote.
+  assert.equal(locationPreferenceMismatch(loc("Italia", true), matteo, { acceptsRemote: true }), null, "Remote Italy matches Italian cities with remote work mode");
+}
+
 function testAshbyLocation() {
   assert.equal(ashbyLocation({
     location: "Remote",
@@ -241,11 +266,13 @@ async function main() {
   testTitleBasedPlace();
   testCitySegmentPreference();
   testRemoteWorkModeForTownPrefs();
+  testBareRemoteJobVariations();
+  testCountryWideListingMatchesCityPreference();
   testAshbyLocation();
   testWorkableHelpers();
   await testWorkableSearch();
   await testWorkablePagination();
   await testAshbyRemoteFlag();
-  console.log("PASS remote scope from home country, posting scope, work-mode remote, Ashby structured location, Workable search resolution and paging");
+  console.log("PASS remote scope from home country, posting scope, work-mode remote, bare remote variations, country-wide listings, Ashby structured location, Workable search resolution and paging");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

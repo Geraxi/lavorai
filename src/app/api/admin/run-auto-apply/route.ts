@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { runAutoApplyCron } from "@/lib/auto-apply-cron";
+import { runAutoApplyCron, runAutoApplyForUser } from "@/lib/auto-apply-cron";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 
@@ -11,8 +11,10 @@ export const maxDuration = 300;
  * Auth: header X-Admin-Key == ADMIN_SYNC_KEY (script) OPPURE sessione
  * admin loggata (bottone founder).
  *
- * Scova e accoda candidature per gli utenti in modalità "auto" (queued +
- * enqueue) e "hybrid" (awaiting_consent, da approvare).
+ * Query param opzionale: ?userId=<uuid> — quando presente, esegue
+ * runAutoApplyForUser per solo quell'utente (stessi cap, consenso, liveness,
+ * dedup) e ritorna il suo risultato; senza userId, comportamento invariato.
+ * Il guard orario è bypassato allo stesso modo dell'X-Admin-Key.
  */
 async function authorized(request: NextRequest): Promise<boolean> {
   const headerKey = request.headers.get("x-admin-key");
@@ -28,6 +30,12 @@ async function handle(request: NextRequest) {
   }
   const t0 = Date.now();
   try {
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
+    if (userId) {
+      const stats = await runAutoApplyForUser(userId);
+      return NextResponse.json({ ok: true, ms: Date.now() - t0, userId, ...stats });
+    }
     const stats = await runAutoApplyCron();
     return NextResponse.json({ ok: true, ms: Date.now() - t0, ...stats });
   } catch (err) {
