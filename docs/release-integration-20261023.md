@@ -36,6 +36,7 @@ reviewed additive migrations in order:
 1. `20261021110000_application_sent_notification`
 2. `20261021210000_value_first_activation`
 3. `20261022110000_email_reliability`
+4. `20261023120000_email_quota_baseline`
 
 Verify migration history/checksums and a current restore point first. These
 migrations do not backfill users, notification intents, consents, counters or
@@ -98,3 +99,64 @@ The `--producers-quiesced` flag is an operator attestation, not an automatic
 worker shutdown or proof that older processes stopped. Do not run the production
 command while Railway access prevents verifying that prerequisite. Unknown
 traffic outside the coordinated account is not made safe by a database lock.
+
+
+## Incident containment and remaining cutover — 23 October 16:35 UTC
+
+The owner promoted f0f1115 before migrations/worker coordination. Runtime logs
+confirmed User P2022 on /admin/users, /api/preferences and /api/sidebar-stats.
+After explicit rollback approval, production returned to 8efe5fc at 16:28 UTC.
+No database migrations or worker changes were made. Authenticated admin recovery
+has not been independently exercised. Preview f0f1115 still reports Node 24.21.0
+at 16:32 UTC; do not promote it until the runtime security gate passes.
+
+Runtime endpoint verified using authorized Neon CLI metadata:
+project curly-silence-16024948, branch br-aged-band-al1r48g9, database neondb,
+endpoint ep-gentle-butterfly-aljrsiuw (Frankfurt). The configured DIRECT_URL
+points to another project in us-east-2; never use it for migration. No credentials
+were exported or changed. Use explicit project/branch selection and validate the
+resolved endpoint for each operation. Read-only schema checks are repeatable with
+scripts/release/preflight-readonly.sql through neon psql; they do not prove host
+quiescence or inspect external provider activity.
+
+The four migrations are nullable column additions or new empty tables/indexes.
+They preserve legacy rows and trial markers and are structurally compatible with
+the old worker. This is NOT behavioral compatibility for the new trial cohort:
+the old worker must not process new activations before its coordinated upgrade.
+
+Remaining execution gates, in order:
+1. Verify a patched web runtime. Do not take production offline while this gate
+   has no completion path. Verify restore availability before DDL; configured
+   six-hour retention is not a tested restoration.
+2. Arrange a bounded maintenance window: hold production requests and scheduled
+   producers, wait for already running functions, and fence any preview/direct
+   deployment URLs that can use the same provider/database. Vercel project pause
+   covers production traffic only; it is not proof that every preview is held.
+   Existing cron invocations continue through deployments. Inventory GitHub cron
+   callers and other account senders too. Never attest quiescence from a pause
+   setting alone. Authentication mail/webhooks may be temporarily unavailable.
+3. Verify old worker current jobs, provider attempts and admission are idle, then
+   stop the old worker explicitly and confirm zero running replicas before
+   starting the replacement. Ordinary Railway redeploy can overlap processes;
+   default termination grace can be zero. Do not rely on old SIGTERM handling.
+   Never reset the seven historical claimed queued rows observed during preflight.
+4. Apply reviewed migrations with bounded lock timeout and migration-history
+   checksum verification on the confirmed runtime database, using the repository
+   migration tooling. Do not db-push or mark a migration applied without execution.
+5. Deploy compatible web/worker with SENDERS_PAUSED=true; verify exact SHA, runtime,
+   pause reporting and no old process. Preserve existing plans and communication
+   choices. Do not let old claimed rows become eligible through recovery at start;
+   review the historical admission cutoff before any resume, without resetting rows.
+6. Obtain a fresh provider observation AFTER quiescence. Last reported consumption
+   was 100/100 daily and 663/3000 monthly, NOT a usable current initialization input.
+   Daily reset was 2026-10-24T00:00Z; monthly reset must be re-read, not assumed to
+   be the first. Initialize the conservative baseline atomically and read it back.
+7. Validate schema, holds, worker logs and all prerequisites while held; then resume
+   only fresh authorized work. No synthetic real sends, historical replay, trial
+   grants or quota increases. If any gate fails, keep dispatch held and retain
+   schema/evidence. No silent automatic fallback to an old sending worker.
+
+Official operational references:
+- https://vercel.com/docs/cli/project (pause covers production traffic)
+- https://vercel.com/docs/cron-jobs/manage-cron-jobs (running cron jobs continue)
+- https://docs.railway.com/deployments/deployment-teardown (overlap and drain)
