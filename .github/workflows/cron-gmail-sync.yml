@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Hit gmail-sync endpoint
         run: |
-          curl -sS -o /tmp/out -w "HTTP %{http_code} in %{time_total}s\n" \
+          curl -sS --fail-with-body --max-time 320 -o /tmp/out -w "HTTP %{http_code} in %{time_total}s\n" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             https://lavorai.it/api/cron/gmail-sync
           echo "--- response body ---"
