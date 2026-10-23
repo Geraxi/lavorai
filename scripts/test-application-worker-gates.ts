@@ -27,10 +27,17 @@ for (const status of ["paused", "completed", "cancelled", "unknown"]) {
 }
 assert.equal(currentWorkerIneligibility({ ...base, session: { ...base.session, sentCount: 30 } }), "session_capacity_reached");
 for (const patch of [{ suspendedAt: now }, { privacyConsentAt: null }, { emailVerified: null },
-  { subscriptionStatus: "pending_payment_method" }, { subscriptionStatus: "canceled" }, { subscriptionStatus: "past_due" }, { subscriptionStatus: "paused" }, { currentPeriodEnd: new Date(0) },
+  { subscriptionStatus: "paused" },
   { pausedUntil: new Date(+now + 86400000) }, { preferences: { ...base.user.preferences, autoApplyMode: "off" } }]) {
   assert.notEqual(currentWorkerIneligibility({ ...base, user: { ...base.user, ...patch } }), null);
 }
+// Billing lapses fall back to the free weekly quota (enforced under lock).
+for (const patch of [{ subscriptionStatus: "pending_payment_method" }, { subscriptionStatus: "canceled" }, { subscriptionStatus: "past_due" }, { currentPeriodEnd: new Date(0) }]) {
+  assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, ...patch } }), null);
+}
+process.env.FREE_WEEKLY_APPLY_QUOTA = "0";
+assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, subscriptionStatus: "past_due" } }), "billing_ineligible", "quota 0 disables the free path");
+delete process.env.FREE_WEEKLY_APPLY_QUOTA;
 assert.equal(currentWorkerIneligibility({ ...base, job: { ...base.job, closedAt: now } }), "job_closed");
 assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, avoidCompanies: "  ACME  " } }), "company_avoided");
 for (const mode of ["manual", "hybrid"]) {

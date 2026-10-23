@@ -13,7 +13,7 @@ import { titleMatchesAnyRole } from "@/lib/role-match";
 import { parseVerifiedSubmissionReceipt, receiptJobId } from "@/lib/submission-receipt";
 import { canonicalPostingKey, DUPLICATE_POSTING_MESSAGE } from "@/lib/posting-key";
 import { prisma } from "@/lib/db";
-import { isApplicationAccessPaused, isLifetimeProPlus, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { FREE_QUOTA_WORKER_INFLIGHT_STATUSES, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
 
 // Persisted before crossing a delivery boundary. A crash/timeout never releases
 // this reservation: only a proved no-send outcome or an atomic success does.
@@ -60,9 +60,9 @@ export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date())
   const mode = user.preferences?.autoApplyMode;
   if (mode === "off" || !mode || (mode !== "auto" && !(["manual", "hybrid"].includes(mode) && row.consentGrantedAt))) return "auto_apply_not_enabled";
   if (user.subscriptionStatus === "paused" || (user.pausedUntil && user.pausedUntil > now)) return "subscription_paused";
-  if (!isLifetimeProPlus(user.email) && (isApplicationAccessPaused(user)
-    || requiresPaymentMethodBeforeApp(user) || !["active", "trialing"].includes(user.subscriptionStatus ?? "")
-    || (user.currentPeriodEnd !== null && user.currentPeriodEnd <= now))) return "billing_ineligible";
+  // Senza accesso pagato/prova si passa dalla quota gratuita settimanale,
+  // verificata sotto lock in admissionBlock (serve un conteggio su DB).
+  if (!hasPaidOrTrialApplicationAccess(user, now) && !usesFreeWeeklyQuota(user, now)) return "billing_ineligible";
   if (row.job.closedAt) return "job_closed";
   if (isAvoidedCompany(row.job.company, user.avoidCompanies)) return "company_avoided";
   if (row.sessionId && (!row.session || row.session.userId !== row.userId
@@ -108,6 +108,22 @@ async function withLockedApplication<T>(id: string, db: DB, operation: (tx: Pris
   });
 }
 
+/** Free-quota users: sends/attempts in the rolling window, excluding this row. */
+export async function freeQuotaAvailable(tx: Pick<Prisma.TransactionClient, "application">, row: Pick<WorkerGateRow, "id" | "userId" | "user">, now = new Date()): Promise<boolean> {
+  if (!usesFreeWeeklyQuota(row.user, now)) return true;
+  const used = await tx.application.count({ where: { userId: row.userId, id: { not: row.id }, OR: [
+    { status: "success", OR: [{ submittedAt: { gte: freeQuotaWindowStart(now) } }, { submittedAt: null, createdAt: { gte: freeQuotaWindowStart(now) } }] },
+    { status: { in: FREE_QUOTA_WORKER_INFLIGHT_STATUSES } },
+  ] } });
+  return used < freeWeeklyApplyQuota();
+}
+
+async function admissionBlock(tx: Prisma.TransactionClient, row: WorkerGateRow): Promise<string | null> {
+  if (!await capacityAvailable(tx, row)) return "session_capacity_reached";
+  if (!await freeQuotaAvailable(tx, row)) return "free_weekly_quota_reached";
+  return null;
+}
+
 async function capacityAvailable(tx: Prisma.TransactionClient, row: WorkerGateRow): Promise<boolean> {
   if (!row.session) return true;
   const others = await tx.application.findMany({
@@ -144,6 +160,7 @@ export function heldMessage(reason: string): string {
     preference_salary: "Retribuzione inferiore alla preferenza corrente",
     preference_match_threshold: "Compatibilità con il profilo inferiore alla soglia scelta",
   };
+  if (reason === "free_weekly_quota_reached") explanations[reason] = `Raggiunto il limite gratuito di ${freeWeeklyApplyQuota()} candidature ogni 7 giorni. Attiva Pro per inviarne di più`;
   return `Invio in attesa: ${explanations[reason] ?? reason}. Questa elaborazione non ha effettuato nuovi invii.`;
 }
 
@@ -157,7 +174,7 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     if (row.answerContinuationJson) {
       if (answerContinuationIneligibility(row, "queued", row.job.url) || currentWorkerIneligibility(row)
-        || !await capacityAvailable(tx, row) || !await continuationReservationMatches(tx, row, continuation!)) return null;
+        || await admissionBlock(tx, row) || !await continuationReservationMatches(tx, row, continuation!)) return null;
       const token = new Date(Math.max(Date.now(), +row.startedAt! + 1));
       await tx.application.update({ where: { id }, data: {
         status: "optimizing", startedAt: token, errorMessage: null,
@@ -188,10 +205,10 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
       } });
       return null;
     }
-    const reason = currentWorkerIneligibility(row);
-    if (reason || !await capacityAvailable(tx, row)) {
+    const reason = currentWorkerIneligibility(row) ?? await admissionBlock(tx, row);
+    if (reason) {
       await tx.application.update({ where: { id }, data: {
-        startedAt: new Date(), errorMessage: heldMessage(reason ?? "session_capacity_reached"),
+        startedAt: new Date(), errorMessage: heldMessage(reason),
       } });
       return null;
     }
@@ -224,11 +241,11 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || !["optimizing", "ready_to_apply"].includes(row.status) || hasPotentialSubmission(row)) return false;
     if (rolloutApplicationIneligibility(row)) return false;
-    const reason = currentWorkerIneligibility(row);
-    if (reason || !await capacityAvailable(tx, row)) {
+    const reason = currentWorkerIneligibility(row) ?? await admissionBlock(tx, row);
+    if (reason) {
       await tx.application.update({ where: { id }, data: {
         status: "queued", startedAt: new Date(), submitConfirmation: NOT_SUBMITTED,
-        errorMessage: heldMessage(reason ?? "session_capacity_reached"),
+        errorMessage: heldMessage(reason),
       } });
       return false;
     }
@@ -289,11 +306,12 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
     if (["portal_greenhouse", "portal_recruitee"].includes(channel) && !await destinationIsUnique(tx, row, channel)) return false;
     const reason = currentWorkerIneligibility(row)
       ?? await reserveSubmissionBudget(tx, { applicationId: id,
-        subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, "recheck");
-    if (reason || !await capacityAvailable(tx, row)) {
+        subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, "recheck")
+      ?? await admissionBlock(tx, row);
+    if (reason) {
       await tx.application.update({ where: { id }, data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
-        errorMessage: `Invio finale interrotto: ${reason ?? "session_capacity_reached"}. Il portale potrebbe aver già ricevuto dati o allegati. Verifica l'esito prima di un nuovo tentativo.`,
+        errorMessage: `Invio finale interrotto: ${reason}. Il portale potrebbe aver già ricevuto dati o allegati. Verifica l'esito prima di un nuovo tentativo.`,
       } });
       return false;
     }
@@ -479,7 +497,8 @@ export async function queueAnswerContinuation(input: {
     const reason = answerContinuationIneligibility(row, "paused", row.job.url) ?? currentWorkerIneligibility({ ...row, consentGrantedAt: consentAt });
     if (reason || !proof) return reason ?? "continuation_proof_missing";
     if (!await continuationReservationMatches(tx, row, proof)) return "continuation_reservation_mismatch";
-    if (!await capacityAvailable(tx, row)) return "session_capacity_reached";
+    const block = await admissionBlock(tx, row);
+    if (block) return block;
     let pending: unknown;
     try { pending = JSON.parse(row.pendingQuestionsJson!); } catch { return "questions_invalid"; }
     if (!Array.isArray(pending) || !pending.length) return "questions_invalid";

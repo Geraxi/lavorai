@@ -3,6 +3,7 @@ import { applicationRolloutConfig, historicalRetriesBlocked, rolloutApplicationI
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { hasPotentialSubmission } from "@/lib/application-worker-gates";
+import { claimScanWindow, sortByPaidPriority, type PriorityUser } from "@/lib/paid-priority";
 
 /**
  * Presa in carico atomica di una candidatura in coda, indipendente da Redis.
@@ -89,6 +90,16 @@ export async function recoverStuckApplications(): Promise<number> {
   return recovered;
 }
 
+const prioritySelect = { tier: true, email: true, subscriptionStatus: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, currentPeriodEnd: true } as const;
+
+/** Paid Pro/Pro+ and active trials first, then oldest first; dedup, capped at `limit`. */
+export function orderClaimable(rows: { id: string; createdAt: Date; user?: PriorityUser | null }[], limit: number): string[] {
+  const seen = new Set<string>();
+  return sortByPaidPriority(rows, r => r.user, r => r.createdAt)
+    .filter(r => !seen.has(r.id) && seen.add(r.id))
+    .slice(0, limit).map(r => r.id);
+}
+
 /** Read-only polling. Historical rows, stale claims and automatic recovery stay frozen. */
 export async function findClaimableQueued(limit: number): Promise<string[]> {
   if (applicationsPaused() || rolloutCreationBlocked()) return [];
@@ -107,17 +118,19 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
       canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
     },
     orderBy: { createdAt: "asc" },
-    take: limit,
-    select: { id: true, createdAt: true, consentGrantedAt: true, retryCount: true },
+    take: claimScanWindow(limit),
+    select: { id: true, createdAt: true, consentGrantedAt: true, retryCount: true, user: { select: prioritySelect } },
   });
   const continuations = await prisma.application.findMany({
     where: { status: "queued", answerContinuationJson: { not: null }, retryCount: 0,
       createdAt: { gt: config.startedAt, lte: now }, consentGrantedAt: { gt: config.startedAt, lte: now },
       submitConfirmation: "NOT_SUBMITTED", completedAt: null, submittedAt: null, submittedVia: null,
-    }, select: continuationSelect, orderBy: { createdAt: "asc" }, take: limit,
+    }, select: { ...continuationSelect, user: { select: prioritySelect } }, orderBy: { createdAt: "asc" }, take: claimScanWindow(limit),
   });
-  return [...rows.filter(row => !rolloutApplicationIneligibility(row, now)).map(row => row.id),
-    ...continuations.filter(row => !answerContinuationIneligibility(row, "queued", undefined, now)).map(row => row.id)].slice(0, limit);
+  return orderClaimable([
+    ...rows.filter(row => !rolloutApplicationIneligibility(row, now)),
+    ...continuations.filter(row => !answerContinuationIneligibility(row, "queued", undefined, now)),
+  ], limit);
 }
 
 /** Rimette una candidatura in stato prendibile (da chiamare all'enqueue). */
