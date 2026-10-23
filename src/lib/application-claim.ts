@@ -90,7 +90,7 @@ export async function recoverStuckApplications(): Promise<number> {
   return recovered;
 }
 
-const prioritySelect = { tier: true, email: true, subscriptionStatus: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true } as const;
+const prioritySelect = { tier: true, email: true, subscriptionStatus: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, currentPeriodEnd: true } as const;
 
 /** Paid Pro/Pro+ and active trials first, then oldest first; dedup, capped at `limit`. */
 export function orderClaimable(rows: { id: string; createdAt: Date; user?: PriorityUser | null }[], limit: number): string[] {

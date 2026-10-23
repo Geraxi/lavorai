@@ -10,7 +10,8 @@ assert.equal(paidPriorityRank({ tier: "pro", subscriptionStatus: "active", creat
 assert.equal(paidPriorityRank({ tier: "pro", subscriptionStatus: null, createdAt: old }), R.proPaid);
 assert.equal(paidPriorityRank({ tier: "pro_plus", subscriptionStatus: "trialing", createdAt: old }), R.proPlusTrial);
 assert.equal(paidPriorityRank({ tier: "pro", subscriptionStatus: "trialing", createdAt: old }), R.proTrial);
-assert.equal(paidPriorityRank({ tier: "free", subscriptionStatus: null, createdAt: fresh }), R.proTrial);
+assert.equal(paidPriorityRank({ tier: "free", subscriptionStatus: "trialing", createdAt: fresh }), R.proTrial);
+assert.equal(paidPriorityRank({ tier: "free", subscriptionStatus: null, createdAt: fresh }), R.none, "trial without card = free quota, lowest");
 assert.equal(paidPriorityRank({ tier: "free", subscriptionStatus: null, createdAt: old }), R.none);
 for (const s of ["past_due", "paused", "canceled"]) assert.equal(paidPriorityRank({ tier: "pro", subscriptionStatus: s, createdAt: old }), R.none);
 assert.equal(paidPriorityRank({ tier: "free", email: "antonella.lasalandra07@gmail.com", createdAt: old }), R.proPlusPaid);

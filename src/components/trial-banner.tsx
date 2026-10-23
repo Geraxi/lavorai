@@ -58,7 +58,7 @@ export async function TrialBanner() {
             {last ? `Prova Pro: ${t.daysLeft === 1 ? "ultimo giorno" : "ultimi 2 giorni"}` : needsSetup ? `La tua prova Pro è attiva · ${t.daysLeft} giorni` : `Prova Pro attiva · ${t.daysLeft} giorni`}
           </strong>
           <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-            {last ? `Scade il ${ends}. Poi il tuo account resta in pausa finché non scegli Pro.` : needsSetup ? `Completa CV e preferenze per iniziare: fino a 5 candidature al giorno nella prova, attiva fino al ${ends}.` : `Fino al ${ends} LavorAI invia fino a 5 candidature al giorno. Carta richiesta prima di iniziare; rinnovo al termine salvo disdetta.`}
+            {last ? `Scade il ${ends}. Poi continui con 5 candidature gratuite ogni 7 giorni, o scegli Pro.` : needsSetup ? `Completa CV e preferenze per iniziare: fino a 5 candidature al giorno nella prova, attiva fino al ${ends}.` : `Fino al ${ends} LavorAI invia fino a 5 candidature al giorno. Carta richiesta prima di iniziare; rinnovo al termine salvo disdetta.`}
           </span>
         </div>
         <div style={{ height: 3, borderRadius: 999, background: "var(--border-ds)", overflow: "hidden" }}>

@@ -17,7 +17,7 @@ const DESCRIPTION_BACKFILL_PER_RUN = 60;
 const DESCRIPTION_BACKFILL_BUDGET_MS = 20_000;
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
-import { dailyApplicationLimit, effectiveTier, getLimits, isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { dailyApplicationLimit, effectiveTier, getLimits, FREE_QUOTA_NON_CONSUMING_STATUSES, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { runSelfHeal } from "@/lib/auto-apply-self-heal";
 import { recordConversionEvent } from "@/lib/conversion-events";
@@ -80,6 +80,7 @@ interface RunStats {
   applicationsAwaitingConsent: number;
   skippedDailyCap: number;
   skippedMonthlyPaywall: number;
+  skippedFreeWeeklyQuota: number;
   skippedMatchThreshold: number;
   skippedRoleMismatch: number;
   skippedAlreadyApplied: number;
@@ -102,6 +103,7 @@ function emptyRunStats(): RunStats {
     applicationsAwaitingConsent: 0,
     skippedDailyCap: 0,
     skippedMonthlyPaywall: 0,
+    skippedFreeWeeklyQuota: 0,
     skippedMatchThreshold: 0,
     skippedRoleMismatch: 0,
     skippedAlreadyApplied: 0,
@@ -175,6 +177,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
       email: true,
       tier: true,
       subscriptionStatus: true,
+      currentPeriodEnd: true,
       trialEndsAt: true, trialGraceEndsAt: true,
       createdAt: true,
       avoidCompanies: true,
@@ -270,6 +273,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       email: true,
       tier: true,
       subscriptionStatus: true,
+      currentPeriodEnd: true,
       trialEndsAt: true, trialGraceEndsAt: true,
       createdAt: true,
       avoidCompanies: true,
@@ -309,6 +313,8 @@ async function processUser(
     id: string;
     email: string;
     tier: string;
+    subscriptionStatus?: string | null;
+    currentPeriodEnd?: Date | null;
     trialEndsAt: Date | null;
     trialGraceEndsAt: Date | null;
     createdAt: Date;
@@ -389,39 +395,48 @@ async function processUser(
   const todayCount = await prisma.application.count({
     where: { userId: user.id, createdAt: { gte: todayStart }, status: { notIn: ["failed", "diagnostic"] } },
   });
-  if (isApplicationAccessPaused(user)) {
-    stats.skippedMonthlyPaywall++;
-    return;
-  }
-  // Una prova senza metodo di pagamento non può consumare crediti o creare
-  // candidature: l'utente deve prima completare il checkout Stripe.
-  if (requiresPaymentMethodBeforeApp(user)) {
-    stats.skippedMonthlyPaywall++;
-    return;
-  }
-  const dailyLimit = dailyApplicationLimit(user, prefs.dailyCap);
-  let remainingToday = Math.max(0, dailyLimit - todayCount);
-  if (remainingToday === 0) {
-    stats.skippedDailyCap++;
-    return;
-  }
+  // Accesso pagato/prova: limiti storici (giornaliero + mensile del tier).
+  // Altrimenti (Free a prova scaduta, prova senza carta, past_due/canceled):
+  // quota gratuita di N candidature su 7 giorni mobili, vedi billing.ts.
+  let remainingToday: number;
+  if (hasPaidOrTrialApplicationAccess(user)) {
+    const dailyLimit = dailyApplicationLimit(user, prefs.dailyCap);
+    remainingToday = Math.max(0, dailyLimit - todayCount);
+    if (remainingToday === 0) {
+      stats.skippedDailyCap++;
+      return;
+    }
 
-  // Paywall mensile (Free fuori prova = view-only; Pro/Pro+ = più alto)
-  const tier = effectiveTier(user);
-  const limits = getLimits(tier);
-  if (limits.monthlyApplications !== Infinity) {
-    const monthCount = await prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { notIn: ["failed", "diagnostic"] } },
-    });
-    const remainingMonth = Math.max(
-      0,
-      limits.monthlyApplications - monthCount,
-    );
-    if (remainingMonth === 0) {
+    // Paywall mensile (Pro/Pro+)
+    const tier = effectiveTier(user);
+    const limits = getLimits(tier);
+    if (limits.monthlyApplications !== Infinity) {
+      const monthCount = await prisma.application.count({
+        where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { notIn: ["failed", "diagnostic"] } },
+      });
+      const remainingMonth = Math.max(
+        0,
+        limits.monthlyApplications - monthCount,
+      );
+      if (remainingMonth === 0) {
+        stats.skippedMonthlyPaywall++;
+        return;
+      }
+      remainingToday = Math.min(remainingToday, remainingMonth);
+    }
+  } else {
+    if (!usesFreeWeeklyQuota(user)) {
       stats.skippedMonthlyPaywall++;
       return;
     }
-    remainingToday = Math.min(remainingToday, remainingMonth);
+    const weekCount = await prisma.application.count({
+      where: { userId: user.id, createdAt: { gte: freeQuotaWindowStart() }, status: { notIn: FREE_QUOTA_NON_CONSUMING_STATUSES } },
+    });
+    remainingToday = Math.max(0, freeWeeklyApplyQuota() - weekCount);
+    if (remainingToday === 0) {
+      stats.skippedFreeWeeklyQuota++;
+      return;
+    }
   }
 
   // Cap globale per run

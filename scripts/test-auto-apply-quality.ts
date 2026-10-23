@@ -88,6 +88,7 @@ async function testCronBothPasses() {
       dailyApplicationLimit: () => 5, effectiveTier: () => "pro",
       getLimits: () => ({ monthlyApplications: 100 }),
       isApplicationAccessPaused: () => false, requiresPaymentMethodBeforeApp: () => false,
+      hasPaidOrTrialApplicationAccess: () => true, usesFreeWeeklyQuota: () => false,
     },
     "@/lib/role-match": { titleMatchesAnyRole: () => true },
     "@/lib/auto-apply-roles": await import("../src/lib/auto-apply-roles"),

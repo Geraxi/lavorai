@@ -251,7 +251,7 @@ async function testExplicitCreation() {
       };
       const route = load(`src/app/api/applications/${routeName}/route.ts`, {
         "@/lib/db": { prisma }, "@/lib/admin-user-actions": { monthlyQuotaSince: () => start },
-        "@/lib/billing": { requiresPaymentMethodBeforeApp: () => false, effectiveTier: () => "pro", getLimits: () => ({ monthlyApplications: 100 }), dailyApplicationLimit: () => 10 },
+        "@/lib/billing": { hasPaidOrTrialApplicationAccess: () => true, usesFreeWeeklyQuota: () => false, requiresPaymentMethodBeforeApp: () => false, effectiveTier: () => "pro", getLimits: () => ({ monthlyApplications: 100 }), dailyApplicationLimit: () => 10 },
         "@/lib/rate-limit": { applyLimiter: { limit: async () => ({ success: true }) }, applyBatchLimiter: { limit: async () => ({ success: true }) } },
         "@/lib/activation-readiness": { getActivationReadiness: async () => ({ ready: true }) },
         "@/lib/apply-session": { resolveSession: async () => ({ id: "round", status: "active" }) },

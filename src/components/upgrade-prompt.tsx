@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Ban, Rocket, Zap } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { effectiveTier, getLimits, trialState } from "@/lib/billing";
+import { effectiveTier, freeWeeklyApplyQuota, getLimits, trialState } from "@/lib/billing";
 import { CompanyLogo } from "@/components/design/company-logo";
 import { pickMatches } from "@/lib/weekly-digest";
 
@@ -201,12 +201,12 @@ const COPY = {
   },
   viewOnly: {
     title: (_used: number, _cap: number) => "Free trial expired",
-    body: "La prova è terminata. Attiva Pro a €19,99/mese per riattivare le funzionalità.",
+    body: `La prova è terminata: LavorAI continua con ${freeWeeklyApplyQuota()} candidature gratuite ogni 7 giorni. Attiva Pro a €19,99/mese per riattivare tutte le funzionalità.`,
     cta: "Attiva Pro",
   },
   trialEnded: {
-    title: (_used: number, _cap: number) => "La prova Pro è finita: le candidature sono in pausa",
-    body: "Attiva Pro per tornare a utilizzare le funzionalità: €19,99/mese, disdici quando vuoi.",
+    title: (_used: number, _cap: number) => `La prova Pro è finita: ora hai ${freeWeeklyApplyQuota()} candidature gratuite ogni 7 giorni`,
+    body: "Attiva Pro per tornare a 50 candidature al mese e a tutte le funzionalità: €19,99/mese, disdici quando vuoi.",
     cta: "Riparti con Pro",
   },
   blocked: {

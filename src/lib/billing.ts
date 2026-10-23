@@ -60,7 +60,7 @@ export const TIERS: Record<Tier, TierConfig> = {
       "Offerte compatibili durante la prova",
       "Risposte dei recruiter nella Inbox",
       "Analisi ATS del CV",
-      "Dopo la prova: account in pausa finché non attivi Pro",
+      "Dopo la prova: 5 candidature gratuite ogni 7 giorni",
     ],
     stripePriceIdEnv: null,
     cta: "Prova Pro 7 giorni gratis",
@@ -357,4 +357,67 @@ export const ANNUAL_PRICING = {
 /** Qualsiasi valore diverso da "year" torna al mensile. */
 export function normalizeInterval(value: unknown): BillingInterval {
   return value === "year" ? "year" : "month";
+}
+
+/**
+ * Quota gratuita: gli utenti senza accesso pagato/prova valido (Free a prova
+ * scaduta, prova senza carta, abbonamento past_due/canceled/scaduto) possono
+ * ricevere fino a N candidature automatiche ogni 7 giorni mobili.
+ * Override: FREE_WEEKLY_APPLY_QUOTA (intero >= 0; 0 disattiva la quota).
+ */
+export const DEFAULT_FREE_WEEKLY_APPLY_QUOTA = 5;
+export const FREE_QUOTA_WINDOW_DAYS = 7;
+
+export function freeWeeklyApplyQuota(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.FREE_WEEKLY_APPLY_QUOTA?.trim();
+  if (!raw) return DEFAULT_FREE_WEEKLY_APPLY_QUOTA;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? Math.min(n, 100) : DEFAULT_FREE_WEEKLY_APPLY_QUOTA;
+}
+
+export function freeQuotaWindowStart(now = new Date()): Date {
+  return new Date(now.getTime() - FREE_QUOTA_WINDOW_DAYS * 86400_000);
+}
+
+/**
+ * Stati che NON consumano la quota gratuita: l'utente non ha ricevuto nulla
+ * (fallita, annullata, diagnostica). Tutto il resto (in coda, in lavorazione,
+ * in attesa di consenso/risposte, inviata) conta come invio o tentativo.
+ */
+export const FREE_QUOTA_NON_CONSUMING_STATUSES = ["failed", "cancelled", "canceled", "diagnostic"];
+
+/**
+ * Stati che al worker contano come invio o tentativo in corso. Il backlog
+ * `queued` e le righe in attesa dell'utente (awaiting_consent, needs_answers,
+ * needs_session) non bloccano l'invio: la quota si consuma quando si parte.
+ * `ready_to_apply` può essere un tentativo dall'esito incerto: conta.
+ */
+export const FREE_QUOTA_WORKER_INFLIGHT_STATUSES = ["optimizing", "applying", "submitting", "answers_claimed", "ready_to_apply"];
+
+type AccessUser = {
+  tier?: string | null; email?: string | null; createdAt?: Date | string;
+  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null;
+  subscriptionStatus?: string | null; currentPeriodEnd?: Date | null;
+};
+
+/**
+ * Accesso pagato o di prova valido (stessa regola storica del worker):
+ * non in pausa per prova scaduta, carta raccolta, subscription active/trialing
+ * e periodo non scaduto. Lifetime Pro+ sempre.
+ */
+export function hasPaidOrTrialApplicationAccess(user: AccessUser, now = new Date()): boolean {
+  if (isLifetimeProPlus(user.email)) return true;
+  return !isApplicationAccessPaused(user) && !requiresPaymentMethodBeforeApp(user)
+    && ["active", "trialing"].includes(user.subscriptionStatus ?? "")
+    && !(user.currentPeriodEnd != null && user.currentPeriodEnd <= now);
+}
+
+/**
+ * true = l'utente non ha accesso pagato/prova e passa dalla quota gratuita.
+ * Gli abbonamenti in pausa (Stripe pause_collection) restano esclusi a monte
+ * dal gate `subscription_paused`: la pausa è una scelta esplicita dell'utente
+ * di non ricevere nuovi invii.
+ */
+export function usesFreeWeeklyQuota(user: AccessUser, now = new Date()): boolean {
+  return !hasPaidOrTrialApplicationAccess(user, now) && freeWeeklyApplyQuota() > 0;
 }

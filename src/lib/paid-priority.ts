@@ -21,6 +21,7 @@ export type PriorityUser = {
   createdAt?: Date | string;
   trialEndsAt?: Date | string | null;
   trialGraceEndsAt?: Date | string | null;
+  currentPeriodEnd?: Date | string | null;
 };
 
 export const PAID_PRIORITY_RANK = { proPlusPaid: 4, proPaid: 3, proPlusTrial: 2, proTrial: 1, none: 0 } as const;
@@ -30,6 +31,8 @@ export function paidPriorityRank(user: PriorityUser | null | undefined): number 
   if (isLifetimeProPlus(user.email)) return PAID_PRIORITY_RANK.proPlusPaid;
   const tier = normalizeTier(user.tier);
   const status = user.subscriptionStatus ?? null;
+  // Periodo Stripe scaduto = nessun accesso pagato: quota gratuita, priorità minima.
+  if (user.currentPeriodEnd && new Date(user.currentPeriodEnd).getTime() <= Date.now()) return PAID_PRIORITY_RANK.none;
   if (tier !== "free") {
     const plus = tier === "pro_plus";
     if (status === "trialing") return plus ? PAID_PRIORITY_RANK.proPlusTrial : PAID_PRIORITY_RANK.proTrial;
@@ -37,7 +40,10 @@ export function paidPriorityRank(user: PriorityUser | null | undefined): number 
     if (status === "active" || status === null) return plus ? PAID_PRIORITY_RANK.proPlusPaid : PAID_PRIORITY_RANK.proPaid;
     return PAID_PRIORITY_RANK.none; // past_due / paused / canceled
   }
-  return trialState(user).status === "active" ? PAID_PRIORITY_RANK.proTrial : PAID_PRIORITY_RANK.none;
+  // Prova da registrazione senza carta (nessuna subscription trialing/active)
+  // passa dalla quota gratuita: priorità minima come gli altri Free.
+  return trialState(user).status === "active" && (status === "trialing" || status === "active")
+    ? PAID_PRIORITY_RANK.proTrial : PAID_PRIORITY_RANK.none;
 }
 
 function time(v: Date | string | undefined | null): number {
