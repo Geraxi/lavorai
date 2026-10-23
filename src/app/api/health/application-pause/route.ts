@@ -27,6 +27,7 @@ export async function GET(request: Request): Promise<Response> {
     applicationsPaused: applicationsPaused(),
     repairVersion: RELEASE_REPAIR_VERSION,
     deploymentCommit: commit,
+    nodeVersion: process.versions.node,
     nonce,
     observedAt: Date.now(),
   }, { headers: {
