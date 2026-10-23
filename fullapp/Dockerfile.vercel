@@ -31,4 +31,4 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npx prisma generate
 RUN DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:5432/fixture AUTH_SECRET=isolated-fixture-not-a-real-secret SENDERS_PAUSED=true npm run build
 ENV NODE_ENV=production PORT=8080 HOSTNAME=0.0.0.0
-CMD ["node", "node_modules/next/dist/bin/next", "start", "-H", "0.0.0.0", "-p", "8080"]
+CMD ["node", "node_modules/next/dist/bin/next", "start", "-H", "0.0.0.0"]
