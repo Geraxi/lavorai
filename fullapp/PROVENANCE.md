@@ -1,0 +1,3 @@
+# Isolated image provenance
+
+The deployment commit identifies the build recipe in codex/isolated-next-container-probe, not a claim that the application is an unmodified checkout of that commit. The workflow pins application source to 911671a6c80a32687d7b0bf7f30bf76a416c884e, applies the checked-in banner.patch from main 532137a836faaff3eb30b1eb18fe4101e086b7e6, and overlays the checked-in fullapp harness. Together these immutable inputs identify the composed build. CLI previews must set VERCEL_GIT_COMMIT_SHA to the verified remote recipe commit and preserve CONTAINER-SOURCE.json with all three inputs. Health retains its existing fail-closed validation. This fixture is not a production release commit.

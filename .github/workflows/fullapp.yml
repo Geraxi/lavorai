@@ -31,6 +31,7 @@ jobs:
       - name: Offline runtime checks
         run: >-
           docker run --network none --rm
+          -e VERCEL_GIT_COMMIT_SHA=${{ github.sha }}
           -e PORT=80 -e SENDERS_PAUSED=true -e APPLICATIONS_PAUSED=true
           -e AUTH_SECRET=isolated-fixture-not-a-real-secret
           -e DATABASE_URL=postgresql://fixture:fixture@127.0.0.1:5432/fixture

@@ -11,3 +11,13 @@ for (let n=0;n<30;n++){try {await fetch(base+'/api/health/application-pause');br
 for(const path of ['/dashboard','/admin/users']){const r=await fetch(base+path,{redirect:'manual'});assert.equal(r.status,307,path);assert.match(r.headers.get('location'),/login/);}
 for(const path of ['/api/cron/nudges','/api/cron/sync-jobs','/api/cron/editorial','/api/cron/mailbox-delivery']){const r=await fetch(base+path);assert.equal(r.status,401,path);}
 console.log(JSON.stringify({node:process.version,chromium:'offline passed',auth:'unauthenticated redirects passed',cron:'all four denied without credentials'}));
+
+const health=await fetch(base+'/api/health/application-pause?nonce=218ad3dca6354a0498e3b6ca89728384');
+assert.equal(health.status,200);
+assert.equal(health.headers.get('x-lavorai-node-version'),'24.22.1');
+assert.equal(health.headers.get('x-lavorai-senders-paused'),'true');
+assert.match(health.headers.get('cache-control'),/no-store/);
+const identity=await health.json();
+assert.equal(identity.deploymentCommit,process.env.VERCEL_GIT_COMMIT_SHA);
+assert.equal(identity.applicationsPaused,true);
+console.log(JSON.stringify({identity:'verified build recipe commit',commit:identity.deploymentCommit,health:'passed'}));
