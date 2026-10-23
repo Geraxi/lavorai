@@ -1,0 +1,1 @@
+Isolated fixture only: no LavorAI data, credentials, providers, cron or worker. NOT production ready. Container build not yet executed. Before deployment: lock dependency graph, verify image digest, included Vercel usage budget, and cron routing. Local Docker unavailable and disk low. Does not prove LavorAI auth, middleware, Chromium, ISR, cron or data flows.

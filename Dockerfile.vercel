@@ -1,0 +1,18 @@
+FROM node:24.22.1-bookworm-slim AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --ignore-scripts --no-audit --no-fund
+COPY app ./app
+COPY public ./public
+COPY proxy.js next.config.mjs ./
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+FROM node:24.22.1-bookworm-slim
+WORKDIR /app
+ENV NODE_ENV=production PORT=8080 HOSTNAME=0.0.0.0 NEXT_TELEMETRY_DISABLED=1
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+COPY --chown=node:node smoke.mjs ./smoke.mjs
+USER node
+CMD ["node", "server.js"]

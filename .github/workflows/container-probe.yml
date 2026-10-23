@@ -1,0 +1,19 @@
+name: Isolated Next container probe
+on:
+  push:
+    branches: [codex/isolated-next-container-probe]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build isolated fixture
+        run: docker build -f Dockerfile.vercel -t lavorai-probe .
+      - name: Test in isolated network namespace
+        run: |
+          docker run --network none --rm --entrypoint sh lavorai-probe -c 'node server.js & server=$!; trap "kill $server" EXIT; sleep 3; node smoke.mjs'
