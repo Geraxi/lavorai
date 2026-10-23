@@ -24,3 +24,21 @@ export function resolveSendMode(env: Env = process.env): SendMode {
   if (vercelEnv === "production") return { live: true };
   return env.MAILBOX_SEND_LIVE === "true" ? { live: true } : { live: false, reason: "non_production" };
 }
+
+/** Per-user daily cap for real Gmail sends (env GMAIL_DAILY_SEND_CAP, default 10, 0 = block all). */
+export function gmailDailySendCap(env: Env = process.env): number {
+  const raw = env.GMAIL_DAILY_SEND_CAP?.trim();
+  if (!raw) return 10;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : 10;
+}
+
+/** Start of the current calendar day in Europe/Rome (the users' day), as a UTC instant. */
+export function romeDayStart(now: Date): Date {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Rome", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(now).map((p) => [p.type, p.value]));
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  const offsetMs = asUtc - Math.floor(now.getTime() / 1000) * 1000;
+  return new Date(Date.UTC(+parts.year, +parts.month - 1, +parts.day) - offsetMs);
+}
