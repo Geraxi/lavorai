@@ -1,4 +1,4 @@
-import { emailLimits, utcPeriods } from "@/lib/email-dispatch";
+import { emailLimits, emailUsage } from "@/lib/email-dispatch";
 import { emailContext } from "@/lib/email-context";
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
@@ -24,15 +24,7 @@ export async function canSendEmail(): Promise<{
   monthly: number;
 }> {
   const { daily, monthly } = emailLimits();
-  const { day, month: monthDate } = utcPeriods(new Date());
-  const count = async (since: Date) => {
-    const rows = await prisma.$queryRaw<Array<{ n: bigint }>>`SELECT COUNT(*) AS n FROM (SELECT id FROM "EmailReservation" WHERE "createdAt" >= ${since} UNION SELECT id FROM "EmailLog" WHERE "createdAt" >= ${since}) usage`;
-    return Number(rows[0].n);
-  };
-  const [today, month] = await Promise.all([
-    count(day),
-    count(monthDate),
-  ]);
+  const { today, month } = await emailUsage(prisma, new Date());
   if (today >= daily) {
     return {
       allowed: false,

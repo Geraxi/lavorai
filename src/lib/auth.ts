@@ -300,10 +300,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // OAuth (Google) users with emailVerified null.
         await createRegistrationConversion(prisma, user.id, (user as { emailVerified?: Date | null }).emailVerified ? "magic_link" : "google");
       }
-      if (user.id) await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
-        userId: user.id, plan: "pro", path: "/signup", valueCents: 0,
-        properties: { days: 7, applicationLimit: 5 }, dedupeKey: `trial_started:${user.id}`,
-      });
+
       // Primo signup → welcome email
       if (!user.email) return;
       try {
@@ -454,14 +451,14 @@ function renderWelcomeEmail(siteUrl: string): string {
       <ol style="font-size:15px;line-height:1.7;color:#0F1012;padding-left:22px;margin:0 0 32px;">
         <li><strong>Carica il tuo CV</strong> — lo useremo come base per ogni candidatura</li>
         <li><strong>Imposta preferenze</strong> — ruoli, città, range RAL</li>
-        <li><strong>Candidati con un click</strong> — LavorAI fa il resto</li>
+        <li><strong>Guarda la tua anteprima</strong> — poi scegli se attivare la prova con carta</li>
       </ol>
       <a href="${siteUrl}/dashboard"
          style="display:inline-block;background:#0F1012;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
         Vai alla dashboard →
       </a>
       <p style="font-size:12.5px;color:#8A8C90;margin:32px 0 0;line-height:1.5;">
-        Hai 7 giorni di Pro gratis per provare, con carta richiesta. Il piano Pro parte da €19.99/mese e lo puoi cancellare con un click.
+        Puoi vedere l’anteprima senza carta. Se sei idoneo, i 7 giorni di Pro iniziano solo quando attivi la prova con carta. Il piano Pro parte da €19.99/mese e lo puoi cancellare con un click.
       </p>
       <hr style="border:none;border-top:1px solid #E6E4DD;margin:32px 0 16px;"/>
       <p style="font-size:11px;color:#8A8C90;line-height:1.5;margin:0;">

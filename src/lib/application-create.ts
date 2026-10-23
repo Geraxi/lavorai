@@ -19,7 +19,7 @@ export async function createFreshApplication(
     if (previous) throw new Error("prior_application_exists");
     await tx.$queryRaw`SELECT id FROM "UserPreferences" WHERE "userId" = ${args.data.userId} FOR UPDATE`;
     const user = await tx.user.findUniqueOrThrow({ where: { id: args.data.userId }, select: {
-      email: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
+      email: true, tier: true, subscriptionStatus: true, trialActivationVersion: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
       quotaResetAt: true, preferences: { select: { dailyCap: true } },
     } });
     // Same periods and exclusions as the producers, now after acquiring the

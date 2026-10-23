@@ -142,7 +142,7 @@ function FormCard({
           <p className="text-sm text-muted-foreground">
             Carica il CV e inserisci l&apos;email. Ti invieremo un magic link:
             dopo il login completi il setup, rivedi le candidature preparate e decidi tu quando inviarle.
-            I tuoi 7 giorni di Pro partono dalla registrazione, con carta richiesta e rinnovo al termine salvo disdetta.
+            I tuoi 7 giorni di Pro partono dall’attivazione della prova con carta, con carta richiesta e rinnovo al termine salvo disdetta.
           </p>
         </div>
 

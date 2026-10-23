@@ -12,37 +12,24 @@ async function main() {
   const active = { id: "trial-test", email: "trial@example.org", tier: "free", createdAt: new Date(now - 86400_000), trialEndsAt: null };
   const expired = { ...active, createdAt: new Date(now - 7 * 86400_000), trialEndsAt: new Date(now + 30 * 86400_000) };
   assert.equal(registrationTrialEnd("2026-01-29T12:00:00Z").toISOString(), "2026-02-05T12:00:00.000Z");
-  assert.equal(trialState(active).status, "active", "Signup without onboarding has an active trial");
-  assert.equal(effectiveTier(active), "pro");
-  assert.equal(requiresPaymentMethodBeforeApp(active), true, "A free trial cannot enter the app or submit applications before Stripe has collected a payment method");
-  assert.equal(requiresPaymentMethodBeforeApp({ ...active, subscriptionStatus: "trialing" }), false, "A Stripe trial subscription unlocks the app");
-  assert.equal(requiresPaymentMethodBeforeApp({ ...active, tier: "pro" }), false, "A paid tier is never blocked by the new-member gate");
-  assert.equal(trialState(expired).status, "ended", "Delayed setup or stored extension must not restart trial");
-  assert.equal(isApplicationAccessPaused(expired), true);
-  const legacy = { ...expired, createdAt: new Date("2026-09-01T12:00:00Z"), trialGraceEndsAt: new Date("2026-09-20T12:00:00Z") };
-  const realNow = Date.now;
-  try {
-    Date.now = () => Date.parse(EARLY_USER_TRIAL_COHORT_CUTOFF);
-    assert.equal(trialState(legacy).daysLeft, 2, "Original extension recipients receive exactly two final days");
-    assert.equal(trialState(legacy).endsAt?.toISOString(), EARLY_USER_TRIAL_FINAL_END);
-    assert.equal(isApplicationAccessPaused(legacy), false);
-    const futureGrace = { ...legacy, trialGraceEndsAt: new Date("2099-01-01") };
-    assert.equal(trialState(futureGrace).endsAt?.toISOString(), EARLY_USER_TRIAL_FINAL_END, "Stored grace cannot extend the fixed deadline");
-    assert.equal(isApplicationAccessPaused({ ...legacy, trialGraceEndsAt: null }), true, "Old users without the original extension do not receive a new trial");
-    const newcomer = { ...legacy, createdAt: new Date(EARLY_USER_TRIAL_COHORT_CUTOFF) };
-    assert.equal(trialState(newcomer).endsAt?.getTime(), registrationTrialEnd(newcomer.createdAt).getTime(), "New signups get seven days, ignoring grace");
-    Date.now = () => Date.parse(EARLY_USER_TRIAL_FINAL_END);
-    assert.equal(isApplicationAccessPaused(legacy), true, "Original cohort locks at the exact fixed deadline");
-    assert.equal(dailyApplicationLimit(legacy), 0);
-    assert.equal(isApplicationAccessPaused({ ...legacy, tier: "pro" }), false, "Paid access remains active");
-  } finally { Date.now = realNow; }
-  assert.equal(FREE_TRIAL_DAILY_APPLICATION_LIMIT, 5, "Free trials are capped at five applications per day");
-  assert.equal(dailyApplicationLimit(active), 5);
-  assert.equal(dailyApplicationLimit(expired), 0);
-  assert.equal(isApplicationAccessPaused({ ...expired, tier: "pro" }), false);
-  assert.equal(isApplicationAccessPaused({ ...expired, stripeSubscriptionId: "incomplete" }), true, "A Stripe ID alone must not unlock access");
-  for (const path of ["/dashboard", "/settings", "/onboarding", "/api/cv/profile", "/api/applications/apply", "/api/interview/prep", "/api/optimize"]) assert.equal(requiresTrialAccess(path), true, path);
-  for (const path of ["/trial-expired", "/api/stripe/checkout", "/api/stripe/webhook", "/api/auth/signout", "/api/account/delete", "/api/gdpr/export", "/api/cron/auto-apply", "/lavoro"]) assert.equal(requiresTrialAccess(path), false, path);
+  assert.equal(trialState(active).status, "none", "Signup does not start a trial");
+  assert.equal(effectiveTier(active), "free");
+  assert.equal(isApplicationAccessPaused(active), true);
+  assert.equal(dailyApplicationLimit(active), 0);
+  assert.equal(requiresPaymentMethodBeforeApp(active), true);
+  const activated = { ...active, trialActivationVersion: 1, tier: "pro", subscriptionStatus: "trialing", trialEndsAt: new Date(now + 7 * 86400_000) };
+  assert.equal(trialState(activated).status, "active");
+  assert.equal(trialState(activated).daysLeft, 7);
+  assert.equal(trialState({ ...activated, createdAt: new Date("2020-01-01"), trialGraceEndsAt: new Date("2026-09-20"), currentPeriodEnd: activated.trialEndsAt }).daysLeft, 7, "Real Stripe deadline wins over legacy cohort markers");
+  assert.equal(dailyApplicationLimit(activated), 5);
+  assert.equal(dailyApplicationLimit({ ...activated, trialActivationVersion: null }, 12), 12, "Existing Stripe trials retain their previous cap");
+  assert.equal(isApplicationAccessPaused(activated), false);
+  assert.equal(requiresPaymentMethodBeforeApp(activated), false);
+  const legacyAutomatic = { ...active, trialEndsAt: new Date(now + 86400_000) };
+  assert.equal(effectiveTier(legacyAutomatic), "free", "An old automatic marker never unlocks unpaid submissions");
+  assert.equal(dailyApplicationLimit(legacyAutomatic), 0);
+  for (const path of ["/dashboard", "/settings", "/api/cv/profile", "/api/applications/apply", "/api/interview/prep", "/api/optimize", "/api/onboarding/trigger-first-apply", "/api/preferences/mode"]) assert.equal(requiresTrialAccess(path), true, path);
+  for (const path of ["/onboarding", "/api/onboarding/cv", "/api/onboarding/demo", "/api/onboarding/demo/viewed", "/api/onboarding/demo/complete", "/trial-expired", "/api/stripe/checkout", "/api/stripe/webhook", "/api/auth/signout", "/api/account/delete", "/api/gdpr/export", "/api/cron/auto-apply", "/lavoro"]) assert.equal(requiresTrialAccess(path), false, path);
 
   const originalFind = prisma.user.findUnique;
   process.env.AUTH_SECRET = "local-test-secret-for-registration-trial-only";
@@ -53,7 +40,7 @@ async function main() {
     const request = (path: string) => new NextRequest(`https://lavorai.it${path}`, { headers: { cookie: `${cookieName}=${token}` } });
     const page = await proxy(request("/dashboard"));
     assert.equal(page.status, 307);
-    assert.equal(page.headers.get("location"), "https://lavorai.it/trial-expired");
+    assert.equal(page.headers.get("location"), "https://lavorai.it/onboarding");
     const api = await proxy(request("/api/applications/apply"));
     assert.equal(api.status, 402);
     assert.equal((await api.json()).error, "trial_expired");
@@ -88,6 +75,6 @@ async function main() {
     currentUser = { ...expired, tier: "pro" };
     assert.equal(await reserveTrialApplication(active.id, "paid-app"), false, "Payment does not unlock a legacy reset path");
   } finally { prisma.$transaction = original; }
-  console.log("PASS: signup trial, 7-day boundary, five-per-day cap, expiry gates, legacy reset paths remain suspended");
+  console.log("PASS: signup has no trial, actual activation clock, five-per-day cap, preview allowlist and submission gates, legacy reset paths remain suspended");
 }
 main().catch(e => { console.error(e); process.exitCode = 1; });

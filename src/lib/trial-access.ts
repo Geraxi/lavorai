@@ -5,6 +5,7 @@ export function requiresTrialAccess(path: string): boolean {
   // Public CV intake only stages a document for later verified login. It does
   // not optimize, mark onboarding complete, activate a trial or send anything.
   if (["/optimize", "/optimize/", "/api/optimize/stage", "/api/optimize/stage/"].includes(path)) return false;
+  if (["/onboarding", "/api/onboarding/cv", "/api/onboarding/details", "/api/onboarding/preferences", "/api/onboarding/demo", "/api/onboarding/demo/complete", "/api/onboarding/demo/viewed", "/api/onboarding/welcome-seen"].includes(path.replace(/\/$/, ""))) return false;
   const parts = path.split("/");
   return parts[1] === "api" ? featureApis.includes(parts[2]) : featurePages.includes(parts[1]);
 }

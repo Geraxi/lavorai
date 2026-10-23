@@ -4,7 +4,6 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { authLimiter } from "@/lib/rate-limit";
 import { checkOrigin } from "@/lib/csrf";
-import { sendTrialStartedEmail } from "@/lib/trial";
 import { releaseHeldApplicationsForUser } from "@/lib/held-application-release";
 
 export const runtime = "nodejs";
@@ -73,18 +72,6 @@ export async function POST(request: NextRequest) {
     // Rows held only for missing verification/consent go back to normal
     // admission once both are present. Never throws; sends nothing.
     await releaseHeldApplicationsForUser(record.userId, "email_verified");
-
-    // The verification token is single-use, so this day-zero lifecycle email
-    // cannot be sent twice through this flow. It never blocks verification.
-    const user = await prisma.user.findUnique({
-      where: { id: record.userId },
-      select: { id: true, email: true, name: true, locale: true, trialEndsAt: true },
-    });
-    if (user) {
-      await sendTrialStartedEmail(user).catch((err) =>
-        console.error("[/api/auth/verify-email/confirm] trial email", err),
-      );
-    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

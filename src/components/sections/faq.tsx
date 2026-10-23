@@ -40,7 +40,7 @@ const FAQ_OBJECTIONS_EN = [
     a: "No. An ATS receipt or delivery to the email server documents the submission, not a read or a reply. Recruiter replies are tracked separately. LavorAI does not guarantee interviews or offers.",
   },
   {
-    q: "What happens after signup?",
+    q: "What happens after trial activation?",
     a: "You upload your CV, confirm your profile, roles and locations, then see your first opportunities with documents already prepared. You review, approve the submission and follow each application's status from the dashboard.",
   },
 ];

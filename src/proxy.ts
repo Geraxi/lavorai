@@ -103,7 +103,7 @@ export async function proxy(request: NextRequest) {
       if (user && !isAdmin(user.email) && isApplicationAccessPaused(user)) {
         return pathname.startsWith("/api/")
           ? NextResponse.json({ error: "trial_expired", message: "Free trial expired", redirect: "/trial-expired" }, { status: 402 })
-          : NextResponse.redirect(new URL("/trial-expired", request.url));
+          : NextResponse.redirect(new URL("/onboarding", request.url));
       }
       if (user && !isAdmin(user.email) && requiresPaymentMethodBeforeApp(user)) {
         return pathname.startsWith("/api/")

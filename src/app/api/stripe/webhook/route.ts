@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type Stripe from "stripe";
 import { stripe, priceIdToTier } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
+import { sendTrialStartedEmail } from "@/lib/trial";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { CARD_VERIFICATION_EXPAND, subscriptionAccessStatus, subscriptionAccessWriteGuard } from "@/lib/stripe-subscription-access";
@@ -23,6 +24,27 @@ async function consumeReferralCreditOnce(customerId: string, subscriptionId: str
   } catch (error) {
     if ((error as { code?: string }).code !== "P2002") throw error;
   }
+}
+
+
+async function recordActivatedTrial(customerId: string, sub: Stripe.Subscription, liveStatus: string, synced: number) {
+  if (!synced || !sub.trial_start || !["trialing", "active"].includes(liveStatus)) return;
+  // A used trial remains used after cancellation, even if events arrive out of order.
+  await prisma.user.updateMany({
+    where: { stripeCustomerId: customerId, stripeSubscriptionId: sub.id, proTrialUsedAt: null },
+    data: { proTrialUsedAt: new Date(sub.trial_start * 1000) },
+  });
+  if (liveStatus !== "trialing" || sub.metadata.trial !== "activation_trial_with_payment_method" || !sub.trial_end) return;
+  await prisma.user.updateMany({
+    where: { stripeCustomerId: customerId, stripeSubscriptionId: sub.id, subscriptionStatus: "trialing" },
+    data: { trialEndsAt: new Date(sub.trial_end * 1000) },
+  });
+  const user = await prisma.user.findUnique({ where: { stripeCustomerId: customerId }, select: { id: true, email: true, name: true, locale: true, trialEndsAt: true, trialActivationVersion: true } });
+  if (user?.trialActivationVersion === 1) await sendTrialStartedEmail(user, { eventKey: `trial-started:${sub.id}` });
+  if (user) await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
+    userId: user.id, valueCents: 0, source: "stripe_verified",
+    properties: { days: 7 }, dedupeKey: `trial_activated:${sub.id}`,
+  });
 }
 
 /**
@@ -134,6 +156,7 @@ export async function POST(request: NextRequest) {
           synced = fallback.count;
         }
         if (!synced && liveStatus !== "pending_payment_method" && (existingAccess || userId)) throw new Error("subscription_state_changed_retry");
+        await recordActivatedTrial(customerId, sub, liveStatus, synced);
         const convertedUser = userId
           ? await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
           : await prisma.user.findFirst({ where: { stripeCustomerId: customerId }, select: { id: true } });
@@ -150,18 +173,7 @@ export async function POST(request: NextRequest) {
             properties: { stripeStatus: sub.status, checkoutPaymentStatus: sess.payment_status },
             dedupeKey: `subscription_started:${sub.id}`,
           });
-          // "purchase_completed" significa addebito effettuato, non solo
-          // carta raccolta per una prova: mantenerlo separato evita di
-          // gonfiare revenue/conversion reporting nei primi 7 giorni.
-          if (sess.payment_status === "paid") {
-            await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
-              userId: convertedUser.id,
-              plan: tier,
-              valueCents: item?.price.unit_amount ?? null,
-              properties: { stripeStatus: sub.status, checkoutPaid: true },
-              dedupeKey: `purchase_completed:${sub.id}`,
-            });
-          }
+
         }
         break;
       }
@@ -230,12 +242,6 @@ export async function POST(request: NextRequest) {
           synced = fallback.count;
         }
         if (!synced && liveStatus !== "pending_payment_method" && (existingAccess || metaUserId)) throw new Error("subscription_state_changed_retry");
-        if (liveStatus === "trialing") {
-          await prisma.user.updateMany({
-            where: { stripeCustomerId: customerId, stripeSubscriptionId: sub.id, subscriptionStatus: "trialing", proTrialUsedAt: null },
-            data: { proTrialUsedAt: new Date() },
-          });
-        }
         // L'invitato è diventato pagante (post-trial) → premia chi l'ha invitato.
         if (liveStatus === "active") {
           const payer = await prisma.user.findFirst({ where: { stripeCustomerId: customerId, referredById: { not: null }, referralRewardedAt: null }, select: { id: true } });
@@ -249,6 +255,7 @@ export async function POST(request: NextRequest) {
           await consumeReferralCreditOnce(customerId, sub.id);
           await stripe().subscriptions.update(sub.id, { metadata: { ...sub.metadata, referralCredit: "used" } }).catch(() => void 0);
         }
+        await recordActivatedTrial(customerId, sub, liveStatus, synced);
         const convertedUser = await prisma.user.findFirst({
           where: { stripeCustomerId: customerId },
           select: { id: true },
@@ -265,15 +272,6 @@ export async function POST(request: NextRequest) {
             valueCents: item?.price.unit_amount ?? null,
             properties: { stripeStatus: sub.status },
             dedupeKey: `subscription_started:${sub.id}`,
-          });
-        }
-        if (convertedUser && liveStatus === "active") {
-          await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
-            userId: convertedUser.id,
-            plan: tier,
-            valueCents: item?.price.unit_amount ?? null,
-            properties: { stripeStatus: sub.status },
-            dedupeKey: `purchase_completed:${sub.id}`,
           });
         }
         break;
@@ -298,6 +296,22 @@ export async function POST(request: NextRequest) {
             dedupeKey: `subscription_canceled:${sub.id}`,
           });
         }
+        break;
+      }
+      case "invoice.paid": {
+        const invoice = event.data.object as Stripe.Invoice;
+        if (invoice.status !== "paid" || invoice.amount_paid <= 0) break;
+        const customerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+        const subscription = invoice.parent?.subscription_details?.subscription
+          ?? (invoice as unknown as { subscription?: string | { id: string } }).subscription;
+        const subscriptionId = typeof subscription === "string" ? subscription : subscription?.id;
+        if (!customerId || !subscriptionId) break;
+        const user = await prisma.user.findUnique({ where: { stripeCustomerId: customerId }, select: { id: true } });
+        if (user) await recordConversionEvent(AnalyticsEvent.PURCHASE_COMPLETED, {
+          userId: user.id, valueCents: invoice.amount_paid,
+          properties: { invoiceId: invoice.id, currency: invoice.currency },
+          dedupeKey: `purchase_completed:${invoice.id}`,
+        });
         break;
       }
       case "invoice.payment_failed": {

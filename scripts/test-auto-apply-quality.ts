@@ -54,7 +54,11 @@ async function testCronBothPasses() {
     preferences, cvProfile: {},
   };
   const prisma = {
-    user: { findUnique: async () => user },
+    user: { findUnique: async (query: any) => {
+      assert.equal(query.select.subscriptionStatus, true);
+      assert.equal(query.select.trialActivationVersion, true);
+      return user;
+    } },
     applicationSession: { findMany: async () => [] },
     job: { findMany: async (query: unknown) => { jobQueries.push(query); return jobs; } },
     application: {

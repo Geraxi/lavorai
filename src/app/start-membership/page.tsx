@@ -1,7 +1,8 @@
+import { trialEligibility } from "@/lib/trial-eligibility";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
-import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd } from "@/lib/billing";
+import { requiresPaymentMethodBeforeApp } from "@/lib/billing";
 import { StartMembershipActions } from "./start-membership-actions";
 import { SupportLink } from "@/components/support-link";
 import { Logo } from "@/components/logo";
@@ -22,11 +23,10 @@ export default async function StartMembershipPage({
   if (!user) redirect("/login");
   if (isAdmin(user.email)) redirect("/dashboard");
   if (!user.emailVerified) redirect("/login?verify=required");
-  if (isApplicationAccessPaused(user)) redirect("/trial-expired");
+  if (!user.onboardedAt) redirect("/onboarding");
   if (!requiresPaymentMethodBeforeApp(user)) redirect(user.onboardedAt ? "/dashboard" : "/onboarding");
 
-  const endsAt = trialEnd(user);
-  const date = endsAt?.toLocaleDateString("it-IT", { day: "numeric", month: "long" }) ?? "tra 7 giorni";
+  const eligible = trialEligibility(user, false) === "eligible";
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#0a0b0b] px-5 py-7 text-white sm:px-8 sm:py-10">
@@ -36,25 +36,26 @@ export default async function StartMembershipPage({
           <Logo />
           <p className="mt-16 text-xs font-bold uppercase tracking-[.22em] text-emerald-300">Prima di iniziare</p>
           <h1 className="mt-4 text-4xl font-semibold leading-[1.02] tracking-[-.045em] sm:text-6xl">
-            Attiva la tua prova.<br />
-            <span className="text-emerald-400">Nessun addebito oggi.</span>
+            {eligible ? "Attiva la tua prova." : "Continua con il piano scelto."}<br />
+            <span className="text-emerald-400">{eligible ? "Sette giorni da quando attivi." : "Scegli il tuo piano."}</span>
           </h1>
           <p className="mt-6 max-w-lg text-base leading-7 text-slate-300 sm:text-lg">
-            Aggiungi una carta per continuare con CV e preferenze. La prova termina il {date}, 7 giorni dopo la registrazione; il primo addebito avverrà alla fine della prova, salvo disdetta.
+            {eligible ? "Hai visto la tua anteprima. Se scegli di attivare la prova con carta, i sette giorni iniziano alla conferma su Stripe. Poi il piano si rinnova al prezzo indicato, salvo disdetta prima della scadenza." : "Non possiamo confermare l’idoneità di questo account a una nuova prova. Per evitare prove ripetute, contatta il supporto per una verifica; puoi continuare a vedere la tua anteprima."}
           </p>
           <div className="mt-10 grid max-w-md grid-cols-3 gap-0 border-y border-white/10 text-sm text-slate-300">
-            <div className="py-4 pr-4"><span className="block font-mono text-xs text-emerald-300">01 · OGGI</span><span className="mt-1 block">Metodo sicuro</span></div>
-            <div className="border-l border-white/10 py-4 pl-4"><span className="block font-mono text-xs text-emerald-300">02 · PROFILO</span><span className="mt-1 block">CV e preferenze</span></div>
+            <div className="py-4 pr-4"><span className="block font-mono text-xs text-emerald-300">01 · FATTO</span><span className="mt-1 block">La tua anteprima</span></div>
+            <div className="border-l border-white/10 py-4 pl-4"><span className="block font-mono text-xs text-emerald-300">02 · ORA</span><span className="mt-1 block">Scegli il piano</span></div>
             <div className="border-l border-white/10 py-4 pl-4"><span className="block font-mono text-xs text-emerald-300">03 · POI</span><span className="mt-1 block">€19,99/mese</span></div>
           </div>
         </div>
         <div className="rounded-[28px] border border-white/12 bg-slate-950/70 p-5 shadow-2xl shadow-emerald-950/40 backdrop-blur sm:p-8">
           <div className="flex items-start justify-between gap-4">
-            <div><p className="text-sm font-medium text-emerald-300">Passaggio obbligatorio</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Aggiungi la tua carta</h2></div>
+            <div><p className="text-sm font-medium text-emerald-300">Attivazione facoltativa</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">Aggiungi la tua carta</h2></div>
             <span className="rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">Carta richiesta</span>
           </div>
           <SupportLink />
-          <StartMembershipActions confirming={params.subscribed === "1" || user.subscriptionStatus === "pending_payment_method"} canceled={params.canceled === "1"} />
+          <a href="/onboarding" className="mt-4 block text-sm underline">Torna alla tua anteprima</a>
+          <StartMembershipActions eligible={eligible} confirming={params.subscribed === "1" || user.subscriptionStatus === "pending_payment_method"} canceled={params.canceled === "1"} />
           <p className="mt-5 text-center text-xs leading-5 text-slate-400">Il pagamento viene gestito da Stripe. Apple Pay e Google Pay compaiono quando sono disponibili sul tuo dispositivo.</p>
         </div>
       </section>

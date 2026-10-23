@@ -7,7 +7,7 @@ import { isTestAccount } from "@/lib/admin";
 import { trialLifecycleStage } from "@/lib/lifecycle-cadence";
 
 /**
- * Finestra di prova dalla registrazione; accesso dopo conferma della carta.
+ * Finestra di prova dall’attivazione della prova con carta; accesso dopo conferma della carta.
  *
  *   - startTrial(userId): imposta trialEndsAt (grant admin per utenti esistenti)
  *   - sendTrialStartedEmail: giorno 0
@@ -28,7 +28,7 @@ export async function startTrial(userId: string, days = TRIAL_DAYS): Promise<Dat
 const fmt = (d: Date, en: boolean) => d.toLocaleDateString(en ? "en-GB" : "it-IT", { weekday: "long", day: "numeric", month: "long" });
 const first = (name: string | null | undefined) => name?.trim().split(/\s+/)[0] || null;
 
-export async function sendTrialStartedEmail(u: { id: string; email: string; name: string | null; locale: string | null; trialEndsAt: Date | null }, opts?: { granted?: boolean }) {
+export async function sendTrialStartedEmail(u: { id: string; email: string; name: string | null; locale: string | null; trialEndsAt: Date | null }, opts?: { granted?: boolean; eventKey?: string }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey || !u.trialEndsAt) return { sent: false, reason: "no_key_or_trial" };
   const en = u.locale === "en";
@@ -41,8 +41,8 @@ export async function sendTrialStartedEmail(u: { id: string; email: string; name
     title: en ? "Your account is ready to set up" : "Il tuo account è pronto per il setup",
     greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
     paragraphs: en
-      ? [`Your trial window ends on <strong>${ends}</strong>, 7 days after signup. Add a card through Stripe before completing your profile and accessing Pro. Setup does not restart the trial.`, "Your selected plan renews at the end of the trial unless you cancel. Stripe shows the exact date and price before confirmation."]
-      : [`La finestra di prova termina il <strong>${ends}</strong>, 7 giorni dopo la registrazione. Aggiungi una carta tramite Stripe prima di completare il profilo e accedere a Pro. Il setup non riavvia la prova.`, "Il piano scelto si rinnova al termine della prova salvo disdetta. Stripe mostra la data e il prezzo esatti prima della conferma."],
+      ? [`Your trial window ends on <strong>${ends}</strong>, 7 days after trial activation. Your trial is now active. Returning to your profile does not restart it.`, "Your selected plan renews at the end of the trial unless you cancel. Stripe shows the exact date and price before confirmation."]
+      : [`La finestra di prova termina il <strong>${ends}</strong>, 7 giorni dopo l’attivazione della prova con carta. La prova è attiva. Tornare al profilo non ne riavvia la durata.`, "Il piano scelto si rinnova al termine della prova salvo disdetta. Stripe mostra la data e il prezzo esatti prima della conferma."],
     bullets: en
       ? ["<strong>Add your card</strong> and wait for Stripe confirmation.", "<strong>Complete your CV and preferences</strong>, then review your tailored preview."]
       : ["<strong>Aggiungi la carta</strong> e attendi la conferma di Stripe.", "<strong>Completa CV e preferenze</strong>, poi controlla l’anteprima personalizzata."],
@@ -59,7 +59,7 @@ export async function sendTrialStartedEmail(u: { id: string; email: string; name
   });
   return sendQueuedNotification(opts?.granted ? "trial_granted" : "trial_started", u.email, async () => {
     return { from: from(), to: u.email, subject: opts?.granted ? (en ? "Pro is on for you, 7 days" : "Pro attivo per te, 7 giorni") : en ? "Your 7 days of Pro start now" : "I tuoi 7 giorni di Pro iniziano adesso", html, text };
-  });
+  }, opts?.eventKey);
 }
 
 export interface TrialNudgeResult { day3: number; day6: number; ending: number; ended: number; skipped: number; details: string[] }
@@ -69,9 +69,9 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
   const apiKey = process.env.RESEND_API_KEY;
   const now = Date.now();
   const users = await prisma.user.findMany({
-    where: { trialEndsAt: { not: null }, stripeSubscriptionId: null, suspendedAt: null, emailVerified: { not: null } },
+    where: { trialActivationVersion: 1, trialEndsAt: { gt: new Date(now) }, stripeSubscriptionId: { not: null }, subscriptionStatus: "trialing", proTrialUsedAt: { not: null }, suspendedAt: null, emailVerified: { not: null } },
     select: {
-      id: true, email: true, name: true, locale: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, tier: true,
+      id: true, email: true, name: true, locale: true, createdAt: true, subscriptionStatus: true, currentPeriodEnd: true, proTrialUsedAt: true, trialEndsAt: true, trialGraceEndsAt: true, tier: true,
       preferences: { select: { rolesJson: true, autoApplyMode: true } },
       _count: { select: { cvDocuments: true, applications: { where: { status: "success" } } } },
     },
@@ -81,10 +81,10 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
 
   for (const u of users) {
     u.trialEndsAt = trialEnd(u);
-    if (isTestAccount(u.email) || !u.trialEndsAt || u.tier !== "free") continue;
+    if (isTestAccount(u.email) || !u.trialEndsAt || !u.proTrialUsedAt) continue;
     const en = u.locale === "en";
     const f = first(u.name);
-    const stage = trialLifecycleStage({ now, createdAt: u.createdAt, trialEndsAt: u.trialEndsAt });
+    const stage = trialLifecycleStage({ now, createdAt: u.proTrialUsedAt, trialEndsAt: u.trialEndsAt });
     const kind: "trial_day_3" | "trial_day_6" | "trial_ended" | null = stage === "day_3" ? "trial_day_3" : stage === "day_6" ? "trial_day_6" : stage === "ended" ? "trial_ended" : null;
     const emailKey = u.email.toLowerCase();
     // trial_ending was the previous name for the final-days reminder. Treat it
@@ -119,8 +119,8 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
           title: en ? "Your Pro trial is nearly over" : "La tua prova Pro sta per finire",
           greeting: f ? (en ? `Hi ${f},` : `Ciao ${f},`) : undefined,
           paragraphs: en
-            ? [`On <strong>${fmt(u.trialEndsAt, en)}</strong> your trial expires and platform features are locked until you subscribe.`, sent > 0 ? `So far LavorAI has sent <strong>${sent} ${sent === 1 ? "application" : "applications"}</strong> on your behalf. Keeping that running is €19.99 a month, cancel any time.` : "Keeping the engine running is €19.99 a month, cancel any time from Settings."]
-            : [`Il <strong>${fmt(u.trialEndsAt, en)}</strong> la prova scade e le funzionalità vengono bloccate finché non attivi un abbonamento.`, sent > 0 ? `Finora LavorAI ha inviato <strong>${sent} ${sent === 1 ? "candidatura" : "candidature"}</strong> a tuo nome. Continuare costa €19,99 al mese, disdici quando vuoi.` : "Continuare costa €19,99 al mese, disdici quando vuoi dalle Impostazioni."],
+            ? [`On <strong>${fmt(u.trialEndsAt, en)}</strong> your trial ends. Unless you cancel before then, your subscription renews at the price and interval you chose in checkout.`, sent > 0 ? `So far LavorAI has sent <strong>${sent} ${sent === 1 ? "application" : "applications"}</strong> on your behalf. You can manage renewal in Settings.` : "Manage your plan or cancel renewal from Settings."]
+            : [`Il <strong>${fmt(u.trialEndsAt, en)}</strong> la prova termina. Salvo disdetta prima della scadenza, l’abbonamento si rinnova al prezzo e con la cadenza scelti nel checkout.`, sent > 0 ? `Finora LavorAI ha inviato <strong>${sent} ${sent === 1 ? "candidatura" : "candidature"}</strong> a tuo nome. Puoi gestire il rinnovo dalle Impostazioni.` : "Gestisci il piano o disdici il rinnovo dalle Impostazioni."],
           cta: { label: en ? "Continue with Pro" : "Continua con Pro", url: pricing },
           secondary: { label: en ? "See what was sent" : "Vedi cosa è stato inviato", url: `${site()}/inbox` },
         })

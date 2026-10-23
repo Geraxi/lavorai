@@ -25,6 +25,8 @@ export const sessionUserSelect = {
   stripeSubscriptionId: true,
   stripePriceId: true,
   currentPeriodEnd: true,
+  proTrialUsedAt: true,
+  trialActivationVersion: true,
   welcomeSeenAt: true,
   onboardedAt: true,
   locale: true,

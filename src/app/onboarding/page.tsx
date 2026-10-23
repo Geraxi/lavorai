@@ -60,7 +60,10 @@ export default async function OnboardingPage() {
     }
   }
 
+  const saved = await prisma.user.findUnique({ where: { id: user.id }, select: { demoPreviewJson: true, preferences: true, seniority: true, yearsExperience: true, englishLevel: true, italianNative: true, euAuthorized: true, noticePeriod: true, avoidCompanies: true } });
   const initial = {
+    saved: saved ? { rolesJson: saved.preferences?.rolesJson, locationsJson: saved.preferences?.locationsJson, sourcesJson: saved.preferences?.sourcesJson, salaryMin: saved.preferences?.salaryMin, employmentType: saved.preferences?.employmentType, dailyRate: saved.preferences?.dailyRate, availableFrom: saved.preferences?.availableFrom, portfolioUrl: saved.preferences?.portfolioUrl, seniority: saved.seniority, yearsExperience: saved.yearsExperience, englishLevel: saved.englishLevel, italianNative: saved.italianNative, euAuthorized: saved.euAuthorized, noticePeriod: saved.noticePeriod, avoidCompanies: saved.avoidCompanies } : null,
+    demo: saved?.demoPreviewJson ? JSON.parse(saved.demoPreviewJson) : null,
     cv: cv
       ? {
           filename: cv.originalFilename,

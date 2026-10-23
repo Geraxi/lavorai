@@ -13,7 +13,7 @@ async function main() {
     tier: "pro", createdAt: new Date(), trialEndsAt: null, trialGraceEndsAt: null,
     emailVerified: null, privacyConsentAt: null, subscriptionStatus: "active", stripeCustomerId: null,
     stripeSubscriptionId: null, stripePriceId: null, currentPeriodEnd: null,
-    welcomeSeenAt: null, onboardedAt: null, locale: "it", yearsExperience: null,
+    trialActivationVersion: null, proTrialUsedAt: null, welcomeSeenAt: null, onboardedAt: null, locale: "it", yearsExperience: null,
   };
   for (const select of [accessUserSelect, sessionUserSelect]) {
     for (const column of Object.keys(select)) assert.ok(column in row, `Unexpected column ${column}`);
@@ -59,7 +59,7 @@ async function main() {
     assert.equal(requiresPaymentMethodBeforeApp({ ...row, tier: "free", subscriptionStatus: null }), true);
     assert.equal(requiresPaymentMethodBeforeApp({ ...row, tier: "free", subscriptionStatus: "trialing" }), false);
     Object.assign(row, expired);
-    assert.equal((await proxy(request("/dashboard"))).headers.get("location"), "https://lavorai.it/trial-expired");
+    assert.equal((await proxy(request("/dashboard"))).headers.get("location"), "https://lavorai.it/onboarding");
     assert.equal((await proxy(request("/api/applications"))).status, 402);
     row.email = "schema-admin@example.com";
     assert.equal((await proxy(request("/dashboard"))).headers.get("x-middleware-next"), "1");

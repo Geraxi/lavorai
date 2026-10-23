@@ -190,7 +190,7 @@ const COPY = {
   cold: {
     title: (_used: number, _cap: number) =>
       "Più candidature su misura, sotto il tuo controllo",
-    body: "Prova Pro: 7 giorni dalla registrazione, fino a 5 candidature al giorno, con carta richiesta. Poi 50 candidature/mese, priorità sui portali supportati e cover letter personalizzata a €19,99/mese. Disdici quando vuoi.",
+    body: "Prova Pro: 7 giorni dall’attivazione della prova con carta, fino a 5 candidature al giorno, con carta richiesta. Poi 50 candidature/mese, priorità sui portali supportati e cover letter personalizzata a €19,99/mese. Disdici quando vuoi.",
     cta: "Prova Pro gratis",
   },
   warning: {

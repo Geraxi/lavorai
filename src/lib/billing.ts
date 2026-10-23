@@ -46,7 +46,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     price: 0,
     priceDisplay: "€0",
     priceSuffix: "",
-    tagline: "7 giorni di Pro dalla registrazione, fino a 5 candidature al giorno. Carta richiesta. Rinnovo al termine salvo disdetta.",
+    tagline: "7 giorni di Pro dall’attivazione della prova con carta, fino a 5 candidature al giorno. Carta richiesta. Rinnovo al termine salvo disdetta.",
     monthlyApplications: 0,
     portals: 0,
     coverLetter: "basic",
@@ -55,7 +55,7 @@ export const TIERS: Record<Tier, TierConfig> = {
     hasFounderCoach: false,
     hasInterviewCopilot: false,
     features: [
-      "La prova parte dalla registrazione",
+      "Prima l’anteprima gratuita, poi scegli se attivare la prova",
       "Fino a 5 candidature al giorno durante la prova",
       "Offerte compatibili durante la prova",
       "Risposte dei recruiter nella Inbox",
@@ -146,7 +146,9 @@ export function registrationTrialEnd(createdAt: Date | string): Date {
 export const EARLY_USER_TRIAL_COHORT_CUTOFF = "2026-09-23T12:43:08.000Z";
 export const EARLY_USER_TRIAL_FINAL_END = "2026-09-25T12:43:08.000Z";
 
-export function trialEnd(user: { createdAt?: Date | string; trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null }): Date | null {
+export function trialEnd(user: { subscriptionStatus?: string | null; currentPeriodEnd?: Date | string | null; createdAt?: Date | string; trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null }): Date | null {
+  // The current Stripe deadline wins over historical signup/grace markers.
+  if (user.subscriptionStatus === "trialing" && user.currentPeriodEnd) return new Date(user.currentPeriodEnd);
   const createdAt = user.createdAt ? new Date(user.createdAt) : null;
   // The legacy field identifies the original extension recipients only. Its
   // stored date no longer grants any configurable/rolling grace period.
@@ -154,7 +156,7 @@ export function trialEnd(user: { createdAt?: Date | string; trialGraceEndsAt?: D
       && user.trialGraceEndsAt && Number.isFinite(new Date(user.trialGraceEndsAt).getTime())) {
     return new Date(EARLY_USER_TRIAL_FINAL_END);
   }
-  return createdAt ? registrationTrialEnd(createdAt) : user.trialEndsAt ? new Date(user.trialEndsAt) : null;
+  return user.trialEndsAt ? new Date(user.trialEndsAt) : null;
 }
 
 /**
@@ -239,19 +241,19 @@ export function effectiveTier(user: {
 }): Tier {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
   const base = normalizeTier(user.tier);
-  // Prova Pro con carta richiesta (dalla registrazione): Free → Pro fino a scadenza.
-  if (base === "free" && (trialEnd(user)?.getTime() ?? 0) > Date.now()) return "pro";
+  // Il tier viene assegnato soltanto dopo conferma server-side di Stripe.
+  // Stripe-confirmed subscriptions already carry their paid tier. Signup timestamps never grant access.
   return base;
 }
 
 /** Stato della prova gratuita per UI/email. */
-export function trialState(user: { tier?: string | null; createdAt?: Date | string;
-  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null }): {
+export function trialState(user: { currentPeriodEnd?: Date | string | null; tier?: string | null; createdAt?: Date | string;
+  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null; subscriptionStatus?: string | null }): {
   status: "none" | "active" | "ended";
   endsAt: Date | null;
   daysLeft: number;
 } {
-  if (!trialEnd(user) || normalizeTier(user.tier) !== "free") return { status: "none", endsAt: null, daysLeft: 0 };
+  if (!trialEnd(user) || user.subscriptionStatus !== "trialing") return { status: "none", endsAt: null, daysLeft: 0 };
   const endsAt = trialEnd(user)!;
   const msLeft = endsAt.getTime() - Date.now();
   return { status: msLeft > 0 ? "active" : "ended", endsAt, daysLeft: Math.max(0, Math.ceil(msLeft / 86400_000)) };
@@ -263,12 +265,13 @@ export function trialState(user: { tier?: string | null; createdAt?: Date | stri
  */
 export function dailyApplicationLimit(
   user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
-  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null; subscriptionStatus?: string | null; trialActivationVersion?: number | null },
   preferredCap?: number | null,
 ): number {
   if (isLifetimeProPlus(user.email)) return Math.max(1, Math.min(100, preferredCap ?? 100));
+  if (user.subscriptionStatus === "trialing" && user.trialActivationVersion === 1) return FREE_TRIAL_DAILY_APPLICATION_LIMIT;
   if (normalizeTier(user.tier) === "free") {
-    return trialState(user).status === "active" ? FREE_TRIAL_DAILY_APPLICATION_LIMIT : 0;
+    return 0;
   }
   return Math.max(1, Math.min(100, preferredCap ?? 10));
 }
@@ -276,9 +279,9 @@ export function dailyApplicationLimit(
 /** Un account Free fuori dalla prova deve passare dalla schermata di pagamento. */
 export function isApplicationAccessPaused(
   user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
-  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null; subscriptionStatus?: string | null },
 ): boolean {
-  return !isLifetimeProPlus(user.email) && normalizeTier(user.tier) === "free" && trialState(user).status !== "active";
+  return !isLifetimeProPlus(user.email) && normalizeTier(user.tier) === "free";
 }
 
 /**
@@ -299,7 +302,7 @@ export function requiresPaymentMethodBeforeApp(
 ): boolean {
   if (isLifetimeProPlus(user.email) || normalizeTier(user.tier) !== "free") return false;
   if (user.subscriptionStatus === "active" || user.subscriptionStatus === "trialing") return false;
-  return trialState(user).status === "active";
+  return true;
 }
 
 /**

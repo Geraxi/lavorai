@@ -1,14 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useSession } from "next-auth/react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Icon, type IconName } from "@/components/design/icon";
 import { SupportLink } from "@/components/support-link";
 import { Logo } from "@/components/logo";
-import { LOCATION_PREFS, ROLE_PREFERENCES } from "@/lib/ui-applications";
+import { LOCATION_PREFS, ROLE_PREFERENCES } from "@/lib/onboarding-options";
 
 type StepDef = {
   key: "cv" | "profile" | "details" | "prefs" | "confirm";
@@ -71,11 +71,14 @@ interface ProfileState {
 }
 
 interface InitialState {
+  saved?: { rolesJson?: string; locationsJson?: string; sourcesJson?: string; salaryMin?: number; employmentType?: string; dailyRate?: number | null; availableFrom?: string | null; portfolioUrl?: string | null; seniority: string | null; yearsExperience: number | null; englishLevel: string | null; italianNative: boolean; euAuthorized: boolean; noticePeriod: string | null; avoidCompanies: string | null } | null;
+  demo?: OnboardingDemo | null;
   cv: InitialCvState | null;
   profile: ProfileState | null;
 }
 
 interface OnboardingDemo {
+  offers?: { title: string; company: string | null; location: string | null }[];
   target: { title: string; company: string | null; location: string | null; matchedJob: boolean };
   atsScore: number;
   summary: string;
@@ -92,14 +95,12 @@ export default function OnboardingClient({
   const t = useTranslations("onboarding");
   const router = useRouter();
   const { update: updateSession } = useSession();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(initial.demo ? STEPS.length - 1 : 0);
   const [finishing, setFinishing] = useState(false);
-  const [demo, setDemo] = useState<OnboardingDemo | null>(null);
-  // Modalità di invio scelta esplicitamente dall'utente. Default = con
-  // conferma ("hybrid": il motore prepara, l'utente approva ogni invio).
-  // L'invio automatico è opt-in: parte solo se l'utente lo seleziona qui
-  // o dalle Preferenze.
-  const [sendMode, setSendMode] = useState<SendMode>("hybrid");
+  const [demo, setDemo] = useState<OnboardingDemo | null>(initial.demo ?? null);
+  useEffect(() => {
+    if (demo) void fetch("/api/onboarding/demo/viewed", { method: "POST" });
+  }, [demo]);
   // Steps localized — usiamo questo array invece di STEPS in render
   const stepsLocalized: StepDef[] = STEPS.map((s, i) => ({
     ...s,
@@ -118,7 +119,9 @@ export default function OnboardingClient({
   const [profile, setProfile] = useState<ProfileState | null>(initial.profile);
   // Ruoli: pre-popolati dai suggeriti AI dal CV (se disponibili), altrimenti
   // lista default. L'utente può aggiungerne altri manualmente in Step 3.
+  const savedList = (raw?: string): string[] => { try { const value = JSON.parse(raw ?? "[]"); return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; } catch { return []; } };
   const [roles, setRoles] = useState<RolePref[]>(() => {
+    if (initial.saved?.rolesJson) return savedList(initial.saved.rolesJson).map(title => ({ title, selected: true }));
     const suggested = (initial.profile as ProfileState | null)?.suggestedRoles;
     if (suggested && suggested.length > 0) {
       return suggested.map((title, i) => ({ title, selected: i < 3 }));
@@ -129,6 +132,7 @@ export default function OnboardingClient({
     }));
   });
   const [locations, setLocations] = useState<LocationPref[]>(() => {
+    if (initial.saved?.locationsJson) return savedList(initial.saved.locationsJson).map(city => ({ city, selected: true }));
     const suggested = (initial.profile as ProfileState | null)?.suggestedCities;
     if (suggested && suggested.length > 0) {
       return suggested.map((city, i) => ({ city, selected: i < 3 }));
@@ -138,29 +142,29 @@ export default function OnboardingClient({
       selected: l.selected,
     }));
   });
-  const [salary, setSalary] = useState(45);
+  const [salary, setSalary] = useState(initial.saved?.salaryMin ?? 45);
   const [modeSel, setModeSel] = useState({
-    remoto: true,
-    ibrido: true,
-    sede: false,
+    remoto: initial.saved?.sourcesJson ? savedList(initial.saved.sourcesJson).includes("remoto") : true,
+    ibrido: initial.saved?.sourcesJson ? savedList(initial.saved.sourcesJson).includes("ibrido") : true,
+    sede: initial.saved?.sourcesJson ? savedList(initial.saved.sourcesJson).includes("sede") : false,
   });
   const [employmentType, setEmploymentType] = useState<
     "employee" | "piva" | "both"
-  >("employee");
-  const [dailyRate, setDailyRate] = useState<string>("");
-  const [availableFrom, setAvailableFrom] = useState<string>("");
-  const [portfolioUrl, setPortfolioUrl] = useState<string>("");
+  >(initial.saved?.employmentType === "piva" || initial.saved?.employmentType === "both" ? initial.saved.employmentType : "employee");
+  const [dailyRate, setDailyRate] = useState<string>(initial.saved?.dailyRate?.toString() ?? "");
+  const [availableFrom, setAvailableFrom] = useState<string>(initial.saved?.availableFrom ?? "");
+  const [portfolioUrl, setPortfolioUrl] = useState<string>(initial.saved?.portfolioUrl ?? "");
   const [details, setDetails] = useState<Details>({
-    seniority: initial.profile?.seniority ?? null,
-    yearsExperience:
+    seniority: initial.saved?.seniority as Seniority ?? initial.profile?.seniority ?? null,
+    yearsExperience: initial.saved?.yearsExperience ?? (
       initial.profile?.yearsExperience != null
         ? initial.profile.yearsExperience
-        : 3,
-    englishLevel: initial.profile?.englishLevel ?? "b2",
-    italianNative: true,
-    euAuthorized: true,
-    noticePeriod: null,
-    avoidCompanies: "",
+        : 3),
+    englishLevel: initial.saved?.englishLevel as EnglishLevel ?? initial.profile?.englishLevel ?? "b2",
+    italianNative: initial.saved?.italianNative ?? true,
+    euAuthorized: initial.saved?.euAuthorized ?? true,
+    noticePeriod: initial.saved?.noticePeriod as Notice ?? null,
+    avoidCompanies: initial.saved?.avoidCompanies ?? "",
   });
   const [savingDetails, setSavingDetails] = useState(false);
 
@@ -255,11 +259,12 @@ export default function OnboardingClient({
   };
   const prev = () => setStep((s) => Math.max(0, s - 1));
   const finish = async () => {
-    if (finishing || !preferencesValid()) return;
+    if (finishing || (!demo && !preferencesValid())) return;
     setFinishing(true);
     try {
     // Salviamo il setup prima della demo, ma l'onboarding termina soltanto
     // dopo che l'utente ha visto il CV e la lettera personalizzati.
+    if (!demo) {
     const selectedRoles = roles.filter((r) => r.selected).map((r) => r.title);
     const selectedCities = locations
       .filter((l) => l.selected)
@@ -289,16 +294,6 @@ export default function OnboardingClient({
       return;
     }
 
-    const modeResult = await fetch("/api/preferences/mode", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ autoApplyMode: sendMode }),
-    }).catch(() => null);
-    if (!modeResult?.ok) {
-      toast.error(t("retryError"));
-      return;
-    }
-
     if (!demo) {
       const preview = await fetch("/api/onboarding/demo", {
         method: "POST",
@@ -315,6 +310,7 @@ export default function OnboardingClient({
       return;
     }
 
+    }
     const complete = await fetch("/api/onboarding/demo/complete", { method: "POST" });
     if (!complete.ok) {
       const error = await complete.json().catch(() => null);
@@ -322,12 +318,12 @@ export default function OnboardingClient({
       return;
     }
 
-    // Carta già confermata: completa il profilo dopo l’anteprima.
+    // La preview completa il profilo; il pagamento resta una scelta separata.
     await fetch("/api/onboarding/welcome-seen", { method: "POST" }).catch(
       () => null,
     );
     await updateSession().catch(() => null);
-    router.push("/dashboard");
+    router.push("/start-membership");
     router.refresh();
     } catch {
       toast.error(t("retryError"));
@@ -454,8 +450,6 @@ export default function OnboardingClient({
                 .join(" · ")}
               details={details}
               demo={demo}
-              sendMode={sendMode}
-              setSendMode={setSendMode}
             />
           )}
         </div>
@@ -493,7 +487,7 @@ export default function OnboardingClient({
             {finishing
               ? (demo ? "Apertura dashboard…" : "Creo la tua anteprima…")
               : step === stepsLocalized.length - 1
-                ? (demo ? "Completa il profilo" : "Vedi CV e lettera personalizzati")
+                ? (demo ? "Scegli se attivare la prova" : "Vedi CV e lettera personalizzati")
                 : t("continue")}{" "}
             <Icon name="arrow-right" size={13} />
           </button>
@@ -1504,7 +1498,6 @@ function StepPreferences({
   );
 }
 
-type SendMode = "hybrid" | "auto";
 
 function StepConfirm({
   salary,
@@ -1512,16 +1505,12 @@ function StepConfirm({
   locationsSummary,
   details,
   demo,
-  sendMode,
-  setSendMode,
 }: {
   salary: number;
   rolesSelected: number;
   locationsSummary: string;
   details: Details;
   demo: OnboardingDemo | null;
-  sendMode: SendMode;
-  setSendMode: (mode: SendMode) => void;
 }) {
   const t = useTranslations("onboarding");
   const seniorityLabel: Record<Seniority, string> = {
@@ -1543,7 +1532,7 @@ function StepConfirm({
       <h1 style={stepTitle}>{demo ? "Il tuo primo risultato è pronto." : "Prima, guarda cosa cambia per te."}</h1>
       <p style={stepLead}>
         {demo
-          ? "Abbiamo adattato il tuo profilo a una posizione concreta e preparato una lettera coerente. Questa è solo un’anteprima: non è stata inviata alcuna candidatura."
+          ? "Abbiamo adattato il tuo profilo al ruolo mostrato e preparato una lettera coerente. Questa è solo un’anteprima: non è stata inviata alcuna candidatura."
           : "Creiamo una piccola anteprima personale: un CV migliorato e una lettera di presentazione per un ruolo compatibile con le tue preferenze."}
       </p>
       {demo && (
@@ -1573,30 +1562,13 @@ function StepConfirm({
           </div>
         </div>
       )}
-      <fieldset className="ob-send-mode" aria-describedby="ob-send-mode-note">
-        <legend>Quando partono le candidature?</legend>
-        {([
-          { value: "hybrid", title: "Con conferma (consigliato)", body: "LavorAI prepara CV e lettera, tu li rivedi e approvi ogni invio." },
-          { value: "auto", title: "Automatico", body: "Invia da solo le candidature sopra la soglia di compatibilità. Puoi disattivarlo quando vuoi." },
-        ] as const).map((option) => (
-          <label key={option.value} className="ob-send-option" data-active={sendMode === option.value ? "" : undefined}>
-            <input
-              type="radio"
-              name="send-mode"
-              value={option.value}
-              checked={sendMode === option.value}
-              onChange={() => setSendMode(option.value)}
-            />
-            <span>
-              <strong>{option.title}</strong>
-              <span>{option.body}</span>
-            </span>
-          </label>
-        ))}
-        <p id="ob-send-mode-note">
-          In ogni caso datori di lavoro, ruoli, date e titoli di studio restano quelli del tuo CV: prima di ogni invio vedi cosa è cambiato rispetto all’originale.
-        </p>
-      </fieldset>
+      <p className="ds-card" style={{ padding: 18 }}>Questa anteprima non invia candidature. Dopo l’attivazione del piano potrai confermare ogni invio o scegliere esplicitamente l’automazione dalle Preferenze. Le risposte delle aziende non sono garantite.</p>
+      {demo && <section className="ds-card" style={{ padding: 18, marginBottom: 14 }}>
+        <h2>Offerte pertinenti nel catalogo</h2>
+        {demo.offers?.length ? demo.offers.map((offer, i) => <p key={i}><strong>{offer.title}</strong><br />{[offer.company, offer.location].filter(Boolean).join(" · ")}</p>) : <p>Al momento non abbiamo trovato offerte verificabili compatibili. L’anteprima è un esempio per il ruolo scelto.</p>}
+        <p>La disponibilità dell’annuncio verrà ricontrollata prima di ogni candidatura.</p>
+      </section>}
+
       <div
         className="ds-card"
         style={{ padding: 18, background: "var(--bg-sunken)" }}

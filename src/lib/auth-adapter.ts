@@ -1,7 +1,6 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { Adapter } from "next-auth/adapters";
-import { registrationTrialEnd } from "./billing";
 
 // Auth must not depend on every business/analytics column in the generated
 // User model. Keep reads AND write return values limited to Auth.js fields.
@@ -32,14 +31,12 @@ export function createAuthAdapter(prisma: PrismaClient): Adapter {
       return account?.user ?? null;
     },
     async createUser({ id: _id, ...data }) {
-      const now = new Date();
       return prisma.user.create({
         data: {
           ...data,
           email: data.email.trim().toLowerCase(),
           trialDurationDays: 7,
-          trialEndsAt: registrationTrialEnd(now),
-          proTrialUsedAt: now,
+          trialActivationVersion: 1,
         },
         select: authUserSelect,
       });

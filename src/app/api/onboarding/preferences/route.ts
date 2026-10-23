@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
       where: { userId: user.id },
       create: {
         userId: user.id,
-        autoApplyOn: true,
+        autoApplyOn: false,
+        autoApplyMode: "manual",
         salaryMin,
         employmentType: employmentType ?? "employee",
         dailyRate: dailyRate ?? null,
@@ -66,10 +67,6 @@ export async function POST(request: NextRequest) {
         sourcesJson: JSON.stringify(sources),
       },
       update: {
-        // Il pulsante finale dell'onboarding è l'attivazione esplicita.
-        // Vale anche per chi ha una preferenza pre-creata da un percorso
-        // speciale (es. categorie protette).
-        autoApplyOn: true,
         salaryMin,
         ...(employmentType != null ? { employmentType } : {}),
         ...(dailyRate !== undefined ? { dailyRate } : {}),

@@ -234,6 +234,21 @@ async function main() {
       assert.deepEqual(await db.application.findMany({ where: { id: { in: prior.map(row => row.id) } }, orderBy: { id: "asc" } }), prior);
       console.log(`PASS PostgreSQL: ${quota} residual one, manual/auto different jobs race, one creation only, consent/history preserved, failed/diagnostic excluded.`);
     }
+    for (const version of [1, null]) {
+      const user = await db.user.create({ data: { email: `trial-cap-${version}@example.invalid`, tier: "pro", subscriptionStatus: "trialing", trialActivationVersion: version,
+        currentPeriodEnd: new Date(Date.now()+86400000), preferences: { create: { dailyCap: 10 } } } });
+      const beforeUser = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+      const jobs = await Promise.all(Array.from({ length: 12 }, (_, i) => db!.job.create({ data: {
+        externalId: `trial-cap-${version}-${i}`, source: "synthetic", title: "Synthetic", description: "Synthetic", url: `https://example.invalid/trial/${version}/${i}`,
+      } })));
+      const outcomes = await Promise.allSettled(jobs.map((job, i) => createFreshApplication({ data: {
+        userId: user.id, jobId: job.id, portal: "synthetic", consentGrantedAt: i % 2 ? null : new Date(),
+      } }, db!)));
+      assert.equal(outcomes.filter(r => r.status === "fulfilled").length, version === 1 ? 5 : 10);
+      for (const outcome of outcomes) if (outcome.status === "rejected") assert.match(String(outcome.reason), /daily_limit/);
+      assert.deepEqual(await db.user.findUniqueOrThrow({ where: { id: user.id } }), beforeUser, "Admission never resets quota, trial, billing or consent");
+    }
+    console.log("PASS PostgreSQL: mixed manual/automatic creators admit five new-trial applications and preserve ten for legacy trials; user state unchanged.");
     console.log("ALL MANUAL SUBMISSION BUDGET POSTGRES CHECKS PASSED. No external sends or production access.");
   } finally { if (db) await db.$disconnect(); if (pg) await pg.stop(); await rm(dir, { recursive: true, force: true }); }
 }

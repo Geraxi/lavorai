@@ -37,7 +37,7 @@ export default async function AppLayout({
     return null;
   }
 
-  if (!isAdmin(user.email) && isApplicationAccessPaused(user)) redirect("/trial-expired");
+  if (!isAdmin(user.email) && requiresPaymentMethodBeforeApp(user) && !user.onboardedAt) redirect("/onboarding");
   if (!isAdmin(user.email) && requiresPaymentMethodBeforeApp(user)) redirect("/start-membership");
 
   const tier = effectiveTier(user);

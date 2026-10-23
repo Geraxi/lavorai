@@ -124,7 +124,7 @@ export default function AutoCandidaturaPage() {
               marginTop: 14,
             }}
           >
-            ✓ Pro completo per 7 giorni · ✓ Fino a 5 candidature al giorno · ✓ La prova parte dalla registrazione
+            ✓ Pro completo per 7 giorni · ✓ Fino a 5 candidature al giorno · ✓ La prova parte dall’attivazione della prova con carta
           </p>
         </section>
 
@@ -275,7 +275,7 @@ export default function AutoCandidaturaPage() {
             },
             {
               q: "Quanto costa?",
-              a: "La prova Pro dura 7 giorni dalla registrazione, con carta richiesta e rinnovo al termine salvo disdetta. Poi Pro costa €19,99/mese per 50 candidature e Pro+ €39,99/mese per candidature illimitate, coda prioritaria e Founder Coach. Disdici quando vuoi.",
+              a: "La prova Pro dura 7 giorni dall’attivazione della prova con carta, con carta richiesta e rinnovo al termine salvo disdetta. Poi Pro costa €19,99/mese per 50 candidature e Pro+ €39,99/mese per candidature illimitate, coda prioritaria e Founder Coach. Disdici quando vuoi.",
             },
             {
               q: "Cosa succede se voglio candidarmi solo ad alcuni annunci?",
@@ -342,7 +342,7 @@ export default function AutoCandidaturaPage() {
               marginBottom: 28,
             }}
           >
-            7 giorni di Pro completo dalla registrazione, con carta richiesta.
+            7 giorni di Pro completo dall’attivazione della prova con carta, con carta richiesta.
             Rinnovo al termine salvo disdetta.
           </p>
           <Link

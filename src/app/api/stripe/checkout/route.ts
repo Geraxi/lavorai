@@ -3,16 +3,20 @@ import { z } from "zod";
 import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { ANNUAL_PRICING, TIERS, trialEnd, type BillingInterval, type Tier } from "@/lib/billing";
+import { ANNUAL_PRICING, TIERS, FREE_TRIAL_DAYS, type BillingInterval, type Tier } from "@/lib/billing";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { CARD_REQUIRED_CHECKOUT } from "@/lib/stripe-subscription-access";
+
+import { getActivationReadiness } from "@/lib/activation-readiness";
+import { trialEligibility } from "@/lib/trial-eligibility";
 
 export const runtime = "nodejs";
 
 
 const schema = z.object({
   tier: z.enum(["pro", "pro_plus"]),
+  trialRequested: z.boolean().optional(),
   interval: z.enum(["month", "year"]).default("month"),
   // The expired-trial screen must return to itself on cancellation so the
   // user does not lose the exact recovery action they just chose.
@@ -59,8 +63,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const claimedAt = new Date();
+  const claim = await prisma.user.updateMany({
+    where: { id: user.id, OR: [{ checkoutClaimedAt: null }, { checkoutClaimedAt: { lt: new Date(Date.now() - 300_000) } }] },
+    data: { checkoutClaimedAt: claimedAt },
+  });
+  if (!claim.count) return NextResponse.json({ error: "checkout_in_progress", message: "Un checkout è già in preparazione. Riprova tra poco." }, { status: 409 });
+
   try {
     const s = stripe();
+    let usedStripeTrial = false;
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
     // Guardia anti-doppio abbonamento: se il customer ha già una subscription
@@ -68,8 +80,10 @@ export async function POST(request: NextRequest) {
     // successo: stesso utente addebitato due volte). Lo mandiamo al portale
     // Stripe, dove può cambiare piano o aggiornare la carta.
     if (user.stripeCustomerId) {
-      const existing = await s.subscriptions.list({ customer: user.stripeCustomerId, status: "all", limit: 10 });
-      const live = existing.data.find((sub) => ["active", "trialing", "past_due", "unpaid"].includes(sub.status));
+      const history = [];
+      for await (const sub of s.subscriptions.list({ customer: user.stripeCustomerId, status: "all", limit: 100 })) history.push(sub);
+      usedStripeTrial = history.some((sub) => sub.trial_start != null);
+      const live = history.find((sub) => ["active", "trialing", "past_due", "unpaid", "paused", "incomplete"].includes(sub.status));
       if (live) {
         const portal = await s.billingPortal.sessions.create({ customer: user.stripeCustomerId, return_url: `${siteUrl}/settings` });
         return NextResponse.json({
@@ -82,6 +96,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const readiness = await getActivationReadiness(user.id, { requireDemo: true });
+    if (!readiness.ready) return NextResponse.json({ error: "preview_required", message: "Completa prima il profilo e guarda la tua anteprima.", redirect: "/onboarding" }, { status: 409 });
+
     // Ottieni (o crea) customer Stripe
     let customerId = user.stripeCustomerId;
     if (!customerId) {
@@ -89,7 +106,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         name: user.name ?? undefined,
         metadata: { userId: user.id },
-      });
+      }, { idempotencyKey: `activation-customer:${user.id}` });
       customerId = customer.id;
       await prisma.user.update({
         where: { id: user.id },
@@ -97,18 +114,21 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Stripe raccoglie il metodo ora; se la prova dalla registrazione è ancora
-    // attiva, il primo addebito avviene alla sua scadenza.
-    const fresh = await prisma.user.findUnique({ where: { id: user.id }, select: { referralCredits: true } });
+    const fresh = await prisma.user.findUnique({ where: { id: user.id }, select: { referralCredits: true, trialActivationVersion: true, proTrialUsedAt: true, trialEndsAt: true } });
     const referralCoupon = (fresh?.referralCredits ?? 0) > 0 ? await ensureReferralCoupon(s) : null;
-    const registrationTrialEndsAt = trialEnd(user);
-    const hasRemainingTrial = Boolean(
-      user.tier === "free"
-      && registrationTrialEndsAt
-      && registrationTrialEndsAt.getTime() > Date.now(),
-    );
+    const hasRemainingTrial = trialEligibility(fresh, usedStripeTrial) === "eligible";
+    if (parsed.data.trialRequested && !hasRemainingTrial) return NextResponse.json({ error: "trial_review_required", message: "Non possiamo confermare l’idoneità a una nuova prova. Contatta il supporto per una verifica; nessun checkout a pagamento è stato aperto." }, { status: 409 });
+    // A canceled browser navigation leaves the same Stripe checkout open.
+    const open = await s.checkout.sessions.list({ customer: customerId, status: "open", limit: 100 });
+    for (const prior of open.data) {
+      if (prior.metadata?.activationVersion === "value_first_v1" && prior.metadata.tier === tier && prior.metadata.interval === interval) {
+        return NextResponse.json({ url: prior.url });
+      }
+      if (prior.mode === "subscription") await s.checkout.sessions.expire(prior.id);
+    }
 
     const session = await s.checkout.sessions.create({
+      metadata: { activationVersion: "value_first_v1", tier, interval },
       customer: customerId,
       mode: "subscription",
       payment_method_types: ["card"],
@@ -128,15 +148,15 @@ export async function POST(request: NextRequest) {
           cardRequired: CARD_REQUIRED_CHECKOUT,
           tier,
           interval,
-          trial: hasRemainingTrial ? "registration_trial_with_payment_method" : "none",
+          trial: hasRemainingTrial ? "activation_trial_with_payment_method" : "none",
           referralCredit: referralCoupon ? "1" : "0",
         },
-        ...(hasRemainingTrial && registrationTrialEndsAt
-          ? { trial_end: Math.floor(registrationTrialEndsAt.getTime() / 1000) }
+        ...(hasRemainingTrial
+          ? { trial_period_days: FREE_TRIAL_DAYS }
           : {}),
       },
       locale: "it",
-    });
+    }, { idempotencyKey: `activation-checkout:${user.id}:${tier}:${interval}:${claimedAt.getTime()}` });
 
     // Valore reale del prezzo scelto (mensile o annuale), non il listino mensile.
     const checkoutValueCents = interval === "year"
@@ -161,5 +181,7 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 },
     );
+  } finally {
+    await prisma.user.updateMany({ where: { id: user.id, checkoutClaimedAt: claimedAt }, data: { checkoutClaimedAt: null } });
   }
 }

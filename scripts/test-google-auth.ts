@@ -142,7 +142,7 @@ async function main() {
   assert.equal(users.length, 1);
   for (const [key, value] of Object.entries(deadlines)) assert.equal(users[0][key as keyof Row], value);
   assert.deepEqual(Object.keys(writes[0]), ["emailVerified"]);
-  assert.equal(onboardingAccessBlock(users[0])?.error, "payment_method_required");
+  assert.equal(onboardingAccessBlock(users[0]), null);
   const verifiedAt = users[0].emailVerified;
   await login();
   assert.equal(users[0].emailVerified, verifiedAt, "Do not reset verification or trial on repeat login");
@@ -154,8 +154,10 @@ async function main() {
   assert.deepEqual(registrations, [[users[0].id, "google"]], "A brand-new Google account issues exactly one registration event");
   assert.equal(writes[0].emailVerified, null, "Installed Auth.js stores null during OAuth creation");
   assert.ok(users[0].emailVerified, "Auth.js overwrites profile verification; signIn must restore it after linking");
-  assert.equal(users[0].trialEndsAt.getTime() - users[0].proTrialUsedAt.getTime(), 7 * 86400_000);
-  assert.equal(onboardingAccessBlock(users[0])?.error, "payment_method_required");
+  assert.equal(writes[0].trialEndsAt, undefined);
+  assert.equal(writes[0].proTrialUsedAt, undefined);
+  assert.equal(writes[0].trialActivationVersion, 1);
+  assert.equal(onboardingAccessBlock(users[0]), null);
 
   for (const verified of [false, undefined, "true"]) {
     reset();

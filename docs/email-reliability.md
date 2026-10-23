@@ -98,7 +98,7 @@ included in error messages.
    against existing logs. Legacy direct sends were not all logged; reconcile that
    baseline conservatively before enabling sends (or wait for a clean period).
    Do not treat an empty reservation table as unused provider quota. Confirm all
-   web/worker instances share this database and account, UTC periods are correct,
+   web/worker instances share this database and account, the UTC daily reset matches the account (monthly admission conservatively counts the trailing 31 days),
    and clocks are synchronized. Keep other account traffic below the headroom.
 4. Deploy compatible web and worker versions together and ensure the 30-second
    pump is healthy before enabling producers. Use only a separately authorized
@@ -145,3 +145,5 @@ included in error messages.
   dummy auth secrets, no provider key and only a local database URL.
 - Independent read-only review performed twice; its findings were addressed,
   including the new-day ambiguity bypass, with regression coverage.
+
+Release integration: monthly admission now uses a trailing 31-day window because the verified provider billing cycle does not reset on the first. This may defer mail longer than the provider would, but prevents a calendar-month reset from prematurely replenishing capacity. Initial unlogged provider traffic still requires conservative reconciliation; the rolling window does not reconstruct missing history.

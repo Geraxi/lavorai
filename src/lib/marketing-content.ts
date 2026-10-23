@@ -45,7 +45,7 @@ export const FAQ_OBJECTIONS: FaqItem[] = [
     a: "No. Una ricevuta ATS o la consegna al server email documentano l'invio, non una lettura o una risposta. Le risposte dei recruiter sono tracciate a parte. LavorAI non garantisce colloqui né offerte.",
   },
   {
-    q: "Cosa succede dopo la registrazione?",
+    q: "Cosa succede dopo l’attivazione della prova con carta?",
     a: "Carichi il CV, confermi profilo, ruoli e città, poi vedi le prime opportunità con i documenti già preparati. Rivedi, approvi l'invio e segui lo stato di ogni candidatura dalla dashboard.",
   },
 ];

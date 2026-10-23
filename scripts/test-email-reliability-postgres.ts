@@ -69,7 +69,7 @@ const policy = load("email-dispatch-policy");
 const payload = (subject: string) => ({ from: "fixture@example.invalid", to: "fixture@example.invalid", subject, text: "fixture only",
   attachments: [{ filename: "fixture.txt", content: Buffer.from("immutable bytes") }] });
 async function reset() {
-  await db.emailOutbox.deleteMany(); await db.emailLog.deleteMany(); await db.emailReservation.deleteMany(); await db.emailDispatchGate.deleteMany();
+  await db.emailQuotaBaseline.deleteMany(); await db.emailOutbox.deleteMany(); await db.emailLog.deleteMany(); await db.emailReservation.deleteMany(); await db.emailDispatchGate.deleteMany();
   accepted.clear(); starts = []; mode = "success"; failures = 0; crashWrites = 0; providerCalls = 0;
   environment.RESEND_DAILY_LIMIT = "95"; environment.RESEND_MONTHLY_LIMIT = "2900";
 }
@@ -84,6 +84,45 @@ async function main() {
   ownsFixture = true;
   await db.user.create({ data: { id: "fixture", email: "fixture@example.invalid" } });
   await reset();
+  environment.RESEND_MONTHLY_LIMIT = "1";
+  await db.emailLog.create({ data: { id: "prior-calendar-month", kind: "other", to: "fixture@example.invalid", createdAt: new Date(Date.now() - 25 * 86400000) } });
+  await assert.rejects(gate.acquireEmailDispatch("cv_ready"), /email_quota_wait/, "Prior-calendar-month usage still consumes a non-calendar provider billing cycle");
+  assert.equal(providerCalls, 0);
+  await reset();
+  console.log("PASS conservative monthly window retains prior-calendar-month usage without provider access");
+  const observedAt = new Date();
+  const snapshot = { id: "fixture-provider-usage", observedAt, dailyConsumed: 97, monthlyConsumed: 660,
+    dailyResetAt: new Date(+observedAt + 3600000), monthlyResetAt: new Date(+observedAt + 25*86400000) };
+  await db.emailLog.createMany({ data: Array.from({ length: 90 }, (_, i) => ({ id: `old-${i}`, kind: "other", to: "fixture@example.invalid", createdAt: new Date(+observedAt - 10000) })) });
+  await assert.rejects(gate.initializeEmailQuota(snapshot, false), /not_quiesced/);
+  await gate.initializeEmailQuota(snapshot, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(await gate.emailUsage(db, new Date()))), { today: 97, month: 660 }, "Provider floor reconciles missing local logs without double-counting logged use");
+  const repeated = await Promise.all(Array.from({ length: 7 }, () => gate.initializeEmailQuota(snapshot, true)));
+  assert.equal(await db.emailQuotaBaseline.count(), 1);
+  assert.ok(repeated.every(r => r.id === snapshot.id));
+  await assert.rejects(gate.initializeEmailQuota({ ...snapshot, dailyConsumed: 96 }, true), /snapshot_conflict/);
+  await assert.rejects(gate.acquireEmailDispatch("cv_ready"), /quota_wait/, "97 actual usage cannot pass the unchanged95 safety limit");
+  assert.equal(providerCalls, 0);
+  await db.emailReservation.create({ data: { id: "post-snapshot", createdAt: new Date() } });
+  assert.equal((await gate.emailUsage(db, new Date())).today, 98);
+  assert.equal((await gate.emailUsage(db, new Date(+snapshot.dailyResetAt + 1))).month, 661, "Daily expiry does not reset a mid-month provider cycle");
+  assert.equal((await gate.emailUsage(db, new Date(+snapshot.monthlyResetAt + 1))).month, 91, "Expired provider floor falls back to conservative local rolling usage");
+  await reset();
+  const retryKey = "preexisting-unknown-key";
+  const retryId = crypto.createHash("sha256").update(`${gate.utcPeriods(new Date()).day.toISOString()}/${retryKey}`).digest("hex");
+  await db.emailReservation.createMany({ data: Array.from({ length: 10 }, (_, i) => ({ id: i === 0 ? retryId : `uncertain-${i}`, createdAt: new Date(Date.now() - 10000) })) });
+  await gate.initializeEmailQuota({ ...snapshot, id: "fixture-uncertain-usage" }, true);
+  assert.equal((await gate.emailUsage(db, new Date())).today, 107, "Unlogged reserved attempts are retained above provider floor");
+  environment.RESEND_DAILY_LIMIT = "100"; // Synthetic provider limit, never production config.
+  await assert.rejects(gate.acquireEmailDispatch("cv_ready", retryKey), /quota_wait/, "An existing ambiguous reservation cannot bypass the reconciled global cap");
+  assert.equal(providerCalls, 0); assert.ok(await db.emailReservation.findUnique({ where: { id: retryId } }));
+  await reset();
+  await db.emailDispatchGate.create({ data: { id: "resend", leaseUntil: new Date(Date.now()+60000) } });
+  await assert.rejects(gate.initializeEmailQuota(snapshot, true), /in_flight/);
+  assert.equal(await db.emailQuotaBaseline.count(), 0);
+  await reset();
+  await assert.rejects(gate.initializeEmailQuota({ ...snapshot, observedAt: new Date(Date.now()-600000) }, true), /stale/);
+  console.log("PASS atomic provider97/local90 reconciliation, immutable concurrent initialization, no limit increase, actual reset, unknown attempts and active-lease fence");
   const kinds = ["onboarding_nudge", "upgrade_nudge", "daily_summary", "weekly_digest", "trial_day_3", "checkout_recovery", "checkout_feedback"];
   const results = await Promise.all(kinds.map(kind => queue.sendQueuedNotification(kind, "fixture@example.invalid", async () => payload(kind))));
   assert.ok(results.every(r => r.sent), JSON.stringify({ results, rows: await db.emailOutbox.findMany({ select: { status: true, error: true } }) })); assert.equal(providerCalls, 7);
@@ -179,7 +218,7 @@ const task = process.argv[2] === "--producer"
   ? queue.sendQueuedNotification("cv_ready", "fixture@example.invalid", async () => payload(`process-${process.argv[3]}`)).then((result: any) => assert.equal(result.sent, true)).finally(() => db.$disconnect())
   : main().finally(async () => {
   if (!ownsFixture) { await db.$disconnect(); return; }
-  await db.emailOutbox.deleteMany(); await db.emailLog.deleteMany(); await db.emailReservation.deleteMany(); await db.emailDispatchGate.deleteMany();
+  await db.emailQuotaBaseline.deleteMany(); await db.emailOutbox.deleteMany(); await db.emailLog.deleteMany(); await db.emailReservation.deleteMany(); await db.emailDispatchGate.deleteMany();
   await db.user.deleteMany({ where: { id: "fixture" } }); await db.$disconnect();
 });
 task.catch(error => { console.error(error); process.exitCode = 1; });

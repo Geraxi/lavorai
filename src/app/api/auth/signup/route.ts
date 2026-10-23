@@ -1,4 +1,3 @@
-import { registrationTrialEnd } from "@/lib/billing";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -142,9 +141,8 @@ export async function POST(request: NextRequest) {
         signupLandingPath: attrib.p ?? null,
         signupSource: parsed.data.source ?? (parsed.data.promo?.toUpperCase() === "STUDENTI" ? "universita" : parsed.data.protectedCategory ? "categorie_protette" : null),
         trialDurationDays: 7,
-        trialEndsAt: registrationTrialEnd(new Date()),
-        proTrialUsedAt: new Date(),
-        ...(parsed.data.protectedCategory ? { preferences: { create: { protectedCategory: true, autoApplyMode: "auto" } } } : {}),
+          trialActivationVersion: 1,
+        ...(parsed.data.protectedCategory ? { preferences: { create: { protectedCategory: true, autoApplyMode: "manual" } } } : {}),
       },
       select: { id: true, email: true, locale: true, name: true },
     });
@@ -166,10 +164,7 @@ export async function POST(request: NextRequest) {
       dedupeKey: `signup_success:${user.id}`,
     });
 
-    await recordConversionEvent(AnalyticsEvent.TRIAL_STARTED, {
-      userId: user.id, plan: "pro", path: "/signup", valueCents: 0,
-      properties: { days: 7, applicationLimit: 5 }, dedupeKey: `trial_started:${user.id}`,
-    });
+
 
     // Invia email di verifica (best-effort; non blocca signup se fallisce)
     await sendVerificationEmail(user.id, user.email, user.locale);
