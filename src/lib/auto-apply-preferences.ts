@@ -186,7 +186,7 @@ export function locationPreferenceMismatch(
   // "Anywhere in France" is remote within one country, not worldwide: only a
   // bare "anywhere" (not followed by "in <place>") opens the job to everyone.
   let worldwide = /\b(anywhere(?!\s+in\s+(?!(?:the\s+)?world\b))|worldwide|global)\b/i.test(location);
-  const bareRemote = remote && !worldwide && /^(?:fully\s+)?remot[eo]\s*$/i.test(location);
+  const bareRemote = remote && !worldwide && /^(?:fully\s+)?remot[eo](?:\s+job)?(?:,\s*remot[eo](?:\s+job)?)*\s*$/i.test(location);
   // A bare "Remote" field: read the scope the posting itself states.
   let scopedFromText = false;
   if (bareRemote) {
@@ -227,6 +227,13 @@ export function locationPreferenceMismatch(
     // "Remote" alone says nothing about geographic eligibility. Do not turn a
     // remote flag into permission for US-only or otherwise restricted vacancies.
     if (aliases && inLocation(aliases)) return null;
+    // City preference ("Milano") vs a country-level listing ("Italia",
+    // "Italy"): the job is open anywhere in the user's own country.
+    if (!remotePref && !restrictions) {
+      const cc = matchCity(pref)?.cc;
+      const countryNames = cc ? (COUNTRY_REGION_NAMES[cc] ?? []) : [];
+      if (countryNames.some((n) => location.trim() === n.toLowerCase())) return null;
+    }
     // Bare "Remote" field whose explicit eligibility sentence names this
     // preference's region ("Candidates must be based in the US").
     if (remotePref && aliases && bareRemote && restrictions) return null;
