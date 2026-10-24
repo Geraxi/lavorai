@@ -72,6 +72,7 @@ async function testCronBothPasses() {
   // Production manual-only blocking is exercised in test-manual-rollout-producers.
   const api = loadModule("src/lib/auto-apply-cron.ts", {
     "@/lib/ats-skip-hosts": await import("../src/lib/ats-skip-hosts"),
+    "@/lib/skip-list-email-lookup": { lookupPublishedSkipListInbox: async () => null },
     "@/lib/daily-application-cap": await import("../src/lib/daily-application-cap"),
     "@/lib/paid-priority": { sortByPaidPriority: <T,>(items: readonly T[]) => [...items] },
     "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
@@ -359,6 +360,24 @@ async function testRecruiterEmail() {
   assert.equal(
     api.companyWebsiteFromPage('<a href="https://www.acme.com/about">Acme</a>', "https://jobs.ashbyhq.com/acme/uuid", "Acme"),
     "https://www.acme.com/",
+  );
+  assert.equal(
+    api.companyWebsiteFromPage('{"publicWebsite":"https://elevenlabs.io","customJobsPageUrl":"https://elevenlabs.io/careers"}', "https://jobs.ashbyhq.com/elevenlabs/uuid", "ElevenLabs"),
+    "https://elevenlabs.io/",
+  );
+  assert.equal(
+    api.companyWebsiteFromPage('<script type="application/ld+json">{"@type":"JobPosting","hiringOrganization":{"name":"Acme","sameAs":"https://acme.com","url":"https://www.acme.com"}}</script>', "https://jobs.ashbyhq.com/acme/uuid", "Acme"),
+    "https://www.acme.com/",
+  );
+  assert.equal(
+    api.companyWebsiteFromPublishedSource('{"publicWebsite":"https://jobs.ashbyhq.com/acme"}', "Acme"),
+    null,
+    "ATS host is never a company website",
+  );
+  assert.equal(
+    api.companyWebsiteFromPublishedSource("elevenlabs", "ElevenLabs"),
+    null,
+    "Must never invent a website from a tenant slug",
   );
   const viaDiscover = await api.findVerifiedRecruiterEmail(
     "https://jobs.ashbyhq.com/acme/uuid", "Acme", null,

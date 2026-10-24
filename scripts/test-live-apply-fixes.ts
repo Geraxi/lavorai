@@ -55,7 +55,7 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
   const prisma = {
     user: { findUnique: async () => user },
     applicationSession: { findMany: async () => [] },
-    job: { findMany: async () => jobs },
+    job: { findMany: async () => jobs, update: async () => ({}) },
     application: {
       count: async () => 0, groupBy: async () => [], findMany: async () => [],
       findFirst: async (query: { where: { jobId: string } }) => created.find((a) => a.jobId === query.where.jobId) ?? null,
@@ -71,6 +71,7 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
   });
   const api = loadModule("src/lib/auto-apply-cron.ts", {
     "@/lib/ats-skip-hosts": { ...skip, compareJobsForAutoApply: () => 0 },
+    "@/lib/skip-list-email-lookup": { lookupPublishedSkipListInbox: async () => null },
     "@/lib/daily-application-cap": await import("../src/lib/daily-application-cap"),
     "@/lib/paid-priority": { sortByPaidPriority: <T,>(items: readonly T[]) => [...items] },
     "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
@@ -115,14 +116,17 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
   const stats = await api.runAutoApplyForUser(user.id);
   const ashby = created.filter((a) => String(a.jobId).startsWith("ashby-"));
   const sendable = created.filter((a) => a.status === "queued");
-  assert.equal(ashby.length, 2, "Ashby skip-list rows are created");
-  assert.ok(ashby.every((a) => a.status === "queued" && !a.errorMessage), "Skip-list rows queue for recruiter-email first");
-  assert.equal(sendable.length, 5, "Daily cap still limits creations to 5");
+  assert.equal(ashby.length, 2, "Ashby skip-list rows are created as handoffs when no inbox exists");
+  assert.ok(
+    ashby.every((a) => a.status === "ready_to_apply" && a.errorMessage === skip.SKIPPED_ATS_MANUAL_MESSAGE),
+    "Skip-list miss hands off without enqueue",
+  );
+  assert.equal(sendable.length, 5, "Daily cap is filled by sendable jobs, not skip-list misses");
   assert.equal(queued.length, 5);
   assert.equal(stats.applicationsEnqueued, 5);
-  assert.equal(stats.skippedManualAts, 0);
-  assert.deepEqual(sendable.map((a) => a.jobId), ["ashby-1", "ashby-2", "gh-1", "gh-2", "gh-3"]);
-  console.log("live-apply-fixes: skip-list rows queue for recruiter-email and consume a daily slot like other queued work");
+  assert.equal(stats.skippedManualAts, 2);
+  assert.deepEqual(sendable.map((a) => a.jobId), ["gh-1", "gh-2", "gh-3", "gh-4", "gh-5"]);
+  console.log("live-apply-fixes: skip-list miss hands off without consuming a daily slot");
 }
 
 testAshbyHandoffsDoNotConsumeDailySlots().catch((err) => { console.error(err); process.exitCode = 1; });

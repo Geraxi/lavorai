@@ -1,4 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
+import { companyWebsiteFromPublishedSource } from "@/lib/recruiter-email";
 import { storedJobDescription } from "./posting-description";
 
 /**
@@ -45,8 +46,9 @@ export async function fetchGreenhouseJobs(
     const data = (await res.json()) as { jobs: GreenhouseJob[] };
     const jobs = Array.isArray(data.jobs) ? data.jobs : [];
     const display = companyName ?? prettySlug(companySlug);
+    const boardWebsite = await fetchGreenhouseBoardWebsite(companySlug, display);
     return jobs
-      .map((j) => mapJob(j, display, companySlug))
+      .map((j) => mapJob(j, display, companySlug, boardWebsite))
       .filter((j): j is JobListItem => j !== null);
   } catch (err) {
     console.warn(`[greenhouse] ${companySlug} fetch failed`, err);
@@ -73,10 +75,42 @@ export async function fetchGreenhouseMulti(
   return out;
 }
 
+/** Employer site from job HTML, custom absolute_url, or board content. Never a tenant slug. */
+export function greenhouseCompanyWebsite(
+  job: Pick<GreenhouseJob, "content" | "absolute_url">,
+  companyName: string,
+  boardWebsite?: string | null,
+): string | null {
+  return companyWebsiteFromPublishedSource(job.content ?? "", companyName, job.absolute_url)
+    ?? companyWebsiteFromPublishedSource(job.absolute_url, companyName, job.absolute_url)
+    ?? boardWebsite
+    ?? null;
+}
+
+async function fetchGreenhouseBoardWebsite(companySlug: string, companyName: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(companySlug)}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 LavorAI/1.0 jobs-sync",
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return null;
+    const board = (await res.json()) as { content?: string; url?: string; name?: string };
+    return companyWebsiteFromPublishedSource(JSON.stringify(board), companyName)
+      ?? companyWebsiteFromPublishedSource(board.content ?? "", companyName)
+      ?? (typeof board.url === "string" ? companyWebsiteFromPublishedSource(board.url, companyName, board.url) : null);
+  } catch {
+    return null;
+  }
+}
+
 function mapJob(
   j: GreenhouseJob,
   companyName: string,
   companySlug: string,
+  boardWebsite?: string | null,
 ): JobListItem | null {
   const description = storedJobDescription(j.content);
   // Filtro geo: vogliamo solo Italia, Europa o Remoto
@@ -95,6 +129,7 @@ function mapJob(
     location: j.location?.name ?? null,
     description,
     url: canonicalUrl,
+    companyWebsite: greenhouseCompanyWebsite(j, companyName, boardWebsite),
     contractType: null,
     remote: /\bremote|remoto\b/i.test(j.location?.name ?? ""),
     salaryMin: null,

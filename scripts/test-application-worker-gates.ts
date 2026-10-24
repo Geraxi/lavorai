@@ -62,9 +62,14 @@ assert(worker.indexOf("reserveApplicationWork(applicationId)") < worker.indexOf(
 assert(worker.includes("if (prepared.count !== 1) return;"));
 assert(worker.includes("published recruiter email"), "Verified published recruiter email must win over portal submit");
 assert(worker.includes("findVerifiedRecruiterEmail"), "Recruiter email is resolved before portal submit");
+assert(worker.includes("lookupPublishedSkipListInbox"), "Skip-list lookup is cheap and shared");
+assert(worker.indexOf("lookupPublishedSkipListInbox") < worker.indexOf("reserveApplicationWork(applicationId)"),
+  "Skip-list email lookup must run before reserving a daily slot or CV/AI");
 assert(worker.includes("discoverPublishedHiringInbox"), "Worker discovers published hiring inboxes on the employer domain");
 assert(worker.includes("isSkippedPortalUrl"), "Skip-list hosts skip portal submit and try email first");
 assert(worker.includes("SKIPPED_ATS_MANUAL_MESSAGE"), "Skip-list handoff happens only after email lookup fails");
+assert(readFileSync(new URL("../src/lib/skip-list-email-lookup.ts", import.meta.url), "utf8").includes("skipPageFetch"),
+  "Cheap skip-list lookup must not crawl the ATS job page");
 assert(!readFileSync(new URL("../src/lib/application-worker-gates.ts", import.meta.url), "utf8").includes("requiresManualAtsHandoff"),
   "Reserve must not park skip-list rows before recruiter-email");
 assert(worker.includes("recruiterFromAddress"), "Recruiter From must use lavorai.it, not UserInbox");

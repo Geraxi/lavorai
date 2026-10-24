@@ -24,7 +24,8 @@ import { recordConversionEvent } from "@/lib/conversion-events";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
 import { sortByPaidPriority } from "@/lib/paid-priority";
-import { compareJobsForAutoApply } from "@/lib/ats-skip-hosts";
+import { compareJobsForAutoApply, isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
 import { companyCapUsageWhere, countDailyCapUsage, countsTowardQuota, monthlyQuotaUsageWhere, quotaConsumingFilter } from "@/lib/daily-application-cap";
 import { usesProvenChannelFilter } from "@/lib/proven-channels";
 import {
@@ -889,33 +890,19 @@ async function processUser(
     const portal = portalOf(job.url);
 
     try {
-      const app = await prisma.application.create({
-        data: {
-          userId: user.id,
-          jobId: job.id,
-          portal,
-          status: initialStatus,
-          trackingToken: randomToken(),
-          atsScore: score,
-          sessionId,
-        },
-      });
-      await recordConversionEvent(AnalyticsEvent.APPLICATION_CREATED, {
+      const outcome = await admitAutoApplyApplication({
         userId: user.id,
-        properties: { mode: isHybrid ? "hybrid" : "auto", consentRequired: isHybrid },
-        dedupeKey: `application_created:${app.id}`,
+        job,
+        portal,
+        initialStatus,
+        isHybrid,
+        score,
+        sessionId,
+        stats,
       });
-      // Skip-list / captcha-known hosts are queued too: the worker tries
-      // recruiter-email first and only then hands back to the user.
-      if (!isHybrid) {
-        await enqueueApplication(app.id);
-        stats.applicationsEnqueued++;
-      } else {
-        stats.applicationsAwaitingConsent++;
-      }
       // Handoffs (skip-list ATS, CAPTCHA) and later liveness holds must not
       // consume the per-user daily slot, 30-day company cap, or session target.
-      if (!countsTowardQuota(app)) continue;
+      if (outcome !== "slot") continue;
       enqueued++;
       // Marca azienda usata nel run (diversificazione)
       const usedKey = (job.company ?? "").toLowerCase();
@@ -995,24 +982,17 @@ async function processUser(
       if (!(await admitProven(job))) continue;
 
       try {
-        const app = await prisma.application.create({
-          data: {
-            userId: user.id,
-            jobId: job.id,
-            portal: portalOf(job.url),
-            status: initialStatus,
-            trackingToken: randomToken(),
-            atsScore: score,
-            sessionId,
-          },
+        const outcome = await admitAutoApplyApplication({
+          userId: user.id,
+          job,
+          portal: portalOf(job.url),
+          initialStatus,
+          isHybrid,
+          score,
+          sessionId,
+          stats,
         });
-        if (!isHybrid) {
-          await enqueueApplication(app.id);
-          stats.applicationsEnqueued++;
-        } else {
-          stats.applicationsAwaitingConsent++;
-        }
-        if (!countsTowardQuota(app)) continue;
+        if (outcome !== "slot") continue;
         enqueued++;
         if (cKey2) {
           companyCount30d.set(cKey2, (companyCount30d.get(cKey2) ?? 0) + 1);
@@ -1029,6 +1009,87 @@ async function processUser(
       }
     }
   }
+}
+
+type AdmitJob = {
+  id: string;
+  url: string;
+  company: string | null;
+  description?: string | null;
+  recruiterEmail?: string | null;
+  recruiterEmailSourceUrl?: string | null;
+  companyWebsite?: string | null;
+};
+
+/** Skip-list jobs get a cheap inbox lookup first. A miss is a handoff and does not occupy dailyCap. */
+async function admitAutoApplyApplication(input: {
+  userId: string;
+  job: AdmitJob;
+  portal: string;
+  initialStatus: string;
+  isHybrid: boolean;
+  score: number;
+  sessionId: string;
+  stats: RunStats;
+}): Promise<"slot" | "handoff" | "consent"> {
+  const job = input.job;
+  if (isSkippedPortalUrl(job.url)) {
+    const found = typeof lookupPublishedSkipListInbox === "function"
+      ? await lookupPublishedSkipListInbox(job)
+      : null;
+    if (!found) {
+      await prisma.application.create({
+        data: {
+          userId: input.userId,
+          jobId: job.id,
+          portal: input.portal,
+          status: "ready_to_apply",
+          trackingToken: randomToken(),
+          atsScore: input.score,
+          sessionId: input.sessionId,
+          errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
+          completedAt: new Date(),
+          recruiterEmailRecheckedAt: new Date(),
+        },
+      });
+      input.stats.skippedManualAts++;
+      return "handoff";
+    }
+    await prisma.job.update({
+      where: { id: job.id },
+      data: {
+        recruiterEmail: found.email,
+        recruiterEmailSourceUrl: found.provenance.sourceUrl,
+        recruiterScrapedAt: new Date(),
+      },
+    }).catch(() => undefined);
+    job.recruiterEmail = found.email;
+  }
+
+  const app = await prisma.application.create({
+    data: {
+      userId: input.userId,
+      jobId: job.id,
+      portal: input.portal,
+      status: input.initialStatus,
+      trackingToken: randomToken(),
+      atsScore: input.score,
+      sessionId: input.sessionId,
+    },
+  });
+  await recordConversionEvent(AnalyticsEvent.APPLICATION_CREATED, {
+    userId: input.userId,
+    properties: { mode: input.isHybrid ? "hybrid" : "auto", consentRequired: input.isHybrid },
+    dedupeKey: `application_created:${app.id}`,
+  });
+  if (!input.isHybrid) {
+    await enqueueApplication(app.id);
+    input.stats.applicationsEnqueued++;
+  } else {
+    input.stats.applicationsAwaitingConsent++;
+  }
+  if (!countsTowardQuota(app)) return input.isHybrid ? "consent" : "handoff";
+  return "slot";
 }
 
 function portalOf(url: string): string {

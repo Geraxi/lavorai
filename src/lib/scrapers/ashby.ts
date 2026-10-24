@@ -1,4 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
+import { companyWebsiteFromPublishedSource } from "@/lib/recruiter-email";
 import { storedJobDescription } from "./posting-description";
 
 /**
@@ -31,6 +32,8 @@ interface AshbyJob {
   jobUrl: string;
   applyUrl?: string | null;
   descriptionHtml?: string | null;
+  publicWebsite?: string | null;
+  customJobsPageUrl?: string | null;
   isRemote?: boolean;
   workplaceType?: string | null;
   /** Structured scope: `addressCountry` can be a country or a list ("US | EU"). */
@@ -79,11 +82,16 @@ export async function fetchAshbyJobs(
       console.warn(`[ashby] ${orgSlug} → ${res.status}`);
       return [];
     }
-    const data = (await res.json()) as { jobs?: AshbyJob[] };
+    const data = (await res.json()) as {
+      jobs?: AshbyJob[];
+      publicWebsite?: string | null;
+      customJobsPageUrl?: string | null;
+    };
     const jobs = Array.isArray(data.jobs) ? data.jobs : [];
     const display = companyName ?? prettySlug(orgSlug);
+    const boardWebsite = ashbyCompanyWebsite(data, display);
     return jobs
-      .map((j) => mapJob(j, display, orgSlug))
+      .map((j) => mapJob(j, display, orgSlug, boardWebsite))
       .filter((j): j is JobListItem => j !== null);
   } catch (err) {
     console.warn(`[ashby] ${orgSlug} fetch failed`, err);
@@ -109,10 +117,29 @@ export async function fetchAshbyMulti(
   return out;
 }
 
+/** Employer site published by Ashby (publicWebsite / customJobsPageUrl / JSON-LD). Never a tenant slug. */
+export function ashbyCompanyWebsite(
+  source: { publicWebsite?: string | null; customJobsPageUrl?: string | null; descriptionHtml?: string | null } | string,
+  companyName: string,
+): string | null {
+  const blob = typeof source === "string"
+    ? source
+    : JSON.stringify({
+        publicWebsite: source.publicWebsite ?? undefined,
+        customJobsPageUrl: source.customJobsPageUrl ?? undefined,
+        descriptionHtml: source.descriptionHtml ?? undefined,
+      });
+  return companyWebsiteFromPublishedSource(blob, companyName)
+    ?? (typeof source === "object" && source.descriptionHtml
+      ? companyWebsiteFromPublishedSource(source.descriptionHtml, companyName)
+      : null);
+}
+
 function mapJob(
   j: AshbyJob,
   companyName: string,
   orgSlug: string,
+  boardWebsite?: string | null,
 ): JobListItem | null {
   const description = storedJobDescription(j.descriptionHtml);
   const location = ashbyLocation(j);
@@ -128,6 +155,7 @@ function mapJob(
     location,
     description,
     url: j.jobUrl,
+    companyWebsite: ashbyCompanyWebsite(j, companyName) ?? boardWebsite ?? null,
     contractType: j.employmentType ?? null,
     // workplaceType is authoritative when present: Ashby sets isRemote on
     // Hybrid postings too (OpenAI "San Francisco", Hybrid, isRemote=true).

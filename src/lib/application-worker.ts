@@ -31,6 +31,7 @@ import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { humanContext, launchBrowser } from "@/lib/browser";
 import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { discoverPublishedHiringInbox } from "@/lib/employer-hiring-inbox";
+import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
 import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
 import {
@@ -135,6 +136,49 @@ async function processApplicationRun(
   if (!app) {
     console.error(`[worker] Application ${applicationId} non trovata`);
     return;
+  }
+
+  // Skip-list hosts: look up a published inbox first. A miss hands off
+  // without reserving a daily slot or running CV/AI.
+  if (isSkippedPortalUrl(app.job.url)) {
+    const cheap = await lookupPublishedSkipListInbox({
+      url: app.job.url,
+      company: app.job.company,
+      description: app.job.description,
+      recruiterEmail: app.job.recruiterEmail,
+      recruiterEmailSourceUrl: app.job.recruiterEmailSourceUrl,
+      companyWebsite: app.job.companyWebsite,
+    }).catch(() => null);
+    if (!cheap) {
+      await prisma.application.updateMany({
+        where: {
+          id: applicationId,
+          status: { in: ["queued", "ready_to_apply"] },
+          submittedAt: null,
+          submittedVia: null,
+          submitConfirmation: null,
+          canaryLog: null,
+          answersUsedJson: null,
+        },
+        data: {
+          status: "ready_to_apply",
+          errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
+          completedAt: new Date(),
+          recruiterEmailRecheckedAt: new Date(),
+        },
+      });
+      return;
+    }
+    await prisma.job.update({
+      where: { id: app.job.id },
+      data: {
+        recruiterEmail: cheap.email,
+        recruiterEmailSourceUrl: cheap.provenance.sourceUrl,
+        recruiterScrapedAt: new Date(),
+      },
+    }).catch(() => undefined);
+    app.job.recruiterEmail = cheap.email;
+    app.job.recruiterEmailSourceUrl = cheap.provenance.sourceUrl;
   }
 
   // Atomic admission rechecks the current account/round and reserves capacity.
