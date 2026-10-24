@@ -38,11 +38,7 @@ export interface WebFormConfig {
   };
   /** Regex del testo del bottone di invio. */
   submitRe: RegExp;
-  /** Testo che indica annuncio chiuso. */
-  closedRe?: RegExp;
 }
-
-const DEFAULT_CLOSED_RE = /no longer (accepting|available|open)|position (has been )?(filled|closed)|job not found|posizione (chiusa|non più)|non più (disponibile|attiva)|annuncio scaduto|expired/i;
 
 export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebFormConfig): Promise<ApplyOutcome> {
   const T = cfg.tag;
@@ -58,10 +54,6 @@ export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebF
   const progress = new PageProgressTracker(3);
   const guarded = await inspectLivePage(page, progress);
   if (guarded) return guarded;
-  const bodyEarly = ((await page.locator("body").innerText().catch(() => "")) ?? "").slice(0, 4000);
-  if ((cfg.closedRe ?? DEFAULT_CLOSED_RE).test(bodyEarly)) {
-    return { ok: false, status: "job_closed", error: "Annuncio non più online." };
-  }
 
   if (cfg.openForm) {
     await cfg.openForm(page).catch(() => false);

@@ -12,9 +12,9 @@ import {
   persistAttemptConfirmation,
   STANDARD_ATTEMPT_OUTCOMES,
 } from "../src/lib/attempt-outcome";
-import { pageSafetyStop, isContractorMarketplace, denyUnsafePermissions, isUnsafePermissionName } from "../src/lib/portal-adapters/safety-stops";
+import { pageSafetyStop, isContractorMarketplace, isIdpLoginUrl, denyUnsafePermissions, isUnsafePermissionName } from "../src/lib/portal-adapters/safety-stops";
 import { verifyFilledFields, expectedFieldsFrom } from "../src/lib/portal-adapters/pre-submit-verify";
-import { PageProgressTracker, isClosedPostingText, canonicalPageUrl } from "../src/lib/portal-adapters/stuck-page";
+import { PageProgressTracker, isClosedPostingBanner, isClosedPostingUrl, canonicalPageUrl } from "../src/lib/portal-adapters/stuck-page";
 import { inspectLivePage, abortIfFieldsWrong } from "../src/lib/portal-adapters/page-guards";
 import { deriveApplicationLifecycle } from "../src/lib/application-lifecycle";
 
@@ -28,13 +28,30 @@ async function test(name: string, fn: () => unknown | Promise<unknown>) {
 function mockPage(opts: {
   url?: string;
   body?: string;
+  form?: string;
+  dialog?: string;
+  heading?: string;
+  alert?: string;
+  title?: string;
   fields?: Record<string, string>;
   clicks?: string[];
 }) {
   const fields = { ...(opts.fields ?? {}) };
   const clicks = opts.clicks ?? [];
   const resolve = (sel: string) => {
-    if (sel === "body") return { kind: "body" as const, value: opts.body ?? "" };
+    if (/dialog|alertdialog|aria-modal/i.test(sel)) {
+      return opts.dialog != null ? { kind: "text" as const, value: opts.dialog } : null;
+    }
+    if (/role=['"]form['"]|^form\b|form,/.test(sel)) {
+      return opts.form != null ? { kind: "text" as const, value: opts.form } : null;
+    }
+    if (sel === "h1" || /^h1\b/.test(sel)) {
+      return opts.heading != null ? { kind: "text" as const, value: opts.heading } : null;
+    }
+    if (/role=['"]alert['"]/.test(sel)) {
+      return opts.alert != null ? { kind: "text" as const, value: opts.alert } : null;
+    }
+    if (sel === "body") return { kind: "text" as const, value: opts.body ?? "" };
     const key = /email/i.test(sel) ? "email"
       : /first|given-name/i.test(sel) ? "firstName"
       : /last|family-name/i.test(sel) ? "lastName"
@@ -50,7 +67,7 @@ function mockPage(opts: {
     const el = {
       count: async () => (hit ? 1 : 0),
       isVisible: async () => !!hit,
-      innerText: async () => (hit?.kind === "body" ? hit.value : ""),
+      innerText: async () => (hit?.kind === "text" ? hit.value : hit?.kind === "input" ? "" : ""),
       inputValue: async () => (hit?.kind === "input" ? fields[hit.key] : ""),
       fill: async (v: string) => {
         if (hit?.kind === "input") fields[hit.key] = v;
@@ -62,11 +79,19 @@ function mockPage(opts: {
   };
   return {
     url: () => opts.url ?? "https://boards.greenhouse.io/acme/jobs/1",
+    title: async () => opts.title ?? "",
     locator,
     clicks,
     fields,
   } as unknown as import("playwright").Page & { clicks: string[]; fields: Record<string, string> };
 }
+
+const TRIGGER_JD = [
+  "We use SSO and SAML for internal tools. Identity verification and a government ID",
+  "may be required after offer. Candidates who are not eligible for visa sponsorship",
+  "or whose work authorisation has expired should not apply. Sign in with Google",
+  "Workspace experience is a plus. Please log in to the corporate VPN to start.",
+].join(" ");
 
 const profile = {
   firstName: "Ada", lastName: "Lovelace", email: "ada@example.test",
@@ -149,18 +174,38 @@ async function main() {
     assert.equal(applied.status, "confirmed_submitted");
   });
 
-  await test("safety stops: marketplace, SSO, ID, login, not eligible", () => {
+  await test("safety stops: marketplace, SSO via IdP URL, form/dialog prompts", () => {
+    const gh = "https://boards.greenhouse.io/acme/jobs/1";
     assert.equal(isContractorMarketplace("https://jobs.mercor.com/x"), true);
     assert.equal(isContractorMarketplace("https://www.toptal.com/apply"), true);
     assert.equal(isContractorMarketplace("https://upwork.com/jobs/1"), true);
-    assert.equal(isContractorMarketplace("https://boards.greenhouse.io/acme/jobs/1"), false);
-    assert.equal(pageSafetyStop("https://mercor.com/j/1", "").outcome, "FAILED:marketplace");
-    assert.equal(pageSafetyStop("https://boards.greenhouse.io/acme/jobs/1", "Sign in with Google to continue").outcome, "FAILED:sso_required");
-    assert.equal(pageSafetyStop("https://boards.greenhouse.io/acme/jobs/1", "Please take a selfie for identity verification").outcome, "FAILED:id_verification");
-    assert.equal(pageSafetyStop("https://boards.greenhouse.io/acme/jobs/1", "Please log in to apply").outcome, "LOGIN_REQUIRED");
-    assert.equal(pageSafetyStop("https://boards.greenhouse.io/acme/jobs/1", "You do not meet the work authorisation requirements").outcome, "NOT_ELIGIBLE");
-    assert.equal(pageSafetyStop("https://boards.greenhouse.io/acme/jobs/1", "Join our talent network").outcome, "FAILED:not_a_job_application");
-    assert.equal(pageSafetyStop("https://boards.greenhouse.io/acme/jobs/1", "Apply for Product Designer"), null);
+    assert.equal(isContractorMarketplace(gh), false);
+    assert.equal(pageSafetyStop({ url: "https://mercor.com/j/1" })?.outcome, "FAILED:marketplace");
+    assert.equal(isIdpLoginUrl("https://accounts.google.com/o/oauth2/v2/auth?client_id=x"), true);
+    assert.equal(isIdpLoginUrl("https://acme.okta.com/app/greenhouse/sso/saml"), true);
+    assert.equal(isIdpLoginUrl(gh), false);
+    assert.equal(pageSafetyStop({ url: "https://accounts.google.com/o/oauth2/v2/auth" })?.outcome, "FAILED:sso_required");
+    assert.equal(pageSafetyStop({ url: gh, formText: "Sign in with Google to continue" }), null, "SSO is URL-only, not form copy");
+    assert.equal(pageSafetyStop({ url: gh, dialogText: "Please take a selfie" })?.outcome, "FAILED:id_verification");
+    assert.equal(pageSafetyStop({ url: gh, formText: "Please log in to apply" })?.outcome, "LOGIN_REQUIRED");
+    assert.equal(pageSafetyStop({ url: gh, dialogText: "You are not eligible for this location" })?.outcome, "NOT_ELIGIBLE");
+    assert.equal(pageSafetyStop({ url: gh, formText: "Join our talent network" })?.outcome, "FAILED:not_a_job_application");
+    assert.equal(pageSafetyStop({ url: gh, formText: "First name Email Submit application" }), null);
+  });
+
+  await test("job-description words must not trigger a safety stop or EXPIRED", async () => {
+    const gh = "https://boards.greenhouse.io/acme/jobs/1";
+    assert.equal(pageSafetyStop({ url: gh, formText: "First name, Email, Submit" }), null);
+    assert.equal(isClosedPostingBanner(TRIGGER_JD), false, "JD 'expired' is not a closed banner");
+    assert.equal(isClosedPostingUrl(gh), false);
+    const live = await inspectLivePage(mockPage({
+      url: gh,
+      body: TRIGGER_JD,
+      form: "First name\nLast name\nEmail\nSubmit application",
+      heading: "Product Designer",
+      title: "Product Designer — Acme",
+    }) as never);
+    assert.equal(live, null, "JD with SSO/SAML/identity verification/not eligible/expired must not stop");
   });
 
   await test("never grant camera, microphone or geolocation", async () => {
@@ -248,15 +293,25 @@ async function main() {
     moving.note("https://a.example/1");
     moving.note("https://a.example/2");
     assert.equal(moving.note("https://a.example/3"), "progress");
-    assert.equal(isClosedPostingText("This job is no longer accepting applications"), true);
-    assert.equal(isClosedPostingText("Annuncio scaduto"), true);
-    assert.equal(isClosedPostingText("Apply now for this role"), false);
+    assert.equal(isClosedPostingBanner("This job is no longer accepting applications"), true);
+    assert.equal(isClosedPostingBanner("Annuncio scaduto"), true);
+    assert.equal(isClosedPostingBanner("Apply now for this role"), false);
+    assert.equal(isClosedPostingBanner("Token expired after 30 days"), false);
+    assert.equal(isClosedPostingUrl("https://boards.greenhouse.io/acme/jobs/1/job-closed"), true);
+    assert.equal(isClosedPostingUrl("https://boards.greenhouse.io/acme/jobs/1"), false);
 
     const closed = await inspectLivePage(mockPage({
       url: "https://boards.greenhouse.io/acme/jobs/1",
-      body: "This job is no longer accepting applications.",
+      heading: "This job is no longer accepting applications.",
+      body: TRIGGER_JD,
     }) as never);
     assert.equal(closed?.status, "job_closed");
+
+    const closed404 = await inspectLivePage(mockPage({
+      url: "https://jobs.lever.co/acme/abcd/not-found",
+      body: TRIGGER_JD,
+    }) as never);
+    assert.equal(closed404?.status, "job_closed");
 
     const stuckTracker = new PageProgressTracker(3);
     stuckTracker.note("https://boards.greenhouse.io/acme/jobs/1");

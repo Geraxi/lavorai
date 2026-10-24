@@ -3,6 +3,9 @@
  * grant camera/mic/location, never do video/selfie/ID verification, never
  * sign up for contractor marketplaces, never attempt SSO login.
  * No captcha-solving service.
+ *
+ * Detection is scoped to the URL plus the application form / dialogs /
+ * permission prompts. Job-description copy is never scanned.
  */
 
 export const MARKETPLACE_HOSTS = [
@@ -12,11 +15,22 @@ export const MARKETPLACE_HOSTS = [
 
 export const UNSAFE_PERMISSIONS = ["camera", "microphone", "geolocation"] as const;
 
-const SSO_RE = /\b(?:sign in with (?:google|microsoft|apple|linkedin|okta|onelogin|auth0)|continue with (?:google|microsoft|apple|linkedin)|accedi con (?:google|microsoft|apple|linkedin)|sso|single sign[- ]on|saml)\b/i;
-const ID_VERIFY_RE = /\b(?:video (?:interview|selfie)|record a (?:video|selfie)|take a selfie|liveness|id verification|identity verification|upload (?:your )?(?:passport|driver'?s license|government id)|verifica (?:identit[aà]|documento)|foto tessera|riconoscimento facciale)\b/i;
-const NOT_A_JOB_RE = /\b(?:create (?:an )?account to (?:apply|continue)|join our talent (?:network|community)|contractor marketplace|become a freelancer)\b/i;
-const LOGIN_WALL_RE = /\b(?:sign in to (?:continue|apply)|log in to (?:continue|apply)|accedi per (?:continuare|candidarti)|please (?:log|sign) in)\b/i;
-const NOT_ELIGIBLE_RE = /\b(?:you (?:do not|don't) meet|not eligible|we are (?:only|not) (?:hiring|accepting).{0,40}(?:location|work (?:auth|permit)|visa|citizenship)|requisiti (?:non |di (?:residenza|visto)))\b/i;
+/** Identity-provider hosts we never sign in through. */
+const IDP_HOSTS = [
+  "accounts.google.com",
+  "login.microsoftonline.com",
+  "login.microsoft.com",
+  "login.live.com",
+  "appleid.apple.com",
+  "okta.com",
+  "auth0.com",
+  "onelogin.com",
+] as const;
+
+const ID_VERIFY_RE = /\b(?:take a selfie|record a (?:video|selfie)|video selfie|liveness check|upload (?:your )?(?:passport|driver'?s license|government id)|verifica (?:identit[aà]|documento)|riconoscimento facciale|foto tessera)\b/i;
+const NOT_A_JOB_RE = /\b(?:create (?:an )?account to (?:apply|continue)|join our talent (?:network|community)|become a freelancer)\b/i;
+const LOGIN_WALL_RE = /\b(?:sign in to (?:continue|apply)|log in to (?:continue|apply)|accedi per (?:continuare|candidarti)|please (?:log|sign) in to (?:continue|apply))\b/i;
+const NOT_ELIGIBLE_RE = /\b(?:you (?:do not|don't|are not) (?:meet|eligible)|we cannot accept your (?:application|profile)|your (?:location|work authori[sz]ation) (?:is not|does not))\b/i;
 
 export function hostOf(url: string): string | null {
   try {
@@ -32,8 +46,18 @@ export function isContractorMarketplace(url: string): boolean {
   return MARKETPLACE_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
 }
 
-export function isSsoLoginPrompt(text: string): boolean {
-  return SSO_RE.test(text);
+/** True only after a navigation to a real IdP login URL — not JD mentions of SSO/SAML. */
+export function isIdpLoginUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (IDP_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return true;
+  if (/(^|\.)linkedin\.com$/.test(host) && /\/(oauth|uas\/login|checkpoint)\b/i.test(parsed.pathname)) return true;
+  return false;
 }
 
 export function isIdOrVideoVerification(text: string): boolean {
@@ -52,6 +76,14 @@ export function isNotEligiblePrompt(text: string): boolean {
   return NOT_ELIGIBLE_RE.test(text);
 }
 
+export type SafetyScan = {
+  url: string;
+  /** Application form + interactive controls. Never the job description. */
+  formText?: string;
+  /** Modal, dialog, or browser-like permission prompt. */
+  dialogText?: string;
+};
+
 export type SafetyStop =
   | { outcome: "FAILED:marketplace"; error: string }
   | { outcome: "FAILED:sso_required"; error: string }
@@ -61,16 +93,21 @@ export type SafetyStop =
   | { outcome: "LOGIN_REQUIRED"; error: string }
   | { outcome: "NOT_ELIGIBLE"; error: string };
 
-export function pageSafetyStop(url: string, bodyText: string): SafetyStop | null {
-  if (isContractorMarketplace(url)) {
+function interactiveText(scan: SafetyScan): string {
+  return `${scan.formText ?? ""}\n${scan.dialogText ?? ""}`.slice(0, 4_000);
+}
+
+export function pageSafetyStop(scan: SafetyScan): SafetyStop | null {
+  if (isContractorMarketplace(scan.url)) {
     return { outcome: "FAILED:marketplace", error: "Contractor marketplace: we never create accounts on Mercor, Toptal, Upwork or similar. Nothing was sent." };
   }
-  const text = bodyText.slice(0, 8_000);
+  if (isIdpLoginUrl(scan.url)) {
+    return { outcome: "FAILED:sso_required", error: "SSO / social login required. We never sign in with Google, Microsoft or similar. Nothing was sent." };
+  }
+  const text = interactiveText(scan);
+  if (!text.trim()) return null;
   if (isIdOrVideoVerification(text)) {
     return { outcome: "FAILED:id_verification", error: "Video, selfie or ID verification requested. We never complete identity checks. Nothing was sent." };
-  }
-  if (isSsoLoginPrompt(text)) {
-    return { outcome: "FAILED:sso_required", error: "SSO / social login required. We never sign in with Google, Microsoft or similar. Nothing was sent." };
   }
   if (isNotAJobApplication(text)) {
     return { outcome: "FAILED:not_a_job_application", error: "This page is not a job application form. Nothing was sent." };
