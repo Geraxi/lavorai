@@ -138,7 +138,9 @@
     "queuedNote": "{count, plural, =1 {1 richiesta salvata} other {# richieste salvate}}: le trovi in Candidature.",
     "noSalary": "RAL non indicata",
     "details": "Dettagli",
-    "alreadyApplied": "Già candidato"
+    "alreadyApplied": "Già candidato",
+    "unsupported": "non supportato",
+    "unsupportedHint": "Questo sito non è tra i portali su cui LavorAI può candidarsi in automatico."
   },
   "jobsPage": {
     "title": "Offerte di lavoro",

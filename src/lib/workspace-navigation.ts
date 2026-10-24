@@ -10,6 +10,7 @@ export function workspaceNavigation(locale: string) {
       item("/discover", en ? "Discover" : "Scopri", "sparkles"),
       item("/applications", en ? "Applications" : "Candidature", "briefcase"),
       item("/inbox", "Inbox", "inbox"),
+      item("/posta", en ? "Application mailbox" : "Posta candidature", "mail"),
       item("/materiali", en ? "CV by position" : "CV per posizione", "file"),
       item("/questions", en ? "Questions" : "Domande", "check"),
       item("/jobs", en ? "Job board" : "Offerte di lavoro", "inbox"),

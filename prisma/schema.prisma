@@ -478,6 +478,9 @@ model UserPreferences {
   rolesJson   String @default("[]")
   locationsJson String @default("[]")
   sourcesJson String @default("[]")
+  /// Mailbox notifications: "priority" (interview/questions now, rest in digest),
+  /// "digest" (daily only), "off". Never auto-replies to employers.
+  mailboxNotifyMode String @default("priority")
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
 
@@ -846,6 +849,8 @@ model ApplicationReply {
   forwardedAt           DateTime?
   forwardProviderId     String?
   forwardError          String?
+  /// Mailbox notify outbox: pending | immediate_sent | digest_queued | digest_sent | skipped
+  notifyStatus          String  @default("pending")
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
@@ -1212,6 +1217,10 @@ model InboundEmail {
   linksJson         String               @default("[]") @db.Text
   applicationId     String?
   matchedAt         DateTime?
+  /// Richer mailbox kind (confirmation|otp|interview|rejection|auto_reply|redirected_to_portal|recruiter_question|other).
+  mailboxKind       String?
+  /// pending | immediate_sent | digest_queued | digest_sent | skipped
+  notifyStatus      String               @default("pending")
   createdAt         DateTime             @default(now())
 
   inbox       UserInbox    @relation(fields: [inboxId], references: [id], onDelete: Cascade)

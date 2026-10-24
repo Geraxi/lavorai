@@ -31,6 +31,14 @@
     {
       "path": "/api/cron/auto-apply",
       "schedule": "0 8,9,12,13,16,17 * * *"
+    },
+    {
+      "path": "/api/cron/mailbox-digest",
+      "schedule": "15 10 * * *"
+    },
+    {
+      "path": "/api/cron/mailbox-retention",
+      "schedule": "30 3 * * *"
     }
   ]
 }

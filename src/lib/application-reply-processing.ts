@@ -2,11 +2,17 @@ import { replyMetadata } from "@/lib/inbox-reply-policy";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { forwardReplyToUser } from "@/lib/email";
-import { classifyReply } from "@/lib/reply-parser";
 import { isApplicationVerificationMessage } from "@/lib/reply-security-message";
 import { applyReplyToApplication } from "@/lib/apply-reply-to-application";
 import { emailTransaction } from "@/lib/application-delivery";
 import { recordAtsConfirmation } from "@/lib/inbound/service";
+import {
+  classifyMailbox,
+  mailboxKindIsHuman,
+  mailboxKindToReplyKind,
+  mailboxNotifyMode,
+  notifyDecision,
+} from "@/lib/application-mailbox";
 
 export interface InboundEmail {
   email_id: string;
@@ -111,14 +117,24 @@ export async function processInboundReply(input: {
     forwardedFrom = match.recruiterFrom;
   }
   const app = await prisma.application.findUnique({ where: { id: appId }, select: {
-    id: true, userId: true, user: { select: { email: true } }, job: { select: { title: true, company: true } },
+    id: true, userId: true,
+    user: { select: { email: true, preferences: { select: { mailboxNotifyMode: true } } } },
+    job: { select: { title: true, company: true } },
   } });
   if (!app) return { matched: false };
   const fromAddress = (forwardedFrom ?? data.from ?? "sconosciuto").slice(0, 320);
   const subject = data.subject?.replace(/^\s*(fwd?|i|tr|wg)\s*:\s*/i, "").slice(0, 500) || null;
   const bodyText = (data.text?.trim() ? data.text : htmlToReplyText(data.html ?? "")).slice(0, MAX_BODY) || null;
   const isSecurityCode = isApplicationVerificationMessage({ fromAddress, subject, bodyText });
-  const classification = isSecurityCode || !bodyText ? { kind: "auto" as const, isHuman: false } : classifyReply({ fromAddress, subject, bodyText });
+  const mailbox = isSecurityCode || !bodyText
+    ? { kind: "otp" as const }
+    : await classifyMailbox({ fromAddress, subject, bodyText });
+  const classification = {
+    kind: mailboxKindToReplyKind(mailbox.kind),
+    isHuman: mailboxKindIsHuman(mailbox.kind),
+  };
+  const notifyStatus = isSecurityCode ? "skipped" as const : notifyDecision(mailbox.kind, mailboxNotifyMode(app.user.preferences?.mailboxNotifyMode));
+  const immediate = notifyStatus === "pending";
   const forwardPayload: ForwardPayload = { userEmail: app.user.email, recruiterFrom: fromAddress,
     jobTitle: app.job.title, company: app.job.company, subject, bodyText, kind: classification.kind };
   const reply = await emailTransaction(async (tx) => {
@@ -128,15 +144,16 @@ export async function processInboundReply(input: {
       ...identity, providerEventId: input.providerEventId, applicationId: app.id,
       ...replyMetadata(data), directRecipient: appIds.length === 1 && !forwardedFrom,
       fromAddress, subject, bodyText, ...classification, isSecurityCode, receivedAt: input.receivedAt,
-      forwardStatus: isSecurityCode ? "skipped" : "pending",
-      forwardIdempotencyKey: isSecurityCode ? null : `reply-forward/${randomUUID()}`,
-      forwardPayloadJson: isSecurityCode ? null : JSON.stringify(forwardPayload),
+      notifyStatus,
+      forwardStatus: immediate ? "pending" : "skipped",
+      forwardIdempotencyKey: immediate ? `reply-forward/${randomUUID()}` : null,
+      forwardPayloadJson: immediate ? JSON.stringify(forwardPayload) : null,
       processingAppliedAt: new Date(),
     } });
     if (!isSecurityCode) await applyReplyToApplication({ applicationId: app.id, ...classification, receivedAt: input.receivedAt }, tx);
     return row;
   });
-  if (classification.kind === "ricevuta") {
+  if (mailbox.kind === "confirmation" || classification.kind === "ricevuta") {
     await recordAtsConfirmation(prisma, {
       applicationId: app.id,
       userId: app.userId,
@@ -144,7 +161,13 @@ export async function processInboundReply(input: {
       at: input.receivedAt,
     });
   }
-  await forwardStoredReply(reply.id);
+  if (immediate) {
+    await forwardStoredReply(reply.id);
+    await prisma.applicationReply.updateMany({
+      where: { id: reply.id, notifyStatus: "pending" },
+      data: { notifyStatus: "immediate_sent" },
+    }).catch(() => undefined);
+  }
   return { matched: true, replyId: reply.id };
 }
 
