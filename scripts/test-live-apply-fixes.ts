@@ -104,6 +104,12 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
     "@/lib/conversion-events": { recordConversionEvent: async () => {} },
     "@/lib/analytics": { AnalyticsEvent: { APPLICATION_CREATED: "application_created" } },
     "@/lib/board-apply-resolver": { resolveBoardListingsForRoles: async () => ({ attempted: 0, promoted: 0, existing: 0, unsupported: 0 }) },
+    "@/lib/proven-channels": { usesProvenChannelFilter: () => false },
+    "@/lib/proven-channel-eligibility": {
+      GREENHOUSE_FORM_FETCH_BUDGET: 12,
+      buildProvenChannelFactContext: () => ({}),
+      evaluateProvenChannelEligibility: async () => { throw new Error("non-pilot must not evaluate proven channels"); },
+    },
   });
   const stats = await api.runAutoApplyForUser(user.id);
   const ashby = created.filter((a) => String(a.jobId).startsWith("ashby-"));

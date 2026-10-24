@@ -112,6 +112,12 @@ async function testCronBothPasses() {
       resolverCalls.push({ roles: [...roles], limit: opts.limit });
       return { attempted: 0, promoted: 0, existing: 0, unsupported: 0 };
     } },
+    "@/lib/proven-channels": { usesProvenChannelFilter: () => false },
+    "@/lib/proven-channel-eligibility": {
+      GREENHOUSE_FORM_FETCH_BUDGET: 12,
+      buildProvenChannelFactContext: () => ({}),
+      evaluateProvenChannelEligibility: async () => { throw new Error("non-pilot must not evaluate proven channels"); },
+    },
   });
   const stats = await api.runAutoApplyForUser(user.id);
   assert.ok(backfillCalls.length <= 1, "At most one bounded backfill per user");
