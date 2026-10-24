@@ -14,18 +14,20 @@ export interface DailySummaryResult {
   errors: number;
   details: Array<{ email: string; status: string; counts?: string }>;
 }
-type SummaryKind = "portal" | "delivered" | "accepted" | "pending" | "problems" | "unverified" | "prepared";
+type SummaryKind = "portal" | "delivered" | "accepted" | "no_bounce" | "unknown" | "pending" | "problems" | "unverified" | "prepared";
 interface Job { title: string; company: string | null; url: string }
 type UserActivity = Record<SummaryKind, { count: number; jobs: Job[] }>;
-const KINDS: SummaryKind[] = ["portal", "delivered", "accepted", "pending", "problems", "unverified", "prepared"];
+const KINDS: SummaryKind[] = ["portal", "delivered", "accepted", "no_bounce", "unknown", "pending", "problems", "unverified", "prepared"];
 function summaryKind(application: DeliveryEvidenceInput): SummaryKind | null {
   if (application.submittedVia === "mock_demo" || application.submitConfirmation === "DRY_RUN") return null;
   const evidence = deliveryEvidence(application);
   switch (evidence) {
     case "confirmed_portal": return "portal";
-    case "confirmed_email": return "delivered";
+    case "confirmed_email": return "portal";
     case "provider_delivered": return "delivered";
     case "provider_accepted": return "accepted";
+    case "sent_no_bounce": return "no_bounce";
+    case "outcome_unknown": return "unknown";
     case "delivery_problem": return "problems";
     case "legacy_unverified": return "unverified";
     case "pending": return "pending";
@@ -70,7 +72,8 @@ export async function runDailySummary(opts?: { onlyEmail?: string; dryRun?: bool
     });
     const activity: UserActivity = {
       portal: { count: 0, jobs: [] }, delivered: { count: 0, jobs: [] },
-      accepted: { count: 0, jobs: [] }, pending: { count: 0, jobs: [] },
+      accepted: { count: 0, jobs: [] }, no_bounce: { count: 0, jobs: [] },
+      unknown: { count: 0, jobs: [] }, pending: { count: 0, jobs: [] },
       problems: { count: 0, jobs: [] }, unverified: { count: 0, jobs: [] },
       prepared: { count: 0, jobs: [] },
     };
@@ -114,6 +117,8 @@ function renderSummary(user: { email: string; name: string | null; locale: strin
     portal: "Portal submissions with a verified application receipt",
     delivered: "Email delivery confirmed by the provider; no proof of reading",
     accepted: "Emails accepted by the provider; delivery still pending",
+    no_bounce: "Mailbox sends with no bounce; not confirmed employer acceptance",
+    unknown: "Send attempted, outcome unknown, no stored proof",
     pending: "Email attempts awaiting a verifiable outcome",
     problems: "Failed applications, bounced emails or other delivery problems",
     unverified: "Applications with unverified submission or historical records without delivery proof",
@@ -122,6 +127,8 @@ function renderSummary(user: { email: string; name: string | null; locale: strin
     portal: "Candidature su portale con ricevuta verificata",
     delivered: "Email con consegna confermata dal provider; lettura non verificata",
     accepted: "Email accettate dal provider; consegna ancora in attesa",
+    no_bounce: "Invii dalla casella senza rimbalzo; non è un'accettazione dell'azienda",
+    unknown: "Invio tentato, esito sconosciuto, nessuna prova memorizzata",
     pending: "Tentativi email in attesa di un esito verificabile",
     problems: "Candidature fallite, email respinte o altri problemi di consegna",
     unverified: "Candidature non confermate o storico senza prova di consegna",

@@ -27,8 +27,11 @@ export type JourneyStage =
   | "manual"
   | "in_flight"
   | "submitted"
+  | "email_delivered"
   | "sent"
+  | "sent_no_bounce"
   | "sent_unverified"
+  | "outcome_unknown"
   | "unverified"
   | "stopped";
 
@@ -66,9 +69,12 @@ export const STAGE_LABEL: Record<JourneyStage, { it: string; en: string; hint: {
   approved: { it: "Approvate", en: "Approved", hint: { it: "In coda di invio", en: "Queued for sending" } },
   manual: { it: "Da completare", en: "Needs your action", hint: { it: "Risposte, accesso o invio manuale", en: "Answers, sign-in or manual sending" } },
   in_flight: { it: "Invio in corso", en: "Sending", hint: { it: "In attesa dell'esito", en: "Waiting for the outcome" } },
-  submitted: { it: "Inviate, consegna in attesa", en: "Sent, delivery pending", hint: { it: "Accettate dal provider email, consegna non ancora confermata", en: "Accepted by the email provider, delivery not confirmed yet" } },
-  sent: { it: "Inviate con prova", en: "Sent with evidence", hint: { it: "Ricevuta ATS o consegna email confermata", en: "Confirmed ATS receipt or email delivery" } },
+  submitted: { it: "Accettate dal provider", en: "Provider-accepted", hint: { it: "Resend ha accettato il messaggio (id presente). Non è una ricevuta dell'azienda", en: "Resend accepted the message (id stored). Not an employer receipt" } },
+  email_delivered: { it: "Email consegnate", en: "Email delivered", hint: { it: "Evento delivered di Resend: il server destinatario ha accettato. Non è una ricevuta", en: "Resend delivered event: the recipient server accepted. Not a receipt" } },
+  sent: { it: "Inviate con prova ATS", en: "ATS-accepted", hint: { it: "Ricevuta ATS, id candidato o risposta di destinazione memorizzata", en: "ATS receipt, candidate id or stored destination response" } },
+  sent_no_bounce: { it: "Inviate, nessun rimbalzo", en: "Sent, no bounce", hint: { it: "Inviate dalla casella; nessun rimbalzo. Non è un'accettazione confermata", en: "Sent from the mailbox; no bounce. Not confirmed acceptance" } },
   sent_unverified: { it: "Invii registrati, senza conferma", en: "Recorded sends, unconfirmed", hint: { it: "Inviate, senza ricevuta verificabile", en: "Sent, without a verifiable receipt" } },
+  outcome_unknown: { it: "Esito sconosciuto", en: "Outcome unknown", hint: { it: "Invio tentato, senza prova memorizzata", en: "Send attempted, no stored proof" } },
   unverified: { it: "Esito da verificare", en: "Outcome unverified", hint: { it: "Esito incerto, non un invio registrato", en: "Uncertain outcome, not a recorded send" } },
   stopped: { it: "Non inviate", en: "Not sent", hint: { it: "Fermate prima dell'invio", en: "Stopped before sending" } },
 };
@@ -81,9 +87,12 @@ export const STAGE_ROW_LABEL: Record<JourneyStage, { it: string; en: string }> =
   approved: { it: "Approvata", en: "Approved" },
   manual: { it: "Da completare", en: "Needs your action" },
   in_flight: { it: "Invio in corso", en: "Sending" },
-  submitted: { it: "Inviata, consegna in attesa", en: "Sent, delivery pending" },
-  sent: { it: "Consegna confermata", en: "Delivery confirmed" },
+  submitted: { it: "Accettata dal provider", en: "Provider-accepted" },
+  email_delivered: { it: "Email consegnata", en: "Email delivered" },
+  sent: { it: "Accettata dall'ATS", en: "ATS-accepted" },
+  sent_no_bounce: { it: "Inviata, nessun rimbalzo", en: "Sent, no bounce" },
   sent_unverified: { it: "Invii registrati, senza conferma", en: "Recorded send, unconfirmed" },
+  outcome_unknown: { it: "Esito sconosciuto", en: "Outcome unknown" },
   unverified: { it: "Esito da verificare", en: "Outcome unverified" },
   stopped: { it: "Non inviata", en: "Not sent" },
 };

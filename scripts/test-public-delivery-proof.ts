@@ -60,7 +60,9 @@ async function main() {
   assert.equal(proof.providerAccepted, 2);
   assert.equal(proof.deliveryProblems, 3);
   assert.equal(proof.legacyUnverified, 499);
-  assert.equal(proof.pending, 1);
+  assert.equal(proof.pending, 0);
+  assert.equal(proof.outcomeUnknown, 1);
+  assert.equal(proof.sentNoBounce, 0);
   assert.equal(proof.replies, 2, "A foreign-linked Gmail message must not inflate the public response numerator");
   assert.ok(!JSON.stringify(proof).includes("PRIVATE-PROVIDER-ID"));
   assert.ok(!JSON.stringify(proof).includes("owner"));

@@ -7,8 +7,8 @@
  *   draft                 prepared or preparing, waiting on the user (approve / answer questions)
  *   approved              the user approved (explicit consent or auto mode); queued, preparing or held
  *   submitting            a delivery attempt is in flight right now
- *   confirmed_submitted   positive evidence: verified ATS receipt (HTTP/DOM) or mailbox no-bounce / confirmedAt
- *   submitted_unverified  sent or possibly sent, including Resend delivered (not an employer receipt)
+ *   confirmed_submitted   ATS-accepted only: stored receipt / candidate id / destination response (confirmedAt)
+ *   submitted_unverified  sent or possibly sent: provider-accepted, Resend delivered, mailbox no-bounce, unknown outcome
  *   failed                stopped before/without delivery, with a typed reason
  *   needs_manual          no supported automated route: apply URL + prepared documents for the user
  *
@@ -39,7 +39,7 @@ export type ManualReason =
 
 export type EvidenceType =
   | "ats_http_receipt" | "ats_confirmation_page" | "email_delivered" | "email_accepted"
-  | "user_reported" | "legacy_detected_no_receipt" | "none";
+  | "email_no_bounce" | "outcome_unknown" | "user_reported" | "legacy_detected_no_receipt" | "none";
 
 export type NextAction =
   | "none" | "wait" | "approve" | "answer_questions" | "apply_manually" | "verify_on_portal" | "fix_account";
@@ -54,6 +54,7 @@ export interface LifecycleInput {
   startedAt?: Date | null;
   completedAt?: Date | null;
   submittedAt?: Date | null;
+  confirmedAt?: Date | string | null;
   createdAt?: Date;
   retryCount?: number;
   cvPdfPath?: string | null;
@@ -151,7 +152,11 @@ export const MANUAL_MESSAGES: Record<ManualReason, Localized> = {
   daily_cap_held: { it: "Limite giornaliero raggiunto: la candidatura è conservata e non inviata.", en: "Daily limit reached: the application is kept and not sent." },
 };
 
-const iso = (d: Date | null | undefined) => (d instanceof Date && Number.isFinite(+d) ? d.toISOString() : null);
+const iso = (d: Date | string | null | undefined) => {
+  if (d instanceof Date && Number.isFinite(+d)) return d.toISOString();
+  if (typeof d === "string" && Number.isFinite(Date.parse(d))) return new Date(d).toISOString();
+  return null;
+};
 const noEvidence: DeliveryEvidenceRecord = { type: "none", at: null, ats: null, snippet: null, receiptId: null, httpStatus: null };
 
 function screenshotFrom(canaryLog: string | null | undefined): string | null {
@@ -240,20 +245,26 @@ export function deriveApplicationLifecycle(
     excludedFromMetrics = true;
     status = "draft";
     messageOverride = { it: "Anteprima o test: nessuna candidatura inviata.", en: "Preview or test: nothing was sent." };
+  } else if (input.confirmedAt) {
+    status = "confirmed_submitted";
+    evidence = { ...noEvidence, type: "ats_confirmation_page", ats: portal ?? "email", at: iso(input.confirmedAt),
+      snippet: "Destination confirmation stored (ATS receipt email). Not mailbox no-bounce." };
   } else if (input.submittedVia?.startsWith("mailbox_")) {
-    // Invio dalla casella dell'utente: mai "confermato" senza id provider + finestra rimbalzi superata.
     const at = iso(input.submittedAt ?? input.completedAt ?? null);
     if (input.submitConfirmation === "MAILBOX_BOUNCED") {
       status = "failed"; failureReason = "email_bounced";
       evidence = { ...noEvidence, ats: "email", at, snippet: "Bounce (DSN) found in the mailbox thread" };
     } else if (input.submitConfirmation === "MAILBOX_NO_BOUNCE") {
-      status = "confirmed_submitted";
-      evidence = { ...noEvidence, type: "email_delivered", ats: "email", at, snippet: "Sent from the user's mailbox; no bounce in the thread after the observation window" };
+      status = "submitted_unverified"; nextAction = "wait";
+      evidence = { ...noEvidence, type: "email_no_bounce", ats: "email", at,
+        snippet: "Sent from the user's mailbox; no bounce after the observation window. Not confirmed acceptance." };
+      messageOverride = { it: "Inviata dalla tua casella, nessun rimbalzo. Non è una conferma di ricezione dell'azienda.", en: "Sent from your mailbox, no bounce. This is not an employer receipt." };
     } else if (input.submitConfirmation === "MAILBOX_ACCEPTED") {
       status = "submitted_unverified"; nextAction = "wait";
       evidence = { ...noEvidence, type: "email_accepted", ats: "email", at, snippet: "Accepted by the user's mail provider; bounce window still open" };
     } else {
       status = "submitted_unverified"; nextAction = "verify_on_portal";
+      evidence = { ...noEvidence, type: "outcome_unknown", ats: "email", at, snippet: "Mailbox send outcome unknown" };
     }
   } else if (attempt && (input.submittedVia === "email_recruiter" || !input.submittedVia)) {
     const at = iso(attempt.lastEventAt ?? attempt.acceptedAt ?? attempt.createdAt ?? null);
@@ -273,7 +284,7 @@ export function deriveApplicationLifecycle(
       status = "submitting"; nextAction = "wait";
     } else {
       status = "submitted_unverified"; nextAction = "verify_on_portal";
-      evidence = { ...noEvidence, ats: "email", at, snippet: "Email send outcome unknown" };
+      evidence = { ...noEvidence, type: "outcome_unknown", ats: "email", at, snippet: "Email send outcome unknown" };
     }
   } else if (input.status === "success" && portal && hasVerifiedSubmissionReceipt(input.submissionReceiptJson, input.submittedVia)) {
     status = "confirmed_submitted";

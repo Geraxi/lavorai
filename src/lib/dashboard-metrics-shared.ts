@@ -8,7 +8,8 @@
  * No page should calculate its own counts; import these functions instead.
  * 
  * Evidence-backed guarantees:
- * - Confirmed submissions = verified ATS receipt OR confirmedAt (never a Resend delivered webhook)
+ * - Confirmed submissions = ATS-accepted only (stored receipt / candidate id / destination response).
+ *   Never mailbox no-bounce, Resend accepted, or Resend delivered.
  * - Recruiter replies = isHuman=true, excluding security codes, distinct applicationIds
  * - Open opportunities = role-filtered, closedAt=null, last 30d cache
  * - Actions needed = awaiting approval + needs answers (NOT all queued applications)
@@ -34,14 +35,16 @@ export {
 /**
  * Confirmed submissions (evidence-backed only)
  * 
- * Counts applications with verified delivery proof:
+ * Counts ATS-accepted applications only:
  * - ATS HTTP receipt (2xx with application_id) OR
- * - ATS confirmation page (DOM evidence) OR  
- * - confirmedAt (employer receipt)
- * 
+ * - ATS confirmation page (DOM evidence) OR
+ * - confirmedAt (stored destination / ATS receipt email)
+ *
  * Excludes:
- * - status="success" without receipt
- * - Provider accepted or Resend delivered webhook (not an employer receipt)
+ * - MAILBOX_NO_BOUNCE / sent-no-bounce
+ * - Resend accepted or delivered
+ * - outcome-unknown
+ * - status="success" without a stored receipt (limited-evidence label, never upgraded)
  * - Tracking pixels, UNCONFIRMED, mock/demo
  * 
  * Used by: Dashboard, Applications, Analytics

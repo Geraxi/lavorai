@@ -63,6 +63,19 @@ assert.deepEqual([email("bounced").status, email("bounced").failureReason], ["fa
 assert.equal(email("complained").failureReason, "email_complaint");
 assert.equal(email("failed").failureReason, "email_rejected");
 assert.equal(email("unknown").status, "submitted_unverified");
+assert.equal(email("unknown").evidence.type, "outcome_unknown");
+const mailboxNoBounce = s({
+  status: "success", submittedVia: "mailbox_gmail", submitConfirmation: "MAILBOX_NO_BOUNCE",
+  submittedAt: now,
+});
+assert.equal(mailboxNoBounce.status, "submitted_unverified", "no-bounce is never ATS-accepted");
+assert.equal(mailboxNoBounce.evidence.type, "email_no_bounce");
+assert.notEqual(mailboxNoBounce.attemptOutcome, "APPLIED");
+const mailboxThenAts = s({
+  status: "success", submittedVia: "mailbox_gmail", submitConfirmation: "MAILBOX_NO_BOUNCE",
+  submittedAt: now, confirmedAt: now,
+});
+assert.equal(mailboxThenAts.status, "confirmed_submitted", "stored destination response stays ATS-accepted");
 assert.equal(s({ status: "applying", submitConfirmation: SUBMISSION_STARTED, emailAttempts: [{ status: "sending", providerEmailId: null }] }).status, "submitting");
 
 // in-flight and possibly-sent rows

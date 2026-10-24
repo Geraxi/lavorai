@@ -5,7 +5,7 @@ const REPLY_KINDS = ["risposta", "colloquio", "rifiutata"];
 /** Aggregate-only public output. No recipient, candidate, body or receipt payload leaves this helper. */
 export async function getPublicDeliveryProof(now = new Date()) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const totals = { confirmed: 0, confirmedMonth: 0, portalConfirmed: 0, emailDelivered: 0, providerAccepted: 0, legacyUnverified: 0, deliveryProblems: 0, pending: 0, replies: 0 };
+  const totals = { confirmed: 0, confirmedMonth: 0, portalConfirmed: 0, emailDelivered: 0, providerAccepted: 0, sentNoBounce: 0, outcomeUnknown: 0, legacyUnverified: 0, deliveryProblems: 0, pending: 0, replies: 0 };
   const portals = new Map<string, number>();
   let recent: { date: Date; source: string; label: string }[] = [];
   let cursor: string | undefined;
@@ -32,6 +32,8 @@ export async function getPublicDeliveryProof(now = new Date()) {
       if (evidence === "provider_delivered") totals.emailDelivered++;
       if (evidence === "legacy_unverified") totals.legacyUnverified++;
       if (evidence === "delivery_problem") totals.deliveryProblems++;
+      if (evidence === "sent_no_bounce") totals.sentNoBounce++;
+      if (evidence === "outcome_unknown") totals.outcomeUnknown++;
       if (evidence === "pending") totals.pending++;
       if (!isConfirmedDelivery(evidence)) continue;
       totals.confirmed++;

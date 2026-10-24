@@ -90,7 +90,7 @@ export const MAILBOX_STATE_LABEL: Record<MailboxState, { it: string; en: string;
   prepared: { it: "Pronta, da approvare", en: "Prepared", tone: "amber", detail: "Email preparata dalla tua casella: serve la tua approvazione prima dell'invio." },
   approved: { it: "Approvata", en: "Approved", tone: "neutral", detail: "Hai approvato l'invio: partirà dalla tua casella." },
   submitted: { it: "Inviata dalla tua casella", en: "Sent from your mailbox", tone: "neutral", detail: "Il provider ha accettato l'email (id registrato). In attesa della finestra di 48 ore per escludere rimbalzi." },
-  delivery_confirmed: { it: "Consegnata, nessun rimbalzo", en: "Delivered, no bounce", tone: "green", detail: "Accettata dal provider e nessun messaggio di mancato recapito nel thread dopo 48 ore. Non indica lettura né risposta." },
+  delivery_confirmed: { it: "Consegnata, nessun rimbalzo", en: "Delivered, no bounce", tone: "amber", detail: "Accettata dal provider e nessun messaggio di mancato recapito nel thread dopo 48 ore. Non è un'accettazione confermata dall'azienda e non indica lettura né risposta." },
   failed: { it: "Non consegnata", en: "Not delivered", tone: "red", detail: "Invio rifiutato o rimbalzato (mancato recapito rilevato nel thread)." },
   unverified: { it: "Esito non verificabile", en: "Unverified", tone: "amber", detail: "Non possiamo confermare l'esito (timeout del provider o casella non più leggibile). Controlla nella cartella Inviati prima di riprovare." },
 };

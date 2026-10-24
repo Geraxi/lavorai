@@ -23,6 +23,8 @@ export function applicationDeliveryView(app: {
   if (app.confirmedAt) return { phase: "confirmed", label: "Ricevuta ATS confermata", tone: "positive",
     detail: "L'azienda ha inviato una conferma di ricezione. Non è ancora una risposta umana." };
   if (app.submittedVia === "mock_demo" || app.submitConfirmation === "DRY_RUN") return { phase: "pending", label: "Anteprima, non inviata", tone: "neutral", detail: "Materiali dimostrativi, senza invio a un'azienda." };
+  if (app.submitConfirmation === "MAILBOX_NO_BOUNCE") return { phase: "delivered", label: "Inviata, nessun rimbalzo", tone: "neutral",
+    detail: "Inviata dalla casella; nessun rimbalzo nel thread. Non è un'accettazione confermata dall'azienda." };
   if (app.submitConfirmation === "UNCONFIRMED") return { phase: "unconfirmed", label: "Esito da verificare", tone: "warning", detail: "Manca una prova verificabile. Controlla il portale prima di un altro tentativo." };
   if (email && ["failed", "bounced", "complained"].includes(email.status)) {
     return { phase: "failed", label: email.status === "complained" ? "Email segnalata" : "Email non consegnata", tone: "warning",

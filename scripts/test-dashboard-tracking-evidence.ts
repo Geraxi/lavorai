@@ -190,7 +190,8 @@ async function main() {
   assert.equal(kpis.interviews, "1", "Interviews count recruiter/user evidence only");
   assert.equal(kpis.offers, "1", "Manual offer status remains intact");
   assert.equal(stageCounts.sent, 1, "Progress 'sent' uses receipts/confirmedAt only, not Resend delivered");
-  assert.equal(stageCounts.submitted, 2, "Provider-accepted and provider-delivered stay 'sent, delivery pending'");
+  assert.equal(stageCounts.submitted, 1, "Resend accepted is provider-accepted, not ATS-accepted");
+  assert.equal(stageCounts.email_delivered, 1, "Resend delivered stays a distinct email-delivered count");
   assert.equal(uiStatus.STAGE_LABEL.sent_unverified.it, "Invii registrati, senza conferma");
   assert.equal(stageCounts.stopped, 1, "A bounced email is not sent");
   assert.equal(stageCounts.sent_unverified, 198, "Legacy success+submittedAt rows are sent-unverified, not fabricated receipts");

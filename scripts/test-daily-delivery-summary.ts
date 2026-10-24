@@ -77,7 +77,7 @@ async function main() {
     const result = await h.run({ onlyEmail: "owner@example.test" });
     assert.equal(result.sent, 1); assert.equal(result.errors, 0); assert.equal(h.logs(), 1);
     assert.equal(result.details[0].status, "accepted");
-    assert.equal(result.details[0].counts, "portal=1,delivered=1,accepted=2,pending=1,problems=4,unverified=4,prepared=1");
+    assert.equal(result.details[0].counts, "portal=1,delivered=1,accepted=2,no_bounce=0,unknown=0,pending=1,problems=4,unverified=4,prepared=1");
     const payload = h.sent[0];
     assert.ok(payload.subject.includes("14"), "Every application contributes to exactly one bucket; dry/mock excluded");
     assert.ok(!/delivered|consegnat|success|inviate/.test(payload.subject), "The subject cannot imply all activity is delivery");

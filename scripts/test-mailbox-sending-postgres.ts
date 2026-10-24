@@ -134,8 +134,9 @@ async function main() {
     assert.equal((await db.mailboxSend.findUniqueOrThrow({ where: { id: s2 } })).state, "delivery_confirmed");
     assert.equal((await db.mailboxSend.findUniqueOrThrow({ where: { id: s1 } })).state, "submitted");
     const app2b = await db.application.findUniqueOrThrow({ where: { id: a2.id }, include: { job: true } });
-    assert.equal(deriveApplicationLifecycle(app2b).status, "confirmed_submitted");
-    assert.equal(deliveryEvidence(app2b), "confirmed_email");
+    assert.equal(deriveApplicationLifecycle(app2b).status, "submitted_unverified");
+    assert.equal(deriveApplicationLifecycle(app2b).evidence.type, "email_no_bounce");
+    assert.equal(deliveryEvidence(app2b), "sent_no_bounce");
 
     // Rimbalzo tardivo dopo la conferma: l'evidenza negativa vince.
     thread = "bounce";

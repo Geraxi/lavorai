@@ -50,7 +50,7 @@
     "test:privacy-consent": "node --import tsx scripts/test-privacy-consent.ts",
     "test:held-release": "node --import tsx scripts/test-held-application-release.ts",
     "test:meta-consent": "node --import tsx scripts/test-meta-consent.ts",
-    "test:application-lifecycle": "node --import tsx scripts/test-application-lifecycle.ts",
+    "test:application-lifecycle": "node --import tsx scripts/test-application-lifecycle.ts && node --import tsx scripts/test-confirmation-semantics.ts",
     "test:reliability-metrics": "node --import tsx scripts/test-reliability-metrics.ts",
     "test:meta-consent-browser": "node scripts/test-meta-consent-browser.mjs",
     "test:greenhouse-preflight-browser": "node --import tsx scripts/test-greenhouse-preflight-browser.ts",
