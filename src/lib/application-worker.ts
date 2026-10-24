@@ -95,7 +95,7 @@ function applicationDocumentFilename(
 
 export async function processApplication(
   applicationId: string,
-  opts?: { forceRealSubmit?: boolean },
+  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean },
 ): Promise<void> {
   // Binds AI token usage of this run to the application (cost per application).
   return withAiUsageContext({ applicationId }, () => processApplicationRun(applicationId, opts));
@@ -103,7 +103,7 @@ export async function processApplication(
 
 async function processApplicationRun(
   applicationId: string,
-  opts?: { forceRealSubmit?: boolean },
+  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean },
 ): Promise<void> {
   if (applicationsPaused()) return;
   const app = await prisma.application.findUnique({
@@ -416,6 +416,20 @@ async function processApplicationRun(
   // Recheck after document generation; a formerly live posting may close.
   if (!await ensureLiveJobForApplication(applicationId, workToken, app.job.id, app.job.url)) return;
 
+  const { isContractorMarketplace } = await import("@/lib/portal-adapters/safety-stops");
+  if (isContractorMarketplace(resolvedUrl) || isContractorMarketplace(app.job.url)) {
+    await prisma.application.updateMany({
+      where: { id: applicationId, startedAt: workToken, status: { in: ["optimizing", "ready_to_apply", "applying"] } },
+      data: {
+        status: "failed",
+        submitConfirmation: "FAILED:marketplace",
+        errorMessage: "Contractor marketplace: we never create accounts on Mercor, Toptal, Upwork or similar. Nothing was sent.",
+        completedAt: new Date(),
+      },
+    });
+    return;
+  }
+
   // Prova il match sull'URL canonico (Job.url) PRIMA di quello risolto:
   // alcuni ATS (Greenhouse) redirigono a career page custom dove il form
   // non è raggiungibile. L'URL canonico porta al form puro dell'ATS.
@@ -480,6 +494,7 @@ async function processApplicationRun(
       company: app.job.company,
       jobDescription: app.job.description,
       forceRealSubmit: opts?.forceRealSubmit === true,
+      forceDryRun: opts?.forceDryRun === true,
     }).catch((err) => {
       console.error(
         `[worker] ${applicationId} adapter ${adapter.id} threw`,
@@ -618,6 +633,7 @@ async function processApplicationRun(
         where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply", "needs_answers"] } },
         data: {
           status: "needs_answers",
+          submitConfirmation: "NEEDS_ANSWERS",
           pendingQuestionsJson: JSON.stringify(questions),
           errorMessage: `${questions.length} domande del form richiedono la tua risposta. Rispondi per completare questa candidatura dopo i controlli di consenso e validità.`,
           canaryLog:
@@ -648,6 +664,21 @@ async function processApplicationRun(
           status: "failed",
           submitConfirmation: "JOB_CLOSED",
           errorMessage: "Annuncio non più online (chiuso dall'azienda). Nessun invio effettuato.",
+          completedAt: new Date(),
+        },
+      });
+      return;
+    }
+
+    if (["login_required", "not_eligible", "stuck", "unsafe_permissions", "sso_required", "marketplace", "id_verification", "not_a_job_application"].includes(outcome.status)) {
+      const { confirmationForFailureStatus, persistAttemptConfirmation } = await import("@/lib/attempt-outcome");
+      const confirmation = persistAttemptConfirmation(confirmationForFailureStatus(outcome.status) ?? `FAILED:${outcome.status}`);
+      await prisma.application.updateMany({
+        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+        data: {
+          status: "failed",
+          submitConfirmation: confirmation,
+          errorMessage: outcome.error,
           completedAt: new Date(),
         },
       });
@@ -1832,6 +1863,7 @@ interface AdapterSubmitInput {
    *  Usato dal test admin per un singolo invio confermato, senza toccare il
    *  flag globale (che farebbe partire il backlog dal worker locale). */
   forceRealSubmit?: boolean;
+  forceDryRun?: boolean;
 }
 
 async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
@@ -1947,7 +1979,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       jobUrl,
       dryRun: input.forceRealSubmit
         ? false
-        : process.env.PORTAL_SUBMIT_DRY_RUN === "true",
+        : input.forceDryRun === true || process.env.PORTAL_SUBMIT_DRY_RUN === "true",
       answers: input.answers,
       storedAnswers: input.storedAnswers,
       reusableAnswers: input.reusableAnswers,

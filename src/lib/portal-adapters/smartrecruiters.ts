@@ -1,5 +1,6 @@
 import { observeSubmission } from "./submission-proof";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
+import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
 
 /**
  * SmartRecruiters ATS — `jobs.smartrecruiters.com/<company>/<jobId>` o
@@ -176,6 +177,10 @@ export const smartrecruitersAdapter: PortalAdapter = {
       const { prepareRequiredAnswers } = await import("./web-form");
       const unanswered = await prepareRequiredAnswers(page, input);
       if (unanswered) return unanswered;
+      const guarded = await inspectLivePage(page);
+      if (guarded) return guarded;
+      const wrong = await abortIfFieldsWrong(page, input);
+      if (wrong) return wrong;
       if (input.dryRun) {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }

@@ -1,6 +1,7 @@
 import { observeSubmission } from "./submission-proof";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 import { detectBlockingCaptcha } from "./captcha";
+import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
 
 /*
  * Workable ATS: apply.workable.com/<slug>/j/<id>/apply/
@@ -136,6 +137,10 @@ export const workableAdapter: PortalAdapter = {
         return { ok: false, status: "missing_field", error: "CV non risultato attaccato (Workable)." };
       }
 
+      const guarded = await inspectLivePage(page);
+      if (guarded) return guarded;
+      const wrong = await abortIfFieldsWrong(page, input);
+      if (wrong) return wrong;
       if (input.dryRun) {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }

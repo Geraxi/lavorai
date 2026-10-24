@@ -10,6 +10,7 @@ import type {
 import type { Page } from "playwright";
 import { detectBlockingCaptcha } from "./captcha";
 import { uploadSubmitScreenshot } from "./submit-evidence";
+import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
 
 /**
  * Canary helper: estrae lo stato attuale di TUTTI i campi form
@@ -413,6 +414,10 @@ export const greenhouseAdapter: PortalAdapter = {
         };
       }
 
+      const guarded = await inspectLivePage(page);
+      if (guarded) return guarded;
+      const wrong = await abortIfFieldsWrong(page, input);
+      if (wrong) return wrong;
       if (input.dryRun) {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }

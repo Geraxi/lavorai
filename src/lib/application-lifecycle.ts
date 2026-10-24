@@ -21,6 +21,7 @@ import { JOB_CLOSED_HELD_MESSAGE, JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "@/li
 import { isAiCreditFailure } from "@/lib/credit-failure-retry";
 import { DUPLICATE_POSTING_MESSAGE } from "@/lib/posting-key";
 import type { Prisma } from "@prisma/client";
+import { attemptOutcomeLabel, deriveAttemptOutcome, type AttemptOutcome } from "@/lib/attempt-outcome";
 
 export const LIFECYCLE_STATUSES = [
   "draft", "approved", "submitting", "confirmed_submitted", "submitted_unverified", "failed", "needs_manual",
@@ -101,6 +102,8 @@ export interface ApplicationLifecycle {
   retry: RetryDecision;
   /** Diagnostics, demos and dry runs never count in metrics or quotas. */
   excludedFromMetrics: boolean;
+  /** Standardised attempt outcome, or null while no attempt has finished. */
+  attemptOutcome: AttemptOutcome | null;
 }
 
 export interface RetryDecision { automatic: boolean; reason: RetryReason }
@@ -160,7 +163,7 @@ function screenshotFrom(canaryLog: string | null | undefined): string | null {
 
 export function classifyFailure(input: Pick<LifecycleInput, "status" | "submitConfirmation" | "errorMessage">): FailureReason {
   const message = input.errorMessage ?? "";
-  if (input.submitConfirmation === "JOB_CLOSED" || message === JOB_CLOSED_HELD_MESSAGE || /annuncio (?:non più online|chiuso)/i.test(message)) return "job_closed";
+  if (input.submitConfirmation === "JOB_CLOSED" || input.submitConfirmation === "EXPIRED" || message === JOB_CLOSED_HELD_MESSAGE || /annuncio (?:non più online|chiuso)/i.test(message)) return "job_closed";
   if (message === DUPLICATE_POSTING_MESSAGE) return "duplicate_posting";
   if (isAiCreditFailure(message)) return "ai_unavailable";
   if (/^CV utente mancante/i.test(message)) return "cv_missing";
@@ -287,6 +290,12 @@ export function deriveApplicationLifecycle(
     // A delivery boundary may have been crossed: never shown as failed, never retried.
     status = "submitted_unverified"; nextAction = "verify_on_portal";
     evidence = { ...noEvidence, snippet: "Submission attempted; no confirmation captured" };
+  } else if (input.submitConfirmation === "EXPIRED" || input.submitConfirmation === "JOB_CLOSED") {
+    status = "failed"; failureReason = "job_closed";
+  } else if (input.submitConfirmation === "LOGIN_REQUIRED" || input.submitConfirmation === "NOT_ELIGIBLE" || (input.submitConfirmation ?? "").startsWith("FAILED:")) {
+    status = "failed";
+    failureReason = classifyFailure(input);
+    messageOverride = attemptOutcomeLabel(input.submitConfirmation as AttemptOutcome);
   } else if (input.status === "failed" || input.status === "cancelled") {
     status = "failed";
     failureReason = classifyFailure(input);
@@ -340,6 +349,7 @@ export function deriveApplicationLifecycle(
     status, legacyStatus: input.status, failureReason, manualReason, held, evidence, nextAction, label, message, tone,
     manual: status === "needs_manual" ? { applyUrl: safeHttpUrl(input.job?.url ?? null), documents: hasDocs } : null,
     retry, excludedFromMetrics,
+    attemptOutcome: deriveAttemptOutcome(input),
   };
 }
 

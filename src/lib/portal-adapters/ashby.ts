@@ -3,6 +3,7 @@ import { findSubmitButton } from "./submit-button";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 import { detectBlockingCaptcha } from "./captcha";
 import { ashbyContactFromProfile } from "./ashby-contact";
+import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
 
 /**
  * Ashby ATS — `jobs.ashbyhq.com/<company>/<uuid>`.
@@ -249,6 +250,10 @@ export const ashbyAdapter: PortalAdapter = {
         };
       }
 
+      const guarded = await inspectLivePage(page);
+      if (guarded) return guarded;
+      const wrong = await abortIfFieldsWrong(page, input);
+      if (wrong) return wrong;
       if (input.dryRun) {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }

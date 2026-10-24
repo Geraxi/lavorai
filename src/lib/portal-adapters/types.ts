@@ -144,7 +144,15 @@ export type ApplyOutcome =
         | "captcha"
         | "validation_failed"
         | "unknown_error"
-        | "submission_unconfirmed";
+        | "submission_unconfirmed"
+        | "login_required"
+        | "not_eligible"
+        | "stuck"
+        | "unsafe_permissions"
+        | "sso_required"
+        | "marketplace"
+        | "id_verification"
+        | "not_a_job_application";
       error: string;
       canary?: CanaryLog;
     }
