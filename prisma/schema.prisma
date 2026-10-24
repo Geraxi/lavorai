@@ -576,6 +576,10 @@ model Job {
   /// Last successful full-description fetch from a public board API.
   /// Null rows at exactly 2,000 chars are eligible for the bounded backfill.
   descriptionFetchedAt DateTime?
+  /// Failed public-board fetches increment this and set descriptionFetchRetryAt
+  /// so the same 429/timeout rows do not occupy the candidate window forever.
+  descriptionFetchAttempts Int?
+  descriptionFetchRetryAt DateTime?
 
   applications Application[]
   dismissals JobDismissal[]

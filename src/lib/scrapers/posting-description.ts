@@ -119,31 +119,69 @@ export function descriptionFromDetail(source: string, body: string, externalId?:
   return text || null;
 }
 
-export async function fetchPostingDescription(
+export type DescriptionFetchBody = {
+  status: number;
+  body: string | null;
+  retryAfterMs?: number;
+};
+
+export type DescriptionFetchResult =
+  | { ok: true; text: string; url: string }
+  | { ok: false; url: string | null; status?: number; retryAfterMs?: number };
+
+const RETRY_AFTER_CAP_MS = 24 * 60 * 60 * 1000;
+
+/** Parse Retry-After (delta-seconds or HTTP-date) into a bounded delay. */
+export function parseRetryAfterMs(header: string | null | undefined, now = Date.now()): number | undefined {
+  if (!header?.trim()) return undefined;
+  const raw = header.trim();
+  const sec = Number(raw);
+  if (Number.isFinite(sec) && sec >= 0) return Math.min(RETRY_AFTER_CAP_MS, Math.round(sec * 1000));
+  const when = Date.parse(raw);
+  if (Number.isFinite(when)) return Math.max(0, Math.min(RETRY_AFTER_CAP_MS, when - now));
+  return undefined;
+}
+
+export function hostFromPostingUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  try { return new URL(url).host.toLowerCase(); } catch { return ""; }
+}
+
+export async function fetchPostingDescriptionResult(
   job: PostingRef,
-  opts: { fetchImpl?: FetchLike; timeoutMs?: number; bodyCache?: Map<string, Promise<string | null>> } = {},
-): Promise<string | null> {
+  opts: { fetchImpl?: FetchLike; timeoutMs?: number; bodyCache?: Map<string, Promise<DescriptionFetchBody>> } = {},
+): Promise<DescriptionFetchResult> {
   const url = postingDescriptionUrl(job);
-  if (!url) return null;
+  if (!url) return { ok: false, url: null };
   const fetchImpl = opts.fetchImpl ?? fetch;
   try {
-    const load = async () => {
+    const load = async (): Promise<DescriptionFetchBody> => {
       const res = await fetchImpl(url, {
         headers: { "User-Agent": UA, Accept: job.source === "breezy" ? "text/html" : "application/json" },
         redirect: job.source === "breezy" ? "manual" : "follow",
         signal: AbortSignal.timeout(opts.timeoutMs ?? 8_000),
       });
-      if (!res.ok) return null;
-      return res.text();
+      const retryAfterMs = parseRetryAfterMs(res.headers.get("retry-after"));
+      if (!res.ok) return { status: res.status, body: null, retryAfterMs };
+      return { status: res.status, body: await res.text(), retryAfterMs };
     };
-    const body = opts.bodyCache
+    const fetched = opts.bodyCache
       ? await (opts.bodyCache.has(url) ? opts.bodyCache.get(url)! : opts.bodyCache.set(url, load()).get(url)!)
       : await load();
-    if (!body) return null;
-    return descriptionFromDetail(job.source, body, job.externalId);
+    if (!fetched.body) return { ok: false, url, status: fetched.status, retryAfterMs: fetched.retryAfterMs };
+    const text = descriptionFromDetail(job.source, fetched.body, job.externalId);
+    return text ? { ok: true, text, url } : { ok: false, url, status: fetched.status };
   } catch {
-    return null;
+    return { ok: false, url };
   }
+}
+
+export async function fetchPostingDescription(
+  job: PostingRef,
+  opts: { fetchImpl?: FetchLike; timeoutMs?: number; bodyCache?: Map<string, Promise<DescriptionFetchBody>> } = {},
+): Promise<string | null> {
+  const result = await fetchPostingDescriptionResult(job, opts);
+  return result.ok ? result.text : null;
 }
 
 /** Fill empty or legacy-truncated descriptions in place, bounded: at most
@@ -155,11 +193,11 @@ export async function fillMissingDescriptions<T extends PostingRef & { descripti
   const todo = jobs.filter((j) => needsFullDescription(j.description) && DESCRIPTION_SOURCES.has(j.source)).slice(0, Math.max(0, opts.limit));
   const filled: T[] = [];
   const queue = [...todo];
-  const bodyCache = new Map<string, Promise<string | null>>();
+  const bodyCache = new Map<string, Promise<DescriptionFetchBody>>();
   async function worker() {
     for (let j = queue.shift(); j; j = queue.shift()) {
       if (opts.deadline && Date.now() >= opts.deadline) return;
-      const text = await fetchPostingDescription(j, { ...opts, bodyCache });
+      const text = await fetchPostingDescription(j, { fetchImpl: opts.fetchImpl, timeoutMs: opts.timeoutMs, bodyCache });
       if (text) { j.description = text; filled.push(j); }
     }
   }
