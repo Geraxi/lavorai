@@ -14,6 +14,7 @@ import * as drainLimits from "../src/lib/drain-limits";
 import * as sendability from "../src/lib/queue-sendability";
 import * as billing from "../src/lib/billing";
 import { heldMessage } from "../src/lib/application-worker-gates";
+import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "../src/lib/job-liveness";
 
 process.env.APPLICATION_SENDING_MODE = "automatic";
 process.env.APPLICATION_ROLLOUT_START_AT = new Date(Date.now() - 3_600_000).toISOString();
@@ -39,6 +40,7 @@ function load(path: string, extra: Record<string, unknown> = {}) {
     "@/lib/ats-skip-hosts": skipHosts,
     "@/lib/billing": billing,
     "@/lib/application-worker-gates": { heldMessage },
+    "@/lib/job-liveness": { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE },
     "@/lib/db": extra["@/lib/db"] ?? { prisma: {} },
     "@/lib/application-claim": extra["@/lib/application-claim"] ?? {},
     "@/lib/application-worker": extra["@/lib/application-worker"] ?? { processApplication: async () => {} },
@@ -192,7 +194,8 @@ async function testParkUnsendable() {
   const parked = await drain.parkUnsendableQueued({ db: db.prisma, now });
   assert.ok(parked.parked >= 2);
   assert.equal(parked.blockedByReason.privacy_consent_missing, 1);
-  assert.equal(parked.skipped, 1);
+  assert.equal(parked.handoff, 1);
+  assert.equal(parked.skipped ?? 0, 0);
   const held = db.rows.find((r) => r.id === "blocked")!;
   assert.equal(held.status, "queued");
   assert.ok(held.startedAt, "consent hold stamps startedAt so it is not re-claimed");
@@ -279,6 +282,116 @@ async function testAttemptCap() {
   delete process.env.DRAIN_MAX_ATTEMPTS;
 }
 
+async function testClassifyDrainOutcome() {
+  const drain = load("src/lib/queue-drain.ts");
+  assert.equal(drain.classifyDrainOutcome({
+    status: "needs_answers", errorMessage: null, submitConfirmation: "NEEDS_ANSWERS",
+  }), "needsAnswers");
+  assert.equal(drain.classifyDrainOutcome({
+    status: "ready_to_apply", errorMessage: null, submitConfirmation: "CAPTCHA",
+  }), "handoff");
+  assert.equal(drain.classifyDrainOutcome({
+    status: "ready_to_apply", errorMessage: skipHosts.SKIPPED_ATS_MANUAL_MESSAGE, submitConfirmation: null,
+  }), "handoff");
+  assert.equal(drain.classifyDrainOutcome({
+    status: "queued", errorMessage: JOB_LIVENESS_UNKNOWN_HELD_MESSAGE, submitConfirmation: "NOT_SUBMITTED",
+  }), "held");
+  assert.equal(drain.classifyDrainOutcome({
+    status: "success", errorMessage: null, submitConfirmation: "DETECTED_THANK_YOU",
+  }), "sent");
+  assert.equal(drain.classifyDrainOutcome({
+    status: "failed", errorMessage: "boom", submitConfirmation: null,
+  }), "failed");
+}
+
+async function testDrainStopsWhenBelowPerRowBudget() {
+  process.env.DRAIN_QUEUE_BATCH = "5";
+  process.env.DRAIN_PER_ROW_BUDGET_MS = "90000";
+  process.env.WORKER_CONCURRENCY = "1";
+  const apps = ["p1", "p2", "p3"].map((id, i) => row(id, { createdAt: new Date(+freshAt + i * 1000) }));
+  const db = database(apps);
+  const processed: string[] = [];
+  let nowMs = 1_000_000;
+  const DateNow = Date.now;
+  Date.now = () => nowMs;
+  try {
+    const drain = load("src/lib/queue-drain.ts", {
+      "@/lib/db": { prisma: db.prisma },
+      "@/lib/application-claim": {
+        findClaimableQueued: async (limit: number) => db.rows
+          .filter((r) => r.status === "queued" && r.startedAt == null)
+          .sort((x, y) => +x.createdAt - +y.createdAt)
+          .slice(0, limit)
+          .map((r) => r.id),
+        claimApplication: async (id: string) => {
+          const r = db.rows.find((x) => x.id === id);
+          if (!r || r.startedAt) return false;
+          r.startedAt = new Date();
+          return true;
+        },
+      },
+      "@/lib/application-worker": {
+        processApplication: async (id: string) => {
+          processed.push(id);
+          nowMs += 50_000;
+          const r = db.rows.find((x) => x.id === id)!;
+          r.status = "success";
+          r.submitConfirmation = "DETECTED_THANK_YOU";
+        },
+      },
+    });
+    const summary = await drain.drainQueuedApplications({
+      now, startedMs: nowMs, maxDurationMs: 100_000, db: db.prisma,
+    });
+    assert.equal(summary.claimed, 1, "Only the first row fits the per-row budget");
+    assert.equal(summary.sent, 1);
+    assert.deepEqual(processed, ["p1"]);
+    assert.equal(db.rows.filter((r) => r.startedAt).length, 1);
+  } finally {
+    Date.now = DateNow;
+    delete process.env.DRAIN_QUEUE_BATCH;
+    delete process.env.DRAIN_PER_ROW_BUDGET_MS;
+    delete process.env.WORKER_CONCURRENCY;
+  }
+}
+
+async function testDrainSummaryBuckets() {
+  process.env.DRAIN_QUEUE_BATCH = "5";
+  const needs = row("needs");
+  const captcha = row("captcha", { createdAt: new Date(+freshAt + 1) });
+  const held = row("held", { createdAt: new Date(+freshAt + 2) });
+  const db = database([needs, captcha, held]);
+  const drain = load("src/lib/queue-drain.ts", {
+    "@/lib/db": { prisma: db.prisma },
+    "@/lib/application-claim": {
+      findClaimableQueued: async () => ["needs", "captcha", "held"],
+      claimApplication: async (id: string) => {
+        const r = db.rows.find((x) => x.id === id);
+        if (!r || r.startedAt) return false;
+        r.startedAt = new Date();
+        return true;
+      },
+    },
+    "@/lib/application-worker": {
+      processApplication: async (id: string) => {
+        const r = db.rows.find((x) => x.id === id)!;
+        if (id === "needs") { r.status = "needs_answers"; r.submitConfirmation = "NEEDS_ANSWERS"; }
+        if (id === "captcha") { r.status = "ready_to_apply"; r.submitConfirmation = "CAPTCHA"; }
+        if (id === "held") { r.status = "queued"; r.errorMessage = JOB_LIVENESS_UNKNOWN_HELD_MESSAGE; r.submitConfirmation = "NOT_SUBMITTED"; }
+      },
+    },
+  });
+  const summary = await drain.drainQueuedApplications({
+    now, startedMs: Date.now(), maxDurationMs: 300_000, db: db.prisma,
+  });
+  assert.equal(summary.claimed, 3);
+  assert.equal(summary.needsAnswers, 1);
+  assert.equal(summary.handoff, 1);
+  assert.equal(summary.held, 1);
+  assert.equal(summary.failed, 0);
+  delete process.env.DRAIN_QUEUE_BATCH;
+}
+
 async function testSkipListEmailPreferred() {
   assert.equal(skipHosts.compareJobsForAutoApply(
     { url: "https://jobs.ashbyhq.com/a/1", recruiterEmail: "jobs@a.com" },
@@ -294,6 +407,9 @@ async function testSkipListEmailPreferred() {
   await testMultiClaimNoDoubleSend();
   await testDrainBatchAndSummary();
   await testAttemptCap();
+  await testClassifyDrainOutcome();
+  await testDrainStopsWhenBelowPerRowBudget();
+  await testDrainSummaryBuckets();
   await testSkipListEmailPreferred();
   console.log("queue drain: ok");
 })().catch((err) => { console.error(err); process.exitCode = 1; });

@@ -2,6 +2,7 @@ import { answerContinuationIneligibility, answerConfirmationDigest, continuation
 import { continuationGuidance } from "@/lib/application-continuation-guidance";
 import { queueAnswerContinuation } from "@/lib/application-worker-gates";
 import { candidateFacts, resolveCandidateFact } from "@/lib/candidate-facts";
+import { prefersRemoteOrHybrid } from "@/lib/auto-apply-preferences";
 import { parseAnswers } from "@/lib/application-answers";
 import { reuseCvAnswers } from "@/lib/cv-answer-reuse";
 import { NextResponse, type NextRequest } from "next/server";
@@ -32,7 +33,7 @@ export async function GET() {
     }),
     prisma.userAnswer.findMany({ where: { userId: user.id, source: "user" }, select: { label: true, kind: true, answer: true, source: true, answeredAt: true, optionsJson: true } }),
     prisma.cVProfile.findUnique({ where: { userId: user.id } }),
-    prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { applicationAnswersJson: true } }),
+    prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { applicationAnswersJson: true, locationsJson: true } }),
     prisma.user.findUnique({ where: { id: user.id }, select: { email: true, name: true, yearsExperience: true, englishLevel: true, noticePeriod: true, privacyConsentAt: true } }),
   ]);
   const profile = profileRow ? rowToProfile(profileRow) : null;
@@ -48,7 +49,12 @@ export async function GET() {
       if (seen.has(fingerprint)) return [];
       seen.add(fingerprint);
       const explicit = resolveExplicitApplicationAnswer(app.userProvidedAnswersJson, app.id, question);
-      const resolved = explicit.answer || explicit.conflict ? null : resolveCandidateFact(question, { facts, privacyConsentAt: userFacts?.privacyConsentAt });
+      const resolved = explicit.answer || explicit.conflict ? null : resolveCandidateFact(question, {
+        facts,
+        privacyConsentAt: userFacts?.privacyConsentAt,
+        company: app.job.company,
+        workRemote: prefersRemoteOrHybrid(preferences?.locationsJson),
+      });
       const suggestion = resolved?.answer ?? null;
       return [{
         id: `${app.id}:${fingerprint}`, applicationId: app.id, fingerprint,

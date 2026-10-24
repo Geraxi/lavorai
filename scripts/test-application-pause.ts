@@ -15,7 +15,13 @@ function load(path: string, extra: Record<string, any> = {}): any {
     "@/lib/scrapers/ats-companies": { GREENHOUSE_COMPANIES: [], LEVER_COMPANIES: [], ASHBY_COMPANIES: [], WORKABLE_COMPANIES: [], SMARTRECRUITERS_COMPANIES: [] },
     // In-process AsyncLocalStorage binding only (no I/O): token usage attribution.
     "@/lib/ai-usage": { withAiUsageContext: (_context: unknown, run: () => unknown) => run(), recordAiUsage: () => {} },
-    "@/lib/daily-application-cap": { countDailyCapUsage: async () => 0 },
+    "@/lib/daily-application-cap": {
+      countDailyCapUsage: async () => 0,
+      countsTowardQuota: () => false,
+      monthlyQuotaUsageWhere: () => ({}),
+      companyCapUsageWhere: () => ({}),
+      quotaConsumingFilter: () => ({}),
+    },
     ...extra,
   };
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;

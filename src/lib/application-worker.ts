@@ -42,6 +42,7 @@ import {
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { withAiUsageContext } from "@/lib/ai-usage";
+import { prefersRemoteOrHybrid } from "@/lib/auto-apply-preferences";
 
 // Set di nomi azienda con board ATS noto (normalizzati). Usato per evitare
 // il fallback email verso indirizzi scrapati quando esiste un portale
@@ -488,6 +489,7 @@ async function processApplicationRun(
       // Unknown facts and declarations always wait for the candidate.
       autonomous: true,
       preferredCity: firstPreferredCity(app.user.preferences?.locationsJson),
+      workRemote: prefersRemoteOrHybrid(app.user.preferences?.locationsJson),
       jobLocation: app.job.location,
       protectedCategory: app.user.preferences?.protectedCategory ?? null,
       jobTitle: app.job.title,
@@ -1854,6 +1856,7 @@ interface AdapterSubmitInput {
   /** Auto-apply "auto": l'AI risponde da sola alle domande del form. */
   autonomous?: boolean;
   preferredCity?: string | null;
+  workRemote?: boolean | null;
   jobLocation?: string | null;
   protectedCategory?: boolean | null;
   jobTitle?: string | null;
@@ -1989,6 +1992,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       applicationId: input.applicationId, // per naming canary assets
       autonomous: input.autonomous === true,
       preferredCity: input.preferredCity,
+      workRemote: input.workRemote === true,
       jobLocation: input.jobLocation,
       protectedCategory: input.protectedCategory,
       jobTitle: input.jobTitle,

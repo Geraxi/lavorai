@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { quickMatchScore, skillVariants, splitRoles, canonicalRole } from "../src/lib/match-score";
 import { roleTitleTokenGroups, titleTokenWhere } from "../src/lib/role-query";
-import { titleMatchesRole } from "../src/lib/role-match";
+import { isInternshipTitle, titleMatchesAnyRole, titleMatchesRole } from "../src/lib/role-match";
 
 // Synthetic profile with the same SHAPE as a rich real CV that scored 0-1/100:
 // 29 skills (some with parentheses / ".js" / multi-word), a composite "·" title,
@@ -68,7 +68,8 @@ function testRoleQuery() {
   assert.deepEqual(roleTitleTokenGroups(["AI Engineer", "iOS Engineer"]).map((g) => g.join(" ")), ["AI Engineer", "iOS Engineer"]);
   assert.equal(titleMatchesRole("Software Engineer, Trust & Safety", "AI Engineer"), false, "AI Engineer is not any engineer");
   assert.equal(titleMatchesRole("Senior AI Engineer", "AI Engineer"), true);
-  assert.equal(titleMatchesRole("Forward-Deployed AI Engineer - Internship", "AI Engineer"), true);
+  assert.equal(titleMatchesRole("Forward-Deployed AI Engineer - Internship", "AI Engineer"), false, "internships are not a selected AI Engineer role");
+  assert.equal(titleMatchesRole("Forward-Deployed AI Engineer - Internship", "AI Engineer Intern"), true);
   assert.equal(titleMatchesRole("Email Marketing Engineer", "AI Engineer"), false, "acronym is a whole word");
   const aiWhere = JSON.stringify(titleTokenWhere("AI"));
   assert(!aiWhere.includes('"contains":"AI"'), "2-letter tokens are never a bare substring filter");
@@ -93,6 +94,21 @@ function testRoleQuery() {
   ] as const) assert.equal(titleMatchesRole(title, role), want, `${title} ~ ${role}`);
   assert(roleTitleTokenGroups(Array.from({ length: 100 }, (_, i) => `Role${i} Engineer${i}`)).length <= 40, "bounded");
   assert.deepEqual(roleTitleTokenGroups(["  ", "x"]), [], "roles without significant tokens are ignored");
+  assert.equal(isInternshipTitle("Software Engineer Intern – Fullstack"), true);
+  assert.equal(isInternshipTitle("Stage Sviluppatore Full-Stack"), true);
+  assert.equal(isInternshipTitle("Tirocinio Full-Stack Developer"), true);
+  assert.equal(isInternshipTitle("Working Student Full-Stack Developer"), true);
+  assert.equal(isInternshipTitle("Early-Stage Startup Full-Stack Engineer"), false, "early-stage is not an internship");
+  assert.equal(titleMatchesRole("Software Engineer Intern – Fullstack", "Full-Stack Developer"), false);
+  assert.equal(titleMatchesRole("Software Engineer Intern – Fullstack", "Software Engineer Intern"), true);
+  assert.equal(titleMatchesRole("Stage Sviluppatore Full-Stack", "Full-Stack Developer"), false);
+  assert.equal(titleMatchesRole("Tirocinio Full-Stack Developer", "Full-Stack Developer"), false);
+  assert.equal(titleMatchesRole("Working Student Full-Stack Developer", "Full-Stack Developer"), false);
+  assert.equal(titleMatchesRole("Early-Stage Startup Full-Stack Engineer", "Full-Stack Developer"), true);
+  assert.equal(titleMatchesAnyRole("Software Engineer Intern – Fullstack", ["Full-Stack Developer"]), false);
+  assert.equal(titleMatchesAnyRole("Software Engineer Intern – Fullstack", ["Full-Stack Developer", "Software Engineer Intern"]), true);
+  assert.equal(titleMatchesAnyRole("Software Engineer Intern – Fullstack", ["Full-Stack Developer"], "intern"), true);
+  assert.equal(titleMatchesAnyRole("Software Engineer Intern – Fullstack", ["Full-Stack Developer"], "senior"), false);
 }
 
 testScaling();

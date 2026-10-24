@@ -1,13 +1,15 @@
 /**
  * Per-user daily auto-apply cap: only sent / in-flight rows, Europe/Rome day.
- * No network, no real DB, no real submissions.
+ * Handoffs and liveness holds never occupy a slot. No network, no real DB.
  */
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { SKIPPED_ATS_MANUAL_MESSAGE } from "../src/lib/ats-skip-hosts";
 import {
   countsTowardDailyCap,
   countDailyCapUsage,
   dailyCapUsageWhere,
+  QUOTA_LIVENESS_HELD_MESSAGE,
   remainingDailyCap,
   romeDayStart,
 } from "../src/lib/daily-application-cap";
@@ -19,6 +21,8 @@ const HANDOFF = [
   { status: "ready_to_apply", submitConfirmation: "NOT_SUBMITTED" },
   { status: "ready_to_apply", submitConfirmation: "UNCONFIRMED" },
   { status: "ready_to_apply", submitConfirmation: "DRY_RUN" },
+  { status: "ready_to_apply", errorMessage: SKIPPED_ATS_MANUAL_MESSAGE },
+  { status: "queued", errorMessage: QUOTA_LIVENESS_HELD_MESSAGE },
   { status: "failed", submitConfirmation: "JOB_CLOSED" },
   { status: "diagnostic", submitConfirmation: null },
   { status: "cancelled", submitConfirmation: null },
@@ -39,17 +43,37 @@ type Row = {
   createdAt: Date;
   submittedAt: Date | null;
   submitConfirmation: string | null;
+  errorMessage: string | null;
 };
+
+function matchClause(row: Row, clause: Record<string, unknown>): boolean {
+  if ("submittedAt" in clause) return row.submittedAt != null;
+  if ("submitConfirmation" in clause) {
+    const conf = clause.submitConfirmation;
+    if (typeof conf === "string") return row.submitConfirmation === conf;
+    return row.status === clause.status && row.submitConfirmation === (conf as { equals?: string } | undefined);
+  }
+  if ("status" in clause && clause.status && typeof clause.status === "object" && "in" in (clause.status as object)) {
+    return ((clause.status as { in: string[] }).in).includes(row.status);
+  }
+  if ("status" in clause && typeof clause.status === "string") {
+    const conf = clause.submitConfirmation;
+    return row.status === clause.status && (conf === undefined || row.submitConfirmation === conf);
+  }
+  if ("errorMessage" in clause && clause.errorMessage && typeof clause.errorMessage === "object" && "in" in (clause.errorMessage as object)) {
+    return ((clause.errorMessage as { in: string[] }).in).includes(row.errorMessage ?? "");
+  }
+  return false;
+}
 
 function matchesWhere(row: Row, where: ReturnType<typeof dailyCapUsageWhere>): boolean {
   if (row.userId !== where.userId) return false;
   if (row.createdAt < where.createdAt.gte) return false;
-  return where.OR.some((clause) => {
-    if ("submittedAt" in clause) return row.submittedAt != null;
-    if ("submitConfirmation" in clause) {
-      return row.status === clause.status && row.submitConfirmation === clause.submitConfirmation;
-    }
-    return (clause.status.in as string[]).includes(row.status);
+  const and = where.AND as Array<Record<string, unknown>>;
+  return and.every((part) => {
+    if ("OR" in part) return (part.OR as Array<Record<string, unknown>>).some((c) => matchClause(row, c));
+    if ("NOT" in part) return !matchClause(row, part.NOT as Record<string, unknown>);
+    return matchClause(row, part);
   });
 }
 
@@ -74,6 +98,7 @@ function row(patch: Partial<Row> = {}): Row {
     createdAt: todayRome,
     submittedAt: null,
     submitConfirmation: null,
+    errorMessage: null,
     ...patch,
   };
 }
@@ -87,7 +112,7 @@ async function main() {
     assert.equal(countsTowardDailyCap({ status: "ready_to_apply", submittedAt: new Date() }), true);
   });
 
-  await test("handoffs, needs_answers, NOT_SUBMITTED, unconfirmed do not occupy a slot", () => {
+  await test("handoffs, needs_answers, CAPTCHA, skipped-ATS and liveness holds do not occupy a slot", () => {
     for (const r of HANDOFF) assert.equal(countsTowardDailyCap(r), false, JSON.stringify(r));
     assert.equal(countsTowardDailyCap({ status: "ready_to_apply", submitConfirmation: null }), false);
   });
@@ -117,6 +142,18 @@ async function main() {
     const used = await countWith(handoff, "owner", now);
     assert.equal(used, 0);
     assert.equal(remainingDailyCap(used, 5), 5);
+  });
+
+  await test("Ashby skip-list and liveness-held queued rows do not occupy a slot", async () => {
+    const rows = [
+      row({ status: "ready_to_apply", errorMessage: SKIPPED_ATS_MANUAL_MESSAGE }),
+      row({ status: "ready_to_apply", errorMessage: SKIPPED_ATS_MANUAL_MESSAGE }),
+      row({ status: "queued", errorMessage: QUOTA_LIVENESS_HELD_MESSAGE, submitConfirmation: "NOT_SUBMITTED" }),
+      row({ status: "queued" }),
+      row({ status: "success", submittedAt: todayRome }),
+    ];
+    assert.equal(await countWith(rows, "owner", now), 2);
+    assert.equal(remainingDailyCap(2, 5), 3);
   });
 
   await test("5 in-flight/sent rows fill a dailyCap of 5", async () => {
@@ -150,15 +187,24 @@ async function main() {
   await test("where clause is Rome-bounded and omits handoff statuses", () => {
     const where = dailyCapUsageWhere("owner", now);
     assert.equal(+where.createdAt.gte, +romeDayStart(now));
-    assert.ok(where.OR.some((c) => "status" in c && "in" in (c as { status: { in: string[] } }).status
-      && (c as { status: { in: string[] } }).status.in.includes("queued")));
-    assert.ok(!JSON.stringify(where).includes("needs_answers"));
-    assert.ok(!JSON.stringify(where).includes("CAPTCHA"));
+    const include = JSON.stringify(where.AND);
+    assert.ok(include.includes("queued"));
+    assert.ok(!include.includes("needs_answers"));
+    assert.ok(include.includes("CAPTCHA"));
+    assert.ok(include.includes(SKIPPED_ATS_MANUAL_MESSAGE.slice(0, 20)));
+    assert.ok(include.includes(QUOTA_LIVENESS_HELD_MESSAGE.slice(0, 20)));
+    assert.match(
+      readFileSync(new URL("../src/lib/job-liveness.ts", import.meta.url), "utf8"),
+      new RegExp(QUOTA_LIVENESS_HELD_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
   });
 
   await test("auto-apply, apply, apply-batch and sidebar use the shared counter", () => {
     const cron = readFileSync(new URL("../src/lib/auto-apply-cron.ts", import.meta.url), "utf8");
     assert.match(cron, /countDailyCapUsage/);
+    assert.match(cron, /countsTowardQuota/);
+    assert.match(cron, /monthlyQuotaUsageWhere/);
+    assert.match(cron, /companyCapUsageWhere/);
     assert.doesNotMatch(cron, /createdAt: \{ gte: todayStart \}/);
     for (const file of [
       "../src/app/api/applications/apply/route.ts",

@@ -17,7 +17,7 @@ const DESCRIPTION_BACKFILL_PER_RUN = 60;
 const DESCRIPTION_BACKFILL_BUDGET_MS = 20_000;
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
-import { dailyApplicationLimit, effectiveTier, getLimits, FREE_QUOTA_NON_CONSUMING_STATUSES, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
+import { dailyApplicationLimit, effectiveTier, getLimits, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { runSelfHeal } from "@/lib/auto-apply-self-heal";
 import { recordConversionEvent } from "@/lib/conversion-events";
@@ -25,7 +25,7 @@ import { AnalyticsEvent } from "@/lib/analytics";
 import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
 import { sortByPaidPriority } from "@/lib/paid-priority";
 import { compareJobsForAutoApply, requiresManualAtsHandoff, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
-import { countDailyCapUsage } from "@/lib/daily-application-cap";
+import { companyCapUsageWhere, countDailyCapUsage, countsTowardQuota, monthlyQuotaUsageWhere, quotaConsumingFilter } from "@/lib/daily-application-cap";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -414,7 +414,10 @@ async function processUser(
     const limits = getLimits(tier);
     if (limits.monthlyApplications !== Infinity) {
       const monthCount = await prisma.application.count({
-        where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { notIn: ["failed", "diagnostic"] } },
+        where: monthlyQuotaUsageWhere(
+          user.id,
+          monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null),
+        ),
       });
       const remainingMonth = Math.max(
         0,
@@ -432,7 +435,7 @@ async function processUser(
       return;
     }
     const weekCount = await prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: freeQuotaWindowStart() }, status: { notIn: FREE_QUOTA_NON_CONSUMING_STATUSES } },
+      where: { userId: user.id, createdAt: { gte: freeQuotaWindowStart() }, ...quotaConsumingFilter() },
     });
     remainingToday = Math.max(0, freeWeeklyApplyQuota() - weekCount);
     if (remainingToday === 0) {
@@ -698,11 +701,7 @@ async function processUser(
   const COMPANY_CAP_30D = 6;
   const recentByCompany30d = await prisma.application.groupBy({
     by: ["jobId"],
-    where: {
-      userId: user.id,
-      createdAt: { gte: new Date(Date.now() - 30 * 86400_000) },
-      status: { in: ["success", "queued", "optimizing", "applying", "ready_to_apply"] },
-    },
+    where: companyCapUsageWhere(user.id, new Date(Date.now() - 30 * 86400_000)),
     _count: { _all: true },
   });
   const recentJobIds30d = recentByCompany30d.map((r) => r.jobId);
@@ -725,6 +724,7 @@ async function processUser(
   // tocchino 5 aziende diverse quando possibile.
   const usedThisRun = new Set<string>();
   let enqueued = 0;
+  let handoffs = 0;
   for (const job of jobs) {
     if (enqueued >= remainingToday) break;
     const cKey = (job.company ?? "").toLowerCase();
@@ -815,6 +815,7 @@ async function processUser(
 
     const portal = portalOf(job.url);
     const manualAts = requiresManualAtsHandoff(job);
+    if (manualAts && !isHybrid && handoffs >= PER_USER_RUN_CAP) continue;
 
     try {
       const app = await prisma.application.create({
@@ -838,12 +839,16 @@ async function processUser(
       // Recruiter email keeps the email path. Otherwise mark as manual handoff.
       if (manualAts && !isHybrid) {
         stats.skippedManualAts++;
+        handoffs++;
       } else if (!isHybrid) {
         await enqueueApplication(app.id);
         stats.applicationsEnqueued++;
       } else {
         stats.applicationsAwaitingConsent++;
       }
+      // Handoffs (skip-list ATS, CAPTCHA) and later liveness holds must not
+      // consume the per-user daily slot, 30-day company cap, or session target.
+      if (!countsTowardQuota(app)) continue;
       enqueued++;
       // Marca azienda usata nel run (diversificazione)
       const usedKey = (job.company ?? "").toLowerCase();
@@ -923,6 +928,7 @@ async function processUser(
 
       try {
         const manualAts = requiresManualAtsHandoff(job);
+        if (manualAts && !isHybrid && handoffs >= PER_USER_RUN_CAP) continue;
         const app = await prisma.application.create({
           data: {
             userId: user.id,
@@ -937,12 +943,14 @@ async function processUser(
         });
         if (manualAts && !isHybrid) {
           stats.skippedManualAts++;
+          handoffs++;
         } else if (!isHybrid) {
           await enqueueApplication(app.id);
           stats.applicationsEnqueued++;
         } else {
           stats.applicationsAwaitingConsent++;
         }
+        if (!countsTowardQuota(app)) continue;
         enqueued++;
         if (cKey2) {
           companyCount30d.set(cKey2, (companyCount30d.get(cKey2) ?? 0) + 1);

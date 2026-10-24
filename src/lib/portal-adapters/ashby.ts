@@ -4,6 +4,7 @@ import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 import { detectBlockingCaptcha } from "./captcha";
 import { ashbyContactFromProfile } from "./ashby-contact";
 import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
+import { fillPhoneCountryCode } from "./phone-country-fill";
 
 /**
  * Ashby ATS — `jobs.ashbyhq.com/<company>/<uuid>`.
@@ -150,6 +151,7 @@ export const ashbyAdapter: PortalAdapter = {
           .first()
           .fill(contact.phone)
           .catch(() => void 0);
+        await fillPhoneCountryCode(page, contact.phone);
       }
 
       if (contact.linkedinUrl) {

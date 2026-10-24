@@ -53,7 +53,7 @@ const factualLabels = [
   "Are you authorized to work in Italy?", "Are you authorized to work in the UK?",
   "Will you require sponsorship?", "Are you an EU citizen?", "Are you over 18?",
   "Have you been convicted of a crime?", "Do you hold security clearance?",
-  "Have you previously worked for this company?", "Do you have family working here?",
+  "Do you have family working here?",
   "Do you hold a professional license?", "Are you bound by a non-compete?",
   "How many years of experience do you have with Python?", "Years of React experience",
   "Expected monthly salary (USD)", "Current annual salary (EUR)", "Expected salary",
@@ -67,6 +67,43 @@ async function testUnknownFacts() {
   const result = await answerer.answerOffline(context, fields);
   assert.equal(result.answers.size, 0, "Every unknown factual answer remains pending, even in autonomous mode");
   assert.equal(result.given.length, 0);
+  const unknownEmployer = await answerer.answerOffline(context, [
+    { idx: 80, label: "Have you previously worked for this company?", kind: "select", options: ["Yes", "No"] },
+    { idx: 81, label: "Have you previously been employed by Past Employer?", kind: "select", options: ["Yes", "No"] },
+    { idx: 82, label: "Have you worked at a startup before?", kind: "select", options: ["Yes", "No"] },
+    { idx: 83, label: "Have you worked at Google?", kind: "select", options: ["Yes", "No"] },
+  ]);
+  assert.equal(unknownEmployer.answers.get(80), undefined, "this company without an application employer goes to the user");
+  assert.equal(unknownEmployer.answers.get(81), undefined, "named other company is not auto-answered");
+  assert.equal(unknownEmployer.answers.get(82), undefined, "startup category is not this employer");
+  assert.equal(unknownEmployer.answers.get(83), undefined, "Google is not this employer");
+  const thisEmployer = await answerer.answerOffline({ ...context, company: "Past Employer" }, [
+    { idx: 80, label: "Have you previously worked for this company?", kind: "select", options: ["Yes", "No"] },
+    { idx: 81, label: "Have you previously been employed by Past Employer?", kind: "select", options: ["Yes", "No"] },
+  ]);
+  assert.equal(thisEmployer.answers.get(80), "Yes", "this company matches work history");
+  assert.equal(thisEmployer.answers.get(81), "Yes", "named this employer matches work history");
+  const otherEmployer = await answerer.answerOffline({ ...context, company: "Acme" }, [
+    { idx: 80, label: "Have you previously worked for this company?", kind: "select", options: ["Yes", "No"] },
+    { idx: 81, label: "Have you previously been employed by Past Employer?", kind: "select", options: ["Yes", "No"] },
+    { idx: 82, label: "Have you worked at a fintech company?", kind: "select", options: ["Yes", "No"] },
+  ]);
+  assert.equal(otherEmployer.answers.get(80), "No", "this company with no history match is No");
+  assert.equal(otherEmployer.answers.get(81), undefined, "Past Employer is not Acme");
+  assert.equal(otherEmployer.answers.get(82), undefined, "fintech category is not this employer");
+  const acme = { ...context, company: "Acme" };
+  assert.equal(facts.resolveCandidateFact({ label: "Why do you want to work at this company?", kind: "text" }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "What excites you about our company?", kind: "textarea" }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "How did you hear about our company?", kind: "text" }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "Do you know anyone who works at this company?", kind: "text" }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "Do you know anyone who works at this company?", kind: "select", options: ["Yes", "No"] }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "Have you previously worked for Stripe?", kind: "text" }, acme).answer, null);
+  const stripeNamed = await answerer.answerOffline({ ...context, company: "Stripe", mostRecentEmployer: "Stripe", employers: ["Stripe"] }, [
+    { idx: 76, label: "Have you previously worked for Stripe?", kind: "select", options: ["Yes", "No"] },
+    { idx: 77, label: "Have you ever been employed by Stripe or a Stripe affiliate?", kind: "select", options: ["Yes", "No"] },
+  ]);
+  assert.equal(stripeNamed.answers.get(76), "Yes");
+  assert.equal(stripeNamed.answers.get(77), "Yes");
   assert.equal(aiCalls, 0, "Factual screening questions never go to AI");
   const missing = await answerer.answerOffline({ autonomous: true }, [
     { idx: 50, label: "Expected annual salary (EUR)", kind: "text" },

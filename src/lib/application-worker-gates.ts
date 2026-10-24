@@ -7,7 +7,7 @@ import { applicationsPaused } from "@/lib/application-pause";
 import { applicationRolloutConfig, rolloutApplicationIneligibility, ROLLOUT_BUDGET_HELD_MESSAGE } from "@/lib/application-rollout";
 import { reserveSubmissionBudget, submissionSubjectKey } from "@/lib/application-submission-budget";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { autoApplyPreferenceMismatch, parsePreferenceList, isAvoidedCompany } from "@/lib/auto-apply-preferences";
+import { autoApplyPreferenceMismatch, parsePreferenceList, isAvoidedCompany, prefersRemoteOrHybrid } from "@/lib/auto-apply-preferences";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { titleMatchesAnyRole } from "@/lib/role-match";
@@ -541,7 +541,12 @@ export async function queueAnswerContinuation(input: {
       if (!question) return "questions_invalid";
       const explicit = resolveExplicitApplicationAnswer(row.userProvidedAnswersJson, row.id, question);
       if (explicit.conflict) return "answer_conflict";
-      const fact = explicit.answer ? null : resolveCandidateFact(question, { facts, privacyConsentAt: row.user.privacyConsentAt });
+      const fact = explicit.answer ? null : resolveCandidateFact(question, {
+        facts,
+        privacyConsentAt: row.user.privacyConsentAt,
+        company: row.job.company,
+        workRemote: prefersRemoteOrHybrid(row.user.preferences?.locationsJson),
+      });
       const answer = explicit.answer ?? fact?.answer;
       if (!answer || !completesApplicationQuestion(question, answer)) return fact?.conflict ? "answer_conflict" : "answers_incomplete";
     }
