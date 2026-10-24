@@ -18,6 +18,7 @@ export const stuckAtsSelect = {
   id: true, userId: true, jobId: true, status: true, errorMessage: true, portal: true, startedAt: true,
   submittedAt: true, submittedVia: true, submitConfirmation: true, canaryLog: true,
   answersUsedJson: true, viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
+  submitStartedAt: true,
   job: { select: { id: true, url: true, closedAt: true } },
 } as const;
 
@@ -26,6 +27,7 @@ export type StuckAtsRow = {
   startedAt: Date | null;
   submittedAt: Date | null; submittedVia: string | null; submitConfirmation: string | null; canaryLog: string | null;
   answersUsedJson: string | null; viewedAt: Date | null; lastReplyAt: Date | null; replyCount: number; userStatus: string | null;
+  submitStartedAt?: Date | null;
   job: { id: string; url: string; closedAt: Date | null };
 };
 

@@ -15,6 +15,7 @@ import * as sendability from "../src/lib/queue-sendability";
 import * as billing from "../src/lib/billing";
 import { heldMessage } from "../src/lib/application-worker-gates";
 import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "../src/lib/job-liveness";
+import * as applicationLease from "../src/lib/application-lease";
 
 process.env.APPLICATION_SENDING_MODE = "automatic";
 process.env.APPLICATION_ROLLOUT_START_AT = new Date(Date.now() - 3_600_000).toISOString();
@@ -39,7 +40,8 @@ function load(path: string, extra: Record<string, unknown> = {}) {
     "@/lib/queue-sendability": sendability,
     "@/lib/ats-skip-hosts": skipHosts,
     "@/lib/billing": billing,
-    "@/lib/application-worker-gates": { heldMessage, hasPotentialSubmission: (row: any) => !!(row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus || row.canaryLog || row.answersUsedJson || (row.submitConfirmation && !["NOT_SUBMITTED", "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation))) },
+    "@/lib/application-lease": applicationLease,
+    "@/lib/application-worker-gates": { heldMessage, hasPotentialSubmission: (row: any) => !!(row.submitStartedAt || row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus || row.canaryLog || row.answersUsedJson || (row.submitConfirmation && !["NOT_SUBMITTED", "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation))) },
     "@/lib/job-liveness": { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE },
     "@/lib/held-application-release": extra["@/lib/held-application-release"] ?? { releaseUnverifiableLivenessHolds: async () => 0 },
     "@/lib/db": extra["@/lib/db"] ?? { prisma: {} },
@@ -104,7 +106,8 @@ function freeUser(overrides: Record<string, unknown> = {}) {
 function row(id: string, overrides: Record<string, unknown> = {}) {
   return {
     id, userId: "paid", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
-    answerContinuationJson: null, retryCount: 0, startedAt: null, completedAt: null,
+    answerContinuationJson: null, retryCount: 0, startedAt: null, leaseToken: null, leaseExpiresAt: null,
+    submitStartedAt: null, completedAt: null,
     submittedAt: null, submittedVia: null, submitConfirmation: null, canaryLog: null,
     answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
     errorMessage: null, job: { url: `https://boards.greenhouse.io/acme/jobs/${id}`, recruiterEmail: null },
@@ -221,6 +224,7 @@ async function testMultiClaimNoDoubleSend() {
   ]);
   assert.equal(results.filter(Boolean).length, 2, "Each row is claimed exactly once");
   assert.ok(db.rows.every((r) => r.startedAt), "Both claimed rows have an owner token");
+  assert.ok(db.rows.every((r) => typeof r.leaseToken === "string" && r.leaseExpiresAt instanceof Date), "Claim issues a live lease");
 }
 
 async function testDrainBatchAndSummary() {
@@ -421,7 +425,11 @@ async function testExpiredQueuedClaimRecovery() {
     startedAt: stale,
     canaryLog: '{"submitHttpStatus":200}',
   });
-  const freshClaim = row("fresh-claim", { startedAt: recent });
+  const freshClaim = row("fresh-claim", {
+    startedAt: recent,
+    leaseToken: "live-token",
+    leaseExpiresAt: new Date(Date.now() + 10 * 60_000),
+  });
   const oldRow = row("historical", { createdAt: historical, startedAt: stale });
   const expired = row("expired", { startedAt: stale, retryCount: 0 });
   const almostOut = row("last-try", { startedAt: stale, retryCount: 2 });
@@ -441,6 +449,7 @@ async function testExpiredQueuedClaimRecovery() {
   assert.ok(db.rows.find((r) => r.id === "held-quota")!.startedAt, "quota holds stay held");
   assert.equal(+db.rows.find((r) => r.id === "continuation")!.startedAt!, +stale);
   assert.ok(db.rows.find((r) => r.id === "fresh-claim")!.startedAt);
+  assert.equal(db.rows.find((r) => r.id === "fresh-claim")!.leaseToken, "live-token", "live lease is not stolen");
   assert.equal(+db.rows.find((r) => r.id === "historical")!.startedAt!, +stale, "pre-cutoff rows stay frozen");
   assert.equal(db.rows.length, 7, "recovery never inserts a duplicate application");
 

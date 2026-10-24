@@ -30,7 +30,8 @@ function makeRow(url: string, consentGrantedAt: Date | null, token: Date) {
   return {
     id: "app1", userId: "u1", jobId: "j1", sessionId: null, session: null, cvDocxPath: null,
     createdAt: new Date(now - 60 * 60_000), consentGrantedAt, retryCount: 0,
-    status: "applying", startedAt: token, completedAt: null, submittedAt: null, submittedVia: null,
+    status: "applying", startedAt: token, leaseToken: null, leaseExpiresAt: null, submitStartedAt: null,
+    completedAt: null, submittedAt: null, submittedVia: null,
     submitConfirmation: "SUBMISSION_STARTED", submissionReceiptJson: null, answerContinuationJson: null as string | null,
     pendingQuestionsJson: null as string | null, userProvidedAnswersJson: null as string | null, canaryLog: null,
     answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null, errorMessage: null as string | null,

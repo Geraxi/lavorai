@@ -9,7 +9,8 @@ process.env.APPLICATION_SENDING_MODE = "manual_only";
 process.env.APPLICATION_ROLLOUT_START_AT = new Date(+now - 60000).toISOString();
 process.env.APPLY_GLOBAL_DAILY_CAP = "10";
 const base = {
-  id: "app", userId: "user", jobId: "job", sessionId: "round", status: "queued", startedAt: null, consentGrantedAt: now, createdAt: now, retryCount: 0,
+  id: "app", userId: "user", jobId: "job", sessionId: "round", status: "queued", startedAt: null,
+  leaseToken: null, leaseExpiresAt: null, submitStartedAt: null, consentGrantedAt: now, createdAt: now, retryCount: 0,
   submissionReceiptJson: null, userProvidedAnswersJson: null, answerContinuationJson: null, pendingQuestionsJson: null, completedAt: null,
   cvDocxPath: null, submittedAt: null, submittedVia: null, submitConfirmation: null,
   canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
@@ -52,7 +53,7 @@ assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, prefere
 assert.equal(hasPotentialSubmission(base), false);
 for (const patch of [{ submitConfirmation: SUBMISSION_STARTED }, { submitConfirmation: "UNCONFIRMED" },
   { submittedAt: now }, { submittedVia: "email_recruiter" }, { canaryLog: "{}" },
-  { answersUsedJson: "[]" }, { replyCount: 1 }, { viewedAt: now }]) {
+  { answersUsedJson: "[]" }, { replyCount: 1 }, { viewedAt: now }, { submitStartedAt: now }]) {
   assert.equal(hasPotentialSubmission({ ...base, ...patch }), true);
 }
 assert.equal(hasPotentialSubmission({ ...base, submitConfirmation: NOT_SUBMITTED, canaryLog: "{}" }), false);
@@ -79,12 +80,16 @@ assert(worker.includes('notSubmitted("failed", "recruiter_email_not_sent")'), "E
 assert(worker.includes('notSubmitted("needs_user", "recruiter_email_acceptance_unknown")'), "Uncertain email must persist proof-of-send");
 const postgresFailureVm = readFileSync(new URL("./test-send-receive-postgres.ts", import.meta.url), "utf8");
 assert(postgresFailureVm.includes("notSubmitted,"), "Postgres email-failure VM must bind notSubmitted");
-assert(worker.includes('status: "optimizing", startedAt: workToken'));
+assert(worker.includes("...liveLeaseFields(workToken)"));
+assert(worker.includes("...renewLeaseData()"));
 assert(!worker.includes("MAX_ATTEMPTS"), "Unknown portal outcomes must not be retried");
 assert(!worker.includes("markSessionSentSuccess"), "Success accounting must be atomic with the application result");
 assert(!worker.includes('submitConfirmation: "DETECTED_LEGACY"'), "A click is not a confirmed receipt");
 const claim = readFileSync(new URL("../src/lib/application-claim.ts", import.meta.url), "utf8");
-assert(claim.includes('["applying", "submitting"].includes(app.status) || hasPotentialSubmission(app)'));
+assert(claim.includes('["applying", "submitting"].includes(app.status)'));
+assert(claim.includes("hasPotentialSubmission(app)"));
+assert(claim.includes("expiredLeaseWhere"));
+assert(claim.includes("submitStartedAt"));
 assert(claim.includes('status: app.status, startedAt: app.startedAt, completedAt: null'));
 const healing = readFileSync(new URL("../src/lib/auto-apply-self-heal.ts", import.meta.url), "utf8");
 assert(healing.includes("await recoverStuckApplications()"));

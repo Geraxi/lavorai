@@ -14,6 +14,7 @@ const noAccess = new Proxy({}, { get() { forbiddenAccesses++; throw new Error("U
 const json = (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 });
 import * as liveness from "../src/lib/auto-apply-liveness-gate";
 import * as paidPriority from "../src/lib/paid-priority";
+import * as applicationLease from "../src/lib/application-lease";
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-rollout": rollout,
@@ -52,8 +53,9 @@ function load(path: string, extra: Record<string, any> = {}) {
     "@/lib/queue-drain": extra["@/lib/queue-drain"] ?? {},
     "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "unknown", reason: "test_no_network" }), markJobClosed: async () => {}, JOB_CLOSED_HELD_MESSAGE: "closed", JOB_LIVENESS_UNKNOWN_HELD_MESSAGE: "Disponibilità dell'annuncio non verificabile: invio sospeso, nuovo controllo più tardi." },
     "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
+    "@/lib/application-lease": extra["@/lib/application-lease"] ?? applicationLease,
     "@/lib/application-worker-gates": extra["@/lib/application-worker-gates"] ?? {
-      hasPotentialSubmission: (row: any) => !!(row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus
+      hasPotentialSubmission: (row: any) => !!(row.submitStartedAt || row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus
         || row.canaryLog || row.answersUsedJson
         || (row.submitConfirmation && !["NOT_SUBMITTED", "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation))),
     },
@@ -81,7 +83,8 @@ function enable() {
 }
 function row(id: string, overrides: Record<string, any> = {}) {
   return { id, userId: "owner", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
-    answerContinuationJson: null, retryCount: 0, startedAt: null, completedAt: null, submittedAt: null, submittedVia: null,
+    answerContinuationJson: null, retryCount: 0, startedAt: null, leaseToken: null, leaseExpiresAt: null,
+    submitStartedAt: null, completedAt: null, submittedAt: null, submittedVia: null,
     submitConfirmation: null, canaryLog: null, answersUsedJson: null, viewedAt: null,
     lastReplyAt: null, replyCount: 0, userStatus: null, job: { id: `job-${id}`, url: `https://jobs.example.invalid/${id}` }, ...overrides };
 }

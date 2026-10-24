@@ -11,6 +11,7 @@ import {
   claimUserSelect, HELD_MESSAGE_PREFIX, isQueuedRowSendable, loadQuotaUsageMaps,
   MAX_ATTEMPTS_MESSAGE_PREFIX, usageFor,
 } from "@/lib/queue-sendability";
+import { expiredLeaseWhere, issueApplicationLease } from "@/lib/application-lease";
 
 /**
  * Presa in carico atomica di una candidatura in coda, indipendente da Redis.
@@ -56,21 +57,26 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
   if (!app || rolloutApplicationIneligibility(app)) return false;
   if (app.answerContinuationJson) {
     if (app.status !== "queued" || answerContinuationIneligibility(app, "queued")) return false;
+    const lease = issueApplicationLease();
     const result = await prisma.application.updateMany({ where: {
       id: applicationId, status: "queued", startedAt: app.startedAt,
       answerContinuationJson: app.answerContinuationJson, consentGrantedAt: app.consentGrantedAt,
       submitConfirmation: { in: ["NOT_SUBMITTED", "NEEDS_ANSWERS"] }, completedAt: null, submittedAt: null, submittedVia: null,
       submissionReceiptJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
-    }, data: { status: "answers_claimed" } });
+      submitStartedAt: null,
+      OR: [{ leaseToken: null }, { leaseExpiresAt: { lte: lease.startedAt } }],
+    }, data: { status: "answers_claimed", leaseToken: lease.leaseToken, leaseExpiresAt: lease.leaseExpiresAt } });
     return result.count === 1;
   }
+  const lease = issueApplicationLease();
   const r = await prisma.application.updateMany({
-    where: { id: applicationId, status: "queued", startedAt: null, completedAt: null,
+    where: { id: applicationId, status: "queued", startedAt: null, leaseToken: null, completedAt: null,
       createdAt: app.createdAt, consentGrantedAt: app.consentGrantedAt, retryCount: app.retryCount,
       submittedAt: null, submittedVia: null, submitConfirmation: null,
       canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+      submitStartedAt: null,
     },
-    data: { startedAt: new Date() },
+    data: lease,
   });
   return r.count === 1;
 }
@@ -92,7 +98,8 @@ export async function recoverStuckApplications(): Promise<number> {
 }
 
 const stuckEvidenceSelect = {
-  id: true, status: true, startedAt: true, retryCount: true, errorMessage: true,
+  id: true, status: true, startedAt: true, leaseToken: true, leaseExpiresAt: true,
+  submitStartedAt: true, retryCount: true, errorMessage: true,
   createdAt: true, submittedAt: true, submittedVia: true, submitConfirmation: true,
   canaryLog: true, answersUsedJson: true, viewedAt: true, lastReplyAt: true,
   replyCount: true, userStatus: true, answerContinuationJson: true,
@@ -103,12 +110,10 @@ export async function recoverExpiredQueuedClaims(now = new Date()): Promise<numb
   if (applicationsPaused()) return 0;
   const config = applicationRolloutConfig(now);
   if (!config.enabled || !config.startedAt) return 0;
-  const stale = new Date(+now - STALE_CLAIM_MS);
   const stuck = await prisma.application.findMany({
     where: {
       status: "queued",
-      startedAt: { lt: stale },
-      completedAt: null,
+      ...expiredLeaseWhere(now),
       createdAt: { gt: config.startedAt, lte: now },
       answerContinuationJson: null,
       submittedAt: null,
@@ -122,13 +127,20 @@ export async function recoverExpiredQueuedClaims(now = new Date()): Promise<numb
   const maxAttempts = maxDrainAttempts();
   for (const app of stuck) {
     if (isIntentionalQueuedHold(app.errorMessage)) continue;
-    if (hasPotentialSubmission(app)) {
+    const reclaimWhere = {
+      id: app.id, status: "queued" as const, startedAt: app.startedAt, completedAt: null,
+      ...expiredLeaseWhere(now),
+    };
+    if (app.submitStartedAt || hasPotentialSubmission(app)) {
       const changed = await prisma.application.updateMany({
-        where: { id: app.id, status: "queued", startedAt: app.startedAt, completedAt: null },
+        where: reclaimWhere,
         data: {
           status: "ready_to_apply",
           submitConfirmation: "UNCONFIRMED",
-          errorMessage: "Invio interrotto con esito non verificato. Verifica prima di ritentare per evitare un doppio invio.",
+          startedAt: null, leaseToken: null, leaseExpiresAt: null,
+          errorMessage: app.submitStartedAt
+            ? "Invio già avviato da un worker precedente. Esito da riconciliare, nessun nuovo tentativo automatico."
+            : "Invio interrotto con esito non verificato. Verifica prima di ritentare per evitare un doppio invio.",
         },
       });
       recovered += changed.count;
@@ -138,15 +150,16 @@ export async function recoverExpiredQueuedClaims(now = new Date()): Promise<numb
     const exhausted = next >= maxAttempts;
     const changed = await prisma.application.updateMany({
       where: {
-        id: app.id, status: "queued", startedAt: app.startedAt, completedAt: null,
-        submittedAt: null, submittedVia: null, answerContinuationJson: null,
+        ...reclaimWhere,
+        submittedAt: null, submittedVia: null, answerContinuationJson: null, submitStartedAt: null,
       },
       data: exhausted ? {
         status: "ready_to_apply",
         retryCount: next,
+        startedAt: null, leaseToken: null, leaseExpiresAt: null,
         errorMessage: staleQueuedClaimExhaustedMessage(maxAttempts),
       } : {
-        startedAt: null,
+        startedAt: null, leaseToken: null, leaseExpiresAt: null,
         retryCount: next,
         errorMessage: staleQueuedClaimReleaseMessage(),
       },
@@ -157,14 +170,13 @@ export async function recoverExpiredQueuedClaims(now = new Date()): Promise<numb
 }
 
 async function recoverStuckInFlight(): Promise<number> {
-  const stale = new Date(Date.now() - STALE_CLAIM_MS);
+  const now = new Date();
   const stuck = await prisma.application.findMany({
     where: {
       status: { in: ["optimizing", "applying", "submitting"] },
-      OR: [{ startedAt: { lt: stale } }, { startedAt: null, createdAt: { lt: stale } }],
-      completedAt: null,
+      ...expiredLeaseWhere(now),
     },
-    select: { id: true, status: true, startedAt: true, submittedAt: true,
+    select: { id: true, status: true, startedAt: true, submitStartedAt: true, submittedAt: true,
       submittedVia: true, submitConfirmation: true, canaryLog: true, answersUsedJson: true,
       viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true },
     take: 50,
@@ -172,15 +184,19 @@ async function recoverStuckInFlight(): Promise<number> {
   let recovered = 0;
   for (const app of stuck) {
     // A timed-out applying worker may already have delivered. Never replay it.
-    // Even pre-marker legacy applying rows require manual outcome verification.
-    const ambiguous = ["applying", "submitting"].includes(app.status) || hasPotentialSubmission(app);
+    // submit_started means the old worker may have crossed the send boundary.
+    const ambiguous = ["applying", "submitting"].includes(app.status)
+      || !!app.submitStartedAt || hasPotentialSubmission(app);
     const changed = await prisma.application.updateMany({
-      where: { id: app.id, status: app.status, startedAt: app.startedAt, completedAt: null },
+      where: { id: app.id, status: app.status, startedAt: app.startedAt, completedAt: null, ...expiredLeaseWhere(now) },
       data: ambiguous ? {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
-        errorMessage: "Invio interrotto con esito non verificato. Verifica prima di ritentare per evitare un doppio invio.",
+        startedAt: null, leaseToken: null, leaseExpiresAt: null,
+        errorMessage: app.submitStartedAt
+          ? "Invio già avviato da un worker precedente. Esito da riconciliare, nessun nuovo tentativo automatico."
+          : "Invio interrotto con esito non verificato. Verifica prima di ritentare per evitare un doppio invio.",
       } : {
-        status: "queued", startedAt: null,
+        status: "queued", startedAt: null, leaseToken: null, leaseExpiresAt: null,
         errorMessage: `Riavviato: preparazione bloccata per più di ${STALE_CLAIM_MS / 60_000} minuti. Nessun invio iniziato.`,
       },
     });
@@ -207,7 +223,7 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
   const now = new Date();
   const attemptCap = maxDrainAttempts();
   const rows = await prisma.application.findMany({
-    where: { status: "queued", startedAt: null, completedAt: null, retryCount: { lt: attemptCap },
+    where: { status: "queued", startedAt: null, leaseToken: null, submitStartedAt: null, completedAt: null, retryCount: { lt: attemptCap },
       createdAt: { gt: config.startedAt, lte: now },
       // Automatic mode also admits rows of auto-mode users (no per-application
       // consent); the worker gate re-checks the user's saved mode.
@@ -229,6 +245,7 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
     where: { status: "queued", answerContinuationJson: { not: null }, retryCount: { lt: attemptCap },
       createdAt: { gt: config.startedAt, lte: now }, consentGrantedAt: { gt: config.startedAt, lte: now },
       submitConfirmation: { in: ["NOT_SUBMITTED", "NEEDS_ANSWERS"] }, completedAt: null, submittedAt: null, submittedVia: null,
+      submitStartedAt: null,
     }, select: {
       ...continuationSelect,
       job: { select: { url: true, recruiterEmail: true } },

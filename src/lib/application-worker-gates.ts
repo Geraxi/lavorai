@@ -19,6 +19,10 @@ import { weeklyQuotaUsageWhere } from "@/lib/daily-application-cap";
 import { maxDrainAttempts } from "@/lib/drain-limits";
 import { MAX_ATTEMPTS_MESSAGE_PREFIX } from "@/lib/queue-sendability";
 import { matchesApplicationEmailProofKey } from "@/lib/recruiter-email-send";
+import {
+  asIssuedWorkLease, issueApplicationLease, leaseTokenOf, liveLeaseWhere, renewLeaseData,
+  type ApplicationWorkLease,
+} from "@/lib/application-lease";
 
 // Persisted before crossing a delivery boundary. A crash/timeout never releases
 // this reservation: only a proved no-send outcome or an atomic success does.
@@ -28,9 +32,11 @@ export const WORK_RESERVED_STATUSES = ["optimizing", "applying", "submitting", "
 const evidenceSelect = {
   submittedAt: true, submittedVia: true, submitConfirmation: true, canaryLog: true,
   answersUsedJson: true, viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
+  submitStartedAt: true,
 } as const;
 export const workerGateSelect = {
-  sessionId: true, cvDocxPath: true, ...evidenceSelect, ...continuationSelect,
+  sessionId: true, leaseToken: true, leaseExpiresAt: true, cvDocxPath: true,
+  ...evidenceSelect, ...continuationSelect,
   job: { select: { closedAt: true, url: true, recruiterEmail: true, company: true, title: true, description: true, location: true,
     remote: true, contractType: true, salaryMin: true, salaryMax: true } },
   session: { select: { id: true, userId: true, status: true, sentCount: true, targetCount: true, title: true, label: true } },
@@ -47,7 +53,14 @@ export const workerGateSelect = {
 export type WorkerGateRow = Prisma.ApplicationGetPayload<{ select: typeof workerGateSelect }>;
 type DB = Pick<PrismaClient, "application" | "$transaction">;
 
-export function hasPotentialSubmission(row: Pick<WorkerGateRow, keyof typeof evidenceSelect>): boolean {
+function ownershipWhere(id: string, token: Date, extra: Prisma.ApplicationWhereInput = {}): Prisma.ApplicationWhereInput {
+  const leaseToken = leaseTokenOf(token);
+  if (leaseToken) return liveLeaseWhere(id, token, extra);
+  return { id, startedAt: token, leaseToken: null, ...extra };
+}
+
+export function hasPotentialSubmission(row: Pick<WorkerGateRow, Exclude<keyof typeof evidenceSelect, "submitStartedAt">> & { submitStartedAt?: Date | null }): boolean {
+  if (row.submitStartedAt) return true;
   if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) return true;
   // Only explicit proof of no delivery can clear earlier form/debug evidence.
   if ([NOT_SUBMITTED, "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation ?? "")) return false;
@@ -179,19 +192,31 @@ export function heldMessage(reason: string): string {
  * Queued backlog is preserved; it cannot consume additional slots concurrently.
  * startedAt is an ownership token so a recovered/stale worker cannot submit.
  */
-export async function reserveApplicationWork(id: string, db: DB = prisma): Promise<Date | null> {
+function nextWorkLease(row: Pick<WorkerGateRow, "leaseToken" | "leaseExpiresAt">, now = new Date()): ApplicationWorkLease | null {
+  if (row.leaseToken && row.leaseExpiresAt && +row.leaseExpiresAt <= +now) return null;
+  const issued = issueApplicationLease(now);
+  if (row.leaseToken && row.leaseExpiresAt && +row.leaseExpiresAt > +now) {
+    return asIssuedWorkLease({ startedAt: issued.startedAt, leaseToken: row.leaseToken });
+  }
+  return asIssuedWorkLease(issued);
+}
+
+export async function reserveApplicationWork(id: string, db: DB = prisma): Promise<ApplicationWorkLease | null> {
   return withLockedApplication(id, db, async (tx, row) => {
     if (!row || !["queued", "answers_claimed"].includes(row.status)) return null;
+    if (row.submitStartedAt) return null;
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     if (row.answerContinuationJson) {
       if (answerContinuationIneligibility(row, "queued", row.job.url) || currentWorkerIneligibility(row)
         || await admissionBlock(tx, row) || !await continuationReservationMatches(tx, row, continuation!)) return null;
-      const token = new Date(Math.max(Date.now(), +row.startedAt! + 1));
+      const lease = nextWorkLease(row);
+      if (!lease) return null;
       await tx.application.update({ where: { id }, data: {
-        status: "optimizing", startedAt: token, errorMessage: null,
-        answerContinuationJson: JSON.stringify({ ...continuation, phase: "running", workToken: token.toISOString() }),
+        status: "optimizing", startedAt: lease, leaseToken: lease.leaseToken,
+        leaseExpiresAt: issueApplicationLease().leaseExpiresAt, errorMessage: null,
+        answerContinuationJson: JSON.stringify({ ...continuation, phase: "running", workToken: lease.toISOString() }),
       } });
-      return token;
+      return lease;
     }
     if (row.status !== "queued") return null;
     if (rolloutApplicationIneligibility(row)) return null;
@@ -245,11 +270,13 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
       } });
       return null;
     }
-    const token = new Date();
+    const lease = nextWorkLease(row);
+    if (!lease) return null;
     await tx.application.update({ where: { id }, data: {
-      status: "optimizing", startedAt: token, completedAt: null, errorMessage: null,
+      status: "optimizing", startedAt: lease, leaseToken: lease.leaseToken,
+      leaseExpiresAt: issueApplicationLease().leaseExpiresAt, completedAt: null, errorMessage: null,
     } });
-    return token;
+    return lease;
   });
 }
 
@@ -259,12 +286,14 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
 export async function beginApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = ""): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
+      || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
+      || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
       || !["optimizing", "ready_to_apply"].includes(row.status) || hasPotentialSubmission(row)) return false;
     if (rolloutApplicationIneligibility(row)) return false;
     const reason = currentWorkerIneligibility(row) ?? await admissionBlock(tx, row);
     if (reason) {
-      await tx.application.update({ where: { id }, data: {
-        status: "queued", startedAt: new Date(), submitConfirmation: NOT_SUBMITTED,
+      await tx.application.updateMany({ where: ownershipWhere(id, token, { status: { in: ["optimizing", "ready_to_apply"] } }), data: {
+        status: "queued", startedAt: new Date(), leaseToken: null, leaseExpiresAt: null, submitConfirmation: NOT_SUBMITTED,
         errorMessage: heldMessage(reason),
       } });
       return false;
@@ -272,7 +301,7 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
     if (await postingAlreadyClaimed(tx, row)) {
       // Nothing crossed a delivery boundary for THIS row (hasPotentialSubmission
       // was false above): record a typed, user-readable no-send outcome.
-      await tx.application.update({ where: { id }, data: {
+      await tx.application.updateMany({ where: ownershipWhere(id, token), data: {
         status: "failed", submitConfirmation: NOT_SUBMITTED, errorMessage: DUPLICATE_POSTING_MESSAGE, completedAt: new Date(),
       } });
       return false;
@@ -284,15 +313,18 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
     const budgetReason = await reserveSubmissionBudget(tx, { applicationId: id,
       subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, continuation ? "recheck" : "begin");
     if (budgetReason) {
-      await tx.application.update({ where: { id }, data: {
+      await tx.application.updateMany({ where: ownershipWhere(id, token), data: {
         status: "ready_to_apply",
         submitConfirmation: budgetReason === "rollout_daily_budget_reached" ? NOT_SUBMITTED : "UNCONFIRMED",
         errorMessage: budgetReason === "rollout_daily_budget_reached" ? ROLLOUT_BUDGET_HELD_MESSAGE : heldMessage(budgetReason),
       } });
       return false;
     }
-    await tx.application.update({ where: { id }, data: { status: "applying", submitConfirmation: SUBMISSION_STARTED } });
-    return true;
+    const started = await tx.application.updateMany({
+      where: ownershipWhere(id, token, { status: { in: ["optimizing", "ready_to_apply"] } }),
+      data: { status: "applying", submitConfirmation: SUBMISSION_STARTED, ...renewLeaseData() },
+    });
+    return started.count === 1;
   })) === true;
 }
 
@@ -303,6 +335,8 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
 export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit"): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
+      || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
+      || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
       || row.status !== "applying" || row.submitConfirmation !== SUBMISSION_STARTED) return false;
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     const staged = STAGED_CHANNELS.includes(channel);
@@ -329,19 +363,26 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
         subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, "recheck")
       ?? await admissionBlock(tx, row);
     if (reason) {
-      await tx.application.update({ where: { id }, data: {
+      await tx.application.updateMany({ where: ownershipWhere(id, token, { status: "applying" }), data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
         errorMessage: `Invio finale interrotto: ${reason}. Il portale potrebbe aver già ricevuto dati o allegati. Verifica l'esito prima di un nuovo tentativo.`,
       } });
       return false;
     }
-    if (continuation) await tx.application.update({ where: { id }, data: {
-      answerContinuationJson: JSON.stringify({ ...continuation,
-        ...(boundary === "candidate_data" ? { candidateDataStartedAt: new Date().toISOString() }
-          : boundary === "verification_submit" ? { verificationSubmitStarted: true } : { finalSubmitStarted: true }),
-      }),
-    } });
-    return true;
+    const marked = await tx.application.updateMany({
+      where: ownershipWhere(id, token, { status: "applying", submitConfirmation: SUBMISSION_STARTED }),
+      data: {
+        ...renewLeaseData(),
+        ...(boundary === "final_submit" ? { submitStartedAt: row.submitStartedAt ?? new Date() } : {}),
+        ...(continuation ? {
+          answerContinuationJson: JSON.stringify({ ...continuation,
+            ...(boundary === "candidate_data" ? { candidateDataStartedAt: new Date().toISOString() }
+              : boundary === "verification_submit" ? { verificationSubmitStarted: true } : { finalSubmitStarted: true }),
+          }),
+        } : {}),
+      },
+    });
+    return marked.count === 1;
   })) === true;
 }
 
@@ -363,7 +404,9 @@ export async function completeApplicationSubmission(
     || !(data.submitConfirmation.startsWith("DETECTED") || data.submitConfirmation === "EMAIL_SENT")
     || data.submittedVia === "mock_demo") return false;
   return (await withLockedApplication(id, db, async (tx, row) => {
-    if (!row || row.startedAt?.getTime() !== token.getTime()) return false;
+    if (!row || row.startedAt?.getTime() !== token.getTime()
+      || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
+      || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())) return false;
     const inFlight = row.status === "applying" && row.submitConfirmation === SUBMISSION_STARTED;
     const recovered = row.status === "ready_to_apply" && row.submitConfirmation === "UNCONFIRMED";
     if (!inFlight && !recovered) return false;
@@ -394,9 +437,9 @@ export async function completeApplicationSubmission(
     if (!proof || !isValidProof(proof)) return false;
     // Recovery does not replace the owner token. A late, proved receipt from
     // that same attempt is still recorded once, without ever replaying it.
-    const changed = await tx.application.updateMany({ where: {
-      id, startedAt: token, status: row.status, submitConfirmation: row.submitConfirmation,
-    }, data: { ...data, status: "success", ...submittedWithProof(proof, data.submittedAt instanceof Date ? data.submittedAt : new Date()) } });
+    const changed = await tx.application.updateMany({ where: ownershipWhere(id, token, {
+      status: row.status, submitConfirmation: row.submitConfirmation,
+    }), data: { ...data, status: "success", ...submittedWithProof(proof, data.submittedAt instanceof Date ? data.submittedAt : new Date()) } });
     if (changed.count !== 1) return false;
     if (row.session) {
       const successes = await tx.application.count({ where: { sessionId: row.session.id, status: "success" } });
@@ -489,6 +532,8 @@ export async function attestAnswerPause(id: string, token: Date, channel: string
     const consentPending = !row.consentGrantedAt;
     if (consentPending && channel === "portal_recruitee") return false;
     if (!row || row.job.url !== jobUrl || row.status !== "applying" || row.startedAt?.getTime() !== +token
+      || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
+      || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
       || row.submitConfirmation !== SUBMISSION_STARTED || rolloutApplicationIneligibility(row)
       || row.submittedAt || row.submittedVia || row.submissionReceiptJson || row.completedAt
       || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) return false;
@@ -506,11 +551,11 @@ export async function attestAnswerPause(id: string, token: Date, channel: string
       ...(BLANK_FORM_EVIDENCE[channel] ? { preTransmissionEvidence: evidence } : {}),
     };
     if (!await continuationReservationMatches(tx, row, proof)) return false;
-    await tx.application.update({ where: { id }, data: {
+    const paused = await tx.application.updateMany({ where: ownershipWhere(id, token, { status: "applying", submitConfirmation: SUBMISSION_STARTED }), data: {
       status: "needs_answers", submitConfirmation: NOT_SUBMITTED, pendingQuestionsJson,
       answerContinuationJson: JSON.stringify(proof),
     } });
-    return true;
+    return paused.count === 1;
   })) === true;
 }
 
