@@ -1,5 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
-import { cleanHtmlText } from "./html-clean";
+import { storedJobDescription } from "./posting-description";
 import { isEuRelevant, runPool } from "./feed-utils";
 
 /**
@@ -54,7 +54,7 @@ function mapItem(it: TtItem, host: string, company: string): JobListItem | null 
   const jp = it._jobposting ?? {};
   const locs = Array.isArray(jp.jobLocation) ? jp.jobLocation : jp.jobLocation ? [jp.jobLocation] : [];
   const loc = locs.map((l) => [l.address?.addressLocality, l.address?.addressCountry].filter(Boolean).join(", ")).filter(Boolean).join(" · ") || null;
-  const description = cleanHtmlText(jp.description || it.content_html || "").slice(0, 2000);
+  const description = storedJobDescription(jp.description || it.content_html || "");
   const remote = jp.jobLocationType === "TELECOMMUTE" || /remote|remoto/i.test(`${loc ?? ""} ${it.title}`);
   if (!isEuRelevant(`${loc ?? ""} ${remote ? "remote" : ""}`, description)) return null;
   const et = jp.employmentType;

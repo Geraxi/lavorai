@@ -17,6 +17,10 @@
       "schedule": "30 5 * * *"
     },
     {
+      "path": "/api/cron/description-backfill",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/editorial",
       "schedule": "0 8 * * 1-5"
     },

@@ -95,7 +95,8 @@ async function testCronBothPasses() {
     "@/lib/role-match": { titleMatchesAnyRole: () => true },
     "@/lib/auto-apply-roles": await import("../src/lib/auto-apply-roles"),
     "@/lib/scrapers/posting-description": {
-      DESCRIPTION_SOURCES: new Set(["workable", "smartrecruiters", "breezy"]),
+      DESCRIPTION_SOURCES: new Set(["workable", "smartrecruiters", "breezy", "greenhouse", "ashby", "lever"]),
+      needsFullDescription: (text?: string | null) => !text?.trim() || text.length === 2000,
       fillMissingDescriptions: async (jobs: unknown[], opts: { limit: number; deadline: number }) => {
         assert.ok(opts.limit > 0 && opts.limit <= 15 && opts.deadline <= Date.now() + 20_000, "Backfill is bounded per user and in time");
         backfillCalls.push(jobs.length); return [];

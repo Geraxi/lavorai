@@ -1,5 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
-import { cleanHtmlText } from "./html-clean";
+import { storedJobDescription } from "./posting-description";
 
 /**
  * Ashby public job board API. Nessuna auth richiesta.
@@ -114,7 +114,7 @@ function mapJob(
   companyName: string,
   orgSlug: string,
 ): JobListItem | null {
-  const description = cleanHtmlText(j.descriptionHtml).slice(0, 2000);
+  const description = storedJobDescription(j.descriptionHtml);
   const location = ashbyLocation(j);
   const loc = location ?? "";
   if (!isRelevantLocation(loc, description, !!j.isRemote)) return null;

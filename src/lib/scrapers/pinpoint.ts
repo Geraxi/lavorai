@@ -1,5 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
-import { cleanHtmlText } from "./html-clean";
+import { storedJobDescription } from "./posting-description";
 import { isEuRelevant, runPool } from "./feed-utils";
 
 /**
@@ -38,7 +38,7 @@ export async function fetchPinpointJobs(slug: string, companyName?: string): Pro
       const locObj = typeof p.location === "string" ? { name: p.location } : p.location ?? {};
       const loc = [locObj.city, locObj.name, locObj.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ") || null;
       const remote = /remote/i.test(`${p.workplace_type ?? ""} ${loc ?? ""}`);
-      const description = cleanHtmlText(p.description ?? "").slice(0, 2000);
+      const description = storedJobDescription(p.description ?? "");
       if (!isEuRelevant(`${loc ?? ""} ${remote ? "remote" : ""}`, description)) continue;
       out.push({
         id: "",

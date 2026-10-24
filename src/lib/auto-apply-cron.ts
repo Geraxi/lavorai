@@ -9,7 +9,7 @@ import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { roleTitleTokenGroups, titleTokenWhere } from "@/lib/role-query";
 import { searchRoleTitles } from "@/lib/auto-apply-roles";
-import { DESCRIPTION_SOURCES, fillMissingDescriptions } from "@/lib/scrapers/posting-description";
+import { DESCRIPTION_SOURCES, fillMissingDescriptions, needsFullDescription } from "@/lib/scrapers/posting-description";
 
 /** Public detail fetches to fill empty descriptions: per user, per run, and time. */
 const DESCRIPTION_BACKFILL_PER_USER = 15;
@@ -626,13 +626,12 @@ async function processUser(
   stats.candidatesFetched += jobs.length;
   if (jobs.length === 0) return;
 
-  // Lazy description backfill (Workable/SmartRecruiters/Breezy rows synced
-  // before the scrapers read the detail endpoint): an empty description
-  // scores ~0 and hides eligibility sentences. Only jobs that can still pass
-  // (title matches a role, location not already excluded), bounded per run.
+  // Lazy description backfill: empty or legacy-truncated (exactly 2,000 chars)
+  // rows score on company intro only. Greenhouse/Ashby/Lever public APIs now
+  // included. Only jobs that can still pass (title matches a role), bounded.
   const backfillLimit = Math.min(DESCRIPTION_BACKFILL_PER_USER, DESCRIPTION_BACKFILL_PER_RUN - stats.descriptionsBackfilled);
   if (backfillLimit > 0) {
-    const eligible = jobs.filter((j) => !j.description?.trim() && DESCRIPTION_SOURCES.has(j.source)
+    const eligible = jobs.filter((j) => needsFullDescription(j.description) && DESCRIPTION_SOURCES.has(j.source)
       && titleMatchesAnyRole(j.title, roles));
     try {
       const filled = await fillMissingDescriptions(eligible, {
@@ -640,7 +639,10 @@ async function processUser(
         deadline: Date.now() + DESCRIPTION_BACKFILL_BUDGET_MS,
       });
       for (const j of filled) {
-        await prisma.job.update({ where: { id: j.id }, data: { description: j.description } }).catch(() => {});
+        await prisma.job.update({
+          where: { id: j.id },
+          data: { description: j.description, descriptionFetchedAt: new Date() },
+        }).catch(() => {});
       }
       stats.descriptionsBackfilled += filled.length;
     } catch (err) {

@@ -1,5 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
-import { cleanHtmlText } from "./html-clean";
+import { storedJobDescription } from "./posting-description";
 
 /**
  * Greenhouse public Job Board API. Nessuna auth richiesta.
@@ -78,7 +78,7 @@ function mapJob(
   companyName: string,
   companySlug: string,
 ): JobListItem | null {
-  const description = cleanHtmlText(j.content).slice(0, 2000);
+  const description = storedJobDescription(j.content);
   // Filtro geo: vogliamo solo Italia, Europa o Remoto
   const loc = j.location?.name ?? "";
   if (!isRelevantLocation(loc, description)) return null;

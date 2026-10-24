@@ -1,5 +1,6 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { cleanHtmlText, decodeHtmlEntities } from "./html-clean";
+import { storedJobDescription } from "./posting-description";
 
 /**
  * Free, attributed feeds. Bounded requests; the daily sync handles refreshes.
@@ -43,7 +44,7 @@ export function parseHimalayas(data: unknown, now = Date.now()): JobListItem[] {
     if (countries.length && !countries.some((v: string) => italy.test(v))) continue;
     const record = job("himalayas", url, cleanHtmlText(j.title), posted);
     record.company = typeof j.companyName === "string" ? j.companyName : null;
-    record.description = cleanHtmlText(typeof j.description === "string" ? j.description : "").slice(0, 6000);
+    record.description = storedJobDescription(typeof j.description === "string" ? j.description : "");
     record.location = `Remote · ${countries.length ? "Italy" : "Worldwide"}`;
     record.contractType = typeof j.employmentType === "string" ? j.employmentType : null;
     // The UI formats salary in EUR. Never relabel dollars as euros.
@@ -71,7 +72,7 @@ export function parseWwr(xml: string, now = Date.now()): JobListItem[] {
     const record = job("weworkremotely", url, split >= 0 ? title.slice(split + 2) : title, posted);
     record.company = split >= 0 ? title.slice(0, split) : null;
     record.location = `Remote · ${country || region}`;
-    record.description = description.slice(0, 6000);
+    record.description = storedJobDescription(description);
     record.contractType = tag("type") || null;
     record.category = tag("category") || "Remote";
     out.set(url, record);

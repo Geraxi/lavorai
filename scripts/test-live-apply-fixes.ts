@@ -92,6 +92,7 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
     "@/lib/auto-apply-roles": await import("../src/lib/auto-apply-roles"),
     "@/lib/scrapers/posting-description": {
       DESCRIPTION_SOURCES: new Set(),
+      needsFullDescription: () => false,
       fillMissingDescriptions: async () => [],
     },
     "@/lib/role-query": {

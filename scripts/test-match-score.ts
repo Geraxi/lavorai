@@ -50,6 +50,20 @@ function testTokenization() {
   assert(quickMatchScore(profile, "Ingegnere\nX\nSviluppo app con Next.js e Node.js, React e TypeScript.") >= 30, "Italian description with the same tech still matches");
 }
 
+function testTruncatedVsFullDescription() {
+  const intro = "We are a mission-driven company building tools for teams around the world. ".repeat(40).slice(0, 2000);
+  assert.equal(intro.length, 2000);
+  const stack = " You will use TypeScript, React, Next.js, Node.js, SQL, Git and Figma every day.";
+  const title = "Product Engineer II\nAcme\n";
+  const truncated = title + intro;
+  const full = title + intro + stack;
+  const low = quickMatchScore(profile, truncated);
+  const high = quickMatchScore(profile, full);
+  assert(low < 25, `company-intro-only (legacy 2k cap) must score low (got ${low})`);
+  assert(high >= 55, `full text after the cap must score like a real match (got ${high})`);
+  assert(high > low + 25, `full description must lift the score (low=${low} high=${high})`);
+}
+
 function testSentinels() {
   assert.equal(quickMatchScore(profile, ""), 100, "missing job text sentinel");
   assert.equal(quickMatchScore({ title: "", summary: "", experiences: [], skills: [] } as never, fullstack), 100, "empty profile sentinel");
@@ -113,6 +127,7 @@ function testRoleQuery() {
 
 testScaling();
 testTokenization();
+testTruncatedVsFullDescription();
 testSentinels();
 testRoleQuery();
 console.log("match score: all tests passed");

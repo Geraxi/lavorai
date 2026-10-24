@@ -155,7 +155,7 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
     m.counts.open++;
     const isNew = j.cachedAt >= newSince;
     if (isNew) { m.isNew = true; newOpportunities++; }
-    const match = profile ? quickMatchScore(profile, `${j.title}\n${j.company ?? ""}\n${(descriptions.get(j.id) ?? "").slice(0, 4000)}`) : null;
+    const match = profile ? quickMatchScore(profile, `${j.title}\n${j.company ?? ""}\n${descriptions.get(j.id) ?? ""}`) : null;
     m.jobs.push({ id: j.id, title: j.title, company: j.company, location: j.location, match, kind: "open", href: `/jobs/${j.id}`, isNew });
   }
   // Conta anche gli aperti fuori dal pool per i totali delle pill

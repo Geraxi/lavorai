@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { clipJobDescriptionForAi } from "@/lib/scrapers/posting-description";
 
 /**
  * Interview Copilot — risposta in <2s a una domanda dell'intervistatore.
@@ -135,7 +136,7 @@ function buildUserPrompt(ctx: CopilotContext, question: string): string {
           .join("\n")}`
       : "";
   const jdSection = ctx.jobDescription
-    ? `\n\nJOB DESCRIPTION:\n${ctx.jobDescription.slice(0, 2000)}`
+    ? `\n\nJOB DESCRIPTION:\n${clipJobDescriptionForAi(ctx.jobDescription)}`
     : "";
   return `CV / PROFILO DEL CANDIDATO:
 ${ctx.cvSummary || "(non fornito)"}${jdSection}${recap}
