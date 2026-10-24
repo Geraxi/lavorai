@@ -72,6 +72,7 @@ async function testCronBothPasses() {
   // Production manual-only blocking is exercised in test-manual-rollout-producers.
   const api = loadModule("src/lib/auto-apply-cron.ts", {
     "@/lib/ats-skip-hosts": await import("../src/lib/ats-skip-hosts"),
+    "@/lib/daily-application-cap": await import("../src/lib/daily-application-cap"),
     "@/lib/paid-priority": { sortByPaidPriority: <T,>(items: readonly T[]) => [...items] },
     "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
     "@/lib/application-pause": { applicationsPaused: () => false },

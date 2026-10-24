@@ -25,6 +25,7 @@ import { AnalyticsEvent } from "@/lib/analytics";
 import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
 import { sortByPaidPriority } from "@/lib/paid-priority";
 import { compareJobsForAutoApply, requiresManualAtsHandoff, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { countDailyCapUsage } from "@/lib/daily-application-cap";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -392,12 +393,10 @@ async function processUser(
   const locationPrefs = parsePreferenceList(prefs.locationsJson);
   if (!locationPrefs?.length) return;
 
-  // Daily cap = quante già create oggi
-  // Le candidature fallite (annuncio chiuso, form rotto, crediti) NON
-  // consumano cap/quota: l'utente non ha ricevuto nulla.
-  const todayCount = await prisma.application.count({
-    where: { userId: user.id, createdAt: { gte: todayStart }, status: { notIn: ["failed", "diagnostic"] } },
-  });
+  // Daily cap = sent today or currently in flight (queued/claimed/sending).
+  // needs_answers, CAPTCHA / finish-it-yourself, NOT_SUBMITTED do not count.
+  // The day boundary is Europe/Rome, not UTC midnight.
+  const todayCount = await countDailyCapUsage(prisma, user.id);
   // Accesso pagato/prova: limiti storici (giornaliero + mensile del tier).
   // Altrimenti (Free a prova scaduta, prova senza carta, past_due/canceled):
   // quota gratuita di N candidature su 7 giorni mobili, vedi billing.ts.

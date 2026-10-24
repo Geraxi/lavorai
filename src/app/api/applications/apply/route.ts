@@ -8,6 +8,7 @@ import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
 import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { countDailyCapUsage } from "@/lib/daily-application-cap";
 import { applyLimiter } from "@/lib/rate-limit";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -100,16 +101,12 @@ export async function POST(request: NextRequest) {
     // di round-trip Neon. Ora tutto in 1 sola tornata) ---
     // Public ATS forms and recruiter email do not require a connected account.
     // The worker checks sessions only when the selected portal needs one.
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
     const [usedThisMonth, usedToday, cv, job, prefs, profileRow, previousApplication] =
       await Promise.all([
         prisma.application.count({
           where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { notIn: ["failed", "diagnostic"] } },
         }),
-        prisma.application.count({
-          where: { userId: user.id, createdAt: { gte: todayStart }, status: { notIn: ["failed", "diagnostic"] } },
-        }),
+        countDailyCapUsage(prisma, user.id),
         prisma.cVDocument.findFirst({
           where: { userId: user.id },
           orderBy: { createdAt: "desc" },
