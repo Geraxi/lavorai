@@ -15,7 +15,7 @@ import {
 import { saveUserFile, readUserFile } from "@/lib/storage";
 import { decryptJson } from "@/lib/crypto";
 import { isPortalId, PORTALS } from "@/lib/portals";
-import { checkJobUrlLiveness, JOB_CLOSED_HELD_MESSAGE, JOB_LIVENESS_UNKNOWN_HELD_MESSAGE, markJobClosed } from "@/lib/job-liveness";
+import { checkJobUrlLiveness, JOB_CLOSED_HELD_MESSAGE, markJobClosed } from "@/lib/job-liveness";
 import {
   extractFullProfile,
   tailorProfileForJob,
@@ -30,6 +30,12 @@ import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { humanContext, launchBrowser } from "@/lib/browser";
 import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
+import {
+  recruiterFromAddress,
+  recruiterEmailAttemptKey,
+  findRecentRecruiterEmailDuplicate,
+  RECRUITER_EMAIL_DEDUP_MS,
+} from "@/lib/recruiter-email-send";
 import { receiptJobId, hasVerifiedSubmissionReceipt } from "@/lib/submission-receipt";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
 import {
@@ -438,11 +444,24 @@ async function processApplicationRun(
   const resolvedAdapter = portalSubmitEnabled ? resolveAdapterByUrl([app.job.url, resolvedUrl]) : null;
   const adapter = resolvedAdapter?.adapter ?? null;
   const adapterUrl = resolvedAdapter?.url ?? app.job.url;
-  const { preferredDeliveryChannel } = await import("@/lib/delivery-channel");
-  const preferRecruiterEmail = preferredDeliveryChannel(app.job) === "email_recruiter";
-  if (preferRecruiterEmail && adapter) {
-    console.log(`[worker] ${applicationId} recruiter email present — skipping portal ${adapter.id}, using email_recruiter`);
+  let verifiedRecruiter = await findVerifiedRecruiterEmail(
+    resolvedUrl, app.job.company, app.job.recruiterEmail,
+    { description: app.job.description, cachedSourceUrl: app.job.recruiterEmailSourceUrl },
+  );
+  if (verifiedRecruiter) {
+    await prisma.job.update({
+      where: { id: app.job.id },
+      data: {
+        recruiterEmail: verifiedRecruiter.email,
+        recruiterEmailSourceUrl: verifiedRecruiter.provenance.sourceUrl,
+        recruiterScrapedAt: new Date(),
+      },
+    }).catch(() => undefined);
+    if (adapter) {
+      console.log(`[worker] ${applicationId} published recruiter email — skipping portal ${adapter.id}, using email_recruiter`);
+    }
   }
+  const preferRecruiterEmail = !!verifiedRecruiter;
 
   if (adapter && !preferRecruiterEmail) {
     const canonicalJobId = receiptJobId(adapter.id, app.job.url);
@@ -583,6 +602,7 @@ async function processApplicationRun(
       // manda l'email "candidatura inviata". UNCONFIRMED resta in coda
       // di review, niente email fuorviante.
       if (!isDryRun && !isUnconfirmed) {
+        console.log(`[worker] ${applicationId} sent via portal_${adapter.id}`);
         await notifyApplicationSent(applicationId).catch((err) =>
           console.error(`[worker] ${applicationId} notify email failed`, err),
         );
@@ -688,25 +708,32 @@ async function processApplicationRun(
     }
 
     if (outcome.status === "captcha") {
-      // Never a silent skip, in any mode: route to the manual queue + notify.
-      const { captchaHandoff } = await import("@/lib/captcha-handoff");
-      const handoff = captchaHandoff({ mode: app.user.preferences?.autoApplyMode, company: app.job.company,
-        adapterLabel: adapter.label, detail: outcome.error });
-      await prisma.application.updateMany({
-        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
-        data: {
-          status: handoff.status,
-          submitConfirmation: handoff.submitConfirmation,
-          errorMessage: handoff.errorMessage,
-          canaryLog: "canary" in outcome && outcome.canary ? JSON.stringify(outcome.canary) : handoff.canaryLog,
-        },
-      });
-      if (handoff.notifyUser) {
-        await notifyApplicationManual(applicationId).catch((err) =>
-          console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
-        );
+      verifiedRecruiter = verifiedRecruiter ?? await findVerifiedRecruiterEmail(
+        resolvedUrl, app.job.company, app.job.recruiterEmail,
+        { description: app.job.description, cachedSourceUrl: app.job.recruiterEmailSourceUrl },
+      );
+      if (verifiedRecruiter) {
+        console.log(`[worker] ${applicationId} captcha on ${adapter.id} — sending published recruiter email instead of handoff`);
+      } else {
+        const { captchaHandoff } = await import("@/lib/captcha-handoff");
+        const handoff = captchaHandoff({ mode: app.user.preferences?.autoApplyMode, company: app.job.company,
+          adapterLabel: adapter.label, detail: outcome.error });
+        await prisma.application.updateMany({
+          where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+          data: {
+            status: handoff.status,
+            submitConfirmation: handoff.submitConfirmation,
+            errorMessage: handoff.errorMessage,
+            canaryLog: "canary" in outcome && outcome.canary ? JSON.stringify(outcome.canary) : handoff.canaryLog,
+          },
+        });
+        if (handoff.notifyUser) {
+          await notifyApplicationManual(applicationId).catch((err) =>
+            console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
+          );
+        }
+        return;
       }
-      return; // the user completes captcha + submit by hand
     }
 
     // se l'adapter non ci è riuscito (form cambiato / captcha / …) proseguiamo
@@ -739,7 +766,7 @@ async function processApplicationRun(
   // portale ufficiale. Se nel pool esiste già una copia ATS dello stesso
   // job (diversa dall'aggregatore Adzuna), puntiamo l'utente lì in manuale;
   // al prossimo ciclo l'auto-apply userà direttamente quella copia.
-  if (!app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
+  if (!verifiedRecruiter && !app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
     const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr", "breezy", "pinpoint"];
     const isAtsSourceJob = ATS_SOURCES.includes(app.job.source);
 
@@ -799,9 +826,6 @@ async function processApplicationRun(
     return;
   }
 
-  // A cached address or DNS record is not provenance. Verify a fresh
-  // recruiting instruction on the employer's actual job page every time.
-  const verifiedRecruiter = await findVerifiedRecruiterEmail(resolvedUrl, app.job.company, app.job.recruiterEmail);
   const recruiterEmail = verifiedRecruiter?.email ?? null;
 
   if (recruiterEmail) {
@@ -810,10 +834,55 @@ async function processApplicationRun(
       select: { trackingToken: true },
     });
     const trackingToken = appRow?.trackingToken ?? null;
+    const attemptKey = recruiterEmailAttemptKey(applicationId, app.jobId, recruiterEmail);
+    const since = new Date(Date.now() - RECRUITER_EMAIL_DEDUP_MS);
+    const duplicate = await findRecentRecruiterEmailDuplicate({
+      userId: app.userId,
+      jobId: app.jobId,
+      recipient: recruiterEmail,
+      find: async () => {
+        const rows = await prisma.applicationEmailAttempt.findMany({
+          where: {
+            application: { userId: app.userId },
+            OR: [{ createdAt: { gte: since } }, { acceptedAt: { gte: since } }],
+            AND: [{ OR: [{ application: { jobId: app.jobId } }, { recipient: recruiterEmail.trim().toLowerCase() }] }],
+          },
+          select: {
+            applicationId: true, recipient: true, status: true, createdAt: true,
+            acceptedAt: true, providerEmailId: true,
+            application: { select: { userId: true, jobId: true } },
+          },
+          take: 50,
+        });
+        return rows.map((row) => ({
+          applicationId: row.applicationId,
+          userId: row.application.userId,
+          jobId: row.application.jobId,
+          recipient: row.recipient,
+          status: row.status,
+          createdAt: row.createdAt,
+          acceptedAt: row.acceptedAt,
+          providerEmailId: row.providerEmailId,
+        }));
+      },
+    });
+    if (duplicate && duplicate.applicationId !== applicationId) {
+      await prisma.application.updateMany({
+        where: { id: applicationId, startedAt: workToken, status: { in: ["optimizing", "ready_to_apply", "applying"] } },
+        data: {
+          status: "ready_to_apply",
+          submitConfirmation: NOT_SUBMITTED,
+          ...notSubmitted("failed", "recruiter_email_duplicate_30d"),
+          errorMessage: "Candidatura già inviata a questo destinatario o per questo annuncio negli ultimi 30 giorni. Nessun nuovo invio.",
+          completedAt: new Date(),
+        },
+      });
+      return;
+    }
     if (!await beginApplicationSubmission(applicationId, workToken, undefined, "email_recruiter")) return;
     const delivered = await deliverApplicationToRecruiter({
       applicationId,
-      attemptKey: `application-${applicationId}-${workToken.getTime()}`,
+      attemptKey,
       recipientProvenanceJson: JSON.stringify(verifiedRecruiter),
       beforeSend: () => recheckBeforePortalSubmit(applicationId, workToken, resolvedUrl, "email_recruiter"),
       to: recruiterEmail,
@@ -841,6 +910,7 @@ async function processApplicationRun(
           submittedAt: now,
           submitConfirmation: "EMAIL_SENT",
       })) return;
+      console.log(`[worker] ${applicationId} sent via email_recruiter`);
       await notifyApplicationSent(applicationId).catch((err) =>
         console.error(`[worker] ${applicationId} notify email failed`, err),
       );
@@ -932,19 +1002,17 @@ async function markFailed(id: string, message: string, workToken: Date): Promise
 
 async function ensureLiveJobForApplication(id: string, token: Date, jobId: string, url: string): Promise<boolean> {
   const check = await checkJobUrlLiveness(url);
-  if (check.state === "live") return true;
-  if (check.state === "closed") await markJobClosed(jobId);
+  if (check.state !== "closed") return true;
+  await markJobClosed(jobId);
   await prisma.application.updateMany({
     where: { id, startedAt: token, status: { in: ["optimizing", "ready_to_apply"] },
       OR: [{ submitConfirmation: null }, { submitConfirmation: { in: [NOT_SUBMITTED, "DRY_RUN", "JOB_CLOSED"] } }] },
     data: {
-      status: check.state === "closed" ? "failed" : "queued",
-      submitConfirmation: check.state === "closed" ? "JOB_CLOSED" : NOT_SUBMITTED,
+      status: "failed",
+      submitConfirmation: "JOB_CLOSED",
       startedAt: new Date(),
-      completedAt: check.state === "closed" ? new Date() : null,
-      errorMessage: check.state === "closed"
-        ? JOB_CLOSED_HELD_MESSAGE
-        : JOB_LIVENESS_UNKNOWN_HELD_MESSAGE,
+      completedAt: new Date(),
+      errorMessage: JOB_CLOSED_HELD_MESSAGE,
     },
   });
   return false;
@@ -1682,8 +1750,10 @@ async function deliverApplicationToRecruiter(
     return { kind: "not_sent", reason: "email_provider_not_configured" };
   }
 
-  const from =
-    process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
+  const candidateName = (input.userName ?? "").trim() || input.replyTo;
+  // Resend can send only from lavorai.it. apply.lavorai.it / inbound.lavorai.it
+  // are receive-only. Reply-To still routes recruiter replies inbound.
+  const from = recruiterFromAddress(input.userName);
 
   // GUARDIA PROD: onboarding@resend.dev è il sandbox di Resend — accetta
   // SOLO invii a caselle dello stesso account. In produzione con
@@ -1694,12 +1764,12 @@ async function deliverApplicationToRecruiter(
     from.toLowerCase().includes("resend.dev")
   ) {
     console.error(
-      `[worker] EMAIL_FROM è sandbox Resend (${from}) — nessuna delivery reale possibile a recruiter esterni. Configura EMAIL_FROM con dominio verificato.`,
+      `[worker] RECRUITER_EMAIL_FROM è sandbox Resend (${from}) — nessuna delivery reale possibile a recruiter esterni. Configura RECRUITER_EMAIL_FROM su lavorai.it.`,
     );
     await alertFounder(
       "email_from_sandbox",
-      "EMAIL_FROM è sandbox — delivery bloccata",
-      `L'app sta cercando di inviare candidature ai recruiter ma EMAIL_FROM punta ancora al sandbox Resend (${from}).\nResend accetta invii sandbox solo verso caselle interne all'account → NIENTE candidatura arriva ai recruiter esterni.\n\nFix: su Resend verifica un dominio (es. lavorai.it), poi setta EMAIL_FROM="LavorAI <candidature@lavorai.it>" (o simile) su Vercel.`,
+      "RECRUITER_EMAIL_FROM è sandbox — delivery bloccata",
+      `L'app sta cercando di inviare candidature ai recruiter ma RECRUITER_EMAIL_FROM punta ancora al sandbox Resend (${from}).\nResend accetta invii sandbox solo verso caselle interne all'account → NIENTE candidatura arriva ai recruiter esterni.\n\nFix: su Resend verifica lavorai.it, poi setta RECRUITER_EMAIL_FROM=candidature@lavorai.it su Vercel.`,
     ).catch(() => void 0);
     return { kind: "not_sent", reason: "email_provider_not_configured" };
   }
@@ -1708,15 +1778,14 @@ async function deliverApplicationToRecruiter(
     ? `${siteUrl}/api/track/open/${input.trackingToken}`
     : null;
 
-  const candidateName = (input.userName ?? "").trim() || input.replyTo;
   const subject = input.cvLanguage === "en"
-    ? `Application for ${input.job.title}${input.job.company ? ` — ${input.job.company}` : ""}`
-    : `Candidatura — ${input.job.title}${input.job.company ? ` · ${input.job.company}` : ""}`;
+    ? `Application: ${input.job.title} – ${candidateName}`
+    : `${input.job.title} – Candidatura ${candidateName}`;
 
-  // Se è configurato un dominio inbound, le risposte del recruiter passano da
-  // noi (per il parsing) e poi le inoltriamo all'utente. Altrimenti fallback
-  // storico: reply diretta alla casella dell'utente (nessun parsing possibile).
-  const inboundReply = inboundReplyAddress(input.applicationId);
+  // Reply-To threads recruiter replies back through inbound.lavorai.it.
+  // INBOUND_EMAIL_DOMAIN is optional; default matches the documented domain.
+  const inboundReply = inboundReplyAddress(input.applicationId)
+    ?? (/^[a-z0-9_-]+$/i.test(input.applicationId) ? `reply+${input.applicationId}@inbound.lavorai.it` : null);
   const effectiveReplyTo = inboundReply ?? input.replyTo;
 
   // Attachments: always include DOCX, and PDF if available (preferred format)

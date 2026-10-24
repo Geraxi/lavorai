@@ -178,6 +178,28 @@ async function closeMissingJobs(items: JobListItem[]): Promise<number> {
   return closed;
 }
 
+async function publishedEmailFields(item: JobListItem): Promise<{
+  recruiterEmail?: string | null;
+  recruiterEmailSourceUrl?: string | null;
+  recruiterScrapedAt?: Date;
+}> {
+  if (item.recruiterEmail?.trim()) {
+    return {
+      recruiterEmail: item.recruiterEmail.trim().toLowerCase(),
+      recruiterEmailSourceUrl: item.recruiterEmailSourceUrl ?? item.url,
+      recruiterScrapedAt: new Date(),
+    };
+  }
+  const { extractPublishedRecruiterEmailFromText } = await import("@/lib/recruiter-email");
+  const found = extractPublishedRecruiterEmailFromText(item.description, item.company, item.url);
+  if (!found) return {};
+  return {
+    recruiterEmail: found.email,
+    recruiterEmailSourceUrl: found.sourceUrl,
+    recruiterScrapedAt: new Date(),
+  };
+}
+
 async function upsertJobs(items: JobListItem[]): Promise<number> {
   let count = 0;
   // Serial batches di 20 per non martellare Prisma
@@ -185,8 +207,9 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
     await Promise.all(
-      batch.map((j) =>
-        prisma.job
+      batch.map(async (j) => {
+        const published = await publishedEmailFields(j);
+        return prisma.job
           .upsert({
             where: {
               externalId_source: {
@@ -209,6 +232,7 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
               sourceSlug: (j as { sourceSlug?: string | null }).sourceSlug ?? null,
               cachedAt: new Date(),
               closedAt: null, // ricomparso sul board → riaperto
+              ...published,
             },
             create: {
               externalId: j.externalId,
@@ -225,6 +249,7 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
               category: j.category,
               postedAt: j.postedAt,
               sourceSlug: (j as { sourceSlug?: string | null }).sourceSlug ?? null,
+              ...published,
             },
           })
           .then(() => {
@@ -232,8 +257,8 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
           })
           .catch((err) => {
             console.warn("[sync-jobs] upsert failed", j.url, err.message);
-          }),
-      ),
+          });
+      }),
     );
   }
   return count;

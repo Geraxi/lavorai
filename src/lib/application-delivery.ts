@@ -64,6 +64,19 @@ async function applyEvent(tx: Prisma.TransactionClient, attempt: ApplicationEmai
           failureReason: event.failureReason ?? `provider_${status}`,
         } : { failureReason: null }),
       } });
+      if (["failed", "bounced", "complained"].includes(status)) {
+        await tx.application.updateMany({
+          where: { id: attempt.applicationId },
+          data: {
+            status: "failed",
+            sendStatus: "failed",
+            sendFailureReason: `email_${status}`,
+            errorMessage: status === "complained"
+              ? "Il destinatario ha segnalato lo spam. Candidatura marcata fallita."
+              : "Email non consegnata (bounce). Candidatura marcata fallita.",
+          },
+        });
+      }
     }
   } else if (event.type === "email.opened") {
     // An open (which may be a proxy/bot) is neither a human reply nor a receipt.

@@ -18,6 +18,7 @@ import { FREE_QUOTA_WORKER_INFLIGHT_STATUSES, freeQuotaWindowStart, freeWeeklyAp
 import { requiresManualAtsHandoff, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import { maxDrainAttempts } from "@/lib/drain-limits";
 import { MAX_ATTEMPTS_MESSAGE_PREFIX } from "@/lib/queue-sendability";
+import { matchesApplicationEmailProofKey } from "@/lib/recruiter-email-send";
 
 // Persisted before crossing a delivery boundary. A crash/timeout never releases
 // this reservation: only a proved no-send outcome or an atomic success does.
@@ -374,10 +375,11 @@ export async function completeApplicationSubmission(
     if (!reservation) return false;
     let proof: SentProof | null = null;
     if (data.submittedVia === "email_recruiter" && data.submitConfirmation === "EMAIL_SENT") {
-      const attempt = await tx.applicationEmailAttempt.findUnique({
-        where: { attemptKey: `application-${id}-${token.getTime()}` },
-        select: { applicationId: true, providerEmailId: true, acceptedAt: true },
+      const attempts = await tx.applicationEmailAttempt.findMany({
+        where: { applicationId: id, providerEmailId: { not: null }, acceptedAt: { not: null } },
+        select: { applicationId: true, providerEmailId: true, acceptedAt: true, attemptKey: true },
       });
+      const attempt = attempts.find((row) => matchesApplicationEmailProofKey(row.attemptKey, id, token));
       if (!attempt || attempt.applicationId !== id || !attempt.providerEmailId?.trim() || !attempt.acceptedAt) return false;
       proof = { type: "email_provider_message_id", ref: attempt.providerEmailId.trim() };
     } else {

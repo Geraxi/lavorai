@@ -75,7 +75,9 @@ export default async function AppLayout({
             icon={ShieldCheck}
             tone="amber"
             title={user.locale === "en" ? "Applications are waiting for your privacy consent." : "Le candidature sono in attesa del tuo consenso privacy."}
-            body={user.locale === "en" ? "Nothing is sent until you review it." : "Non inviamo nulla finché non lo confermi."}
+            body={user.locale === "en"
+              ? "Queued applications cannot be sent until you review the notice and consent. Nothing is emailed to you from this prompt."
+              : "Le candidature in coda restano bloccate finché non leggi l’informativa e acconsenti. Questo avviso non invia email."}
             action={{ href: "/settings#privacy-consent", label: user.locale === "en" ? "Review consent" : "Rivedi il consenso" }}
           />
         )}

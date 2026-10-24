@@ -17,7 +17,8 @@ const domainIs = (host: string, domain: string) => host === domain || host.endsW
 const ATS_DOMAINS = ["greenhouse.io", "ashbyhq.com", "lever.co", "workable.com", "smartrecruiters.com", "recruitee.com", "teamtailor.com", "bamboohr.com", "breezy.hr", "pinpointhq.com"];
 
 /** Only conclusive removal evidence can close a shared vacancy. Failures,
- * challenges and unrecognised pages remain unknown, which cannot auto-send.
+ * challenges and unrecognised pages remain unknown, which now proceeds
+ * (the worker does not hold "unverifiable" rows).
  */
 export async function checkJobUrlLiveness(url: string): Promise<JobLivenessResult> {
   const checkedAt = new Date();
@@ -43,15 +44,12 @@ export async function checkJobUrlLiveness(url: string): Promise<JobLivenessResul
     if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) return result("unknown", "unexpected_content_type", finalUrl);
     const html = (await response.text()).slice(0, 300_000);
     const visible = html.replace(/<(script|style|nav|footer)\b[^>]*>[\s\S]*?<\/\1>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    if (/job (?:was )?not found|this (?:job|position) is no longer|(?:this|the) position (?:has been |is )(?:filled|closed)|no longer accepting applications|questa posizione non è più|annuncio (?:non è più|scaduto)/i.test(visible)
-      || /"posting"\s*:\s*null/.test(html)) return result("closed", "posting_closed_message", finalUrl);
-    if (/captcha|verify (?:you are|that you are) human|access denied|just a moment|sign in to continue/i.test(visible)) return result("unknown", "challenge_or_login", finalUrl);
-    // A 200 status alone is not proof: login pages, empty SPA shells and generic
-    // career pages cannot safely stand in for an actual application posting.
-    const posting = /["']@type["']\s*:\s*["']JobPosting["']|"posting"\s*:\s*\{|<h1\b/i.test(html);
-    const application = /\b(apply (?:now|for|to)|submit (?:your )?application|send (?:your )?(?:cv|resume)|candidati|invia(?:re)? (?:il |la |una )?(?:cv|candidatura)|application form)\b/i.test(visible)
-      || /<form\b[^>]*(?:application|apply)|href=["'][^"']*\/(?:apply|application)(?:[/?#"'])/i.test(html);
-    return posting && application ? result("live", "posting_with_application_context", finalUrl) : result("unknown", "posting_not_verified", finalUrl);
+    if (/job (?:was )?not found|this (?:job|position) is no longer|(?:this|the) position (?:has been |is )(?:filled|closed)|no longer accepting applications|questa posizione non è più|posizione chiusa|annuncio (?:non è più|scaduto)|no longer accepting/i.test(visible)
+      || /"posting"\s*:\s*null/.test(html)
+      || /\b(?:position closed|applications? closed|ruolo chiuso)\b/i.test(visible)) return result("closed", "posting_closed_message", finalUrl);
+    // No explicit closed signal: treat as open. Captcha/SPA/login are not
+    // removal evidence; unknown HTTP failures stay unknown and still proceed.
+    return result("live", "no_closed_signal", finalUrl);
   } catch { return result("unknown", "network_or_timeout"); }
 }
 
@@ -59,7 +57,7 @@ export async function checkJobUrlLiveness(url: string): Promise<JobLivenessResul
  * consumers that persist closure must inspect checkJobUrlLiveness().state.
  */
 export async function isJobUrlAlive(url: string): Promise<boolean> {
-  return (await checkJobUrlLiveness(url)).state === "live";
+  return (await checkJobUrlLiveness(url)).state !== "closed";
 }
 
 export async function markJobClosed(jobId: string): Promise<void> {
@@ -71,6 +69,12 @@ async function getJson(url: string): Promise<{ status: number; json: unknown } |
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { accept: "application/json", "user-agent": "LavorAI/1.0" } });
     return { status: response.status, json: await response.json().catch(() => null) };
+  } catch { return null; }
+}
+async function getText(url: string): Promise<{ status: number; text: string } | null> {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { accept: "application/xml,text/xml,application/json", "user-agent": "LavorAI/1.0" } });
+    return { status: response.status, text: await response.text().catch(() => "") };
   } catch { return null; }
 }
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
@@ -100,6 +104,31 @@ async function checkViaAtsApi(url: URL): Promise<ApiVerdict | null> {
     if (match) { id = match[2]; apiUrl = `https://apply.workable.com/api/v2/accounts/${encodeURIComponent(match[1])}/jobs/${encodeURIComponent(id)}`; }
   } else if (domainIs(host, "smartrecruiters.com") && parts[0] && parts[1]) {
     id = parts[1].split("-")[0]; apiUrl = `https://api.smartrecruiters.com/v1/companies/${encodeURIComponent(parts[0])}/postings/${encodeURIComponent(id)}`;
+  } else if (domainIs(host, "recruitee.com")) {
+    const tenant = host.split(".")[0];
+    const slug = parts[0] === "o" ? parts[1] : null;
+    if (!tenant || tenant === "www" || !slug) return null;
+    const response = await getJson(`https://${tenant}.recruitee.com/api/offers/`);
+    if (!response) return null;
+    if ([404, 410].includes(response.status)) return { state: "closed", reason: `ats_api_${response.status}` };
+    if (response.status !== 200 || !object(response.json) || !Array.isArray(response.json.offers)) return null;
+    const offers = response.json.offers;
+    const open = offers.some((offer) => object(offer) && (
+      String(offer.slug ?? "").toLowerCase() === slug.toLowerCase()
+      || String(offer.id ?? "") === slug
+    ) && (!offer.status || offer.status === "published"));
+    return open ? { state: "live", reason: "ats_api_posting_present" } : { state: "closed", reason: "ats_api_posting_removed" };
+  } else if (/\.jobs\.personio\.(?:de|com)$/i.test(host)) {
+    const tenant = host.split(".")[0];
+    const jobId = parts[0] === "job" ? parts[1] : null;
+    if (!tenant || !jobId) return null;
+    const tld = host.endsWith(".de") ? "de" : "com";
+    const xml = await getText(`https://${tenant}.jobs.personio.${tld}/xml?language=en`);
+    if (!xml) return null;
+    if ([404, 410].includes(xml.status)) return { state: "closed", reason: `ats_api_${xml.status}` };
+    if (xml.status !== 200 || !xml.text.includes("<position>")) return null;
+    const open = xml.text.includes(`<id>${jobId}</id>`) || xml.text.includes(`<id><![CDATA[${jobId}]]></id>`);
+    return open ? { state: "live", reason: "ats_api_posting_present" } : { state: "closed", reason: "ats_api_posting_removed" };
   }
   if (!apiUrl || !id) return null;
   const response = await getJson(apiUrl);

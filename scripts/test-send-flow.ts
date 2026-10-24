@@ -13,6 +13,8 @@ async function main() {
     let sends = 0;
     const result = await sendRecruiterEmailOnce(input, {
       withinQuota: async (_kind, _to, fn) => { await fn(); return { sent: true, reason: null }; },
+      recipientDomainAllowed: async () => ({ allowed: true, reason: null, domain: "acme.invalid", used: 0, limit: 12 }),
+      findAttempt: async () => null,
       createAttempt: async () => { events.push("persist"); if (duplicate) throw Object.assign(new Error("duplicate"), { code: "P2002" }); return { id: "attempt-1" } as any; },
       send: async (payload, key) => { sends++; assert.equal(events[0], "persist"); assert.equal(payload.to, input.recipient); assert.equal(key, input.attemptKey); if (throws) throw new Error("socket lost"); return response; },
       accepted: async () => { events.push("accepted"); },
@@ -38,6 +40,8 @@ async function main() {
   const gateEvents: string[] = [];
   const denied = await sendRecruiterEmailOnce({ ...input, beforeSend: async () => { gateEvents.push("gate"); return false; } }, {
     withinQuota: async (_kind, _to, fn) => { await fn(); gateEvents.push("quota-recorded"); return { sent: true, reason: null }; },
+    recipientDomainAllowed: async () => ({ allowed: true, reason: null, domain: "acme.invalid", used: 0, limit: 12 }),
+    findAttempt: async () => null,
     createAttempt: async () => { gateEvents.push("persist"); return { id: "gate-attempt" } as any; },
     send: async () => { throw new Error("Denied eligibility must not contact provider"); },
     accepted: async () => { throw new Error("Denied eligibility must not be accepted"); },
@@ -52,6 +56,8 @@ async function main() {
     globalThis.fetch = async () => { throw new Error("Synthetic connection lost after request"); };
     const result = await sendRecruiterEmailOnce(input, {
       withinQuota: async (_kind, _to, fn) => { await fn(); return { sent: true, reason: null }; },
+      recipientDomainAllowed: async () => ({ allowed: true, reason: null, domain: "acme.invalid", used: 0, limit: 12 }),
+      findAttempt: async () => null,
       createAttempt: async () => ({ id: "synthetic-sdk" } as any), accepted: async () => { throw new Error("not expected"); },
       uncertain: async (_id, rejected) => { assert.notEqual(rejected, true); },
     });

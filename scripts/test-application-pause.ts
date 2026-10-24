@@ -15,6 +15,13 @@ function load(path: string, extra: Record<string, any> = {}): any {
     "@/lib/scrapers/ats-companies": { GREENHOUSE_COMPANIES: [], LEVER_COMPANIES: [], ASHBY_COMPANIES: [], WORKABLE_COMPANIES: [], SMARTRECRUITERS_COMPANIES: [] },
     // In-process AsyncLocalStorage binding only (no I/O): token usage attribution.
     "@/lib/ai-usage": { withAiUsageContext: (_context: unknown, run: () => unknown) => run(), recordAiUsage: () => {} },
+    "@/lib/held-application-release": {
+      recheckLivenessHeldApplications: async () => ({ checked: 0, released: 0, closed: 0, stillUnknown: 0, exhausted: 0 }),
+      releaseUnverifiableLivenessHolds: async () => 0,
+    },
+    "@/lib/cv-profile-ensure": {
+      backfillMissingCvProfiles: async () => ({ created: 0, filled: 0, failed: 0, noCv: 0, emptyExtraction: 0, skipped: 0 }),
+    },
     "@/lib/daily-application-cap": {
       countDailyCapUsage: async () => 0,
       countsTowardQuota: () => false,

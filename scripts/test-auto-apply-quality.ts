@@ -167,6 +167,7 @@ async function testRecruiterEmail() {
   let dnsCalls = 0;
   let status = 200;
   let finalUrl = "https://careers.acme.com/job";
+  let pages: Record<string, string> | null = null;
   let aiCalls = 0;
   const api = loadModule("src/lib/recruiter-email.ts", {
     "node:crypto": { createHash },
@@ -177,8 +178,8 @@ async function testRecruiterEmail() {
       resolveMx: async () => { dnsCalls++; return dnsAvailable ? [{ exchange: "mail.acme.com", priority: 10 }] : []; },
       resolve4: async () => [],
     },
-  }, { AbortSignal, fetch: async () => ({ ok: status === 200, status, url: finalUrl,
-    headers: { get: () => "text/html" }, text: async () => html }) });
+  }, { AbortSignal, fetch: async (url: string) => ({ ok: status === 200, status, url: pages ? url : finalUrl,
+    headers: { get: () => "text/html" }, text: async () => pages?.[url] ?? html }) });
   const scrape = async (email: string) => {
     html = `<html><body><h1>Acme: Product Designer</h1><p>Send your CV to ${email}.</p></body></html>`;
     return api.scrapeRecruiterEmail("https://careers.acme.com/job", "Acme");
@@ -297,8 +298,56 @@ async function testRecruiterEmail() {
     assert.equal(await verify(url, email, company, redirectedTo), null, `Unverified attribution must require review: ${url}, ${email ?? "careers@acme.com"}`);
     assert.equal(dnsCalls, beforeDns, "Domain/tenant attribution must fail before DNS can lend false credibility");
   }
+  // Description, JSON-LD, Italian invitation, careers page — never invent jobs@
+  status = 503;
+  const fromDescription = await api.findVerifiedRecruiterEmail(
+    "https://www.adzuna.it/job/1", "Acme", null,
+    { description: "Inviare il CV a careers@acme.com per questa posizione." },
+  );
+  assert.equal(fromDescription?.email, "careers@acme.com", "Job description unlocks aggregator URLs");
+  assert.equal(fromDescription?.provenance.sourceType, "job_description");
+  status = 200; finalUrl = "https://careers.acme.com/job";
+  html = `<html><head><script type="application/ld+json">{"@type":"JobPosting","applicationContact":{"email":"jobs@acme.com"}}</script></head><body><h1>Acme Designer</h1></body></html>`;
+  const jsonLd = await api.findVerifiedRecruiterEmail("https://careers.acme.com/job", "Acme");
+  assert.equal(jsonLd?.email, "jobs@acme.com");
+  assert.equal(jsonLd?.provenance.sourceType, "json_ld_application_contact");
+  html = "<h1>Acme Designer</h1><p>Candidature a selection@acme.com — inviaci il profilo.</p>";
+  assert.equal(await api.scrapeRecruiterEmail("https://careers.acme.com/job", "Acme"), "selection@acme.com");
+  html = '<h1>Acme Designer</h1><p>Apply here.</p><a href="https://careers.acme.com/careers">Careers</a>';
+  pages = {
+    "https://careers.acme.com/job": html,
+    "https://careers.acme.com/careers": "<h1>Acme careers</h1><p>Send your CV to talent@acme.com.</p>",
+  };
+  const careers = await api.findVerifiedRecruiterEmail("https://careers.acme.com/job", "Acme");
+  assert.equal(careers?.email, "talent@acme.com");
+  assert.equal(careers?.provenance.sourceType, "employer_careers_page");
+  assert.equal(careers?.provenance.sourceUrl, "https://careers.acme.com/careers");
+  pages = null;
+  html = "<h1>Acme Designer</h1><p>We are hiring. No inbox listed.</p>";
+  const invented = await api.findVerifiedRecruiterEmail("https://careers.acme.com/job", "Acme");
+  assert.equal(invented, null, "Must never guess jobs@domain");
+  const extracted = api.extractPublishedRecruiterEmailFromText("No address here, apply on the site.", "Acme", "https://careers.acme.com/job");
+  assert.equal(extracted, null);
+  assert.equal(
+    api.extractPublishedRecruiterEmailFromText("Inviare il CV a jobs@randstad.com per questa posizione.", "Acme", "https://www.adzuna.it/details/1"),
+    null,
+    "Generic staffing inbox on an aggregator posting is not the employer",
+  );
+  assert.equal(
+    api.extractPublishedRecruiterEmailFromText("Inviare il CV a careers@acme.com per questa posizione.", "Acme", "https://www.adzuna.it/details/1")?.email,
+    "careers@acme.com",
+  );
+  assert.equal(
+    api.extractPublishedRecruiterEmailFromText("Send your CV to jobs@acme.com.", "Widget Labs", "https://boards.greenhouse.io/acme/jobs/123")?.email,
+    "jobs@acme.com",
+    "ATS-listed company domain may authorize a generic inbox",
+  );
+  assert.equal(
+    api.extractPublishedRecruiterEmailFromText("Send your CV to recruiting@randstad.com.", "Acme", "https://boards.greenhouse.io/acme/jobs/123"),
+    null,
+  );
   console.log(`[auto-apply-quality] ${accepted.length + rejected.length} registrable-domain, suffix, private-tenant, ATS, URL and IDN regressions passed.`);
-  console.log("[auto-apply-quality] Fresh page provenance, cache/AI rejection, blocklist and DNS checks passed.");
+  console.log("[auto-apply-quality] Fresh page provenance, cache/AI rejection, blocklist, DNS, description/JSON-LD/careers checks passed.");
 }
 
 async function main() {

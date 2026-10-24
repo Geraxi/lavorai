@@ -3,6 +3,9 @@ import { authorizeReleaseCanary } from "@/lib/release-email-canary";
 import { Resend, type CreateEmailOptions } from "resend";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { createApplicationEmailAttempt, recordApplicationEmailAccepted, recordApplicationEmailUncertain } from "@/lib/application-delivery";
+import { canSendToRecipientDomain } from "@/lib/recipient-domain-quota";
+import { isActiveRecruiterEmailStatus } from "@/lib/recruiter-email-send";
+import { prisma } from "@/lib/db";
 
 export type RecruiterDeliveryResult =
   | { kind: "accepted"; attemptId: string; providerEmailId: string }
@@ -14,6 +17,10 @@ interface Dependencies {
   createAttempt: typeof createApplicationEmailAttempt;
   accepted: typeof recordApplicationEmailAccepted;
   uncertain: typeof recordApplicationEmailUncertain;
+  recipientDomainAllowed: typeof canSendToRecipientDomain;
+  findAttempt: (attemptKey: string) => Promise<{
+    id: string; status: string; providerEmailId: string | null; acceptedAt: Date | null;
+  } | null>;
   send: (payload: CreateEmailOptions, key: string) => Promise<{ data: { id: string } | null; error: { name: string; statusCode?: number | null } | null }>;
 }
 
@@ -39,6 +46,10 @@ export async function sendRecruiterEmailOnce(input: {
     createAttempt: createApplicationEmailAttempt,
     accepted: recordApplicationEmailAccepted,
     uncertain: recordApplicationEmailUncertain,
+    recipientDomainAllowed: canSendToRecipientDomain,
+    findAttempt: async (attemptKey) => prisma.applicationEmailAttempt.findUnique({
+      where: { attemptKey }, select: { id: true, status: true, providerEmailId: true, acceptedAt: true },
+    }),
     send: async (payload, key) => {
       const apiKey = process.env.RESEND_API_KEY;
       if (!apiKey) throw new Error("email_provider_not_configured");
@@ -51,6 +62,17 @@ export async function sendRecruiterEmailOnce(input: {
   let attemptCreationStarted = false;
   let result: RecruiterDeliveryResult = { kind: "not_sent", reason: "email_quota_unavailable" };
   try {
+    const existing = await deps.findAttempt(input.attemptKey);
+    if (existing) {
+      if (existing.providerEmailId && existing.acceptedAt) {
+        return { kind: "accepted", attemptId: existing.id, providerEmailId: existing.providerEmailId };
+      }
+      if (existing.providerEmailId || isActiveRecruiterEmailStatus(existing.status)) {
+        return { kind: "uncertain", attemptId: existing.id };
+      }
+    }
+    const domainQuota = await deps.recipientDomainAllowed(input.recipient);
+    if (!domainQuota.allowed) return { kind: "not_sent", reason: domainQuota.reason ?? "recipient_domain_rate_limited" };
     const quota = await deps.withinQuota(canary ? "release_canary" : "application_sent", input.recipient, async () => {
       attemptCreationStarted = true;
       const attempt = await deps.createAttempt({

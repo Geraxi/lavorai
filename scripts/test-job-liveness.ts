@@ -19,9 +19,10 @@ vm.runInNewContext(output, { module, exports: module.exports, URL, Date, AbortSi
   fetch: async (url: string) => {
     urls.push(url);
     if (throws) throw new Error("test network timeout");
-    const r = /boards-api|api\.ashbyhq|api\.lever|\/api\/v2\/|api\.smartrecruiters/.test(url) ? (apiResponse ?? { status: 503, json: null }) : response;
+    const r = /boards-api|api\.ashbyhq|api\.lever|\/api\/v2\/|api\.smartrecruiters|recruitee\.com\/api\/offers|jobs\.personio/.test(url)
+      ? (apiResponse ?? { status: 503, json: null, html: response.html }) : response;
     return { ...r, ok: r.status >= 200 && r.status < 300, headers: { get: () => "text/html" },
-      text: async () => response.html, json: async () => r.json };
+      text: async () => (r as { html?: string }).html ?? (typeof r.json === "string" ? r.json : response.html), json: async () => r.json };
   },
 });
 const check = (url = "https://careers.acme.test/job") => module.exports.checkJobUrlLiveness(url);
@@ -32,7 +33,7 @@ async function main() {
   response.status = 200; response.html = "<h1>This job is no longer accepting applications</h1>";
   assert.equal((await check()).state, "closed");
   for (const html of ["<h1>Careers</h1>", "<html><script>loadApp()</script></html>", "<h1>Just a moment</h1><p>Verify you are human</p>"]) {
-    response.html = html; assert.equal((await check()).state, "unknown");
+    response.html = html; assert.equal((await check()).state, "live", "No explicit closed signal proceeds");
   }
   response.html = '<h1>Acme Engineer</h1><p>Apply now</p><footer>Old job no longer accepting applications</footer>';
   assert.equal((await check()).state, "live", "Closed wording in unrelated footer is not removal evidence");
@@ -45,15 +46,23 @@ async function main() {
   apiResponse = { status: 200, json: { id: 123, title: "Engineer" } };
   assert.equal((await check(response.url)).state, "live");
   apiResponse = { status: 200, json: { id: 999, title: "Wrong job" } };
-  assert.equal((await check(response.url)).state, "unknown");
+  assert.equal((await check(response.url)).state, "live", "Unusable API + no closed HTML proceeds");
   apiResponse = { status: 200, json: { error: "Invalid token" } };
-  assert.equal((await check(response.url)).state, "unknown");
+  assert.equal((await check(response.url)).state, "live");
   apiResponse = { status: 404, json: null }; assert.equal((await check(response.url)).state, "closed");
   apiResponse = { status: 200, json: { jobs: [] } };
   assert.equal((await check("https://jobs.ashbyhq.com/acme/01234567-0123-0123-0123-012345678901")).state, "closed");
   apiResponse = { status: 503, json: null };
-  assert.equal((await check(response.url)).state, "unknown");
-  assert.equal(await module.exports.isJobUrlAlive(response.url), false, "Unknown cannot auto-send");
+  assert.equal((await check(response.url)).state, "live", "API outage + no closed HTML proceeds");
+  assert.equal(await module.exports.isJobUrlAlive(response.url), true, "Unknown/live both proceed");
+  apiResponse = { status: 200, json: { offers: [{ slug: "designer", status: "published" }] } };
+  assert.equal((await check("https://acme.recruitee.com/o/designer")).state, "live");
+  apiResponse = { status: 200, json: { offers: [] } };
+  assert.equal((await check("https://acme.recruitee.com/o/designer")).state, "closed");
+  apiResponse = { status: 200, json: "<positions><position><id>123</id></position></positions>", html: "<positions><position><id>123</id></position></positions>" };
+  assert.equal((await check("https://acme.jobs.personio.de/job/123")).state, "live");
+  apiResponse = { status: 200, json: "<positions><position><id>999</id></position></positions>", html: "<positions><position><id>999</id></position></positions>" };
+  assert.equal((await check("https://acme.jobs.personio.de/job/123")).state, "closed");
   const loc = (location: string | null, remote = true, description = "") => ({ location, remote, description });
   assert.equal(locationPreferenceMismatch(loc("Remote - US only"), ["Milano"]), "location");
   assert.equal(locationPreferenceMismatch(loc("Remote - US only"), ["Remote (EU)"]), "location");

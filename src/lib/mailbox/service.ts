@@ -20,7 +20,7 @@ export interface MailboxDeps {
   env: Record<string, string | undefined>;
   readFile: (path: string) => Promise<Buffer>;
   /** Destinatario verificato per l'annuncio (provenienza dalla pagina del datore). */
-  findRecipient: (job: { url: string; company: string | null; recruiterEmail: string | null }) => Promise<{ email: string; provenance: unknown } | null>;
+  findRecipient: (job: { url: string; company: string | null; recruiterEmail: string | null; description?: string | null }) => Promise<{ email: string; provenance: unknown } | null>;
   /** Client autenticato per la casella collegata (null se non collegata/valida). */
   clientFor: (userId: string, provider: MailboxProvider) => Promise<MailboxClient | null>;
   decrypt: (s: string) => string;
@@ -38,7 +38,7 @@ export async function prepareMailboxSends(userId: string, applicationIds: string
       where: { id: applicationId, userId },
       select: { id: true, status: true, cvPdfPath: true, coverLetterPath: true, coverLetterText: true, cvLanguage: true,
         user: { select: { name: true, email: true } },
-        job: { select: { title: true, company: true, url: true, recruiterEmail: true } },
+        job: { select: { title: true, company: true, url: true, recruiterEmail: true, description: true } },
         mailboxSends: { where: { state: { not: "failed" } }, select: { id: true, state: true } } },
     });
     if (!app) { skipped.push({ applicationId, reason: "not_found" }); continue; }
@@ -48,7 +48,7 @@ export async function prepareMailboxSends(userId: string, applicationIds: string
     if (app.status === "success") { skipped.push({ applicationId, reason: "already_sent" }); continue; }
     if (!app.cvPdfPath) { skipped.push({ applicationId, reason: "no_cv_pdf" }); continue; }
     if (!app.coverLetterText?.trim()) { skipped.push({ applicationId, reason: "no_cover_letter" }); continue; }
-    const found = await deps.findRecipient({ url: app.job.url, company: app.job.company, recruiterEmail: app.job.recruiterEmail }).catch(() => null);
+    const found = await deps.findRecipient({ url: app.job.url, company: app.job.company, recruiterEmail: app.job.recruiterEmail, description: app.job.description }).catch(() => null);
     if (!found) { skipped.push({ applicationId, reason: "no_verified_recipient" }); continue; }
     const recipient = found.email.trim().toLowerCase();
     try { assertSafeAddress(recipient); } catch { skipped.push({ applicationId, reason: "no_verified_recipient" }); continue; }
