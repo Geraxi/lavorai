@@ -69,6 +69,11 @@ assert(worker.indexOf("lookupPublishedSkipListInbox") < worker.indexOf("reserveA
 assert(worker.includes("discoverPublishedHiringInbox"), "Worker discovers published hiring inboxes on the employer domain");
 assert(worker.includes("isSkippedPortalUrl"), "Skip-list hosts skip portal submit and try email first");
 assert(worker.includes("SKIPPED_ATS_MANUAL_MESSAGE"), "Skip-list handoff happens only after email lookup fails");
+assert(worker.includes("skipListManualHandoffWhere"), "Skip-list miss must include answers_claimed / NOT_SUBMITTED resumes");
+assert(worker.includes("skipListManualHandoffData"), "Skip-list miss must clear the work lease on handoff");
+const gates = readFileSync(new URL("../src/lib/application-worker-gates.ts", import.meta.url), "utf8");
+assert(gates.includes("CONTINUATION_PROOF_MISSING_MESSAGE"), "Missing continuation proof must persist a visible user-action");
+assert(gates.includes("handOffContinuationProofMissing"), "continuation_proof_missing must rewrite the row, not return silently");
 assert(readFileSync(new URL("../src/lib/skip-list-email-lookup.ts", import.meta.url), "utf8").includes("skipPageFetch"),
   "Cheap skip-list lookup must not crawl the ATS job page");
 assert(!readFileSync(new URL("../src/lib/application-worker-gates.ts", import.meta.url), "utf8").includes("requiresManualAtsHandoff"),

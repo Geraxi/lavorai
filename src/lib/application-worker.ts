@@ -33,7 +33,7 @@ import { humanContext, launchBrowser } from "@/lib/browser";
 import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { discoverPublishedHiringInbox } from "@/lib/employer-hiring-inbox";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
-import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData, skipListManualHandoffWhere } from "@/lib/ats-skip-hosts";
 import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
 import {
   recruiterFromAddress,
@@ -152,21 +152,8 @@ async function processApplicationRun(
     }).catch(() => null);
     if (!cheap) {
       await prisma.application.updateMany({
-        where: {
-          id: applicationId,
-          status: { in: ["queued", "ready_to_apply"] },
-          submittedAt: null,
-          submittedVia: null,
-          submitConfirmation: null,
-          canaryLog: null,
-          answersUsedJson: null,
-        },
-        data: {
-          status: "ready_to_apply",
-          errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
-          completedAt: new Date(),
-          recruiterEmailRecheckedAt: new Date(),
-        },
+        where: skipListManualHandoffWhere(applicationId),
+        data: skipListManualHandoffData(),
       });
       return;
     }

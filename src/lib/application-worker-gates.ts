@@ -1,4 +1,4 @@
-import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
+import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, CONTINUATION_PROOF_MISSING_MESSAGE, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
 import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
 import { parseAnswers } from "./application-answers";
 import { isValidProof, portalProof, submittedWithProof, type SentProof } from "./proof-of-send";
@@ -559,6 +559,38 @@ export async function attestAnswerPause(id: string, token: Date, channel: string
   })) === true;
 }
 
+/** CAS: unsent paused/queued/claimed rows with no usable proof become a visible handoff. */
+async function handOffContinuationProofMissing(
+  tx: Prisma.TransactionClient,
+  row: Pick<WorkerGateRow, "id">,
+): Promise<void> {
+  await tx.application.updateMany({
+    where: {
+      id: row.id,
+      status: { in: ["needs_answers", "queued", "answers_claimed"] },
+      submittedAt: null,
+      submittedVia: null,
+      completedAt: null,
+      submitStartedAt: null,
+      canaryLog: null,
+      answersUsedJson: null,
+      OR: [
+        { submitConfirmation: null },
+        { submitConfirmation: { in: [NOT_SUBMITTED, "NEEDS_ANSWERS"] } },
+      ],
+    },
+    data: {
+      status: "ready_to_apply",
+      submitConfirmation: NOT_SUBMITTED,
+      errorMessage: CONTINUATION_PROOF_MISSING_MESSAGE,
+      completedAt: new Date(),
+      startedAt: null,
+      leaseToken: null,
+      leaseExpiresAt: null,
+    },
+  });
+}
+
 /** Authenticated, candidate-confirmed continuation of the same reserved attempt.
  * Only this transition can publish a continuation. No implicit resume on save. */
 export async function queueAnswerContinuation(input: {
@@ -566,7 +598,10 @@ export async function queueAnswerContinuation(input: {
 }, db: DB = prisma): Promise<string> {
   return (await withLockedApplication(input.applicationId, db, async (tx, row) => {
     if (!row || row.userId !== input.userId) return "application_not_found";
-    if (!row.answerContinuationJson) return "continuation_proof_missing";
+    if (!row.answerContinuationJson) {
+      await handOffContinuationProofMissing(tx, row);
+      return "continuation_proof_missing";
+    }
     if (row.userProvidedAnswersJson !== input.expectedAnswersJson) return "questions_changed_reload";
     const proof = parseAnswerContinuation(row.answerContinuationJson);
     if (row.status === "queued" && proof?.phase === "queued" && continuationConfirmationAccepted(row.submitConfirmation)) {
@@ -577,7 +612,12 @@ export async function queueAnswerContinuation(input: {
     const grantsConsent = proof?.consentGrantedAt === null && proof.consentSource === "answers" && !row.consentGrantedAt;
     const consentAt = grantsConsent ? new Date(Math.max(Date.now(), Date.parse(proof!.pausedAt))) : row.consentGrantedAt;
     const reason = answerContinuationIneligibility(row, "paused", row.job.url) ?? currentWorkerIneligibility({ ...row, consentGrantedAt: consentAt });
-    if (reason || !proof) return reason ?? "continuation_proof_missing";
+    if (reason || !proof) {
+      if (!proof || (reason === "continuation_proof_missing" && row.status === "needs_answers")) {
+        await handOffContinuationProofMissing(tx, row);
+      }
+      return reason ?? "continuation_proof_missing";
+    }
     if (!await continuationReservationMatches(tx, row, proof)) return "continuation_reservation_mismatch";
     const block = await admissionBlock(tx, row);
     if (block) return block;

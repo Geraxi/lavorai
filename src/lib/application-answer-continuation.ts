@@ -29,6 +29,9 @@ export const BLANK_FORM_EVIDENCE: Record<string, PreTransmissionEvidence> = {
   portal_greenhouse: "greenhouse_blank_form_v1", portal_ashby: "ashby_blank_form_v1",
 };
 export const ANSWERS_CONSENT_NOTE = "Consenso per questa candidatura dato confermando le risposte su Domande";
+/** Visible user-action when Domande cannot resume: no attested pause proof. */
+export const CONTINUATION_PROOF_MISSING_MESSAGE =
+  "Impossibile riprendere l'invio automatico: manca la prova della pausa sul portale. Completa la candidatura dal link dell'annuncio. Nessun invio effettuato.";
 export const continuationSelect = {
   id: true, userId: true, jobId: true, createdAt: true, consentGrantedAt: true, retryCount: true,
   status: true, startedAt: true, completedAt: true, submittedAt: true, submittedVia: true,
