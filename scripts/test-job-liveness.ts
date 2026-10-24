@@ -15,7 +15,11 @@ let throws = false;
 const urls: string[] = [];
 const module = { exports: {} as Record<string, any> };
 vm.runInNewContext(output, { module, exports: module.exports, URL, Date, AbortSignal,
-  require: (id: string) => { assert.equal(id, "@/lib/db"); return { prisma: { job: { update: () => { throw new Error("No DB writes allowed"); } } } }; },
+  require: (id: string) => {
+    if (id === "@/lib/ats-test-capability") return { allowUnpublishedRecruiteeOffer: (url: string) => url.includes("produzioneweb.recruitee.com") };
+    assert.equal(id, "@/lib/db");
+    return { prisma: { job: { update: () => { throw new Error("No DB writes allowed"); } } } };
+  },
   fetch: async (url: string) => {
     urls.push(url);
     if (throws) throw new Error("test network timeout");
@@ -57,6 +61,10 @@ async function main() {
   assert.equal(await module.exports.isJobUrlAlive(response.url), true, "Unknown/live both proceed");
   apiResponse = { status: 200, json: { offers: [{ slug: "designer", status: "published" }] } };
   assert.equal((await check("https://acme.recruitee.com/o/designer")).state, "live");
+  apiResponse = { status: 200, json: { offers: [{ slug: "designer", status: "internal" }] } };
+  assert.equal((await check("https://acme.recruitee.com/o/designer")).state, "closed", "unpublished Recruitee stays closed for non-test hosts");
+  apiResponse = { status: 200, json: { offers: [{ slug: "trial-offer", status: "internal" }] } };
+  assert.equal((await check("https://produzioneweb.recruitee.com/o/trial-offer")).state, "live", "allowlisted test host may be unpublished");
   apiResponse = { status: 200, json: { offers: [] } };
   assert.equal((await check("https://acme.recruitee.com/o/designer")).state, "closed");
   apiResponse = { status: 200, json: "<positions><position><id>123</id></position></positions>", html: "<positions><position><id>123</id></position></positions>" };

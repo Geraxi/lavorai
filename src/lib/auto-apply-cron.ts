@@ -612,6 +612,8 @@ async function processUser(
           "breezy",
           "pinpoint",
         ],
+        // `ats_test` is excluded: restricted test destinations never enter
+        // the customer auto-apply pool.
         // Board sources (weworkremotely, arbeitnow, etc.) and ToS-restricted
         // sources (eures) are not included in the pool: they're either resolved
         // to their canonical ATS posting via board-apply-resolver or disabled.

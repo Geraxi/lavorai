@@ -266,6 +266,7 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
   const attemptCap = maxDrainAttempts();
   const rows = await prisma.application.findMany({
     where: { status: "queued", startedAt: null, leaseToken: null, submitStartedAt: null, completedAt: null, retryCount: { lt: attemptCap },
+      job: { source: { not: "ats_test" } },
       createdAt: { gt: config.startedAt, lte: now },
       // Automatic mode also admits rows of auto-mode users (no per-application
       // consent); the worker gate re-checks the user's saved mode.
@@ -285,6 +286,7 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
   });
   const continuations = await prisma.application.findMany({
     where: { status: "queued", answerContinuationJson: { not: null }, retryCount: { lt: attemptCap },
+      job: { source: { not: "ats_test" } },
       createdAt: { gt: config.startedAt, lte: now }, consentGrantedAt: { gt: config.startedAt, lte: now },
       submitConfirmation: { in: ["NOT_SUBMITTED", "NEEDS_ANSWERS"] }, completedAt: null, submittedAt: null, submittedVia: null,
       submitStartedAt: null,

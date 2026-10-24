@@ -65,7 +65,7 @@ export async function UpgradePrompt({
       const roles = parse(prefs?.rolesJson);
       if (roles.length) {
         const pool = await prisma.job.findMany({
-          where: { cachedAt: { gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) } },
+          where: { source: { not: "ats_test" }, cachedAt: { gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) } },
           orderBy: { cachedAt: "desc" },
           select: { id: true, title: true, company: true, location: true, url: true, remote: true },
           take: 2500,

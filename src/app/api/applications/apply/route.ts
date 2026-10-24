@@ -16,6 +16,7 @@ import { resolveSession } from "@/lib/apply-session";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { ACTIVATION_MESSAGES, getActivationReadiness } from "@/lib/activation-readiness";
+import { isAtsTestJobSource } from "@/lib/ats-test-capability";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -160,7 +161,7 @@ export async function POST(request: NextRequest) {
         { status: 409 },
       );
     }
-    if (!job) {
+    if (!job || isAtsTestJobSource(job.source)) {
       return NextResponse.json(
         { error: "job_not_found", message: "Annuncio non trovato." },
         { status: 404 },

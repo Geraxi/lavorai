@@ -15,6 +15,7 @@ import { resolveSession } from "@/lib/apply-session";
 import { applyBatchLimiter } from "@/lib/rate-limit";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { AnalyticsEvent } from "@/lib/analytics";
+import { isAtsTestJobSource } from "@/lib/ats-test-capability";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -183,6 +184,7 @@ export async function POST(request: NextRequest) {
     );
     const toApply = jobs.filter(
       (j) =>
+        !isAtsTestJobSource(j.source) &&
         !alreadySet.has(j.id) &&
         !(j.company && avoidSet.has(j.company.toLowerCase())),
     );

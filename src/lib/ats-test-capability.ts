@@ -1,0 +1,363 @@
+/**
+ * Restricted ATS test capability. Reuses the production adapter, worker,
+ * status and evidence pipeline. Never a parallel submit path.
+ *
+ * Server-side only:
+ *   ATS_TEST_USER_ID          dedicated test user id
+ *   ATS_TEST_DESTINATIONS     comma/space list of host/o/slug
+ *                             e.g. produzioneweb.recruitee.com/o/trial-offer
+ *   ATS_TEST_REAL_SUBMIT      default off; real submit also needs an admin flag
+ *
+ * Test jobs use source `ats_test` and are excluded from feeds, matching,
+ * other users and quota. Do not add the tenant to RECRUITEE_COMPANIES.
+ */
+
+export const ATS_TEST_JOB_SOURCE = "ats_test";
+
+export type AtsTestEnv = Record<string, string | undefined>;
+
+export type AtsTestDestination = {
+  host: string;
+  slug: string;
+  url: string;
+};
+
+const DEST_RE = /^(?:https:\/\/)?([^/\s?#]+)\/o\/([^/?#\s]+)/i;
+
+export function atsTestUserId(env: AtsTestEnv = process.env): string | null {
+  const id = env.ATS_TEST_USER_ID?.trim();
+  return id || null;
+}
+
+export function isAtsTestUser(userId: string | null | undefined, env: AtsTestEnv = process.env): boolean {
+  const expected = atsTestUserId(env);
+  return !!expected && !!userId && userId === expected;
+}
+
+export function isAtsTestJobSource(source: string | null | undefined): boolean {
+  return source === ATS_TEST_JOB_SOURCE;
+}
+
+export function excludeAtsTestJobsWhere() {
+  return { source: { not: ATS_TEST_JOB_SOURCE } } as const;
+}
+
+export function excludeAtsTestJobRelationWhere() {
+  return { job: { source: { not: ATS_TEST_JOB_SOURCE } } } as const;
+}
+
+export function atsTestRealSubmitEnabled(env: AtsTestEnv = process.env): boolean {
+  const value = env.ATS_TEST_REAL_SUBMIT?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "on" || value === "yes";
+}
+
+function parseDestinationToken(value: string): AtsTestDestination | null {
+  const match = value.trim().match(DEST_RE);
+  if (!match) return null;
+  const host = match[1].toLowerCase();
+  let slug = match[2];
+  try { slug = decodeURIComponent(slug); } catch { /* keep raw */ }
+  if (!host || !slug || host.includes("..")) return null;
+  return { host, slug, url: `https://${host}/o/${slug}` };
+}
+
+export function parseAtsTestDestinations(env: AtsTestEnv = process.env): AtsTestDestination[] {
+  const raw = env.ATS_TEST_DESTINATIONS?.trim() ?? "";
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const out: AtsTestDestination[] = [];
+  for (const token of raw.split(/[\s,]+/)) {
+    const dest = parseDestinationToken(token);
+    if (!dest) continue;
+    const key = `${dest.host}/o/${dest.slug.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(dest);
+  }
+  return out;
+}
+
+export function matchAtsTestDestination(url: string, env: AtsTestEnv = process.env): AtsTestDestination | null {
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return null; }
+  if (parsed.protocol !== "https:") return null;
+  const dest = parseDestinationToken(`${parsed.hostname}${parsed.pathname}`);
+  if (!dest) return null;
+  return parseAtsTestDestinations(env).find((allowed) =>
+    allowed.host === dest.host && allowed.slug.toLowerCase() === dest.slug.toLowerCase(),
+  ) ?? null;
+}
+
+/** Recruitee adapter/liveness may accept a non-published offer only here. */
+export function allowUnpublishedRecruiteeOffer(url: string, env: AtsTestEnv = process.env): boolean {
+  return matchAtsTestDestination(url, env) !== null;
+}
+
+export type AtsTestAuthInput = {
+  adminOk: boolean;
+  jobUrl?: string | null;
+  jobSource?: string | null;
+  targetUserId?: string | null;
+  realSubmit?: boolean;
+};
+
+export type AtsTestAuthOk = {
+  ok: true;
+  mode: "dry_run" | "real_submit";
+  userId: string;
+  destination: AtsTestDestination;
+};
+
+export type AtsTestAuthDenied = { ok: false; reason: string };
+
+export function authorizeAtsTest(input: AtsTestAuthInput, env: AtsTestEnv = process.env): AtsTestAuthOk | AtsTestAuthDenied {
+  if (!input.adminOk) return { ok: false, reason: "forbidden" };
+  const userId = atsTestUserId(env);
+  if (!userId) return { ok: false, reason: "ats_test_user_unconfigured" };
+  if (input.targetUserId && input.targetUserId !== userId) return { ok: false, reason: "ats_test_user_mismatch" };
+  const destinations = parseAtsTestDestinations(env);
+  if (!destinations.length) return { ok: false, reason: "ats_test_destinations_unconfigured" };
+  const destination = input.jobUrl?.trim()
+    ? matchAtsTestDestination(input.jobUrl, env)
+    : destinations[0];
+  if (!destination) return { ok: false, reason: "ats_test_destination_not_allowlisted" };
+  if (input.jobSource && !isAtsTestJobSource(input.jobSource)) {
+    return { ok: false, reason: "ats_test_job_source_required" };
+  }
+  if (input.realSubmit) {
+    if (!atsTestRealSubmitEnabled(env)) return { ok: false, reason: "ats_test_real_submit_disabled" };
+    return { ok: true, mode: "real_submit", userId, destination };
+  }
+  return { ok: true, mode: "dry_run", userId, destination };
+}
+
+export function atsTestJobExternalId(destination: AtsTestDestination): string {
+  return `${destination.host}/o/${destination.slug}`;
+}
+
+export type AtsTestPriorRow = {
+  id: string;
+  userId: string;
+  status?: string | null;
+  submitStartedAt?: Date | null;
+  submittedAt?: Date | null;
+  submittedVia?: string | null;
+  submitConfirmation?: string | null;
+  canaryLog?: string | null;
+  answersUsedJson?: string | null;
+  viewedAt?: Date | null;
+  lastReplyAt?: Date | null;
+  replyCount?: number | null;
+  userStatus?: string | null;
+};
+
+const NO_SEND_CONFIRMATIONS = new Set(["NOT_SUBMITTED", "NEEDS_ANSWERS", "DRY_RUN", "JOB_CLOSED"]);
+
+/** Same refuse rules as uncertain-submission, inlined so adapters stay a leaf. */
+export function atsTestUncertainReason(row: AtsTestPriorRow): string | null {
+  if (row.submitStartedAt) return "uncertain_submit_started";
+  if (row.submitConfirmation === "UNCONFIRMED" || row.submitConfirmation === "SUBMISSION_STARTED") {
+    return "uncertain_submission";
+  }
+  if (NO_SEND_CONFIRMATIONS.has(row.submitConfirmation ?? "")) {
+    if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) {
+      return "uncertain_prior_attempt";
+    }
+    return null;
+  }
+  if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus
+    || row.submitConfirmation || row.canaryLog || row.answersUsedJson) {
+    return "uncertain_prior_attempt";
+  }
+  return null;
+}
+
+export function atsTestPriorAttemptReason(rows: AtsTestPriorRow[], _mode: "dry_run" | "real_submit", env: AtsTestEnv = process.env): string | null {
+  if (rows.some((row) => !isAtsTestUser(row.userId, env))) return "ats_test_other_user_application";
+  for (const row of rows) {
+    const uncertain = atsTestUncertainReason(row);
+    if (uncertain) return uncertain;
+  }
+  if (rows.length > 0) return "ats_test_already_attempted";
+  return null;
+}
+
+function randomToken(): string {
+  const bytes = new Uint8Array(18);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export type AtsTestJobRow = {
+  id: string;
+  source: string;
+  url: string;
+  externalId: string;
+  title: string;
+};
+
+export type AtsTestAppResult = {
+  id: string;
+  status: string | null;
+  submittedVia: string | null;
+  submitConfirmation: string | null;
+  submissionReceiptJson: string | null;
+  errorMessage: string | null;
+  submitStartedAt: Date | null;
+};
+
+export type AtsTestDeps = {
+  env?: AtsTestEnv;
+  prisma: {
+    user: { findUnique: (args: { where: { id: string } }) => Promise<{ id: string } | null> };
+    job: {
+      findFirst: (args: { where: { source?: string; url?: string } }) => Promise<AtsTestJobRow | null>;
+      upsert: (args: {
+        where: { externalId_source: { externalId: string; source: string } };
+        update: { url: string; cachedAt: Date; closedAt: null };
+        create: {
+          externalId: string;
+          source: string;
+          title: string;
+          company: string;
+          location: string;
+          description: string;
+          url: string;
+          sourceSlug: string | null;
+        };
+      }) => Promise<AtsTestJobRow>;
+    };
+    application: {
+      findMany: (args: { where: { jobId: string } }) => Promise<AtsTestPriorRow[]>;
+      create: (args: {
+        data: {
+          userId: string;
+          jobId: string;
+          portal: string;
+          status: string;
+          createdAt: Date;
+          consentGrantedAt: Date;
+          trackingToken: string;
+        };
+      }) => Promise<{ id: string }>;
+      findUnique: (args: { where: { id: string } }) => Promise<AtsTestAppResult | null>;
+      updateMany: (args: {
+        where: { id: string; status: string };
+        data: { status: string; errorMessage: string };
+      }) => Promise<{ count: number }>;
+    };
+  };
+  processApplication: (id: string, opts: { forceDryRun?: boolean; forceRealSubmit?: boolean }) => Promise<void>;
+  findPortalAdapter: (url: string) => { id: string } | null;
+};
+
+export type AtsTestRunResult =
+  | { ok: false; reason: string; status?: number }
+  | {
+      ok: true;
+      mode: "dry_run" | "real_submit";
+      applicationId: string;
+      jobId: string;
+      destination: AtsTestDestination;
+      adapter: string;
+      result: AtsTestAppResult | null;
+    };
+
+/**
+ * Create one fresh ats_test application for the dedicated user and run it
+ * through processApplication. Never enqueues (the poller would drop the
+ * dry-run / single-shot flags). Never auto-retries.
+ */
+export async function prepareAndRunAtsTest(input: {
+  adminOk: boolean;
+  realSubmit?: boolean;
+  jobUrl?: string | null;
+}, deps: AtsTestDeps): Promise<AtsTestRunResult> {
+  const env = deps.env ?? process.env;
+  const auth = authorizeAtsTest({
+    adminOk: input.adminOk,
+    realSubmit: input.realSubmit === true,
+    jobUrl: input.jobUrl,
+  }, env);
+  if (!auth.ok) return { ok: false, reason: auth.reason, status: auth.reason === "forbidden" ? 403 : 400 };
+
+  const user = await deps.prisma.user.findUnique({ where: { id: auth.userId } });
+  if (!user) return { ok: false, reason: "ats_test_user_missing", status: 409 };
+
+  const adapter = deps.findPortalAdapter(auth.destination.url);
+  if (!adapter) return { ok: false, reason: "ats_test_adapter_missing", status: 409 };
+
+  const externalId = atsTestJobExternalId(auth.destination);
+  const job = await deps.prisma.job.upsert({
+    where: { externalId_source: { externalId, source: ATS_TEST_JOB_SOURCE } },
+    update: { url: auth.destination.url, cachedAt: new Date(), closedAt: null },
+    create: {
+      externalId,
+      source: ATS_TEST_JOB_SOURCE,
+      title: auth.destination.slug,
+      company: auth.destination.host.split(".")[0] ?? auth.destination.host,
+      location: "ATS test",
+      description: "Restricted ATS test destination. Excluded from feeds, matching, other users and quota.",
+      url: auth.destination.url,
+      sourceSlug: auth.destination.host.split(".")[0] ?? null,
+    },
+  });
+  if (!isAtsTestJobSource(job.source) || !matchAtsTestDestination(job.url, env)) {
+    return { ok: false, reason: "ats_test_job_source_required", status: 409 };
+  }
+
+  const existing = await deps.prisma.application.findMany({
+    where: { jobId: job.id },
+  });
+  const prior = atsTestPriorAttemptReason(existing, auth.mode, env);
+  if (prior) return { ok: false, reason: prior, status: 409 };
+
+  const createdAt = new Date();
+  const created = await deps.prisma.application.create({
+    data: {
+      userId: auth.userId,
+      jobId: job.id,
+      portal: adapter.id,
+      status: "queued",
+      createdAt,
+      consentGrantedAt: createdAt,
+      trackingToken: randomToken(),
+    },
+  });
+
+  try {
+    await deps.processApplication(created.id, auth.mode === "real_submit"
+      ? { forceRealSubmit: true }
+      : { forceDryRun: true });
+  } catch (err) {
+    await deps.prisma.application.updateMany({
+      where: { id: created.id, status: "queued" },
+      data: {
+        status: "ready_to_apply",
+        errorMessage: err instanceof Error ? err.message : "ATS test run failed before admission.",
+      },
+    });
+    return { ok: false, reason: "ats_test_process_failed", status: 500 };
+  }
+
+  // Never leave a queued row for the poller: it would call processApplication
+  // without the dry-run / single-shot flags.
+  await deps.prisma.application.updateMany({
+    where: { id: created.id, status: "queued" },
+    data: {
+      status: "ready_to_apply",
+      errorMessage: "ATS test non ammesso dalla pipeline di produzione. Nessun invio eseguito; la riga non resta in coda.",
+    },
+  });
+
+  const result = await deps.prisma.application.findUnique({ where: { id: created.id } });
+  return {
+    ok: true,
+    mode: auth.mode,
+    applicationId: created.id,
+    jobId: job.id,
+    destination: auth.destination,
+    adapter: adapter.id,
+    result,
+  };
+}

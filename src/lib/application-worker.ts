@@ -521,6 +521,10 @@ async function processApplicationRun(
       console.log(`[worker] ${applicationId} published recruiter email — skipping portal ${adapter.id}, using email_recruiter`);
     }
   }
+  // Restricted ATS-test jobs must stay on the production adapter path.
+  // Never substitute a recruiter-email fallback for an allowlisted test dest.
+  if (app.job.source === "ats_test") verifiedRecruiter = null;
+
   const preferRecruiterEmail = !!verifiedRecruiter;
 
   if (adapter && !preferRecruiterEmail) {
@@ -871,7 +875,7 @@ async function processApplicationRun(
   // job (diversa dall'aggregatore Adzuna), puntiamo l'utente lì in manuale;
   // al prossimo ciclo l'auto-apply userà direttamente quella copia.
   if (!skipPortal && !verifiedRecruiter && !app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
-    const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr", "breezy", "pinpoint"];
+    const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr", "breezy", "pinpoint", "ats_test"];
     const isAtsSourceJob = ATS_SOURCES.includes(app.job.source);
 
     if (isAtsSourceJob) {

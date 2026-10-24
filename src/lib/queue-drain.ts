@@ -119,6 +119,7 @@ export async function parkUnsendableQueued(opts: {
   const rows = await db.application.findMany({
     where: {
       status: "queued", startedAt: null, completedAt: null,
+      job: { source: { not: "ats_test" } },
       retryCount: { lt: maxDrainAttempts() },
       createdAt: { gt: config.startedAt, lte: now },
       submittedAt: null, submittedVia: null, submitConfirmation: null,

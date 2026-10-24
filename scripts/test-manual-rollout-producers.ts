@@ -18,6 +18,7 @@ import * as applicationLease from "../src/lib/application-lease";
 import * as recoveryRelease from "../src/lib/application-recovery-release";
 import * as uncertainSubmission from "../src/lib/uncertain-submission";
 import * as recruiterEmailFallback from "../src/lib/recruiter-email-fallback";
+import * as atsTestCapability from "../src/lib/ats-test-capability";
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-rollout": rollout,
@@ -60,6 +61,7 @@ function load(path: string, extra: Record<string, any> = {}) {
     "@/lib/application-recovery-release": extra["@/lib/application-recovery-release"] ?? recoveryRelease,
     "@/lib/uncertain-submission": extra["@/lib/uncertain-submission"] ?? uncertainSubmission,
     "@/lib/recruiter-email-fallback": extra["@/lib/recruiter-email-fallback"] ?? recruiterEmailFallback,
+    "@/lib/ats-test-capability": extra["@/lib/ats-test-capability"] ?? atsTestCapability,
     "@/lib/application-worker-gates": extra["@/lib/application-worker-gates"] ?? {
       hasPotentialSubmission: (row: any) => !!(row.submitStartedAt || row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus
         || row.canaryLog || row.answersUsedJson

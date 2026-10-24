@@ -85,7 +85,7 @@ export async function runWeeklyDigest(opts?: {
   const alreadySent = new Set(recentLogs.map((l) => l.to.toLowerCase()));
 
   const pool = await prisma.job.findMany({
-    where: { cachedAt: { gte: new Date(Date.now() - WEEK_MS) } },
+    where: { source: { not: "ats_test" }, cachedAt: { gte: new Date(Date.now() - WEEK_MS) } },
     orderBy: { cachedAt: "desc" },
     select: { id: true, title: true, company: true, location: true, url: true, remote: true },
     take: 4000,

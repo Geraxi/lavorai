@@ -1,3 +1,4 @@
+import { allowUnpublishedRecruiteeOffer } from "@/lib/ats-test-capability";
 import { verifySubmissionResponse } from "./submission-proof";
 import { readFile } from "node:fs/promises";
 import type { PortalAdapter, ApplyInput, ApplyOutcome, PendingQuestion } from "./types";
@@ -44,7 +45,9 @@ export const recruiteeAdapter: PortalAdapter = {
       if (r.ok) {
         const j = (await r.json()) as { offer?: { status?: string; open_questions?: OpenQuestion[] } };
         if (!j.offer || typeof j.offer !== "object") return { ok: false, status: "form_not_found", error: "Offerta Recruitee non riconosciuta. Nessun invio eseguito." };
-        if (j.offer?.status && j.offer.status !== "published") return { ok: false, status: "job_closed", error: `Annuncio Recruitee in stato ${j.offer.status}.` };
+        if (j.offer?.status && j.offer.status !== "published" && !allowUnpublishedRecruiteeOffer(input.jobUrl)) {
+          return { ok: false, status: "job_closed", error: `Annuncio Recruitee in stato ${j.offer.status}.` };
+        }
         questions = j.offer?.open_questions ?? [];
       }
     } catch (err) {

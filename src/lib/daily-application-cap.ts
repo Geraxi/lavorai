@@ -12,6 +12,7 @@
  * Handoffs, blocked/held, failed and needs-answers never consume a slot.
  */
 import { SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { excludeAtsTestJobRelationWhere, isAtsTestJobSource } from "@/lib/ats-test-capability";
 import { freeQuotaWindowStart } from "@/lib/billing";
 import { romeDayStart } from "@/lib/mailbox/send-guard";
 
@@ -59,6 +60,7 @@ export type DailyCapRow = {
   submitConfirmation?: string | null;
   createdAt?: Date | string | null;
   errorMessage?: string | null;
+  jobSource?: string | null;
 };
 
 export function isQuotaExcludedHandoffOrHold(row: DailyCapRow): boolean {
@@ -74,6 +76,7 @@ export function isQuotaExcludedHandoffOrHold(row: DailyCapRow): boolean {
 
 /** True when this row occupies a daily-cap slot (ignore createdAt here). */
 export function countsTowardDailyCap(row: DailyCapRow): boolean {
+  if (isAtsTestJobSource(row.jobSource)) return false;
   if (isQuotaExcludedHandoffOrHold(row)) return false;
   if (row.submittedAt) return true;
   if (SENT.has(row.status)) return true;
@@ -107,6 +110,7 @@ export function isWeeklyQuotaReservation(row: DailyCapRow): boolean {
 
 /** Gate occupancy: accepted send or live reservation. */
 export function occupiesWeeklyQuotaSlot(row: DailyCapRow, now = new Date()): boolean {
+  if (isAtsTestJobSource(row.jobSource)) return false;
   return isAcceptedWeeklySend(row, now) || isWeeklyQuotaReservation(row);
 }
 
@@ -150,6 +154,7 @@ export function weeklyQuotaUsageWhere(
 ) {
   return {
     userId,
+    ...excludeAtsTestJobRelationWhere(),
     ...(excludeIds.length === 1 ? { id: { not: excludeIds[0] } }
       : excludeIds.length ? { id: { notIn: excludeIds } } : {}),
     OR: [weeklyQuotaAcceptedFilter(now), weeklyQuotaReservationFilter()],
@@ -178,6 +183,7 @@ export function dailyCapUsageWhere(userId: string, now = new Date()) {
   return {
     userId,
     createdAt: { gte: romeDayStart(now) },
+    ...excludeAtsTestJobRelationWhere(),
     ...quotaConsumingFilter(),
   };
 }
@@ -186,6 +192,7 @@ export function monthlyQuotaUsageWhere(userId: string, since: Date) {
   return {
     userId,
     createdAt: { gte: since },
+    ...excludeAtsTestJobRelationWhere(),
     ...quotaConsumingFilter(),
   };
 }
@@ -194,6 +201,7 @@ export function companyCapUsageWhere(userId: string, since: Date) {
   return {
     userId,
     createdAt: { gte: since },
+    ...excludeAtsTestJobRelationWhere(),
     ...quotaConsumingFilter(),
   };
 }
