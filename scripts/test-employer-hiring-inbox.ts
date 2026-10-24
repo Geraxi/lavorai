@@ -151,6 +151,29 @@ async function main() {
   assert.ok(atsFetched.some((url) => url.includes("ashbyhq.com")), "ATS page may publish the company website");
   assert.ok(!atsFetched.some((url) => url === "https://acme.com" && url.includes("guess")));
 
+  const hostFetched: string[] = [];
+  const perHost = await discoverPublishedHiringInbox({
+    jobUrl: "https://jobs.ashbyhq.com/acme/uuid", company: "Acme", companyWebsite: "https://www.acme.com",
+  }, {
+    fetch: async (url: string) => {
+      hostFetched.push(url);
+      if (url === "https://acme.com/robots.txt") return text(url, "User-agent: *\nDisallow: /\n");
+      if (url === "https://careers.acme.com/robots.txt") return text(url, "User-agent: *\nAllow: /\n");
+      if (url === "https://careers.acme.com/" || url === "https://careers.acme.com") {
+        return page("https://careers.acme.com/", "<p>Send your CV to jobs@acme.com.</p>");
+      }
+      return { ok: false, status: 404, url, headers: { get: () => null }, text: async () => "" };
+    },
+    cacheGet: async () => null,
+    cacheSet: async () => {},
+    now: new Date("2026-10-24T12:00:00.000Z"),
+    budget: { remaining: EMPLOYER_INBOX_FETCH_BUDGET },
+  });
+  assert.equal(perHost?.email, "jobs@acme.com");
+  assert.ok(hostFetched.includes("https://careers.acme.com/robots.txt"), "careers.<host> must use its own robots.txt");
+  assert.ok(hostFetched.includes("https://acme.com/robots.txt"));
+  assert.ok(!hostFetched.includes("https://acme.com/careers"), "Root-host Disallow must not be applied to careers.<host>");
+
   console.log("PASS employer-hiring-inbox: employer domain only, robots, cache, no invented addresses.");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

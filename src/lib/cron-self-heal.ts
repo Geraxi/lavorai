@@ -3,6 +3,7 @@ import { applicationsPaused } from "@/lib/application-pause";
 import { backfillMissingCvProfiles } from "@/lib/cv-profile-ensure";
 import { recheckLivenessHeldApplications, releaseUnverifiableLivenessHolds } from "@/lib/held-application-release";
 import { recoverStuckApplications } from "@/lib/application-claim";
+import { recheckSkippedAtsHandoffs } from "@/lib/skip-list-handoff-recheck";
 
 /**
  * Cron self-heal step — girato PRIMA di runAutoApplyCron.
@@ -65,6 +66,16 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
     report.livenessClosed = live.closed;
   } catch (err) {
     console.error("[self-heal] liveness recheck failed", err instanceof Error ? err.message : err);
+  }
+
+  // ---------- 1c. One-time skip-list email recheck (pre-discovery handoffs) ----------
+  try {
+    if (typeof recheckSkippedAtsHandoffs === "function") {
+      const recheck = await recheckSkippedAtsHandoffs({ limit: 20 });
+      if (recheck.checked) console.log("[self-heal] skip-list email recheck", recheck);
+    }
+  } catch (err) {
+    console.error("[self-heal] skip-list email recheck failed", err instanceof Error ? err.message : err);
   }
 
   // ---------- 2. Shared evidence-aware recovery ----------

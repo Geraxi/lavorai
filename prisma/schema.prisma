@@ -725,6 +725,9 @@ model Application {
   /// On unsent queued rows held for an unverifiable posting it records the
   /// FIRST liveness re-check (held-application-release.ts backoff bound).
   lastStatusCheckAt DateTime?
+  /// One-time recruiter-email recheck for skip-list handoffs created before
+  /// employer-domain discovery. Null = not yet attempted. Additive only.
+  recruiterEmailRecheckedAt DateTime?
   createdAt       DateTime  @default(now())
   startedAt       DateTime?
   completedAt     DateTime?

@@ -178,6 +178,11 @@ async function closeMissingJobs(items: JobListItem[]): Promise<number> {
   return closed;
 }
 
+function publishedWebsiteFields(item: JobListItem): { companyWebsite?: string } {
+  const website = item.companyWebsite?.trim();
+  return website ? { companyWebsite: website } : {};
+}
+
 async function publishedEmailFields(item: JobListItem): Promise<{
   recruiterEmail?: string | null;
   recruiterEmailSourceUrl?: string | null;
@@ -208,7 +213,7 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
     const batch = items.slice(i, i + batchSize);
     await Promise.all(
       batch.map(async (j) => {
-        const published = await publishedEmailFields(j);
+        const published = { ...await publishedEmailFields(j), ...publishedWebsiteFields(j) };
         return prisma.job
           .upsert({
             where: {

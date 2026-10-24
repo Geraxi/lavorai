@@ -152,24 +152,46 @@ async function readPage(
   } catch { return null; }
 }
 
-async function robotsForDomain(
-  domain: string,
+/** robots.txt is per origin host: careers.acme.com is not acme.com. */
+async function robotsForHost(
+  host: string,
   deps: EmployerInboxDeps,
   budget: FetchBudget | undefined,
-): Promise<string | null> {
-  if (!spend(budget)) return "";
+  cache: Map<string, string | null | "">,
+): Promise<string | null | ""> {
+  const key = host.trim().toLowerCase();
+  if (!key) return "";
+  if (cache.has(key)) return cache.get(key)!;
+  if (!spend(budget)) {
+    cache.set(key, "");
+    return "";
+  }
   try {
-    const response = await deps.fetch(`https://${domain}/robots.txt`, {
+    const response = await deps.fetch(`https://${key}/robots.txt`, {
       headers: { "User-Agent": EMPLOYER_INBOX_USER_AGENT, accept: "text/plain" },
       signal: AbortSignal.timeout(EMPLOYER_INBOX_FETCH_TIMEOUT_MS),
       redirect: "follow",
     });
-    if (response.status === 404) return null;
-    if (!response.ok) return "";
-    const final = new URL(response.url || `https://${domain}/robots.txt`);
-    if (final.protocol !== "https:") return "";
-    return (await response.text()).slice(0, 20_000);
-  } catch { return ""; }
+    if (response.status === 404) {
+      cache.set(key, null);
+      return null;
+    }
+    if (!response.ok) {
+      cache.set(key, "");
+      return "";
+    }
+    const final = new URL(response.url || `https://${key}/robots.txt`);
+    if (final.protocol !== "https:") {
+      cache.set(key, "");
+      return "";
+    }
+    const body = (await response.text()).slice(0, 20_000);
+    cache.set(key, body);
+    return body;
+  } catch {
+    cache.set(key, "");
+    return "";
+  }
 }
 
 function hiringInboxOnPage(html: string, pageUrl: string, company: string, domain: string): DiscoveredHiringInbox | null {
@@ -212,19 +234,14 @@ export async function discoverPublishedHiringInbox(input: {
       : null;
   }
 
-  const robots = await robotsForDomain(owned.domain, deps, budget);
-  if (robots === "") {
-    await deps.cacheSet({
-      companyDomain: owned.domain, email: null, sourceUrl: null, evidence: null, status: "none", checkedAt: now,
-    }).catch(() => undefined);
-    return null;
-  }
-
+  const robotsCache = new Map<string, string | null | "">();
   let found: DiscoveredHiringInbox | null = null;
   for (const url of employerSitePageUrls(owned.domain)) {
-    let path = "/";
-    try { path = new URL(url).pathname || "/"; } catch { continue; }
-    if (robots && !robotsAllowsPath(robots, path)) continue;
+    let parsed: URL;
+    try { parsed = new URL(url); } catch { continue; }
+    const robots = await robotsForHost(parsed.hostname, deps, budget, robotsCache);
+    if (robots === "") continue;
+    if (robots && !robotsAllowsPath(robots, parsed.pathname || "/")) continue;
     const page = await readPage(url, owned.domain, deps, budget);
     if (!page) continue;
     found = hiringInboxOnPage(page.html, page.final.toString(), input.company, owned.domain);

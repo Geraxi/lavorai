@@ -274,6 +274,8 @@ export type RecruiterEmailLookup = {
   description?: string | null;
   cachedSourceUrl?: string | null;
   companyWebsite?: string | null;
+  /** Description + employer-domain discovery only. No job/careers HTML fetch. */
+  skipPageFetch?: boolean;
   discoverEmployerInbox?: (input: {
     jobUrl: string;
     company: string;
@@ -494,24 +496,111 @@ export function employerOwnDomain(
   return null;
 }
 
-/** A same-company https link on an ATS/job page is published website evidence. */
-export function companyWebsiteFromPage(html: string, pageUrl: string, company: string): string | null {
+const PUBLISHED_WEBSITE_KEYS = [
+  "publicWebsite",
+  "public_website",
+  "customJobsPageUrl",
+  "custom_jobs_page_url",
+  "companyWebsite",
+  "company_website",
+  "companyUrl",
+  "company_url",
+  "officialWebsite",
+  "official_website",
+];
+
+function acceptPublishedWebsite(raw: string, pageUrl: string | null, companyKey: string): string | null {
+  if (!raw?.trim()) return null;
+  let next: URL;
+  try { next = new URL(raw.trim(), pageUrl ?? undefined); } catch { return null; }
+  if (next.protocol !== "https:" || next.username || next.password || next.port) return null;
+  if (AGGREGATOR_HOSTS.some((host) => domainIs(next.hostname, host))) return null;
+  if (ATS_HOSTS.some((host) => domainIs(next.hostname, host))) return null;
+  const source = registrableIdentity(next.hostname);
+  if (!source || source.key !== companyKey) return null;
+  return `${next.protocol}//${next.hostname}/`;
+}
+
+function collectHiringOrgUrls(value: unknown, out: string[], depth = 0): void {
+  if (!value || typeof value !== "object" || depth > 8 || out.length >= 24) return;
+  if (Array.isArray(value)) {
+    for (const item of value) collectHiringOrgUrls(item, out, depth + 1);
+    return;
+  }
+  const rec = value as Record<string, unknown>;
+  for (const key of PUBLISHED_WEBSITE_KEYS) {
+    const field = rec[key];
+    if (typeof field === "string") out.push(field);
+  }
+  const org = rec.hiringOrganization ?? rec.hiring_organization;
+  if (org && typeof org === "object") {
+    const nodes = Array.isArray(org) ? org : [org];
+    for (const node of nodes) {
+      if (!node || typeof node !== "object" || Array.isArray(node)) continue;
+      const row = node as Record<string, unknown>;
+      if (typeof row.url === "string") out.push(row.url);
+      if (typeof row.sameAs === "string") out.push(row.sameAs);
+      if (Array.isArray(row.sameAs)) {
+        for (const same of row.sameAs) if (typeof same === "string") out.push(same);
+      }
+      if (typeof row.website === "string") out.push(row.website);
+    }
+  }
+  for (const child of Object.values(rec)) {
+    if (child && typeof child === "object") collectHiringOrgUrls(child, out, depth + 1);
+  }
+}
+
+function websitesFromJsonLd(html: string): string[] {
+  const out: string[] = [];
+  for (const block of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    const raw = block[1]?.trim();
+    if (!raw) continue;
+    try {
+      collectHiringOrgUrls(JSON.parse(decodeHtml(raw)), out);
+    } catch { /* ignore malformed JSON-LD */ }
+  }
+  return out;
+}
+
+function websitesFromEmbeddedJson(text: string): string[] {
+  const out: string[] = [];
+  for (const key of PUBLISHED_WEBSITE_KEYS) {
+    const re = new RegExp(`["']${key}["']\\s*:\\s*["'](https?:[^"'\\\\]+)["']`, "gi");
+    for (const match of text.matchAll(re)) out.push(match[1]);
+  }
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try { collectHiringOrgUrls(JSON.parse(trimmed), out); } catch { /* not JSON */ }
+  }
+  return out;
+}
+
+/** Published employer website from HTML and/or raw ATS JSON. Never invented from a tenant slug. */
+export function companyWebsiteFromPublishedSource(
+  source: string,
+  company: string,
+  pageUrl?: string | null,
+): string | null {
   const companyKey = identity(company);
-  if (companyKey.length < 3) return null;
-  let page: URL;
-  try { page = new URL(pageUrl); } catch { return null; }
-  const hrefs = [...html.matchAll(/\bhref\s*=\s*["']([^"'#]+)["']/gi)].map((m) => m[1]);
-  for (const href of hrefs) {
-    let next: URL;
-    try { next = new URL(href, page); } catch { continue; }
-    if (next.protocol !== "https:" || next.username || next.password || next.port) continue;
-    if (AGGREGATOR_HOSTS.some((host) => domainIs(next.hostname, host))) continue;
-    if (ATS_HOSTS.some((host) => domainIs(next.hostname, host))) continue;
-    const source = registrableIdentity(next.hostname);
-    if (!source || source.key !== companyKey) continue;
-    return `${next.protocol}//${next.hostname}/`;
+  if (companyKey.length < 3 || !source.trim()) return null;
+  let page: URL | null = null;
+  if (pageUrl) {
+    try { page = new URL(pageUrl); } catch { page = null; }
+  }
+  const hrefs = [...source.matchAll(/\bhref\s*=\s*["']([^"'#]+)["']/gi)].map((m) => m[1]);
+  const selfUrls = [pageUrl, source].filter((value): value is string => !!value && /^https:\/\//i.test(value.trim()));
+  const candidates = [...websitesFromJsonLd(source), ...websitesFromEmbeddedJson(source), ...hrefs, ...selfUrls];
+  for (const raw of candidates) {
+    const hit = acceptPublishedWebsite(raw, page?.toString() ?? null, companyKey);
+    if (hit) return hit;
   }
   return null;
+}
+
+/** A same-company https link or published JSON website on an ATS/job page. */
+export function companyWebsiteFromPage(html: string, pageUrl: string, company: string): string | null {
+  return companyWebsiteFromPublishedSource(html, company, pageUrl);
 }
 
 export function employerSitePageUrls(domain: string): string[] {
@@ -715,6 +804,8 @@ export async function findVerifiedRecruiterEmail(
         jobUrl, discovered.sourceUrl, discovered.evidence, discovered.evidence);
     }
   }
+
+  if (extras?.skipPageFetch) return null;
 
   try {
     const requested = new URL(jobUrl);

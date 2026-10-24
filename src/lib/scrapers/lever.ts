@@ -1,4 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
+import { companyWebsiteFromPublishedSource } from "@/lib/recruiter-email";
 import { cleanHtmlText } from "./html-clean";
 
 /**
@@ -75,6 +76,12 @@ export async function fetchLeverMulti(
   return out;
 }
 
+/** Employer site from Lever description HTML / JSON-LD. Never a tenant slug. */
+export function leverCompanyWebsite(p: Pick<LeverPosting, "description" | "descriptionPlain" | "hostedUrl">, companyName: string): string | null {
+  return companyWebsiteFromPublishedSource(p.description ?? "", companyName, p.hostedUrl)
+    ?? companyWebsiteFromPublishedSource(p.descriptionPlain ?? "", companyName, p.hostedUrl);
+}
+
 function mapPosting(
   p: LeverPosting,
   companyName: string,
@@ -102,6 +109,7 @@ function mapPosting(
     location,
     description,
     url: p.hostedUrl,
+    companyWebsite: leverCompanyWebsite(p, companyName),
     contractType: p.categories?.commitment ?? null,
     remote:
       (p.workplaceType ?? "").toLowerCase() === "remote" ||
