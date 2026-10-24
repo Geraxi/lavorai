@@ -2,6 +2,7 @@ import { observeSubmission } from "./submission-proof";
 import { findSubmitButton } from "./submit-button";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
+import { fillPhoneCountryCode } from "./phone-country-fill";
 
 /**
  * Lever ATS — `jobs.lever.co/<company>/<uuid>`.
@@ -94,6 +95,7 @@ export const leverAdapter: PortalAdapter = {
           .first()
           .fill(phoneToUse)
           .catch(() => void 0);
+        await fillPhoneCountryCode(page, phoneToUse);
       }
 
       // LinkedIn URL se disponibile

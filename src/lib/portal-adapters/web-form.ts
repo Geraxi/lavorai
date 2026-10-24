@@ -255,6 +255,7 @@ export function buildAnswerContext(input: ApplyInput): CandidateContext {
     cvText,
     jobTitle: input.jobTitle ?? p.title,
     company: input.company ?? null,
+    workRemote: input.workRemote === true,
     jobDescription: input.jobDescription,
     jobLocation: input.jobLocation,
     protectedCategory: input.protectedCategory,

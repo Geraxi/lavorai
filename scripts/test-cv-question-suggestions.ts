@@ -28,7 +28,7 @@ assert.equal(suggestAnswerFromCv("Dove vivi?", "radio", ["Roma", "Milano"], cv),
 assert.equal(suggestAnswerFromCv("How many years of experience do you have?", "number", undefined, cv, 7), "7");
 assert.equal(suggestAnswerFromCv("Are you willing to relocate to Milano?", "radio", ["Yes", "No"], cv), null);
 assert.equal(suggestAnswerFromCv("Do you have experience with React?", "radio", ["Yes", "No"], cv), "Yes");
-assert.equal(suggestAnswerFromCv("Country of residence", "text", undefined, cv), null);
+assert.equal(suggestAnswerFromCv("Country of residence", "text", undefined, cv), "Italia");
 assert.equal(suggestAnswerFromCv("What is your current role?", "text", undefined, { ...cv, experiences: [] }), null);
 console.log("CV answer reuse: wording, current roles, option matching and sensitive exclusions passed");
 assert.equal(suggestAnswerFromCv("What is your current or previous job title?", "text", undefined, cv), "Engineer");

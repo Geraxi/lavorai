@@ -11,6 +11,7 @@ import type { Page } from "playwright";
 import { detectBlockingCaptcha } from "./captcha";
 import { uploadSubmitScreenshot } from "./submit-evidence";
 import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
+import { fillPhoneCountryCode } from "./phone-country-fill";
 
 /**
  * Canary helper: estrae lo stato attuale di TUTTI i campi form
@@ -224,6 +225,7 @@ export const greenhouseAdapter: PortalAdapter = {
           .first()
           .fill(phoneToUse)
           .catch(() => void 0);
+        await fillPhoneCountryCode(page, phoneToUse);
       }
 
       // ============================================================

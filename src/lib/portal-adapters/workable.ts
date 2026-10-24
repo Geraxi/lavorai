@@ -2,6 +2,7 @@ import { observeSubmission } from "./submission-proof";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 import { detectBlockingCaptcha } from "./captcha";
 import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
+import { fillPhoneCountryCode } from "./phone-country-fill";
 
 /*
  * Workable ATS: apply.workable.com/<slug>/j/<id>/apply/
@@ -53,6 +54,7 @@ export const workableAdapter: PortalAdapter = {
       if (phoneToUse) {
         await page.locator('input[name="phone"], input[type="tel"]').first()
           .fill(phoneToUse).catch(() => void 0);
+        await fillPhoneCountryCode(page, phoneToUse);
       }
 
       // ----- CV (obbligatorio) -----

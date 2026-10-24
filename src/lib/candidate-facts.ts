@@ -1,5 +1,7 @@
 import type { CVProfile } from "./cv-profile-types";
 import type { ApplicationAnswers } from "./application-answers";
+import { matchCity } from "./city-centroids";
+import { COUNTRY_CENTROIDS } from "./country-centroids";
 
 /** Employer privacy/GDPR consent only — never terms, marketing, or certifications. */
 export function isPrivacyConsentQuestion(label: string): boolean {
@@ -25,6 +27,10 @@ export type FactContext = {
   yearsExperience?: number | null; englishLevel?: string | null; noticePeriod?: string | null; highestEducation?: string | null;
   languages?: Array<{ name: string; level?: string }>;
   privacyConsentAt?: Date | string | null;
+  /** True when location prefs include remote / hybrid. Missing means unknown — never invent No. */
+  workRemote?: boolean | null;
+  /** Employer on the current application; used for "previously employed by <company>". */
+  company?: string | null;
 };
 export function factQuestionKey(label: string): string {
   return label.normalize("NFKC").toLowerCase().replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim()
@@ -57,12 +63,92 @@ const aliases: Record<string, string[]> = {
   noticePeriod: ["notice period", "preavviso", "periodo di preavviso", "available from", "available to start", "earliest start date", "earliest start", "when can you start", "start date", "disponibilità"],
   highestEducation: ["highest education", "highest level of education", "titolo di studio", "titolo di studio più alto"],
   howHeard: ["where did you hear about us", "how did you hear about us", "how did you hear about this role", "how did you hear about this job", "how did you find us", "where did you hear about this role", "come ci hai conosciuto", "come hai saputo di noi"],
+  willingRemote: [
+    "are you willing to work remotely", "willing to work remotely", "willingness to work remotely",
+    "are you open to remote work", "open to remote work", "can you work remotely",
+    "would you work remotely", "remote work", "disponibile a lavorare da remoto",
+    "disponibile al lavoro da remoto", "lavoro da remoto", "accetti lavoro remoto",
+    "are you willing to work hybrid", "open to hybrid work", "disponibile all'ibrido",
+  ],
+  marketingOptIn: [
+    "whatsapp opt-in", "whatsapp opt in", "may we contact you via whatsapp",
+    "can we contact you on whatsapp", "contact via whatsapp", "whatsapp updates",
+    "sms opt-in", "sms opt in", "may we contact you via sms", "sms marketing",
+    "marketing opt-in", "marketing opt in", "marketing communications",
+    "receive marketing messages", "consent to marketing",
+  ],
+  previouslyEmployed: [
+    "have you previously been employed by this company", "have you worked for this company",
+    "have you previously worked for this company", "have you been employed by this company",
+    "previously employed by this company", "former employee",
+    "have you ever worked for us", "have you worked with us before",
+  ],
 };
+export function screeningCountryFromLabel(label: string): string | null {
+  const key = factQuestionKey(label);
+  const pairs: Array<[RegExp, string]> = [
+    [/\b(?:united states of america|united states|u\.s\.a\.|u\.s\.|\busa\b|in the us)\b/, "united_states"],
+    [/\b(?:united kingdom|great britain|u\.k\.|\buk\b|in the uk)\b/, "united_kingdom"],
+    [/\b(?:european union|\beu\b|europe)\b/, "european_union"],
+    [/\b(?:italy|italia)\b/, "italy"],
+    [/\b(?:germany|deutschland|germania)\b/, "germany"],
+    [/\b(?:france|francia)\b/, "france"],
+    [/\b(?:spain|spagna|españa|espana)\b/, "spain"],
+    [/\b(?:netherlands|olanda|holland|paesi bassi)\b/, "netherlands"],
+    [/\b(?:ireland|irlanda)\b/, "ireland"],
+    [/\b(?:switzerland|svizzera|schweiz)\b/, "switzerland"],
+    [/\b(?:austria|österreich|osterreich)\b/, "austria"],
+    [/\b(?:belgium|belgio)\b/, "belgium"],
+    [/\b(?:portugal|portogallo)\b/, "portugal"],
+    [/\b(?:poland|polonia)\b/, "poland"],
+    [/\b(?:sweden|svezia)\b/, "sweden"],
+    [/\b(?:norway|norvegia)\b/, "norway"],
+    [/\b(?:denmark|danimarca)\b/, "denmark"],
+  ];
+  for (const [re, id] of pairs) {
+    if (re.test(key)) return id;
+  }
+  return null;
+}
+export function countryScopedScreeningKey(label: string): string | null {
+  const key = factQuestionKey(label);
+  const country = screeningCountryFromLabel(label);
+  if (/\b(?:public official|public office|politically exposed|\bpep\b|carica pubblica|funzionario pubblic)\b/.test(key)) {
+    return country ? `publicOfficial:${country}` : "publicOfficial";
+  }
+  if (/\b(?:authori[sz]ed to work|right to work|work authori[sz]ation|legally (?:able|allowed|authori[sz]ed) to work|permesso di lavoro|autorizzazione al lavoro)\b/.test(key)
+    && !/\b(?:eu citizen|cittadino ue)\b/.test(key)) {
+    return country ? `workAuthorization:${country}` : null;
+  }
+  if (/\b(?:require|need|need of) (?:visa )?sponsorship|visa sponsor|sponsorizzazione\b/.test(key)) {
+    return country ? `sponsorship:${country}` : null;
+  }
+  return null;
+}
+function previouslyEmployedLabel(label: string): boolean {
+  const key = factQuestionKey(label);
+  return aliases.previouslyEmployed.includes(key)
+    || /have you (?:previously )?(?:been )?employed by /.test(key)
+    || /have you (?:ever )?worked (?:for|at) /.test(key)
+    || /have you (?:ever )?worked with (?:us|this company|this employer|our company)\b/.test(key);
+}
+export function isMarketingOptInQuestion(label: string): boolean {
+  return aliases.marketingOptIn.includes(factQuestionKey(label));
+}
+export function isRemoteWillingnessQuestion(label: string): boolean {
+  return aliases.willingRemote.includes(factQuestionKey(label));
+}
+export function isPreviouslyEmployedQuestion(label: string): boolean {
+  return previouslyEmployedLabel(label);
+}
 export function reusableFactKey(label: string): string | null {
   const key = factQuestionKey(label);
   if (/^(?:(?:expected|desired) annual (?:salary|compensation)|annual (?:salary|compensation) expectations?)\s*\(?\s*(?:eur|€|euros?)\s*\)?$/.test(key)
     || /^(?:ral desiderata|ral attesa|aspettativa (?:di )?ral)$/.test(key)
     || /^(?:salary|compensation) expectations?$/.test(key)) return "salaryExpectationEur";
+  const scoped = countryScopedScreeningKey(label);
+  if (scoped) return scoped;
+  if (previouslyEmployedLabel(label)) return "previouslyEmployed";
   const skill = key.match(/^(?:do you have experience with|have you worked with|have you used|hai esperienza con) ([a-z0-9+#. -]+)$/);
   if (skill) return `skill:${skill[1].trim()}`;
   return Object.entries(aliases).find(([, values]) => values.includes(key))?.[0] ?? null;
@@ -105,6 +191,94 @@ const NOTICE_TEXT: Record<string, string> = {
   immediate: "Immediate", "2weeks": "2 weeks", "1month": "1 month", "2months": "2 months", "3months_plus": "3 months",
 };
 
+function yesNoAnswer(question: FactQuestion, value: "Yes" | "No"): string | null {
+  return matchFactOption(question, value)
+    ?? (["select", "react-select", "radio"].includes(question.kind) ? null : value);
+}
+
+function employerNames(context: FactContext): string[] {
+  const fromFacts = (context.facts ?? [])
+    .filter((fact) => ["currentEmployer", "previousEmployer", "mostRecentEmployer", "currentOrPreviousEmployer"].includes(fact.key) && fact.value.trim())
+    .map((fact) => fact.value);
+  const fromContext = [context.currentEmployer, context.mostRecentEmployer]
+    .filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
+  return [...fromFacts, ...fromContext];
+}
+
+function normalizeCompany(value: string): string {
+  return value.normalize("NFKC").trim().toLowerCase()
+    .replace(/\b(?:inc|ltd|llc|gmbh|s\.?p\.?a\.?|s\.?r\.?l\.?|ag|plc|corp|corporation|limited)\b\.?/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function sameCompany(a: string, b: string): boolean {
+  const left = normalizeCompany(a);
+  const right = normalizeCompany(b);
+  if (!left || !right) return false;
+  return left === right || left.includes(right) || right.includes(left);
+}
+
+function employerFromQuestion(label: string): string | null {
+  const key = factQuestionKey(label);
+  const match = key.match(/have you (?:previously )?(?:been )?employed by (.+)$/)
+    ?? key.match(/have you (?:ever )?worked (?:for|at|with) (.+)$/);
+  if (!match) return null;
+  const name = match[1].replace(/^(?:this company|this employer|our company|us|we)\b/, "").trim();
+  return name || null;
+}
+
+function resolveStandardScreening(question: FactQuestion, context: FactContext, key: string | null): FactResolution | null {
+  const empty = { answer: null, provenance: [] as Fact[], conflict: false };
+  if (key === "marketingOptIn" || isMarketingOptInQuestion(question.label)) {
+    const facts = (context.facts ?? []).filter((fact) => fact.key === "marketingOptIn" && fact.value.trim());
+    const values = new Set(facts.map((fact) => canonicalFactValue("marketingOptIn", fact.value)));
+    if (values.size > 1) return { ...empty, conflict: true, provenance: facts };
+    const value = (values.size === 1 ? facts[0].value : "No").trim();
+    const yesNo = /^(yes|no|sì|si)$/i.test(value) ? ( /^(yes|sì|si)$/i.test(value) ? "Yes" : "No" ) : "No";
+    const answer = yesNoAnswer(question, yesNo);
+    return {
+      answer,
+      provenance: facts.length
+        ? facts
+        : [{ key: "marketingOptIn", value: "No", source: "profile", reference: "marketing_opt_in_default" }],
+      conflict: false,
+    };
+  }
+  if (key === "willingRemote" || isRemoteWillingnessQuestion(question.label)) {
+    const facts = (context.facts ?? []).filter((fact) => fact.key === "willingRemote" && fact.value.trim());
+    if (facts.length) {
+      const values = new Set(facts.map((fact) => canonicalFactValue("willingRemote", fact.value)));
+      if (values.size !== 1) return { answer: null, provenance: facts, conflict: values.size > 1 };
+      return { answer: yesNoAnswer(question, /^(yes|sì|si)$/i.test(facts[0].value) ? "Yes" : "No"), provenance: facts, conflict: false };
+    }
+    if (context.workRemote === true) {
+      return {
+        answer: yesNoAnswer(question, "Yes"),
+        provenance: [{ key: "willingRemote", value: "Yes", source: "preferences", reference: "locationsJson" }],
+        conflict: false,
+      };
+    }
+    return empty;
+  }
+  if (key === "previouslyEmployed" || isPreviouslyEmployedQuestion(question.label)) {
+    const target = employerFromQuestion(question.label) ?? context.company ?? null;
+    const history = employerNames(context);
+    const hit = !!(target && history.some((company) => sameCompany(company, target)));
+    return {
+      answer: yesNoAnswer(question, hit ? "Yes" : "No"),
+      provenance: [{
+        key: "previouslyEmployed",
+        value: hit ? "Yes" : "No",
+        source: hit ? "cv" : "profile",
+        reference: hit ? "experiences" : "previously_employed_default",
+      }],
+      conflict: false,
+    };
+  }
+  return null;
+}
+
 export function resolveCandidateFact(question: FactQuestion, context: FactContext, allowSearchValue = false): FactResolution {
   let key = reusableFactKey(question.label);
   const empty = { answer: null, provenance: [], conflict: false };
@@ -112,8 +286,13 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
     if (isPrivacyConsentQuestion(question.label) && context.privacyConsentAt) {
       return { answer: "Yes", provenance: [{ key: "privacyConsent", value: "Yes", source: "profile", reference: "privacyConsentAt" }], conflict: false };
     }
+    if (key === "marketingOptIn" || isMarketingOptInQuestion(question.label)) {
+      return { answer: "No", provenance: [{ key: "marketingOptIn", value: "No", source: "profile", reference: "marketing_opt_in_default" }], conflict: false };
+    }
     return empty;
   }
+  const screening = resolveStandardScreening(question, context, key);
+  if (screening) return screening;
   if (!key) return empty;
   if (key === "phoneCountry" || (key === "country" && question.options?.some(option => /\+\d/.test(option)))) key = "phone";
   const facts = context.facts ?? Object.entries(context).flatMap(([field, value]): Fact[] => {
@@ -197,6 +376,12 @@ export function candidateFacts(profile: CVProfile | null, user: { email?: string
   }
   for (const key of ["city", "country", "linkedinUrl", "portfolioUrl", "githubUrl", "websiteUrl", "salaryExpectationEur", "yearsExperience", "englishLevel", "noticePeriod", "highestEducation", "howHeard"] as const) add(key, preferences[key], "preferences");
   add("languages", preferences.languagesText, "preferences", "languagesText");
+  if (profile?.city && !facts.some((fact) => fact.key === "country")) {
+    const located = matchCity(profile.city);
+    if (located?.cc && COUNTRY_CENTROIDS[located.cc]?.name) {
+      add("country", COUNTRY_CENTROIDS[located.cc].name, "cv", "city");
+    }
+  }
   // Do not reuse a bare historical label/value or any generated/assumed source.
   for (const answer of saved) {
     if (answer.source !== "user" || !answer.answer?.trim() || !answer.answeredAt || !Number.isFinite(+new Date(answer.answeredAt)) || answer.kind === "checkbox") continue;

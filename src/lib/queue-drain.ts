@@ -3,7 +3,8 @@ import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { heldMessage } from "@/lib/application-worker-gates";
 import { SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
-import { drainProcessConcurrency, drainQueueBatch, DRAIN_TIME_RESERVE_MS, maxDrainAttempts } from "@/lib/drain-limits";
+import { canClaimAnotherDrainRow, drainProcessConcurrency, drainQueueBatch, maxDrainAttempts } from "@/lib/drain-limits";
+import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "@/lib/job-liveness";
 import {
   CLAIM_HOLD_REASONS,
   claimBlockReason,
@@ -20,6 +21,8 @@ import type { PrismaClient } from "@prisma/client";
 
 type DB = Pick<PrismaClient, "application">;
 
+export type DrainOutcome = "sent" | "blocked" | "skipped" | "failed" | "queued" | "needsAnswers" | "handoff" | "held";
+
 export type DrainSummary = {
   claimed: number;
   sent: number;
@@ -27,10 +30,13 @@ export type DrainSummary = {
   skipped: number;
   failed: number;
   parked: number;
+  needsAnswers: number;
+  handoff: number;
+  held: number;
 };
 
 export function emptyDrainSummary(): DrainSummary {
-  return { claimed: 0, sent: 0, blockedByReason: {}, skipped: 0, failed: 0, parked: 0 };
+  return { claimed: 0, sent: 0, blockedByReason: {}, skipped: 0, failed: 0, parked: 0, needsAnswers: 0, handoff: 0, held: 0 };
 }
 
 export function bumpReason(map: Record<string, number>, reason: string, n = 1): void {
@@ -49,15 +55,17 @@ export function classifyDrainOutcome(row: {
   status: string;
   errorMessage: string | null;
   submitConfirmation: string | null;
-}): "sent" | "blocked" | "skipped" | "failed" | "queued" {
+}): DrainOutcome {
   if (row.status === "success") return "sent";
-  if (row.errorMessage === SKIPPED_ATS_MANUAL_MESSAGE || row.errorMessage?.startsWith(MAX_ATTEMPTS_MESSAGE_PREFIX)) {
-    return row.errorMessage === SKIPPED_ATS_MANUAL_MESSAGE ? "skipped" : "failed";
+  if (row.status === "needs_answers" || row.submitConfirmation === "NEEDS_ANSWERS") return "needsAnswers";
+  if (row.errorMessage === JOB_LIVENESS_UNKNOWN_HELD_MESSAGE) return "held";
+  if (row.errorMessage === SKIPPED_ATS_MANUAL_MESSAGE || row.submitConfirmation === "CAPTCHA" || row.status === "ready_to_apply") {
+    return "handoff";
   }
   if (blockedReasonFromMessage(row.errorMessage)) return "blocked";
+  if (row.errorMessage?.startsWith(MAX_ATTEMPTS_MESSAGE_PREFIX)) return "failed";
   if (row.status === "failed") return "failed";
   if (row.status === "queued") return "queued";
-  if (row.status === "ready_to_apply" && row.errorMessage === SKIPPED_ATS_MANUAL_MESSAGE) return "skipped";
   return "failed";
 }
 
@@ -77,8 +85,8 @@ export async function parkUnsendableQueued(opts: {
   db?: DB;
   now?: Date;
   limit?: number;
-} = {}): Promise<Pick<DrainSummary, "parked" | "blockedByReason" | "skipped">> {
-  const result = { parked: 0, blockedByReason: {} as Record<string, number>, skipped: 0 };
+} = {}): Promise<Pick<DrainSummary, "parked" | "blockedByReason" | "skipped" | "handoff">> {
+  const result = { parked: 0, blockedByReason: {} as Record<string, number>, skipped: 0, handoff: 0 };
   if (applicationsPaused() || rolloutCreationBlocked()) return result;
   const now = opts.now ?? new Date();
   const config = applicationRolloutConfig(now);
@@ -114,7 +122,7 @@ export async function parkUnsendableQueued(opts: {
       });
       if (changed.count === 1) {
         result.parked++;
-        result.skipped++;
+        result.handoff++;
         bumpReason(result.blockedByReason, "skipped_ats");
       }
       continue;
@@ -255,6 +263,7 @@ export async function drainQueuedApplications(opts: {
   const parked = await parkUnsendableQueued({ db: opts.db, now });
   summary.parked = parked.parked;
   summary.skipped += parked.skipped;
+  summary.handoff += parked.handoff;
   for (const [reason, n] of Object.entries(parked.blockedByReason)) bumpReason(summary.blockedByReason, reason + "", n);
   await releaseQuotaHoldsIfAvailable({ db: opts.db, now });
 
@@ -275,7 +284,7 @@ export async function drainQueuedApplications(opts: {
   const queue = [...ids];
 
   const runOne = async (id: string) => {
-    if (remaining() < DRAIN_TIME_RESERVE_MS) return;
+    if (!canClaimAnotherDrainRow(remaining())) return;
     if (!(await claim(id))) return;
     summary.claimed++;
     try {
@@ -294,6 +303,9 @@ export async function drainQueuedApplications(opts: {
     const kind = classifyDrainOutcome(after);
     if (kind === "sent") summary.sent++;
     else if (kind === "skipped") summary.skipped++;
+    else if (kind === "needsAnswers") summary.needsAnswers++;
+    else if (kind === "handoff") summary.handoff++;
+    else if (kind === "held") summary.held++;
     else if (kind === "blocked") bumpReason(summary.blockedByReason, blockedReasonFromMessage(after.errorMessage) ?? "held");
     else if (kind === "failed") summary.failed++;
     else if (kind === "queued" && !blockedReasonFromMessage(after.errorMessage)) {
@@ -305,7 +317,7 @@ export async function drainQueuedApplications(opts: {
   };
 
   const workers = Array.from({ length: Math.min(concurrency, queue.length || 1) }, async () => {
-    while (queue.length && remaining() >= DRAIN_TIME_RESERVE_MS) {
+    while (queue.length && canClaimAnotherDrainRow(remaining())) {
       const id = queue.shift();
       if (!id) break;
       await runOne(id);

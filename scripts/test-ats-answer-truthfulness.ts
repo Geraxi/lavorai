@@ -53,7 +53,7 @@ const factualLabels = [
   "Are you authorized to work in Italy?", "Are you authorized to work in the UK?",
   "Will you require sponsorship?", "Are you an EU citizen?", "Are you over 18?",
   "Have you been convicted of a crime?", "Do you hold security clearance?",
-  "Have you previously worked for this company?", "Do you have family working here?",
+  "Do you have family working here?",
   "Do you hold a professional license?", "Are you bound by a non-compete?",
   "How many years of experience do you have with Python?", "Years of React experience",
   "Expected monthly salary (USD)", "Current annual salary (EUR)", "Expected salary",
@@ -67,6 +67,12 @@ async function testUnknownFacts() {
   const result = await answerer.answerOffline(context, fields);
   assert.equal(result.answers.size, 0, "Every unknown factual answer remains pending, even in autonomous mode");
   assert.equal(result.given.length, 0);
+  const priorEmployer = await answerer.answerOffline(context, [
+    { idx: 80, label: "Have you previously worked for this company?", kind: "select", options: ["Yes", "No"] },
+    { idx: 81, label: "Have you previously been employed by Past Employer?", kind: "select", options: ["Yes", "No"] },
+  ]);
+  assert.equal(priorEmployer.answers.get(80), "No", "Unknown employer defaults to No");
+  assert.equal(priorEmployer.answers.get(81), "Yes", "Work history at that company answers Yes");
   assert.equal(aiCalls, 0, "Factual screening questions never go to AI");
   const missing = await answerer.answerOffline({ autonomous: true }, [
     { idx: 50, label: "Expected annual salary (EUR)", kind: "text" },

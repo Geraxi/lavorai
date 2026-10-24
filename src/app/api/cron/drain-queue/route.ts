@@ -20,9 +20,11 @@ export async function GET(request: NextRequest) {
   const t0 = Date.now();
   const result: {
     claimed: number; sent: number; completed: number; failed: number; skipped: number;
-    parked: number; blockedByReason: Record<string, number>; liveness: boolean | string;
+    parked: number; needsAnswers: number; handoff: number; held: number;
+    blockedByReason: Record<string, number>; liveness: boolean | string;
   } = {
     claimed: 0, sent: 0, completed: 0, failed: 0, skipped: 0, parked: 0,
+    needsAnswers: 0, handoff: 0, held: 0,
     blockedByReason: {}, liveness: false,
   };
   try {
@@ -34,6 +36,9 @@ export async function GET(request: NextRequest) {
     result.failed = drain.failed;
     result.skipped = drain.skipped;
     result.parked = drain.parked;
+    result.needsAnswers = drain.needsAnswers;
+    result.handoff = drain.handoff;
+    result.held = drain.held;
     result.blockedByReason = drain.blockedByReason;
 
     if (new Date().getUTCMinutes() % 30 < 5 && Date.now() - t0 < 200_000) {
@@ -49,7 +54,9 @@ export async function GET(request: NextRequest) {
     const ms = Date.now() - t0;
     console.log(`[cron/drain-queue] ${ms}ms`, {
       claimed: result.claimed, sent: result.sent, blockedByReason: result.blockedByReason,
-      skipped: result.skipped, failed: result.failed, parked: result.parked, liveness: result.liveness,
+      skipped: result.skipped, failed: result.failed, parked: result.parked,
+      needsAnswers: result.needsAnswers, handoff: result.handoff, held: result.held,
+      liveness: result.liveness,
     });
     return NextResponse.json({ ok: true, ms, ...result });
   } catch (err) {

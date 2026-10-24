@@ -51,6 +51,7 @@ function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; 
     "@/lib/cv-answer-reuse": { reuseCvAnswers: async () => 0 },
     "@/lib/reusable-standard-answers": { persistReusableStandardAnswers: async () => 0 },
     "@/lib/cv-profile-types": { rowToProfile: (row: any) => row },
+    "@/lib/auto-apply-preferences": { prefersRemoteOrHybrid: () => false },
   };
   const module = { exports: {} as any };
   const code = ts.transpileModule(readFileSync("src/app/api/questions/route.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;

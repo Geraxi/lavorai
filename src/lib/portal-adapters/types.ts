@@ -67,6 +67,8 @@ export interface ApplyInput {
   autonomous?: boolean;
   /** Desired job location only; never a fallback for current residence. */
   preferredCity?: string | null;
+  /** True when the user listed remote / hybrid in location preferences. */
+  workRemote?: boolean | null;
   /** Dati dell'annuncio per le domande aperte ("perché noi?"). */
   jobTitle?: string | null;
   company?: string | null;

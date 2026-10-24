@@ -289,6 +289,14 @@ export function autoApplyPreferenceMismatch(
   return null;
 }
 
+/** True when the user listed remote / hybrid (or home office) as a work-mode preference. */
+export function prefersRemoteOrHybrid(prefs: string[] | string | null | undefined): boolean {
+  const list = Array.isArray(prefs)
+    ? prefs
+    : parsePreferenceList(typeof prefs === "string" ? prefs : null) ?? [];
+  return list.some((p) => /^(?:remote|remoto|hybrid|ibrido|home\s*office|homeoffice)\b/i.test(p.trim()));
+}
+
 export function isAvoidedCompany(company: string | null, avoided: string | null): boolean {
   if (!company || !avoided) return false;
   const normalize = (value: string) => value.normalize("NFKC").trim().toLowerCase().replace(/\s+/g, " ");
