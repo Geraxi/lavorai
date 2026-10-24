@@ -15,6 +15,9 @@ import { parseVerifiedSubmissionReceipt, receiptJobId } from "@/lib/submission-r
 import { canonicalPostingKey, DUPLICATE_POSTING_MESSAGE } from "@/lib/posting-key";
 import { prisma } from "@/lib/db";
 import { FREE_QUOTA_WORKER_INFLIGHT_STATUSES, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
+import { requiresManualAtsHandoff, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { maxDrainAttempts } from "@/lib/drain-limits";
+import { MAX_ATTEMPTS_MESSAGE_PREFIX } from "@/lib/queue-sendability";
 
 // Persisted before crossing a delivery boundary. A crash/timeout never releases
 // this reservation: only a proved no-send outcome or an atomic success does.
@@ -27,7 +30,7 @@ const evidenceSelect = {
 } as const;
 export const workerGateSelect = {
   sessionId: true, cvDocxPath: true, ...evidenceSelect, ...continuationSelect,
-  job: { select: { closedAt: true, url: true, company: true, title: true, description: true, location: true,
+  job: { select: { closedAt: true, url: true, recruiterEmail: true, company: true, title: true, description: true, location: true,
     remote: true, contractType: true, salaryMin: true, salaryMax: true } },
   session: { select: { id: true, userId: true, status: true, sentCount: true, targetCount: true, title: true, label: true } },
   user: { select: {
@@ -160,6 +163,7 @@ export function heldMessage(reason: string): string {
     preference_employment: "Tipo di contratto non compatibile con le preferenze correnti",
     preference_salary: "Retribuzione inferiore alla preferenza corrente",
     preference_match_threshold: "Compatibilità con il profilo inferiore alla soglia scelta",
+    daily_quota_reached: "Raggiunto il limite giornaliero di candidature. Riprova domani",
   };
   if (reason === "free_weekly_quota_reached") explanations[reason] = `Raggiunto il limite gratuito di ${freeWeeklyApplyQuota()} candidature ogni 7 giorni. Attiva Pro per inviarne di più`;
   return `Invio in attesa: ${explanations[reason] ?? reason}. Questa elaborazione non ha effettuato nuovi invii.`;
@@ -185,6 +189,19 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
     }
     if (row.status !== "queued") return null;
     if (rolloutApplicationIneligibility(row)) return null;
+    if ((row.retryCount ?? 0) >= maxDrainAttempts()) {
+      await tx.application.update({ where: { id }, data: {
+        status: "ready_to_apply",
+        errorMessage: `${MAX_ATTEMPTS_MESSAGE_PREFIX} ${maxDrainAttempts()} tentativi. Nessun nuovo tentativo automatico.`,
+      } });
+      return null;
+    }
+    if (requiresManualAtsHandoff(row.job)) {
+      await tx.application.update({ where: { id }, data: {
+        status: "ready_to_apply", errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
+      } });
+      return null;
+    }
     // An immutable budget record survives every ordinary status/reset path.
     // A previous attempt is never eligible for preparation/replay in this mode.
     if (await tx.applicationSubmissionReservation.findFirst({ where: { OR: [

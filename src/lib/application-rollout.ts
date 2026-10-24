@@ -1,3 +1,5 @@
+import { maxDrainAttempts } from "@/lib/drain-limits";
+
 /** Application sending policy shared by the Vercel web runtime and the Railway
  * worker (same module, same env, same decisions).
  *
@@ -82,6 +84,6 @@ export function rolloutApplicationIneligibility(row: {
     // fall through to retry check
   } else if (!(row.consentGrantedAt instanceof Date) || !Number.isFinite(+row.consentGrantedAt)
     || +row.consentGrantedAt <= +config.startedAt! || +row.consentGrantedAt > +now) return "rollout_explicit_consent_required";
-  if (row.retryCount !== undefined && row.retryCount !== 0) return "rollout_retry_blocked";
+  if (row.retryCount !== undefined && row.retryCount >= maxDrainAttempts()) return "rollout_retry_blocked";
   return null;
 }

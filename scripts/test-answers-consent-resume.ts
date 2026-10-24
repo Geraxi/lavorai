@@ -27,7 +27,7 @@ function makeRow(url: string, consentGrantedAt: Date | null, token: Date) {
     submitConfirmation: "SUBMISSION_STARTED", submissionReceiptJson: null, answerContinuationJson: null as string | null,
     pendingQuestionsJson: null as string | null, userProvidedAnswersJson: null as string | null, canaryLog: null,
     answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null, errorMessage: null as string | null,
-    job: { closedAt: null, url, company: "Alan", title: "Fullstack Software Engineer", description: "", location: "Paris", remote: true, contractType: null, salaryMin: null, salaryMax: null },
+    job: { closedAt: null, url, recruiterEmail: null, company: "Alan", title: "Fullstack Software Engineer", description: "", location: "Paris", remote: true, contractType: null, salaryMin: null, salaryMax: null },
     user: { email: "candidate@example.test", yearsExperience: 3, englishLevel: null, noticePeriod: null, tier: "pro", createdAt: new Date(now - 30 * 86400_000),
       trialEndsAt: null, trialGraceEndsAt: null, subscriptionStatus: "active", currentPeriodEnd: null, pausedUntil: null, suspendedAt: null,
       emailVerified: new Date(now - 86400_000), privacyConsentAt: new Date(now - 86400_000), avoidCompanies: null, cvProfile: null,

@@ -36,7 +36,7 @@ async function testCronBothPasses() {
     id, title: "Product Designer", company: "Acme", location: "Milano",
     remote: false, contractType: "full time", description: "Permanent product design role.",
     salaryMin: 60_000, salaryMax: 70_000, postedAt: new Date("2026-01-01T00:00:00.000Z"),
-    url: `https://jobs.ashbyhq.com/acme/${id}`, category: "design", ...overrides,
+    url: `https://boards.greenhouse.io/acme/jobs/${id}`, category: "design", ...overrides,
   });
   const jobs = [
     job("valid-first"), job("valid-second-same-company"),
@@ -71,6 +71,7 @@ async function testCronBothPasses() {
   // Retain algorithm regression coverage behind an explicitly mocked legacy gate.
   // Production manual-only blocking is exercised in test-manual-rollout-producers.
   const api = loadModule("src/lib/auto-apply-cron.ts", {
+    "@/lib/ats-skip-hosts": await import("../src/lib/ats-skip-hosts"),
     "@/lib/paid-priority": { sortByPaidPriority: <T,>(items: readonly T[]) => [...items] },
     "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
     "@/lib/application-pause": { applicationsPaused: () => false },
