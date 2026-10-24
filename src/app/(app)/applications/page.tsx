@@ -523,6 +523,9 @@ function replyLabel(a: Row, en: boolean): string | null {
   if (a.lastReplyKind === "colloquio") return en ? "Interview invite" : "Invito a colloquio";
   if (a.lastReplyKind === "rifiutata") return en ? "Rejection" : "Rifiuto del recruiter";
   if (a.lastReplyKind === "risposta") return en ? "Recruiter reply" : "Risposta del recruiter";
+  if (a.lastReplyKind === "ricevuta") return en ? "Application receipt" : "Ricevuta di candidatura";
+  if (a.lastReplyKind === "redirected_to_portal") return en ? "Apply on the portal (not a rejection)" : "Candidati sul portale (non è un rifiuto)";
+  if (a.lastReplyKind === "auto_reply") return en ? "Automatic reply (not a rejection)" : "Risposta automatica (non è un rifiuto)";
   return null;
 }
 

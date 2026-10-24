@@ -70,6 +70,7 @@ async function main() {
   assert.equal(applicationDeliveryView({ ...base, emailAttempts: [{ status: "bounced", providerEmailId: "id" }] }).phase, "failed");
   const uncertain = applicationDeliveryView({ ...base, status: "ready_to_apply", submitConfirmation: "UNCONFIRMED" });
   assert.equal(uncertain.phase, "unconfirmed"); assert(!uncertain.label.includes("NON inviata"));
+  assert.equal(applicationDeliveryView({ ...base, confirmedAt: "2026-10-24T12:00:00Z" }).phase, "confirmed");
   const worker = readFileSync("src/lib/application-worker.ts", "utf8");
   assert.match(worker, /: \{ status: "applying", submitConfirmation: "SUBMISSION_STARTED" \}/,
     "Late failure cannot downgrade a concurrently reconciled success");

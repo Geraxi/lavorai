@@ -7,7 +7,7 @@ export function inboundAiClassifier(env: Record<string, string | undefined> = pr
     const { complete } = await import("@/lib/ai-router");
     const { text } = await complete({
       task: "email_extract", maxTokens: 50, json: true, temperature: 0,
-      system: 'Classify an email received by a job applicant. Reply JSON {"category": one of "confirmation" (application received), "incomplete" (action/verification needed to finish applying), "interview", "rejection", "other"}.',
+      system: 'Classify an email received by a job applicant. Reply JSON {"category": one of "confirmation" (application received), "incomplete" (action/verification needed, including "apply via our portal / we don\'t accept applications over email" — those are never rejection), "interview", "rejection", "other"}.',
       user: `Subject: ${subject}\n\n${body.slice(0, 3000)}`,
     });
     const c = (JSON.parse(text) as { category?: string }).category as InboundCategory | undefined;

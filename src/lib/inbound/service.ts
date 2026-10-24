@@ -85,6 +85,16 @@ export async function processUserInboundEmail(mail: NormalizedInbound, deps: { d
     result.stored++;
     if (category === "confirmation" && applicationId && await recordAtsConfirmation(deps.db, { applicationId, userId: inbox.userId, inboundEmailId: row.id, at: mail.receivedAt })) {
       result.confirmed.push(applicationId);
+      if (typeof deps.db.application.updateMany === "function") {
+        await deps.db.application.updateMany({
+          where: {
+            id: applicationId,
+            userId: inbox.userId,
+            OR: [{ lastReplyKind: null }, { lastReplyKind: { in: ["auto", "auto_reply", "ricevuta"] } }],
+          },
+          data: { lastReplyKind: "ricevuta" },
+        }).catch(() => undefined);
+      }
     }
   }
   return result;

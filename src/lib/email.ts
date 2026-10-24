@@ -80,12 +80,19 @@ export async function forwardReplyToUser(input: {
     rifiutata: "❌ Esito negativo",
     risposta: "💬 Risposta",
     auto: "🤖 Risposta automatica",
+    auto_reply: "🤖 Risposta automatica (non è un rifiuto)",
+    redirected_to_portal: "📋 Candidati sul portale (non è un rifiuto)",
     ricevuta: "📩 Candidatura ricevuta",
     bounce: "⚠️ Mancata consegna",
   };
   const label = kindLabel[input.kind] ?? "💬 Risposta";
   const ctx = `${input.jobTitle}${input.company ? ` · ${input.company}` : ""}`;
-  const safeBody = escapeHtml(input.bodyText ?? "").replace(/\n/g, "<br/>");
+  const notice = input.kind === "redirected_to_portal"
+    ? "Questa non è un rifiuto. L'azienda chiede di candidarti sul portale, non via email.\n\n"
+    : input.kind === "auto_reply"
+      ? "Questa è una risposta automatica, non un rifiuto del recruiter.\n\n"
+      : "";
+  const safeBody = escapeHtml(`${notice}${input.bodyText ?? ""}`).replace(/\n/g, "<br/>");
 
   const result = await client.emails.send({
     from: getFromAddress(),
@@ -95,7 +102,7 @@ export async function forwardReplyToUser(input: {
     text:
       `${label} alla tua candidatura "${ctx}"\n` +
       `Da: ${input.recruiterFrom}\n\n` +
-      `${input.bodyText ?? "(nessun contenuto testuale)"}\n\n` +
+      `${notice}${input.bodyText ?? "(nessun contenuto testuale)"}\n\n` +
       `---\nRispondi direttamente a questa email per rispondere al recruiter.\n` +
       `Inoltrato da LavorAI.`,
     html: `<!doctype html><html lang="it"><body style="margin:0;padding:0;background:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;color:#0F172A;">

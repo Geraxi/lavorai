@@ -10,6 +10,8 @@ const cases = [
   { fromAddress: "no-reply@example.com", subject: "Undeliverable: Security code for application", kind: "bounce", isHuman: false },
   { fromAddress: "recruiter@example.com", subject: "Interview invitation", kind: "colloquio", isHuman: true },
   { fromAddress: "noreply@example.com", bodyText: "Unfortunately, we will not be moving forward.", kind: "rifiutata", isHuman: true },
+  { fromAddress: "careers@monzo.com", subject: "Thanks for your email", bodyText: "Unfortunately we don't take any applications over email. Please apply via our careers site.", kind: "redirected_to_portal", isHuman: false },
+  { fromAddress: "jane@example.com", subject: "Automatic reply", bodyText: "I am out of office until Monday.", kind: "auto_reply", isHuman: false },
 ];
 for (const { kind, isHuman, ...input } of cases) {
   assert.deepEqual(classifyReply(input), { kind, isHuman }, input.subject ?? input.bodyText);
