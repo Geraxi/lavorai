@@ -32,8 +32,9 @@ const tx = {
     update: async ({ where, data }: any) => {
       if (failProjection) throw new Error("synthetic_projection_failure");
       const app = apps.find((app) => app.id === where.id)!;
-      app.replyCount += data.replyCount.increment;
+      if (data.replyCount?.increment) app.replyCount += data.replyCount.increment;
       if (data.lastReplyAt) app.lastReplyAt = data.lastReplyAt;
+      if (data.lastReplyKind) (app as { lastReplyKind?: string }).lastReplyKind = data.lastReplyKind;
       return app;
     },
   },
