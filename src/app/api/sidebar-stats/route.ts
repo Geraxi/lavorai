@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { dailyApplicationLimit } from "@/lib/billing";
+import { countDailyCapUsage } from "@/lib/daily-application-cap";
 import { getApplicationTotal } from "@/lib/dashboard-metrics-shared";
 
 export const runtime = "nodejs";
@@ -22,13 +23,7 @@ export async function GET() {
   }
   const [applicationsCount, todayCount, prefs] = await Promise.all([
     getApplicationTotal(user.id),
-    prisma.application.count({
-      where: {
-        userId: user.id,
-        createdAt: { gte: new Date(new Date().setHours(0, 0, 0, 0)) },
-        status: { notIn: ["failed", "diagnostic"] },
-      },
-    }),
+    countDailyCapUsage(prisma, user.id),
     prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { dailyCap: true } }),
   ]);
   const dailyCap = dailyApplicationLimit(user, prefs?.dailyCap);

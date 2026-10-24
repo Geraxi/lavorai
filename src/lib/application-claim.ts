@@ -4,6 +4,8 @@ import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { hasPotentialSubmission } from "@/lib/application-worker-gates";
 import { claimScanWindow, sortByPaidPriority, type PriorityUser } from "@/lib/paid-priority";
+import { maxDrainAttempts } from "@/lib/drain-limits";
+import { claimUserSelect, isQueuedRowSendable, loadQuotaUsageMaps, usageFor } from "@/lib/queue-sendability";
 
 /**
  * Presa in carico atomica di una candidatura in coda, indipendente da Redis.
@@ -41,7 +43,7 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
   }
   const r = await prisma.application.updateMany({
     where: { id: applicationId, status: "queued", startedAt: null, completedAt: null,
-      createdAt: app.createdAt, consentGrantedAt: app.consentGrantedAt, retryCount: 0,
+      createdAt: app.createdAt, consentGrantedAt: app.consentGrantedAt, retryCount: app.retryCount,
       submittedAt: null, submittedVia: null, submitConfirmation: null,
       canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
     },
@@ -90,7 +92,7 @@ export async function recoverStuckApplications(): Promise<number> {
   return recovered;
 }
 
-const prioritySelect = { tier: true, email: true, subscriptionStatus: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, currentPeriodEnd: true } as const;
+const prioritySelect = claimUserSelect;
 
 /** Paid Pro/Pro+ and active trials first, then oldest first; dedup, capped at `limit`. */
 export function orderClaimable(rows: { id: string; createdAt: Date; user?: PriorityUser | null }[], limit: number): string[] {
@@ -106,8 +108,9 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
   const config = applicationRolloutConfig();
   if (!config.enabled || !config.startedAt) return [];
   const now = new Date();
+  const attemptCap = maxDrainAttempts();
   const rows = await prisma.application.findMany({
-    where: { status: "queued", startedAt: null, completedAt: null, retryCount: 0,
+    where: { status: "queued", startedAt: null, completedAt: null, retryCount: { lt: attemptCap },
       createdAt: { gt: config.startedAt, lte: now },
       // Automatic mode also admits rows of auto-mode users (no per-application
       // consent); the worker gate re-checks the user's saved mode.
@@ -119,18 +122,29 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
     },
     orderBy: { createdAt: "asc" },
     take: claimScanWindow(limit),
-    select: { id: true, createdAt: true, consentGrantedAt: true, retryCount: true, user: { select: prioritySelect } },
+    select: {
+      id: true, userId: true, createdAt: true, consentGrantedAt: true, retryCount: true,
+      job: { select: { url: true, recruiterEmail: true } },
+      user: { select: prioritySelect },
+    },
   });
   const continuations = await prisma.application.findMany({
-    where: { status: "queued", answerContinuationJson: { not: null }, retryCount: 0,
+    where: { status: "queued", answerContinuationJson: { not: null }, retryCount: { lt: attemptCap },
       createdAt: { gt: config.startedAt, lte: now }, consentGrantedAt: { gt: config.startedAt, lte: now },
       submitConfirmation: "NOT_SUBMITTED", completedAt: null, submittedAt: null, submittedVia: null,
-    }, select: { ...continuationSelect, user: { select: prioritySelect } }, orderBy: { createdAt: "asc" }, take: claimScanWindow(limit),
+    }, select: {
+      ...continuationSelect,
+      job: { select: { url: true, recruiterEmail: true } },
+      user: { select: prioritySelect },
+    }, orderBy: { createdAt: "asc" }, take: claimScanWindow(limit),
   });
-  return orderClaimable([
+  const admitted = [
     ...rows.filter(row => !rolloutApplicationIneligibility(row, now)),
     ...continuations.filter(row => !answerContinuationIneligibility(row, "queued", undefined, now)),
-  ], limit);
+  ];
+  const freeIds = admitted.map(row => row.userId).filter((id): id is string => !!id);
+  const usage = await loadQuotaUsageMaps(prisma, freeIds, admitted.map(row => row.id), now);
+  return orderClaimable(admitted.filter(row => isQueuedRowSendable(row, usageFor(usage, row.userId), now)), limit);
 }
 
 /** Rimette una candidatura in stato prendibile (da chiamare all'enqueue). */

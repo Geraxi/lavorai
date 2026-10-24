@@ -90,7 +90,7 @@ async function main() {
     assert.equal((await db.application.findUniqueOrThrow({ where: { id: historical.id } })).startedAt, null, "Historical rows are not rewritten");
     const noConsent = await make("no-consent", { consentGrantedAt: null });
     assert.equal(await reserve(noConsent.id), null);
-    const retry = await make("retry", { retryCount: 1 }); assert.equal(await reserve(retry.id), null);
+    const retry = await make("retry", { retryCount: 3 }); assert.equal(await reserve(retry.id), null);
     const invalid = await make("invalid");
     process.env.APPLY_GLOBAL_DAILY_CAP = "0"; assert.equal(await reserve(invalid.id), null);
     process.env.APPLY_GLOBAL_DAILY_CAP = "10";

@@ -24,6 +24,8 @@ import { recordConversionEvent } from "@/lib/conversion-events";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
 import { sortByPaidPriority } from "@/lib/paid-priority";
+import { compareJobsForAutoApply, requiresManualAtsHandoff, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { countDailyCapUsage } from "@/lib/daily-application-cap";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -91,6 +93,7 @@ interface RunStats {
   skippedLocationUnverified: number;
   skippedSalaryMismatch: number;
   skippedJobClosed: number;
+  skippedManualAts: number;
   candidatesFetched: number;
   descriptionsBackfilled: number;
   errors: number;
@@ -114,6 +117,7 @@ function emptyRunStats(): RunStats {
     skippedLocationUnverified: 0,
     skippedSalaryMismatch: 0,
     skippedJobClosed: 0,
+    skippedManualAts: 0,
     candidatesFetched: 0,
     descriptionsBackfilled: 0,
     errors: 0,
@@ -389,12 +393,10 @@ async function processUser(
   const locationPrefs = parsePreferenceList(prefs.locationsJson);
   if (!locationPrefs?.length) return;
 
-  // Daily cap = quante già create oggi
-  // Le candidature fallite (annuncio chiuso, form rotto, crediti) NON
-  // consumano cap/quota: l'utente non ha ricevuto nulla.
-  const todayCount = await prisma.application.count({
-    where: { userId: user.id, createdAt: { gte: todayStart }, status: { notIn: ["failed", "diagnostic"] } },
-  });
+  // Daily cap = sent today or currently in flight (queued/claimed/sending).
+  // needs_answers, CAPTCHA / finish-it-yourself, NOT_SUBMITTED do not count.
+  // The day boundary is Europe/Rome, not UTC midnight.
+  const todayCount = await countDailyCapUsage(prisma, user.id);
   // Accesso pagato/prova: limiti storici (giornaliero + mensile del tier).
   // Altrimenti (Free a prova scaduta, prova senza carta, past_due/canceled):
   // quota gratuita di N candidature su 7 giorni mobili, vedi billing.ts.
@@ -624,6 +626,9 @@ async function processUser(
       const pb = b.protectedCategory ? 1 : 0;
       if (pa !== pb) return pb - pa;
     }
+    // 0b. Recruiter-email and captcha-free Greenhouse/Lever/Workable/Recruitee first.
+    const delivery = compareJobsForAutoApply(a, b);
+    if (delivery) return delivery;
     // 1. Match score DESC (più congruo prima)
     const sb = scoreOf(b);
     const sa = scoreOf(a);
@@ -809,6 +814,7 @@ async function processUser(
     }
 
     const portal = portalOf(job.url);
+    const manualAts = requiresManualAtsHandoff(job);
 
     try {
       const app = await prisma.application.create({
@@ -816,10 +822,11 @@ async function processUser(
           userId: user.id,
           jobId: job.id,
           portal,
-          status: initialStatus,
+          status: manualAts && !isHybrid ? "ready_to_apply" : initialStatus,
           trackingToken: randomToken(),
           atsScore: score,
           sessionId,
+          ...(manualAts && !isHybrid ? { errorMessage: SKIPPED_ATS_MANUAL_MESSAGE } : {}),
         },
       });
       await recordConversionEvent(AnalyticsEvent.APPLICATION_CREATED, {
@@ -827,9 +834,11 @@ async function processUser(
         properties: { mode: isHybrid ? "hybrid" : "auto", consentRequired: isHybrid },
         dedupeKey: `application_created:${app.id}`,
       });
-      // Solo in auto mandiamo subito in coda. In hybrid resta
-      // "awaiting_consent" finché l'utente non approva dal dashboard.
-      if (!isHybrid) {
+      // Skip-list ATS (default Ashby reCAPTCHA): never auto-queue portal submit.
+      // Recruiter email keeps the email path. Otherwise mark as manual handoff.
+      if (manualAts && !isHybrid) {
+        stats.skippedManualAts++;
+      } else if (!isHybrid) {
         await enqueueApplication(app.id);
         stats.applicationsEnqueued++;
       } else {
@@ -913,18 +922,22 @@ async function processUser(
       }
 
       try {
+        const manualAts = requiresManualAtsHandoff(job);
         const app = await prisma.application.create({
           data: {
             userId: user.id,
             jobId: job.id,
             portal: portalOf(job.url),
-            status: initialStatus,
+            status: manualAts && !isHybrid ? "ready_to_apply" : initialStatus,
             trackingToken: randomToken(),
             atsScore: score,
             sessionId,
+            ...(manualAts && !isHybrid ? { errorMessage: SKIPPED_ATS_MANUAL_MESSAGE } : {}),
           },
         });
-        if (!isHybrid) {
+        if (manualAts && !isHybrid) {
+          stats.skippedManualAts++;
+        } else if (!isHybrid) {
           await enqueueApplication(app.id);
           stats.applicationsEnqueued++;
         } else {

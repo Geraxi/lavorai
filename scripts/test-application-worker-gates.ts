@@ -13,7 +13,7 @@ const base = {
   submissionReceiptJson: null, userProvidedAnswersJson: null, answerContinuationJson: null, pendingQuestionsJson: null, completedAt: null,
   cvDocxPath: null, submittedAt: null, submittedVia: null, submitConfirmation: null,
   canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
-  job: { closedAt: null, url: "https://boards.greenhouse.io/acme/jobs/123", title: "Product Designer", company: "Acme", description: "Product Designer", location: "Milano", remote: false, contractType: "employee", salaryMin: 60000, salaryMax: 70000 }, session: { id: "round", userId: "user", status: "active", sentCount: 27, targetCount: 30, title: "Product Designer", label: "Design" },
+  job: { closedAt: null, url: "https://boards.greenhouse.io/acme/jobs/123", recruiterEmail: null, title: "Product Designer", company: "Acme", description: "Product Designer", location: "Milano", remote: false, contractType: "employee", salaryMin: 60000, salaryMax: 70000 }, session: { id: "round", userId: "user", status: "active", sentCount: 27, targetCount: 30, title: "Product Designer", label: "Design" },
   user: { email: "synthetic@example.invalid", name: "Alex Example", yearsExperience: null, englishLevel: null, noticePeriod: null, tier: "pro", createdAt: now, trialEndsAt: null, trialGraceEndsAt: null,
     subscriptionStatus: "active", currentPeriodEnd: new Date(+now + 86400000), pausedUntil: null, suspendedAt: null,
     emailVerified: now, privacyConsentAt: now, avoidCompanies: null,

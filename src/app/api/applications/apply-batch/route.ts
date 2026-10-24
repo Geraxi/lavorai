@@ -8,6 +8,7 @@ import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
 import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
+import { countDailyCapUsage } from "@/lib/daily-application-cap";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { resolveSession } from "@/lib/apply-session";
@@ -116,15 +117,11 @@ export async function POST(request: NextRequest) {
     // --- Paywall per-tier ---
     const tier = effectiveTier(user);
     const limits = getLimits(tier);
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
     const [usedThisMonth, usedToday, prefs, profileRow] = await Promise.all([
       prisma.application.count({
         where: { userId: user.id, createdAt: { gte: monthlyQuotaSince((user as { quotaResetAt?: Date | null }).quotaResetAt ?? null) }, status: { notIn: ["failed", "diagnostic"] } },
       }),
-      prisma.application.count({
-        where: { userId: user.id, createdAt: { gte: todayStart }, status: { notIn: ["failed", "diagnostic"] } },
-      }),
+      countDailyCapUsage(prisma, user.id),
       prisma.userPreferences.findUnique({
         where: { userId: user.id },
         select: { autoApplyMode: true, matchMin: true, dailyCap: true },

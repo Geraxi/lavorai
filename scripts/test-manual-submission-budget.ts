@@ -58,7 +58,8 @@ assert.equal(rolloutApplicationIneligibility({ ...row, createdAt: new Date("2026
 assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: null }, now), "rollout_explicit_consent_required");
 assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: new Date(start) }, now), "rollout_explicit_consent_required");
 assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: new Date(+now + 1) }, now), "rollout_explicit_consent_required");
-assert.equal(rolloutApplicationIneligibility({ ...row, retryCount: 1 }, now), "rollout_retry_blocked");
+assert.equal(rolloutApplicationIneligibility({ ...row, retryCount: 1 }, now), null, "fresh rows may retry under the drain attempt cap");
+assert.equal(rolloutApplicationIneligibility({ ...row, retryCount: 3 }, now), "rollout_retry_blocked");
 
 // Automatic mode: auto rows without per-application consent are admitted
 // (the worker gate still requires the user's saved mode to be "auto");
@@ -68,7 +69,8 @@ assert.equal(rolloutApplicationIneligibility(row, now), null);
 assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: null }, now), null);
 assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: new Date(start) }, now), "rollout_explicit_consent_required");
 assert.equal(rolloutApplicationIneligibility({ ...row, createdAt: new Date("2026-01-01T00:00:00Z"), consentGrantedAt: null }, now), "rollout_historical_application");
-assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: null, retryCount: 1 }, now), "rollout_retry_blocked");
+assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: null, retryCount: 1 }, now), null);
+assert.equal(rolloutApplicationIneligibility({ ...row, consentGrantedAt: null, retryCount: 3 }, now), "rollout_retry_blocked");
 assert.equal(rolloutApplicationIneligibility({ ...row, createdAt: new Date(+now + 1), consentGrantedAt: null }, now), "rollout_historical_application");
 
 const held = applicationDeliveryView({ status: "ready_to_apply", submittedVia: null, submitConfirmation: "NOT_SUBMITTED", errorMessage: ROLLOUT_BUDGET_HELD_MESSAGE });

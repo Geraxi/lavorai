@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { enqueueApplication } from "@/lib/application-queue";
 import { Resend } from "resend";
 import { recoverStuckApplications } from "@/lib/application-claim";
+import { maxDrainAttempts } from "@/lib/drain-limits";
+import { HELD_MESSAGE_PREFIX } from "@/lib/queue-sendability";
 
 /**
  * Self-healing automatico per l'auto-apply cron.
@@ -166,6 +168,8 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
       where: {
         status: "queued",
         ...NO_PRIOR_DELIVERY,
+        retryCount: { lt: maxDrainAttempts() },
+        NOT: { errorMessage: { startsWith: HELD_MESSAGE_PREFIX } },
         OR: [
           { startedAt: { lt: stuckCutoff } },
           { startedAt: null, createdAt: { lt: stuckCutoff } },
@@ -177,7 +181,11 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
     for (const app of stuck) {
       try {
         const changed = await prisma.application.updateMany({
-          where: { id: app.id, status: "queued", startedAt: app.startedAt, ...NO_PRIOR_DELIVERY },
+          where: {
+            id: app.id, status: "queued", startedAt: app.startedAt, ...NO_PRIOR_DELIVERY,
+            retryCount: { lt: maxDrainAttempts() },
+            NOT: { errorMessage: { startsWith: HELD_MESSAGE_PREFIX } },
+          },
           data: { startedAt: null },
         });
         if (changed.count !== 1) continue;

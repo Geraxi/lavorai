@@ -7,7 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "echo 'next lint removed in Next 16; typecheck is the CI gate' && exit 0",
-    "test": "node --import tsx scripts/test-application-security-code.ts && node --import tsx scripts/test-otp-auto-complete.ts && node --import tsx scripts/test-auth-hardening.ts && npm run test:google-auth && node --import tsx scripts/test-registration-trial.ts && node --import tsx scripts/test-growth-lifecycle.ts && node --import tsx scripts/test-auth-schema-compatibility.ts && npm run test:credit-retry && npm run test:worker-gates && npm run test:auto-apply-quality && npm run test:send-reply && npm run test:release-controls && npm run test:manual-rollout && npm run test:card-onboarding && npm run test:user-workspace && npm run test:application-pagination && npm run test:attention-evidence && npm run test:privacy-consent && npm run test:held-release && npm run test:meta-consent && npm run test:google-ads && node --import tsx scripts/test-application-prerequisites.ts && npm run test:application-lifecycle && npm run test:reliability-metrics && node --import tsx scripts/test-cv-fact-guard.ts && npm run test:ghost-jobs && npm run test:match-score && npm run test:ats-unstick && npm run test:ats-submit && npm run test:answers-consent && npm run test:mailbox-sending && npm run test:liveness-gate && npm run test:paid-priority && npm run test:free-quota",
+    "test": "node --import tsx scripts/test-application-security-code.ts && node --import tsx scripts/test-otp-auto-complete.ts && node --import tsx scripts/test-auth-hardening.ts && npm run test:google-auth && node --import tsx scripts/test-registration-trial.ts && node --import tsx scripts/test-growth-lifecycle.ts && node --import tsx scripts/test-auth-schema-compatibility.ts && npm run test:credit-retry && npm run test:worker-gates && npm run test:auto-apply-quality && npm run test:send-reply && npm run test:release-controls && npm run test:manual-rollout && npm run test:card-onboarding && npm run test:user-workspace && npm run test:application-pagination && npm run test:attention-evidence && npm run test:privacy-consent && npm run test:held-release && npm run test:meta-consent && npm run test:google-ads && node --import tsx scripts/test-application-prerequisites.ts && npm run test:application-lifecycle && npm run test:reliability-metrics && node --import tsx scripts/test-cv-fact-guard.ts && npm run test:ghost-jobs && npm run test:match-score && npm run test:ats-unstick && npm run test:ats-submit && npm run test:answers-consent && npm run test:mailbox-sending && npm run test:liveness-gate && npm run test:paid-priority && npm run test:free-quota && npm run test:queue-drain && npm run test:daily-cap",
     "test:mailbox-sending": "NODE_ENV=test node --import tsx scripts/test-mailbox-sending.ts && NODE_ENV=test node --import tsx scripts/test-mailbox-connect-config.ts",
     "test:mailbox-sending-postgres": "NODE_ENV=test node --import tsx scripts/test-mailbox-sending-postgres.ts",
     "test:match-score": "node --import tsx scripts/test-match-score.ts",
@@ -59,7 +59,9 @@
     "test:google-ads": "node --import tsx scripts/test-google-ads.ts && node --import tsx scripts/test-google-ads-signup-route.ts",
     "test:google-ads-browser": "node scripts/test-google-ads-browser.mjs",
     "test:paid-priority": "node --import tsx scripts/test-paid-priority.ts",
-    "test:free-quota": "node --import tsx scripts/test-free-weekly-quota.ts"
+    "test:free-quota": "node --import tsx scripts/test-free-weekly-quota.ts",
+    "test:queue-drain": "node --import tsx scripts/test-queue-drain.ts",
+    "test:daily-cap": "node --import tsx scripts/test-daily-application-cap.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

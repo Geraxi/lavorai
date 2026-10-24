@@ -29,6 +29,11 @@ function load(path: string, extra: Record<string, any> = {}) {
     "next/server": { NextResponse: { json, redirect: (location: string) => ({ status: 307, location }) } },
     "@/lib/auto-apply-liveness-gate": liveness,
     "@/lib/paid-priority": paidPriority,
+    "@/lib/ats-skip-hosts": extra["@/lib/ats-skip-hosts"] ?? { requiresManualAtsHandoff: () => false, compareJobsForAutoApply: () => 0, SKIPPED_ATS_MANUAL_MESSAGE: "skip" },
+    "@/lib/daily-application-cap": extra["@/lib/daily-application-cap"] ?? { countDailyCapUsage: async () => 0, remainingDailyCap: (used: number, limit: number) => Math.max(0, limit - used) },
+    "@/lib/drain-limits": extra["@/lib/drain-limits"] ?? { maxDrainAttempts: () => 3, drainQueueBatch: () => 5, drainProcessConcurrency: () => 2, DRAIN_TIME_RESERVE_MS: 60_000 },
+    "@/lib/queue-sendability": extra["@/lib/queue-sendability"] ?? { claimUserSelect: {}, isQueuedRowSendable: () => true, loadQuotaUsageMaps: async () => ({ weekly: new Map(), daily: new Map() }), usageFor: () => ({ weekly: 0, daily: 0 }), HELD_MESSAGE_PREFIX: "Invio in attesa:" },
+    "@/lib/queue-drain": extra["@/lib/queue-drain"] ?? {},
     "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "unknown", reason: "test_no_network" }), markJobClosed: async () => {}, JOB_CLOSED_HELD_MESSAGE: "closed" },
     zod: { z }, ...extra,
   };
@@ -66,7 +71,9 @@ function match(value: any, condition: any): boolean {
     if (key === "gt") return value !== null && +value > +expected;
     if (key === "gte") return value !== null && +value >= +expected;
     if (key === "lte") return value !== null && +value <= +expected;
+    if (key === "lt") return value !== null && +value < +expected;
     if (key === "in") return expected.includes(value);
+    if (key === "notIn") return !expected.includes(value);
     if (key === "not") return !match(value, expected);
     if (key === "OR") return expected.some((condition: any) => match(value, condition));
     return match(value?.[key], expected);
@@ -134,7 +141,7 @@ async function testClaimsAndQueue() {
   const old = new Date(+start - 1);
   const fixtures = [row("fresh"), row("historical", { createdAt: old }), row("boundary", { createdAt: start }),
     row("unconfirmed", { consentGrantedAt: null }), row("old-consent", { consentGrantedAt: old }),
-    row("retry", { retryCount: 1 }), row("claimed", { startedAt: old }), row("complete", { completedAt: freshAt }),
+    row("retry", { retryCount: 3 }), row("claimed", { startedAt: old }), row("complete", { completedAt: freshAt }),
     row("attempted", { submitConfirmation: "NOT_SUBMITTED" }), row("evidence", { canaryLog: "{}" }),
     row("future", { createdAt: new Date(Date.now() + 60_000) })];
   const db = database(fixtures);
@@ -170,7 +177,7 @@ async function testAutomaticClaimsAndQueue() {
   enable(); delete process.env.APPLICATION_SENDING_MODE;
   const old = new Date(+start - 1);
   const fixtures = [row("fresh"), row("auto", { consentGrantedAt: null }), row("historical", { createdAt: old, consentGrantedAt: null }),
-    row("old-consent", { consentGrantedAt: old }), row("retry", { retryCount: 1, consentGrantedAt: null }),
+    row("old-consent", { consentGrantedAt: old }), row("retry", { retryCount: 3, consentGrantedAt: null }),
     row("claimed", { startedAt: old, consentGrantedAt: null }), row("attempted", { submitConfirmation: "NOT_SUBMITTED", consentGrantedAt: null }),
     row("evidence", { canaryLog: "{}", consentGrantedAt: null })];
   const db = database(fixtures);
@@ -200,7 +207,7 @@ async function testConsentCohort() {
   const fixtures = [row("fresh", { status: "awaiting_consent", consentGrantedAt: null }),
     row("historical", { status: "awaiting_consent", createdAt: new Date(+start - 1), consentGrantedAt: null }),
     row("boundary", { status: "awaiting_consent", createdAt: start, consentGrantedAt: null }),
-    row("retry", { status: "awaiting_consent", retryCount: 1, consentGrantedAt: null }),
+    row("retry", { status: "awaiting_consent", retryCount: 3, consentGrantedAt: null }),
     row("foreign", { status: "awaiting_consent", userId: "other", consentGrantedAt: null }),
     row("attempted", { status: "awaiting_consent", submitConfirmation: "NOT_SUBMITTED", consentGrantedAt: null })];
   const db = database(fixtures), queued: string[] = [];
