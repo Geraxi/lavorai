@@ -1,7 +1,7 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { homeCountries } from "@/lib/auto-apply-preferences";
-import { cleanHtmlText } from "./html-clean";
+import { storedJobDescription } from "./posting-description";
 import { fetchWorkableAccountRaw, mapWorkableAccountJobs, type WorkableJob } from "./workable";
 
 /**
@@ -174,7 +174,7 @@ export async function fetchWorkableSearchJobs(
         const mapped = mapWorkableAccountJobs(raw, slug, c.name);
         for (const item of mapped) {
           const hit = matched.find((h) => norm(h.title) === norm(item.title));
-          if (hit && !item.description && hit.description) item.description = cleanHtmlText(hit.description).slice(0, 2000);
+          if (hit && !item.description && hit.description) item.description = storedJobDescription(hit.description);
         }
         items.push(...mapped);
         break;

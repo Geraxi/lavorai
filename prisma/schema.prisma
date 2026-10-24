@@ -573,6 +573,9 @@ model Job {
   /// Annuncio riservato/prioritario per le categorie protette (L. 68/99):
   /// riconosciuto da titolo/descrizione (src/lib/protected-category.ts).
   protectedCategory Boolean @default(false)
+  /// Last successful full-description fetch from a public board API.
+  /// Null rows at exactly 2,000 chars are eligible for the bounded backfill.
+  descriptionFetchedAt DateTime?
 
   applications Application[]
   dismissals JobDismissal[]

@@ -22,6 +22,7 @@ import {
 } from "@/lib/cv-profile-ai-full";
 import { profileToRow, rowToProfile } from "@/lib/cv-profile-types";
 import { detectLanguage } from "@/lib/lang-detect";
+import { clipJobDescriptionForAi } from "@/lib/scrapers/posting-description";
 import { renderCVPdf } from "@/lib/cv-pdf";
 import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
 import { sendWithinQuota } from "@/lib/email-quota";
@@ -161,7 +162,7 @@ async function processApplicationRun(
     return;
   }
 
-  const jobPosting = `${app.job.title}\n${app.job.company ?? ""}\n\n${app.job.description}`;
+  const jobPosting = `${app.job.title}\n${app.job.company ?? ""}\n\n${clipJobDescriptionForAi(app.job.description)}`;
   const jobLang = detectLanguage(`${app.job.title} ${app.job.description}`);
 
   let result: Awaited<ReturnType<typeof optimizeCV>>;
@@ -521,7 +522,7 @@ async function processApplicationRun(
       protectedCategory: app.user.preferences?.protectedCategory ?? null,
       jobTitle: app.job.title,
       company: app.job.company,
-      jobDescription: app.job.description,
+      jobDescription: clipJobDescriptionForAi(app.job.description),
       forceRealSubmit: opts?.forceRealSubmit === true,
       forceDryRun: opts?.forceDryRun === true,
     }).catch((err) => {

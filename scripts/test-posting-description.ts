@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { descriptionFromDetail, fetchPostingDescription, fillMissingDescriptions, jobPostingLdDescription, postingDescriptionUrl } from "../src/lib/scrapers/posting-description";
+import { clipJobDescriptionForAi, DESCRIPTION_AI_MAX, DESCRIPTION_MAX, descriptionFromDetail, fetchPostingDescription, fillMissingDescriptions, jobPostingLdDescription, postingDescriptionUrl } from "../src/lib/scrapers/posting-description";
 import { fetchSmartRecruitersJobs } from "../src/lib/scrapers/smartrecruiters";
 import { fetchBreezyJobs } from "../src/lib/scrapers/breezy";
 import { fetchWorkableJobs } from "../src/lib/scrapers/workable";
@@ -18,7 +18,12 @@ async function main() {
     "https://api.smartrecruiters.com/v1/companies/Santen/postings/744000156288089");
   assert.equal(postingDescriptionUrl({ source: "breezy", url: "https://zact-inc.breezy.hr/p/7a8e-architect?x=1", externalId: "7a8e", sourceSlug: "zact-inc" }), "https://zact-inc.breezy.hr/p/7a8e-architect");
   assert.equal(postingDescriptionUrl({ source: "breezy", url: "https://evil.example/p/1", externalId: "1" }), null, "Only the board's own host");
-  assert.equal(postingDescriptionUrl({ source: "greenhouse", url: "https://boards.greenhouse.io/x/jobs/1", externalId: "1" }), null);
+  assert.equal(postingDescriptionUrl({ source: "greenhouse", url: "https://boards.greenhouse.io/acme/jobs/99", externalId: "99" }),
+    "https://boards-api.greenhouse.io/v1/boards/acme/jobs/99?content=true");
+  assert.equal(postingDescriptionUrl({ source: "ashby", url: "https://jobs.ashbyhq.com/elevenlabs/uuid", externalId: "uuid", sourceSlug: "elevenlabs" }),
+    "https://api.ashbyhq.com/posting-api/job-board/elevenlabs?includeCompensation=true");
+  assert.equal(postingDescriptionUrl({ source: "lever", url: "https://jobs.lever.co/stripe/abc", externalId: "abc" }),
+    "https://api.lever.co/v0/postings/stripe/abc?mode=json");
 
   // Parsing.
   const wk = descriptionFromDetail("workable", WK)!;
@@ -30,7 +35,20 @@ async function main() {
   assert.ok(descriptionFromDetail("breezy", BZ)!.includes("Java & cloud-native"));
   assert.equal(descriptionFromDetail("workable", "not json"), null);
   assert.equal(descriptionFromDetail("breezy", "<html>no ld</html>"), null);
-  assert.equal(descriptionFromDetail("workable", JSON.stringify({ description: "x".repeat(5000) }))!.length, 2000, "Same 2000-char cap as the other scrapers");
+  assert.equal(descriptionFromDetail("workable", JSON.stringify({ description: "x".repeat(25_000) }))!.length, DESCRIPTION_MAX, "Store up to 20k, not the legacy 2k cap");
+  assert.equal(clipJobDescriptionForAi("y".repeat(12_000)).length, DESCRIPTION_AI_MAX);
+  const gh = descriptionFromDetail("greenhouse", JSON.stringify({ content: "<p>About us</p><p>Tech stack: TypeScript, React, Node.js</p>" }))!;
+  assert.ok(gh.includes("TypeScript") && gh.includes("React") && !gh.includes("<"));
+  const ash = descriptionFromDetail("ashby", JSON.stringify({ jobs: [
+    { id: "other", descriptionHtml: "<p>Skip</p>" },
+    { id: "job-1", descriptionHtml: "<p>Build with Next.js and Postgres</p>" },
+  ] }), "job-1")!;
+  assert.ok(ash.includes("Next.js") && ash.includes("Postgres") && !ash.includes("Skip"));
+  const lv = descriptionFromDetail("lever", JSON.stringify({
+    descriptionPlain: "We ship weekly.",
+    lists: [{ text: "Requirements", content: "TypeScript and React" }],
+  }))!;
+  assert.ok(lv.includes("We ship weekly") && lv.includes("TypeScript"));
 
   // Failures are null, never throw.
   const ref = { source: "workable", url: "https://apply.workable.com/a/j/B/", externalId: "B", sourceSlug: "a" };
@@ -51,6 +69,19 @@ async function main() {
   assert.equal((await fillMissingDescriptions(rows, { limit: 10, fetchImpl: stub, deadline: Date.now() - 1 })).length, 0);
   assert.equal(calls.length, 0, "Nothing starts after the deadline");
 
+  // Legacy 2,000-char rows are treated as missing (company intro only).
+  const truncated = {
+    source: "greenhouse", url: "https://boards.greenhouse.io/acme/jobs/7", externalId: "7", sourceSlug: "acme",
+    description: "About the company. ".repeat(200).slice(0, 2000),
+  };
+  assert.equal(truncated.description.length, 2000);
+  const ghFilled = await fillMissingDescriptions([truncated], {
+    limit: 1,
+    fetchImpl: async () => ok(JSON.stringify({ content: "<p>About</p><p>TypeScript React Node.js stack</p>" })),
+  });
+  assert.equal(ghFilled.length, 1);
+  assert.ok(truncated.description.includes("TypeScript"));
+
   // Scrapers read the detail endpoint when the list has no description.
   const srJobs = await fetchSmartRecruitersJobs("Santen", "Santen", { fetchImpl: async (u: string) => u.includes("/postings?")
     ? ok(JSON.stringify({ content: [{ id: "744000156288089", name: "Backend Developer", location: { city: "Amsterdam", country: "nl" } }] }))
@@ -69,6 +100,6 @@ async function main() {
     const wkJobs = await fetchWorkableJobs("treatwell", "Treatwell", { fetchImpl: async (u: string) => u.endsWith("/jobs/AB3B06F361") ? ok(WK) : new Response("", { status: 404 }) });
     assert.equal(wkJobs.length, 1); assert.ok(wkJobs[0].description.includes("PostgreSQL"));
   } finally { globalThis.fetch = realFetch; }
-  console.log("PASS posting descriptions: Workable/SmartRecruiters/Breezy detail parsing, bounded backfill, scrapers fill empty descriptions");
+  console.log("PASS posting descriptions: 20k cap, GH/Ashby/Lever public APIs, truncated-2000 fill, bounded backfill");
 }
 main().catch((e) => { console.error(e); process.exit(1); });

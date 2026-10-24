@@ -1,5 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
-import { cleanHtmlText } from "./html-clean";
+import { storedJobDescription } from "./posting-description";
 import { isEuRelevant, runPool } from "./feed-utils";
 
 /**
@@ -63,7 +63,7 @@ function mapOffer(o: RecruiteeOffer, base: string, tenant: string, companyName?:
   if (!o.slug || !o.title) return null;
   const loc = o.location || [o.city, o.country].filter(Boolean).join(", ") || null;
   const remote = String(o.remote) === "true" || /remote|remoto/i.test(loc ?? "");
-  const description = cleanHtmlText(`${o.description ?? ""}\n${o.requirements ?? ""}`).slice(0, 2000);
+  const description = storedJobDescription(`${o.description ?? ""}\n${o.requirements ?? ""}`);
   if (!isEuRelevant(`${loc ?? ""} ${remote ? "remote" : ""}`, description)) return null;
   return {
     id: "",

@@ -1,6 +1,6 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { cleanHtmlText } from "./html-clean";
-import { fillMissingDescriptions, type FetchLike } from "./posting-description";
+import { fillMissingDescriptions, storedJobDescription, type FetchLike } from "./posting-description";
 
 /**
  * Workable public jobs API. Niente auth.
@@ -146,7 +146,7 @@ function mapJob(
   const location = Array.from(new Set([j.location?.city, j.location?.country]
     .map((v) => (typeof v === "string" ? v.trim() : "")).filter(Boolean))).join(", ") || (locParts[0] ?? null);
   const locStr = locParts.join(" ");
-  const description = cleanHtmlText(j.description ?? "").slice(0, 2000);
+  const description = storedJobDescription(j.description ?? "");
   if (!isRelevant(`${locStr} ${j.remote || j.telecommuting || j.workplace === "remote" ? "remote" : ""}`, description))
     return null;
   return {

@@ -1,6 +1,7 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { cleanHtmlText } from "./html-clean";
 import { isEuRelevant, runPool } from "./feed-utils";
+import { storedJobDescription } from "./posting-description";
 
 /**
  * Personio — feed XML pubblico per ogni tenant, nessuna auth:
@@ -34,7 +35,7 @@ export async function fetchPersonioJobs(tenant: string, companyName?: string): P
       const extra = [...pos.matchAll(/<additionalOffices>[\s\S]*?<\/additionalOffices>/g)].flatMap((m) => [...m[0].matchAll(/<office>([\s\S]*?)<\/office>/g)].map((x) => decode(x[1])));
       const loc = [office, ...extra].filter(Boolean).join(" · ") || null;
       const descParts = [...pos.matchAll(/<jobDescription>[\s\S]*?<value>([\s\S]*?)<\/value>/g)].map((m) => cleanHtmlText(m[1].replace(/^\s*<!\[CDATA\[/, "").replace(/\]\]>\s*$/, "")));
-      const description = descParts.join("\n").slice(0, 2000);
+      const description = storedJobDescription(descParts.join("\n"));
       const schedule = get("schedule");
       const remote = /remote|remoto|home office|homeoffice/i.test(`${loc ?? ""} ${description.slice(0, 300)}`);
       if (!isEuRelevant(`${loc ?? ""} ${remote ? "remote" : ""}`, description)) continue;

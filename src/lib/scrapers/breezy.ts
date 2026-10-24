@@ -1,6 +1,5 @@
 import type { JobListItem } from "@/lib/adzuna";
-import { cleanHtmlText } from "./html-clean";
-import { fetchPostingDescription, type FetchLike } from "./posting-description";
+import { fetchPostingDescription, storedJobDescription, type FetchLike } from "./posting-description";
 import { isEuRelevant, runPool } from "./feed-utils";
 
 /**
@@ -42,13 +41,12 @@ export async function fetchBreezyJobs(slug: string, companyName?: string, opts: 
       if (!id || !p.name) continue;
       const loc = [p.location?.city, p.location?.name, p.location?.country?.name].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ") || null;
       const remote = !!p.location?.is_remote || /remote/i.test(loc ?? "");
-      let description = cleanHtmlText(p.description ?? "");
+      let description = storedJobDescription(p.description ?? "");
       if (!description) {
         // The list JSON has no description and /json/position/<id> redirects
         // to the portal home: read the posting page's JobPosting ld+json.
         description = (await fetchPostingDescription({ source: "breezy", url: p.url ?? `${base}/p/${id}`, externalId: String(id), sourceSlug: slug }, { fetchImpl })) ?? "";
       }
-      description = description.slice(0, 2000);
       if (!isEuRelevant(`${loc ?? ""} ${remote ? "remote" : ""}`, description)) continue;
       out.push({
         id: "",

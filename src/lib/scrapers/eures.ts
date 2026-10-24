@@ -1,5 +1,6 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { stripHtml } from "./feed-utils";
+import { storedJobDescription } from "./posting-description";
 
 /**
  * EURES (Commissione europea / ELA): motore pubblico di ricerca delle
@@ -77,7 +78,7 @@ function mapHit(h: EuresHit, keyword: string): JobListItem | null {
   const locs = (h.locations ?? []).map((l) => [l.city, l.region].filter(Boolean).join(", ")).filter(Boolean);
   const nuts = h.locationMap ? Object.values(h.locationMap).flat()[0] ?? null : null;
   const loc = locs[0] ?? (nuts ? nutsToRegion(nuts) : null) ?? "Italia";
-  const description = stripHtml(h.description).slice(0, 2000);
+  const description = storedJobDescription(h.description);
   const tsRaw = h.creationDate ?? h.lastModificationDate;
   const tsNum = tsRaw != null && /^\d+$/.test(String(tsRaw)) ? Number(tsRaw) : tsRaw ? Date.parse(String(tsRaw)) : NaN;
   const postedAt = isNaN(tsNum) ? new Date() : new Date(tsNum);

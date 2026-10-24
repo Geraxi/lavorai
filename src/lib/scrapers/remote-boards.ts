@@ -1,6 +1,6 @@
 import { fetchHimalayasJobs, fetchWwrJobs } from "./public-remote-feeds";
 import type { JobListItem } from "@/lib/adzuna";
-import { cleanHtmlText } from "./html-clean";
+import { storedJobDescription } from "./posting-description";
 
 /**
  * Board di lavoro remoto con API pubbliche senza chiave:
@@ -60,7 +60,7 @@ export async function fetchRemotiveJobs(): Promise<JobListItem[]> {
           title: j.title,
           company: j.company_name || null,
           location: `Remote · ${j.candidate_required_location || "Worldwide"}`,
-          description: cleanHtmlText(j.description ?? "").slice(0, 2000),
+          description: storedJobDescription(j.description),
           url: j.url,
           contractType: j.job_type?.replace("_", " ") ?? null,
           category: j.category || "Remote",
@@ -93,7 +93,7 @@ export async function fetchJobicyJobs(count = 100): Promise<JobListItem[]> {
             title: j.jobTitle,
             company: j.companyName || null,
             location: `Remote · ${j.jobGeo || "Anywhere"}`,
-            description: cleanHtmlText(j.jobDescription ?? j.jobExcerpt ?? "").slice(0, 2000),
+            description: storedJobDescription(j.jobDescription ?? j.jobExcerpt),
             url: j.url,
             contractType: j.jobType?.[0] ?? null,
             category: j.jobIndustry?.[0] ?? "Remote",
@@ -124,7 +124,7 @@ export async function fetchRemoteOkJobs(): Promise<JobListItem[]> {
           title: j.position!,
           company: j.company || null,
           location: `Remote · ${j.location || "Worldwide"}`,
-          description: cleanHtmlText(j.description ?? "").slice(0, 2000),
+          description: storedJobDescription(j.description),
           url: j.url!,
           category: j.tags?.[0] ?? "Remote",
           postedAt: j.date ? new Date(j.date) : new Date(),
@@ -176,7 +176,7 @@ export async function fetchArbeitnowJobs(): Promise<JobListItem[]> {
           location: j.remote
             ? `Remote · ${j.location || "Europe"}`
             : j.location || "Europe",
-          description: cleanHtmlText(j.description ?? "").slice(0, 2000),
+          description: storedJobDescription(j.description),
           url: j.url,
           remote: !!j.remote,
           category: j.tags?.[0] ?? "Remote",
