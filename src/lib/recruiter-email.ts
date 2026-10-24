@@ -250,7 +250,8 @@ export type RecruiterEmailSourceType =
   | "employer_job_page"
   | "job_description"
   | "json_ld_application_contact"
-  | "employer_careers_page";
+  | "employer_careers_page"
+  | "employer_domain_page";
 
 export type VerifiedRecruiterEmail = {
   email: string;
@@ -267,9 +268,17 @@ export type VerifiedRecruiterEmail = {
   };
 };
 
+export type DiscoveredHiringInbox = { email: string; sourceUrl: string; evidence: string };
+
 export type RecruiterEmailLookup = {
   description?: string | null;
   cachedSourceUrl?: string | null;
+  companyWebsite?: string | null;
+  discoverEmployerInbox?: (input: {
+    jobUrl: string;
+    company: string;
+    companyWebsite?: string | null;
+  }) => Promise<DiscoveredHiringInbox | null>;
 };
 
 // Do not truncate unsupported Unicode mailboxes/domains into a different ASCII
@@ -440,6 +449,84 @@ export function employerDomainAllowsRecipient(
   if (source && (source.domain === recipient.domain || source.key === recipient.key)) return true;
   const tenant = approvedAtsTenant(page);
   return !!tenant && compactIdentity(domainToUnicode(tenant)) === recipient.key;
+}
+
+const FREEMAIL_DOMAINS = new Set([
+  "gmail.com", "yahoo.com", "yahoo.it", "hotmail.com", "outlook.com", "live.com",
+  "libero.it", "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com",
+]);
+
+export function isFreemailDomain(domain: string): boolean {
+  const host = domain.trim().toLowerCase();
+  return [...FREEMAIL_DOMAINS].some((listed) => host === listed || host.endsWith(`.${listed}`));
+}
+
+function httpsPage(value: string): URL | null {
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
+    if (AGGREGATOR_HOSTS.some((host) => domainIs(url.hostname, host))) return null;
+    if (ATS_HOSTS.some((host) => domainIs(url.hostname, host))) return null;
+    return url;
+  } catch { return null; }
+}
+
+/** Registrable employer domain from a published job page or company website.
+ * Never invented from an ATS tenant slug.
+ */
+export function employerOwnDomain(
+  jobUrl: string,
+  company: string | null,
+  companyWebsite?: string | null,
+): { domain: string; key: string } | null {
+  const companyKey = company ? identity(company) : "";
+  const candidates = [companyWebsite, jobUrl];
+  for (const raw of candidates) {
+    if (!raw?.trim()) continue;
+    const page = httpsPage(raw);
+    if (!page) continue;
+    const source = registrableIdentity(page.hostname);
+    if (!source) continue;
+    if (companyKey.length >= 3 && source.key !== companyKey) continue;
+    if (companyKey.length < 3 && !companyWebsite) continue;
+    return source;
+  }
+  return null;
+}
+
+/** A same-company https link on an ATS/job page is published website evidence. */
+export function companyWebsiteFromPage(html: string, pageUrl: string, company: string): string | null {
+  const companyKey = identity(company);
+  if (companyKey.length < 3) return null;
+  let page: URL;
+  try { page = new URL(pageUrl); } catch { return null; }
+  const hrefs = [...html.matchAll(/\bhref\s*=\s*["']([^"'#]+)["']/gi)].map((m) => m[1]);
+  for (const href of hrefs) {
+    let next: URL;
+    try { next = new URL(href, page); } catch { continue; }
+    if (next.protocol !== "https:" || next.username || next.password || next.port) continue;
+    if (AGGREGATOR_HOSTS.some((host) => domainIs(next.hostname, host))) continue;
+    if (ATS_HOSTS.some((host) => domainIs(next.hostname, host))) continue;
+    const source = registrableIdentity(next.hostname);
+    if (!source || source.key !== companyKey) continue;
+    return `${next.protocol}//${next.hostname}/`;
+  }
+  return null;
+}
+
+export function employerSitePageUrls(domain: string): string[] {
+  const host = domain.replace(/^www\./, "").toLowerCase();
+  if (!host || host.includes("/") || host.includes(" ")) return [];
+  return [
+    `https://${host}/careers`,
+    `https://${host}/jobs`,
+    `https://${host}/lavora-con-noi`,
+    `https://${host}/contact`,
+    `https://careers.${host}/`,
+    `https://${host}/join-us`,
+    `https://${host}/work-with-us`,
+    `https://${host}/`,
+  ];
 }
 
 /**
@@ -616,6 +703,17 @@ export async function findVerifiedRecruiterEmail(
   if (fromDescription && await isUsableRecruiterEmail(fromDescription.email, company)) {
     return provenance(fromDescription.email, company, "job_description", "job_description",
       jobUrl, fromDescription.sourceUrl, extras?.description ?? "", fromDescription.evidence);
+  }
+
+  if (extras?.discoverEmployerInbox) {
+    const discovered = await extras.discoverEmployerInbox({
+      jobUrl, company, companyWebsite: extras.companyWebsite,
+    }).catch(() => null);
+    if (discovered && await isUsableRecruiterEmail(discovered.email, company)
+      && employerDomainAllowsRecipient(discovered.email, company, discovered.sourceUrl)) {
+      return provenance(discovered.email, company, "employer_domain_page", "visible_application_instruction",
+        jobUrl, discovered.sourceUrl, discovered.evidence, discovered.evidence);
+    }
   }
 
   try {

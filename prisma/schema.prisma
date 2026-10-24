@@ -556,6 +556,9 @@ model Job {
   /// URL of the employer-published page/text where recruiterEmail was observed.
   /// Additive only — never guess jobs@domain; never mine unrelated pages.
   recruiterEmailSourceUrl String?
+  /// Employer website published by the ATS/board (https host). Never guessed
+  /// from a tenant slug. Used only to fetch careers/contact on that domain.
+  companyWebsite String?
   // Slug dell'ATS (es. "stripe" per boards.greenhouse.io/stripe/...)
   // Usato per costruire l'URL canonico del form quando il job è linkato
   // da una career page custom (es. stripe.com/jobs?gh_jid=...)
@@ -574,6 +577,18 @@ model Job {
   @@unique([externalId, source])
   @@index([closedAt])
   @@index([protectedCategory, postedAt])
+}
+
+/// Cache of a published hiring inbox found on the employer's own domain.
+/// Additive only. email is null when the last check found none (negative cache).
+model EmployerHiringInbox {
+  companyDomain String   @id
+  email         String?
+  sourceUrl     String?
+  evidence      String?  @db.Text
+  status        String
+  checkedAt     DateTime
+  updatedAt     DateTime @updatedAt
 }
 
 /// Application Session: raggruppa candidature simili (stesso ruolo + settore)

@@ -15,7 +15,6 @@ import { parseVerifiedSubmissionReceipt, receiptJobId } from "@/lib/submission-r
 import { canonicalPostingKey, DUPLICATE_POSTING_MESSAGE } from "@/lib/posting-key";
 import { prisma } from "@/lib/db";
 import { FREE_QUOTA_WORKER_INFLIGHT_STATUSES, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
-import { requiresManualAtsHandoff, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import { maxDrainAttempts } from "@/lib/drain-limits";
 import { MAX_ATTEMPTS_MESSAGE_PREFIX } from "@/lib/queue-sendability";
 import { matchesApplicationEmailProofKey } from "@/lib/recruiter-email-send";
@@ -197,12 +196,8 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
       } });
       return null;
     }
-    if (requiresManualAtsHandoff(row.job)) {
-      await tx.application.update({ where: { id }, data: {
-        status: "ready_to_apply", errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
-      } });
-      return null;
-    }
+    // Skip-list / captcha-known hosts still reserve work: the worker tries
+    // recruiter-email first and only then writes SKIPPED_ATS_MANUAL_MESSAGE.
     // An immutable budget record survives every ordinary status/reset path.
     // A previous attempt is never eligible for preparation/replay in this mode.
     if (await tx.applicationSubmissionReservation.findFirst({ where: { OR: [

@@ -82,8 +82,8 @@ const parkSelect = {
 /**
  * Move unsendable queued rows out of the claimable set before the drain
  * picks work. Consent/quota holds stay `queued` with startedAt + heldMessage
- * so held-application-release can reopen them. Skip-list and exhausted
- * attempts leave the queue entirely.
+ * so held-application-release can reopen them. Exhausted attempts leave
+ * the queue entirely. Skip-list hosts stay queued so recruiter-email can run.
  */
 export async function parkUnsendableQueued(opts: {
   db?: DB;
@@ -119,18 +119,6 @@ export async function parkUnsendableQueued(opts: {
     usage.daily += parkedDaily.get(row.userId) ?? 0;
     const reason = claimBlockReason(row, usage, now);
     if (!reason) continue;
-    if (reason === "skipped_ats") {
-      const changed = await db.application.updateMany({
-        where: { id: row.id, status: "queued", startedAt: null },
-        data: { status: "ready_to_apply", startedAt: now, errorMessage: SKIPPED_ATS_MANUAL_MESSAGE },
-      });
-      if (changed.count === 1) {
-        result.parked++;
-        result.handoff++;
-        bumpReason(result.blockedByReason, "skipped_ats");
-      }
-      continue;
-    }
     if (reason === "max_attempts") {
       const changed = await db.application.updateMany({
         where: { id: row.id, status: "queued", startedAt: null },

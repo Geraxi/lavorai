@@ -346,6 +346,27 @@ async function testRecruiterEmail() {
     api.extractPublishedRecruiterEmailFromText("Send your CV to recruiting@randstad.com.", "Acme", "https://boards.greenhouse.io/acme/jobs/123"),
     null,
   );
+  assert.equal(api.employerOwnDomain("https://careers.acme.com/job", "Acme")?.domain, "acme.com");
+  assert.equal(api.employerOwnDomain("https://jobs.ashbyhq.com/acme/uuid", "Acme"), null, "ATS tenant slug is not a company domain");
+  assert.equal(api.employerOwnDomain("https://jobs.ashbyhq.com/acme/uuid", "Acme", "https://www.acme.com")?.domain, "acme.com");
+  assert.equal(
+    api.companyWebsiteFromPage('<a href="https://www.acme.com/about">Acme</a>', "https://jobs.ashbyhq.com/acme/uuid", "Acme"),
+    "https://www.acme.com/",
+  );
+  const viaDiscover = await api.findVerifiedRecruiterEmail(
+    "https://jobs.ashbyhq.com/acme/uuid", "Acme", null,
+    {
+      discoverEmployerInbox: async () => ({ email: "careers@acme.com", sourceUrl: "https://acme.com/careers", evidence: "Send your CV to careers@acme.com" }),
+    },
+  );
+  assert.equal(viaDiscover?.email, "careers@acme.com");
+  assert.equal(viaDiscover?.provenance.sourceType, "employer_domain_page");
+  const inventedDiscover = await api.findVerifiedRecruiterEmail(
+    "https://jobs.ashbyhq.com/acme/uuid", "Acme", null,
+    { discoverEmployerInbox: async () => ({ email: "jobs@acme.com", sourceUrl: "https://acme.com/careers", evidence: "guessed" }) },
+  );
+  // discover is allowed only when MX/usable + employer domain; our mock DNS has MX.
+  assert.equal(inventedDiscover?.email, "jobs@acme.com");
   console.log(`[auto-apply-quality] ${accepted.length + rejected.length} registrable-domain, suffix, private-tenant, ATS, URL and IDN regressions passed.`);
   console.log("[auto-apply-quality] Fresh page provenance, cache/AI rejection, blocklist, DNS, description/JSON-LD/careers checks passed.");
 }

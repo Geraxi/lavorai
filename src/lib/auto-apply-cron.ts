@@ -24,7 +24,7 @@ import { recordConversionEvent } from "@/lib/conversion-events";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
 import { sortByPaidPriority } from "@/lib/paid-priority";
-import { compareJobsForAutoApply, requiresManualAtsHandoff, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { compareJobsForAutoApply } from "@/lib/ats-skip-hosts";
 import { companyCapUsageWhere, countDailyCapUsage, countsTowardQuota, monthlyQuotaUsageWhere, quotaConsumingFilter } from "@/lib/daily-application-cap";
 
 /**
@@ -724,7 +724,6 @@ async function processUser(
   // tocchino 5 aziende diverse quando possibile.
   const usedThisRun = new Set<string>();
   let enqueued = 0;
-  let handoffs = 0;
   for (const job of jobs) {
     if (enqueued >= remainingToday) break;
     const cKey = (job.company ?? "").toLowerCase();
@@ -814,8 +813,6 @@ async function processUser(
     }
 
     const portal = portalOf(job.url);
-    const manualAts = requiresManualAtsHandoff(job);
-    if (manualAts && !isHybrid && handoffs >= PER_USER_RUN_CAP) continue;
 
     try {
       const app = await prisma.application.create({
@@ -823,11 +820,10 @@ async function processUser(
           userId: user.id,
           jobId: job.id,
           portal,
-          status: manualAts && !isHybrid ? "ready_to_apply" : initialStatus,
+          status: initialStatus,
           trackingToken: randomToken(),
           atsScore: score,
           sessionId,
-          ...(manualAts && !isHybrid ? { errorMessage: SKIPPED_ATS_MANUAL_MESSAGE } : {}),
         },
       });
       await recordConversionEvent(AnalyticsEvent.APPLICATION_CREATED, {
@@ -835,12 +831,9 @@ async function processUser(
         properties: { mode: isHybrid ? "hybrid" : "auto", consentRequired: isHybrid },
         dedupeKey: `application_created:${app.id}`,
       });
-      // Skip-list ATS (default Ashby reCAPTCHA): never auto-queue portal submit.
-      // Recruiter email keeps the email path. Otherwise mark as manual handoff.
-      if (manualAts && !isHybrid) {
-        stats.skippedManualAts++;
-        handoffs++;
-      } else if (!isHybrid) {
+      // Skip-list / captcha-known hosts are queued too: the worker tries
+      // recruiter-email first and only then hands back to the user.
+      if (!isHybrid) {
         await enqueueApplication(app.id);
         stats.applicationsEnqueued++;
       } else {
@@ -927,24 +920,18 @@ async function processUser(
       }
 
       try {
-        const manualAts = requiresManualAtsHandoff(job);
-        if (manualAts && !isHybrid && handoffs >= PER_USER_RUN_CAP) continue;
         const app = await prisma.application.create({
           data: {
             userId: user.id,
             jobId: job.id,
             portal: portalOf(job.url),
-            status: manualAts && !isHybrid ? "ready_to_apply" : initialStatus,
+            status: initialStatus,
             trackingToken: randomToken(),
             atsScore: score,
             sessionId,
-            ...(manualAts && !isHybrid ? { errorMessage: SKIPPED_ATS_MANUAL_MESSAGE } : {}),
           },
         });
-        if (manualAts && !isHybrid) {
-          stats.skippedManualAts++;
-          handoffs++;
-        } else if (!isHybrid) {
+        if (!isHybrid) {
           await enqueueApplication(app.id);
           stats.applicationsEnqueued++;
         } else {
