@@ -557,7 +557,7 @@ async function processUser(
   const backfillLimit = Math.min(DESCRIPTION_BACKFILL_PER_USER, DESCRIPTION_BACKFILL_PER_RUN - stats.descriptionsBackfilled);
   if (backfillLimit > 0) {
     const eligible = jobs.filter((j) => !j.description?.trim() && DESCRIPTION_SOURCES.has(j.source)
-      && titleMatchesAnyRole(j.title, roles) && locationPreferenceMismatch(j, locationPrefs) !== "location");
+      && titleMatchesAnyRole(j.title, roles));
     try {
       const filled = await fillMissingDescriptions(eligible, {
         limit: backfillLimit, concurrency: 4, timeoutMs: 8_000,
@@ -628,6 +628,14 @@ async function processUser(
     const sb = scoreOf(b);
     const sa = scoreOf(a);
     if (sb !== sa) return sb - sa;
+    // 1b. Location is a soft ranking signal (never a reject).
+    const locRank = (j: typeof a) => {
+      const r = locationPreferenceMismatch(j, locationPrefs);
+      return r === null ? 0 : r === "location_unverified" ? 1 : 2;
+    };
+    const la = locRank(a);
+    const lb = locRank(b);
+    if (la !== lb) return la - lb;
     // 2. Aziende mai contattate prima (diversificazione)
     const ca = companyApplyCount.get((a.company ?? "").toLowerCase()) ?? 0;
     const cb = companyApplyCount.get((b.company ?? "").toLowerCase()) ?? 0;
@@ -725,8 +733,6 @@ async function processUser(
 
     const preferenceMismatch = autoApplyPreferenceMismatch(job, prefs, locationPrefs);
     if (preferenceMismatch) {
-      if (preferenceMismatch === "location") stats.skippedLocationMismatch++;
-      if (preferenceMismatch === "location_unverified") stats.skippedLocationUnverified++;
       if (preferenceMismatch === "salary") stats.skippedSalaryMismatch++;
       if (preferenceMismatch === "employment") stats.skippedEmploymentMismatch++;
       continue;

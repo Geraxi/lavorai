@@ -168,7 +168,7 @@ export const workableAdapter: PortalAdapter = {
       }
       await submit.first().scrollIntoViewIfNeeded().catch(() => void 0);
       return (await observeSubmission(page, "workable", input.jobUrl,
-        () => submit.first().click({ timeout: 8_000 }), input.beforeSubmit)).outcome;
+        () => submit.first().click({ timeout: 8_000 }), input.beforeSubmit, { applicationId: input.applicationId })).outcome;
     } catch (err) {
       return {
         ok: false,

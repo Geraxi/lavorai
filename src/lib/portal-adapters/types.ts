@@ -24,6 +24,8 @@ export interface ApplyInput {
   userEmail: string;
   /** Telefono fallback (account/preferences) se profile.phone vuoto. */
   userPhone?: string;
+  /** Display name from User.name — fallback when CVProfile first/last are empty. */
+  userName?: string;
   /** Path locale del CV (assicurato via ensureLocalPath nel worker) */
   cvLocalPath: string;
   /** Path locale della cover letter (opzionale per alcuni ATS) */
@@ -75,10 +77,19 @@ export interface ApplyInput {
   onAiAnswers?: (answers: Array<{ label: string; kind: string; answer: string; source: "user" | "profile" | "ai" | "rule" | "assumed" }>) => void;
 }
 
+/** Captured ATS submit network response (truncated for canaryLog). */
+export interface SubmitNetworkEvidence {
+  url: string;
+  operation?: string;
+  httpStatus: number;
+  /** First ~2KB of the response body. */
+  body: string | null;
+}
+
 /**
- * Canary debug payload: ritornato dall'adapter quando CANARY_DEBUG=1.
- * Il worker lo serializza su Application.canaryLog per ispezione.
- * Risponde alla domanda: "il submit è davvero andato in porto?".
+ * Submit evidence persisted on Application.canaryLog for every portal
+ * attempt (Ashby, Greenhouse, …). Screenshot URLs are present only when
+ * Vercel Blob is configured.
  */
 export interface CanaryLog {
   /** Filename effettivo del CV attaccato all'input file (read da
@@ -99,15 +110,16 @@ export interface CanaryLog {
   }>;
   /** HTTP response status della POST di submission (null se nessuna POST). */
   submitHttpStatus: number | null;
-  /** Body excerpt (primi 800 char) della response. */
+  /** Body excerpt (primi ~2KB) della response. */
   submitHttpBody: string | null;
   /** URL prima del submit. */
   urlBeforeSubmit: string;
   /** URL dopo il submit. */
   urlAfterSubmit: string;
-  /** Body innerText post-submit (primi 800 char) — per spotting "thank
-   *  you" / error banner / nothing. */
+  /** Visible page text after the click (truncated). */
   bodyTextAfterSubmit: string;
+  /** All captured application-write responses in this click window. */
+  submitResponses?: SubmitNetworkEvidence[];
   /** Timestamp ISO del capture. */
   capturedAt: string;
 }

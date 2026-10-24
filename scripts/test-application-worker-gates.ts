@@ -46,7 +46,7 @@ for (const mode of ["manual", "hybrid"]) {
   assert.equal(currentWorkerIneligibility({ ...row, consentGrantedAt: now }), null);
 }
 assert.equal(currentWorkerIneligibility({ ...base, consentGrantedAt: now, user: { ...base.user, preferences: { ...base.user.preferences, autoApplyMode: "off" } } }), "auto_apply_not_enabled");
-assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, locationsJson: '["Berlin"]' } } }), null, "Explicit job consent overrides search preferences");
+assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, locationsJson: '["Berlin"]' } } }), null, "Location is a soft signal and explicit consent still delivers");
 assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, locationsJson: "broken" } } }), null, "Explicit job consent overrides search preferences");
 assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, preferences: { ...base.user.preferences, matchMin: 100 } } }), null, "Explicit job consent overrides search preferences");
 assert.equal(hasPotentialSubmission(base), false);
@@ -60,6 +60,7 @@ assert.equal(hasPotentialSubmission({ ...base, submitConfirmation: NOT_SUBMITTED
 const worker = readFileSync(new URL("../src/lib/application-worker.ts", import.meta.url), "utf8");
 assert(worker.indexOf("reserveApplicationWork(applicationId)") < worker.indexOf("result = await optimizeCV("));
 assert(worker.includes("if (prepared.count !== 1) return;"));
+assert(worker.includes("preferredDeliveryChannel"), "Recruiter email must win over portal submit");
 assert(worker.includes('status: "optimizing", startedAt: workToken'));
 assert(!worker.includes("MAX_ATTEMPTS"), "Unknown portal outcomes must not be retried");
 assert(!worker.includes("markSessionSentSuccess"), "Success accounting must be atomic with the application result");

@@ -2,7 +2,6 @@
  * Location is job-location evidence, never evidence of citizenship/work authorization.
  */
 import { matchCity } from "@/lib/city-centroids";
-import { seedCompanyCountry } from "@/lib/scrapers/ats-companies";
 export function parsePreferenceList(raw: string | null | undefined): string[] | null {
   try {
     const values: unknown = JSON.parse(raw ?? "");
@@ -274,9 +273,8 @@ export function autoApplyPreferenceMismatch(
     description: string; salaryMin: number | null; salaryMax: number | null; source?: string; sourceSlug?: string | null },
   prefs: { employmentType: string; salaryMin: number; sourcesJson?: string | null }, locationPrefs: string[],
 ): "location" | "location_unverified" | "employment" | "salary" | null {
-  const acceptsRemote = parsePreferenceList(prefs.sourcesJson)?.some((mode) => mode.toLowerCase() === "remoto") ?? false;
-  const locationReason = locationPreferenceMismatch(job, locationPrefs, { acceptsRemote, companyCountry: seedCompanyCountry(job.source, job.sourceSlug) });
-  if (locationReason) return locationReason;
+  // Location is a soft signal (locationPreferenceMismatch) used for ranking,
+  // never a hard reject. Role match + score threshold remain the gates.
   const employment = prefs.employmentType ?? "employee";
   if (employment !== "both") {
     const primary = `${job.title} ${job.contractType ?? ""}`.toLowerCase();
