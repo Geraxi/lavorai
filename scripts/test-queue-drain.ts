@@ -1,5 +1,5 @@
 /**
- * Queue drain: claim only sendable rows, park quota/consent/skip-list,
+ * Queue drain: claim only sendable rows, park quota/consent,
  * multi-claim without double-send, capped attempts. No network, no real DB.
  */
 import assert from "node:assert/strict";
@@ -156,7 +156,7 @@ assert.equal(sendability.weeklyQuotaBlockReason(sendableUser(), 99, now), null);
 assert.equal(sendability.isQueuedRowSendable(row("ok")), true);
 assert.equal(sendability.isQueuedRowSendable(row("ashby", {
   job: { url: "https://jobs.ashbyhq.com/acme/uuid", recruiterEmail: null },
-})), false);
+})), true, "Skip-list rows stay claimable so recruiter-email can run");
 assert.equal(sendability.isQueuedRowSendable(row("ashby-email", {
   job: { url: "https://jobs.ashbyhq.com/acme/uuid", recruiterEmail: "jobs@acme.com" },
 })), true);
@@ -182,7 +182,7 @@ async function testClaimSelection() {
   const db = database([blocked, quota, sendable, ashby, used, ...extras]);
   const claims = load("src/lib/application-claim.ts", { "@/lib/db": { prisma: db.prisma } });
   const ids = await claims.findClaimableQueued(10);
-  assert.equal(Array.from(ids).join(","), "sendable", "Claim selection skips consent-blocked, quota-blocked and skip-list rows");
+  assert.equal(Array.from(ids).join(","), "sendable,ashby", "Claim selection skips consent/quota blocks; skip-list rows stay claimable");
   assert.equal(db.counts().writes, 0, "findClaimableQueued stays read-only");
 }
 
@@ -193,19 +193,17 @@ async function testParkUnsendable() {
   const db = database([blocked, ashby, sendable]);
   const drain = load("src/lib/queue-drain.ts", { "@/lib/db": { prisma: db.prisma } });
   const parked = await drain.parkUnsendableQueued({ db: db.prisma, now });
-  assert.ok(parked.parked >= 2);
   assert.equal(parked.blockedByReason.privacy_consent_missing, 1);
-  assert.equal(parked.handoff, 1);
-  assert.equal(parked.skipped ?? 0, 0);
+  assert.equal(parked.handoff ?? 0, 0, "Skip-list rows are not parked as handoffs before recruiter-email");
   const held = db.rows.find((r) => r.id === "blocked")!;
   assert.equal(held.status, "needs_user");
   assert.equal(held.sendStatus, "needs_user");
   assert.equal(held.sendFailureReason, "privacy_consent_missing");
   assert.ok(held.startedAt, "consent hold stamps startedAt so it is not re-claimed");
   assert.equal(held.errorMessage, heldMessage("privacy_consent_missing"));
-  const manual = db.rows.find((r) => r.id === "ashby")!;
-  assert.equal(manual.status, "ready_to_apply");
-  assert.equal(manual.errorMessage, skipHosts.SKIPPED_ATS_MANUAL_MESSAGE);
+  const ashbyRow = db.rows.find((r) => r.id === "ashby")!;
+  assert.equal(ashbyRow.status, "queued");
+  assert.equal(ashbyRow.startedAt, null);
   assert.equal(db.rows.find((r) => r.id === "sendable")!.startedAt, null);
 }
 

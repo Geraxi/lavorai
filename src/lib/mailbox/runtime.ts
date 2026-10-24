@@ -12,8 +12,10 @@ export function realMailboxDeps(): MailboxDeps {
     env: process.env,
     readFile: readUserFile,
     findRecipient: async (job) => {
+      const { discoverPublishedHiringInbox } = await import("@/lib/employer-hiring-inbox");
       const r = await findVerifiedRecruiterEmail(job.url, job.company, job.recruiterEmail, {
         description: job.description,
+        discoverEmployerInbox: discoverPublishedHiringInbox,
       });
       return r ? { email: r.email, provenance: r } : null;
     },

@@ -6,8 +6,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
-import { SKIPPED_ATS_MANUAL_MESSAGE } from "../src/lib/ats-skip-hosts";
-
 function loadModule(path: string, dependencies: Record<string, unknown>, globals: Record<string, unknown> = {}) {
   const output = ts.transpileModule(readFileSync(path, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
@@ -108,16 +106,16 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
     "@/lib/board-apply-resolver": { resolveBoardListingsForRoles: async () => ({ attempted: 0, promoted: 0, existing: 0, unsupported: 0 }) },
   });
   const stats = await api.runAutoApplyForUser(user.id);
-  const ashby = created.filter((a) => a.errorMessage === SKIPPED_ATS_MANUAL_MESSAGE);
+  const ashby = created.filter((a) => String(a.jobId).startsWith("ashby-"));
   const sendable = created.filter((a) => a.status === "queued");
-  assert.equal(ashby.length, 2, "Both Ashby skip-list rows are still created as handoffs");
-  assert.ok(ashby.every((a) => a.status === "ready_to_apply"));
-  assert.equal(sendable.length, 5, "All 5 daily slots go to sendable Greenhouse rows");
+  assert.equal(ashby.length, 2, "Ashby skip-list rows are created");
+  assert.ok(ashby.every((a) => a.status === "queued" && !a.errorMessage), "Skip-list rows queue for recruiter-email first");
+  assert.equal(sendable.length, 5, "Daily cap still limits creations to 5");
   assert.equal(queued.length, 5);
   assert.equal(stats.applicationsEnqueued, 5);
-  assert.equal(stats.skippedManualAts, 2);
-  assert.deepEqual(sendable.map((a) => a.jobId), ["gh-1", "gh-2", "gh-3", "gh-4", "gh-5"]);
-  console.log("live-apply-fixes: Ashby handoffs do not consume the owner's 5 daily slots");
+  assert.equal(stats.skippedManualAts, 0);
+  assert.deepEqual(sendable.map((a) => a.jobId), ["ashby-1", "ashby-2", "gh-1", "gh-2", "gh-3"]);
+  console.log("live-apply-fixes: skip-list rows queue for recruiter-email and consume a daily slot like other queued work");
 }
 
 testAshbyHandoffsDoNotConsumeDailySlots().catch((err) => { console.error(err); process.exitCode = 1; });

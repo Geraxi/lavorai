@@ -60,6 +60,7 @@ export function compareJobsForAutoApply<T extends { url: string; recruiterEmail?
   return jobDeliveryPriority(b) - jobDeliveryPriority(a);
 }
 
+/** After recruiter-email lookup failed: portal is skip-list and no inbox. */
 export function requiresManualAtsHandoff(job: { url: string; recruiterEmail?: string | null }, env: Record<string, string | undefined> = process.env): boolean {
   return isSkippedPortalUrl(job.url, env) && !job.recruiterEmail?.trim();
 }

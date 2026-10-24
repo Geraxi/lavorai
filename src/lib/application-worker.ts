@@ -29,6 +29,8 @@ import { inboundReplyAddress } from "@/lib/email";
 import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { humanContext, launchBrowser } from "@/lib/browser";
 import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
+import { discoverPublishedHiringInbox } from "@/lib/employer-hiring-inbox";
+import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
 import {
   recruiterFromAddress,
@@ -441,12 +443,18 @@ async function processApplicationRun(
   // alcuni ATS (Greenhouse) redirigono a career page custom dove il form
   // non è raggiungibile. L'URL canonico porta al form puro dell'ATS.
   // Risoluzione per host URL: app.portal è un'etichetta storica e non decide.
-  const resolvedAdapter = portalSubmitEnabled ? resolveAdapterByUrl([app.job.url, resolvedUrl]) : null;
+  const skipPortal = isSkippedPortalUrl(app.job.url) || isSkippedPortalUrl(resolvedUrl);
+  const resolvedAdapter = portalSubmitEnabled && !skipPortal ? resolveAdapterByUrl([app.job.url, resolvedUrl]) : null;
   const adapter = resolvedAdapter?.adapter ?? null;
   const adapterUrl = resolvedAdapter?.url ?? app.job.url;
+  const recruiterLookup = {
+    description: app.job.description,
+    cachedSourceUrl: app.job.recruiterEmailSourceUrl,
+    companyWebsite: app.job.companyWebsite,
+    discoverEmployerInbox: discoverPublishedHiringInbox,
+  };
   let verifiedRecruiter = await findVerifiedRecruiterEmail(
-    resolvedUrl, app.job.company, app.job.recruiterEmail,
-    { description: app.job.description, cachedSourceUrl: app.job.recruiterEmailSourceUrl },
+    resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
   );
   if (verifiedRecruiter) {
     await prisma.job.update({
@@ -709,8 +717,7 @@ async function processApplicationRun(
 
     if (outcome.status === "captcha") {
       verifiedRecruiter = verifiedRecruiter ?? await findVerifiedRecruiterEmail(
-        resolvedUrl, app.job.company, app.job.recruiterEmail,
-        { description: app.job.description, cachedSourceUrl: app.job.recruiterEmailSourceUrl },
+        resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
       );
       if (verifiedRecruiter) {
         console.log(`[worker] ${applicationId} captcha on ${adapter.id} — sending published recruiter email instead of handoff`);
@@ -766,7 +773,7 @@ async function processApplicationRun(
   // portale ufficiale. Se nel pool esiste già una copia ATS dello stesso
   // job (diversa dall'aggregatore Adzuna), puntiamo l'utente lì in manuale;
   // al prossimo ciclo l'auto-apply userà direttamente quella copia.
-  if (!verifiedRecruiter && !app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
+  if (!skipPortal && !verifiedRecruiter && !app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
     const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr", "breezy", "pinpoint"];
     const isAtsSourceJob = ATS_SOURCES.includes(app.job.source);
 
@@ -939,6 +946,18 @@ async function processApplicationRun(
         },
       });
     }
+  } else if (skipPortal) {
+    await prisma.application.updateMany({
+      where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+      data: {
+        status: "ready_to_apply",
+        errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
+        completedAt: new Date(),
+      },
+    });
+    await notifyApplicationManual(applicationId).catch((err) =>
+      console.error(`[worker] ${applicationId} notify manual (skip-list, no published email) failed`, err),
+    );
   } else {
     // Nessuna email del recruiter trovata nell'annuncio → fallback: se
     // AUTO_APPLY_ENABLED + portal session → prova Playwright; altrimenti

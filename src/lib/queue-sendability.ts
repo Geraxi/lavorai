@@ -1,6 +1,5 @@
 import { dailyApplicationLimit, FREE_QUOTA_WORKER_INFLIGHT_STATUSES, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
 import { maxDrainAttempts } from "@/lib/drain-limits";
-import { requiresManualAtsHandoff } from "@/lib/ats-skip-hosts";
 
 export const HELD_MESSAGE_PREFIX = "Invio in attesa:";
 export const MAX_ATTEMPTS_MESSAGE_PREFIX = "Invio interrotto dopo";
@@ -93,11 +92,8 @@ export function claimBlockReason(
   row: ClaimableRow,
   usage: { weekly: number; daily: number },
   now = new Date(),
-): ClaimHoldReason | "skipped_ats" | "max_attempts" | null {
+): ClaimHoldReason | "max_attempts" | null {
   if ((row.retryCount ?? 0) >= maxDrainAttempts()) return "max_attempts";
-  if (row.job?.url && requiresManualAtsHandoff({ url: row.job.url, recruiterEmail: row.job.recruiterEmail })) {
-    return "skipped_ats";
-  }
   return queuedUserBlockReason(row.user, row.consentGrantedAt, now)
     ?? weeklyQuotaBlockReason(row.user, usage.weekly, now)
     ?? dailyQuotaBlockReason(row.user, usage.daily, now);
