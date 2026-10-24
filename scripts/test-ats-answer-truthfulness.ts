@@ -91,6 +91,19 @@ async function testUnknownFacts() {
   assert.equal(otherEmployer.answers.get(80), "No", "this company with no history match is No");
   assert.equal(otherEmployer.answers.get(81), undefined, "Past Employer is not Acme");
   assert.equal(otherEmployer.answers.get(82), undefined, "fintech category is not this employer");
+  const acme = { ...context, company: "Acme" };
+  assert.equal(facts.resolveCandidateFact({ label: "Why do you want to work at this company?", kind: "text" }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "What excites you about our company?", kind: "textarea" }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "How did you hear about our company?", kind: "text" }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "Do you know anyone who works at this company?", kind: "text" }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "Do you know anyone who works at this company?", kind: "select", options: ["Yes", "No"] }, acme).answer, null);
+  assert.equal(facts.resolveCandidateFact({ label: "Have you previously worked for Stripe?", kind: "text" }, acme).answer, null);
+  const stripeNamed = await answerer.answerOffline({ ...context, company: "Stripe", mostRecentEmployer: "Stripe", employers: ["Stripe"] }, [
+    { idx: 76, label: "Have you previously worked for Stripe?", kind: "select", options: ["Yes", "No"] },
+    { idx: 77, label: "Have you ever been employed by Stripe or a Stripe affiliate?", kind: "select", options: ["Yes", "No"] },
+  ]);
+  assert.equal(stripeNamed.answers.get(76), "Yes");
+  assert.equal(stripeNamed.answers.get(77), "Yes");
   assert.equal(aiCalls, 0, "Factual screening questions never go to AI");
   const missing = await answerer.answerOffline({ autonomous: true }, [
     { idx: 50, label: "Expected annual salary (EUR)", kind: "text" },

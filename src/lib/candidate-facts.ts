@@ -128,33 +128,50 @@ export function countryScopedScreeningKey(label: string): string | null {
   return null;
 }
 const GENERIC_EMPLOYER_CATEGORY = /^(?:startup|start[- ]?up|early[- ]?stage(?: company)?|late[- ]?stage(?: company)?|fintech(?: company)?|scale[- ]?up|company|employer)s?$/;
+const THIS_EMPLOYER_TARGET = /^(?:this company|this employer|us|our company|our organisation|our organization)$/;
+const CANDIDATE_EMPLOYMENT_RE = /^(?:have you|were you|are you)\s+(?:ever|previously|formerly)?\s*(?:worked|been employed|been an employee|been a contractor|employed)\s+(?:for|at|with|by)\s+(.+)$/;
+const FORMER_EMPLOYEE_RE = /^(?:are you (?:a )?)?(?:former|ex) employee(?: of (.+))?$/;
+const BARE_EMPLOYED_BY_RE = /^(?:previously |formerly )?employed by (.+)$/;
 
-function isDeicticThisEmployerQuestion(label: string): boolean {
-  const key = factQuestionKey(label);
-  return aliases.previouslyEmployed.includes(key)
-    || /\b(?:this company|this employer|our company|our organisation|our organization)\b/.test(key)
-    || /have you (?:ever )?(?:worked|been employed) (?:for|with|at) us\b/.test(key)
-    || /(?:worked|employed) with us before/.test(key)
-    || /^(?:former employee|ex employee|are you a former employee)$/.test(key);
-}
-
-function namedEmployerFromQuestion(label: string): string | null {
-  const key = factQuestionKey(label);
-  const match = key.match(/have you (?:previously )?(?:been )?employed by (.+)$/)
-    ?? key.match(/previously employed by (.+)$/)
-    ?? key.match(/have you (?:ever )?worked (?:for|at|with) (.+)$/);
-  if (!match) return null;
-  const name = match[1]
+function cleanEmployerName(raw: string): string {
+  return raw
+    .replace(/\s+or (?:a|an|any)(?: \S+)? (?:affiliates?|subsidiaries|subsidiary)\b.*$/i, "")
+    .replace(/\s+or (?:its|their) (?:affiliates?|subsidiaries|subsidiary)\b.*$/i, "")
     .replace(/\b(?:before|previously|in the past)$/g, "")
     .replace(/^(?:the|a|an)\s+/g, "")
     .trim();
-  if (!name || isDeicticThisEmployerQuestion(name) || /^(?:us|we)$/.test(name)) return null;
+}
+
+/** Candidate employment at this/named employer — never "why us", referrals, or how-heard. */
+function parsePreviouslyEmployedQuestion(label: string): { deictic: true } | { deictic: false; name: string } | null {
+  const key = factQuestionKey(label);
+  if (aliases.previouslyEmployed.includes(key)) return { deictic: true };
+  const former = key.match(FORMER_EMPLOYEE_RE);
+  const raw = former ? former[1] : (key.match(CANDIDATE_EMPLOYMENT_RE)?.[1] ?? key.match(BARE_EMPLOYED_BY_RE)?.[1]);
+  if (former && raw == null) return { deictic: true };
+  if (raw == null) return null;
+  const name = cleanEmployerName(raw);
+  if (!name) return null;
+  if (THIS_EMPLOYER_TARGET.test(name)) return { deictic: true };
   if (GENERIC_EMPLOYER_CATEGORY.test(name)) return null;
-  return name;
+  return { deictic: false, name };
+}
+
+function isDeicticThisEmployerQuestion(label: string): boolean {
+  return parsePreviouslyEmployedQuestion(label)?.deictic === true;
+}
+
+function namedEmployerFromQuestion(label: string): string | null {
+  const parsed = parsePreviouslyEmployedQuestion(label);
+  return parsed && !parsed.deictic ? parsed.name : null;
 }
 
 function previouslyEmployedLabel(label: string): boolean {
   return isDeicticThisEmployerQuestion(label);
+}
+
+function isYesNoQuestionKind(kind: string): boolean {
+  return ["select", "react-select", "radio", "checkbox"].includes(kind);
 }
 export function isMarketingOptInQuestion(label: string): boolean {
   return aliases.marketingOptIn.includes(factQuestionKey(label));
@@ -279,6 +296,7 @@ function resolveStandardScreening(question: FactQuestion, context: FactContext, 
     return empty;
   }
   if (key === "previouslyEmployed" || isPreviouslyEmployedQuestion(question.label, context.company)) {
+    if (!isYesNoQuestionKind(question.kind)) return empty;
     if (!isPreviouslyEmployedQuestion(question.label, context.company)) return empty;
     const target = context.company?.trim() || null;
     if (!target) return empty;
@@ -307,6 +325,9 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
     }
     if (key === "marketingOptIn" || isMarketingOptInQuestion(question.label)) {
       return { answer: "No", provenance: [{ key: "marketingOptIn", value: "No", source: "profile", reference: "marketing_opt_in_default" }], conflict: false };
+    }
+    if (isPreviouslyEmployedQuestion(question.label, context.company)) {
+      return resolveStandardScreening(question, context, key) ?? empty;
     }
     return empty;
   }
