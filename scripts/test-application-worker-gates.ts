@@ -61,6 +61,10 @@ const worker = readFileSync(new URL("../src/lib/application-worker.ts", import.m
 assert(worker.indexOf("reserveApplicationWork(applicationId)") < worker.indexOf("result = await optimizeCV("));
 assert(worker.includes("if (prepared.count !== 1) return;"));
 assert(worker.includes("preferredDeliveryChannel"), "Recruiter email must win over portal submit");
+assert(worker.includes('notSubmitted("failed", "recruiter_email_not_sent")'), "Email failure must persist proof-of-send");
+assert(worker.includes('notSubmitted("needs_user", "recruiter_email_acceptance_unknown")'), "Uncertain email must persist proof-of-send");
+const postgresFailureVm = readFileSync(new URL("./test-send-receive-postgres.ts", import.meta.url), "utf8");
+assert(postgresFailureVm.includes("notSubmitted,"), "Postgres email-failure VM must bind notSubmitted");
 assert(worker.includes('status: "optimizing", startedAt: workToken'));
 assert(!worker.includes("MAX_ATTEMPTS"), "Unknown portal outcomes must not be retried");
 assert(!worker.includes("markSessionSentSuccess"), "Success accounting must be atomic with the application result");
