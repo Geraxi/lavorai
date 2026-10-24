@@ -31,6 +31,8 @@ export type FactContext = {
   workRemote?: boolean | null;
   /** Employer on the current application; used for "previously employed by <company>". */
   company?: string | null;
+  /** Every CV / work-history employer, including jobs older than current + most recent. */
+  employers?: string[] | null;
 };
 export function factQuestionKey(label: string): string {
   return label.normalize("NFKC").toLowerCase().replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim()
@@ -125,12 +127,34 @@ export function countryScopedScreeningKey(label: string): string | null {
   }
   return null;
 }
-function previouslyEmployedLabel(label: string): boolean {
+const GENERIC_EMPLOYER_CATEGORY = /^(?:startup|start[- ]?up|early[- ]?stage(?: company)?|late[- ]?stage(?: company)?|fintech(?: company)?|scale[- ]?up|company|employer)s?$/;
+
+function isDeicticThisEmployerQuestion(label: string): boolean {
   const key = factQuestionKey(label);
   return aliases.previouslyEmployed.includes(key)
-    || /have you (?:previously )?(?:been )?employed by /.test(key)
-    || /have you (?:ever )?worked (?:for|at) /.test(key)
-    || /have you (?:ever )?worked with (?:us|this company|this employer|our company)\b/.test(key);
+    || /\b(?:this company|this employer|our company|our organisation|our organization)\b/.test(key)
+    || /have you (?:ever )?(?:worked|been employed) (?:for|with|at) us\b/.test(key)
+    || /(?:worked|employed) with us before/.test(key)
+    || /^(?:former employee|ex employee|are you a former employee)$/.test(key);
+}
+
+function namedEmployerFromQuestion(label: string): string | null {
+  const key = factQuestionKey(label);
+  const match = key.match(/have you (?:previously )?(?:been )?employed by (.+)$/)
+    ?? key.match(/previously employed by (.+)$/)
+    ?? key.match(/have you (?:ever )?worked (?:for|at|with) (.+)$/);
+  if (!match) return null;
+  const name = match[1]
+    .replace(/\b(?:before|previously|in the past)$/g, "")
+    .replace(/^(?:the|a|an)\s+/g, "")
+    .trim();
+  if (!name || isDeicticThisEmployerQuestion(name) || /^(?:us|we)$/.test(name)) return null;
+  if (GENERIC_EMPLOYER_CATEGORY.test(name)) return null;
+  return name;
+}
+
+function previouslyEmployedLabel(label: string): boolean {
+  return isDeicticThisEmployerQuestion(label);
 }
 export function isMarketingOptInQuestion(label: string): boolean {
   return aliases.marketingOptIn.includes(factQuestionKey(label));
@@ -138,8 +162,10 @@ export function isMarketingOptInQuestion(label: string): boolean {
 export function isRemoteWillingnessQuestion(label: string): boolean {
   return aliases.willingRemote.includes(factQuestionKey(label));
 }
-export function isPreviouslyEmployedQuestion(label: string): boolean {
-  return previouslyEmployedLabel(label);
+export function isPreviouslyEmployedQuestion(label: string, company?: string | null): boolean {
+  if (isDeicticThisEmployerQuestion(label)) return true;
+  const named = namedEmployerFromQuestion(label);
+  return !!(named && company && sameCompany(named, company));
 }
 export function reusableFactKey(label: string): string | null {
   const key = factQuestionKey(label);
@@ -198,9 +224,9 @@ function yesNoAnswer(question: FactQuestion, value: "Yes" | "No"): string | null
 
 function employerNames(context: FactContext): string[] {
   const fromFacts = (context.facts ?? [])
-    .filter((fact) => ["currentEmployer", "previousEmployer", "mostRecentEmployer", "currentOrPreviousEmployer"].includes(fact.key) && fact.value.trim())
+    .filter((fact) => ["currentEmployer", "previousEmployer", "mostRecentEmployer", "currentOrPreviousEmployer", "employerHistory"].includes(fact.key) && fact.value.trim())
     .map((fact) => fact.value);
-  const fromContext = [context.currentEmployer, context.mostRecentEmployer]
+  const fromContext = [context.currentEmployer, context.mostRecentEmployer, ...(context.employers ?? [])]
     .filter((value): value is string => typeof value === "string" && Boolean(value.trim()));
   return [...fromFacts, ...fromContext];
 }
@@ -217,15 +243,6 @@ function sameCompany(a: string, b: string): boolean {
   const right = normalizeCompany(b);
   if (!left || !right) return false;
   return left === right || left.includes(right) || right.includes(left);
-}
-
-function employerFromQuestion(label: string): string | null {
-  const key = factQuestionKey(label);
-  const match = key.match(/have you (?:previously )?(?:been )?employed by (.+)$/)
-    ?? key.match(/have you (?:ever )?worked (?:for|at|with) (.+)$/);
-  if (!match) return null;
-  const name = match[1].replace(/^(?:this company|this employer|our company|us|we)\b/, "").trim();
-  return name || null;
 }
 
 function resolveStandardScreening(question: FactQuestion, context: FactContext, key: string | null): FactResolution | null {
@@ -261,10 +278,12 @@ function resolveStandardScreening(question: FactQuestion, context: FactContext, 
     }
     return empty;
   }
-  if (key === "previouslyEmployed" || isPreviouslyEmployedQuestion(question.label)) {
-    const target = employerFromQuestion(question.label) ?? context.company ?? null;
+  if (key === "previouslyEmployed" || isPreviouslyEmployedQuestion(question.label, context.company)) {
+    if (!isPreviouslyEmployedQuestion(question.label, context.company)) return empty;
+    const target = context.company?.trim() || null;
+    if (!target) return empty;
     const history = employerNames(context);
-    const hit = !!(target && history.some((company) => sameCompany(company, target)));
+    const hit = history.some((company) => sameCompany(company, target));
     return {
       answer: yesNoAnswer(question, hit ? "Yes" : "No"),
       provenance: [{
@@ -358,6 +377,9 @@ export function candidateFacts(profile: CVProfile | null, user: { email?: string
     if (previous >= 0) add("previousEmployer", profile.experiences[previous].company, "cv", `experiences.${previous}.company`);
     add("mostRecentEmployer", profile.experiences[0]?.company, "cv", "experiences.0.company");
     add("mostRecentJobTitle", profile.experiences[0]?.role, "cv", "experiences.0.role");
+    profile.experiences.forEach((e, i) => {
+      if (e.company.trim()) add("employerHistory", e.company, "cv", `experiences.${i}.company`);
+    });
     add("school", profile.education[0]?.school, "cv", "education.0.school");
     // No qualification is inferred from an education entry, including a past end date.
     (profile.skills ?? []).forEach((skill, i) => add(`skill:${skill.name.toLowerCase().trim()}`, "Yes", "cv", `skills.${i}`));

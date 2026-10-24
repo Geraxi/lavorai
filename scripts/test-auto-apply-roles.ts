@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { isJunkSessionTitle, searchRoleTitles } from "../src/lib/auto-apply-roles";
+import { titleMatchesAnyRole, titleMatchesRole } from "../src/lib/role-match";
 
 const s = (title: string, sentCount = 0, targetCount = 10) => ({ title, label: title, sentCount, targetCount });
 // Real session titles seen on the owner account (Oct 2026).
@@ -19,4 +20,11 @@ assert.deepEqual([...searchRoleTitles("[]", sessions).values()], ["Product Manag
 assert.deepEqual([...searchRoleTitles("not json", [s("Designer", 10, 10), s("UX Designer")]).values()], ["UX Designer"],
   "Malformed rolesJson falls back; full sessions are skipped");
 assert.deepEqual([...searchRoleTitles('["  ", "ai engineer", "AI Engineer"]', []).values()], ["ai engineer"], "Blank and duplicate saved roles collapse");
-console.log("PASS auto-apply search roles: saved roles first, junk session titles filtered");
+assert.equal(titleMatchesRole("Software Engineer Intern – Fullstack", "Full-Stack Developer"), false);
+assert.equal(titleMatchesAnyRole("Software Engineer Intern – Fullstack", ["Full-Stack Developer"]), false);
+assert.equal(titleMatchesAnyRole("Stage Full-Stack Developer", ["Full-Stack Developer"]), false);
+assert.equal(titleMatchesAnyRole("Tirocinio Full-Stack Developer", ["Full-Stack Developer"]), false);
+assert.equal(titleMatchesAnyRole("Working Student – Full-Stack Developer", ["Full-Stack Developer"]), false);
+assert.equal(titleMatchesAnyRole("Software Engineer Intern – Fullstack", ["Software Engineer Intern"]), true);
+assert.equal(titleMatchesAnyRole("Senior Full-Stack Developer", ["Full-Stack Developer"]), true);
+console.log("PASS auto-apply search roles: saved roles first, junk session titles filtered, internships excluded");

@@ -102,23 +102,52 @@ export function significantTokens(s: string): string[] {
   return tokenize(s).filter((t) => (t.length >= 3 || ROLE_ACRONYMS.has(t)) && !STOPWORDS.has(t));
 }
 
+const INTERNSHIP_WORDS = new Set([
+  "intern", "interns", "internship", "internships",
+  "tirocinio", "tirocini", "tirocinante", "tirocinanti",
+  "stagista", "stagisti", "stagiare",
+  "werkstudent", "werkstudents",
+]);
+const STAGE_PREFIX = new Set(["early", "late", "multi", "growth", "next", "on", "off", "seed"]);
+
+/** Internship / stage / tirocinio / working-student titles — not "early-stage". */
+export function isInternshipTitle(s: string): boolean {
+  const tokens = tokenize(s);
+  if (tokens.some((t) => INTERNSHIP_WORDS.has(t))) return true;
+  const joined = tokens.join(" ");
+  if (/\bworking student\b/.test(joined) || /\bstudent worker\b/.test(joined)) return true;
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i] === "stage" && !STAGE_PREFIX.has(tokens[i - 1] ?? "")) return true;
+  }
+  return false;
+}
+
+function wantsInternship(roles: string[], seniority?: string | null): boolean {
+  if (seniority && isInternshipTitle(seniority)) return true;
+  return roles.some((role) => isInternshipTitle(role));
+}
+
 /**
  * True se il titolo contiene tutti i token significativi del ruolo.
  * Match con stemming leggero — "Product Designer" matcha "Product Design
  * Lead", "Product Designers", "Product Design Manager".
+ * Internship / intern / stage / tirocinio / working-student titles match
+ * only when the selected role or seniority itself asks for internships.
  */
-export function titleMatchesRole(title: string, role: string): boolean {
+export function titleMatchesRole(title: string, role: string, seniority?: string | null): boolean {
+  if (isInternshipTitle(title) && !wantsInternship([role], seniority)) return false;
   const roleTokens = significantTokens(role);
-  if (roleTokens.length === 0) return false;
+  if (roleTokens.length === 0) return isInternshipTitle(title) && wantsInternship([role], seniority);
   const key = (t: string) => (ENGINEER_SYNONYMS.has(t) ? "#engineer" : stem(t));
   const titleStems = new Set(tokenize(title).map(key));
   return roleTokens.every((rt) => titleStems.has(key(rt)));
 }
 
 /** True se almeno uno dei ruoli combacia col titolo. */
-export function titleMatchesAnyRole(title: string, roles: string[]): boolean {
+export function titleMatchesAnyRole(title: string, roles: string[], seniority?: string | null): boolean {
+  if (isInternshipTitle(title) && !wantsInternship(roles, seniority)) return false;
   for (const r of roles) {
-    if (titleMatchesRole(title, r)) return true;
+    if (titleMatchesRole(title, r, seniority)) return true;
   }
   return false;
 }

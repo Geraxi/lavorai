@@ -67,12 +67,30 @@ async function testUnknownFacts() {
   const result = await answerer.answerOffline(context, fields);
   assert.equal(result.answers.size, 0, "Every unknown factual answer remains pending, even in autonomous mode");
   assert.equal(result.given.length, 0);
-  const priorEmployer = await answerer.answerOffline(context, [
+  const unknownEmployer = await answerer.answerOffline(context, [
+    { idx: 80, label: "Have you previously worked for this company?", kind: "select", options: ["Yes", "No"] },
+    { idx: 81, label: "Have you previously been employed by Past Employer?", kind: "select", options: ["Yes", "No"] },
+    { idx: 82, label: "Have you worked at a startup before?", kind: "select", options: ["Yes", "No"] },
+    { idx: 83, label: "Have you worked at Google?", kind: "select", options: ["Yes", "No"] },
+  ]);
+  assert.equal(unknownEmployer.answers.get(80), undefined, "this company without an application employer goes to the user");
+  assert.equal(unknownEmployer.answers.get(81), undefined, "named other company is not auto-answered");
+  assert.equal(unknownEmployer.answers.get(82), undefined, "startup category is not this employer");
+  assert.equal(unknownEmployer.answers.get(83), undefined, "Google is not this employer");
+  const thisEmployer = await answerer.answerOffline({ ...context, company: "Past Employer" }, [
     { idx: 80, label: "Have you previously worked for this company?", kind: "select", options: ["Yes", "No"] },
     { idx: 81, label: "Have you previously been employed by Past Employer?", kind: "select", options: ["Yes", "No"] },
   ]);
-  assert.equal(priorEmployer.answers.get(80), "No", "Unknown employer defaults to No");
-  assert.equal(priorEmployer.answers.get(81), "Yes", "Work history at that company answers Yes");
+  assert.equal(thisEmployer.answers.get(80), "Yes", "this company matches work history");
+  assert.equal(thisEmployer.answers.get(81), "Yes", "named this employer matches work history");
+  const otherEmployer = await answerer.answerOffline({ ...context, company: "Acme" }, [
+    { idx: 80, label: "Have you previously worked for this company?", kind: "select", options: ["Yes", "No"] },
+    { idx: 81, label: "Have you previously been employed by Past Employer?", kind: "select", options: ["Yes", "No"] },
+    { idx: 82, label: "Have you worked at a fintech company?", kind: "select", options: ["Yes", "No"] },
+  ]);
+  assert.equal(otherEmployer.answers.get(80), "No", "this company with no history match is No");
+  assert.equal(otherEmployer.answers.get(81), undefined, "Past Employer is not Acme");
+  assert.equal(otherEmployer.answers.get(82), undefined, "fintech category is not this employer");
   assert.equal(aiCalls, 0, "Factual screening questions never go to AI");
   const missing = await answerer.answerOffline({ autonomous: true }, [
     { idx: 50, label: "Expected annual salary (EUR)", kind: "text" },

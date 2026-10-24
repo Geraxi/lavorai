@@ -34,10 +34,24 @@ assert.equal(resolveCandidateFact(q("May we contact you via WhatsApp?"), { facts
 assert.equal(resolveCandidateFact(q("SMS marketing", "select", ["Yes", "No"]), { facts }).answer, "No");
 assert.equal(resolveCandidateFact(q("Are you willing to work remotely?"), { facts }).answer, null);
 assert.equal(resolveCandidateFact(q("Are you willing to work remotely?"), { facts, workRemote: true }).answer, "Yes");
-assert.equal(resolveCandidateFact(q("Have you worked for this company?"), { facts }).answer, "No");
-assert.equal(resolveCandidateFact(q("Have you worked at Stripe?"), { facts }).answer, "No");
-assert.equal(resolveCandidateFact(q("Have you previously been employed by Previous?"), { facts }).answer, "Yes");
+assert.equal(resolveCandidateFact(q("Have you worked for this company?"), { facts }).answer, null, "this company without an application employer goes to the user");
+assert.equal(resolveCandidateFact(q("Have you worked for this company?"), { facts, company: "Acme" }).answer, "No");
+assert.equal(resolveCandidateFact(q("Have you worked at a startup before?"), { facts, company: "Acme" }).answer, null);
+assert.equal(resolveCandidateFact(q("Have you worked at an early-stage company?"), { facts, company: "Acme" }).answer, null);
+assert.equal(resolveCandidateFact(q("Have you worked at a fintech company?"), { facts, company: "Acme" }).answer, null);
+assert.equal(resolveCandidateFact(q("Have you worked at Google?"), { facts, company: "Acme" }).answer, null);
+assert.equal(resolveCandidateFact(q("Have you worked at Stripe?"), { facts }).answer, null);
+assert.equal(resolveCandidateFact(q("Have you previously been employed by Previous?"), { facts }).answer, null, "named other company is not this employer");
+assert.equal(resolveCandidateFact(q("Have you previously been employed by Previous?"), { facts, company: "Previous" }).answer, "Yes");
 assert.equal(resolveCandidateFact(q("Have you worked for this company?"), { facts, company: "Previous" }).answer, "Yes");
+const exp = (company: string, endDate: string) => ({ company, role: "Engineer", startDate: "2018", endDate, location: "", description: "", bullets: [] });
+const threeJobsAgo = candidateFacts({
+  ...profile,
+  experiences: [exp("NowCo", "Present"), exp("MidCo", "2024"), exp("BridgeCo", "2022"), exp("Ancient Ltd", "2019")],
+}, {}, {}, [], date);
+assert.equal(resolveCandidateFact(q("Have you worked for this company?"), { facts: threeJobsAgo, company: "Ancient Ltd" }).answer, "Yes", "employer three jobs ago still counts");
+assert.equal(resolveCandidateFact(q("Have you previously been employed by Ancient?"), { facts: threeJobsAgo, company: "Ancient Ltd" }).answer, "Yes");
+assert.equal(resolveCandidateFact(q("Have you worked for this company?"), { facts: threeJobsAgo, company: "Stranger Inc" }).answer, "No");
 assert.equal(resolveCandidateFact(q("Are you a public official?"), { facts }).answer, null);
 assert.equal(resolveCandidateFact(q("Do you have family in public office?"), { facts }).answer, null);
 assert.equal(resolveCandidateFact(q("Do you hold a master's degree?"), { facts }).answer, null);
