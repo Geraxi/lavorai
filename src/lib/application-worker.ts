@@ -6,7 +6,7 @@ import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmi
 import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS } from "@/lib/application-answer-continuation";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
-import { ensureUserInbox, getUserInboxAddress } from "@/lib/inbound/service";
+import { getUserInboxAddress } from "@/lib/inbound/service";
 import { optimizeCV } from "@/lib/claude";
 import {
   generateCoverLetterDocx,
@@ -30,6 +30,12 @@ import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { humanContext, launchBrowser } from "@/lib/browser";
 import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
+import {
+  recruiterFromAddress,
+  recruiterEmailAttemptKey,
+  findRecentRecruiterEmailDuplicate,
+  RECRUITER_EMAIL_DEDUP_MS,
+} from "@/lib/recruiter-email-send";
 import { receiptJobId, hasVerifiedSubmissionReceipt } from "@/lib/submission-receipt";
 import { resolveFinalUrl } from "@/lib/resolve-job-url";
 import {
@@ -828,17 +834,58 @@ async function processApplicationRun(
       select: { trackingToken: true },
     });
     const trackingToken = appRow?.trackingToken ?? null;
+    const attemptKey = recruiterEmailAttemptKey(applicationId, app.jobId, recruiterEmail);
+    const since = new Date(Date.now() - RECRUITER_EMAIL_DEDUP_MS);
+    const duplicate = await findRecentRecruiterEmailDuplicate({
+      userId: app.userId,
+      jobId: app.jobId,
+      recipient: recruiterEmail,
+      find: async () => {
+        const rows = await prisma.applicationEmailAttempt.findMany({
+          where: {
+            application: { userId: app.userId },
+            OR: [{ createdAt: { gte: since } }, { acceptedAt: { gte: since } }],
+            AND: [{ OR: [{ application: { jobId: app.jobId } }, { recipient: recruiterEmail.trim().toLowerCase() }] }],
+          },
+          select: {
+            applicationId: true, recipient: true, status: true, createdAt: true,
+            acceptedAt: true, providerEmailId: true,
+            application: { select: { userId: true, jobId: true } },
+          },
+          take: 50,
+        });
+        return rows.map((row) => ({
+          applicationId: row.applicationId,
+          userId: row.application.userId,
+          jobId: row.application.jobId,
+          recipient: row.recipient,
+          status: row.status,
+          createdAt: row.createdAt,
+          acceptedAt: row.acceptedAt,
+          providerEmailId: row.providerEmailId,
+        }));
+      },
+    });
+    if (duplicate && duplicate.applicationId !== applicationId) {
+      await prisma.application.updateMany({
+        where: { id: applicationId, startedAt: workToken, status: { in: ["optimizing", "ready_to_apply", "applying"] } },
+        data: {
+          status: "ready_to_apply",
+          submitConfirmation: NOT_SUBMITTED,
+          ...notSubmitted("failed", "recruiter_email_duplicate_30d"),
+          errorMessage: "Candidatura già inviata a questo destinatario o per questo annuncio negli ultimi 30 giorni. Nessun nuovo invio.",
+          completedAt: new Date(),
+        },
+      });
+      return;
+    }
     if (!await beginApplicationSubmission(applicationId, workToken, undefined, "email_recruiter")) return;
-    const inbox = await getUserInboxAddress(prisma, app.userId)
-      ?? (await ensureUserInbox(prisma, app.userId).catch(() => null))?.address
-      ?? null;
     const delivered = await deliverApplicationToRecruiter({
       applicationId,
-      attemptKey: `application-${applicationId}-${workToken.getTime()}`,
+      attemptKey,
       recipientProvenanceJson: JSON.stringify(verifiedRecruiter),
       beforeSend: () => recheckBeforePortalSubmit(applicationId, workToken, resolvedUrl, "email_recruiter"),
       to: recruiterEmail,
-      fromAddress: inbox,
       replyTo: app.user.email,
       userName: app.user.name,
       job: app.job,
@@ -1677,7 +1724,6 @@ interface DeliverInput {
   attemptKey: string;
   recipientProvenanceJson: string;
   to: string;
-  fromAddress?: string | null;
   replyTo: string;
   userName: string | null;
   job: { title: string; company: string | null; url: string };
@@ -1705,10 +1751,9 @@ async function deliverApplicationToRecruiter(
   }
 
   const candidateName = (input.userName ?? "").trim() || input.replyTo;
-  const fromInbox = input.fromAddress?.trim();
-  const from = fromInbox
-    ? `${candidateName} <${fromInbox}>`
-    : (process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>");
+  // Resend can send only from lavorai.it. apply.lavorai.it / inbound.lavorai.it
+  // are receive-only. Reply-To still routes recruiter replies inbound.
+  const from = recruiterFromAddress(input.userName);
 
   // GUARDIA PROD: onboarding@resend.dev è il sandbox di Resend — accetta
   // SOLO invii a caselle dello stesso account. In produzione con
@@ -1719,12 +1764,12 @@ async function deliverApplicationToRecruiter(
     from.toLowerCase().includes("resend.dev")
   ) {
     console.error(
-      `[worker] EMAIL_FROM è sandbox Resend (${from}) — nessuna delivery reale possibile a recruiter esterni. Configura EMAIL_FROM con dominio verificato.`,
+      `[worker] RECRUITER_EMAIL_FROM è sandbox Resend (${from}) — nessuna delivery reale possibile a recruiter esterni. Configura RECRUITER_EMAIL_FROM su lavorai.it.`,
     );
     await alertFounder(
       "email_from_sandbox",
-      "EMAIL_FROM è sandbox — delivery bloccata",
-      `L'app sta cercando di inviare candidature ai recruiter ma EMAIL_FROM punta ancora al sandbox Resend (${from}).\nResend accetta invii sandbox solo verso caselle interne all'account → NIENTE candidatura arriva ai recruiter esterni.\n\nFix: su Resend verifica un dominio (es. lavorai.it), poi setta EMAIL_FROM="LavorAI <candidature@lavorai.it>" (o simile) su Vercel.`,
+      "RECRUITER_EMAIL_FROM è sandbox — delivery bloccata",
+      `L'app sta cercando di inviare candidature ai recruiter ma RECRUITER_EMAIL_FROM punta ancora al sandbox Resend (${from}).\nResend accetta invii sandbox solo verso caselle interne all'account → NIENTE candidatura arriva ai recruiter esterni.\n\nFix: su Resend verifica lavorai.it, poi setta RECRUITER_EMAIL_FROM=candidature@lavorai.it su Vercel.`,
     ).catch(() => void 0);
     return { kind: "not_sent", reason: "email_provider_not_configured" };
   }

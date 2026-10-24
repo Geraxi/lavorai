@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { completeApplicationSubmission } from "@/lib/application-worker-gates";
+import { matchesApplicationEmailProofKey } from "@/lib/recruiter-email-send";
 
 /** Repair only bookkeeping after proven provider acceptance. Never send, reset
  * an ownership token, requeue work or require current consent for a past send.
@@ -23,7 +24,7 @@ export async function reconcileAcceptedApplicationEmails(limit = 20): Promise<{
   let reconciled = 0; let skipped = 0; let failed = 0;
   for (const attempt of attempts) {
     const token = attempt.application.startedAt;
-    if (!token || !attempt.acceptedAt || attempt.attemptKey !== `application-${attempt.applicationId}-${token.getTime()}`) {
+    if (!token || !attempt.acceptedAt || !matchesApplicationEmailProofKey(attempt.attemptKey, attempt.applicationId, token)) {
       skipped++; continue;
     }
     try {

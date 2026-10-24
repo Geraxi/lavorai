@@ -417,15 +417,41 @@ function careersUrlsFromHtml(html: string, page: URL, companyKey: string): strin
 export type ExtractedPublishedEmail = { email: string; evidence: string; score: number };
 
 /**
+ * Generic recruiting inboxes in a description (jobs@, cv@, careers@, hr@, …)
+ * are only the employer when the mailbox domain matches the company name,
+ * a non-aggregator job-page domain, or the ATS tenant. Staffing-agency
+ * inboxes on aggregator copy are rejected.
+ */
+export function employerDomainAllowsRecipient(
+  email: string,
+  company: string | null,
+  jobUrl?: string | null,
+): boolean {
+  const recipient = registrableIdentity(email.split("@")[1] ?? "");
+  if (!recipient) return false;
+  const companyKey = company ? identity(company) : "";
+  if (companyKey.length >= 3 && recipient.key === companyKey) return true;
+  if (!jobUrl) return false;
+  let page: URL;
+  try { page = new URL(jobUrl); } catch { return false; }
+  if (page.protocol !== "https:" || page.username || page.password || page.port) return false;
+  if (AGGREGATOR_HOSTS.some((host) => domainIs(page.hostname, host))) return false;
+  const source = registrableIdentity(page.hostname);
+  if (source && (source.domain === recipient.domain || source.key === recipient.key)) return true;
+  const tenant = approvedAtsTenant(page);
+  return !!tenant && compactIdentity(domainToUnicode(tenant)) === recipient.key;
+}
+
+/**
  * Literal employer-published addresses only. Never invents jobs@domain.
- * `requireCompanyDomain` keeps page/ATS attribution; description text may
- * accept a recruiting local-part on a non-company domain when the invitation
- * is in the posting itself (the employer published that inbox).
+ * `requireCompanyDomain` keeps page/ATS attribution. Description text may
+ * keep a named inbox the employer printed, but generic recruiting locals
+ * still need an employer-domain match.
  */
 export function extractPublishedRecruiterEmailsFromText(
   text: string,
   company: string | null,
-  opts: { requireCompanyDomain?: boolean; pageDomain?: string | null; atsPage?: boolean } = {},
+  opts: { requireCompanyDomain?: boolean; pageDomain?: string | null; atsPage?: boolean; jobUrl?: string | null } = {},
 ): ExtractedPublishedEmail[] {
   const companyKey = company ? identity(company) : "";
   const visible = decodeHtml(text.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
@@ -443,12 +469,14 @@ export function extractPublishedRecruiterEmailsFromText(
     if (BLACKLIST_DOMAIN.has(emailDomain)) continue;
     const recipient = registrableIdentity(emailDomain);
     if (!recipient) continue;
+    const local = email.split("@")[0] ?? "";
     if (opts.requireCompanyDomain !== false) {
       if (companyKey.length >= 3 && recipient.key !== companyKey) continue;
       if (opts.pageDomain && !opts.atsPage && recipient.domain !== opts.pageDomain) continue;
+    } else if (PREFERRED_LOCAL.has(local)) {
+      if (!employerDomainAllowsRecipient(email, company, opts.jobUrl)) continue;
     } else if (companyKey.length >= 3 && recipient.key !== companyKey) {
-      const local = email.split("@")[0] ?? "";
-      if (!PREFERRED_LOCAL.has(local)) continue;
+      continue;
     }
     candidates.push({ email, evidence: context, score: candidateScore });
   }
@@ -560,7 +588,10 @@ export function extractPublishedRecruiterEmailFromText(
   sourceUrl: string,
 ): { email: string; sourceUrl: string; evidence: string } | null {
   if (!description?.trim() || !company?.trim()) return null;
-  const [best] = extractPublishedRecruiterEmailsFromText(description, company, { requireCompanyDomain: false });
+  const [best] = extractPublishedRecruiterEmailsFromText(description, company, {
+    requireCompanyDomain: false,
+    jobUrl: sourceUrl,
+  });
   return best ? { email: best.email, sourceUrl, evidence: best.evidence } : null;
 }
 

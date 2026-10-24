@@ -48,7 +48,10 @@ delete process.env.APPLICATIONS_PAUSED;
 
 const pause = { applicationsPaused: () => process.env.APPLICATIONS_PAUSED === "true" };
 const budget = load("src/lib/application-submission-budget.ts", { "node:crypto": require("node:crypto"), "@/lib/application-rollout": rollout });
-const gates = load("src/lib/application-worker-gates.ts", { "@/lib/application-rollout": rollout, "@/lib/application-pause": pause, "@/lib/application-submission-budget": budget }, false);
+const gates = load("src/lib/application-worker-gates.ts", {
+  "@/lib/application-rollout": rollout, "@/lib/application-pause": pause, "@/lib/application-submission-budget": budget,
+  "@/lib/recruiter-email-send": { matchesApplicationEmailProofKey: () => false },
+}, false);
 const LIVENESS = "Disponibilità dell'annuncio non verificabile: invio sospeso, nuovo controllo più tardi.";
 const CLOSED = "Annuncio chiuso dall'azienda. Nessun invio effettuato.";
 const closedJobs: string[] = [];

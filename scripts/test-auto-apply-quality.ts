@@ -328,6 +328,24 @@ async function testRecruiterEmail() {
   assert.equal(invented, null, "Must never guess jobs@domain");
   const extracted = api.extractPublishedRecruiterEmailFromText("No address here, apply on the site.", "Acme", "https://careers.acme.com/job");
   assert.equal(extracted, null);
+  assert.equal(
+    api.extractPublishedRecruiterEmailFromText("Inviare il CV a jobs@randstad.com per questa posizione.", "Acme", "https://www.adzuna.it/details/1"),
+    null,
+    "Generic staffing inbox on an aggregator posting is not the employer",
+  );
+  assert.equal(
+    api.extractPublishedRecruiterEmailFromText("Inviare il CV a careers@acme.com per questa posizione.", "Acme", "https://www.adzuna.it/details/1")?.email,
+    "careers@acme.com",
+  );
+  assert.equal(
+    api.extractPublishedRecruiterEmailFromText("Send your CV to jobs@acme.com.", "Widget Labs", "https://boards.greenhouse.io/acme/jobs/123")?.email,
+    "jobs@acme.com",
+    "ATS-listed company domain may authorize a generic inbox",
+  );
+  assert.equal(
+    api.extractPublishedRecruiterEmailFromText("Send your CV to recruiting@randstad.com.", "Acme", "https://boards.greenhouse.io/acme/jobs/123"),
+    null,
+  );
   console.log(`[auto-apply-quality] ${accepted.length + rejected.length} registrable-domain, suffix, private-tenant, ATS, URL and IDN regressions passed.`);
   console.log("[auto-apply-quality] Fresh page provenance, cache/AI rejection, blocklist, DNS, description/JSON-LD/careers checks passed.");
 }

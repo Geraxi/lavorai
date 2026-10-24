@@ -208,11 +208,16 @@ async function main() {
   let reconciledStatus = "ready_to_apply";
   let roundCount = 0;
   let completeCalls = 0;
+  const proofKey = {
+    matchesApplicationEmailProofKey: (key: string, id: string, owner: Date) =>
+      key === `application-${id}-${owner.getTime()}` || key.startsWith(`recruiter-email:${id}:`),
+  };
   const late = load("src/lib/application-email-reconciliation.ts", {
     "@/lib/db": { prisma: { applicationEmailAttempt: { findMany: async () => reconciledStatus === "success" ? [] : [
       { applicationId: "late-app", attemptKey: `application-late-app-${token.getTime()}`, acceptedAt: receivedAt, application: { startedAt: token } },
       { applicationId: "wrong-owner", attemptKey: "application-wrong-owner-1", acceptedAt: receivedAt, application: { startedAt: token } },
     ] } } },
+    "@/lib/recruiter-email-send": proofKey,
     "@/lib/application-worker-gates": { completeApplicationSubmission: async (id: string, owner: Date, data: any) => {
       completeCalls++;
       assert.equal(id, "late-app"); assert.equal(owner, token); assert.equal(data.submittedAt, receivedAt);
@@ -224,6 +229,22 @@ async function main() {
   assert.equal((await late.reconcileAcceptedApplicationEmails()).reconciled, 1);
   assert.equal((await late.reconcileAcceptedApplicationEmails()).reconciled, 0);
   assert.equal(roundCount, 1); assert.equal(completeCalls, 1, "Wrong owner token never reaches completion");
+  reconciledStatus = "ready_to_apply"; completeCalls = 0; roundCount = 0;
+  const lateStable = load("src/lib/application-email-reconciliation.ts", {
+    "@/lib/db": { prisma: { applicationEmailAttempt: { findMany: async () => reconciledStatus === "success" ? [] : [
+      { applicationId: "late-app", attemptKey: "recruiter-email:late-app:job1:careers@acme.test", acceptedAt: receivedAt, application: { startedAt: token } },
+      { applicationId: "wrong-owner", attemptKey: "application-wrong-owner-1", acceptedAt: receivedAt, application: { startedAt: token } },
+    ] } } },
+    "@/lib/application-worker-gates": { completeApplicationSubmission: async (id: string, owner: Date, data: any) => {
+      completeCalls++;
+      assert.equal(id, "late-app"); assert.equal(owner, token);
+      if (reconciledStatus === "success") return false;
+      reconciledStatus = "success"; roundCount++; return true;
+    } },
+    "@/lib/recruiter-email-send": proofKey,
+  });
+  assert.equal((await lateStable.reconcileAcceptedApplicationEmails()).reconciled, 1);
+  assert.equal(completeCalls, 1, "Stable recruiter-email key reconciles; wrong-owner key does not");
   console.log("PASS late accepted-attempt reconciliation uses exact owner gate once and never sends email.");
 
   const route = load("src/app/api/webhooks/resend/route.ts", {
