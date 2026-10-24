@@ -23,6 +23,8 @@ import { PostCheckoutRefresh } from "@/components/post-checkout-refresh";
 import { PrivacyConsentForm } from "@/components/privacy-consent-form";
 import { CookieSettingsLink } from "@/components/cookie-settings-link";
 import { MailboxConnect } from "@/components/mailbox-connect";
+import { MailboxPrivacyCard } from "@/components/mailbox-privacy";
+import { mailboxNotifyMode } from "@/lib/application-mailbox";
 
 export const metadata: Metadata = { title: "Impostazioni" };
 export const dynamic = "force-dynamic";
@@ -37,7 +39,7 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
   const trial = trialState(user);
   const me = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { passwordHash: true, privacyConsentAt: true },
+    select: { passwordHash: true, privacyConsentAt: true, preferences: { select: { mailboxNotifyMode: true } } },
   });
   const hasPassword = Boolean(me?.passwordHash);
 
@@ -188,6 +190,16 @@ export default async function SettingsPage({ searchParams }: { searchParams?: Pr
           <SectionCard id="privacy-consent">
             <SectionHead icon={<Icon name="eye" size={14} />} title={user.locale === "en" ? "Privacy consent" : "Consenso privacy"} />
             <SectionBody><PrivacyConsentForm recorded={Boolean(me?.privacyConsentAt)} locale={user.locale} /></SectionBody>
+          </SectionCard>
+
+          <SectionCard id="application-mailbox-privacy">
+            <SectionHead icon={<Icon name="mail" size={14} />} title={user.locale === "en" ? "Application mailbox" : "Posta candidature"} />
+            <SectionBody>
+              <MailboxPrivacyCard
+                locale={user.locale ?? "it"}
+                mailboxNotifyMode={mailboxNotifyMode(me?.preferences?.mailboxNotifyMode)}
+              />
+            </SectionBody>
           </SectionCard>
 
           <SectionCard id="cookie-settings">

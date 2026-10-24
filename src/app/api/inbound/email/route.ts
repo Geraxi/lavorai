@@ -2,7 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { INBOUND_PROVIDERS } from "@/lib/inbound/providers";
 import { processUserInboundEmail } from "@/lib/inbound/service";
-import { inboundAiClassifier } from "@/lib/inbound/ai";
+import { inboundAiClassifier, mailboxAiClassifier } from "@/lib/inbound/ai";
+import { createResendMailboxMailer, sendMailboxPriorityNotice } from "@/lib/application-mailbox-notify";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -11,7 +12,8 @@ export const maxDuration = 60;
  * Inbound mail for per-user addresses (<slug>@INBOUND_USER_DOMAIN).
  * Provider-agnostic (?provider=, default "resend"); Resend signature verified
  * with RESEND_INBOUND_SECRET. 2xx only after durable storage so the provider
- * retries failures. Never logs bodies, senders or codes. Never sends mail.
+ * retries failures. Never logs bodies, senders or codes. Never replies to
+ * employers; may notify the candidate of interviews / recruiter questions.
  */
 export async function POST(request: NextRequest) {
   const provider = INBOUND_PROVIDERS[request.nextUrl.searchParams.get("provider") ?? "resend"];
@@ -27,7 +29,36 @@ export async function POST(request: NextRequest) {
   if (!mail) return NextResponse.json({ ok: true, ignored: true });
   try {
     const hydrated = await provider.hydrate(mail, process.env);
-    const r = await processUserInboundEmail(hydrated, { db: prisma, env: process.env, ai: inboundAiClassifier() });
+    const mailer = createResendMailboxMailer();
+    const r = await processUserInboundEmail(hydrated, {
+      db: prisma,
+      env: process.env,
+      ai: inboundAiClassifier(),
+      mailboxAi: mailboxAiClassifier(),
+      notify: mailer
+        ? async (notice) => {
+          const user = await prisma.user.findUnique({
+            where: { id: notice.userId },
+            select: { email: true, name: true, locale: true },
+          });
+          if (!user) return false;
+          return sendMailboxPriorityNotice({
+            userEmail: user.email,
+            user,
+            message: {
+              id: notice.emailId,
+              kind: notice.kind,
+              fromAddress: notice.fromAddress,
+              subject: notice.subject,
+              receivedAt: notice.receivedAt,
+              jobTitle: notice.jobTitle,
+              company: notice.company,
+            },
+            send: mailer,
+          });
+        }
+        : null,
+    });
     return NextResponse.json({ ok: true, stored: r.stored, duplicates: r.duplicates, ignored: r.unknownRecipient, confirmed: r.confirmed.length });
   } catch (e) {
     console.error(`[inbound/email] ${provider.name} processing failed: ${e instanceof Error ? e.message.slice(0, 80) : "unknown"}`);

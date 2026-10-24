@@ -65,6 +65,8 @@ export async function getConfirmedSubmissions(userId: string): Promise<number> {
         submittedVia: true,
         submitConfirmation: true,
         submissionReceiptJson: true,
+        confirmedAt: true,
+        sendStatus: true,
         emailAttempts: {
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -261,6 +263,8 @@ export async function getApplicationStageCounts(userId: string): Promise<{ total
         submittedVia: true,
         submitConfirmation: true,
         submissionReceiptJson: true,
+        confirmedAt: true,
+        sendStatus: true,
         emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true, acceptedAt: true } },
       },
     });
@@ -362,6 +366,8 @@ export async function getUnverifiedSubmissions(userId: string): Promise<number> 
         submittedVia: true,
         submitConfirmation: true,
         submissionReceiptJson: true,
+        confirmedAt: true,
+        sendStatus: true,
         emailAttempts: {
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -578,6 +584,8 @@ export async function getDashboardTimeSeries(userId: string, now: Date = new Dat
         submittedVia: true,
         submitConfirmation: true,
         submissionReceiptJson: true,
+        confirmedAt: true,
+        sendStatus: true,
         submittedAt: true,
         completedAt: true,
         createdAt: true,
@@ -689,6 +697,7 @@ export async function getAnalyticsCohort(
     },
     select: {
       status: true, submittedVia: true, submitConfirmation: true, submissionReceiptJson: true,
+      confirmedAt: true, sendStatus: true,
       createdAt: true, completedAt: true, submittedAt: true,
       userStatus: true, lastReplyAt: true, lastReplyKind: true, cvDocxPath: true, cvPdfPath: true,
       emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true, acceptedAt: true, createdAt: true } },

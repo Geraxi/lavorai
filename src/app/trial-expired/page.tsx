@@ -5,7 +5,7 @@ import { isAdmin } from "@/lib/admin";
 import { TrialExpiredActions } from "./trial-expired-actions";
 import { SupportLink } from "@/components/support-link";
 import { Logo } from "@/components/logo";
-import { prisma } from "@/lib/db";
+import { getConfirmedSubmissions } from "@/lib/dashboard-metrics-shared";
 
 export const metadata = { title: "Free trial expired | LavorAI", robots: { index: false, follow: false } };
 
@@ -14,9 +14,7 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (isAdmin(user.email) || !isApplicationAccessPaused(user)) redirect("/dashboard");
-  const applicationsSent = await prisma.application.count({
-    where: { userId: user.id, status: "success" },
-  });
+  const applicationsSent = await getConfirmedSubmissions(user.id);
   return (
     <main className="trial-expired-screen min-h-screen flex items-center justify-center bg-background text-foreground px-6 py-12">
       <section className="trial-expired-panel w-full max-w-2xl overflow-hidden rounded-2xl border bg-card shadow-lg">

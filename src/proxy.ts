@@ -30,6 +30,7 @@ const PROTECTED_PREFIXES = [
   "/preferences",
   "/analytics",
   "/inbox",
+  "/posta",
   "/settings",
   "/admin",
 ];

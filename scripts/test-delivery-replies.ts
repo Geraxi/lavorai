@@ -81,6 +81,25 @@ const processing = load("src/lib/application-reply-processing.ts", {
   "@/lib/reply-security-message": replySecurity, "@/lib/application-delivery": delivery,
   "@/lib/apply-reply-to-application": projection,
   "@/lib/inbound/service": { recordAtsConfirmation: async () => true },
+  "@/lib/application-mailbox": {
+    classifyMailbox: async (input: { fromAddress: string; subject?: string | null; bodyText?: string | null }) => {
+      const classified = parser.classifyReply(input);
+      const kind = ({
+        colloquio: "interview", ricevuta: "confirmation", rifiutata: "rejection",
+        auto_reply: "auto_reply", redirected_to_portal: "redirected_to_portal",
+        auto: "other", bounce: "other", risposta: "recruiter_question",
+      } as Record<string, string>)[classified.kind] ?? "other";
+      return { kind };
+    },
+    mailboxKindToReplyKind: (kind: string) => ({
+      confirmation: "ricevuta", otp: "auto", interview: "colloquio", rejection: "rifiutata",
+      auto_reply: "auto_reply", redirected_to_portal: "redirected_to_portal",
+      recruiter_question: "risposta", other: "risposta",
+    } as Record<string, string>)[kind] ?? "risposta",
+    mailboxKindIsHuman: (kind: string) => ["interview", "rejection", "recruiter_question"].includes(kind),
+    mailboxNotifyMode: () => "priority",
+    notifyDecision: (kind: string) => ["interview", "recruiter_question"].includes(kind) ? "pending" : "digest_queued",
+  },
   "@/lib/email": { forwardReplyToUser: async (input: unknown, options: { idempotencyKey: string }) => {
     forwardingCalls++;
     if (failForward) throw new Error("synthetic_provider_failure");
