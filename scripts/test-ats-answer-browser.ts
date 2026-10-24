@@ -5,11 +5,12 @@ import ts from "typescript";
 import { chromium } from "playwright";
 import * as facts from "../src/lib/candidate-facts";
 import * as safety from "../src/lib/portal-adapters/answer-safety";
+import * as formLabels from "../src/lib/portal-adapters/form-labels";
 
 // Actual ATS scanner/filler and browser DOM, with no employer, AI or DB access.
 const module = { exports: {} as any };
 const dependencies: Record<string, unknown> = {
-  "../candidate-facts": facts, "./answer-safety": safety,
+  "../candidate-facts": facts, "./answer-safety": safety, "./form-labels": formLabels,
   "@/lib/ai-router": { complete: () => { throw new Error("AI forbidden in factual browser tests"); } },
 };
 vm.runInNewContext(ts.transpileModule(readFileSync("src/lib/portal-adapters/ai-answer.ts", "utf8"), {
@@ -55,11 +56,15 @@ async function main() {
     const phone = await module.exports.answerRequiredFields(page, { phone: "+44 7911 123456", country: "Italy" });
     assert.equal(phone.answered, 1); assert.equal(phone.remainingRequired, 0);
     assert.equal(await page.locator(".single-value").textContent(), "United Kingdom (+44)");
-    await widget("Country", ["United States (+1)", "Canada (+1)"], [], true);
-    const ambiguous = await module.exports.answerRequiredFields(page, { phone: "+1 212 555 1234", country: "Canada" });
+    await widget("Country", ["United States (+1)", "Canada (+1)"], ["United States (+1)", "Canada (+1)"], true);
+    const nanp = await module.exports.answerRequiredFields(page, { phone: "+1 212 555 1234", country: "Canada" });
+    assert.equal(nanp.answered, 1); assert.equal(nanp.remainingRequired, 0);
+    assert.equal(await page.locator(".single-value").textContent(), "Canada (+1)");
+    await widget("Country", ["United States (+1)", "Canada (+1)"], ["United States (+1)", "Canada (+1)"], true);
+    const ambiguous = await module.exports.answerRequiredFields(page, { phone: "+1 212 555 1234" });
     assert.equal(ambiguous.answered, 0); assert.equal(ambiguous.remainingRequired, 1);
     assert.deepEqual(external, []); assert.deepEqual(errors, []);
-    console.log("PASS real browser: delayed city option, stale unrelated results, phone-country metadata, prefix versus residence, shared-prefix ambiguity. No external requests or submissions.");
+    console.log("PASS real browser: delayed city option, stale unrelated results, phone-country metadata, prefix versus residence, shared +1 disambiguated by country. No external requests or submissions.");
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

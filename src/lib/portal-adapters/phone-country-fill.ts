@@ -18,6 +18,10 @@ const SELECTORS = [
   'input[aria-label*="country code" i]',
   'input[aria-label*="Phone country" i]',
   'input[name*="countryCode" i]',
+  '[class*="phone" i] [role="combobox"]',
+  '[class*="Phone" i] [role="combobox"]',
+  'input[role="combobox"][aria-label*="country" i]',
+  'input[role="combobox"][aria-label*="Phone" i]',
 ];
 
 const PHONE_NEAR = [
@@ -30,9 +34,13 @@ const PHONE_NEAR = [
 ];
 
 /** Fill Greenhouse / Lever / Ashby / Workable country-code widgets from the profile phone. */
-export async function fillPhoneCountryCode(page: Page, phone: string | null | undefined): Promise<boolean> {
+export async function fillPhoneCountryCode(
+  page: Page,
+  phone: string | null | undefined,
+  country?: string | null,
+): Promise<boolean> {
   const parsed = parsePhoneCountry(phone ?? "");
-  if (!parsed || !phone) return false;
+  if (!parsed && !country?.trim()) return false;
 
   for (const sel of [...SELECTORS, ...PHONE_NEAR]) {
     const loc = page.locator(sel);
@@ -41,22 +49,50 @@ export async function fillPhoneCountryCode(page: Page, phone: string | null | un
       const el = loc.nth(i);
       if (!(await el.isVisible().catch(() => false))) continue;
       const tag = (await el.evaluate((node) => node.tagName).catch(() => "")).toLowerCase();
+      const role = (await el.getAttribute("role").catch(() => ""))?.toLowerCase() ?? "";
       if (tag === "select") {
         const labels = await el.locator("option").allTextContents().catch(() => []);
-        const match = matchPhoneCountryOption(labels, phone);
+        const match = matchPhoneCountryOption(labels, phone ?? "", country);
         if (!match) continue;
         const ok = await el.selectOption({ label: match }).then(() => true).catch(async () => {
-          return el.selectOption({ value: parsed.dial }).then(() => true).catch(() => false);
+          return parsed
+            ? el.selectOption({ value: parsed.dial }).then(() => true).catch(() => false)
+            : false;
         });
         if (ok) return true;
         continue;
       }
       const current = await el.inputValue().catch(() => "");
-      if (current && /(?:\+\d{1,4}|[A-Za-z]{2,})/.test(current) && matchPhoneCountryOption([current], phone)) {
+      if (current && /(?:\+\d{1,4}|[A-Za-z]{2,})/.test(current) && matchPhoneCountryOption([current], phone ?? "", country)) {
         return true;
       }
-      const filled = await el.fill(parsed.dial).then(() => true).catch(() => false);
-      if (filled) return true;
+      if (role === "combobox") {
+        const labels = await el.evaluate((node) => {
+          const id = node.getAttribute("aria-controls");
+          const root = id ? document.getElementById(id) : node.closest("form") ?? document;
+          return Array.from(root?.querySelectorAll("[role='option']") ?? []).map((o) => (o.textContent ?? "").trim()).filter(Boolean);
+        }).catch(() => [] as string[]);
+        const match = matchPhoneCountryOption(labels, phone ?? "", country);
+        const typed = match ?? parsed?.dial ?? country ?? "";
+        if (!typed) continue;
+        await el.click().catch(() => undefined);
+        await el.fill(typed).catch(() => undefined);
+        const picked = await el.evaluate((node, expected) => {
+          const id = node.getAttribute("aria-controls");
+          const root = id ? document.getElementById(id) : node.closest("form") ?? document;
+          const opt = Array.from(root?.querySelectorAll("[role='option']") ?? []).find((o) =>
+            (o.textContent ?? "").trim().toLowerCase() === expected.toLowerCase(),
+          ) as HTMLElement | undefined;
+          opt?.click();
+          return Boolean(opt);
+        }, match ?? typed).catch(() => false);
+        if (picked) return true;
+        continue;
+      }
+      if (parsed) {
+        const filled = await el.fill(parsed.dial).then(() => true).catch(() => false);
+        if (filled) return true;
+      }
     }
   }
   return false;

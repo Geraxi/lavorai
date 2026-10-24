@@ -15,6 +15,7 @@ import {
   greenhouseAbsoluteUrlIsNative,
   greenhouseRequiredQuestionsAnswerable,
   loadGreenhouseJobForm,
+  mergeGreenhouseStandardContactQuestions,
   parseGreenhouseBoardJob,
 } from "../src/lib/greenhouse-job-form";
 import {
@@ -69,15 +70,55 @@ function testGreenhouseParseAndQuestions() {
     ],
   });
   assert.deepEqual(questions.map((q) => q.label), ["First Name", "LinkedIn profile", "Why us?", "Resume"]);
+  const merged = mergeGreenhouseStandardContactQuestions(questions);
+  assert.ok(merged.some((q) => q.label === "Phone country code"), "boards-api omits phone-country; precheck still accounts for it");
+  assert.ok(merged.some((q) => q.label === "Last Name"));
   const ctx = {
     facts: [
       { key: "firstName", value: "Ada", source: "cv" as const, reference: "firstName" },
+      { key: "lastName", value: "Lovelace", source: "cv" as const, reference: "lastName" },
+      { key: "email", value: "ada@example.test", source: "cv" as const, reference: "email" },
+      { key: "phone", value: "+39000", source: "cv" as const, reference: "phone" },
     ],
     storedAnswers: [{ label: "LinkedIn profile", answer: "https://linkedin.com/in/ada" }],
     firstName: "Ada",
+    lastName: "Lovelace",
+    email: "ada@example.test",
+    phone: "+39000",
     privacyConsentAt: new Date("2026-01-01"),
   };
   assert.equal(greenhouseRequiredQuestionsAnswerable(questions, ctx, { hasCv: true }).ok, true);
+  assert.equal(
+    greenhouseRequiredQuestionsAnswerable(
+      questions.filter((q) => q.label === "First Name"),
+      ctx,
+      { hasCv: true },
+    ).ok,
+    true,
+    "+39 makes implied Phone country code auto-answerable even when the API list omits it",
+  );
+  const noPhone = {
+    ...ctx,
+    facts: ctx.facts.filter((fact) => fact.key !== "phone"),
+    phone: null,
+  };
+  const missingPhone = greenhouseRequiredQuestionsAnswerable(
+    questions.filter((q) => q.label === "First Name"),
+    noPhone,
+    { hasCv: true },
+  );
+  assert.equal(missingPhone.ok, false);
+  assert.ok(
+    missingPhone.missing.includes("Phone") && missingPhone.missing.includes("Phone country code"),
+    `implied contact fields stay required: ${missingPhone.missing.join(",")}`,
+  );
+  const whyUs = greenhouseRequiredQuestionsAnswerable(
+    [...questions, { label: "Why us?", required: true, kind: "textarea" }],
+    ctx,
+    { hasCv: true },
+  );
+  assert.equal(whyUs.ok, false, "non-contact required questions are never invented");
+  assert.ok(whyUs.missing.includes("Why us?"));
   assert.equal(greenhouseRequiredQuestionsAnswerable(questions, { facts: [] }, { hasCv: true }).ok, false);
   console.log("PASS greenhouse parse / truthful required questions");
 }

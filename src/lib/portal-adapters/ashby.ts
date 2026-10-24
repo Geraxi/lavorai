@@ -151,8 +151,8 @@ export const ashbyAdapter: PortalAdapter = {
           .first()
           .fill(contact.phone)
           .catch(() => void 0);
-        await fillPhoneCountryCode(page, contact.phone);
       }
+      await fillPhoneCountryCode(page, contact.phone, input.answers?.country);
 
       if (contact.linkedinUrl) {
         await page

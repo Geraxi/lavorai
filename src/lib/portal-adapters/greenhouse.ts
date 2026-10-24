@@ -225,8 +225,8 @@ export const greenhouseAdapter: PortalAdapter = {
           .first()
           .fill(phoneToUse)
           .catch(() => void 0);
-        await fillPhoneCountryCode(page, phoneToUse);
       }
+      await fillPhoneCountryCode(page, phoneToUse, input.answers?.country);
 
       // ============================================================
       // Upload CV — HARDENED contro le varianti Greenhouse.

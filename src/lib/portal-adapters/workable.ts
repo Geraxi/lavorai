@@ -54,8 +54,8 @@ export const workableAdapter: PortalAdapter = {
       if (phoneToUse) {
         await page.locator('input[name="phone"], input[type="tel"]').first()
           .fill(phoneToUse).catch(() => void 0);
-        await fillPhoneCountryCode(page, phoneToUse);
       }
+      await fillPhoneCountryCode(page, phoneToUse, input.answers?.country);
 
       // ----- CV (obbligatorio) -----
       // Workable ha spesso DUE input file: il primo è la FOTO (accept
