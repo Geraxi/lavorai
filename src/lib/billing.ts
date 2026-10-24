@@ -381,18 +381,18 @@ export function freeQuotaWindowStart(now = new Date()): Date {
 
 /**
  * Stati che NON consumano la quota gratuita: l'utente non ha ricevuto nulla
- * (fallita, annullata, diagnostica). Tutto il resto (in coda, in lavorazione,
- * in attesa di consenso/risposte, inviata) conta come invio o tentativo.
+ * (fallita, annullata, diagnostica). Handoff, hold e needs-answers sono
+ * esclusi da `isQuotaExcludedHandoffOrHold`. Solo un invio accettato
+ * (success + submittedAt nella finestra) consuma; le reservation in corso
+ * occupano lo slot solo per la concorrenza.
  */
 export const FREE_QUOTA_NON_CONSUMING_STATUSES = ["failed", "cancelled", "canceled", "diagnostic"];
 
 /**
- * Stati che al worker contano come invio o tentativo in corso. Il backlog
- * `queued` e le righe in attesa dell'utente (awaiting_consent, needs_answers,
- * needs_session) non bloccano l'invio: la quota si consuma quando si parte.
- * `ready_to_apply` può essere un tentativo dall'esito incerto: conta.
+ * Reservation in corso (concorrenza). Non sono invii accettati: al fallimento
+ * o handoff lo slot si libera. Vedi `isWeeklyQuotaReservation`.
  */
-export const FREE_QUOTA_WORKER_INFLIGHT_STATUSES = ["optimizing", "applying", "submitting", "answers_claimed", "ready_to_apply"];
+export const FREE_QUOTA_WORKER_INFLIGHT_STATUSES = ["optimizing", "applying", "submitting", "answers_claimed"];
 
 type AccessUser = {
   tier?: string | null; email?: string | null; createdAt?: Date | string;

@@ -7,8 +7,8 @@
  *   draft                 prepared or preparing, waiting on the user (approve / answer questions)
  *   approved              the user approved (explicit consent or auto mode); queued, preparing or held
  *   submitting            a delivery attempt is in flight right now
- *   confirmed_submitted   positive evidence: verified ATS receipt (HTTP/DOM) or email delivered event
- *   submitted_unverified  sent or possibly sent, with no confirmation evidence (never auto-retried)
+ *   confirmed_submitted   positive evidence: verified ATS receipt (HTTP/DOM) or mailbox no-bounce / confirmedAt
+ *   submitted_unverified  sent or possibly sent, including Resend delivered (not an employer receipt)
  *   failed                stopped before/without delivery, with a typed reason
  *   needs_manual          no supported automated route: apply URL + prepared documents for the user
  *
@@ -259,8 +259,8 @@ export function deriveApplicationLifecycle(
       failureReason = attempt.status === "bounced" ? "email_bounced" : attempt.status === "complained" ? "email_complaint" : "email_rejected";
       evidence = { ...noEvidence, ats: "email", at, snippet: `Email provider reported ${attempt.status}` };
     } else if (attempt.status === "delivered" && attempt.providerEmailId) {
-      status = "confirmed_submitted";
-      evidence = { ...noEvidence, type: "email_delivered", ats: "email", at, snippet: "Recipient mail server accepted the message (provider delivered event)" };
+      status = "submitted_unverified"; nextAction = "wait";
+      evidence = { ...noEvidence, type: "email_delivered", ats: "email", at, snippet: "Provider delivered event: recipient mail server accepted the message. Not an employer receipt." };
     } else if (attempt.providerEmailId && ["accepted", "delayed"].includes(attempt.status)) {
       status = "submitted_unverified";
       evidence = { ...noEvidence, type: "email_accepted", ats: "email", at,

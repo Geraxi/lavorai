@@ -42,9 +42,21 @@ function load(path: string, extra: Record<string, any> = {}) {
       maxDrainAttempts: () => 3, drainQueueBatch: () => 5, drainProcessConcurrency: () => 2,
       DRAIN_TIME_RESERVE_MS: 60_000, drainPerRowBudgetMs: () => 90_000, canClaimAnotherDrainRow: () => true,
     },
-    "@/lib/queue-sendability": extra["@/lib/queue-sendability"] ?? { claimUserSelect: {}, isQueuedRowSendable: () => true, loadQuotaUsageMaps: async () => ({ weekly: new Map(), daily: new Map() }), usageFor: () => ({ weekly: 0, daily: 0 }), HELD_MESSAGE_PREFIX: "Invio in attesa:" },
+    "@/lib/queue-sendability": extra["@/lib/queue-sendability"] ?? { claimUserSelect: {}, isQueuedRowSendable: () => true, loadQuotaUsageMaps: async () => ({ weekly: new Map(), daily: new Map() }), usageFor: () => ({ weekly: 0, daily: 0 }), HELD_MESSAGE_PREFIX: "Invio in attesa:", MAX_ATTEMPTS_MESSAGE_PREFIX: "Invio interrotto dopo" },
+    "@/lib/application-claim": extra["@/lib/application-claim"] ?? {
+      recoverStuckApplications: async () => 0,
+      findClaimableQueued: async () => [],
+      claimApplication: async () => false,
+      resetClaim: async () => {},
+    },
     "@/lib/queue-drain": extra["@/lib/queue-drain"] ?? {},
-    "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "unknown", reason: "test_no_network" }), markJobClosed: async () => {}, JOB_CLOSED_HELD_MESSAGE: "closed" },
+    "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "unknown", reason: "test_no_network" }), markJobClosed: async () => {}, JOB_CLOSED_HELD_MESSAGE: "closed", JOB_LIVENESS_UNKNOWN_HELD_MESSAGE: "Disponibilità dell'annuncio non verificabile: invio sospeso, nuovo controllo più tardi." },
+    "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
+    "@/lib/application-worker-gates": extra["@/lib/application-worker-gates"] ?? {
+      hasPotentialSubmission: (row: any) => !!(row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus
+        || row.canaryLog || row.answersUsedJson
+        || (row.submitConfirmation && !["NOT_SUBMITTED", "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation))),
+    },
     zod: { z }, ...extra,
   };
   const module = { exports: {} as Record<string, any> };
@@ -119,7 +131,9 @@ async function testBlockedEntrypoints() {
     assert.equal(await load("src/lib/trial-quota.ts").reserveTrialApplication("owner", "old"), false);
     assert.equal((await load("src/lib/cron-self-heal.ts").runCronSelfHeal()).appsRecoveredSafely, 0);
     }
-    const claim = load("src/lib/application-claim.ts");
+    const claim = load("src/lib/application-claim.ts", {
+      "@/lib/db": { prisma: { application: { findMany: async () => [], updateMany: async () => ({ count: 0 }) } } },
+    });
     assert.equal(await claim.recoverStuckApplications(), 0);
     await claim.resetClaim("old");
     const request = { headers: new Headers({ authorization: "Bearer fixture-cron" }), json: async () => ({}) };
@@ -164,8 +178,11 @@ async function testClaimsAndQueue() {
   assert.equal(db.counts().writes, 1);
   const snapshot = structuredClone(db.rows);
   await claims.resetClaim("fresh");
-  assert.equal(await claims.recoverStuckApplications(), 0);
-  assert.deepEqual(db.rows, snapshot, "Neither claimed new work nor historical rows are reset");
+  assert.equal(await claims.recoverStuckApplications(), 1, "Expired queued lease on a post-cutoff row is released");
+  assert.equal(db.rows.find((r: any) => r.id === "claimed")!.startedAt, null);
+  assert.equal(db.rows.find((r: any) => r.id === "claimed")!.retryCount, 1);
+  assert.equal(db.rows.find((r: any) => r.id === "historical")!.startedAt, snapshot.find((r: any) => r.id === "historical")!.startedAt, "Historical rows are not reset");
+  assert.equal(db.rows.find((r: any) => r.id === "fresh")!.status, "queued");
 
   const queueDb = database(fixtures);
   const queued: string[] = [];
@@ -196,7 +213,8 @@ async function testAutomaticClaimsAndQueue() {
   for (const fixture of fixtures.slice(2)) assert.equal(await claims.claimApplication(fixture.id), false, fixture.id);
   const results = await Promise.all([claims.claimApplication("auto"), claims.claimApplication("auto")]);
   assert.equal(results.filter(Boolean).length, 1, "Automatic claim is atomic");
-  assert.equal(await claims.recoverStuckApplications(), 0, "Stale-claim recovery stays suspended in automatic mode");
+  assert.equal(await claims.recoverStuckApplications(), 1, "Expired queued lease is released; in-flight historical replay stays blocked");
+  assert.equal(db.rows.find((r: any) => r.id === "claimed")!.startedAt, null);
   const queueDb = database(fixtures);
   const queued: string[] = [];
   process.env.QUEUE_MODE = "bullmq"; process.env.REDIS_URL = "redis://synthetic.invalid";

@@ -89,10 +89,10 @@ async function main() {
   assert.equal(jobApplySupport("https://jobs.ashbyhq.com/acme/abc"), "unsupported");
   assert.equal(jobApplySupport("https://www.linkedin.com/jobs/view/1"), "unsupported");
 
-  assert.equal(countsAsSentUsage({ confirmedAt: new Date() }), true);
-  assert.equal(countsAsSentUsage({ submitConfirmation: "APPLIED" }), true);
+  assert.equal(countsAsSentUsage({ confirmedAt: new Date() }), false, "confirmed-with-proof is not the unverified-sent bucket");
+  assert.equal(countsAsSentUsage({ status: "success", submittedAt: new Date(), submittedVia: "email_recruiter" }), true);
   assert.equal(countsAsSentUsage({ submitConfirmation: "UNCONFIRMED" }), false);
-  assert.equal(countsAsSentUsage({ status: "success", submitConfirmation: "DETECTED_HTTP_200" }), true);
+  assert.equal(countsAsSentUsage({ status: "success", submitConfirmation: "DETECTED_HTTP_200" }), false, "HTTP 200 without submittedAt is not a recorded send");
   const cutoff = mailboxRetentionCutoff(new Date("2026-10-24T00:00:00Z"), 180);
   assert.equal(cutoff.toISOString().slice(0, 10), "2026-04-27");
 

@@ -32,12 +32,27 @@ async function handle(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get("userId");
+    const { drainQueuedApplications } = await import("@/lib/queue-drain");
     if (userId) {
       const stats = await runAutoApplyForUser(userId);
-      return NextResponse.json({ ok: true, ms: Date.now() - t0, userId, ...stats });
+      const drain = await drainQueuedApplications({ startedMs: t0, maxDurationMs: 280_000 });
+      stats.attempted = drain.attempted;
+      stats.accepted = drain.accepted;
+      stats.failed = drain.failed + stats.errors;
+      stats.blockedByReason = { ...stats.blockedByReason, ...drain.blockedByReason };
+      stats.awaitingAction = drain.awaitingAction + stats.applicationsHandedOff + stats.applicationsAwaitingConsent;
+      stats.deployedVersion = drain.deployedVersion;
+      return NextResponse.json({ ok: true, ms: Date.now() - t0, userId, ...stats, drain });
     }
     const stats = await runAutoApplyCron();
-    return NextResponse.json({ ok: true, ms: Date.now() - t0, ...stats });
+    const drain = await drainQueuedApplications({ startedMs: t0, maxDurationMs: 280_000 });
+    stats.attempted = drain.attempted;
+    stats.accepted = drain.accepted;
+    stats.failed = drain.failed + stats.errors;
+    stats.blockedByReason = { ...stats.blockedByReason, ...drain.blockedByReason };
+    stats.awaitingAction = drain.awaitingAction + stats.applicationsHandedOff + stats.applicationsAwaitingConsent;
+    stats.deployedVersion = drain.deployedVersion;
+    return NextResponse.json({ ok: true, ms: Date.now() - t0, ...stats, drain });
   } catch (err) {
     console.error("[api/admin/run-auto-apply]", err);
     return NextResponse.json(

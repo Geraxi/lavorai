@@ -66,7 +66,7 @@ export function aggregatePerformance(applications: PerformanceApplication[], day
   });
   return { ...period, buckets, sent: rows.length,
     portalConfirmed: cohort.filter(a => a.evidence === "confirmed_portal").length,
-    emailDelivered: cohort.filter(a => a.evidence === "confirmed_email").length,
+    emailDelivered: cohort.filter(a => a.evidence === "provider_delivered").length,
     providerAccepted: cohort.filter(a => a.evidence === "provider_accepted").length,
     legacyUnverified: cohort.filter(a => a.evidence === "legacy_unverified").length,
     deliveryProblems: cohort.filter(a => a.evidence === "delivery_problem").length,

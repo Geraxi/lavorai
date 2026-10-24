@@ -5,7 +5,12 @@ import { prisma } from "@/lib/db";
 import { hasPotentialSubmission } from "@/lib/application-worker-gates";
 import { claimScanWindow, sortByPaidPriority, type PriorityUser } from "@/lib/paid-priority";
 import { maxDrainAttempts } from "@/lib/drain-limits";
-import { claimUserSelect, isQueuedRowSendable, loadQuotaUsageMaps, usageFor } from "@/lib/queue-sendability";
+import { SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "@/lib/job-liveness";
+import {
+  claimUserSelect, HELD_MESSAGE_PREFIX, isQueuedRowSendable, loadQuotaUsageMaps,
+  MAX_ATTEMPTS_MESSAGE_PREFIX, usageFor,
+} from "@/lib/queue-sendability";
 
 /**
  * Presa in carico atomica di una candidatura in coda, indipendente da Redis.
@@ -23,6 +28,24 @@ import { claimUserSelect, isQueuedRowSendable, loadQuotaUsageMaps, usageFor } fr
 
 export const STALE_CLAIM_MS = 20 * 60_000;
 
+/** Released lease on a queued row that never started sending. */
+export function staleQueuedClaimReleaseMessage(): string {
+  return `Riavviato: presa in carico scaduta dopo ${STALE_CLAIM_MS / 60_000} minuti. Nessun invio iniziato.`;
+}
+
+/** Exhausted expired leases: awaiting-action, no further automatic claim. */
+export function staleQueuedClaimExhaustedMessage(attempts = maxDrainAttempts()): string {
+  return `${MAX_ATTEMPTS_MESSAGE_PREFIX} ${attempts} tentativi: presa in carico scaduta senza invio. Nessun nuovo tentativo automatico. Completa dal portale o verifica l'esito prima di ritentare.`;
+}
+
+function isIntentionalQueuedHold(errorMessage: string | null | undefined): boolean {
+  if (!errorMessage) return false;
+  return errorMessage.startsWith(HELD_MESSAGE_PREFIX)
+    || errorMessage === JOB_LIVENESS_UNKNOWN_HELD_MESSAGE
+    || errorMessage === SKIPPED_ATS_MANUAL_MESSAGE
+    || errorMessage.startsWith(MAX_ATTEMPTS_MESSAGE_PREFIX);
+}
+
 /** One fresh, unclaimed, explicitly confirmed application. Never steal a stale claim. */
 export async function claimApplication(applicationId: string): Promise<boolean> {
   if (applicationsPaused() || rolloutCreationBlocked()) return false;
@@ -36,7 +59,7 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
     const result = await prisma.application.updateMany({ where: {
       id: applicationId, status: "queued", startedAt: app.startedAt,
       answerContinuationJson: app.answerContinuationJson, consentGrantedAt: app.consentGrantedAt,
-      submitConfirmation: "NOT_SUBMITTED", completedAt: null, submittedAt: null, submittedVia: null,
+      submitConfirmation: { in: ["NOT_SUBMITTED", "NEEDS_ANSWERS"] }, completedAt: null, submittedAt: null, submittedVia: null,
       submissionReceiptJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
     }, data: { status: "answers_claimed" } });
     return result.count === 1;
@@ -53,13 +76,87 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
 }
 
 /**
- * Recupera candidature bloccate in `optimizing` o `applying` da troppo tempo.
- * Un worker crash, timeout AI, o Playwright hang lasciano la candidatura in
- * uno stato intermedio senza completedAt. Solo optimizing senza prove di invio
- * torna queued; applying resta riservata per verifica, senza replay automatico.
+ * Recupera candidature bloccate. Due percorsi:
+ * 1. `queued` + lease scaduto (`startedAt` vecchio, mai rilasciato): la presa
+ *    viene rilasciata (bounded attempts) oppure va in attesa/azione esplicita.
+ *    Non è un replay: l'invio non è mai iniziato. Consentito anche quando
+ *    `historicalRetriesBlocked` ferma i retry storici.
+ * 2. `optimizing` / `applying` / `submitting` scaduti: solo se i retry storici
+ *    sono ammessi. Applying resta riservata se c'è prova di possibile invio.
  */
 export async function recoverStuckApplications(): Promise<number> {
-  if (applicationsPaused() || historicalRetriesBlocked()) return 0;
+  if (applicationsPaused()) return 0;
+  let recovered = await recoverExpiredQueuedClaims();
+  if (!historicalRetriesBlocked()) recovered += await recoverStuckInFlight();
+  return recovered;
+}
+
+const stuckEvidenceSelect = {
+  id: true, status: true, startedAt: true, retryCount: true, errorMessage: true,
+  createdAt: true, submittedAt: true, submittedVia: true, submitConfirmation: true,
+  canaryLog: true, answersUsedJson: true, viewedAt: true, lastReplyAt: true,
+  replyCount: true, userStatus: true, answerContinuationJson: true,
+} as const;
+
+/** Claimed `queued` rows whose worker died before reserve/process. */
+export async function recoverExpiredQueuedClaims(now = new Date()): Promise<number> {
+  if (applicationsPaused()) return 0;
+  const config = applicationRolloutConfig(now);
+  if (!config.enabled || !config.startedAt) return 0;
+  const stale = new Date(+now - STALE_CLAIM_MS);
+  const stuck = await prisma.application.findMany({
+    where: {
+      status: "queued",
+      startedAt: { lt: stale },
+      completedAt: null,
+      createdAt: { gt: config.startedAt, lte: now },
+      answerContinuationJson: null,
+      submittedAt: null,
+      submittedVia: null,
+    },
+    select: stuckEvidenceSelect,
+    take: 50,
+    orderBy: { startedAt: "asc" },
+  });
+  let recovered = 0;
+  const maxAttempts = maxDrainAttempts();
+  for (const app of stuck) {
+    if (isIntentionalQueuedHold(app.errorMessage)) continue;
+    if (hasPotentialSubmission(app)) {
+      const changed = await prisma.application.updateMany({
+        where: { id: app.id, status: "queued", startedAt: app.startedAt, completedAt: null },
+        data: {
+          status: "ready_to_apply",
+          submitConfirmation: "UNCONFIRMED",
+          errorMessage: "Invio interrotto con esito non verificato. Verifica prima di ritentare per evitare un doppio invio.",
+        },
+      });
+      recovered += changed.count;
+      continue;
+    }
+    const next = (app.retryCount ?? 0) + 1;
+    const exhausted = next >= maxAttempts;
+    const changed = await prisma.application.updateMany({
+      where: {
+        id: app.id, status: "queued", startedAt: app.startedAt, completedAt: null,
+        submittedAt: null, submittedVia: null, answerContinuationJson: null,
+      },
+      data: exhausted ? {
+        status: "ready_to_apply",
+        retryCount: next,
+        errorMessage: staleQueuedClaimExhaustedMessage(maxAttempts),
+      } : {
+        startedAt: null,
+        retryCount: next,
+        errorMessage: staleQueuedClaimReleaseMessage(),
+      },
+    });
+    recovered += changed.count;
+  }
+  return recovered;
+}
+
+async function recoverStuckInFlight(): Promise<number> {
   const stale = new Date(Date.now() - STALE_CLAIM_MS);
   const stuck = await prisma.application.findMany({
     where: {
@@ -131,7 +228,7 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
   const continuations = await prisma.application.findMany({
     where: { status: "queued", answerContinuationJson: { not: null }, retryCount: { lt: attemptCap },
       createdAt: { gt: config.startedAt, lte: now }, consentGrantedAt: { gt: config.startedAt, lte: now },
-      submitConfirmation: "NOT_SUBMITTED", completedAt: null, submittedAt: null, submittedVia: null,
+      submitConfirmation: { in: ["NOT_SUBMITTED", "NEEDS_ANSWERS"] }, completedAt: null, submittedAt: null, submittedVia: null,
     }, select: {
       ...continuationSelect,
       job: { select: { url: true, recruiterEmail: true } },

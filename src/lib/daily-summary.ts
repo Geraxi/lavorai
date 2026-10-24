@@ -24,6 +24,7 @@ function summaryKind(application: DeliveryEvidenceInput): SummaryKind | null {
   switch (evidence) {
     case "confirmed_portal": return "portal";
     case "confirmed_email": return "delivered";
+    case "provider_delivered": return "delivered";
     case "provider_accepted": return "accepted";
     case "delivery_problem": return "problems";
     case "legacy_unverified": return "unverified";

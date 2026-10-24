@@ -14,6 +14,7 @@ export function applicationDeliveryView(app: {
   submissionReceiptJson?: string | null;
   errorMessage?: string | null;
   confirmedAt?: Date | string | null;
+  submittedAt?: Date | string | null;
   emailAttempts?: Array<{ status: string; acceptedAt?: Date | string | null; providerEmailId?: string | null }>;
 }): DeliveryView {
   const email = app.emailAttempts?.[0];
@@ -39,6 +40,10 @@ export function applicationDeliveryView(app: {
   }
   if (app.submittedVia === "manual" || app.submitConfirmation === "MANUAL") {
     return { phase: "manual", label: "Invio dichiarato da te", tone: "neutral", detail: "Candidatura importata manualmente, senza verifica di invio da LavorAI." };
+  }
+  if (app.status === "success" && app.submittedAt) {
+    return { phase: "unconfirmed", label: "Invii registrati, senza conferma", tone: "warning",
+      detail: "Candidatura registrata come inviata, senza ricevuta verificabile. Non è una nuova prova e non rilanciamo l'invio." };
   }
   if (app.submitConfirmation === "UNCONFIRMED" || app.submitConfirmation === "SUBMISSION_STARTED" || email?.status === "unknown" || app.status === "success") {
     return { phase: "unconfirmed", label: "Esito da verificare", tone: "warning",

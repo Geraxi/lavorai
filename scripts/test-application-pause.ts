@@ -22,6 +22,7 @@ function load(path: string, extra: Record<string, any> = {}): any {
     "@/lib/cv-profile-ensure": {
       backfillMissingCvProfiles: async () => ({ created: 0, filled: 0, failed: 0, noCv: 0, emptyExtraction: 0, skipped: 0 }),
     },
+    "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
     "@/lib/daily-application-cap": {
       countDailyCapUsage: async () => 0,
       countsTowardQuota: () => false,
@@ -89,8 +90,8 @@ async function main() {
         "@/lib/db": { prisma: { user: { findMany: async () => [] } } },
         "@/lib/application-claim": { recoverStuckApplications: async () => { safeRecoveryCalls++; return 2; } },
       });
-      assert.equal((await heal.runCronSelfHeal()).appsRecoveredSafely, 0);
-      assert.equal(safeRecoveryCalls, 0);
+      assert.equal((await heal.runCronSelfHeal()).appsRecoveredSafely, 2);
+      assert.equal(safeRecoveryCalls, 1, "queued-lease recovery runs even when historical retries stay blocked");
       assert(!readFileSync("src/lib/cron-self-heal.ts", "utf8").includes("prisma.application.update"));
       process.env.APPLICATIONS_PAUSED = "true";
     }

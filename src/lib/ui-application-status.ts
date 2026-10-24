@@ -28,6 +28,7 @@ export type JourneyStage =
   | "in_flight"
   | "submitted"
   | "sent"
+  | "sent_unverified"
   | "unverified"
   | "stopped";
 
@@ -66,8 +67,9 @@ export const STAGE_LABEL: Record<JourneyStage, { it: string; en: string; hint: {
   manual: { it: "Da completare", en: "Needs your action", hint: { it: "Risposte, accesso o invio manuale", en: "Answers, sign-in or manual sending" } },
   in_flight: { it: "Invio in corso", en: "Sending", hint: { it: "In attesa dell'esito", en: "Waiting for the outcome" } },
   submitted: { it: "Inviate, consegna in attesa", en: "Sent, delivery pending", hint: { it: "Accettate dal provider email, consegna non ancora confermata", en: "Accepted by the email provider, delivery not confirmed yet" } },
-  sent: { it: "Inviate con prova", en: "Sent with evidence", hint: { it: "Ricevuta ATS o consegna email", en: "ATS receipt or email delivery" } },
-  unverified: { it: "Esito da verificare", en: "Outcome unverified", hint: { it: "Nessuna prova di consegna", en: "No delivery evidence" } },
+  sent: { it: "Inviate con prova", en: "Sent with evidence", hint: { it: "Ricevuta ATS o consegna email confermata", en: "Confirmed ATS receipt or email delivery" } },
+  sent_unverified: { it: "Invii registrati, senza conferma", en: "Recorded sends, unconfirmed", hint: { it: "Inviate, senza ricevuta verificabile", en: "Sent, without a verifiable receipt" } },
+  unverified: { it: "Esito da verificare", en: "Outcome unverified", hint: { it: "Esito incerto, non un invio registrato", en: "Uncertain outcome, not a recorded send" } },
   stopped: { it: "Non inviate", en: "Not sent", hint: { it: "Fermate prima dell'invio", en: "Stopped before sending" } },
 };
 
@@ -81,6 +83,7 @@ export const STAGE_ROW_LABEL: Record<JourneyStage, { it: string; en: string }> =
   in_flight: { it: "Invio in corso", en: "Sending" },
   submitted: { it: "Inviata, consegna in attesa", en: "Sent, delivery pending" },
   sent: { it: "Consegna confermata", en: "Delivery confirmed" },
+  sent_unverified: { it: "Invii registrati, senza conferma", en: "Recorded send, unconfirmed" },
   unverified: { it: "Esito da verificare", en: "Outcome unverified" },
   stopped: { it: "Non inviata", en: "Not sent" },
 };

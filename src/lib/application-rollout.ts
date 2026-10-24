@@ -61,10 +61,12 @@ export function automaticApplicationsBlocked(): boolean {
   return !config.enabled || config.mode !== "automatic";
 }
 
-/** Replays of historical/failed/stale work (admin repair/reset/retry routes,
- * transient/credit/CAPTCHA retries, stale-claim recovery, multi-attempt queue
- * jobs) stay suspended: they are the paths that can double-send or revive
- * rows whose outcome was never verified. Not changed by the sending mode. */
+/** Replays of historical/failed/in-flight work (admin repair/reset/retry routes,
+ * transient/credit/CAPTCHA retries, optimizing/applying recovery, multi-attempt
+ * queue jobs) stay suspended: they can double-send or revive unverified rows.
+ * Expired `queued` leases (claim taken, never reserved/sent) are released by
+ * recoverExpiredQueuedClaims and are not a historical replay.
+ * Not changed by the sending mode. */
 export function historicalRetriesBlocked(): boolean { return true; }
 
 export function rolloutCreationBlocked(): boolean { return !applicationRolloutConfig().enabled; }

@@ -39,13 +39,14 @@ function load(path: string, extra: Record<string, unknown> = {}) {
     "@/lib/queue-sendability": sendability,
     "@/lib/ats-skip-hosts": skipHosts,
     "@/lib/billing": billing,
-    "@/lib/application-worker-gates": { heldMessage },
+    "@/lib/application-worker-gates": { heldMessage, hasPotentialSubmission: (row: any) => !!(row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus || row.canaryLog || row.answersUsedJson || (row.submitConfirmation && !["NOT_SUBMITTED", "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation))) },
     "@/lib/job-liveness": { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE },
     "@/lib/held-application-release": extra["@/lib/held-application-release"] ?? { releaseUnverifiableLivenessHolds: async () => 0 },
     "@/lib/db": extra["@/lib/db"] ?? { prisma: {} },
     "@/lib/application-claim": extra["@/lib/application-claim"] ?? {},
     "@/lib/application-worker": extra["@/lib/application-worker"] ?? { processApplication: async () => {} },
     "@/lib/queue-drain": extra["@/lib/queue-drain"] ?? {},
+    "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
     ...extra,
   };
   const module = { exports: {} as Record<string, unknown> };
@@ -262,9 +263,13 @@ async function testDrainBatchAndSummary() {
   assert.equal(summary.parked, 1);
   assert.equal(summary.blockedByReason.privacy_consent_missing, 1);
   assert.equal(summary.claimed, 5);
+  assert.equal(summary.attempted, 5);
+  assert.equal(summary.accepted, 5);
   assert.equal(summary.sent, 5);
   assert.equal(summary.emailSent, 1);
   assert.equal(summary.portalSent, 4);
+  assert.equal(summary.awaitingAction, 0);
+  assert.equal(summary.deployedVersion, "test-sha");
   assert.equal([...processed].sort().join(","), "p1,p2,p3,p4,p5");
   delete process.env.DRAIN_QUEUE_BATCH;
 }
@@ -399,6 +404,65 @@ async function testDrainSummaryBuckets() {
   delete process.env.DRAIN_QUEUE_BATCH;
 }
 
+async function testExpiredQueuedClaimRecovery() {
+  const stale = new Date(Date.now() - 25 * 60_000);
+  const recent = new Date();
+  const historical = new Date(+start - 1);
+  const held = row("held-quota", {
+    startedAt: stale,
+    errorMessage: heldMessage("free_weekly_quota_reached"),
+  });
+  const continuation = row("continuation", {
+    startedAt: stale,
+    answerContinuationJson: "{}",
+    submitConfirmation: "NOT_SUBMITTED",
+  });
+  const evidenced = row("evidenced", {
+    startedAt: stale,
+    canaryLog: '{"submitHttpStatus":200}',
+  });
+  const freshClaim = row("fresh-claim", { startedAt: recent });
+  const oldRow = row("historical", { createdAt: historical, startedAt: stale });
+  const expired = row("expired", { startedAt: stale, retryCount: 0 });
+  const almostOut = row("last-try", { startedAt: stale, retryCount: 2 });
+  const db = database([held, continuation, evidenced, freshClaim, oldRow, expired, almostOut]);
+  const claims = load("src/lib/application-claim.ts", { "@/lib/db": { prisma: db.prisma } });
+  const recovered = await claims.recoverStuckApplications();
+  assert.equal(recovered, 3, "expired lease, last-try, and evidenced row");
+  assert.equal(db.rows.find((r) => r.id === "expired")!.startedAt, null, "lease released");
+  assert.equal(db.rows.find((r) => r.id === "expired")!.status, "queued");
+  assert.equal(db.rows.find((r) => r.id === "expired")!.retryCount, 1);
+  assert.match(db.rows.find((r) => r.id === "expired")!.errorMessage, /presa in carico scaduta/);
+  assert.equal(db.rows.find((r) => r.id === "last-try")!.status, "ready_to_apply", "bounded attempts become awaiting-action");
+  assert.equal(db.rows.find((r) => r.id === "last-try")!.retryCount, 3);
+  assert.match(db.rows.find((r) => r.id === "last-try")!.errorMessage, /Nessun nuovo tentativo automatico/);
+  assert.equal(db.rows.find((r) => r.id === "evidenced")!.status, "ready_to_apply");
+  assert.equal(db.rows.find((r) => r.id === "evidenced")!.submitConfirmation, "UNCONFIRMED", "evidence is not replayed");
+  assert.ok(db.rows.find((r) => r.id === "held-quota")!.startedAt, "quota holds stay held");
+  assert.equal(+db.rows.find((r) => r.id === "continuation")!.startedAt!, +stale);
+  assert.ok(db.rows.find((r) => r.id === "fresh-claim")!.startedAt);
+  assert.equal(+db.rows.find((r) => r.id === "historical")!.startedAt!, +stale, "pre-cutoff rows stay frozen");
+  assert.equal(db.rows.length, 7, "recovery never inserts a duplicate application");
+
+  const again = await claims.recoverStuckApplications();
+  assert.equal(again, 0, "idempotent: released and exhausted rows are not recovered twice");
+  assert.equal(db.rows.filter((r) => r.id === "expired").length, 1);
+
+  let drainRecoveries = 0;
+  const drain = load("src/lib/queue-drain.ts", {
+    "@/lib/db": { prisma: db.prisma },
+    "@/lib/application-claim": {
+      recoverStuckApplications: async () => { drainRecoveries += 1; return 0; },
+      findClaimableQueued: async () => [],
+      claimApplication: async () => false,
+    },
+  });
+  await drain.drainQueuedApplications({
+    now, startedMs: Date.now(), maxDurationMs: 300_000, db: db.prisma,
+  });
+  assert.equal(drainRecoveries, 1, "drain releases expired queued claims before claiming");
+}
+
 async function testSkipListEmailPreferred() {
   assert.equal(skipHosts.compareJobsForAutoApply(
     { url: "https://jobs.ashbyhq.com/a/1", recruiterEmail: "jobs@a.com" },
@@ -417,6 +481,7 @@ async function testSkipListEmailPreferred() {
   await testClassifyDrainOutcome();
   await testDrainStopsWhenBelowPerRowBudget();
   await testDrainSummaryBuckets();
+  await testExpiredQueuedClaimRecovery();
   await testSkipListEmailPreferred();
   console.log("queue drain: ok");
 })().catch((err) => { console.error(err); process.exitCode = 1; });

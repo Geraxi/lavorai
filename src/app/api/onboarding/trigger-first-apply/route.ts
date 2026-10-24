@@ -55,7 +55,14 @@ export async function POST() {
     ok: true,
     stats: {
       enqueued: stats.applicationsEnqueued,
+      handedOff: stats.applicationsHandedOff,
+      held: stats.applicationsHeld,
       awaitingConsent: stats.applicationsAwaitingConsent,
+      attempted: stats.attempted,
+      accepted: stats.accepted,
+      failed: stats.failed,
+      awaitingAction: stats.awaitingAction,
+      deployedVersion: stats.deployedVersion,
       errors: stats.errors,
     },
   });

@@ -77,6 +77,7 @@ async function testCronBothPasses() {
     "@/lib/paid-priority": { sortByPaidPriority: <T,>(items: readonly T[]) => [...items] },
     "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
     "@/lib/application-pause": { applicationsPaused: () => false },
+    "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
     "@/lib/auto-apply-preferences": preferenceHelpers,
     "@/lib/db": { prisma },
     "@/lib/admin-user-actions": { monthlyQuotaSince: () => new Date(0) },

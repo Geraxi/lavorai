@@ -8,7 +8,7 @@
  * No page should calculate its own counts; import these functions instead.
  * 
  * Evidence-backed guarantees:
- * - Confirmed submissions = verified ATS receipt OR email delivered event (never inferred)
+ * - Confirmed submissions = verified ATS receipt OR confirmedAt (never a Resend delivered webhook)
  * - Recruiter replies = isHuman=true, excluding security codes, distinct applicationIds
  * - Open opportunities = role-filtered, closedAt=null, last 30d cache
  * - Actions needed = awaiting approval + needs answers (NOT all queued applications)
@@ -17,7 +17,7 @@
  */
 
 import { prisma } from "@/lib/db";
-import { applicationEvidenceDate, deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
+import { applicationEvidenceDate, deliveryEvidence, isConfirmedDelivery, isSentUnverified } from "@/lib/application-evidence";
 import { ACTION_STAGES, applicationStage, emptyStageCounts, type StageCounts } from "@/lib/application-stage";
 import { STATUS_STAGE } from "@/lib/ui-application-status";
 
@@ -37,11 +37,11 @@ export {
  * Counts applications with verified delivery proof:
  * - ATS HTTP receipt (2xx with application_id) OR
  * - ATS confirmation page (DOM evidence) OR  
- * - Email delivered event (provider confirmed)
+ * - confirmedAt (employer receipt)
  * 
  * Excludes:
  * - status="success" without receipt
- * - Provider accepted (not delivered)
+ * - Provider accepted or Resend delivered webhook (not an employer receipt)
  * - Tracking pixels, UNCONFIRMED, mock/demo
  * 
  * Used by: Dashboard, Applications, Analytics
@@ -265,6 +265,7 @@ export async function getApplicationStageCounts(userId: string): Promise<{ total
         submissionReceiptJson: true,
         confirmedAt: true,
         sendStatus: true,
+        submittedAt: true,
         emailAttempts: { orderBy: { createdAt: "desc" }, take: 1, select: { status: true, providerEmailId: true, acceptedAt: true } },
       },
     });
@@ -368,6 +369,7 @@ export async function getUnverifiedSubmissions(userId: string): Promise<number> 
         submissionReceiptJson: true,
         confirmedAt: true,
         sendStatus: true,
+        submittedAt: true,
         emailAttempts: {
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -379,7 +381,8 @@ export async function getUnverifiedSubmissions(userId: string): Promise<number> 
     for (const application of applications) {
       if (application.userId !== userId) continue;
       const evidence = deliveryEvidence(application);
-      if (!isConfirmedDelivery(evidence) && evidence !== "provider_accepted" && application.status === "success") {
+      if (!isConfirmedDelivery(evidence) && evidence !== "provider_accepted" && evidence !== "provider_delivered"
+        && application.status === "success" && !isSentUnverified(application)) {
         unverified++;
       }
     }
@@ -389,6 +392,15 @@ export async function getUnverifiedSubmissions(userId: string): Promise<number> 
   }
 
   return unverified;
+}
+
+/**
+ * Sent without a verifiable receipt (legacy status=success + submittedAt).
+ * Kept separate from confirmed-with-proof. Does not invent receipts.
+ */
+export async function getSentUnverifiedSubmissions(userId: string): Promise<number> {
+  const { stages } = await getApplicationStageCounts(userId);
+  return stages.sent_unverified;
 }
 
 /**
@@ -445,6 +457,7 @@ export async function getAllDashboardMetrics(userId: string) {
     unreadMessages,
     actionsNeeded,
     unverified,
+    sentUnverified,
     draftReplies,
     recentApplications,
   ] = await Promise.all([
@@ -457,6 +470,7 @@ export async function getAllDashboardMetrics(userId: string) {
     getUnreadMessages(userId),
     getActionsNeeded(userId),
     getUnverifiedSubmissions(userId),
+    getSentUnverifiedSubmissions(userId),
     getDraftReplies(userId),
     getRecentApplications(userId),
   ]);
@@ -471,6 +485,7 @@ export async function getAllDashboardMetrics(userId: string) {
     unreadMessages,
     actionsNeeded,
     unverified,
+    sentUnverified,
     draftReplies,
     recentApplications,
   };

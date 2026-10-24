@@ -53,7 +53,7 @@ assert.equal(s({ status: "success", submittedVia: "portal_lever", submissionRece
 // email channel
 const email = (status: string, providerEmailId: string | null = "re_1") => s({ status: "success", submittedVia: "email_recruiter", submitConfirmation: "EMAIL_SENT", submittedAt: now,
   emailAttempts: [{ status, providerEmailId, acceptedAt: now, createdAt: now, lastEventAt: now, lastEventType: `email.${status}` }] });
-assert.equal(email("delivered").status, "confirmed_submitted");
+assert.equal(email("delivered").status, "submitted_unverified", "Resend delivered is not an employer receipt");
 assert.equal(email("delivered").evidence.type, "email_delivered");
 assert.equal(email("accepted").status, "submitted_unverified");
 assert.equal(email("delayed").status, "submitted_unverified");

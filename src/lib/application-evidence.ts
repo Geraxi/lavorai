@@ -9,10 +9,11 @@ export interface DeliveryEvidenceInput {
   /** Query ordered newest first; one application counts once, never per attempt. */
   emailAttempts?: { status: string; providerEmailId: string | null; acceptedAt?: Date | null; createdAt?: Date }[];
 }
-export type DeliveryEvidence = "confirmed_portal" | "confirmed_email" | "provider_accepted" | "delivery_problem" | "pending" | "legacy_unverified" | "excluded";
+export type DeliveryEvidence = "confirmed_portal" | "confirmed_email" | "provider_accepted" | "provider_delivered" | "delivery_problem" | "pending" | "legacy_unverified" | "excluded";
 
 export function deliveryEvidence(application: DeliveryEvidenceInput): DeliveryEvidence {
   if (application.status === "diagnostic") return "excluded";
+  // Employer/ATS confirmation only. A Resend "delivered" webhook is not this.
   if (application.confirmedAt) return "confirmed_email";
   if (application.submittedVia === "mock_demo" || ["DRY_RUN", "UNCONFIRMED"].includes(application.submitConfirmation ?? "")) return "excluded";
   const attempt = application.emailAttempts?.[0];
@@ -26,7 +27,8 @@ export function deliveryEvidence(application: DeliveryEvidenceInput): DeliveryEv
   }
   if ((application.submittedVia === "email_recruiter" || !application.submittedVia) && attempt) {
     if (["failed", "bounced", "complained"].includes(attempt.status)) return "delivery_problem";
-    if (attempt.providerEmailId && attempt.status === "delivered") return "confirmed_email";
+    // Resend delivered = recipient MTA accepted the message, not an employer receipt.
+    if (attempt.providerEmailId && attempt.status === "delivered") return "provider_delivered";
     if (attempt.providerEmailId && ["accepted", "delayed"].includes(attempt.status)) return "provider_accepted";
     return "pending";
   }
@@ -37,6 +39,13 @@ export function deliveryEvidence(application: DeliveryEvidenceInput): DeliveryEv
 
 export function isConfirmedDelivery(evidence: DeliveryEvidence): boolean {
   return evidence === "confirmed_portal" || evidence === "confirmed_email";
+}
+
+/** status=success with a send timestamp but no verified receipt. Not a fabricated proof. */
+export function isSentUnverified(application: DeliveryEvidenceInput & { submittedAt?: Date | string | null }): boolean {
+  if (application.status !== "success" || !application.submittedAt) return false;
+  const evidence = deliveryEvidence(application);
+  return evidence === "legacy_unverified" || evidence === "excluded" || evidence === "pending";
 }
 
 export function applicationEvidenceDate(application: DeliveryEvidenceInput & { submittedAt: Date | null; completedAt: Date | null; createdAt: Date }): Date {

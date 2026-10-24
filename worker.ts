@@ -126,7 +126,7 @@ async function main(): Promise<void> {
         const t0 = Date.now();
         const stats = await runAutoApplyCron();
         console.log(`[worker] auto-apply cron ${Date.now() - t0}ms`, stats);
-        console.log(`[worker] auto-apply funnel candidates=${stats.candidatesFetched} location=${stats.skippedLocationMismatch} locationUnverified=${stats.skippedLocationUnverified} contract=${stats.skippedEmploymentMismatch} salary=${stats.skippedSalaryMismatch} title=${stats.skippedRoleMismatch} score=${stats.skippedMatchThreshold} enqueued=${stats.applicationsEnqueued} awaitingConsent=${stats.applicationsAwaitingConsent}`);
+        console.log(`[worker] auto-apply funnel version=${stats.deployedVersion} attempted=${stats.attempted} accepted=${stats.accepted} failed=${stats.failed} awaitingAction=${stats.awaitingAction} candidates=${stats.candidatesFetched} location=${stats.skippedLocationMismatch} locationUnverified=${stats.skippedLocationUnverified} contract=${stats.skippedEmploymentMismatch} salary=${stats.skippedSalaryMismatch} title=${stats.skippedRoleMismatch} score=${stats.skippedMatchThreshold} enqueued=${stats.applicationsEnqueued} handedOff=${stats.applicationsHandedOff} held=${stats.applicationsHeld} awaitingConsent=${stats.applicationsAwaitingConsent}`);
       } catch (err) {
         console.error("[worker] auto-apply cron failed", err);
       }

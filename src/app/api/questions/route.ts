@@ -1,4 +1,4 @@
-import { answerContinuationIneligibility, answerConfirmationDigest, continuationSelect } from "@/lib/application-answer-continuation";
+import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationSelect } from "@/lib/application-answer-continuation";
 import { continuationGuidance } from "@/lib/application-continuation-guidance";
 import { queueAnswerContinuation } from "@/lib/application-worker-gates";
 import { candidateFacts, resolveCandidateFact } from "@/lib/candidate-facts";
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     if (!answer) continue;
     const app = appById.get(item.applicationId);
     if (!app) return NextResponse.json({ error: "application_not_found" }, { status: 404 });
-    if (app.submitConfirmation !== "NOT_SUBMITTED" || app.submittedAt || app.submittedVia || app.submissionReceiptJson || app.completedAt)
+    if (!continuationConfirmationAccepted(app.submitConfirmation) || app.submittedAt || app.submittedVia || app.submissionReceiptJson || app.completedAt)
       return NextResponse.json({ error: "application_outcome_uncertain" }, { status: 409 });
     const pending = safeParse(app.pendingQuestionsJson ?? "[]");
     const question = Array.isArray(pending) ? pending.map(parseApplicationQuestion)
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     const changed = await prisma.application.updateMany({
       where: { id: app.id, userId: user.id, status: "needs_answers", startedAt: app.startedAt,
         pendingQuestionsJson: app.pendingQuestionsJson, userProvidedAnswersJson: app.userProvidedAnswersJson,
-        submitConfirmation: "NOT_SUBMITTED", submittedAt: null, submittedVia: null,
+        submitConfirmation: { in: ["NOT_SUBMITTED", "NEEDS_ANSWERS"] }, submittedAt: null, submittedVia: null,
         submissionReceiptJson: null, completedAt: null, consentGrantedAt: app.consentGrantedAt,
         answerContinuationJson: app.answerContinuationJson },
       data: { userProvidedAnswersJson: json },
@@ -166,6 +166,7 @@ export async function POST(request: NextRequest) {
     if (!app) { held.push({ applicationId: item.applicationId, reason: "application_not_found" }); continue; }
     const result = await queueAnswerContinuation({ applicationId: app.id, userId: user.id,
       proofDigest: item.proofDigest, expectedAnswersJson: app.userProvidedAnswersJson });
+    if (result === "already_queued") continue;
     if (result !== "queued") { held.push({ applicationId: app.id, reason: result ?? "continuation_held" }); continue; }
     await enqueueApplication(app.id, { preserveClaim: true }).catch(error =>
       console.error(`[questions] queue notification ${app.id} failed; durable queue retained`, error));

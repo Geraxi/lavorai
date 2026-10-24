@@ -27,13 +27,14 @@ export const revalidate = 60; // 1 minute cache
 interface DashboardMetrics {
   userId: string;
   computedAt: string;
-  overview: {
-    confirmed: number;
-    providerAccepted: number;
-    withReplies: number;
-    interviews: number;
-    offers: number;
-  };
+    overview: {
+      confirmed: number;
+      sentUnverified: number;
+      providerAccepted: number;
+      withReplies: number;
+      interviews: number;
+      offers: number;
+    };
   progress: Record<JourneyStage, number>;
   opportunities: {
     open: number;
@@ -94,6 +95,7 @@ export async function GET(request: NextRequest) {
     computedAt: new Date().toISOString(),
     overview: {
       confirmed: sharedMetrics.confirmed,
+      sentUnverified: sharedMetrics.sentUnverified,
       providerAccepted: sharedMetrics.providerAccepted,
       withReplies: sharedMetrics.replies,
       interviews: sharedMetrics.interviews,

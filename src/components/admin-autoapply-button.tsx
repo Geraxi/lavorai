@@ -7,11 +7,21 @@ interface RunResult {
   ms?: number;
   usersProcessed?: number;
   applicationsEnqueued?: number;
+  applicationsHandedOff?: number;
+  applicationsHeld?: number;
   applicationsAwaitingConsent?: number;
+  skippedFreeWeeklyQuota?: number;
+  skippedManualAts?: number;
   skippedDailyCap?: number;
   skippedMatchThreshold?: number;
   skippedRoleMismatch?: number;
   skippedLocationMismatch?: number;
+  attempted?: number;
+  accepted?: number;
+  failed?: number;
+  blockedByReason?: Record<string, number>;
+  awaitingAction?: number;
+  deployedVersion?: string;
   errors?: number;
   error?: string;
   message?: string;
@@ -85,12 +95,21 @@ export function AdminAutoApplyButton() {
               {result.usersProcessed} utenti processati.
               <div style={{ marginTop: 4 }}>
                 <strong style={{ color: "hsl(var(--primary))" }}>
-                  {result.applicationsEnqueued} accodate (auto)
+                  {result.applicationsEnqueued ?? 0} accodate (non ancora inviate)
                 </strong>{" "}
-                · {result.applicationsAwaitingConsent} da approvare (hybrid) · cap{" "}
-                {result.skippedDailyCap} · match {result.skippedMatchThreshold} · ruolo{" "}
-                {result.skippedRoleMismatch} · sede {result.skippedLocationMismatch} · errori{" "}
-                {result.errors}
+                · tentati {result.attempted ?? 0} · accettati {result.accepted ?? 0} · falliti{" "}
+                {result.failed ?? result.errors ?? 0} · in attesa {result.awaitingAction ?? 0} ·{" "}
+                {result.applicationsHandedOff ?? 0} handoff (da completare a mano) ·{" "}
+                {result.applicationsHeld ?? 0} tenute (quota/limite) ·{" "}
+                {result.applicationsAwaitingConsent ?? 0} da approvare (hybrid) · cap{" "}
+                {result.skippedDailyCap ?? 0} · quota free {result.skippedFreeWeeklyQuota ?? 0} · ATS manuale{" "}
+                {result.skippedManualAts ?? 0} · match {result.skippedMatchThreshold ?? 0} · ruolo{" "}
+                {result.skippedRoleMismatch ?? 0} · sede {result.skippedLocationMismatch ?? 0} · errori{" "}
+                {result.errors ?? 0}
+                {result.blockedByReason && Object.keys(result.blockedByReason).length
+                  ? ` · bloccati ${Object.entries(result.blockedByReason).map(([k, n]) => `${k}:${n}`).join(" ")}`
+                  : ""}
+                {result.deployedVersion ? ` · versione ${result.deployedVersion.slice(0, 12)}` : ""}
               </div>
             </>
           )}

@@ -1,4 +1,4 @@
-import { automaticApplicationsBlocked, historicalRetriesBlocked } from "@/lib/application-rollout";
+import { automaticApplicationsBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { backfillMissingCvProfiles } from "@/lib/cv-profile-ensure";
 import { recheckLivenessHeldApplications, releaseUnverifiableLivenessHolds } from "@/lib/held-application-release";
@@ -11,8 +11,9 @@ import { recheckSkippedAtsHandoffs } from "@/lib/skip-list-handoff-recheck";
  *   1. Crea i CVProfile mancanti/vuoti dal CV già caricato (backfill
  *      limitato e idempotente, cv-profile-ensure.ts), poi ricontrolla le
  *      candidature ferme per "disponibilità annuncio non verificabile".
- *   2. Recover stale preparation only through evidence-aware, exact-token CAS.
- *      In-flight or uncertain submissions are held for review, never replayed.
+ *   2. Recover expired queued leases (claim taken, never sent) even while
+ *      historical retries stay blocked. In-flight or uncertain submissions
+ *      are held for review, never replayed.
  *
  * Idempotente. Errori mai fatali: se un CV fallisce riparsing, passa
  * al prossimo. Se un enqueue fallisce, salta.
@@ -79,8 +80,10 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
   }
 
   // ---------- 2. Shared evidence-aware recovery ----------
-  // Stale-claim recovery stays suspended with the other replay paths.
-  if (!historicalRetriesBlocked()) try {
+  // Queued lease release runs even while historicalRetriesBlocked: those
+  // rows never started sending. In-flight replay stays gated inside
+  // recoverStuckApplications.
+  try {
     report.appsRecoveredSafely = await recoverStuckApplications();
   } catch {
     report.appsFailed++;

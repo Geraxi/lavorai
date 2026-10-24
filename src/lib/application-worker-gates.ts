@@ -1,4 +1,4 @@
-import { answerContinuationIneligibility, answerConfirmationDigest, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
+import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
 import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
 import { parseAnswers } from "./application-answers";
 import { isValidProof, portalProof, submittedWithProof, type SentProof } from "./proof-of-send";
@@ -14,7 +14,8 @@ import { titleMatchesAnyRole } from "@/lib/role-match";
 import { parseVerifiedSubmissionReceipt, receiptJobId } from "@/lib/submission-receipt";
 import { canonicalPostingKey, DUPLICATE_POSTING_MESSAGE } from "@/lib/posting-key";
 import { prisma } from "@/lib/db";
-import { FREE_QUOTA_WORKER_INFLIGHT_STATUSES, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
+import { freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
+import { weeklyQuotaUsageWhere } from "@/lib/daily-application-cap";
 import { maxDrainAttempts } from "@/lib/drain-limits";
 import { MAX_ATTEMPTS_MESSAGE_PREFIX } from "@/lib/queue-sendability";
 import { matchesApplicationEmailProofKey } from "@/lib/recruiter-email-send";
@@ -112,13 +113,18 @@ async function withLockedApplication<T>(id: string, db: DB, operation: (tx: Pris
   });
 }
 
-/** Free-quota users: sends/attempts in the rolling window, excluding this row. */
+/**
+ * Free-quota users: accepted sends in the rolling 7-day window plus live
+ * submitting reservations, excluding this row. Must run under the same
+ * per-user advisory lock as reserve/begin so concurrent drains cannot
+ * exceed the limit. A reservation is released when the row fails, is
+ * handed back, needs answers, or is held.
+ */
 export async function freeQuotaAvailable(tx: Pick<Prisma.TransactionClient, "application">, row: Pick<WorkerGateRow, "id" | "userId" | "user">, now = new Date()): Promise<boolean> {
   if (!usesFreeWeeklyQuota(row.user, now)) return true;
-  const used = await tx.application.count({ where: { userId: row.userId, id: { not: row.id }, OR: [
-    { status: "success", OR: [{ submittedAt: { gte: freeQuotaWindowStart(now) } }, { submittedAt: null, createdAt: { gte: freeQuotaWindowStart(now) } }] },
-    { status: { in: FREE_QUOTA_WORKER_INFLIGHT_STATUSES } },
-  ] } });
+  const used = await tx.application.count({
+    where: weeklyQuotaUsageWhere(row.userId, now, [row.id]),
+  });
   return used < freeWeeklyApplyQuota();
 }
 
@@ -518,6 +524,9 @@ export async function queueAnswerContinuation(input: {
     if (!row.answerContinuationJson) return "continuation_proof_missing";
     if (row.userProvidedAnswersJson !== input.expectedAnswersJson) return "questions_changed_reload";
     const proof = parseAnswerContinuation(row.answerContinuationJson);
+    if (row.status === "queued" && proof?.phase === "queued" && continuationConfirmationAccepted(row.submitConfirmation)) {
+      return "already_queued";
+    }
     // Confirming the answers IS the per-application consent when the proof
     // was recorded consent-pending. Evaluate the current gates as if granted.
     const grantsConsent = proof?.consentGrantedAt === null && proof.consentSource === "answers" && !row.consentGrantedAt;
@@ -550,7 +559,7 @@ export async function queueAnswerContinuation(input: {
     const confirmedAt = grantsConsent ? consentAt!.toISOString() : new Date().toISOString();
     // Compare-and-set on the consent we evaluated: a concurrent grant/revoke reloads.
     const changed = await tx.application.updateMany({ where: { id: row.id, consentGrantedAt: row.consentGrantedAt, answerContinuationJson: row.answerContinuationJson }, data: {
-      status: "queued", errorMessage: null,
+      status: "queued", submitConfirmation: NOT_SUBMITTED, errorMessage: null,
       ...(grantsConsent ? { consentGrantedAt: consentAt } : {}),
       answerContinuationJson: JSON.stringify({ ...proof, phase: "queued", confirmedAt,
         ...(grantsConsent ? { consentGrantedAt: consentAt!.toISOString(), consentSource: "answers", consentNote: ANSWERS_CONSENT_NOTE } : {}) }),

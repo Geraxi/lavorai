@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { applicationsPaused } from "@/lib/application-pause";
+import { deployedAppVersion } from "@/lib/deployed-version";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -15,23 +16,25 @@ export async function GET(request: NextRequest) {
   if (!cronSecret || request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (applicationsPaused()) return NextResponse.json({ ok: true, paused: true, reason: "applications_paused" });
+  if (applicationsPaused()) return NextResponse.json({ ok: true, paused: true, reason: "applications_paused", deployedVersion: deployedAppVersion() });
 
   const t0 = Date.now();
   const result: {
-    claimed: number; sent: number; emailSent: number; portalSent: number;
+    claimed: number; attempted: number; accepted: number; sent: number; emailSent: number; portalSent: number;
     completed: number; failed: number; skipped: number;
-    parked: number; needsAnswers: number; handoff: number; held: number;
-    blockedByReason: Record<string, number>; liveness: boolean | string;
+    parked: number; needsAnswers: number; handoff: number; held: number; awaitingAction: number;
+    blockedByReason: Record<string, number>; liveness: boolean | string; deployedVersion: string;
   } = {
-    claimed: 0, sent: 0, emailSent: 0, portalSent: 0, completed: 0, failed: 0, skipped: 0, parked: 0,
-    needsAnswers: 0, handoff: 0, held: 0,
-    blockedByReason: {}, liveness: false,
+    claimed: 0, attempted: 0, accepted: 0, sent: 0, emailSent: 0, portalSent: 0, completed: 0, failed: 0, skipped: 0, parked: 0,
+    needsAnswers: 0, handoff: 0, held: 0, awaitingAction: 0,
+    blockedByReason: {}, liveness: false, deployedVersion: deployedAppVersion(),
   };
   try {
     const { drainQueuedApplications } = await import("@/lib/queue-drain");
     const drain = await drainQueuedApplications({ startedMs: t0, maxDurationMs: 300_000 });
     result.claimed = drain.claimed;
+    result.attempted = drain.attempted;
+    result.accepted = drain.accepted;
     result.sent = drain.sent;
     result.emailSent = drain.emailSent;
     result.portalSent = drain.portalSent;
@@ -42,7 +45,9 @@ export async function GET(request: NextRequest) {
     result.needsAnswers = drain.needsAnswers;
     result.handoff = drain.handoff;
     result.held = drain.held;
+    result.awaitingAction = drain.awaitingAction;
     result.blockedByReason = drain.blockedByReason;
+    result.deployedVersion = drain.deployedVersion;
 
     if (new Date().getUTCMinutes() % 30 < 5 && Date.now() - t0 < 200_000) {
       try {
@@ -55,12 +60,13 @@ export async function GET(request: NextRequest) {
       }
     }
     const ms = Date.now() - t0;
-    console.log(`[cron/drain-queue] ${ms}ms`, {
+    console.log(`[cron/drain-queue] ${ms}ms version=${result.deployedVersion}`, {
+      attempted: result.attempted, accepted: result.accepted, failed: result.failed,
+      blockedByReason: result.blockedByReason, awaitingAction: result.awaitingAction,
       claimed: result.claimed, sent: result.sent, emailSent: result.emailSent, portalSent: result.portalSent,
-      blockedByReason: result.blockedByReason,
-      skipped: result.skipped, failed: result.failed, parked: result.parked,
+      skipped: result.skipped, parked: result.parked,
       needsAnswers: result.needsAnswers, handoff: result.handoff, held: result.held,
-      liveness: result.liveness,
+      liveness: result.liveness, deployedVersion: result.deployedVersion,
     });
     return NextResponse.json({ ok: true, ms, ...result });
   } catch (err) {

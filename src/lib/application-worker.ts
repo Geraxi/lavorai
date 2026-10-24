@@ -3,7 +3,7 @@ import { applicationsPaused, assertApplicationsRunning } from "@/lib/application
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
 import { notSubmitted } from "@/lib/proof-of-send";
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
-import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS } from "@/lib/application-answer-continuation";
+import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS, needsAnswersSubmitConfirmation } from "@/lib/application-answer-continuation";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { getUserInboxAddress } from "@/lib/inbound/service";
@@ -704,11 +704,16 @@ async function processApplicationRun(
             console.error(`[worker] upsert UserAnswer failed`, err),
           );
       }
+      const paused = await prisma.application.findFirst({
+        where: { id: applicationId, startedAt: workToken },
+        select: { answerContinuationJson: true },
+      });
+      const confirmation = needsAnswersSubmitConfirmation(paused ?? {});
       await prisma.application.updateMany({
         where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply", "needs_answers"] } },
         data: {
           status: "needs_answers",
-          submitConfirmation: "NEEDS_ANSWERS",
+          ...(confirmation ? { submitConfirmation: confirmation } : {}),
           pendingQuestionsJson: JSON.stringify(questions),
           errorMessage: `${questions.length} domande del form richiedono la tua risposta. Rispondi per completare questa candidatura dopo i controlli di consenso e validità.`,
           canaryLog:

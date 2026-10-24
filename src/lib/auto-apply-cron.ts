@@ -17,7 +17,7 @@ const DESCRIPTION_BACKFILL_PER_RUN = 60;
 const DESCRIPTION_BACKFILL_BUDGET_MS = 20_000;
 import { enqueueApplication } from "@/lib/application-queue";
 import { resolveSession } from "@/lib/apply-session";
-import { dailyApplicationLimit, effectiveTier, getLimits, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
+import { dailyApplicationLimit, effectiveTier, getLimits, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { runSelfHeal } from "@/lib/auto-apply-self-heal";
 import { recordConversionEvent } from "@/lib/conversion-events";
@@ -26,8 +26,9 @@ import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
 import { sortByPaidPriority } from "@/lib/paid-priority";
 import { compareJobsForAutoApply, isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
-import { companyCapUsageWhere, countDailyCapUsage, countsTowardQuota, monthlyQuotaUsageWhere, quotaConsumingFilter } from "@/lib/daily-application-cap";
+import { companyCapUsageWhere, countDailyCapUsage, countsTowardQuota, monthlyQuotaUsageWhere, weeklyQuotaUsageWhere } from "@/lib/daily-application-cap";
 import { usesProvenChannelFilter } from "@/lib/proven-channels";
+import { deployedAppVersion } from "@/lib/deployed-version";
 import {
   GREENHOUSE_FORM_FETCH_BUDGET,
   buildProvenChannelFactContext,
@@ -84,9 +85,11 @@ function randomToken(): string {
 
 export { expandLocationPref, jobMatchesLocationPrefs, autoApplyPreferenceMismatch } from "@/lib/auto-apply-preferences";
 
-interface RunStats {
+export interface RunStats {
   usersProcessed: number;
   applicationsEnqueued: number;
+  applicationsHandedOff: number;
+  applicationsHeld: number;
   applicationsAwaitingConsent: number;
   skippedDailyCap: number;
   skippedMonthlyPaywall: number;
@@ -106,12 +109,20 @@ interface RunStats {
   candidatesFetched: number;
   descriptionsBackfilled: number;
   errors: number;
+  attempted: number;
+  accepted: number;
+  failed: number;
+  blockedByReason: Record<string, number>;
+  awaitingAction: number;
+  deployedVersion: string;
 }
 
 function emptyRunStats(): RunStats {
   return {
     usersProcessed: 0,
     applicationsEnqueued: 0,
+    applicationsHandedOff: 0,
+    applicationsHeld: 0,
     applicationsAwaitingConsent: 0,
     skippedDailyCap: 0,
     skippedMonthlyPaywall: 0,
@@ -131,7 +142,42 @@ function emptyRunStats(): RunStats {
     candidatesFetched: 0,
     descriptionsBackfilled: 0,
     errors: 0,
+    attempted: 0,
+    accepted: 0,
+    failed: 0,
+    blockedByReason: {},
+    awaitingAction: 0,
+    deployedVersion: deployedAppVersion(),
   };
+}
+
+/** Honest outcome counters for cron/admin. Enqueue-only until a drain is merged. */
+export function finalizeRunStats(stats: RunStats): RunStats {
+  const blockedByReason: Record<string, number> = {};
+  const add = (reason: string, n: number) => { if (n) blockedByReason[reason] = (blockedByReason[reason] ?? 0) + n; };
+  add("free_weekly_quota_reached", stats.skippedFreeWeeklyQuota);
+  add("daily_quota_reached", stats.skippedDailyCap);
+  add("billing_ineligible", stats.skippedMonthlyPaywall);
+  add("job_closed", stats.skippedJobClosed);
+  add("unproven_channel", stats.skippedUnprovenChannel);
+  add("preference_match_threshold", stats.skippedMatchThreshold);
+  add("preference_role", stats.skippedRoleMismatch);
+  add("preference_location", stats.skippedLocationMismatch);
+  add("preference_location_unverified", stats.skippedLocationUnverified);
+  add("preference_employment", stats.skippedEmploymentMismatch);
+  add("preference_salary", stats.skippedSalaryMismatch);
+  add("company_avoided", stats.skippedAvoidedCompany);
+  add("session_paused", stats.skippedSessionPaused);
+  add("already_applied", stats.skippedAlreadyApplied);
+  add("manual_ats", stats.skippedManualAts);
+  stats.attempted = stats.applicationsEnqueued + stats.applicationsHandedOff
+    + stats.applicationsHeld + stats.applicationsAwaitingConsent;
+  stats.accepted = 0;
+  stats.failed = stats.errors;
+  stats.blockedByReason = blockedByReason;
+  stats.awaitingAction = stats.applicationsHandedOff + stats.applicationsAwaitingConsent;
+  stats.deployedVersion = deployedAppVersion();
+  return stats;
 }
 
 function newLivenessGate(): LivenessGate {
@@ -139,7 +185,7 @@ function newLivenessGate(): LivenessGate {
 }
 
 export async function runAutoApplyCron(): Promise<RunStats> {
-  if (applicationsPaused() || automaticApplicationsBlocked()) return emptyRunStats();
+  if (applicationsPaused() || automaticApplicationsBlocked()) return finalizeRunStats(emptyRunStats());
   // Self-heal PRIMA di processare gli utenti: archivia sessioni garbage,
   // re-enqueue safe stuck apps, preserve user matchMin, alert
   // admin su credit exhaustion. Idempotente, gira ogni tick (~30min).
@@ -247,7 +293,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
     console.error("[auto-apply-cron] daily-summary failed (non-fatal)", err);
   }
 
-  return stats;
+  return finalizeRunStats(stats);
 }
 
 /**
@@ -260,7 +306,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
  * che mostra "N candidature accodate").
  */
 export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
-  if (applicationsPaused() || automaticApplicationsBlocked()) return emptyRunStats();
+  if (applicationsPaused() || automaticApplicationsBlocked()) return finalizeRunStats(emptyRunStats());
   const stats = emptyRunStats();
   const user = await prisma.user.findUnique({
     where: {
@@ -308,7 +354,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       cvProfile: true,
     },
   });
-  if (!user || !user.preferences || !user.cvProfile) return stats;
+  if (!user || !user.preferences || !user.cvProfile) return finalizeRunStats(stats);
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -319,7 +365,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
     console.error(`[runAutoApplyForUser] ${userId} errored`, err);
     stats.errors++;
   }
-  return stats;
+  return finalizeRunStats(stats);
 }
 
 async function processUser(
@@ -478,6 +524,7 @@ async function processUser(
     remainingToday = Math.max(0, dailyLimit - todayCount);
     if (remainingToday === 0) {
       stats.skippedDailyCap++;
+      stats.applicationsHeld++;
       return;
     }
 
@@ -507,11 +554,12 @@ async function processUser(
       return;
     }
     const weekCount = await prisma.application.count({
-      where: { userId: user.id, createdAt: { gte: freeQuotaWindowStart() }, ...quotaConsumingFilter() },
+      where: weeklyQuotaUsageWhere(user.id),
     });
     remainingToday = Math.max(0, freeWeeklyApplyQuota() - weekCount);
     if (remainingToday === 0) {
       stats.skippedFreeWeeklyQuota++;
+      stats.applicationsHeld++;
       return;
     }
   }
@@ -1053,6 +1101,7 @@ async function admitAutoApplyApplication(input: {
         },
       });
       input.stats.skippedManualAts++;
+      input.stats.applicationsHandedOff++;
       return "handoff";
     }
     await prisma.job.update({
@@ -1084,7 +1133,8 @@ async function admitAutoApplyApplication(input: {
   });
   if (!input.isHybrid) {
     await enqueueApplication(app.id);
-    input.stats.applicationsEnqueued++;
+    if (countsTowardQuota(app) && app.status === "queued") input.stats.applicationsEnqueued++;
+    else input.stats.applicationsHandedOff++;
   } else {
     input.stats.applicationsAwaitingConsent++;
   }

@@ -29,6 +29,7 @@ export async function getPublicDeliveryProof(now = new Date()) {
       const date = applicationEvidenceDate(row);
       if (+date > +now) continue;
       if (evidence === "provider_accepted") totals.providerAccepted++;
+      if (evidence === "provider_delivered") totals.emailDelivered++;
       if (evidence === "legacy_unverified") totals.legacyUnverified++;
       if (evidence === "delivery_problem") totals.deliveryProblems++;
       if (evidence === "pending") totals.pending++;
@@ -36,12 +37,11 @@ export async function getPublicDeliveryProof(now = new Date()) {
       totals.confirmed++;
       if (+date >= +monthStart) totals.confirmedMonth++;
       if (evidence === "confirmed_portal") totals.portalConfirmed++;
-      if (evidence === "confirmed_email") totals.emailDelivered++;
       const responseDates = [...row.replies.map(reply => reply.receivedAt), ...row.gmailMessages.filter(message => message.userId === row.userId).map(message => message.date)];
       if (responseDates.some(responseDate => +responseDate >= +date && +responseDate <= +now)) totals.replies++;
       const source = evidence === "confirmed_email" ? "Email" : (row.submittedVia ?? "ATS").replace("portal_", "");
       portals.set(source, (portals.get(source) ?? 0) + 1);
-      recent.push({ date, source, label: evidence === "confirmed_email" ? "Consegna al server destinatario" : "Ricevuta di candidatura ATS" });
+      recent.push({ date, source, label: evidence === "confirmed_email" ? "Conferma di ricezione" : "Ricevuta di candidatura ATS" });
     }
     recent = recent.sort((a, b) => +b.date - +a.date).slice(0, 20);
     if (rows.length < 500) break;

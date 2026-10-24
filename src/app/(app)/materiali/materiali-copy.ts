@@ -74,6 +74,8 @@ const english: Record<string, string> = {
   "Email accettata dal provider": "Email accepted by provider",
   "Consegna email in ritardo": "Email delivery delayed",
   "Esito da verificare": "Outcome unverified",
+  "Invii registrati, senza conferma": "Recorded sends, unconfirmed",
+  "Inviata (senza conferma)": "Recorded sends, unconfirmed",
   "Non inviata": "Not submitted",
   "Email non consegnata": "Email not delivered",
   "Email segnalata": "Email reported",

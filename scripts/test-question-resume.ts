@@ -22,7 +22,11 @@ const makeApp = (id = "owned", overrides: Record<string, any> = {}) => ({
 function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; saved?: any[]; privacy?: boolean; race?: (app: any) => void } = {}) {
   const apps = structuredClone(options.apps ?? [makeApp()]);
   let writes = 0, resumes = 0, queued = 0;
-  const equal = (a: any, b: any) => a instanceof Date && b instanceof Date ? +a === +b : a === b;
+  const equal = (a: any, b: any) => {
+    if (a instanceof Date && b instanceof Date) return +a === +b;
+    if (b && typeof b === "object" && "in" in b) return (b.in as unknown[]).includes(a);
+    return a === b;
+  };
   const prisma = {
     application: {
       findMany: async ({ where }: any) => structuredClone(apps.filter(app => app.userId === where.userId && app.status === where.status)),
@@ -97,6 +101,10 @@ async function main() {
   assert.equal(conflictCard.suggestion, null); assert.equal(conflictCard.conflict, true);
   const cards = (await setup({ apps: [makeApp("a"), makeApp("b")] }).get()).body.questions;
   assert.equal(cards.length, 2); assert.notEqual(cards[0].id, cards[1].id); assert.equal(cards[0].suggestion, null);
+  const needsAnswersSave = setup({ apps: [makeApp("owned", { submitConfirmation: "NEEDS_ANSWERS" })] });
+  assert.equal((await needsAnswersSave.post()).status, 200);
+  assert.equal(needsAnswersSave.counts.writes, 1, "NEEDS_ANSWERS paused rows can still save answers");
+
   console.log("PASS questions HTTP: authenticated ownership, scoped assertions/refusals, conflicts, stale form/save races, suggestions with provenance, no implicit resume or legacy permission.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

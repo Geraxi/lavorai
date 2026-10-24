@@ -140,7 +140,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: P
                 <StatusBar showShare={false} segments={[
                   { key: "sent", label: "Consegna confermata", count: data.sent, tone: "green" },
                   { key: "accepted", label: "Accettate dal provider", count: data.providerAccepted, tone: "neutral" },
-                  { key: "unverified", label: "Esito da verificare", count: data.pending + data.legacyUnverified, tone: "amber" },
+                  { key: "sent_unverified", label: "Invii registrati, senza conferma", count: data.legacyUnverified, tone: "amber" },
+                  { key: "unverified", label: "Esito da verificare", count: data.pending, tone: "amber" },
                   { key: "problem", label: "Problemi di consegna", count: data.deliveryProblems, tone: "red" },
                 ]} />
               )}

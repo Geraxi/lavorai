@@ -18,6 +18,7 @@ import {
   type ClaimHoldReason,
 } from "@/lib/queue-sendability";
 import { usesFreeWeeklyQuota } from "@/lib/billing";
+import { deployedAppVersion } from "@/lib/deployed-version";
 import type { PrismaClient } from "@prisma/client";
 
 type DB = Pick<PrismaClient, "application">;
@@ -26,6 +27,8 @@ export type DrainOutcome = "sent" | "blocked" | "skipped" | "failed" | "queued" 
 
 export type DrainSummary = {
   claimed: number;
+  attempted: number;
+  accepted: number;
   sent: number;
   emailSent: number;
   portalSent: number;
@@ -36,10 +39,24 @@ export type DrainSummary = {
   needsAnswers: number;
   handoff: number;
   held: number;
+  awaitingAction: number;
+  deployedVersion: string;
 };
 
 export function emptyDrainSummary(): DrainSummary {
-  return { claimed: 0, sent: 0, emailSent: 0, portalSent: 0, blockedByReason: {}, skipped: 0, failed: 0, parked: 0, needsAnswers: 0, handoff: 0, held: 0 };
+  return {
+    claimed: 0, attempted: 0, accepted: 0, sent: 0, emailSent: 0, portalSent: 0,
+    blockedByReason: {}, skipped: 0, failed: 0, parked: 0, needsAnswers: 0,
+    handoff: 0, held: 0, awaitingAction: 0, deployedVersion: deployedAppVersion(),
+  };
+}
+
+export function finalizeDrainSummary(summary: DrainSummary): DrainSummary {
+  summary.attempted = summary.claimed;
+  summary.accepted = summary.sent;
+  summary.awaitingAction = summary.needsAnswers + summary.handoff + summary.held;
+  summary.deployedVersion = deployedAppVersion();
+  return summary;
 }
 
 export function bumpReason(map: Record<string, number>, reason: string, n = 1): void {
@@ -268,8 +285,18 @@ export async function drainQueuedApplications(opts: {
   await releaseQuotaHoldsIfAvailable({ db: opts.db, now });
   if (!opts.db) await releaseUnverifiableLivenessHolds({ now });
 
-  const find = opts.findClaimableQueued ?? (await import("@/lib/application-claim")).findClaimableQueued;
-  const claim = opts.claimApplication ?? (await import("@/lib/application-claim")).claimApplication;
+  const claims = await import("@/lib/application-claim");
+  // Release expired queued leases before claim so a dead worker cannot
+  // pin a row forever. In-flight recovery stays gated inside the helper.
+  if (typeof claims.recoverStuckApplications === "function") {
+    try {
+      await claims.recoverStuckApplications();
+    } catch (err) {
+      console.error("[drain] queued-claim recovery failed", err);
+    }
+  }
+  const find = opts.findClaimableQueued ?? claims.findClaimableQueued;
+  const claim = opts.claimApplication ?? claims.claimApplication;
   const process = opts.processApplication ?? (await import("@/lib/application-worker")).processApplication;
   const read = opts.readOutcome ?? (async (id: string) => {
     const row = await (opts.db ?? prisma).application.findUnique({
@@ -329,7 +356,7 @@ export async function drainQueuedApplications(opts: {
     }
   });
   await Promise.all(workers);
-  return summary;
+  return finalizeDrainSummary(summary);
 }
 
 export type { ClaimHoldReason };

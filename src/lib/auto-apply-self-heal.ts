@@ -88,6 +88,14 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
     transientFailuresRetried: 0,
   };
 
+  // Queued lease release is not a historical replay: a claim was taken
+  // and never reserved/sent. Run it even while other retries stay blocked.
+  try {
+    await recoverStuckApplications();
+  } catch (err) {
+    console.error("[self-heal] queued-claim recovery failed", err);
+  }
+
   // Temporary manual-only rollout never rewrites or replays historical work.
   if (historicalRetriesBlocked()) return report;
 
