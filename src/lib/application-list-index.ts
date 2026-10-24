@@ -7,6 +7,7 @@ import type { JourneyStage } from "./ui-application-status";
 export const evidenceSelect = {
   id: true, createdAt: true, status: true, userStatus: true, lastReplyKind: true,
   submittedVia: true, submitConfirmation: true, submissionReceiptJson: true,
+  confirmedAt: true,
   emailAttempts: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1,
     select: { status: true, providerEmailId: true } },
 } satisfies Prisma.ApplicationSelect;
@@ -33,6 +34,7 @@ export function applicationIndexRevisionQuery(filter: { userId: string; since: D
       md5(COALESCE(string_agg(md5(jsonb_build_array(
         a.id, a."createdAt", a.status, a."userStatus", a."lastReplyKind",
         a."submittedVia", a."submitConfirmation", a."submissionReceiptJson",
+        a."confirmedAt",
         e.status, e."providerEmailId")::text), '' ORDER BY a."createdAt" DESC, a.id DESC), '')) AS revision
     FROM "Application" a
     LEFT JOIN LATERAL (
@@ -51,7 +53,8 @@ export function applicationIndexRevisionQuery(filter: { userId: string; since: D
  * the shared stage rules (src/lib/application-stage.ts, re-exported by
  * dashboard-metrics-shared), so Candidature counts match the dashboard. */
 export function indexRow(app: { id: string; status: string; userStatus: string | null; lastReplyKind: string | null; submittedVia: string | null;
-  submitConfirmation: string | null; submissionReceiptJson: string | null; emailAttempts: { status: string; providerEmailId: string | null }[] },
+  submitConfirmation: string | null; submissionReceiptJson: string | null; confirmedAt?: Date | string | null;
+  emailAttempts: { status: string; providerEmailId: string | null }[] },
   delivery: ReturnType<typeof applicationDeliveryView>): IndexRow {
   const journey = applicationStage(app);
   return { id: app.id, stage: pipelineLane({ ...app, delivery }), journey,

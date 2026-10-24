@@ -1,13 +1,32 @@
-/** UserInbox lifecycle + inbound processing (DB). Never sends or forwards mail. */
+/** UserInbox lifecycle + inbound processing (DB). Never replies to employers. */
 import type { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { newSlug, userInboxDomain, inboxRecipients } from "./address";
 import { classifyInbound, type AiClassifier } from "./classify";
 import { extractCodes, extractLinks } from "./extract";
-import { bestApplicationMatch } from "./match";
+import {
+  classifyMailbox,
+  inboundCategoryFor,
+  linkMailboxApplication,
+  mailboxKindFromAi,
+  mailboxNotifyMode,
+  notifyDecision,
+  type MailboxKind,
+} from "@/lib/application-mailbox";
 import type { NormalizedInbound } from "./providers";
 
 type Db = Pick<PrismaClient, "user" | "userInbox" | "inboundEmail" | "application" | "$executeRaw">;
+type MailboxAi = (input: { subject: string; body: string }) => Promise<string | null>;
+type InboundNotify = (input: {
+  userId: string;
+  emailId: string;
+  kind: MailboxKind;
+  fromAddress: string;
+  subject: string | null;
+  receivedAt: Date;
+  jobTitle: string;
+  company: string | null;
+}) => Promise<boolean>;
 const MAX_BODY = 20_000;
 
 export async function getUserInboxAddress(db: Pick<PrismaClient, "userInbox">, userId: string): Promise<string | null> {
@@ -47,7 +66,14 @@ export function htmlToText(html: string): string {
 
 export type InboundResult = { stored: number; duplicates: number; unknownRecipient: boolean; confirmed: string[] };
 
-export async function processUserInboundEmail(mail: NormalizedInbound, deps: { db: Db; env: Record<string, string | undefined>; ai?: AiClassifier | null; now?: () => Date }): Promise<InboundResult> {
+export async function processUserInboundEmail(mail: NormalizedInbound, deps: {
+  db: Db;
+  env: Record<string, string | undefined>;
+  ai?: AiClassifier | null;
+  mailboxAi?: MailboxAi | null;
+  notify?: InboundNotify | null;
+  now?: () => Date;
+}): Promise<InboundResult> {
   const domain = userInboxDomain(deps.env);
   const result: InboundResult = { stored: 0, duplicates: 0, unknownRecipient: false, confirmed: [] };
   const recipients = domain ? inboxRecipients(mail.to, domain) : [];
@@ -56,7 +82,19 @@ export async function processUserInboundEmail(mail: NormalizedInbound, deps: { d
   const body = (mail.text?.trim() || (mail.html ? htmlToText(mail.html) : "")).slice(0, MAX_BODY);
   const codes = extractCodes(`${mail.subject}\n${body}`);
   const links = extractLinks(body, mail.html);
-  const { category, by } = await classifyInbound(mail.subject, body, deps.ai);
+  const mailbox = await classifyMailbox(
+    { fromAddress: mail.from, subject: mail.subject, bodyText: body },
+    deps.mailboxAi ?? (deps.ai
+      ? async ({ subject, body: text }) => {
+          const guess = await classifyInbound(subject, text, deps.ai);
+          if (guess.by !== "ai") return null;
+          if (guess.category === "confirmation" || guess.category === "interview") return guess.category;
+          return mailboxKindFromAi(guess.category);
+        }
+      : null),
+  );
+  const category = inboundCategoryFor(mailbox.kind);
+  const by = mailbox.by;
   const now = deps.now?.() ?? new Date();
 
   for (const inbox of inboxes) {
@@ -69,7 +107,14 @@ export async function processUserInboundEmail(mail: NormalizedInbound, deps: { d
       where: { userId: inbox.userId, createdAt: { gte: since } }, orderBy: { createdAt: "desc" }, take: 300,
       select: { id: true, submittedAt: true, createdAt: true, job: { select: { company: true, title: true, url: true } } },
     });
-    const applicationId = bestApplicationMatch(apps.map((a) => ({ id: a.id, company: a.job.company, title: a.job.title, url: a.job.url, at: a.submittedAt ?? a.createdAt })), { from: mail.from, subject: mail.subject, body });
+    const applicationId = linkMailboxApplication(apps.map((a) => ({ id: a.id, company: a.job.company, title: a.job.title, url: a.job.url, at: a.submittedAt ?? a.createdAt })), { from: mail.from, subject: mail.subject, body });
+    const prefs = typeof deps.db.user?.findUnique === "function"
+      ? await deps.db.user.findUnique({
+        where: { id: inbox.userId },
+        select: { preferences: { select: { mailboxNotifyMode: true } } },
+      }).catch(() => null)
+      : null;
+    const notifyStatus = notifyDecision(mailbox.kind, mailboxNotifyMode(prefs?.preferences?.mailboxNotifyMode));
     let row;
     try {
       row = await deps.db.inboundEmail.create({ data: {
@@ -77,6 +122,7 @@ export async function processUserInboundEmail(mail: NormalizedInbound, deps: { d
         fromAddress: mail.from.slice(0, 500), toAddress: inbox.address, subject: mail.subject.slice(0, 1000) || null, bodyText: body || null,
         receivedAt: mail.receivedAt, category, classifiedBy: by, codesJson: JSON.stringify(codes), linksJson: JSON.stringify(links),
         applicationId, matchedAt: applicationId ? now : null,
+        mailboxKind: mailbox.kind, notifyStatus,
       } });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") { result.duplicates++; continue; }
@@ -85,6 +131,32 @@ export async function processUserInboundEmail(mail: NormalizedInbound, deps: { d
     result.stored++;
     if (category === "confirmation" && applicationId && await recordAtsConfirmation(deps.db, { applicationId, userId: inbox.userId, inboundEmailId: row.id, at: mail.receivedAt })) {
       result.confirmed.push(applicationId);
+      if (typeof deps.db.application.updateMany === "function") {
+        await deps.db.application.updateMany({
+          where: {
+            id: applicationId,
+            userId: inbox.userId,
+            OR: [{ lastReplyKind: null }, { lastReplyKind: { in: ["auto", "auto_reply", "ricevuta"] } }],
+          },
+          data: { lastReplyKind: "ricevuta" },
+        }).catch(() => undefined);
+      }
+    }
+    if (notifyStatus === "pending" && deps.notify) {
+      const matched = apps.find((a) => a.id === applicationId);
+      const sent = await deps.notify({
+        userId: inbox.userId,
+        emailId: row.id,
+        kind: mailbox.kind,
+        fromAddress: mail.from,
+        subject: mail.subject,
+        receivedAt: mail.receivedAt,
+        jobTitle: matched?.job.title ?? "Candidatura",
+        company: matched?.job.company ?? null,
+      }).catch(() => false);
+      if (sent && typeof deps.db.inboundEmail.update === "function") {
+        await deps.db.inboundEmail.update({ where: { id: row.id }, data: { notifyStatus: "immediate_sent" } }).catch(() => undefined);
+      }
     }
   }
   return result;

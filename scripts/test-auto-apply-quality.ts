@@ -96,7 +96,8 @@ async function testCronBothPasses() {
     "@/lib/role-match": { titleMatchesAnyRole: () => true },
     "@/lib/auto-apply-roles": await import("../src/lib/auto-apply-roles"),
     "@/lib/scrapers/posting-description": {
-      DESCRIPTION_SOURCES: new Set(["workable", "smartrecruiters", "breezy"]),
+      DESCRIPTION_SOURCES: new Set(["workable", "smartrecruiters", "breezy", "greenhouse", "ashby", "lever"]),
+      needsFullDescription: (text?: string | null) => !text?.trim() || text.length === 2000,
       fillMissingDescriptions: async (jobs: unknown[], opts: { limit: number; deadline: number }) => {
         assert.ok(opts.limit > 0 && opts.limit <= 15 && opts.deadline <= Date.now() + 20_000, "Backfill is bounded per user and in time");
         backfillCalls.push(jobs.length); return [];
@@ -113,6 +114,12 @@ async function testCronBothPasses() {
       resolverCalls.push({ roles: [...roles], limit: opts.limit });
       return { attempted: 0, promoted: 0, existing: 0, unsupported: 0 };
     } },
+    "@/lib/proven-channels": { usesProvenChannelFilter: () => false },
+    "@/lib/proven-channel-eligibility": {
+      GREENHOUSE_FORM_FETCH_BUDGET: 12,
+      buildProvenChannelFactContext: () => ({}),
+      evaluateProvenChannelEligibility: async () => { throw new Error("non-pilot must not evaluate proven channels"); },
+    },
   });
   const stats = await api.runAutoApplyForUser(user.id);
   assert.ok(backfillCalls.length <= 1, "At most one bounded backfill per user");

@@ -9,7 +9,7 @@ import { rowToProfile } from "@/lib/cv-profile-types";
 import { quickMatchScore } from "@/lib/match-score";
 import { roleTitleTokenGroups, titleTokenWhere } from "@/lib/role-query";
 import { searchRoleTitles } from "@/lib/auto-apply-roles";
-import { DESCRIPTION_SOURCES, fillMissingDescriptions } from "@/lib/scrapers/posting-description";
+import { DESCRIPTION_SOURCES, fillMissingDescriptions, needsFullDescription } from "@/lib/scrapers/posting-description";
 
 /** Public detail fetches to fill empty descriptions: per user, per run, and time. */
 const DESCRIPTION_BACKFILL_PER_USER = 15;
@@ -27,6 +27,13 @@ import { sortByPaidPriority } from "@/lib/paid-priority";
 import { compareJobsForAutoApply, isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
 import { companyCapUsageWhere, countDailyCapUsage, countsTowardQuota, monthlyQuotaUsageWhere, quotaConsumingFilter } from "@/lib/daily-application-cap";
+import { usesProvenChannelFilter } from "@/lib/proven-channels";
+import {
+  GREENHOUSE_FORM_FETCH_BUDGET,
+  buildProvenChannelFactContext,
+  evaluateProvenChannelEligibility,
+  type ProvenChannelUserContext,
+} from "@/lib/proven-channel-eligibility";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -95,6 +102,7 @@ interface RunStats {
   skippedSalaryMismatch: number;
   skippedJobClosed: number;
   skippedManualAts: number;
+  skippedUnprovenChannel: number;
   candidatesFetched: number;
   descriptionsBackfilled: number;
   errors: number;
@@ -119,6 +127,7 @@ function emptyRunStats(): RunStats {
     skippedSalaryMismatch: 0,
     skippedJobClosed: 0,
     skippedManualAts: 0,
+    skippedUnprovenChannel: 0,
     candidatesFetched: 0,
     descriptionsBackfilled: 0,
     errors: 0,
@@ -347,6 +356,68 @@ async function processUser(
   const profile = rowToProfile(user.cvProfile);
   if (!profile.title && !profile.summary && !profile.skills.length && !profile.experiences.length) return;
 
+  const restrictProven = usesProvenChannelFilter(user.id);
+  const formBudget = { remaining: GREENHOUSE_FORM_FETCH_BUDGET };
+  let provenCtx: ProvenChannelUserContext | null = null;
+  if (restrictProven) {
+    const extra = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        name: true,
+        yearsExperience: true,
+        englishLevel: true,
+        noticePeriod: true,
+        privacyConsentAt: true,
+        preferences: { select: { applicationAnswersJson: true, locationsJson: true } },
+        answers: {
+          where: { source: "user", answeredAt: { not: null } },
+          select: { label: true, answer: true, kind: true, optionsJson: true, source: true, answeredAt: true },
+        },
+      },
+    });
+    provenCtx = {
+      factContext: buildProvenChannelFactContext({
+        profile: user.cvProfile,
+        user: {
+          email: user.email,
+          name: extra?.name,
+          yearsExperience: extra?.yearsExperience,
+          englishLevel: extra?.englishLevel,
+          noticePeriod: extra?.noticePeriod,
+          privacyConsentAt: extra?.privacyConsentAt,
+        },
+        applicationAnswersJson: extra?.preferences?.applicationAnswersJson,
+        locationsJson: extra?.preferences?.locationsJson,
+        savedAnswers: extra?.answers ?? [],
+      }),
+      hasCv: true,
+    };
+  }
+
+  const admitProven = async (job: {
+    url: string;
+    sourceSlug?: string | null;
+    company?: string | null;
+    recruiterEmail?: string | null;
+  }): Promise<boolean> => {
+    if (!restrictProven || !provenCtx) return true;
+    const verdict = await evaluateProvenChannelEligibility(
+      {
+        url: job.url,
+        sourceSlug: job.sourceSlug,
+        company: job.company,
+        recruiterEmail: job.recruiterEmail,
+      },
+      { ...provenCtx, factContext: { ...provenCtx.factContext, company: job.company } },
+      { formBudget },
+    );
+    if (!verdict.ok) {
+      stats.skippedUnprovenChannel++;
+      return false;
+    }
+    return true;
+  };
+
   // Modalità: "auto" candida direttamente (queued + enqueue), "hybrid"
   // prepara la candidatura e la lascia in "awaiting_consent" perché
   // l'utente la approvi dal dashboard. initialStatus guida entrambi i
@@ -556,13 +627,12 @@ async function processUser(
   stats.candidatesFetched += jobs.length;
   if (jobs.length === 0) return;
 
-  // Lazy description backfill (Workable/SmartRecruiters/Breezy rows synced
-  // before the scrapers read the detail endpoint): an empty description
-  // scores ~0 and hides eligibility sentences. Only jobs that can still pass
-  // (title matches a role, location not already excluded), bounded per run.
+  // Lazy description backfill: empty or legacy-truncated (exactly 2,000 chars)
+  // rows score on company intro only. Greenhouse/Ashby/Lever public APIs now
+  // included. Only jobs that can still pass (title matches a role), bounded.
   const backfillLimit = Math.min(DESCRIPTION_BACKFILL_PER_USER, DESCRIPTION_BACKFILL_PER_RUN - stats.descriptionsBackfilled);
   if (backfillLimit > 0) {
-    const eligible = jobs.filter((j) => !j.description?.trim() && DESCRIPTION_SOURCES.has(j.source)
+    const eligible = jobs.filter((j) => needsFullDescription(j.description) && DESCRIPTION_SOURCES.has(j.source)
       && titleMatchesAnyRole(j.title, roles));
     try {
       const filled = await fillMissingDescriptions(eligible, {
@@ -570,7 +640,10 @@ async function processUser(
         deadline: Date.now() + DESCRIPTION_BACKFILL_BUDGET_MS,
       });
       for (const j of filled) {
-        await prisma.job.update({ where: { id: j.id }, data: { description: j.description } }).catch(() => {});
+        await prisma.job.update({
+          where: { id: j.id },
+          data: { description: j.description, descriptionFetchedAt: new Date() },
+        }).catch(() => {});
       }
       stats.descriptionsBackfilled += filled.length;
     } catch (err) {
@@ -812,6 +885,7 @@ async function processUser(
       stats.skippedJobClosed++;
       continue;
     }
+    if (!(await admitProven(job))) continue;
 
     const portal = portalOf(job.url);
 
@@ -905,6 +979,7 @@ async function processUser(
         stats.skippedJobClosed++;
         continue;
       }
+      if (!(await admitProven(job))) continue;
 
       try {
         const outcome = await admitAutoApplyApplication({

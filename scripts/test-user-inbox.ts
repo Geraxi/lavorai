@@ -42,6 +42,7 @@ const cases: Array<[string, string, string]> = [
   ["Action required", "Please verify your email to complete your application.", "incomplete"],
   ["Completa la candidatura", "Completa la tua candidatura inserendo il codice di verifica 123456.", "incomplete"],
   ["Newsletter", "Discover our new offices", "other"],
+  ["Thanks for your email", "Unfortunately we don't take any applications over email. Please apply via our careers site.", "incomplete"],
 ];
 for (const [s, b, want] of cases) assert.equal(classifyByRules(s, b), want, `${s}`);
 
@@ -101,6 +102,8 @@ async function main() {
   const r = await processUserInboundEmail(hydrated, { db, env: {}, now: () => new Date("2026-10-23T09:00:00Z") });
   assert.deepEqual(r, { stored: 1, duplicates: 0, unknownRecipient: false, confirmed: ["a1"] });
   assert.equal(stored[0].category, "confirmation"); assert.equal(stored[0].applicationId, "a1");
+  assert.equal(stored[0].mailboxKind, "confirmation");
+  assert.equal(stored[0].notifyStatus, "digest_queued");
   assert.equal(raws.length, 1);
   const sql = (raws[0][0] as TemplateStringsArray).join("?");
   assert.match(sql, /"confirmedAt" = \?/); assert.match(sql, /'ats_confirmation_email'::"SentProofType"/); assert.match(sql, /"confirmedAt" IS NULL/);
@@ -116,6 +119,23 @@ async function main() {
   console.error = orig;
   assert.deepEqual(r3.confirmed, []); assert.equal(r3.stored, 1); assert.match(String(errs[0]), /42703/);
   assert.ok(!JSON.stringify(errs).includes("greenhouse"), "no sender in logs");
+
+  const notices: string[] = [];
+  const interview = await processUserInboundEmail({
+    ...hydrated,
+    providerMessageId: "em_interview",
+    subject: "Interview invitation",
+    text: "We would like to invite you to an interview. Please share your availability.",
+    from: "jane@acme.com",
+  }, {
+    db,
+    env: {},
+    notify: async (n) => { notices.push(n.kind); return true; },
+  });
+  assert.equal(interview.stored, 1);
+  assert.equal(stored.at(-1)?.mailboxKind, "interview");
+  assert.equal(stored.at(-1)?.notifyStatus, "pending");
+  assert.deepEqual(notices, ["interview"]);
 
   // ensureUserInbox: idempotent + collision retry
   const rows: any[] = [{ id: "x", userId: "other", slug: "mario.rossi.aaaaaa", address: "mario.rossi.aaaaaa@apply.lavorai.it" }];

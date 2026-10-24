@@ -1,6 +1,6 @@
 import type { JobListItem } from "@/lib/adzuna";
-import { cleanHtmlText } from "./html-clean";
 import { isEuRelevant, runPool } from "./feed-utils";
+import { storedJobDescription } from "./posting-description";
 
 /**
  * BambooHR — endpoint JSON del widget careers (non documentato ma stabile):
@@ -41,7 +41,7 @@ export async function fetchBambooJobs(tenant: string, companyName?: string, with
           const d = await fetch(`${base}/careers/${r.id}/detail`, { headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0 LavorAI/1.0 jobs-sync" }, signal: AbortSignal.timeout(10_000) });
           if (d.ok) {
             const j = (await d.json()) as { result?: { jobOpening?: { description?: string } } };
-            description = cleanHtmlText(j.result?.jobOpening?.description ?? "").slice(0, 2000);
+            description = storedJobDescription(j.result?.jobOpening?.description);
           }
         } catch { /* descrizione opzionale */ }
       }

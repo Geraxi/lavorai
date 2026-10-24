@@ -5,6 +5,7 @@ export interface DeliveryEvidenceInput {
   submittedVia: string | null;
   submitConfirmation?: string | null;
   submissionReceiptJson?: string | null;
+  confirmedAt?: Date | string | null;
   /** Query ordered newest first; one application counts once, never per attempt. */
   emailAttempts?: { status: string; providerEmailId: string | null; acceptedAt?: Date | null; createdAt?: Date }[];
 }
@@ -12,6 +13,7 @@ export type DeliveryEvidence = "confirmed_portal" | "confirmed_email" | "provide
 
 export function deliveryEvidence(application: DeliveryEvidenceInput): DeliveryEvidence {
   if (application.status === "diagnostic") return "excluded";
+  if (application.confirmedAt) return "confirmed_email";
   if (application.submittedVia === "mock_demo" || ["DRY_RUN", "UNCONFIRMED"].includes(application.submitConfirmation ?? "")) return "excluded";
   const attempt = application.emailAttempts?.[0];
   if (application.status === "failed") return "delivery_problem";

@@ -53,7 +53,7 @@ export function AppShell({
 
   return (
     <div
-      className={`font-sans lavorai-app-shell product-workspace${["/dashboard", "/discover", "/applications", "/inbox", "/materiali", "/feedback"].includes(pathname) ? " reference-workspace" : ""}`}
+      className={`font-sans lavorai-app-shell product-workspace${["/dashboard", "/discover", "/applications", "/inbox", "/posta", "/materiali", "/feedback"].includes(pathname) ? " reference-workspace" : ""}`}
       style={{
         background: "var(--bg)",
         color: "var(--fg)",

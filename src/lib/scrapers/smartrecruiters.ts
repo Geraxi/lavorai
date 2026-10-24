@@ -1,6 +1,6 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { cleanHtmlText } from "./html-clean";
-import { fillMissingDescriptions, type FetchLike } from "./posting-description";
+import { fillMissingDescriptions, storedJobDescription, type FetchLike } from "./posting-description";
 
 /**
  * SmartRecruiters public posting API. Nessuna auth richiesta.
@@ -104,7 +104,7 @@ function mapJob(
     (j.jobAd?.sections?.jobDescription?.text ?? "") +
     " " +
     (j.jobAd?.sections?.qualifications?.text ?? "");
-  const description = cleanHtmlText(desc).slice(0, 2000);
+  const description = storedJobDescription(desc);
   const locParts = [j.location?.city, j.location?.region, j.location?.country]
     .filter(Boolean)
     .join(", ");

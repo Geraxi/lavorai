@@ -35,6 +35,8 @@ import {
   BAMBOOHR_COMPANIES,
 } from "./ats-companies";
 import type { JobListItem } from "@/lib/adzuna";
+import { backfillTruncatedDescriptions } from "./description-backfill";
+import { DESCRIPTION_TRUNCATED_LEN } from "./posting-description";
 
 /**
  * Sync job da Greenhouse + Lever pubblici — ogni URL restituito è
@@ -63,6 +65,7 @@ export async function syncAtsJobs(): Promise<{
   remote: number;
   workableSearch: number;
   total: number;
+  descriptionBackfill?: { scanned: number; updated: number; marked: number; skipped: number };
 }> {
   console.log(
     "[sync-jobs] starting Greenhouse + Lever + Ashby + SmartRecruiters + Workable + LinkedIn(Apify) + Demand(Adzuna) fetch...",
@@ -121,6 +124,10 @@ export async function syncAtsJobs(): Promise<{
   const all = [...gh, ...lv, ...ash, ...sr, ...wk, ...extraWorkable, ...li, ...demand.items, ...rc, ...pe, ...tt, ...bh, ...eu, ...bz, ...pp, ...jn, ...rb];
   const upserted = await upsertJobs(all);
   await closeMissingJobs(all);
+  const descriptionBackfill = await backfillTruncatedDescriptions().catch((err) => {
+    console.warn("[sync-jobs] description backfill failed (non-fatal)", err instanceof Error ? err.message : err);
+    return { scanned: 0, updated: 0, marked: 0, skipped: 0 };
+  });
   return {
     greenhouse: gh.length,
     lever: lv.length,
@@ -141,6 +148,7 @@ export async function syncAtsJobs(): Promise<{
     remote: rb.length,
     workableSearch: extraWorkable.length,
     total: upserted,
+    descriptionBackfill,
   };
 }
 
@@ -227,6 +235,9 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
               company: j.company,
               location: j.location,
               description: j.description,
+              ...(j.description.trim() && j.description.length !== DESCRIPTION_TRUNCATED_LEN
+                ? { descriptionFetchedAt: new Date() }
+                : {}),
               url: j.url,
               contractType: j.contractType,
               remote: j.remote,
@@ -246,6 +257,9 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
               company: j.company,
               location: j.location,
               description: j.description,
+              ...(j.description.trim() && j.description.length !== DESCRIPTION_TRUNCATED_LEN
+                ? { descriptionFetchedAt: new Date() }
+                : {}),
               url: j.url,
               contractType: j.contractType,
               remote: j.remote,

@@ -478,6 +478,9 @@ model UserPreferences {
   rolesJson   String @default("[]")
   locationsJson String @default("[]")
   sourcesJson String @default("[]")
+  /// Mailbox notifications: "priority" (interview/questions now, rest in digest),
+  /// "digest" (daily only), "off". Never auto-replies to employers.
+  mailboxNotifyMode String @default("priority")
   updatedAt   DateTime @updatedAt
   createdAt   DateTime @default(now())
 
@@ -570,6 +573,9 @@ model Job {
   /// Annuncio riservato/prioritario per le categorie protette (L. 68/99):
   /// riconosciuto da titolo/descrizione (src/lib/protected-category.ts).
   protectedCategory Boolean @default(false)
+  /// Last successful full-description fetch from a public board API.
+  /// Null rows at exactly 2,000 chars are eligible for the bounded backfill.
+  descriptionFetchedAt DateTime?
 
   applications Application[]
   dismissals JobDismissal[]
@@ -589,6 +595,21 @@ model EmployerHiringInbox {
   status        String
   checkedAt     DateTime
   updatedAt     DateTime @updatedAt
+}
+
+/// Cached Greenhouse boards-api questions snapshot (not candidate answers).
+/// Additive only. Used by the proven-channel pre-check; never stores guessed answers.
+model GreenhouseJobForm {
+  cacheKey     String   @id
+  boardToken   String
+  jobId        String
+  absoluteUrl  String?
+  /// "native" | "redirected" | "unavailable"
+  status       String
+  questionsJson String  @db.Text
+  checkedAt    DateTime
+
+  @@index([boardToken, jobId])
 }
 
 /// Application Session: raggruppa candidature simili (stesso ruolo + settore)
@@ -834,6 +855,8 @@ model ApplicationReply {
   forwardedAt           DateTime?
   forwardProviderId     String?
   forwardError          String?
+  /// Mailbox notify outbox: pending | immediate_sent | digest_queued | digest_sent | skipped
+  notifyStatus          String  @default("pending")
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
@@ -1200,6 +1223,10 @@ model InboundEmail {
   linksJson         String               @default("[]") @db.Text
   applicationId     String?
   matchedAt         DateTime?
+  /// Richer mailbox kind (confirmation|otp|interview|rejection|auto_reply|redirected_to_portal|recruiter_question|other).
+  mailboxKind       String?
+  /// pending | immediate_sent | digest_queued | digest_sent | skipped
+  notifyStatus      String               @default("pending")
   createdAt         DateTime             @default(now())
 
   inbox       UserInbox    @relation(fields: [inboxId], references: [id], onDelete: Cascade)

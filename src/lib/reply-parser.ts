@@ -14,7 +14,15 @@ import { isApplicationVerificationMessage } from "@/lib/reply-security-message";
  * Mai gonfiare le metriche — l'onestà è il punto di tutta questa feature.
  */
 
-export type ReplyKind = "colloquio" | "rifiutata" | "risposta" | "ricevuta" | "auto" | "bounce";
+export type ReplyKind =
+  | "colloquio"
+  | "rifiutata"
+  | "risposta"
+  | "ricevuta"
+  | "auto"
+  | "auto_reply"
+  | "redirected_to_portal"
+  | "bounce";
 
 export interface ClassifiedReply {
   kind: ReplyKind;
@@ -128,6 +136,50 @@ const AUTO_REPLY = [
   "do not reply to this email",
   "questo messaggio è generato automaticamente",
 ];
+
+/** Employer autoresponder: apply on the careers site, not over email. Never a rejection. */
+const PORTAL_REDIRECT = [
+  "we don't take any applications over email",
+  "we don't take applications over email",
+  "we do not take any applications over email",
+  "we do not take applications over email",
+  "we don't accept applications over email",
+  "we don't accept applications via email",
+  "we don't accept applications by email",
+  "we do not accept applications over email",
+  "we do not accept applications via email",
+  "we do not accept applications by email",
+  "we don't accept cvs via email",
+  "we don't accept resumes via email",
+  "please apply via our careers",
+  "please apply through our careers",
+  "please apply on our careers",
+  "please apply via our website",
+  "please apply through our website",
+  "please apply via the portal",
+  "please apply through the portal",
+  "please apply on our job",
+  "apply via our careers site",
+  "apply through our careers site",
+  "apply via our careers page",
+  "apply through our online portal",
+  "applications are not accepted via email",
+  "applications are not accepted over email",
+  "applications are only accepted via",
+  "we are unable to accept applications via email",
+  "unable to accept applications via email",
+  "unable to accept applications over email",
+  "non accettiamo candidature via email",
+  "non accettiamo candidature via e-mail",
+  "non prendiamo candidature via email",
+  "candidati sul portale",
+  "candidati tramite il portale",
+  "invia la candidatura dal portale",
+];
+
+export function isPortalRedirectText(text: string): boolean {
+  return containsAny(text.toLowerCase(), PORTAL_REDIRECT);
+}
 
 const REJECTION = [
   // EN
@@ -260,7 +312,13 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     return { kind: "ricevuta", isHuman: false };
   }
 
-  // 4. System/automated notifications (CI/CD, monitoring, etc.) → auto, never human.
+  // 4. Apply-via-portal / "we don't take applications over email" is an
+  //    autoresponder, never a rejection — even if the copy says "unfortunately".
+  if (containsAny(subjectBody, PORTAL_REDIRECT)) {
+    return { kind: "redirected_to_portal", isHuman: false };
+  }
+
+  // 5. System/automated notifications (CI/CD, monitoring, etc.) → auto, never human.
   //    Check AFTER acknowledgements to allow ATS confirmations through, but BEFORE
   //    INTERVIEW/REJECTION checks to prevent Vercel/GitHub/etc. from hitting the
   //    INTERVIEW keyword path (e.g., "interview" in commit message).
@@ -271,30 +329,30 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     return { kind: "auto", isHuman: false };
   }
 
-  // 5. Auto-reply (out of office, ecc.) → non conta come risposta reale.
+  // 6. Auto-reply (out of office, ecc.) → not a recruiter decision.
   if (containsAny(subjectBody, AUTO_REPLY)) {
-    return { kind: "auto", isHuman: false };
+    return { kind: "auto_reply", isHuman: false };
   }
 
-  // 6. Rifiuto. Controllato PRIMA del colloquio: un'email di rifiuto può
+  // 7. Rifiuto. Controllato PRIMA del colloquio: un'email di rifiuto può
   //    contenere "interview" ("thank you for interviewing") ma resta un no.
   if (containsAny(subjectBody, REJECTION)) {
     return { kind: "rifiutata", isHuman: true };
   }
 
-  // 7. Invito a colloquio / next steps.
+  // 8. Invito a colloquio / next steps.
   if (containsAny(subjectBody, INTERVIEW)) {
     return { kind: "colloquio", isHuman: true };
   }
 
-  // 8. Catch remaining system notification senders (noreply@, notifications@, etc.)
+  // 9. Catch remaining system notification senders (noreply@, notifications@, etc.)
   //    that didn't match acknowledgement/rejection/interview patterns above.
   //    These are generic automated messages, not job-related responses.
   if (containsAny(from, SYSTEM_NOTIFICATION_FROM)) {
     return { kind: "auto", isHuman: false };
   }
 
-  // 9. Risposta umana generica (qualcuno ha scritto, ma senza segnali chiari).
+  // 10. Risposta umana generica (qualcuno ha scritto, ma senza segnali chiari).
   return { kind: "risposta", isHuman: true };
 }
 

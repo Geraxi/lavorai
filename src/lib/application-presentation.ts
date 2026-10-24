@@ -7,6 +7,7 @@ const english: Record<string, string> = {
   "Test diagnostico": "Diagnostic test", "Email segnalata": "Email reported", "Email non consegnata": "Email not delivered",
   "Email consegnata": "Email delivered", "Consegna email in ritardo": "Email delivery delayed",
   "Email accettata dal provider": "Email accepted by provider", "Ricevuta ATS verificata": "Verified ATS receipt",
+  "Ricevuta ATS confermata": "ATS receipt confirmed",
   "Invio dichiarato da te": "Submission reported by you", "Esito da verificare": "Outcome unverified", "Non inviata": "Not submitted",
   "In attesa: limite giornaliero": "Held: daily limit", "In coda": "Queued", "In preparazione": "Preparing", "Invio in corso": "Submitting",
   "In attesa del tuo consenso": "Awaiting your consent", "Risposte necessarie": "Answers needed", "Collegamento necessario": "Connection needed",

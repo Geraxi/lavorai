@@ -1,6 +1,6 @@
 import type { JobListItem } from "@/lib/adzuna";
 import { companyWebsiteFromPublishedSource } from "@/lib/recruiter-email";
-import { cleanHtmlText } from "./html-clean";
+import { storedJobDescription } from "./posting-description";
 
 /**
  * Lever public Postings API. Nessuna auth richiesta.
@@ -27,6 +27,7 @@ export interface LeverPosting {
     allLocations?: string[];
   };
   workplaceType?: string;
+  lists?: Array<{ text?: string; content?: string }>;
 }
 
 export async function fetchLeverJobs(
@@ -87,9 +88,9 @@ function mapPosting(
   companyName: string,
   companySlug?: string,
 ): JobListItem | null {
-  const description = cleanHtmlText(
-    p.descriptionPlain ?? p.description ?? "",
-  ).slice(0, 2000);
+  const description = storedJobDescription(
+    [p.descriptionPlain ?? p.description ?? "", ...(p.lists ?? []).map((l) => [l.text, l.content].filter(Boolean).join("\n"))].join("\n"),
+  );
   const location =
     p.categories?.location ??
     (p.categories?.allLocations && p.categories.allLocations[0]) ??

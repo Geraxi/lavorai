@@ -11,6 +11,7 @@ import type { GhostJobResult } from "@/lib/ghost-job";
 import { CompanyLogo, companyColor } from "@/components/design/company-logo";
 import { PaywallDialog } from "@/components/paywall-dialog";
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { jobApplySupport } from "@/lib/application-mailbox";
 
 export interface JobRow {
   id: string;
@@ -250,6 +251,7 @@ export function JobsList({ jobs, label, alreadyApplied = [] }: { jobs: JobRow[];
             const isPrior = priorIds.has(j.id);
             const isApplying = applyingId === j.id;
             const salary = formatSalaryRange(j.salaryMin, j.salaryMax);
+            const unsupported = jobApplySupport(j.url) === "unsupported";
             return (
               <li key={j.id} className="jobs-row">
                 <Link href={`/jobs/${j.id}`} className="jobs-row-main">
@@ -260,6 +262,7 @@ export function JobsList({ jobs, label, alreadyApplied = [] }: { jobs: JobRow[];
                   </span>
                 </Link>
                 <span className="jobs-row-meta">
+                  {unsupported && <span className="pm-pill tone-neutral" title={t("unsupportedHint")}>{t("unsupported")}</span>}
                   {j.ghost && <GhostBadge result={j.ghost} />}
                   {j.remote && <span className="pm-pill tone-neutral">{t("remote")}</span>}
                   {j.protectedCategory && <span className="pm-pill tone-neutral" title="Riservato/prioritario categorie protette, L. 68/99">L. 68/99</span>}

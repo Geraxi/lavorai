@@ -1,0 +1,30 @@
+.posta-page { padding: 20px 24px 80px; max-width: 1100px; margin: 0 auto; color: var(--pm-fg); }
+.posta-intro h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 8px; }
+.posta-intro p { margin: 0 0 20px; color: var(--pm-muted); font-size: 13.5px; max-width: 62ch; }
+.posta-empty {
+  border: 1px solid var(--pm-line); border-radius: 12px; padding: 28px;
+  background: var(--pm-card); color: var(--pm-muted);
+}
+.posta-split { display: grid; grid-template-columns: minmax(240px, 320px) 1fr; gap: 16px; align-items: start; }
+.posta-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.posta-list button {
+  width: 100%; text-align: left; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--pm-line); background: var(--pm-card); color: inherit; cursor: pointer;
+}
+.posta-list button.is-active { border-color: var(--pm-fg); }
+.posta-list strong { display: block; font-size: 14px; }
+.posta-list small { color: var(--pm-muted); font-size: 12px; }
+.posta-receipt, .posta-receipt-detail {
+  display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 600;
+  color: #d6d3d1; background: #1c1917; border: 1px solid #44403c; border-radius: 999px; padding: 2px 8px;
+}
+.posta-receipt-detail { margin: 8px 0 0; }
+.posta-thread { border: 1px solid var(--pm-line); border-radius: 12px; background: var(--pm-card); padding: 18px; }
+.posta-thread h2 { margin: 0; font-size: 18px; }
+.posta-thread header p { margin: 4px 0 0; color: var(--pm-muted); }
+.posta-thread ul { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.posta-msg { border-top: 1px solid var(--pm-line); padding-top: 12px; }
+.posta-msg-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--pm-muted); font-size: 12px; margin-bottom: 6px; }
+.posta-subject { margin: 4px 0; font-size: 13px; }
+.posta-body { margin: 0; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; }
+@media (max-width: 800px) { .posta-split { grid-template-columns: 1fr; } }

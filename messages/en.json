@@ -138,7 +138,9 @@
     "queuedNote": "{count, plural, =1 {1 request saved} other {# requests saved}}: see Applications.",
     "noSalary": "Salary not listed",
     "details": "Details",
-    "alreadyApplied": "Already applied"
+    "alreadyApplied": "Already applied",
+    "unsupported": "unsupported",
+    "unsupportedHint": "This site is not among the portals LavorAI can apply to automatically."
   },
   "jobsPage": {
     "title": "Job board",
