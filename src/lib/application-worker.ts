@@ -470,6 +470,7 @@ async function processApplicationRun(
       userYearsExperience: app.user.yearsExperience,
       userEnglishLevel: app.user.englishLevel,
       userNoticePeriod: app.user.noticePeriod,
+      privacyConsentAt: app.user.privacyConsentAt,
       // Unknown facts and declarations always wait for the candidate.
       autonomous: true,
       preferredCity: firstPreferredCity(app.user.preferences?.locationsJson),
@@ -1818,6 +1819,7 @@ interface AdapterSubmitInput {
   userYearsExperience?: number | null;
   userEnglishLevel?: string | null;
   userNoticePeriod?: string | null;
+  privacyConsentAt?: Date | string | null;
   /** Auto-apply "auto": l'AI risponde da sola alle domande del form. */
   autonomous?: boolean;
   preferredCity?: string | null;
@@ -1938,6 +1940,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       userEmail: formEmail,
       userName: input.userName ?? undefined,
       userPhone: profile.phone || undefined,
+      privacyConsentAt: input.privacyConsentAt ?? null,
       cvLocalPath,
       clLocalPath,
       coverLetterText: input.coverLetterText,

@@ -1,6 +1,15 @@
 import type { CVProfile } from "./cv-profile-types";
 import type { ApplicationAnswers } from "./application-answers";
 
+/** Employer privacy/GDPR consent only — never terms, marketing, or certifications. */
+export function isPrivacyConsentQuestion(label: string): boolean {
+  const key = factQuestionKey(label);
+  if (/\b(terms of (?:service|use)|terms and conditions|i certify|i confirm that|marketing|newsletter|share my (?:data|information) with|third[ -]part)\b/.test(key)) {
+    return false;
+  }
+  return /privacy policy|informativa privacy|gdpr|trattamento dei dati personali|processing of (?:my )?personal data|data protection(?: policy)?|consenso (?:privacy|gdpr)|i (?:agree to|accept|consent to) (?:the )?(?:privacy|gdpr)/.test(key);
+}
+
 export type FactSource = "cv" | "profile" | "preferences" | "previous_user";
 export type Fact = { key: string; value: string; source: FactSource; reference: string };
 export type SavedFactAnswer = { label: string; kind?: string; answer: string | null; source: string; answeredAt: Date | string | null; optionsJson?: string | null };
@@ -15,6 +24,7 @@ export type FactContext = {
   linkedinUrl?: string | null; portfolioUrl?: string | null; salaryExpectationEur?: number | null;
   yearsExperience?: number | null; englishLevel?: string | null; noticePeriod?: string | null; highestEducation?: string | null;
   languages?: Array<{ name: string; level?: string }>;
+  privacyConsentAt?: Date | string | null;
 };
 export function factQuestionKey(label: string): string {
   return label.normalize("NFKC").toLowerCase().replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim()
@@ -23,11 +33,11 @@ export function factQuestionKey(label: string): string {
 const aliases: Record<string, string[]> = {
   firstName: ["first name", "given name", "nome", "qual è il tuo nome"],
   lastName: ["last name", "family name", "surname", "cognome", "qual è il tuo cognome"],
-  fullName: ["full name", "nome e cognome", "come ti chiami"],
+  fullName: ["name", "full name", "legal name", "applicant name", "nome e cognome", "come ti chiami"],
   email: ["email", "e-mail", "email address", "indirizzo email", "qual è il tuo indirizzo email"],
-  phone: ["phone", "phone number", "telephone", "mobile", "telefono", "numero di telefono", "cellulare"],
+  phone: ["phone", "phone number", "telephone", "mobile", "best contact number", "best phone number", "contact number", "mobile number", "telefono", "numero di telefono", "cellulare"],
   phoneCountry: ["phone country", "phone country code", "phone country/region", "country calling code", "dial code", "dialing code", "country code", "prefisso telefonico"],
-  city: ["city", "location (city)", "current city", "city of residence", "current location", "current location (city)", "current location (country, city)", "current location (city, country)", "città", "citta", "città di residenza", "citta di residenza", "where do you live", "where are you based", "where are you currently based", "where are you located", "what city do you live in", "dove vivi", "dove risiedi", "in quale città vivi", "qual è la tua città di residenza"],
+  city: ["city", "location", "your location", "location (city)", "current city", "city of residence", "current location", "current location (city)", "current location (country, city)", "current location (city, country)", "città", "citta", "città di residenza", "citta di residenza", "where do you live", "where are you based", "where are you currently based", "where are you located", "what city do you live in", "dove vivi", "dove risiedi", "in quale città vivi", "qual è la tua città di residenza"],
   country: ["country", "current country", "country of residence", "current country of residence", "country/region of residence", "residence country", "country where you currently reside", "in which country do you currently reside", "which country do you currently live in", "what country do you live in", "paese", "nazione", "paese di residenza", "in quale paese risiedi"],
   currentEmployer: ["current employer", "current company", "azienda attuale", "datore di lavoro attuale", "qual è la tua azienda attuale", "where do you currently work"],
   currentOrPreviousEmployer: ["current or previous employer", "current/previous employer", "current / previous employer", "who is your current or previous employer", "current or last company", "current or last employer", "current or most recent company", "current or most recent employer"],
@@ -37,20 +47,22 @@ const aliases: Record<string, string[]> = {
   currentOrPreviousJobTitle: ["current or previous job title"],
   mostRecentJobTitle: ["most recent job title", "last job title"],
   school: ["most recent school", "most recent university", "ultima università", "ultima universita"],
-  linkedinUrl: ["linkedin", "linkedin url", "linkedin profile", "profilo linkedin"],
+  linkedinUrl: ["linkedin", "linkedin url", "linkedin profile", "linkedin profile url", "linkedin profile link", "profilo linkedin"],
   portfolioUrl: ["portfolio", "portfolio url"],
   githubUrl: ["github", "github url", "github profile"],
   websiteUrl: ["website", "personal website", "sito web personale"],
   yearsExperience: ["years of experience", "years of professional experience", "years of total experience", "total years of experience", "how many years of experience do you have", "how many years of professional experience do you have", "anni di esperienza", "anni di esperienza professionale", "quanti anni di esperienza hai", "quanti anni di esperienza professionale hai"],
   englishLevel: ["english level", "level of english", "english proficiency", "livello di inglese"],
   languages: ["languages", "languages spoken", "spoken languages", "lingue", "lingue parlate"],
-  noticePeriod: ["notice period", "preavviso", "periodo di preavviso"],
+  noticePeriod: ["notice period", "preavviso", "periodo di preavviso", "available from", "available to start", "earliest start date", "earliest start", "when can you start", "start date", "disponibilità"],
   highestEducation: ["highest education", "highest level of education", "titolo di studio", "titolo di studio più alto"],
+  howHeard: ["where did you hear about us", "how did you hear about us", "how did you hear about this role", "how did you hear about this job", "how did you find us", "where did you hear about this role", "come ci hai conosciuto", "come hai saputo di noi"],
 };
 export function reusableFactKey(label: string): string | null {
   const key = factQuestionKey(label);
   if (/^(?:(?:expected|desired) annual (?:salary|compensation)|annual (?:salary|compensation) expectations?)\s*\(?\s*(?:eur|€|euros?)\s*\)?$/.test(key)
-    || /^(?:ral desiderata|ral attesa|aspettativa (?:di )?ral)$/.test(key)) return "salaryExpectationEur";
+    || /^(?:ral desiderata|ral attesa|aspettativa (?:di )?ral)$/.test(key)
+    || /^(?:salary|compensation) expectations?$/.test(key)) return "salaryExpectationEur";
   const skill = key.match(/^(?:do you have experience with|have you worked with|have you used|hai esperienza con) ([a-z0-9+#. -]+)$/);
   if (skill) return `skill:${skill[1].trim()}`;
   return Object.entries(aliases).find(([, values]) => values.includes(key))?.[0] ?? null;
@@ -62,6 +74,7 @@ function canonicalFactValue(key: string | null, value: string): string {
   const groups: Record<string, string[][]> = {
     country: [["italy", "italia", "it", "ita"], ["united kingdom", "uk", "gb", "gbr", "regno unito"], ["united states", "united states of america", "us", "usa", "stati uniti"]],
     noticePeriod: [["immediate", "immediately", "immediata", "immediato"], ["2weeks", "2 weeks", "2 settimane"], ["1month", "1 month", "1 mese"], ["2months", "2 months", "2 mesi"], ["3months_plus", "3 months or more", "3 mesi o più"]],
+    howHeard: [["linkedin"], ["google", "google / search", "search"], ["referral", "referral / passaparola", "word of mouth", "passaparola"], ["other", "altro"]],
     highestEducation: [["high_school", "high school", "high school diploma"], ["bachelor", "bachelor's degree", "bachelor’s degree"], ["master", "master's degree", "master’s degree"], ["phd", "ph.d.", "doctorate"]],
   };
   const group = groups[key ?? ""]?.find(values => values.includes(normalized));
@@ -88,10 +101,20 @@ export function matchFactOption(question: FactQuestion, value: string): string |
 }
 /** Multiple sources must agree. Only a fresh application-scoped candidate answer
  * may override conflicting facts; never silently prefer CV, settings or history. */
+const NOTICE_TEXT: Record<string, string> = {
+  immediate: "Immediate", "2weeks": "2 weeks", "1month": "1 month", "2months": "2 months", "3months_plus": "3 months",
+};
+
 export function resolveCandidateFact(question: FactQuestion, context: FactContext, allowSearchValue = false): FactResolution {
   let key = reusableFactKey(question.label);
   const empty = { answer: null, provenance: [], conflict: false };
-  if (!key || question.kind === "checkbox") return empty;
+  if (question.kind === "checkbox") {
+    if (isPrivacyConsentQuestion(question.label) && context.privacyConsentAt) {
+      return { answer: "Yes", provenance: [{ key: "privacyConsent", value: "Yes", source: "profile", reference: "privacyConsentAt" }], conflict: false };
+    }
+    return empty;
+  }
+  if (!key) return empty;
   if (key === "phoneCountry" || (key === "country" && question.options?.some(option => /\+\d/.test(option)))) key = "phone";
   const facts = context.facts ?? Object.entries(context).flatMap(([field, value]): Fact[] => {
     if (typeof value === "string" || typeof value === "number") return [{ key: field, value: String(value), source: "profile", reference: field }];
@@ -116,10 +139,14 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
   const values = new Set(provenance.map(fact => canonicalFactValue(key, fact.value)));
   if (values.size !== 1) return { answer: null, provenance, conflict: values.size > 1 };
   const value = provenance[0].value.trim();
-  const answer = matchFactOption(question, value);
+  let answer = matchFactOption(question, value)
+    ?? (allowSearchValue && question.kind === "react-select" && reusableFactKey(question.label) !== "phoneCountry" ? value : null);
+  if (answer && key === "noticePeriod" && !["select", "react-select", "radio"].includes(question.kind)) {
+    answer = NOTICE_TEXT[canonicalFactValue("noticePeriod", answer)] ?? answer;
+  }
   // A search string is never a selected answer: the browser must fetch current
   // options and map them again before clicking. Offline suggestions stay strict.
-  return { answer: answer ?? (allowSearchValue && question.kind === "react-select" && reusableFactKey(question.label) !== "phoneCountry" ? value : null), provenance, conflict: false };
+  return { answer, provenance, conflict: false };
 }
 
 /** Only a fully elapsed, explicit calendar period proves a job has ended.
@@ -136,7 +163,7 @@ export function employmentEnded(endDate: string, now = new Date()): boolean {
   return date.toISOString().slice(0, 10) === value && +date + 86400000 <= +now;
 }
 
-export function candidateFacts(profile: CVProfile | null, user: { email?: string | null; yearsExperience?: number | null; englishLevel?: string | null; noticePeriod?: string | null } = {}, preferences: ApplicationAnswers = {}, saved: SavedFactAnswer[] = [], now = new Date()): Fact[] {
+export function candidateFacts(profile: CVProfile | null, user: { email?: string | null; name?: string | null; phone?: string | null; yearsExperience?: number | null; englishLevel?: string | null; noticePeriod?: string | null } = {}, preferences: ApplicationAnswers = {}, saved: SavedFactAnswer[] = [], now = new Date()): Fact[] {
   const facts: Fact[] = [];
   const add = (key: string, value: unknown, source: FactSource, reference = key) => {
     if ((typeof value === "string" && value.trim()) || (typeof value === "number" && Number.isFinite(value) && value >= 0)) facts.push({ key, value: String(value).trim(), source, reference });
@@ -161,7 +188,14 @@ export function candidateFacts(profile: CVProfile | null, user: { email?: string
   }
   for (const key of ["yearsExperience", "englishLevel", "noticePeriod"] as const) add(key, user[key], "profile");
   if (!profile?.email?.trim()) add("email", user.email, "profile");
-  for (const key of ["city", "country", "linkedinUrl", "portfolioUrl", "githubUrl", "websiteUrl", "salaryExpectationEur", "yearsExperience", "englishLevel", "noticePeriod", "highestEducation"] as const) add(key, preferences[key], "preferences");
+  if (!profile?.phone?.trim()) add("phone", user.phone, "profile");
+  if (!(profile?.firstName?.trim() && profile?.lastName?.trim()) && user.name?.trim()) {
+    const parts = user.name.trim().split(/\s+/).filter(Boolean);
+    add("fullName", user.name.trim(), "profile", "name");
+    if (!profile?.firstName?.trim() && parts[0]) add("firstName", parts[0], "profile", "name");
+    if (!profile?.lastName?.trim() && parts.length > 1) add("lastName", parts.slice(1).join(" "), "profile", "name");
+  }
+  for (const key of ["city", "country", "linkedinUrl", "portfolioUrl", "githubUrl", "websiteUrl", "salaryExpectationEur", "yearsExperience", "englishLevel", "noticePeriod", "highestEducation", "howHeard"] as const) add(key, preferences[key], "preferences");
   add("languages", preferences.languagesText, "preferences", "languagesText");
   // Do not reuse a bare historical label/value or any generated/assumed source.
   for (const answer of saved) {

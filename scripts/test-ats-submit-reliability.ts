@@ -245,6 +245,14 @@ await test("common Alan questions map to profile facts (pre-fill on Domande)", (
   assert.equal(reusableFactKey("Current or last company"), "currentOrPreviousEmployer");
   assert.equal(reusableFactKey("Current location (Country, city)"), "city");
   assert.equal(reusableFactKey("LinkedIn"), "linkedinUrl");
+  assert.equal(reusableFactKey("LinkedIn Profile URL"), "linkedinUrl");
+  assert.equal(reusableFactKey("Name"), "fullName");
+  assert.equal(reusableFactKey("Best Contact Number"), "phone");
+  assert.equal(reusableFactKey("Location"), "city");
+  assert.equal(reusableFactKey("Available from"), "noticePeriod");
+  assert.equal(reusableFactKey("Earliest start date"), "noticePeriod");
+  assert.equal(reusableFactKey("Salary expectations"), "salaryExpectationEur");
+  assert.equal(reusableFactKey("Where did you hear about us"), "howHeard");
   assert.equal(reusableFactKey("Notice period"), "noticePeriod");
   assert.equal(reusableFactKey("Expected annual salary (EUR)"), "salaryExpectationEur");
   // Free-text motivation / essay questions stay with the candidate.

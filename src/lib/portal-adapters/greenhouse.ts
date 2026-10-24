@@ -9,34 +9,7 @@ import type {
 } from "./types";
 import type { Page } from "playwright";
 import { detectBlockingCaptcha } from "./captcha";
-
-/**
- * Canary helper: scatta uno screenshot della page corrente e lo
- * carica su Vercel Blob. Ritorna l'URL pubblico, o null se fallisce
- * o se Blob non è configurato. Mai throws — la canary deve essere
- * non-distruttiva sul flow di submit.
- */
-async function uploadScreenshot(
-  page: Page,
-  label: string,
-  applicationId: string | undefined,
-): Promise<string | null> {
-  try {
-    if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
-    const { put } = await import("@vercel/blob");
-    const buf = await page.screenshot({ type: "png", fullPage: false });
-    const filename = `canary/${applicationId ?? "noid"}-${label}-${Date.now()}.png`;
-    const blob = await put(filename, buf, {
-      access: "public",
-      contentType: "image/png",
-      addRandomSuffix: false,
-    });
-    return blob.url;
-  } catch (err) {
-    console.warn("[canary] screenshot upload failed", err);
-    return null;
-  }
-}
+import { uploadSubmitScreenshot } from "./submit-evidence";
 
 /**
  * Canary helper: estrae lo stato attuale di TUTTI i campi form
@@ -464,7 +437,7 @@ export const greenhouseAdapter: PortalAdapter = {
           const [resumeFn, fields, screenshotUrl] = await Promise.all([
             readResumeFilename(page),
             captureFormFields(page),
-            uploadScreenshot(page, "pre-submit", input.applicationId),
+            uploadSubmitScreenshot(page, "pre-submit", input.applicationId),
           ]);
           canaryPre = {
             resumeAttachedFilename: resumeFn,
@@ -503,7 +476,7 @@ export const greenhouseAdapter: PortalAdapter = {
         canaryFull = {
           resumeAttachedFilename: canaryPre.resumeAttachedFilename,
           preSubmitScreenshotUrl: canaryPre.preSubmitScreenshotUrl,
-          postSubmitScreenshotUrl: await uploadScreenshot(page, "post-submit", input.applicationId),
+          postSubmitScreenshotUrl: await uploadSubmitScreenshot(page, "post-submit", input.applicationId),
           fields: canaryPre.fields,
           submitHttpStatus,
           submitHttpBody,

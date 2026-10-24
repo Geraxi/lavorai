@@ -228,7 +228,7 @@ async function attachCv(page: Page, cvPath: string, T: string): Promise<boolean>
 /** Contesto per l'AI answerer, uguale a quello usato da Greenhouse/Workable. */
 export function buildAnswerContext(input: ApplyInput): CandidateContext {
   const p = input.profile;
-  const facts = candidateFacts(p, { email: input.userEmail, yearsExperience: input.userYearsExperience, englishLevel: input.userEnglishLevel, noticePeriod: input.userNoticePeriod }, input.answers, input.reusableAnswers);
+  const facts = candidateFacts(p, { email: input.userEmail, name: input.userName, phone: input.userPhone, yearsExperience: input.userYearsExperience, englishLevel: input.userEnglishLevel, noticePeriod: input.userNoticePeriod }, input.answers, input.reusableAnswers);
   const value = (label: string) => resolveCandidateFact({ label, kind: "text" }, { facts }).answer;
   const cvText = [p.summary, ...(p.experiences ?? []).map((e) => `${e.role} @ ${e.company} (${e.startDate}-${e.endDate || "end date unspecified"}): ${e.description || (e.bullets ?? []).join("; ")}`)].filter(Boolean).join("\n");
   return {
@@ -261,6 +261,7 @@ export function buildAnswerContext(input: ApplyInput): CandidateContext {
     protectedCategory: input.protectedCategory,
     autonomous: input.autonomous === true,
     storedAnswers: input.storedAnswers,
+    privacyConsentAt: input.privacyConsentAt ?? null,
   };
 }
 

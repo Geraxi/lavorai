@@ -26,6 +26,8 @@ export interface ApplyInput {
   userPhone?: string;
   /** Display name from User.name — fallback when CVProfile first/last are empty. */
   userName?: string;
+  /** LavorAI privacy consent timestamp. Required privacy/GDPR checkboxes may be auto-checked when set. */
+  privacyConsentAt?: Date | string | null;
   /** Path locale del CV (assicurato via ensureLocalPath nel worker) */
   cvLocalPath: string;
   /** Path locale della cover letter (opzionale per alcuni ATS) */

@@ -14,7 +14,8 @@ export function isTotalExperienceQuestion(label: string): boolean {
 }
 export function isAnnualEurExpectation(label: string): boolean {
   const question = questionKey(label);
-  return /^(?:expected|desired) annual (?:salary|compensation)\s*\(?\s*(?:eur|€|euros?)\s*\)?$/.test(question) ||
+  return /^(?:salary|compensation) expectations?$/.test(question) ||
+    /^(?:expected|desired) annual (?:salary|compensation)\s*\(?\s*(?:eur|€|euros?)\s*\)?$/.test(question) ||
     /^(?:annual (?:salary|compensation) (?:expectation|expectations)\s*\(?\s*(?:eur|€|euros?)\s*\)?|ral desiderata|ral attesa|aspettativa ral|aspettativa di ral)$/.test(question);
 }
 export function isNarrativeQuestion(label: string, kind: string): boolean {

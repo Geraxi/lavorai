@@ -144,6 +144,7 @@ export const FIELD_HINTS: Record<keyof ApplicationAnswers, string[]> = {
     "sponsorship",
   ],
   salaryExpectationEur: [
+    "salary expectations",
     "salary expectation",
     "expected salary",
     "compensation expectation",
@@ -163,10 +164,12 @@ export const FIELD_HINTS: Record<keyof ApplicationAnswers, string[]> = {
     "preavviso",
     "when can you start",
     "earliest start",
+    "earliest start date",
+    "available from",
     "disponibilità",
     "availability",
   ],
-  linkedinUrl: ["linkedin", "linkedin url", "linkedin profile"],
+  linkedinUrl: ["linkedin", "linkedin url", "linkedin profile", "linkedin profile url"],
   githubUrl: ["github", "github url", "github profile"],
   portfolioUrl: [
     "portfolio",
@@ -179,7 +182,7 @@ export const FIELD_HINTS: Record<keyof ApplicationAnswers, string[]> = {
     "behance",
   ],
   websiteUrl: ["website", "personal website", "sito web", "your site"],
-  city: ["city", "town", "città", "city of residence", "current city"],
+  city: ["city", "town", "location", "città", "city of residence", "current city"],
   country: ["country", "paese", "nazione", "country of residence"],
   pronouns: ["pronoun", "pronouns", "pronomi"],
   yearsExperience: [
@@ -206,6 +209,7 @@ export const FIELD_HINTS: Record<keyof ApplicationAnswers, string[]> = {
   howHeard: [
     "how did you hear",
     "where did you hear",
+    "where did you hear about us",
     "how did you find",
     "come ci hai conosciuto",
     "come hai saputo",

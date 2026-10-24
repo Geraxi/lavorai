@@ -1,5 +1,6 @@
 import { resolveCandidateFact, matchFactOption, type Fact, type FactContext } from "../candidate-facts";
 import { exactOption, isNarrativeQuestion, matchingScopedAnswer, resolveScopedQuestionAnswer } from "./answer-safety";
+import { sanitizeFormLabel } from "./form-labels";
 import type { Page } from "playwright";
 import { complete } from "@/lib/ai-router";
 
@@ -162,7 +163,7 @@ export async function answerRequiredFields(
   // 3b. Riempi i campi noti dal PROFILO (country/city/phone/link) anche se
   //     sono react-select searchable (le cui opzioni l'AI non vedrebbe).
   for (const f of pending) {
-    if (filledIdx.has(f.idx) || f.kind === "checkbox" || resolveScopedQuestionAnswer(ctx.storedAnswers, f).conflict) continue;
+    if (filledIdx.has(f.idx) || resolveScopedQuestionAnswer(ctx.storedAnswers, f).conflict) continue;
     const fact = resolveCandidateFact(f, ctx, true);
     const pv = fact.answer;
     if (!pv) continue;
@@ -326,8 +327,11 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
         label =
           el.getAttribute("aria-label") ||
           el.getAttribute("placeholder") ||
-          el.getAttribute("name") ||
           "";
+      const rawName = el.getAttribute("name") || "";
+      // Lever custom cards and autocomplete widgets use cards[field] as the
+      // control name. That is not a question label.
+      if (!label && rawName && !/^cards?\[/i.test(rawName)) label = rawName;
       label = label
         .replace(/SVGs? not supported by this browser\.?/gi, " ")
         // Workable: il selettore paesi del telefono dumpa l'intera lista
@@ -494,7 +498,11 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
     }
 
     return out;
-  }, { tag: TAG, includePopulated }) as Promise<FieldDescriptor[]>;
+  }, { tag: TAG, includePopulated }).then((fields) => fields.flatMap((field) => {
+    const label = sanitizeFormLabel(field.label);
+    if (!label) return [];
+    return [{ ...field, label }];
+  })) as Promise<FieldDescriptor[]>;
 }
 
 // ---------- react-select helpers ----------

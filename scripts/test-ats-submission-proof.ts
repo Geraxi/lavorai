@@ -250,6 +250,7 @@ async function testRealAshbyAndOtp() {
     "./submission-proof": proofModule,
     "./captcha": captcha,
     "../application-security-code": securityCode,
+    "./submit-evidence": { uploadSubmitScreenshot: async () => null },
     "./submit-button": { findSubmitButton: async (page: MockPage) => ({ click: () => page.click() }) },
     "./generic-fill": { fillCustomQuestions: async () => ({ filled: 0, matched: [] }) },
     "./web-form": { prepareRequiredAnswers: async () => null },
