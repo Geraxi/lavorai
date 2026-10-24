@@ -5,6 +5,7 @@ import ts from "typescript";
 import { questionFingerprint } from "../src/lib/application-question-answers";
 import * as facts from "../src/lib/candidate-facts";
 import * as safety from "../src/lib/portal-adapters/answer-safety";
+import * as formLabels from "../src/lib/portal-adapters/form-labels";
 import * as answerConstants from "../src/lib/application-answers";
 import * as protectedCategory from "../src/lib/protected-category";
 
@@ -29,7 +30,7 @@ const scopedAnswer = (label: string, answer: string, kind = "text", options: str
 let aiCalls = 0;
 let lastPrompt = "";
 const answerer = load("ai-answer", {
-  "./answer-safety": safety, "../candidate-facts": facts,
+  "./answer-safety": safety, "../candidate-facts": facts, "./form-labels": formLabels,
   "@/lib/protected-category": protectedCategory,
   "@/lib/ai-router": { complete: async ({ user }: { user: string }) => {
     aiCalls++; lastPrompt = user;
@@ -74,6 +75,12 @@ async function testUnknownFacts() {
     { idx: 53, label: "I agree to the privacy policy", kind: "checkbox" },
   ]);
   assert.equal(missing.answers.size, 0, "No negotiable/N/A/default notice/residence/checkbox invention");
+  const consented = await answerer.answerOffline({ ...context, privacyConsentAt: new Date("2026-01-01") }, [
+    { idx: 53, label: "I agree to the privacy policy", kind: "checkbox" },
+    { idx: 54, label: "I agree to the terms", kind: "checkbox" },
+  ]);
+  assert.equal(consented.answers.get(53), "Yes");
+  assert.equal(consented.answers.get(54), undefined, "Terms stay a question");
   console.log("Unknown eligibility, history, qualifications, salary, availability and consent stay unanswered.");
 }
 async function testActualFactsAndUserAnswers() {

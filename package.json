@@ -13,7 +13,7 @@
     "test:match-score": "node --import tsx scripts/test-match-score.ts",
     "test:ghost-jobs": "node --import tsx scripts/test-ghost-job.ts",
     "test:ats-unstick": "node --import tsx scripts/test-ats-unstick.ts",
-    "test:ats-submit": "node --import tsx scripts/test-ats-submit-reliability.ts",
+    "test:ats-submit": "node --import tsx scripts/test-ats-submit-reliability.ts && node --import tsx scripts/test-ats-profile-answers.ts",
     "test:answers-consent": "node --import tsx scripts/test-answers-consent-resume.ts",
     "test:google-auth": "node --import tsx scripts/test-google-auth.ts",
     "test:inbox-replies-postgres": "node --import tsx scripts/test-inbox-replies-postgres.ts",

@@ -128,16 +128,16 @@ export function matchAnswerKey(label: string): keyof ApplicationAnswers | null {
   const key = questionKey(label);
   if (isAnnualEurExpectation(label)) return "salaryExpectationEur";
   const mappings: Array<[RegExp, keyof ApplicationAnswers]> = [
-    [/^(?:linkedin|linkedin url|linkedin profile|profilo linkedin)$/, "linkedinUrl"],
+    [/^(?:linkedin|linkedin url|linkedin profile|linkedin profile url|profilo linkedin)$/, "linkedinUrl"],
     [/^(?:github|github url|github profile)$/, "githubUrl"],
     [/^(?:portfolio|portfolio url)$/, "portfolioUrl"],
     [/^(?:website|personal website|sito web personale)$/, "websiteUrl"],
-    [/^(?:city|current city|city of residence|città|citta|città di residenza)$/, "city"],
+    [/^(?:city|location|current city|city of residence|città|citta|città di residenza)$/, "city"],
     [/^(?:country|current country|country of residence|paese|paese di residenza|nazione)$/, "country"],
     [/^(?:pronouns|pronoun|pronomi)$/, "pronouns"],
-    [/^(?:notice period|preavviso|periodo di preavviso)$/, "noticePeriod"],
+    [/^(?:notice period|preavviso|periodo di preavviso|available from|earliest start date|earliest start)$/, "noticePeriod"],
     [/^(?:are you willing to relocate|willing to relocate|disponibile a trasferirti)$/, "relocate"],
-    [/^(?:how did you hear about us|where did you hear about us|come ci hai conosciuto)$/, "howHeard"],
+    [/^(?:how did you hear about us|where did you hear about us|how did you hear about this (?:role|job)|come ci hai conosciuto)$/, "howHeard"],
     [/^(?:gender|genere)$/, "eeoGender"],
     [/^(?:veteran status|are you a veteran)$/, "eeoVeteran"],
     [/^(?:disability status|do you have a disability)$/, "eeoDisability"],

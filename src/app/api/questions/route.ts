@@ -8,6 +8,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
+import { persistReusableStandardAnswers } from "@/lib/reusable-standard-answers";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import {
   completesApplicationQuestion, encodeExplicitApplicationAnswers, isReusableProfileQuestion,
@@ -32,7 +33,7 @@ export async function GET() {
     prisma.userAnswer.findMany({ where: { userId: user.id, source: "user" }, select: { label: true, kind: true, answer: true, source: true, answeredAt: true, optionsJson: true } }),
     prisma.cVProfile.findUnique({ where: { userId: user.id } }),
     prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { applicationAnswersJson: true } }),
-    prisma.user.findUnique({ where: { id: user.id }, select: { email: true, yearsExperience: true, englishLevel: true, noticePeriod: true, privacyConsentAt: true } }),
+    prisma.user.findUnique({ where: { id: user.id }, select: { email: true, name: true, yearsExperience: true, englishLevel: true, noticePeriod: true, privacyConsentAt: true } }),
   ]);
   const profile = profileRow ? rowToProfile(profileRow) : null;
   const facts = candidateFacts(profile, userFacts ?? user, parseAnswers(preferences?.applicationAnswersJson), globalAnswers);
@@ -47,7 +48,7 @@ export async function GET() {
       if (seen.has(fingerprint)) return [];
       seen.add(fingerprint);
       const explicit = resolveExplicitApplicationAnswer(app.userProvidedAnswersJson, app.id, question);
-      const resolved = explicit.answer || explicit.conflict ? null : resolveCandidateFact(question, { facts });
+      const resolved = explicit.answer || explicit.conflict ? null : resolveCandidateFact(question, { facts, privacyConsentAt: userFacts?.privacyConsentAt });
       const suggestion = resolved?.answer ?? null;
       return [{
         id: `${app.id}:${fingerprint}`, applicationId: app.id, fingerprint,
@@ -149,6 +150,7 @@ export async function POST(request: NextRequest) {
     if (changed.count !== 1) return NextResponse.json({ error: "questions_changed_reload" }, { status: 409 });
     app.userProvidedAnswersJson = json;
     saved += changes.get(applicationId)!.size;
+    await persistReusableStandardAnswers(user.id, [...changes.get(applicationId)!.values()]);
   }
 
   let requeued = 0;

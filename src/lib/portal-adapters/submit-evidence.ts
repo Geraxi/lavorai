@@ -1,5 +1,6 @@
 import type { Page } from "playwright";
 import type { CanaryLog, SubmitNetworkEvidence } from "./types";
+import { canaryScreenshotFilename } from "./form-labels";
 
 export interface EvidenceResponse {
   url: string;
@@ -30,11 +31,11 @@ export async function uploadSubmitScreenshot(
     if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
     const { put } = await import("@vercel/blob");
     const buf = await page.screenshot({ type: "png", fullPage: false });
-    const filename = `canary/${applicationId ?? "noid"}-${label}-${Date.now()}.png`;
+    const filename = canaryScreenshotFilename(label);
     const blob = await put(filename, buf, {
       access: "public",
       contentType: "image/png",
-      addRandomSuffix: false,
+      addRandomSuffix: true,
     });
     return blob.url;
   } catch (err) {

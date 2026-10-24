@@ -31,7 +31,7 @@ export const workerGateSelect = {
     remote: true, contractType: true, salaryMin: true, salaryMax: true } },
   session: { select: { id: true, userId: true, status: true, sentCount: true, targetCount: true, title: true, label: true } },
   user: { select: {
-    email: true, yearsExperience: true, englishLevel: true, noticePeriod: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
+    email: true, name: true, yearsExperience: true, englishLevel: true, noticePeriod: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
     subscriptionStatus: true, currentPeriodEnd: true, pausedUntil: true, suspendedAt: true,
     emailVerified: true, privacyConsentAt: true, avoidCompanies: true,
     cvProfile: { select: { firstName: true, lastName: true, email: true, phone: true, city: true, title: true, summary: true,
@@ -524,7 +524,7 @@ export async function queueAnswerContinuation(input: {
       if (!question) return "questions_invalid";
       const explicit = resolveExplicitApplicationAnswer(row.userProvidedAnswersJson, row.id, question);
       if (explicit.conflict) return "answer_conflict";
-      const fact = explicit.answer ? null : resolveCandidateFact(question, { facts });
+      const fact = explicit.answer ? null : resolveCandidateFact(question, { facts, privacyConsentAt: row.user.privacyConsentAt });
       const answer = explicit.answer ?? fact?.answer;
       if (!answer || !completesApplicationQuestion(question, answer)) return fact?.conflict ? "answer_conflict" : "answers_incomplete";
     }

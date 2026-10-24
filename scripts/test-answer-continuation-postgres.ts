@@ -78,6 +78,7 @@ async function main() {
       "next/server": { NextResponse: { json: (body: any, options?: any) => ({ body, status: options?.status ?? 200 }) } },
       "@/lib/cv-profile-types": profile, "@/lib/application-question-answers": scoped,
       "@/lib/cv-answer-reuse": { reuseCvAnswers: () => { throw new Error("Unexpected global write"); } },
+      "@/lib/reusable-standard-answers": { persistReusableStandardAnswers: async () => 0 },
       "@/lib/application-queue": { enqueueApplication: async (...args: [string, { preserveClaim?: boolean }?]) => {
         if (publicationFailure) throw new Error("Synthetic publication outage"); return queue.enqueueApplication(...args);
       } },

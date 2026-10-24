@@ -49,6 +49,7 @@ function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; 
     "@/lib/application-queue": { enqueueApplication: async () => { queued++; } },
     "@/lib/application-question-answers": scoped,
     "@/lib/cv-answer-reuse": { reuseCvAnswers: async () => 0 },
+    "@/lib/reusable-standard-answers": { persistReusableStandardAnswers: async () => 0 },
     "@/lib/cv-profile-types": { rowToProfile: (row: any) => row },
   };
   const module = { exports: {} as any };
