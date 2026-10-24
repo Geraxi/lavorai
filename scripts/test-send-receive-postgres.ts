@@ -7,6 +7,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { notSubmitted } from "../src/lib/proof-of-send";
+import { asWorkLease, liveLeaseFields } from "../src/lib/application-lease";
 
 async function main() {
   // Synthetic localhost only. Never consume ambient production credentials.
@@ -87,6 +88,8 @@ async function main() {
     const { POST: webhook } = await import("../src/app/api/webhooks/resend/route");
     const { NextRequest } = await import("next/server");
     const now = new Date();
+    const workLease = asWorkLease(now, "pg-email-failure-lease");
+    const leaseExpiresAt = new Date(+now + 10 * 60_000);
     const user = await db.user.create({ data: { id: "synthetic-user", email: "candidate@example.invalid", tier: "pro", emailVerified: now, privacyConsentAt: now,
       subscriptionStatus: "active", currentPeriodEnd: new Date(+now + 86400000), preferences: { create: { autoApplyMode: "auto" } } } });
     const job = await db.job.create({ data: { externalId: "synthetic-job", source: "synthetic", title: "Product Designer", company: "Acme", description: "Synthetic role", url: "https://acme.example.invalid/jobs/1" } });
@@ -177,7 +180,7 @@ async function main() {
     console.log("PASS PostgreSQL + route: genuine synthetic signature verifies; unsigned rejected; duplicate signed webhook remains one message.");
     const { reconcileAcceptedApplicationEmails } = await import("../src/lib/application-email-reconciliation");
     const raceSession = await db.applicationSession.create({ data: { userId: user.id, key: "race", label: "race", targetCount: 10 } });
-    const raceApp = await db.application.create({ data: { userId: user.id, jobId: job.id, sessionId: raceSession.id, portal: "email", status: "applying", submitConfirmation: "SUBMISSION_STARTED", startedAt: now } });
+    const raceApp = await db.application.create({ data: { userId: user.id, jobId: job.id, sessionId: raceSession.id, portal: "email", status: "applying", submitConfirmation: "SUBMISSION_STARTED", startedAt: now, leaseToken: workLease.leaseToken, leaseExpiresAt } });
     const { submissionSubjectKey } = await import("../src/lib/application-submission-budget");
     await db.applicationSubmissionReservation.create({ data: {
       applicationId: raceApp.id, subjectKey: submissionSubjectKey(user.id, job.id), attemptStartedAt: now,
@@ -200,10 +203,11 @@ async function main() {
     const failureContext = {
       prisma: db,
       applicationId: raceApp.id,
-      workToken: now,
+      workToken: workLease,
       delivered: { kind: "uncertain" } as { kind: string; reason?: string },
       NOT_SUBMITTED: "NOT_SUBMITTED",
       notSubmitted,
+      liveLeaseFields,
       Date,
     };
     await executeFailure.runInNewContext(failureContext);
@@ -211,7 +215,7 @@ async function main() {
     assert.equal((await reconcileAcceptedApplicationEmails()).reconciled, 0);
     assert.equal((await db.applicationSession.findUniqueOrThrow({ where: { id: raceSession.id } })).sentCount, 1);
     console.log("PASS independent PostgreSQL review: actual worker ambiguous-outcome write cannot downgrade concurrent reconciled success or double-increment round.");
-    const deniedApp = await db.application.create({ data: { userId: user.id, jobId: job.id, portal: "email", status: "ready_to_apply", submitConfirmation: "UNCONFIRMED", startedAt: now } });
+    const deniedApp = await db.application.create({ data: { userId: user.id, jobId: job.id, portal: "email", status: "ready_to_apply", submitConfirmation: "UNCONFIRMED", startedAt: now, leaseToken: workLease.leaseToken, leaseExpiresAt } });
     const deniedAttempt = await delivery.createApplicationEmailAttempt({ applicationId: deniedApp.id, attemptKey: `application-${deniedApp.id}-${now.getTime()}`, recipient: submission.recipient });
     await delivery.recordApplicationEmailUncertain(deniedAttempt.id, true);
     await executeFailure.runInNewContext({

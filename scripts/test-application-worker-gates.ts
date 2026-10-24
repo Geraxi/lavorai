@@ -85,6 +85,7 @@ assert(worker.includes('notSubmitted("failed", "recruiter_email_not_sent")'), "E
 assert(worker.includes('notSubmitted("needs_user", "recruiter_email_acceptance_unknown")'), "Uncertain email must persist proof-of-send");
 const postgresFailureVm = readFileSync(new URL("./test-send-receive-postgres.ts", import.meta.url), "utf8");
 assert(postgresFailureVm.includes("notSubmitted,"), "Postgres email-failure VM must bind notSubmitted");
+assert(postgresFailureVm.includes("liveLeaseFields,"), "Postgres email-failure VM must bind liveLeaseFields");
 assert(worker.includes("...liveLeaseFields(workToken)"));
 assert(worker.includes("...renewLeaseData()"));
 assert(!worker.includes("MAX_ATTEMPTS"), "Unknown portal outcomes must not be retried");
