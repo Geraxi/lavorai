@@ -591,6 +591,21 @@ model EmployerHiringInbox {
   updatedAt     DateTime @updatedAt
 }
 
+/// Cached Greenhouse boards-api questions snapshot (not candidate answers).
+/// Additive only. Used by the proven-channel pre-check; never stores guessed answers.
+model GreenhouseJobForm {
+  cacheKey     String   @id
+  boardToken   String
+  jobId        String
+  absoluteUrl  String?
+  /// "native" | "redirected" | "unavailable"
+  status       String
+  questionsJson String  @db.Text
+  checkedAt    DateTime
+
+  @@index([boardToken, jobId])
+}
+
 /// Application Session: raggruppa candidature simili (stesso ruolo + settore)
 /// per permettere pause/resume di intere "campagne". Ogni utente vede
 /// le sessioni attive su /preferences.

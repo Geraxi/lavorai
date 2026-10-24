@@ -80,6 +80,7 @@ const processing = load("src/lib/application-reply-processing.ts", {
   "node:crypto": crypto, "@/lib/db": { prisma }, "@/lib/reply-parser": parser,
   "@/lib/reply-security-message": replySecurity, "@/lib/application-delivery": delivery,
   "@/lib/apply-reply-to-application": projection,
+  "@/lib/inbound/service": { recordAtsConfirmation: async () => true },
   "@/lib/email": { forwardReplyToUser: async (input: unknown, options: { idempotencyKey: string }) => {
     forwardingCalls++;
     if (failForward) throw new Error("synthetic_provider_failure");

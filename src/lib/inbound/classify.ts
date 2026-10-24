@@ -2,6 +2,8 @@
  * Keyword classifier (Italian + English) for mail received on a user inbox,
  * with an optional, injectable AI fallback for "other". Pure by default.
  */
+import { isPortalRedirectText } from "@/lib/reply-parser";
+
 export type InboundCategory = "confirmation" | "incomplete" | "interview" | "rejection" | "other";
 
 const RULES: Array<[Exclude<InboundCategory, "other">, RegExp[]]> = [
@@ -44,6 +46,9 @@ const CONDITIONAL = /\b(if|should|may|might|whether|in case|qualora|nel caso|eve
 
 export function classifyByRules(subject: string, body: string): InboundCategory {
   const text = `${subject}\n${body}`.slice(0, 20_000);
+  // Apply-via-portal / "we don't take applications over email" is an action
+  // for the candidate, never a recruiter rejection.
+  if (isPortalRedirectText(text)) return "incomplete";
   // "If your profile matches we may invite you to an interview" is a
   // confirmation, not an invitation: drop conditional sentences for interview.
   const assertive = text.split(/(?<=[.!?\n])/).filter((s) => !CONDITIONAL.test(s)).join(" ");

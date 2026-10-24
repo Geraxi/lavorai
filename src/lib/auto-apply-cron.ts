@@ -26,6 +26,13 @@ import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
 import { sortByPaidPriority } from "@/lib/paid-priority";
 import { compareJobsForAutoApply } from "@/lib/ats-skip-hosts";
 import { companyCapUsageWhere, countDailyCapUsage, countsTowardQuota, monthlyQuotaUsageWhere, quotaConsumingFilter } from "@/lib/daily-application-cap";
+import { usesProvenChannelFilter } from "@/lib/proven-channels";
+import {
+  GREENHOUSE_FORM_FETCH_BUDGET,
+  buildProvenChannelFactContext,
+  evaluateProvenChannelEligibility,
+  type ProvenChannelUserContext,
+} from "@/lib/proven-channel-eligibility";
 
 /**
  * Auto-apply cron: per ogni utente con autoApplyMode="auto", scova job
@@ -94,6 +101,7 @@ interface RunStats {
   skippedSalaryMismatch: number;
   skippedJobClosed: number;
   skippedManualAts: number;
+  skippedUnprovenChannel: number;
   candidatesFetched: number;
   descriptionsBackfilled: number;
   errors: number;
@@ -118,6 +126,7 @@ function emptyRunStats(): RunStats {
     skippedSalaryMismatch: 0,
     skippedJobClosed: 0,
     skippedManualAts: 0,
+    skippedUnprovenChannel: 0,
     candidatesFetched: 0,
     descriptionsBackfilled: 0,
     errors: 0,
@@ -345,6 +354,68 @@ async function processUser(
   const prefs = user.preferences;
   const profile = rowToProfile(user.cvProfile);
   if (!profile.title && !profile.summary && !profile.skills.length && !profile.experiences.length) return;
+
+  const restrictProven = usesProvenChannelFilter(user.id);
+  const formBudget = { remaining: GREENHOUSE_FORM_FETCH_BUDGET };
+  let provenCtx: ProvenChannelUserContext | null = null;
+  if (restrictProven) {
+    const extra = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        name: true,
+        yearsExperience: true,
+        englishLevel: true,
+        noticePeriod: true,
+        privacyConsentAt: true,
+        preferences: { select: { applicationAnswersJson: true, locationsJson: true } },
+        answers: {
+          where: { source: "user", answeredAt: { not: null } },
+          select: { label: true, answer: true, kind: true, optionsJson: true, source: true, answeredAt: true },
+        },
+      },
+    });
+    provenCtx = {
+      factContext: buildProvenChannelFactContext({
+        profile: user.cvProfile,
+        user: {
+          email: user.email,
+          name: extra?.name,
+          yearsExperience: extra?.yearsExperience,
+          englishLevel: extra?.englishLevel,
+          noticePeriod: extra?.noticePeriod,
+          privacyConsentAt: extra?.privacyConsentAt,
+        },
+        applicationAnswersJson: extra?.preferences?.applicationAnswersJson,
+        locationsJson: extra?.preferences?.locationsJson,
+        savedAnswers: extra?.answers ?? [],
+      }),
+      hasCv: true,
+    };
+  }
+
+  const admitProven = async (job: {
+    url: string;
+    sourceSlug?: string | null;
+    company?: string | null;
+    recruiterEmail?: string | null;
+  }): Promise<boolean> => {
+    if (!restrictProven || !provenCtx) return true;
+    const verdict = await evaluateProvenChannelEligibility(
+      {
+        url: job.url,
+        sourceSlug: job.sourceSlug,
+        company: job.company,
+        recruiterEmail: job.recruiterEmail,
+      },
+      { ...provenCtx, factContext: { ...provenCtx.factContext, company: job.company } },
+      { formBudget },
+    );
+    if (!verdict.ok) {
+      stats.skippedUnprovenChannel++;
+      return false;
+    }
+    return true;
+  };
 
   // Modalità: "auto" candida direttamente (queued + enqueue), "hybrid"
   // prepara la candidatura e la lascia in "awaiting_consent" perché
@@ -811,6 +882,7 @@ async function processUser(
       stats.skippedJobClosed++;
       continue;
     }
+    if (!(await admitProven(job))) continue;
 
     const portal = portalOf(job.url);
 
@@ -918,6 +990,7 @@ async function processUser(
         stats.skippedJobClosed++;
         continue;
       }
+      if (!(await admitProven(job))) continue;
 
       try {
         const app = await prisma.application.create({

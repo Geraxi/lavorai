@@ -37,6 +37,8 @@ export function inboxKindLabel(kind: string): string {
     rifiutata: "Possible rejection",
     ricevuta: "Application receipt",
     auto: "Automated message",
+    auto_reply: "Automatic reply (not a rejection)",
+    redirected_to_portal: "Apply on the portal (not a rejection)",
     bounce: "Delivery failure",
   } as Record<string, string>)[kind] ?? "Unclassified message";
 }
@@ -52,7 +54,10 @@ export function filterInboxMessages(
   const needle = options.search.trim().toLowerCase();
   return messages.filter((message) => {
     if (options.jobOnly && !message.jobRelated) return false;
-    if (options.kind !== "all" && message.kind !== options.kind) return false;
+    if (options.kind !== "all") {
+      const autoKinds = new Set(["auto", "auto_reply", "redirected_to_portal"]);
+      if (options.kind === "auto" ? !autoKinds.has(message.kind) : message.kind !== options.kind) return false;
+    }
     return !needle || [message.from, message.subject, message.snippet, message.company, message.jobTitle]
       .some((value) => value?.toLowerCase().includes(needle));
   }).sort((a, b) => {

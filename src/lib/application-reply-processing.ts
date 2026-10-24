@@ -6,6 +6,7 @@ import { classifyReply } from "@/lib/reply-parser";
 import { isApplicationVerificationMessage } from "@/lib/reply-security-message";
 import { applyReplyToApplication } from "@/lib/apply-reply-to-application";
 import { emailTransaction } from "@/lib/application-delivery";
+import { recordAtsConfirmation } from "@/lib/inbound/service";
 
 export interface InboundEmail {
   email_id: string;
@@ -110,7 +111,7 @@ export async function processInboundReply(input: {
     forwardedFrom = match.recruiterFrom;
   }
   const app = await prisma.application.findUnique({ where: { id: appId }, select: {
-    id: true, user: { select: { email: true } }, job: { select: { title: true, company: true } },
+    id: true, userId: true, user: { select: { email: true } }, job: { select: { title: true, company: true } },
   } });
   if (!app) return { matched: false };
   const fromAddress = (forwardedFrom ?? data.from ?? "sconosciuto").slice(0, 320);
@@ -135,6 +136,14 @@ export async function processInboundReply(input: {
     if (!isSecurityCode) await applyReplyToApplication({ applicationId: app.id, ...classification, receivedAt: input.receivedAt }, tx);
     return row;
   });
+  if (classification.kind === "ricevuta") {
+    await recordAtsConfirmation(prisma, {
+      applicationId: app.id,
+      userId: app.userId,
+      inboundEmailId: `reply:${reply.id}`,
+      at: input.receivedAt,
+    });
+  }
   await forwardStoredReply(reply.id);
   return { matched: true, replyId: reply.id };
 }

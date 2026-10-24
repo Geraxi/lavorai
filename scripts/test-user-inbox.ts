@@ -42,6 +42,7 @@ const cases: Array<[string, string, string]> = [
   ["Action required", "Please verify your email to complete your application.", "incomplete"],
   ["Completa la candidatura", "Completa la tua candidatura inserendo il codice di verifica 123456.", "incomplete"],
   ["Newsletter", "Discover our new offices", "other"],
+  ["Thanks for your email", "Unfortunately we don't take any applications over email. Please apply via our careers site.", "incomplete"],
 ];
 for (const [s, b, want] of cases) assert.equal(classifyByRules(s, b), want, `${s}`);
 

@@ -32,6 +32,7 @@ function serialize(a: Detail) {
     hasCvPdf: Boolean(a.cvPdfPath), cvLanguage: a.cvLanguage, userStatus: a.userStatus,
     viewedAt: a.viewedAt?.toISOString() ?? null, submittedVia: a.submittedVia, submittedAt: a.submittedAt?.toISOString() ?? null,
     lastReplyAt: a.lastReplyAt?.toISOString() ?? null, replyCount: a.replyCount, lastReplyKind: a.lastReplyKind,
+    confirmedAt: a.confirmedAt?.toISOString() ?? null,
     submitConfirmation: a.submitConfirmation, delivery: applicationDeliveryView(a), stage: applicationStage(a),
     deliveryRecipient: a.emailAttempts[0]?.recipient ?? a.mailboxSends?.[0]?.recipient ?? null, job: a.job,
     // Optional chaining: test fixtures and legacy mocks may omit the relation.

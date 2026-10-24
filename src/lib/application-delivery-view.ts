@@ -13,11 +13,14 @@ export function applicationDeliveryView(app: {
   submitConfirmation: string | null;
   submissionReceiptJson?: string | null;
   errorMessage?: string | null;
+  confirmedAt?: Date | string | null;
   emailAttempts?: Array<{ status: string; acceptedAt?: Date | string | null; providerEmailId?: string | null }>;
 }): DeliveryView {
   const email = app.emailAttempts?.[0];
   if (app.status === "diagnostic") return { phase: "pending", label: "Test diagnostico", tone: "neutral",
     detail: `Dati fittizi, esclusi da quote e risultati. Stato provider: ${email?.status ?? "non inviato"}.` };
+  if (app.confirmedAt) return { phase: "confirmed", label: "Ricevuta ATS confermata", tone: "positive",
+    detail: "L'azienda ha inviato una conferma di ricezione. Non è ancora una risposta umana." };
   if (app.submittedVia === "mock_demo" || app.submitConfirmation === "DRY_RUN") return { phase: "pending", label: "Anteprima, non inviata", tone: "neutral", detail: "Materiali dimostrativi, senza invio a un'azienda." };
   if (app.submitConfirmation === "UNCONFIRMED") return { phase: "unconfirmed", label: "Esito da verificare", tone: "warning", detail: "Manca una prova verificabile. Controlla il portale prima di un altro tentativo." };
   if (email && ["failed", "bounced", "complained"].includes(email.status)) {
