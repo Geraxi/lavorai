@@ -423,8 +423,13 @@ async function processApplicationRun(
   const resolvedAdapter = portalSubmitEnabled ? resolveAdapterByUrl([app.job.url, resolvedUrl]) : null;
   const adapter = resolvedAdapter?.adapter ?? null;
   const adapterUrl = resolvedAdapter?.url ?? app.job.url;
+  const { preferredDeliveryChannel } = await import("@/lib/delivery-channel");
+  const preferRecruiterEmail = preferredDeliveryChannel(app.job) === "email_recruiter";
+  if (preferRecruiterEmail && adapter) {
+    console.log(`[worker] ${applicationId} recruiter email present — skipping portal ${adapter.id}, using email_recruiter`);
+  }
 
-  if (adapter) {
+  if (adapter && !preferRecruiterEmail) {
     const canonicalJobId = receiptJobId(adapter.id, app.job.url);
     if (!canonicalJobId || canonicalJobId !== receiptJobId(adapter.id, adapterUrl)) {
       await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: "ready_to_apply" }, data: {
@@ -458,6 +463,7 @@ async function processApplicationRun(
       coverLetterText: result.coverLetter,
       userId: app.userId,
       userEmail: app.user.email,
+      userName: app.user.name,
       answers: userAnswers,
       storedAnswers,
       reusableAnswers,
@@ -1805,6 +1811,7 @@ interface AdapterSubmitInput {
   coverLetterText: string;
   userId: string;
   userEmail: string;
+  userName?: string | null;
   answers?: import("@/lib/application-answers").ApplicationAnswers;
   reusableAnswers?: import("@/lib/candidate-facts").SavedFactAnswer[];
   storedAnswers?: Array<{ label: string; answer: string; kind?: string; options?: string[]; fingerprint?: string }>;
@@ -1929,6 +1936,8 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
         },
       } : {}),
       userEmail: formEmail,
+      userName: input.userName ?? undefined,
+      userPhone: profile.phone || undefined,
       cvLocalPath,
       clLocalPath,
       coverLetterText: input.coverLetterText,

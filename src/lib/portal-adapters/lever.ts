@@ -177,7 +177,7 @@ export const leverAdapter: PortalAdapter = {
         };
       }
       return (await observeSubmission(page, "lever", input.jobUrl,
-        () => submit.click({ timeout: 5_000 }), input.beforeSubmit)).outcome;
+        () => submit.click({ timeout: 5_000 }), input.beforeSubmit, { applicationId: input.applicationId })).outcome;
     } catch (err) {
       return {
         ok: false,

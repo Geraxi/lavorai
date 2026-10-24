@@ -45,7 +45,7 @@ function testBareRemoteIsRemoteFromHome() {
     assert.equal(locationPreferenceMismatch(loc("Remote · United States"), it, { companyCountry: "DE" }), "location", "A stated region still wins");
     const base = { title: "Full-Stack Engineer", contractType: null, description: "", salaryMin: null, salaryMax: null, location: "Remote", remote: true };
     assert.equal(autoApplyPreferenceMismatch({ ...base, source: "ashby", sourceSlug: "lexroom" }, { employmentType: "both", salaryMin: 0, sourcesJson: '["remoto"]' }, it), null);
-    assert.equal(autoApplyPreferenceMismatch({ ...base, source: "ashby", sourceSlug: "elevenlabs" }, { employmentType: "both", salaryMin: 0, sourcesJson: '["remoto"]' }, it), "location_unverified");
+    assert.equal(autoApplyPreferenceMismatch({ ...base, source: "ashby", sourceSlug: "elevenlabs" }, { employmentType: "both", salaryMin: 0, sourcesJson: '["remoto"]' }, it), null, "Location unverified is not a hard preference reject");
   }
   // Alan on Workable: "Anywhere in France · France" is France-only, not worldwide.
   const owner = ["Milano", "Roma", "Remoto"];
@@ -106,8 +106,8 @@ function testRemoteWorkModeForTownPrefs() {
   assert.equal(locationPreferenceMismatch(loc("Remote · Italy"), ["Losine"], remoteOk), "location", "No known home country → no remote scope");
   const job = { ...loc("Remote · Italy"), title: "Graphic Designer", contractType: null, salaryMin: null, salaryMax: null };
   assert.equal(autoApplyPreferenceMismatch(job, { employmentType: "employee", salaryMin: 25, sourcesJson: '["remoto","ibrido","sede"]' }, matteo), null);
-  assert.equal(autoApplyPreferenceMismatch(job, { employmentType: "employee", salaryMin: 25, sourcesJson: '["sede"]' }, matteo), "location");
-  assert.equal(autoApplyPreferenceMismatch(job, { employmentType: "employee", salaryMin: 25 }, matteo), "location");
+  assert.equal(autoApplyPreferenceMismatch(job, { employmentType: "employee", salaryMin: 25, sourcesJson: '["sede"]' }, matteo), null, "Location mismatch is a soft signal");
+  assert.equal(autoApplyPreferenceMismatch(job, { employmentType: "employee", salaryMin: 25 }, matteo), null, "Location mismatch is a soft signal");
 }
 
 function testBareRemoteJobVariations() {

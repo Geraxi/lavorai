@@ -205,7 +205,7 @@ export const smartrecruitersAdapter: PortalAdapter = {
         };
       }
       return (await observeSubmission(page, "smartrecruiters", input.jobUrl,
-        () => submit.first().click({ timeout: 5_000 }), input.beforeSubmit)).outcome;
+        () => submit.first().click({ timeout: 5_000 }), input.beforeSubmit, { applicationId: input.applicationId })).outcome;
     } catch (err) {
       return {
         ok: false,

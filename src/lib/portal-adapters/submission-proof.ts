@@ -1,8 +1,9 @@
 import { receiptJobId as submissionJobId } from "../submission-receipt";
 export { receiptJobId as submissionJobId } from "../submission-receipt";
 import type { Page, Request, Response } from "playwright";
-import type { ApplyOutcome, SubmissionReceipt } from "./types";
+import type { ApplyOutcome, CanaryLog, SubmissionReceipt } from "./types";
 import { detectBlockingCaptcha } from "./captcha";
+import { captureSubmitEvidence } from "./submit-evidence";
 import { SECURITY_CODE_FIELD } from "../application-security-code";
 
 /** A status code is transport evidence, never proof that an application exists. */
@@ -260,11 +261,19 @@ export interface ObservedSubmission {
   response: SubmissionResponse | null;
 }
 
+export interface ObserveSubmissionOptions {
+  applicationId?: string;
+}
+
+function withCanary(outcome: ApplyOutcome, canary: CanaryLog | undefined): ApplyOutcome {
+  return canary ? { ...outcome, canary } : outcome;
+}
+
 /** Observe only requests STARTED in this click's window; never click twice. */
-export async function observeSubmission(page: Page, provider: string, jobUrl: string, click: () => Promise<unknown>, beforeSubmit?: () => Promise<boolean>): Promise<ObservedSubmission> {
+export async function observeSubmission(page: Page, provider: string, jobUrl: string, click: () => Promise<unknown>, beforeSubmit?: () => Promise<boolean>, opts?: ObserveSubmissionOptions): Promise<ObservedSubmission> {
   const before = await snapshotPage(page);
   const initialCaptcha = await detectBlockingCaptcha(page);
-  if (initialCaptcha.blocking) return { response: null, outcome: { ok: false, status: "captcha", error: "Il portale richiede un captcha interattivo. Completa la verifica manualmente prima di procedere." } };
+  if (initialCaptcha.blocking) return { response: null, outcome: { ok: false, status: "captcha", error: "Il portale richiede un captcha (anche invisibile). Completa la verifica manualmente prima di procedere." } };
   const started = new Set<Request>();
   const responses: SubmissionResponse[] = [];
   const pending: Promise<void>[] = [];
@@ -298,17 +307,21 @@ export async function observeSubmission(page: Page, provider: string, jobUrl: st
   await Promise.all(pending);
   const after = await snapshotPage(page);
   const response = responses.at(-1) ?? null;
+  const canary = await captureSubmitEvidence(page, responses, {
+    applicationId: opts?.applicationId,
+    urlBeforeSubmit: before.url,
+  }).catch(() => undefined);
   const captcha = await detectBlockingCaptcha(page);
   const codeVisible = await page.locator(SECURITY_CODE_FIELD).first().isVisible().catch(() => false);
   if (captcha.blocking || codeVisible) {
-    return { response, outcome: { ok: false, status: captcha.blocking ? "captcha" : "submission_unconfirmed", error: "Il portale richiede una verifica prima di confermare la ricezione. Non reinviare automaticamente la candidatura." } };
+    return { response, outcome: withCanary({ ok: false, status: captcha.blocking ? "captcha" : "submission_unconfirmed", error: "Il portale richiede una verifica prima di confermare la ricezione. Non reinviare automaticamente la candidatura." }, canary) };
   }
   const proofs = responses.map((r) => verifySubmissionResponse(provider, jobUrl, r));
   // A validation/challenge response cannot be rescued by generic DOM text.
   if (proofs.some((r) => r.rejected)) {
-    return { response, outcome: { ok: false, status: "submission_unconfirmed", error: `Il portale ${provider} ha risposto con un errore alla richiesta di candidatura. Ricezione non confermata; verificare prima di un nuovo invio.` } };
+    return { response, outcome: withCanary({ ok: false, status: "submission_unconfirmed", error: `Il portale ${provider} ha risposto con un errore alla richiesta di candidatura. Ricezione non confermata; verificare prima di un nuovo invio.` }, canary) };
   }
   const receipt = proofs.find((r) => r.receipt)?.receipt ?? verifyPageReceipt(provider, jobUrl, before, after);
-  if (receipt) return { response, outcome: { ok: true, status: "submitted", confirmation: receipt.kind === "http" ? `DETECTED_HTTP_${receipt.httpStatus}` : "DETECTED_DOM", receipt } };
-  return { response, outcome: { ok: false, status: "submission_unconfirmed", error: `Invio ${provider} tentato, ma manca una ricevuta verificabile per questo annuncio. Verifica la ricezione prima di riprovare per evitare duplicati.` } };
+  if (receipt) return { response, outcome: withCanary({ ok: true, status: "submitted", confirmation: receipt.kind === "http" ? `DETECTED_HTTP_${receipt.httpStatus}` : "DETECTED_DOM", receipt }, canary) };
+  return { response, outcome: withCanary({ ok: false, status: "submission_unconfirmed", error: `Invio ${provider} tentato, ma manca una ricevuta verificabile per questo annuncio. Verifica la ricezione prima di riprovare per evitare duplicati.` }, canary) };
 }

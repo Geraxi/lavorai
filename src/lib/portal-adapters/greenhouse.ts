@@ -492,12 +492,13 @@ export const greenhouseAdapter: PortalAdapter = {
       const submittedAt = new Date();
       await submit.scrollIntoViewIfNeeded().catch(() => void 0);
       const observed = await observeSubmission(page, "greenhouse", input.jobUrl,
-        () => submit.click({ timeout: 8_000 }), input.beforeSubmit);
+        () => submit.click({ timeout: 8_000 }), input.beforeSubmit, { applicationId: input.applicationId });
       const submitHttpStatus = observed.response?.status ?? null;
       const submitHttpBody = observed.response?.body?.slice(0, 800).replace(/\s+/g, " ") ?? null;
       const finalUrl = page.url();
       const bodyText = await page.locator("body").innerText().catch(() => "");
-      let canaryFull: CanaryLog | undefined;
+      const observedCanary = "canary" in observed.outcome ? observed.outcome.canary : undefined;
+      let canaryFull: CanaryLog | undefined = observedCanary;
       if (canaryEnabled && canaryPre) {
         canaryFull = {
           resumeAttachedFilename: canaryPre.resumeAttachedFilename,
@@ -509,6 +510,7 @@ export const greenhouseAdapter: PortalAdapter = {
           urlBeforeSubmit: canaryPre.urlBeforeSubmit,
           urlAfterSubmit: finalUrl,
           bodyTextAfterSubmit: bodyText.slice(0, 800).replace(/\s+/g, " "),
+          submitResponses: observedCanary?.submitResponses,
           capturedAt: canaryPre.capturedAt,
         };
       }
@@ -735,7 +737,7 @@ export async function submitWithSecurityCode(
   
   console.log(`[greenhouse/otp] ${applicationId} clicking submit with filled code...`);
   const observed = await observeSubmission(page, "greenhouse", jobUrl,
-    () => submit.click({ timeout: 8_000 }), beforeSubmit);
+    () => submit.click({ timeout: 8_000 }), beforeSubmit, { applicationId });
   
   console.log(`[greenhouse/otp] ${applicationId} verification submit result: ok=${observed.outcome.ok} status=${observed.outcome.status} confirmation=${('confirmation' in observed.outcome && observed.outcome.confirmation) || 'none'}`);
   return observed.outcome;

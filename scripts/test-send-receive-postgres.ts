@@ -6,6 +6,7 @@ import { createHmac } from "node:crypto";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { notSubmitted } from "../src/lib/proof-of-send";
 
 async function main() {
   // Synthetic localhost only. Never consume ambient production credentials.
@@ -194,8 +195,18 @@ async function main() {
       ts.forEachChild(node, visit);
     }
     visit(ast); assert.ok(failureWrite);
+    assert.match(failureWrite, /notSubmitted\(/, "Worker email-failure write must use the shared proof-of-send helper");
     const executeFailure = new vm.Script(`(async () => { ${failureWrite}; })()`, { filename: "actual-worker-email-failure-write" });
-    await executeFailure.runInNewContext({ prisma: db, applicationId: raceApp.id, workToken: now, delivered: { kind: "uncertain" }, NOT_SUBMITTED: "NOT_SUBMITTED", Date });
+    const failureContext = {
+      prisma: db,
+      applicationId: raceApp.id,
+      workToken: now,
+      delivered: { kind: "uncertain" } as { kind: string; reason?: string },
+      NOT_SUBMITTED: "NOT_SUBMITTED",
+      notSubmitted,
+      Date,
+    };
+    await executeFailure.runInNewContext(failureContext);
     assert.equal((await db.application.findUniqueOrThrow({ where: { id: raceApp.id } })).status, "success", "Stale failure cannot overwrite reconciled success");
     assert.equal((await reconcileAcceptedApplicationEmails()).reconciled, 0);
     assert.equal((await db.applicationSession.findUniqueOrThrow({ where: { id: raceSession.id } })).sentCount, 1);
@@ -203,9 +214,17 @@ async function main() {
     const deniedApp = await db.application.create({ data: { userId: user.id, jobId: job.id, portal: "email", status: "ready_to_apply", submitConfirmation: "UNCONFIRMED", startedAt: now } });
     const deniedAttempt = await delivery.createApplicationEmailAttempt({ applicationId: deniedApp.id, attemptKey: `application-${deniedApp.id}-${now.getTime()}`, recipient: submission.recipient });
     await delivery.recordApplicationEmailUncertain(deniedAttempt.id, true);
-    await executeFailure.runInNewContext({ prisma: db, applicationId: deniedApp.id, workToken: now, delivered: { kind: "not_sent", reason: "current_gate_blocked" }, NOT_SUBMITTED: "NOT_SUBMITTED", Date });
+    await executeFailure.runInNewContext({
+      ...failureContext,
+      applicationId: deniedApp.id,
+      delivered: { kind: "not_sent", reason: "current_gate_blocked" },
+    });
     assert.equal((await db.application.findUniqueOrThrow({ where: { id: deniedApp.id } })).submitConfirmation, "NOT_SUBMITTED", "Proven denied email send can release its own held fence");
-    await executeFailure.runInNewContext({ prisma: db, applicationId: raceApp.id, workToken: now, delivered: { kind: "not_sent", reason: "current_gate_blocked" }, NOT_SUBMITTED: "NOT_SUBMITTED", Date });
+    await executeFailure.runInNewContext({
+      ...failureContext,
+      applicationId: raceApp.id,
+      delivered: { kind: "not_sent", reason: "current_gate_blocked" },
+    });
     assert.equal((await db.application.findUniqueOrThrow({ where: { id: raceApp.id } })).status, "success", "Known no-send cannot overwrite another accepted attempt");
     console.log("PASS PostgreSQL: final email gate denial remains proven NOT_SUBMITTED without erasing accepted or uncertain outcomes.");
 

@@ -11,6 +11,10 @@ import { verifyOfficialApiResponse, submitViaOfficialApi, employerApiKey, boardS
 import { captchaHandoff } from "../src/lib/captcha-handoff";
 import { reusableFactKey } from "../src/lib/candidate-facts";
 import { greenhouseAdapter } from "../src/lib/portal-adapters/greenhouse";
+import { detectBlockingCaptcha } from "../src/lib/portal-adapters/captcha";
+import { networkEvidence } from "../src/lib/portal-adapters/submit-evidence";
+import { ashbyContactFromProfile } from "../src/lib/portal-adapters/ashby-contact";
+import { preferredDeliveryChannel } from "../src/lib/delivery-channel";
 
 const ASHBY_JOB = "https://jobs.ashbyhq.com/elevenlabs/e4e0450f-d139-4f8e-b210-2f326a680d90";
 const ASHBY_POSTING = "e4e0450f-d139-4f8e-b210-2f326a680d90";
@@ -61,13 +65,19 @@ await test("Ashby success for ANOTHER posting is not a receipt for this job", ()
 function fakePage(opts: { body: string; status?: number; formVisibleAfter?: boolean }) {
   const ev = new EventEmitter();
   let clicked = false;
-  const locator = () => ({ count: async () => 0, nth: () => ({ isVisible: async () => false }), first: () => ({ isVisible: async () => false }) });
+  const locator = (sel?: string) => ({
+    count: async () => 0,
+    nth: () => ({ isVisible: async () => false }),
+    first: () => ({ isVisible: async () => false }),
+    innerText: async () => (sel === "body" ? "Grazie per la candidatura. We received your application." : ""),
+  });
   const page = {
     url: () => `${ASHBY_JOB}/application`,
     on: (n: string, f: (...a: unknown[]) => void) => ev.on(n, f),
     off: (n: string, f: (...a: unknown[]) => void) => ev.off(n, f),
     evaluate: async () => ({ receiptText: "", formVisible: clicked ? opts.formVisibleAfter ?? true : true, readable: true }),
     locator,
+    screenshot: async () => Buffer.from("png"),
     waitForLoadState: async () => undefined,
     waitForTimeout: async () => undefined,
   };
@@ -85,6 +95,13 @@ await test("observeSubmission: Ashby click with FormSubmitSuccess → submitted 
   assert.equal(outcome.ok, true);
   assert.equal(outcome.ok && outcome.confirmation, "DETECTED_HTTP_200");
   assert.equal(outcome.ok && outcome.receipt?.provider, "ashby");
+  assert.ok(outcome.canary, "submit evidence is always persisted");
+  assert.equal(outcome.canary!.submitResponses?.length, 1);
+  assert.equal(outcome.canary!.submitResponses?.[0].operation, "ApiSubmitSingleApplicationFormAction");
+  assert.equal(outcome.canary!.submitResponses?.[0].httpStatus, 200);
+  assert.ok((outcome.canary!.submitResponses?.[0].body?.length ?? 0) > 0);
+  assert.match(outcome.canary!.bodyTextAfterSubmit, /Grazie per la candidatura/);
+  assert.equal(outcome.canary!.postSubmitScreenshotUrl, null, "no Blob token → screenshot skipped");
 });
 await test("observeSubmission: Ashby FormRender → submission_unconfirmed with portal error message", async () => {
   const { page, click } = fakePage({ body: ashbyBody(FORM_RENDER) });
@@ -167,6 +184,50 @@ await test("Greenhouse: unattestable pause before any data → needs_user_input 
 });
 
 // ---------- C: captcha ----------
+await test("invisible reCAPTCHA badge is blocking — never auto-submit", async () => {
+  const locator = (sel: string) => ({
+    count: async () => (sel.includes("grecaptcha-badge") || sel.includes('data-size="invisible"') ? 1 : 0),
+    nth: () => ({ isVisible: async () => false }),
+    first: () => ({ isVisible: async () => false }),
+  });
+  const r = await detectBlockingCaptcha({ locator } as never);
+  assert.equal(r.blocking, true);
+  assert.equal(r.kind, "recaptcha_invisible_badge");
+});
+await test("captured submit responses keep URL, operation, status, first 2KB", () => {
+  const ev = networkEvidence([{
+    url: ASHBY_ENDPOINT, postData: ashbyRequest, status: 200, body: "x".repeat(5000),
+  }]);
+  assert.equal(ev[0].url, ASHBY_ENDPOINT);
+  assert.equal(ev[0].operation, "ApiSubmitSingleApplicationFormAction");
+  assert.equal(ev[0].httpStatus, 200);
+  assert.equal(ev[0].body?.length, 2048);
+});
+await test("Ashby Name/Phone/LinkedIn fall back to User + answers when CVProfile is sparse", () => {
+  const empty = ashbyContactFromProfile({ profile: { firstName: "", lastName: "", phone: "", links: [] } });
+  assert.equal(empty.fullName, "");
+  const fromUser = ashbyContactFromProfile({
+    profile: { firstName: "", lastName: "", phone: "", links: [] },
+    userName: "Mario Rossi", userPhone: "+39 333 1234567", linkedinUrl: "https://linkedin.com/in/mario",
+  });
+  assert.equal(fromUser.fullName, "Mario Rossi");
+  assert.equal(fromUser.firstName, "Mario");
+  assert.equal(fromUser.lastName, "Rossi");
+  assert.equal(fromUser.phone, "+39 333 1234567");
+  assert.equal(fromUser.linkedinUrl, "https://linkedin.com/in/mario");
+  const fromCv = ashbyContactFromProfile({
+    profile: { firstName: "Anna", lastName: "Bianchi", phone: "+39 02 1", links: [{ url: "https://linkedin.com/in/anna", label: "LinkedIn" }] },
+    userName: "Ignored", userPhone: "ignored", linkedinUrl: "https://ignored",
+  });
+  assert.equal(fromCv.fullName, "Anna Bianchi");
+  assert.equal(fromCv.phone, "+39 02 1");
+  assert.equal(fromCv.linkedinUrl, "https://linkedin.com/in/anna");
+});
+await test("recruiter email is preferred over portal submit", () => {
+  assert.equal(preferredDeliveryChannel({ recruiterEmail: "jobs@acme.com" }), "email_recruiter");
+  assert.equal(preferredDeliveryChannel({ recruiterEmail: "  " }), "portal");
+  assert.equal(preferredDeliveryChannel({ recruiterEmail: null }), "portal");
+});
 await test("captcha in full-auto is routed to the manual queue with a notification, not skipped", () => {
   for (const mode of ["auto", "hybrid", "manual", null]) {
     const h = captchaHandoff({ mode, company: "ElevenLabs", adapterLabel: "Ashby", detail: "hcaptcha" });

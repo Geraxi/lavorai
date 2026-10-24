@@ -120,11 +120,11 @@ async function testCronBothPasses() {
   for (const board of ["adzuna", "weworkremotely", "arbeitnow", "jobicy", "himalayas", "remoteok"]) {
     assert.ok(!poolQuery.includes(`"${board}"`), `Board rows (${board}) are never direct candidates; only their resolved ATS posting is`);
   }
-  assert.deepEqual(created.map((a) => a.jobId), ["valid-first", "valid-second-same-company"],
-    "Pass 2 must fill only with eligible jobs; it may relax company diversification, never preferences");
-  assert.equal(queued.length, 2);
-  assert.equal(stats.applicationsEnqueued, 2);
-  assert.equal(stats.skippedLocationMismatch, 1);
+  assert.deepEqual(created.map((a) => a.jobId), ["valid-first", "wrong-location", "valid-second-same-company"],
+    "Location is a soft ranking signal: Berlin is eligible; pass 1 takes unique companies first");
+  assert.equal(queued.length, 3);
+  assert.equal(stats.applicationsEnqueued, 3);
+  assert.equal(stats.skippedLocationMismatch, 0);
   assert.equal(stats.skippedEmploymentMismatch, 1);
   assert.equal(stats.errors, 0);
 
@@ -153,8 +153,8 @@ async function testCronBothPasses() {
   assert.equal(preferenceHelpers.annualSalaryEur(9), 9);
   assert.equal(preferenceHelpers.annualSalaryEur(45_000), 45_000);
   assert.equal(preferenceHelpers.annualSalaryEur(null), 0);
-  // A remote flag cannot override geographic restrictions.
-  assert.equal(mismatch(job("remote", { remote: true, location: "Berlin" }), preferences, ["Milano"]), "location");
+  // Location is a soft signal: city mismatch does not reject at preference gate.
+  assert.equal(mismatch(job("remote", { remote: true, location: "Berlin" }), preferences, ["Milano"]), null);
   assert.equal(mismatch(job("no-location-pref", { location: "Berlin" }), preferences, []), null);
   console.log("[auto-apply-quality] Both-pass enqueue regression and preference compatibility passed.");
 }

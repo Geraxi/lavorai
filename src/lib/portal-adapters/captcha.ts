@@ -1,18 +1,11 @@
 import type { Page } from "playwright";
 
 /**
- * Rilevamento captcha "onesto": distingue un captcha INTERATTIVO (checkbox
- * reCAPTCHA v2, hCaptcha, Turnstile visibile, challenge aperta) — che blocca
- * davvero l'invio automatico — dal badge reCAPTCHA INVISIBILE (v3 / v2
- * invisible / enterprise) che quasi tutti i form Greenhouse e Ashby hanno e
- * che NON richiede alcuna interazione: il token viene generato al click su
- * Invia.
- *
- * Bug storico: `.grecaptcha-badge` / `iframe[src*="recaptcha"]` + textarea
- * `g-recaptcha-response` vuota venivano letti come "captcha non risolto" →
- * ogni candidatura ATS si fermava PRIMA del submit → zero DETECTED_* in prod
- * (riprodotto in locale su Stripe/Greenhouse e Linear/Ashby: solo badge,
- * 256×60, anchor invisibile).
+ * Captcha detection. Interactive widgets (checkbox, challenge, hCaptcha,
+ * Turnstile) and invisible reCAPTCHA (badge / data-size=invisible) are all
+ * blocking: we never auto-submit or solve captchas. Invisible tokens are
+ * still a captcha — the application is handed off to the user with CV and
+ * answers prepared.
  *
  * Implementazione con locator Playwright (niente funzioni interne dentro
  * page.evaluate: con tsx/esbuild `keepNames` iniettano `__name(...)` che nel
@@ -52,13 +45,17 @@ export async function detectBlockingCaptcha(page: Page): Promise<{
       return { blocking: true, kind: "turnstile", detail: "widget Turnstile visibile" };
     }
 
-    // 4) Solo badge invisibile (o niente) → NON bloccante.
+    // 4) Invisible reCAPTCHA (badge or data-size=invisible): hand off, never auto-submit.
+    const invisibleWidget = (await page.locator('.g-recaptcha[data-size="invisible"]').count().catch(() => 0)) > 0;
     const badge = (await page.locator(".grecaptcha-badge").count().catch(() => 0)) > 0;
-    return {
-      blocking: false,
-      kind: badge ? "recaptcha_invisible_badge" : null,
-      detail: badge ? "solo badge reCAPTCHA invisibile: il token viene generato al submit" : "nessun captcha",
-    };
+    if (invisibleWidget || badge) {
+      return {
+        blocking: true,
+        kind: badge ? "recaptcha_invisible_badge" : "recaptcha_invisible",
+        detail: "reCAPTCHA invisibile: non inviamo automaticamente. CV e risposte sono pronti, completa tu il captcha e premi Invia.",
+      };
+    }
+    return { blocking: false, kind: null, detail: "nessun captcha" };
   } catch (err) {
     return { blocking: false, kind: null, detail: `check fallito: ${err instanceof Error ? err.message : String(err)}` };
   }

@@ -2,6 +2,7 @@ import { observeSubmission } from "./submission-proof";
 import { findSubmitButton } from "./submit-button";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 import { detectBlockingCaptcha } from "./captcha";
+import { ashbyContactFromProfile } from "./ashby-contact";
 
 /**
  * Ashby ATS — `jobs.ashbyhq.com/<company>/<uuid>`.
@@ -105,29 +106,30 @@ export const ashbyAdapter: PortalAdapter = {
         const stop = await blankFormPause(page, input, "Ashby");
         if (stop) return stop;
       }
-      const fullName = [input.profile.firstName, input.profile.lastName]
-        .filter(Boolean)
-        .join(" ")
-        .trim();
+      const contact = ashbyContactFromProfile({
+        profile: input.profile,
+        userName: input.userName,
+        userPhone: input.userPhone,
+        linkedinUrl: input.answers?.linkedinUrl,
+      });
       const emailToUse = input.profile.email?.trim() || input.userEmail;
-      const phoneToUse = input.profile.phone?.trim() || input.userPhone;
 
       // Ashby usa un singolo "Name" o due field separati. Provo entrambi.
       const nameField = page.locator(
-        'input[name="_systemfield_name"], input[aria-label*="Full name" i]',
+        'input[name="_systemfield_name"], input[aria-label*="Full name" i], input[aria-label="Name" i], input[placeholder*="Full name" i]',
       );
-      if ((await nameField.count()) > 0) {
-        await nameField.first().fill(fullName).catch(() => void 0);
+      if ((await nameField.count()) > 0 && contact.fullName) {
+        await nameField.first().fill(contact.fullName).catch(() => void 0);
       } else {
         await page
           .locator('input[aria-label*="First name" i]')
           .first()
-          .fill(input.profile.firstName || "")
+          .fill(contact.firstName)
           .catch(() => void 0);
         await page
           .locator('input[aria-label*="Last name" i]')
           .first()
-          .fill(input.profile.lastName || "")
+          .fill(contact.lastName)
           .catch(() => void 0);
       }
 
@@ -139,25 +141,23 @@ export const ashbyAdapter: PortalAdapter = {
         .fill(emailToUse)
         .catch(() => void 0);
 
-      if (phoneToUse) {
+      if (contact.phone) {
         await page
           .locator(
             'input[type="tel"], input[aria-label*="Phone" i], input[name*="phone" i]',
           )
           .first()
-          .fill(phoneToUse)
+          .fill(contact.phone)
           .catch(() => void 0);
       }
 
-      // LinkedIn URL
-      const li = input.profile.links?.find((l) => /linkedin/i.test(l.url));
-      if (li) {
+      if (contact.linkedinUrl) {
         await page
           .locator(
-            'input[aria-label*="LinkedIn" i], input[placeholder*="linkedin" i]',
+            'input[aria-label*="LinkedIn" i], input[placeholder*="linkedin" i], input[name*="linkedin" i]',
           )
           .first()
-          .fill(li.url)
+          .fill(contact.linkedinUrl)
           .catch(() => void 0);
       }
 
@@ -237,8 +237,7 @@ export const ashbyAdapter: PortalAdapter = {
       const { prepareRequiredAnswers } = await import("./web-form");
       const unanswered = await prepareRequiredAnswers(page, input);
       if (unanswered) return unanswered;
-      // Captcha: bloccante SOLO se interattivo (vedi ./captcha.ts). Il badge
-      // reCAPTCHA invisibile di Ashby non blocca l'invio.
+      // Any captcha, including invisible reCAPTCHA: never auto-submit.
       const captcha = await detectBlockingCaptcha(page);
       console.log(`[ashby] captcha check: ${captcha.kind ?? "none"} → ${captcha.blocking ? "BLOCCANTE" : "ok"} (${captcha.detail})`);
       if (captcha.blocking) {
@@ -246,7 +245,7 @@ export const ashbyAdapter: PortalAdapter = {
           ok: false,
           status: "captcha",
           error:
-            `Il form Ashby ha un captcha interattivo (${captcha.kind}) che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.`,
+            `Il form Ashby ha un captcha (${captcha.kind}) che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.`,
         };
       }
 
@@ -264,7 +263,7 @@ export const ashbyAdapter: PortalAdapter = {
       }
 
       return (await observeSubmission(page, "ashby", input.jobUrl,
-        () => submit.click({ timeout: 5_000 }), input.beforeSubmit)).outcome;
+        () => submit.click({ timeout: 5_000 }), input.beforeSubmit, { applicationId: input.applicationId })).outcome;
     } catch (err) {
       return {
         ok: false,

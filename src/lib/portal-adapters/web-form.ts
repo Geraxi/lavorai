@@ -136,7 +136,7 @@ export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebF
 
     await submit.first().scrollIntoViewIfNeeded().catch(() => void 0);
     return (await observeSubmission(page, cfg.id, input.jobUrl,
-      () => submit.first().click({ timeout: 8_000 }), input.beforeSubmit)).outcome;
+      () => submit.first().click({ timeout: 8_000 }), input.beforeSubmit, { applicationId: input.applicationId })).outcome;
   } catch (err) {
     return { ok: false, status: "unknown_error", error: err instanceof Error ? err.message : `Errore imprevisto ${cfg.id}` };
   }

@@ -154,6 +154,7 @@ class MockPage extends EventEmitter {
   async goto() {}
   async waitForLoadState() {}
   async waitForTimeout() {}
+  async screenshot() { return Buffer.from("png"); }
   locator(selector: string): any {
     const isCaptcha = /recaptcha|hcaptcha|turnstile|grecaptcha/.test(selector);
     const isCode = selector === securityCode.SECURITY_CODE_FIELD;
@@ -252,6 +253,11 @@ async function testRealAshbyAndOtp() {
     "./submit-button": { findSubmitButton: async (page: MockPage) => ({ click: () => page.click() }) },
     "./generic-fill": { fillCustomQuestions: async () => ({ filled: 0, matched: [] }) },
     "./web-form": { prepareRequiredAnswers: async () => null },
+    "./ashby-contact": { ashbyContactFromProfile: (input: { profile: { firstName?: string; lastName?: string; phone?: string } }) => ({
+      fullName: [input.profile.firstName, input.profile.lastName].filter(Boolean).join(" "),
+      firstName: input.profile.firstName ?? "", lastName: input.profile.lastName ?? "",
+      phone: input.profile.phone ?? "", linkedinUrl: "",
+    }) },
   };
   const { ashbyAdapter } = loadAdapter("ashby", deps);
   for (const [response, success] of [[accepted, true], [{ ...accepted, body: '{"errors":["invalid"]}' }, false], [{ ...accepted, body: null }, false], [{ ...accepted, postData: '{"operationName":"Analytics"}' }, false]] as const) {
