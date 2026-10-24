@@ -4,6 +4,8 @@ import type { Page } from "playwright";
 import type { ApplyInput, ApplyOutcome, PendingQuestion } from "./types";
 import { detectBlockingCaptcha } from "./captcha";
 import { answerRequiredFields, type CandidateContext } from "./ai-answer";
+import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
+import { PageProgressTracker } from "./stuck-page";
 
 /**
  * Routine condivisa per i form di candidatura pubblici "semplici"
@@ -36,11 +38,7 @@ export interface WebFormConfig {
   };
   /** Regex del testo del bottone di invio. */
   submitRe: RegExp;
-  /** Testo che indica annuncio chiuso. */
-  closedRe?: RegExp;
 }
-
-const DEFAULT_CLOSED_RE = /no longer (accepting|available|open)|position (has been )?(filled|closed)|job not found|posizione (chiusa|non più)|non più (disponibile|attiva)|annuncio scaduto|expired/i;
 
 export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebFormConfig): Promise<ApplyOutcome> {
   const T = cfg.tag;
@@ -53,10 +51,9 @@ export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebF
   await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => void 0);
   await dismissCookies(page);
 
-  const bodyEarly = ((await page.locator("body").innerText().catch(() => "")) ?? "").slice(0, 4000);
-  if ((cfg.closedRe ?? DEFAULT_CLOSED_RE).test(bodyEarly)) {
-    return { ok: false, status: "job_closed", error: "Annuncio non più online." };
-  }
+  const progress = new PageProgressTracker(3);
+  const guarded = await inspectLivePage(page, progress);
+  if (guarded) return guarded;
 
   if (cfg.openForm) {
     await cfg.openForm(page).catch(() => false);
@@ -126,6 +123,8 @@ export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebF
     if (pending.length > 0) {
       return { ok: false, status: "needs_user_input", error: `${pending.length} domande obbligatorie richiedono la tua risposta prima dell'invio.`, pendingQuestions: pending };
     }
+    const wrong = await abortIfFieldsWrong(page, input);
+    if (wrong) return wrong;
     if (input.dryRun) return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
 
     // Submit once + verified receipt

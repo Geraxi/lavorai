@@ -233,6 +233,8 @@ function testGenericAndContext() {
   assert.equal(generic.matchAnswerKey("Expected annual salary (EUR)"), "salaryExpectationEur");
   const web = load("web-form", {
     "../candidate-facts": facts, "./submission-proof": {}, "./captcha": {}, "./ai-answer": answerer,
+    "./page-guards": { inspectLivePage: async () => null, abortIfFieldsWrong: async () => null },
+    "./stuck-page": { PageProgressTracker: class { note() { return "progress"; } } },
   });
   const input = { profile: { experiences: [{ company: "Old", role: "Designer", endDate: "2020" }], links: [], education: [] }, preferredCity: "Berlin", userEmail: "alex@example.test" };
   const built = web.buildAnswerContext(input);

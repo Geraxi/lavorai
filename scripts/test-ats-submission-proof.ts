@@ -254,6 +254,7 @@ async function testRealAshbyAndOtp() {
     "./submit-button": { findSubmitButton: async (page: MockPage) => ({ click: () => page.click() }) },
     "./generic-fill": { fillCustomQuestions: async () => ({ filled: 0, matched: [] }) },
     "./web-form": { prepareRequiredAnswers: async () => null },
+    "./page-guards": { inspectLivePage: async () => null, abortIfFieldsWrong: async () => null },
     "./ashby-contact": { ashbyContactFromProfile: (input: { profile: { firstName?: string; lastName?: string; phone?: string } }) => ({
       fullName: [input.profile.firstName, input.profile.lastName].filter(Boolean).join(" "),
       firstName: input.profile.firstName ?? "", lastName: input.profile.lastName ?? "",

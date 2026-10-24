@@ -89,7 +89,11 @@ export async function humanContext(browser: Browser) {
     deviceScaleFactor: 1,
     colorScheme: "light",
     extraHTTPHeaders: { "Accept-Language": "it-IT,it;q=0.9,en;q=0.7" },
+    // Never pre-grant camera, microphone or geolocation.
+    geolocation: undefined,
+    permissions: [],
   });
+  await context.clearPermissions().catch(() => void 0);
   await context.addInitScript(() => {
     Object.defineProperty(navigator, "webdriver", { get: () => undefined });
     Object.defineProperty(navigator, "languages", { get: () => ["it-IT", "it", "en"] });

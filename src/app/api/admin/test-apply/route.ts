@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   if (applicationsPaused()) return NextResponse.json({ error: "applications_paused" }, { status: 503 });
   if (historicalRetriesBlocked()) return NextResponse.json({ error: "historical_application_retries_blocked" }, { status: 503 });
 
-  let body: { applicationId?: string; realSubmit?: boolean } = {};
+  let body: { applicationId?: string; realSubmit?: boolean; dryRun?: boolean } = {};
   try {
     body = await request.json();
   } catch {
@@ -42,9 +42,8 @@ export async function POST(request: NextRequest) {
   // Invio reale SOLO se richiesto esplicitamente: override chirurgico del
   // dry-run per questa singola candidatura (non tocca il flag globale).
   const forceRealSubmit = body.realSubmit === true;
-  const dryRun = forceRealSubmit
-    ? false
-    : process.env.PORTAL_SUBMIT_DRY_RUN === "true";
+  // Admin/dev default: fill the form but never click the final submit.
+  const dryRun = forceRealSubmit ? false : body.dryRun !== false;
   const portalEnabled = process.env.PORTAL_SUBMIT_ENABLED !== "false";
 
   // Trova la candidatura da testare.
@@ -98,7 +97,7 @@ export async function POST(request: NextRequest) {
   const t0 = Date.now();
   let runError: string | null = null;
   try {
-    await processApplication(appId, { forceRealSubmit });
+    await processApplication(appId, { forceRealSubmit, forceDryRun: dryRun });
   } catch (err) {
     runError = err instanceof Error ? err.message : String(err);
   }

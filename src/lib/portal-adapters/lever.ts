@@ -1,6 +1,7 @@
 import { observeSubmission } from "./submission-proof";
 import { findSubmitButton } from "./submit-button";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
+import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
 
 /**
  * Lever ATS — `jobs.lever.co/<company>/<uuid>`.
@@ -148,6 +149,10 @@ export const leverAdapter: PortalAdapter = {
       const { prepareRequiredAnswers } = await import("./web-form");
       const unanswered = await prepareRequiredAnswers(page, input);
       if (unanswered) return unanswered;
+      const guarded = await inspectLivePage(page);
+      if (guarded) return guarded;
+      const wrong = await abortIfFieldsWrong(page, input);
+      if (wrong) return wrong;
       if (input.dryRun) {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
