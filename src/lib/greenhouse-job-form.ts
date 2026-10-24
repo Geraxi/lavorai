@@ -8,9 +8,11 @@ import { extractGreenhouseJobId } from "@/lib/portal-adapters/greenhouse";
 import {
   isPrivacyConsentQuestion,
   resolveCandidateFact,
+  reusableFactKey,
   type FactContext,
   type FactQuestion,
 } from "@/lib/candidate-facts";
+import { derivePhoneCountryLabel } from "@/lib/phone-country";
 
 export const GREENHOUSE_FORM_CACHE_MS = 7 * 24 * 60 * 60 * 1000;
 export const GREENHOUSE_FORM_FETCH_TIMEOUT_MS = 8_000;
@@ -210,6 +212,49 @@ export async function loadGreenhouseJobForm(
   }
 }
 
+const GREENHOUSE_STANDARD_CONTACT_KEYS = new Set([
+  "firstName", "lastName", "fullName", "email", "phone", "phoneCountry",
+]);
+
+/** Boards-api omits Greenhouse's built-in phone-country widget (~244 options). */
+export const GREENHOUSE_IMPLIED_CONTACT_QUESTIONS: GreenhouseFormQuestion[] = [
+  { label: "First Name", required: true, kind: "text", name: "first_name" },
+  { label: "Last Name", required: true, kind: "text", name: "last_name" },
+  { label: "Email", required: true, kind: "text", name: "email" },
+  { label: "Phone", required: true, kind: "text", name: "phone" },
+  { label: "Phone country code", required: true, kind: "select", name: "phone_country" },
+];
+
+export function isGreenhouseStandardContactQuestion(label: string): boolean {
+  const key = reusableFactKey(label);
+  return !!key && GREENHOUSE_STANDARD_CONTACT_KEYS.has(key);
+}
+
+export function mergeGreenhouseStandardContactQuestions(
+  questions: GreenhouseFormQuestion[],
+): GreenhouseFormQuestion[] {
+  const have = new Set(
+    questions.map((q) => reusableFactKey(q.label)).filter((key): key is string => !!key),
+  );
+  const extra = GREENHOUSE_IMPLIED_CONTACT_QUESTIONS.filter((std) => {
+    const key = reusableFactKey(std.label);
+    return !!key && !have.has(key);
+  });
+  return [...extra, ...questions];
+}
+
+function canAutoAnswerGreenhouseContact(question: GreenhouseFormQuestion, context: FactContext): boolean {
+  if (!isGreenhouseStandardContactQuestion(question.label)) return false;
+  const resolved = resolveCandidateFact(question, context);
+  if (resolved.answer?.trim() && !resolved.conflict) return true;
+  const key = reusableFactKey(question.label);
+  if (key === "phoneCountry") {
+    return Boolean(derivePhoneCountryLabel(context.phone ?? null, context.country ?? null)
+      || resolveCandidateFact({ label: "Phone country code", kind: "select" }, context).answer);
+  }
+  return false;
+}
+
 export function isResumeUploadQuestion(label: string): boolean {
   return /\b(resume|cv|curriculum(?: vitae)?)\b/i.test(label) && !/\bcover\b/i.test(label);
 }
@@ -225,7 +270,7 @@ export function greenhouseRequiredQuestionsAnswerable(
   opts: { hasCv?: boolean; hasCoverLetter?: boolean } = {},
 ): { ok: boolean; missing: string[] } {
   const missing: string[] = [];
-  for (const question of questions) {
+  for (const question of mergeGreenhouseStandardContactQuestions(questions)) {
     if (!question.required) continue;
     if (question.kind === "file" || isResumeUploadQuestion(question.label)) {
       if (isCoverLetterQuestion(question.label) ? opts.hasCoverLetter !== false : opts.hasCv !== false) continue;
@@ -236,6 +281,7 @@ export function greenhouseRequiredQuestionsAnswerable(
     if (isPrivacyConsentQuestion(question.label) && context.privacyConsentAt) continue;
     const stored = context.storedAnswers?.find((row) => row.label.trim().toLowerCase() === question.label.trim().toLowerCase() && row.answer.trim());
     if (stored) continue;
+    if (canAutoAnswerGreenhouseContact(question, context)) continue;
     const resolved = resolveCandidateFact(question, context);
     if (resolved.answer?.trim() && !resolved.conflict) continue;
     missing.push(question.label);

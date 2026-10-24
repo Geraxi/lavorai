@@ -2,6 +2,7 @@ import type { CVProfile } from "./cv-profile-types";
 import type { ApplicationAnswers } from "./application-answers";
 import { matchCity } from "./city-centroids";
 import { COUNTRY_CENTROIDS } from "./country-centroids";
+import { derivePhoneCountryLabel, matchPhoneCountryOption } from "./phone-country";
 
 /** Employer privacy/GDPR consent only — never terms, marketing, or certifications. */
 export function isPrivacyConsentQuestion(label: string): boolean {
@@ -209,20 +210,13 @@ function canonicalFactValue(key: string | null, value: string): string {
   const group = groups[key ?? ""]?.find(values => values.includes(normalized));
   return group?.[0] ?? normalized;
 }
-export function matchFactOption(question: FactQuestion, value: string): string | null {
+export function matchFactOption(question: FactQuestion, value: string, country?: string | null): string | null {
   const options = question.options ?? [];
   const phoneCountry = reusableFactKey(question.label) === "phoneCountry"
     || (reusableFactKey(question.label) === "country" && options.some(option => /\+\d/.test(option)));
   if (phoneCountry) {
-    const phone = value.replace(/[\s().-]/g, "").replace(/^00/, "+");
-    if (!/^\+\d{7,15}$/.test(phone)) return null;
-    const matches = options.flatMap(option => {
-      const prefix = option.match(/\+\s*(\d{1,4})\b/);
-      return prefix && phone.startsWith(`+${prefix[1]}`) ? [{ option, length: prefix[1].length }] : [];
-    });
-    const longest = Math.max(...matches.map(match => match.length));
-    const exact = matches.filter(match => match.length === longest);
-    return exact.length === 1 ? exact[0].option : null;
+    if (options.length) return matchPhoneCountryOption(options, value, country);
+    return derivePhoneCountryLabel(value, country);
   }
   if (!["select", "react-select", "radio"].includes(question.kind)) return value;
   const exact = options.filter(option => canonicalFactValue(reusableFactKey(question.label), option) === canonicalFactValue(reusableFactKey(question.label), value));
@@ -334,11 +328,24 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
   const screening = resolveStandardScreening(question, context, key);
   if (screening) return screening;
   if (!key) return empty;
-  if (key === "phoneCountry" || (key === "country" && question.options?.some(option => /\+\d/.test(option)))) key = "phone";
   const facts = context.facts ?? Object.entries(context).flatMap(([field, value]): Fact[] => {
     if (typeof value === "string" || typeof value === "number") return [{ key: field, value: String(value), source: "profile", reference: field }];
     return [];
   });
+  if (key === "phoneCountry" || (key === "country" && question.options?.some((option) => /\+\d/.test(option)))) {
+    const phones = facts.filter((fact) => fact.key === "phone" && fact.value.trim());
+    const countries = facts.filter((fact) => fact.key === "country" && fact.value.trim());
+    const phoneValues = new Set(phones.map((fact) => canonicalFactValue("phone", fact.value)));
+    if (phoneValues.size > 1) return { answer: null, provenance: phones, conflict: true };
+    const phone = phones[0]?.value ?? context.phone ?? null;
+    const country = countries[0]?.value ?? context.country ?? null;
+    const provenance = [...phones, ...countries];
+    const options = question.options ?? [];
+    const answer = options.length
+      ? matchPhoneCountryOption(options, phone ?? "", country)
+      : derivePhoneCountryLabel(phone, country);
+    return { answer, provenance, conflict: false };
+  }
   let keys = [key];
   if (key === "fullName") {
     const first = resolveCandidateFact({ label: "First name", kind: "text" }, context);

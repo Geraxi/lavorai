@@ -95,8 +95,8 @@ export const leverAdapter: PortalAdapter = {
           .first()
           .fill(phoneToUse)
           .catch(() => void 0);
-        await fillPhoneCountryCode(page, phoneToUse);
       }
+      await fillPhoneCountryCode(page, phoneToUse, input.answers?.country);
 
       // LinkedIn URL se disponibile
       const li = input.profile.links?.find((l) =>

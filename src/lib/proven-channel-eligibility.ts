@@ -89,6 +89,7 @@ export function buildProvenChannelFactContext(input: {
     email: profile?.email ?? input.user.email,
     phone: profile?.phone,
     city: profile?.city,
+    country: answers.country ?? null,
     privacyConsentAt: input.user.privacyConsentAt,
     workRemote: prefersRemoteOrHybrid(input.locationsJson),
     company: input.company,

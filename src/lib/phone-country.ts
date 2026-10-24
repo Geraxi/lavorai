@@ -173,12 +173,95 @@ export function phoneCountryLabels(parsed: PhoneCountry): string[] {
   ];
 }
 
-/** Pick the unique option whose +prefix matches the phone, longest wins. */
-export function matchPhoneCountryOption(options: string[], phone: string): string | null {
+const COUNTRY_ALIASES: Array<[string, string[]]> = [
+  ["italy", ["italy", "italia", "it", "ita"]],
+  ["united kingdom", ["united kingdom", "uk", "gb", "gbr", "great britain", "regno unito"]],
+  ["united states", ["united states", "united states of america", "us", "usa", "america", "stati uniti"]],
+  ["canada", ["canada", "ca", "can"]],
+  ["germany", ["germany", "deutschland", "de", "germania"]],
+  ["france", ["france", "fr", "francia"]],
+  ["spain", ["spain", "es", "espana", "españa", "spagna"]],
+  ["portugal", ["portugal", "pt", "portogallo"]],
+  ["netherlands", ["netherlands", "nl", "holland", "olanda", "paesi bassi"]],
+  ["ireland", ["ireland", "ie", "irlanda"]],
+  ["switzerland", ["switzerland", "ch", "svizzera", "schweiz"]],
+  ["austria", ["austria", "at", "österreich", "osterreich"]],
+  ["belgium", ["belgium", "be", "belgio"]],
+  ["poland", ["poland", "pl", "polonia"]],
+  ["sweden", ["sweden", "se", "svezia"]],
+  ["norway", ["norway", "no", "norvegia"]],
+  ["denmark", ["denmark", "dk", "danimarca"]],
+];
+
+function normalizeCountryToken(value: string): string {
+  return value.normalize("NFKC").trim().toLowerCase().replace(/[().+,]/g, " ").replace(/\s+/g, " ");
+}
+
+export function countryAliasTokens(country: string | null | undefined): string[] {
+  if (!country?.trim()) return [];
+  const needle = normalizeCountryToken(country);
+  const hit = COUNTRY_ALIASES.find(([, aliases]) =>
+    aliases.includes(needle) || aliases.some((a) => a.length >= 4 && (needle === a || needle.includes(a) || a.includes(needle))),
+  );
+  return hit ? hit[1] : [needle];
+}
+
+export function optionMatchesCountry(option: string, country: string | null | undefined): boolean {
+  const aliases = countryAliasTokens(country);
+  if (!aliases.length) return false;
+  const needle = normalizeCountryToken(option);
+  const words = needle.split(" ");
+  return aliases.some((alias) => {
+    if (alias.length < 2) return false;
+    if (needle === alias || words.includes(alias)) return true;
+    // Short codes ("it", "us") must not substring-match "united" / "lithuania".
+    return alias.length >= 4 && needle.includes(alias);
+  });
+}
+
+function titleCountry(name: string): string {
+  return name.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function countryDisplayName(country: string | null | undefined): string | null {
+  const tokens = countryAliasTokens(country);
+  if (!tokens.length) return null;
+  const canon = COUNTRY_ALIASES.find(([, aliases]) => aliases[0] === tokens[0] || aliases.includes(tokens[0]));
+  if (!canon) return country!.trim();
+  return titleCountry(canon[1][0]);
+}
+
+/** NANP +1 and +7 are shared; the table's primary country is not enough. */
+function isSharedDial(dial: string): boolean {
+  return dial === "+1" || dial === "+7";
+}
+
+/** Label to store / type when the live list is not loaded yet. */
+export function derivePhoneCountryLabel(phone: string | null | undefined, country?: string | null): string | null {
   const parsed = parsePhoneCountry(phone);
-  const digits = normalizePhoneDigits(phone);
-  const prefix = parsed?.dial.replace("+", "") ?? (digits.startsWith("+") ? digits.slice(1, 5) : "");
-  if (!prefix && !parsed) return null;
+  if (parsed) {
+    if (isSharedDial(parsed.dial)) {
+      if (!country?.trim()) return null;
+      if (optionMatchesCountry(`${parsed.name} (${parsed.dial})`, country)) {
+        return `${parsed.name} (${parsed.dial})`;
+      }
+      const named = countryDisplayName(country);
+      return named ? `${named} (${parsed.dial})` : null;
+    }
+    return `${parsed.name} (${parsed.dial})`;
+  }
+  return countryDisplayName(country);
+}
+
+/** Pick the unique option whose +prefix matches the phone, longest wins.
+ * Shared codes (+1) are disambiguated by profile country. No prefix → country. */
+export function matchPhoneCountryOption(
+  options: string[],
+  phone: string,
+  country?: string | null,
+): string | null {
+  const parsed = parsePhoneCountry(phone);
+  const digits = normalizePhoneDigits(phone ?? "");
   const matches = options.flatMap((option) => {
     const found = option.match(/\+\s*(\d{1,4})\b/);
     if (found && digits.startsWith(`+${found[1]}`)) {
@@ -197,8 +280,19 @@ export function matchPhoneCountryOption(options: string[], phone: string): strin
     }
     return [];
   });
-  if (!matches.length) return null;
-  const longest = Math.max(...matches.map((m) => m.length));
-  const exact = matches.filter((m) => m.length === longest);
-  return exact.length === 1 ? exact[0].option : null;
+  if (matches.length) {
+    const longest = Math.max(...matches.map((m) => m.length));
+    const exact = matches.filter((m) => m.length === longest);
+    if (exact.length === 1) return exact[0].option;
+    if (country?.trim()) {
+      const byCountry = exact.filter((m) => optionMatchesCountry(m.option, country));
+      if (byCountry.length === 1) return byCountry[0].option;
+    }
+    return null;
+  }
+  if (!parsed && country?.trim()) {
+    const byCountry = options.filter((option) => optionMatchesCountry(option, country));
+    return byCountry.length === 1 ? byCountry[0] : null;
+  }
+  return null;
 }

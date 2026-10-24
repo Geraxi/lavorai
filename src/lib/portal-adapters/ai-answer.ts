@@ -167,7 +167,7 @@ export async function answerRequiredFields(
     const fact = resolveCandidateFact(f, ctx, true);
     const pv = fact.answer;
     if (!pv) continue;
-    const ok = await fillField(page, f, pv).catch(() => false);
+    const ok = await fillField(page, f, pv, ctx.country).catch(() => false);
     if (ok) {
       answered++;
       filledIdx.add(f.idx);
@@ -528,7 +528,7 @@ async function readReactSelectOptions(page: Page, idx: number): Promise<string[]
 
 // ---------- fill ----------
 
-async function fillField(page: Page, f: FieldDescriptor, value: string): Promise<boolean> {
+async function fillField(page: Page, f: FieldDescriptor, value: string, country?: string | null): Promise<boolean> {
   const loc = page.locator(`[${TAG}="${f.idx}"]`).first();
   if (f.kind === "text" || f.kind === "textarea") {
     let v = value;
@@ -581,7 +581,7 @@ async function fillField(page: Page, f: FieldDescriptor, value: string): Promise
     for (let i = 0; i < 12; i++) {
       await page.waitForTimeout(250);
       const options = (await page.locator(optsSel).allTextContents()).map(option => option.trim());
-      selected = exactOption(options, value) ?? matchFactOption({ ...f, options }, value);
+      selected = exactOption(options, value) ?? matchFactOption({ ...f, options }, value, country);
       if (selected) {
         await page.locator(optsSel).nth(options.indexOf(selected)).click({ timeout: 3000 });
         break;
