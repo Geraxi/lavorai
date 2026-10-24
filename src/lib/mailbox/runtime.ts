@@ -12,7 +12,9 @@ export function realMailboxDeps(): MailboxDeps {
     env: process.env,
     readFile: readUserFile,
     findRecipient: async (job) => {
-      const r = await findVerifiedRecruiterEmail(job.url, job.company, job.recruiterEmail);
+      const r = await findVerifiedRecruiterEmail(job.url, job.company, job.recruiterEmail, {
+        description: job.description,
+      });
       return r ? { email: r.email, provenance: r } : null;
     },
     clientFor: makeClientFor(base),

@@ -1,7 +1,7 @@
 import { automaticApplicationsBlocked, historicalRetriesBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { backfillMissingCvProfiles } from "@/lib/cv-profile-ensure";
-import { recheckLivenessHeldApplications } from "@/lib/held-application-release";
+import { recheckLivenessHeldApplications, releaseUnverifiableLivenessHolds } from "@/lib/held-application-release";
 import { recoverStuckApplications } from "@/lib/application-claim";
 
 /**
@@ -59,8 +59,9 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
 
   // ---------- 1b. Re-check rows held on a temporary job-availability failure ----------
   try {
+    const releasedHeld = await releaseUnverifiableLivenessHolds({ limit: 80 });
     const live = await recheckLivenessHeldApplications({ limit: 50 });
-    report.livenessReleased = live.released;
+    report.livenessReleased = releasedHeld + live.released;
     report.livenessClosed = live.closed;
   } catch (err) {
     console.error("[self-heal] liveness recheck failed", err instanceof Error ? err.message : err);

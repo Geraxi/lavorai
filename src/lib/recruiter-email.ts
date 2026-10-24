@@ -246,19 +246,30 @@ export async function isUsableRecruiterEmail(
   return hasMxRecord(normalized.split("@")[1] ?? "");
 }
 
+export type RecruiterEmailSourceType =
+  | "employer_job_page"
+  | "job_description"
+  | "json_ld_application_contact"
+  | "employer_careers_page";
+
 export type VerifiedRecruiterEmail = {
   email: string;
   provenance: {
     version: 1;
-    sourceType: "employer_job_page";
+    sourceType: RecruiterEmailSourceType;
     requestedUrl: string;
     sourceUrl: string;
     observedAt: string;
     pageSha256: string;
     evidence: string;
     company: string;
-    extraction: "visible_application_instruction";
+    extraction: "visible_application_instruction" | "json_ld_application_contact" | "job_description";
   };
+};
+
+export type RecruiterEmailLookup = {
+  description?: string | null;
+  cachedSourceUrl?: string | null;
 };
 
 // Do not truncate unsupported Unicode mailboxes/domains into a different ASCII
@@ -335,75 +346,259 @@ function decodeHtml(value: string): string {
   }).replace(/&commat;/gi, "@").replace(/&period;/gi, ".").replace(/&amp;/gi, "&").replace(/&(?:nbsp|quot|apos|lt|gt);/gi, " ");
 }
 
-/** Freshly fetch the selected employer posting every time. An old cache or DNS
- * record is never evidence that an employer invited this application. We use no
- * model-generated candidates: only literal addresses in visible application
- * instructions can pass, with a source excerpt and page digest for the attempt.
+const INVITED_BEFORE_EMAIL =
+  /(?:(?:send|submit|invia(?:re)?|manda(?:re)?|inoltra(?:re)?)[^.!?]{0,80}(?:cv|curriculum|resume|application|candidat(?:ura|ure))|(?:apply|candidati)\s+(?:by e-?mail|via e-?mail|to|at|scrivendo)|(?:applications?|candidature|recruit(?:ing|ment)|hiring|talent acquisition)(?:\s+(?:contact|email|inbox|team))?\s*[:–-]|candidature\s+(?:a|all['’])|inviare\s+(?:il\s+)?cv|send your cv to)[^.!?]{0,100}$/i;
+const EXCLUDED_BEFORE_EMAIL =
+  /(?:do not|don't|non)[^.!?]{0,70}(?:send|submit|apply|invia|manda)|(?:accessibility|accommodation|privacy|disabilit|technical support)[^.!?]{0,100}$/i;
+
+function visibleApplicationText(html: string): string {
+  const withoutChrome = html.replace(/<(script|style|nav|footer|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ");
+  return decodeHtml(withoutChrome.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_all, attrs: string, body: string) => {
+    const mailto = attrs.match(/href\s*=\s*["']mailto:([^?"']+)/i)?.[1];
+    if (!mailto) return body;
+    const email = decodeHtml(mailto).toLowerCase();
+    const local = email.split("@")[0] ?? "";
+    // A recruiting-inbox mailto on the posting is an application instruction.
+    // Personal/name mailtos still need an explicit "send your CV" phrase.
+    const invitedMailto = PREFERRED_LOCAL.has(local) ? "Send your CV to " : "";
+    return `${body} ${invitedMailto}${email}`;
+  }).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+}
+
+function emailsFromJsonLd(html: string): Array<{ email: string; evidence: string }> {
+  const out: Array<{ email: string; evidence: string }> = [];
+  for (const block of html.matchAll(/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)) {
+    const raw = block[1]?.trim();
+    if (!raw) continue;
+    try {
+      const parsed = JSON.parse(decodeHtml(raw)) as unknown;
+      const nodes = Array.isArray(parsed) ? parsed : [parsed];
+      const walk = (value: unknown): void => {
+        if (!value || typeof value !== "object") return;
+        if (Array.isArray(value)) { value.forEach(walk); return; }
+        const rec = value as Record<string, unknown>;
+        const types = [rec["@type"]].flat().map((t) => String(t ?? "").toLowerCase());
+        if (types.includes("jobposting") && rec.applicationContact != null) {
+          const contact = rec.applicationContact;
+          const email = typeof contact === "string" ? contact
+            : contact && typeof contact === "object" && !Array.isArray(contact)
+              ? String((contact as Record<string, unknown>).email ?? (contact as Record<string, unknown>).emailAddress ?? "")
+              : "";
+          const normalized = email.trim().toLowerCase();
+          if (EMAIL_RE.test(normalized)) {
+            EMAIL_RE.lastIndex = 0;
+            out.push({ email: normalized, evidence: `applicationContact ${normalized}` });
+          }
+          EMAIL_RE.lastIndex = 0;
+        }
+        for (const child of Object.values(rec)) walk(child);
+      };
+      walk(parsed);
+    } catch { /* ignore malformed JSON-LD */ }
+  }
+  return out;
+}
+
+function careersUrlsFromHtml(html: string, page: URL, companyKey: string): string[] {
+  const hrefs = [...html.matchAll(/\bhref\s*=\s*["']([^"'#]+)["']/gi)].map((m) => m[1]);
+  const out: string[] = [];
+  for (const href of hrefs) {
+    let next: URL;
+    try { next = new URL(href, page); } catch { continue; }
+    if (next.href === page.href) continue;
+    if (!/\/(careers|jobs|lavora(?:-con-noi)?|join(?:-us)?|work-with-us|opportunita)(\/|$)/i.test(next.pathname)) continue;
+    if (!attributedSource(next, companyKey)) continue;
+    out.push(next.toString());
+    if (out.length >= 2) break;
+  }
+  return out;
+}
+
+export type ExtractedPublishedEmail = { email: string; evidence: string; score: number };
+
+/**
+ * Literal employer-published addresses only. Never invents jobs@domain.
+ * `requireCompanyDomain` keeps page/ATS attribution; description text may
+ * accept a recruiting local-part on a non-company domain when the invitation
+ * is in the posting itself (the employer published that inbox).
  */
-export async function findVerifiedRecruiterEmail(
-  jobUrl: string, company: string | null, cachedEmail?: string | null,
+export function extractPublishedRecruiterEmailsFromText(
+  text: string,
+  company: string | null,
+  opts: { requireCompanyDomain?: boolean; pageDomain?: string | null; atsPage?: boolean } = {},
+): ExtractedPublishedEmail[] {
+  const companyKey = company ? identity(company) : "";
+  const visible = decodeHtml(text.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+  const candidates: ExtractedPublishedEmail[] = [];
+  for (const match of visible.matchAll(EMAIL_RE)) {
+    const email = match[0].toLowerCase();
+    const start = match.index ?? 0;
+    const context = visible.slice(Math.max(0, start - 180), start + email.length + 100);
+    const preceding = visible.slice(Math.max(0, start - 180), start).replace(EMAIL_RE, "[email]");
+    if (!INVITED_BEFORE_EMAIL.test(preceding) || EXCLUDED_BEFORE_EMAIL.test(preceding)) continue;
+    const candidateScore = score(email, slug(company));
+    if (candidateScore < 0) continue;
+    const emailDomain = email.split("@")[1];
+    if (!emailDomain || AGGREGATOR_HOSTS.some((host) => domainIs(emailDomain, host))) continue;
+    if (BLACKLIST_DOMAIN.has(emailDomain)) continue;
+    const recipient = registrableIdentity(emailDomain);
+    if (!recipient) continue;
+    if (opts.requireCompanyDomain !== false) {
+      if (companyKey.length >= 3 && recipient.key !== companyKey) continue;
+      if (opts.pageDomain && !opts.atsPage && recipient.domain !== opts.pageDomain) continue;
+    } else if (companyKey.length >= 3 && recipient.key !== companyKey) {
+      const local = email.split("@")[0] ?? "";
+      if (!PREFERRED_LOCAL.has(local)) continue;
+    }
+    candidates.push({ email, evidence: context, score: candidateScore });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates;
+}
+
+async function firstUsable(
+  candidates: ExtractedPublishedEmail[],
+  company: string | null,
+): Promise<ExtractedPublishedEmail | null> {
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (seen.has(candidate.email)) continue;
+    seen.add(candidate.email);
+    if (await isUsableRecruiterEmail(candidate.email, company)) return candidate;
+  }
+  return null;
+}
+
+function provenance(
+  email: string,
+  company: string,
+  sourceType: RecruiterEmailSourceType,
+  extraction: VerifiedRecruiterEmail["provenance"]["extraction"],
+  requestedUrl: string,
+  sourceUrl: string,
+  html: string,
+  evidence: string,
+): VerifiedRecruiterEmail {
+  return {
+    email,
+    provenance: {
+      version: 1,
+      sourceType,
+      requestedUrl,
+      sourceUrl,
+      observedAt: new Date().toISOString(),
+      pageSha256: createHash("sha256").update(html).digest("hex"),
+      evidence,
+      company,
+      extraction,
+    },
+  };
+}
+
+async function verifyFromFetchedHtml(
+  html: string,
+  company: string,
+  companyKey: string,
+  requestedUrl: string,
+  final: URL,
+  sourceType: RecruiterEmailSourceType,
 ): Promise<VerifiedRecruiterEmail | null> {
-  void cachedEmail; // deliberately not authority, nor a selection preference
-  if (!company?.trim()) return null;
+  const source = attributedSource(final, companyKey);
+  if (!source) return null;
+  const jsonLd = emailsFromJsonLd(html);
+  const jsonCandidates: ExtractedPublishedEmail[] = [];
+  for (const item of jsonLd) {
+    const candidateScore = score(item.email, slug(company));
+    if (candidateScore < 0) continue;
+    const recipient = registrableIdentity(item.email.split("@")[1] ?? "");
+    if (!recipient) continue;
+    if (recipient.key !== companyKey && !PREFERRED_LOCAL.has(item.email.split("@")[0] ?? "")) continue;
+    if (!source.ats && recipient.key !== companyKey) continue;
+    jsonCandidates.push({ email: item.email, evidence: item.evidence, score: candidateScore + 20 });
+  }
+  const usableJson = await firstUsable(jsonCandidates, company);
+  if (usableJson) {
+    return provenance(usableJson.email, company, "json_ld_application_contact", "json_ld_application_contact",
+      requestedUrl, final.toString(), html, usableJson.evidence);
+  }
+  const visible = visibleApplicationText(html);
+  if (/job (?:was )?not found|this (?:job|position) is no longer|no longer accepting applications|annuncio scaduto|captcha|access denied/i.test(visible)) return null;
+  if (!identity(visible).includes(companyKey)) return null;
+  const pageCandidates = extractPublishedRecruiterEmailsFromText(visible, company, {
+    requireCompanyDomain: true, pageDomain: source.domain, atsPage: source.ats,
+  });
+  const usable = await firstUsable(pageCandidates, company);
+  if (!usable) return null;
+  return provenance(usable.email, company, sourceType, "visible_application_instruction",
+    requestedUrl, final.toString(), html, usable.evidence);
+}
+
+async function fetchEmployerHtml(url: string, companyKey: string, requestedOrigin?: string): Promise<{ html: string; final: URL } | null> {
   try {
-    const requested = new URL(jobUrl);
-    const companyKey = identity(company);
-    if (companyKey.length < 3 || !attributedSource(requested, companyKey)) return null;
-    const response = await fetch(jobUrl, { headers: { "User-Agent": "Mozilla/5.0", accept: "text/html" }, signal: AbortSignal.timeout(10_000), redirect: "follow" });
+    const requested = new URL(url);
+    if (!attributedSource(requested, companyKey)) return null;
+    const response = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0", accept: "text/html" }, signal: AbortSignal.timeout(10_000), redirect: "follow" });
     if (!response.ok) return null;
-    const final = new URL(response.url || jobUrl);
-    // A redirect to another organization or a generic listing is not provenance
-    // for this posting. Resolve changed employer URLs separately, then recheck.
+    const final = new URL(response.url || url);
+    if (requestedOrigin && requestedOrigin !== final.origin) return null;
     if (requested.origin !== final.origin || /^[\/]?$/.test(final.pathname)) return null;
-    const source = attributedSource(final, companyKey);
-    if (!source) return null;
+    if (!attributedSource(final, companyKey)) return null;
     if (/[?&]error=true(?:&|$)/i.test(final.search)) return null;
     const contentType = response.headers.get("content-type") ?? "";
     if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) return null;
-    const html = (await response.text()).slice(0, 300_000);
-    // Registrable-domain/ATS attribution is source evidence, not cryptographic
-    // ownership. Unknown employer-brand mappings remain a manual-review case.
-    // Do not mine script bundles, analytics, placeholder inputs, footer contacts,
-    // privacy/accommodation text or navigation for application destinations.
-    const visibleHtml = html.replace(/<(script|style|nav|footer|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi, " ");
-    const visible = decodeHtml(visibleHtml.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (_all, attrs: string, body: string) => {
-      const mailto = attrs.match(/href\s*=\s*["']mailto:([^?"']+)/i)?.[1];
-      return `${body}${mailto ? ` ${decodeHtml(mailto)}` : ""}`;
-    }).replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
-    if (/job (?:was )?not found|this (?:job|position) is no longer|no longer accepting applications|annuncio scaduto|captcha|access denied/i.test(visible)) return null;
-    if (!identity(visible).includes(companyKey)) return null;
-    const candidates: Array<{ email: string; evidence: string; score: number }> = [];
-    for (const match of visible.matchAll(EMAIL_RE)) {
-      const email = match[0].toLowerCase();
-      const start = match.index ?? 0;
-      const context = visible.slice(Math.max(0, start - 180), start + email.length + 100);
-      const preceding = visible.slice(Math.max(0, start - 180), start).replace(EMAIL_RE, "[email]");
-      // An explicit application action before the address, or a dedicated
-      // recruiting-contact label, is required. Merely "we are hiring" elsewhere
-      // on the page cannot make a footer employee address an application inbox.
-      const invited = /(?:(?:send|submit|invia(?:re)?|manda(?:re)?)[^.!?]{0,60}(?:cv|resume|application|candidat(?:ura|ure))|(?:apply|candidati)\s+(?:by email|via email|to|at|scrivendo)|(?:applications?|recruit(?:ing|ment)|hiring|talent acquisition)(?:\s+(?:contact|email|inbox|team))?\s*[:–-])[^.!?]{0,100}$/i.test(preceding);
-      const excluded = /(?:do not|don't|non)[^.!?]{0,70}(?:send|submit|apply|invia|manda)|(?:accessibility|accommodation|privacy|disabilit|technical support)[^.!?]{0,100}$/i.test(preceding);
-      if (!invited || excluded) continue;
-      const candidateScore = score(email, slug(company));
-      if (candidateScore < 0) continue;
-      // Cross-employer addresses cannot piggyback on a real job page. An external
-      // recruiter with a different domain needs explicit review/verified mapping.
-      const emailDomain = email.split("@")[1];
-      const recipient = registrableIdentity(emailDomain);
-      if (!recipient || recipient.key !== companyKey) continue;
-      // For direct employer-page attribution, a same-brand domain on another TLD
-      // is an unverified affiliate. ATS pages use the checked tenant above and
-      // the literal employer-domain address in the application instruction.
-      if (!source.ats && recipient.domain !== source.domain) continue;
-      candidates.push({ email, evidence: context, score: candidateScore });
-    }
-    candidates.sort((a, b) => b.score - a.score);
-    for (const candidate of candidates) {
-      if (!await isUsableRecruiterEmail(candidate.email, company)) continue;
-      return { email: candidate.email, provenance: { version: 1, sourceType: "employer_job_page",
-        requestedUrl: jobUrl, sourceUrl: final.toString(), observedAt: new Date().toISOString(),
-        pageSha256: createHash("sha256").update(html).digest("hex"), evidence: candidate.evidence,
-        company, extraction: "visible_application_instruction" } };
+    return { html: (await response.text()).slice(0, 300_000), final };
+  } catch { return null; }
+}
+
+/** Published addresses from the stored job description (no HTTP). Used at
+ * ingest and as the first lookup so aggregator URLs still yield the inbox
+ * the employer printed in the posting. Never invents an address.
+ */
+export function extractPublishedRecruiterEmailFromText(
+  description: string | null | undefined,
+  company: string | null,
+  sourceUrl: string,
+): { email: string; sourceUrl: string; evidence: string } | null {
+  if (!description?.trim() || !company?.trim()) return null;
+  const [best] = extractPublishedRecruiterEmailsFromText(description, company, { requireCompanyDomain: false });
+  return best ? { email: best.email, sourceUrl, evidence: best.evidence } : null;
+}
+
+/** Freshly fetch the selected employer posting every time. An old cache or DNS
+ * record is never evidence that an employer invited this application. We use no
+ * model-generated candidates: only literal addresses in visible application
+ * instructions, JSON-LD applicationContact, or the stored job description.
+ */
+export async function findVerifiedRecruiterEmail(
+  jobUrl: string,
+  company: string | null,
+  cachedEmail?: string | null,
+  extras?: RecruiterEmailLookup,
+): Promise<VerifiedRecruiterEmail | null> {
+  void cachedEmail; // deliberately not authority, nor a selection preference
+  void extras?.cachedSourceUrl;
+  if (!company?.trim()) return null;
+  const companyKey = identity(company);
+  if (companyKey.length < 3) return null;
+
+  const fromDescription = extractPublishedRecruiterEmailFromText(extras?.description, company, jobUrl);
+  if (fromDescription && await isUsableRecruiterEmail(fromDescription.email, company)) {
+    return provenance(fromDescription.email, company, "job_description", "job_description",
+      jobUrl, fromDescription.sourceUrl, extras?.description ?? "", fromDescription.evidence);
+  }
+
+  try {
+    const requested = new URL(jobUrl);
+    if (!attributedSource(requested, companyKey)) return null;
+    const fetched = await fetchEmployerHtml(jobUrl, companyKey);
+    if (!fetched) return null;
+    const pageHit = await verifyFromFetchedHtml(fetched.html, company, companyKey, jobUrl, fetched.final, "employer_job_page");
+    if (pageHit) return pageHit;
+    for (const careers of careersUrlsFromHtml(fetched.html, fetched.final, companyKey)) {
+      const extra = await fetchEmployerHtml(careers, companyKey, fetched.final.origin);
+      if (!extra) continue;
+      const hit = await verifyFromFetchedHtml(extra.html, company, companyKey, jobUrl, extra.final, "employer_careers_page");
+      if (hit) return hit;
     }
     return null;
   } catch { return null; }

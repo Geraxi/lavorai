@@ -186,6 +186,9 @@ async function main() {
   assert.equal(attempts[0].status, "delivered", "Later weaker signals cannot undo delivery");
   await delivery.recordApplicationDeliveryEvent({ ...delivered, providerEventId: "bounce-later", type: "email.bounced", occurredAt: new Date("2026-10-13T12:03:00Z") });
   assert.equal(attempts[0].status, "bounced");
+  assert.equal(app.status, "failed");
+  assert.equal(app.sendStatus, "failed");
+  assert.equal(app.sendFailureReason, "email_bounced");
   await delivery.recordApplicationEmailUncertain(attempt.id);
   await delivery.recordApplicationEmailAccepted(attempt.id, "outbound-one");
   assert.equal(attempts[0].status, "bounced", "Sender bookkeeping cannot overwrite bounce");

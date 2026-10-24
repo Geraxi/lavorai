@@ -3,6 +3,7 @@ import { authorizeReleaseCanary } from "@/lib/release-email-canary";
 import { Resend, type CreateEmailOptions } from "resend";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { createApplicationEmailAttempt, recordApplicationEmailAccepted, recordApplicationEmailUncertain } from "@/lib/application-delivery";
+import { canSendToRecipientDomain } from "@/lib/recipient-domain-quota";
 
 export type RecruiterDeliveryResult =
   | { kind: "accepted"; attemptId: string; providerEmailId: string }
@@ -14,6 +15,7 @@ interface Dependencies {
   createAttempt: typeof createApplicationEmailAttempt;
   accepted: typeof recordApplicationEmailAccepted;
   uncertain: typeof recordApplicationEmailUncertain;
+  recipientDomainAllowed: typeof canSendToRecipientDomain;
   send: (payload: CreateEmailOptions, key: string) => Promise<{ data: { id: string } | null; error: { name: string; statusCode?: number | null } | null }>;
 }
 
@@ -39,6 +41,7 @@ export async function sendRecruiterEmailOnce(input: {
     createAttempt: createApplicationEmailAttempt,
     accepted: recordApplicationEmailAccepted,
     uncertain: recordApplicationEmailUncertain,
+    recipientDomainAllowed: canSendToRecipientDomain,
     send: async (payload, key) => {
       const apiKey = process.env.RESEND_API_KEY;
       if (!apiKey) throw new Error("email_provider_not_configured");
@@ -51,6 +54,8 @@ export async function sendRecruiterEmailOnce(input: {
   let attemptCreationStarted = false;
   let result: RecruiterDeliveryResult = { kind: "not_sent", reason: "email_quota_unavailable" };
   try {
+    const domainQuota = await deps.recipientDomainAllowed(input.recipient);
+    if (!domainQuota.allowed) return { kind: "not_sent", reason: domainQuota.reason ?? "recipient_domain_rate_limited" };
     const quota = await deps.withinQuota(canary ? "release_canary" : "application_sent", input.recipient, async () => {
       attemptCreationStarted = true;
       const attempt = await deps.createAttempt({

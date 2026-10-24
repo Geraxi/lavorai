@@ -60,7 +60,8 @@ assert.equal(hasPotentialSubmission({ ...base, submitConfirmation: NOT_SUBMITTED
 const worker = readFileSync(new URL("../src/lib/application-worker.ts", import.meta.url), "utf8");
 assert(worker.indexOf("reserveApplicationWork(applicationId)") < worker.indexOf("result = await optimizeCV("));
 assert(worker.includes("if (prepared.count !== 1) return;"));
-assert(worker.includes("preferredDeliveryChannel"), "Recruiter email must win over portal submit");
+assert(worker.includes("published recruiter email"), "Verified published recruiter email must win over portal submit");
+assert(worker.includes("findVerifiedRecruiterEmail"), "Recruiter email is resolved before portal submit");
 assert(worker.includes('notSubmitted("failed", "recruiter_email_not_sent")'), "Email failure must persist proof-of-send");
 assert(worker.includes('notSubmitted("needs_user", "recruiter_email_acceptance_unknown")'), "Uncertain email must persist proof-of-send");
 const postgresFailureVm = readFileSync(new URL("./test-send-receive-postgres.ts", import.meta.url), "utf8");

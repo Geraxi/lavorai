@@ -19,11 +19,12 @@ export async function GET(request: NextRequest) {
 
   const t0 = Date.now();
   const result: {
-    claimed: number; sent: number; completed: number; failed: number; skipped: number;
+    claimed: number; sent: number; emailSent: number; portalSent: number;
+    completed: number; failed: number; skipped: number;
     parked: number; needsAnswers: number; handoff: number; held: number;
     blockedByReason: Record<string, number>; liveness: boolean | string;
   } = {
-    claimed: 0, sent: 0, completed: 0, failed: 0, skipped: 0, parked: 0,
+    claimed: 0, sent: 0, emailSent: 0, portalSent: 0, completed: 0, failed: 0, skipped: 0, parked: 0,
     needsAnswers: 0, handoff: 0, held: 0,
     blockedByReason: {}, liveness: false,
   };
@@ -32,6 +33,8 @@ export async function GET(request: NextRequest) {
     const drain = await drainQueuedApplications({ startedMs: t0, maxDurationMs: 300_000 });
     result.claimed = drain.claimed;
     result.sent = drain.sent;
+    result.emailSent = drain.emailSent;
+    result.portalSent = drain.portalSent;
     result.completed = drain.sent;
     result.failed = drain.failed;
     result.skipped = drain.skipped;
@@ -53,7 +56,8 @@ export async function GET(request: NextRequest) {
     }
     const ms = Date.now() - t0;
     console.log(`[cron/drain-queue] ${ms}ms`, {
-      claimed: result.claimed, sent: result.sent, blockedByReason: result.blockedByReason,
+      claimed: result.claimed, sent: result.sent, emailSent: result.emailSent, portalSent: result.portalSent,
+      blockedByReason: result.blockedByReason,
       skipped: result.skipped, failed: result.failed, parked: result.parked,
       needsAnswers: result.needsAnswers, handoff: result.handoff, held: result.held,
       liveness: result.liveness,

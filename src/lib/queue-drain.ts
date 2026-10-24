@@ -5,6 +5,7 @@ import { heldMessage } from "@/lib/application-worker-gates";
 import { SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import { canClaimAnotherDrainRow, drainProcessConcurrency, drainQueueBatch, maxDrainAttempts } from "@/lib/drain-limits";
 import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "@/lib/job-liveness";
+import { releaseUnverifiableLivenessHolds } from "@/lib/held-application-release";
 import {
   CLAIM_HOLD_REASONS,
   claimBlockReason,
@@ -26,6 +27,8 @@ export type DrainOutcome = "sent" | "blocked" | "skipped" | "failed" | "queued" 
 export type DrainSummary = {
   claimed: number;
   sent: number;
+  emailSent: number;
+  portalSent: number;
   blockedByReason: Record<string, number>;
   skipped: number;
   failed: number;
@@ -36,7 +39,7 @@ export type DrainSummary = {
 };
 
 export function emptyDrainSummary(): DrainSummary {
-  return { claimed: 0, sent: 0, blockedByReason: {}, skipped: 0, failed: 0, parked: 0, needsAnswers: 0, handoff: 0, held: 0 };
+  return { claimed: 0, sent: 0, emailSent: 0, portalSent: 0, blockedByReason: {}, skipped: 0, failed: 0, parked: 0, needsAnswers: 0, handoff: 0, held: 0 };
 }
 
 export function bumpReason(map: Record<string, number>, reason: string, n = 1): void {
@@ -57,6 +60,7 @@ export function classifyDrainOutcome(row: {
   submitConfirmation: string | null;
 }): DrainOutcome {
   if (row.status === "success") return "sent";
+  if (row.status === "needs_user") return "blocked";
   if (row.status === "needs_answers" || row.submitConfirmation === "NEEDS_ANSWERS") return "needsAnswers";
   if (row.errorMessage === JOB_LIVENESS_UNKNOWN_HELD_MESSAGE) return "held";
   if (row.errorMessage === SKIPPED_ATS_MANUAL_MESSAGE || row.submitConfirmation === "CAPTCHA" || row.status === "ready_to_apply") {
@@ -141,9 +145,17 @@ export async function parkUnsendableQueued(opts: {
       }
       continue;
     }
+    const privacyHold = reason === "privacy_consent_missing";
     const changed = await db.application.updateMany({
       where: { id: row.id, status: "queued", startedAt: null },
-      data: { startedAt: now, errorMessage: heldMessage(reason) },
+      data: {
+        startedAt: now, errorMessage: heldMessage(reason),
+        ...(privacyHold ? {
+          status: "needs_user",
+          sendStatus: "needs_user",
+          sendFailureReason: "privacy_consent_missing",
+        } : {}),
+      },
     });
     if (changed.count !== 1) continue;
     result.parked++;
@@ -250,7 +262,7 @@ export async function drainQueuedApplications(opts: {
   findClaimableQueued?: (limit: number) => Promise<string[]>;
   claimApplication?: (id: string) => Promise<boolean>;
   processApplication?: (id: string) => Promise<void>;
-  readOutcome?: (id: string) => Promise<{ status: string; errorMessage: string | null; submitConfirmation: string | null } | null>;
+  readOutcome?: (id: string) => Promise<{ status: string; errorMessage: string | null; submitConfirmation: string | null; submittedVia?: string | null } | null>;
   db?: DB;
 } = {}): Promise<DrainSummary> {
   const summary = emptyDrainSummary();
@@ -266,6 +278,7 @@ export async function drainQueuedApplications(opts: {
   summary.handoff += parked.handoff;
   for (const [reason, n] of Object.entries(parked.blockedByReason)) bumpReason(summary.blockedByReason, reason + "", n);
   await releaseQuotaHoldsIfAvailable({ db: opts.db, now });
+  if (!opts.db) await releaseUnverifiableLivenessHolds({ now });
 
   const find = opts.findClaimableQueued ?? (await import("@/lib/application-claim")).findClaimableQueued;
   const claim = opts.claimApplication ?? (await import("@/lib/application-claim")).claimApplication;
@@ -273,7 +286,7 @@ export async function drainQueuedApplications(opts: {
   const read = opts.readOutcome ?? (async (id: string) => {
     const row = await (opts.db ?? prisma).application.findUnique({
       where: { id },
-      select: { status: true, errorMessage: true, submitConfirmation: true },
+      select: { status: true, errorMessage: true, submitConfirmation: true, submittedVia: true },
     });
     return row;
   });
@@ -301,7 +314,11 @@ export async function drainQueuedApplications(opts: {
     const after = await read(id);
     if (!after) return;
     const kind = classifyDrainOutcome(after);
-    if (kind === "sent") summary.sent++;
+    if (kind === "sent") {
+      summary.sent++;
+      if (after.submittedVia === "email_recruiter") summary.emailSent++;
+      else if (typeof after.submittedVia === "string" && after.submittedVia.startsWith("portal_")) summary.portalSent++;
+    }
     else if (kind === "skipped") summary.skipped++;
     else if (kind === "needsAnswers") summary.needsAnswers++;
     else if (kind === "handoff") summary.handoff++;

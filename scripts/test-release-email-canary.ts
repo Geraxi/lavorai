@@ -77,6 +77,7 @@ async function main() {
       withinQuota: async (kind: string, to: string, fn: () => Promise<void>) => {
         assert.equal(kind, "release_canary"); assert.equal(to, C.email); await fn(); return { sent: true, reason: null };
       },
+      recipientDomainAllowed: async () => ({ allowed: true, reason: null, domain: "example.invalid", used: 0, limit: 12 }),
       createAttempt: async () => { events.push("persist"); return { id: "diagnostic-attempt" }; },
       send: async (payload: any, key: string) => {
         assert.deepEqual(events, ["persist"]); assert.equal(key, C.attemptKey);

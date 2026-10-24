@@ -49,7 +49,7 @@ export function releasableHoldMessages(trigger: ReleaseTrigger): string[] {
 /** Prisma filter shared by every release path: no evidence of a past attempt. */
 export function noPriorSubmissionWhere(now: Date, cutoff: Date): Prisma.ApplicationWhereInput {
   return {
-    status: "queued", startedAt: { not: null }, completedAt: null, retryCount: 0,
+    status: { in: ["queued", "needs_user"] }, startedAt: { not: null }, completedAt: null, retryCount: 0,
     createdAt: { gt: cutoff, lte: now },
     submittedAt: null, submittedVia: null, submissionReceiptJson: null,
     canaryLog: null, answersUsedJson: null, answerContinuationJson: null,
@@ -91,6 +91,7 @@ async function releaseOne(row: ReleaseRow, now: Date, cutoff: Date, db: DB): Pro
       where: { ...noPriorSubmissionWhere(now, cutoff), id: row.id, startedAt: row.startedAt,
         errorMessage: row.errorMessage, submitConfirmation: row.submitConfirmation },
       data: {
+        status: "queued", sendStatus: "not_sent", sendFailureReason: null,
         startedAt: null, errorMessage: null, submitConfirmation: null,
         // NOT_SUBMITTED proves these prepared files were never transmitted;
         // admission treats unexplained documents as a possible send, so the
@@ -204,13 +205,11 @@ export async function recheckLivenessHeldApplications(opts: {
           status: "failed", submitConfirmation: "JOB_CLOSED", completedAt: now, errorMessage: JOB_CLOSED_HELD_MESSAGE,
           lastStatusCheckAt: row.lastStatusCheckAt ?? now,
         } })).count;
-      } else if (verdict.state === "live") {
+      } else {
+        // live OR unknown: unknown proceeds (not held). Re-release through
+        // the same fenced path as consent holds.
         if (!row.lastStatusCheckAt) await db.application.updateMany({ where: fence, data: { lastStatusCheckAt: now } });
         if (await releaseOne({ ...row, lastStatusCheckAt: row.lastStatusCheckAt ?? now }, now, cutoff, db)) report.released++;
-      } else {
-        report.stillUnknown += (await db.application.updateMany({ where: fence, data: {
-          startedAt: now, lastStatusCheckAt: row.lastStatusCheckAt ?? now,
-        } })).count;
       }
     } catch (err) {
       console.error("[held-release] liveness recheck failed", err instanceof Error ? err.message : err);
@@ -218,4 +217,32 @@ export async function recheckLivenessHeldApplications(opts: {
   }
   if (report.checked + report.exhausted) console.log("[held-release] liveness recheck", report);
   return report;
+}
+
+/**
+ * One-shot release of rows parked as "availability unverifiable".
+ * Unknown now proceeds; these holds must re-enter normal admission.
+ */
+export async function releaseUnverifiableLivenessHolds(opts: {
+  db?: DB; now?: Date; limit?: number;
+} = {}): Promise<number> {
+  const db = opts.db ?? prisma;
+  const now = opts.now ?? new Date();
+  const cutoff = sendingOpen();
+  if (!cutoff) return 0;
+  const messages = [JOB_LIVENESS_UNKNOWN_HELD_MESSAGE, LIVENESS_RECHECK_EXHAUSTED_MESSAGE];
+  const rows = await db.application.findMany({
+    where: { ...noPriorSubmissionWhere(now, cutoff), errorMessage: { in: messages } },
+    select: releaseSelect, orderBy: { createdAt: "asc" }, take: Math.max(1, Math.min(opts.limit ?? 80, 200)),
+  });
+  let released = 0;
+  for (const row of rows) {
+    try {
+      if (await releaseOne(row, now, cutoff, db)) released++;
+    } catch (err) {
+      console.error("[held-release] unverifiable release failed", err instanceof Error ? err.message : err);
+    }
+  }
+  if (released) console.log(`[held-release] unverifiable: released ${released} held application(s)`);
+  return released;
 }

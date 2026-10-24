@@ -151,6 +151,10 @@ async function testConsentRelease() {
   assert.equal(byId("ready-to-apply").status, "ready_to_apply");
   // Idempotent.
   assert.equal(await rel.releaseHeldApplicationsForUser("u1", "privacy_consent", db, NOW), 0);
+  state.apps.push(app("needs-user", { status: "needs_user", errorMessage: gates.heldMessage("privacy_consent_missing") }));
+  assert.equal(await rel.releaseHeldApplicationsForUser("u1", "privacy_consent", db, NOW), 1);
+  assert.equal(byId("needs-user").status, "queued");
+  assert.equal(byId("needs-user").sendStatus, "not_sent");
 
   // Profile trigger only releases profile holds.
   state.apps.push(app("profile-held", { errorMessage: gates.heldMessage("profile_unverified") }));
@@ -203,15 +207,14 @@ async function testLivenessRecheck() {
   };
   closedJobs.length = 0;
   const report = await rel.recheckLivenessHeldApplications({ db, now: NOW, check, markClosed: liveness.markJobClosed });
-  assert.equal(report.released, 1);
+  assert.equal(report.released, 2, "live and unknown both proceed");
   assert.equal(byId("live").startedAt, null); assert.equal(byId("live").submitConfirmation, null); assert.equal(byId("live").errorMessage, null);
+  assert.equal(byId("unknown").startedAt, null); assert.equal(byId("unknown").errorMessage, null);
   assert.ok((byId("live").lastStatusCheckAt as unknown) instanceof Date, "first check recorded for backoff bound");
   assert.equal(byId("closed").status, "failed"); assert.equal(byId("closed").submitConfirmation, "JOB_CLOSED");
   assert.equal(byId("already-closed-job").status, "failed");
   assert.deepEqual(closedJobs, ["job-closed"]);
   assert.equal(report.closed, 2);
-  assert.equal(+byId("unknown").startedAt, +NOW, "unknown stays held, backoff restarts");
-  assert.equal(byId("unknown").status, "queued"); assert.equal(byId("unknown").errorMessage, LIVENESS);
   assert.equal(byId("exhausted").errorMessage, rel.LIVENESS_RECHECK_EXHAUSTED_MESSAGE);
   assert.equal(report.exhausted, 1);
   for (const id of ["too-soon", "live-but-reserved", "submitted", "email-attempt", "unready-user", "other-message"]) {
@@ -221,11 +224,20 @@ async function testLivenessRecheck() {
   // Exhausted rows are never picked again.
   const again = await rel.recheckLivenessHeldApplications({ db, now: new Date(+NOW + 30 * HOUR), check, markClosed: liveness.markJobClosed });
   assert.equal(byId("exhausted").errorMessage, rel.LIVENESS_RECHECK_EXHAUSTED_MESSAGE);
-  assert.equal(again.released, 0);
+  assert.equal(byId("too-soon").startedAt, null, "later unknown/live holds are released when due");
+  assert.ok(again.released >= 1);
   process.env.APPLICATIONS_PAUSED = "true";
   assert.deepEqual(await rel.recheckLivenessHeldApplications({ db, now: NOW, check }), { checked: 0, released: 0, closed: 0, stillUnknown: 0, exhausted: 0 });
   delete process.env.APPLICATIONS_PAUSED;
-  console.log("PASS liveness recheck: backoff bounded (≤5 checks/12h), closed → JOB_CLOSED + job closed, live → fenced release, evidence/ledger/unready rows untouched, paused → no-op.");
+  const leftover = held("still-unverified", { startedAt: new Date(+NOW - HOUR) });
+  leftover.errorMessage = LIVENESS;
+  leftover.submitConfirmation = "NOT_SUBMITTED";
+  state.apps.push(leftover);
+  const unverifiable = await rel.releaseUnverifiableLivenessHolds({ db, now: NOW });
+  assert.ok(unverifiable >= 1);
+  assert.equal(byId("still-unverified").startedAt, null);
+  assert.equal(byId("exhausted").startedAt, null, "exhausted unverifiable holds also re-enter admission");
+  console.log("PASS liveness recheck: backoff bounded (≤5 checks/12h), closed → JOB_CLOSED + job closed, live/unknown → fenced release, evidence/ledger/unready rows untouched, paused → no-op.");
 }
 
 async function testCvProfileEnsure() {

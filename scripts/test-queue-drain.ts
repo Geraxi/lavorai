@@ -41,6 +41,7 @@ function load(path: string, extra: Record<string, unknown> = {}) {
     "@/lib/billing": billing,
     "@/lib/application-worker-gates": { heldMessage },
     "@/lib/job-liveness": { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE },
+    "@/lib/held-application-release": extra["@/lib/held-application-release"] ?? { releaseUnverifiableLivenessHolds: async () => 0 },
     "@/lib/db": extra["@/lib/db"] ?? { prisma: {} },
     "@/lib/application-claim": extra["@/lib/application-claim"] ?? {},
     "@/lib/application-worker": extra["@/lib/application-worker"] ?? { processApplication: async () => {} },
@@ -197,7 +198,9 @@ async function testParkUnsendable() {
   assert.equal(parked.handoff, 1);
   assert.equal(parked.skipped ?? 0, 0);
   const held = db.rows.find((r) => r.id === "blocked")!;
-  assert.equal(held.status, "queued");
+  assert.equal(held.status, "needs_user");
+  assert.equal(held.sendStatus, "needs_user");
+  assert.equal(held.sendFailureReason, "privacy_consent_missing");
   assert.ok(held.startedAt, "consent hold stamps startedAt so it is not re-claimed");
   assert.equal(held.errorMessage, heldMessage("privacy_consent_missing"));
   const manual = db.rows.find((r) => r.id === "ashby")!;
@@ -251,6 +254,7 @@ async function testDrainBatchAndSummary() {
         const r = db.rows.find((x) => x.id === id)!;
         r.status = "success";
         r.submitConfirmation = "DETECTED_THANK_YOU";
+        r.submittedVia = id === "p1" ? "email_recruiter" : "portal_greenhouse";
       },
     },
   });
@@ -261,6 +265,8 @@ async function testDrainBatchAndSummary() {
   assert.equal(summary.blockedByReason.privacy_consent_missing, 1);
   assert.equal(summary.claimed, 5);
   assert.equal(summary.sent, 5);
+  assert.equal(summary.emailSent, 1);
+  assert.equal(summary.portalSent, 4);
   assert.equal([...processed].sort().join(","), "p1,p2,p3,p4,p5");
   delete process.env.DRAIN_QUEUE_BATCH;
 }
@@ -296,6 +302,9 @@ async function testClassifyDrainOutcome() {
   assert.equal(drain.classifyDrainOutcome({
     status: "queued", errorMessage: JOB_LIVENESS_UNKNOWN_HELD_MESSAGE, submitConfirmation: "NOT_SUBMITTED",
   }), "held");
+  assert.equal(drain.classifyDrainOutcome({
+    status: "needs_user", errorMessage: heldMessage("privacy_consent_missing"), submitConfirmation: null,
+  }), "blocked");
   assert.equal(drain.classifyDrainOutcome({
     status: "success", errorMessage: null, submitConfirmation: "DETECTED_THANK_YOU",
   }), "sent");
