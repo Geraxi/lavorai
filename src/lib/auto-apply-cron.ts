@@ -26,6 +26,7 @@ import { resolveBoardListingsForRoles } from "@/lib/board-apply-resolver";
 import { sortByPaidPriority } from "@/lib/paid-priority";
 import { compareJobsForAutoApply, isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
+import { skipListEmailSendDecision } from "@/lib/recruiter-email-fallback";
 import { companyCapUsageWhere, countDailyCapUsage, countsTowardQuota, monthlyQuotaUsageWhere, weeklyQuotaUsageWhere } from "@/lib/daily-application-cap";
 import { usesProvenChannelFilter } from "@/lib/proven-channels";
 import { deployedAppVersion } from "@/lib/deployed-version";
@@ -1085,7 +1086,19 @@ async function admitAutoApplyApplication(input: {
     const found = typeof lookupPublishedSkipListInbox === "function"
       ? await lookupPublishedSkipListInbox(job)
       : null;
-    if (!found) {
+    if (found) {
+      await prisma.job.update({
+        where: { id: job.id },
+        data: {
+          recruiterEmail: found.email,
+          recruiterEmailSourceUrl: found.provenance.sourceUrl,
+          recruiterScrapedAt: new Date(),
+        },
+      }).catch(() => undefined);
+      job.recruiterEmail = found.email;
+    }
+    const decision = found ? skipListEmailSendDecision(found, job) : null;
+    if (!found || !decision?.ok) {
       await prisma.application.create({
         data: {
           userId: input.userId,
@@ -1096,6 +1109,7 @@ async function admitAutoApplyApplication(input: {
           atsScore: input.score,
           sessionId: input.sessionId,
           errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
+          ...(decision && !decision.ok ? { sendFailureReason: decision.reason } : {}),
           completedAt: new Date(),
           recruiterEmailRecheckedAt: new Date(),
         },
@@ -1104,15 +1118,6 @@ async function admitAutoApplyApplication(input: {
       input.stats.applicationsHandedOff++;
       return "handoff";
     }
-    await prisma.job.update({
-      where: { id: job.id },
-      data: {
-        recruiterEmail: found.email,
-        recruiterEmailSourceUrl: found.provenance.sourceUrl,
-        recruiterScrapedAt: new Date(),
-      },
-    }).catch(() => undefined);
-    job.recruiterEmail = found.email;
   }
 
   const app = await prisma.application.create({

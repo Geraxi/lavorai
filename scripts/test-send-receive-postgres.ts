@@ -180,7 +180,7 @@ async function main() {
     console.log("PASS PostgreSQL + route: genuine synthetic signature verifies; unsigned rejected; duplicate signed webhook remains one message.");
     const { reconcileAcceptedApplicationEmails } = await import("../src/lib/application-email-reconciliation");
     const raceSession = await db.applicationSession.create({ data: { userId: user.id, key: "race", label: "race", targetCount: 10 } });
-    const raceApp = await db.application.create({ data: { userId: user.id, jobId: job.id, sessionId: raceSession.id, portal: "email", status: "applying", submitConfirmation: "SUBMISSION_STARTED", startedAt: now, leaseToken: workLease.leaseToken, leaseExpiresAt } });
+    const raceApp = await db.application.create({ data: { userId: user.id, jobId: job.id, sessionId: raceSession.id, portal: "email", status: "applying", submitConfirmation: "SUBMISSION_STARTED", startedAt: now } });
     const { submissionSubjectKey } = await import("../src/lib/application-submission-budget");
     await db.applicationSubmissionReservation.create({ data: {
       applicationId: raceApp.id, subjectKey: submissionSubjectKey(user.id, job.id), attemptStartedAt: now,

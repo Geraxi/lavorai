@@ -23,6 +23,8 @@ import {
   asIssuedWorkLease, issueApplicationLease, leaseTokenOf, liveLeaseWhere, renewLeaseData,
   type ApplicationWorkLease,
 } from "@/lib/application-lease";
+import { RecoveryReleaseBudget, controlledReleaseHoldData } from "@/lib/application-recovery-release";
+import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
 
 // Persisted before crossing a delivery boundary. A crash/timeout never releases
 // this reservation: only a proved no-send outcome or an atomic success does.
@@ -183,6 +185,7 @@ export function heldMessage(reason: string): string {
     preference_salary: "Retribuzione inferiore alla preferenza corrente",
     preference_match_threshold: "Compatibilità con il profilo inferiore alla soglia scelta",
     daily_quota_reached: "Raggiunto il limite giornaliero di candidature. Riprova domani",
+    controlled_release: "in attesa di rilascio controllato",
   };
   if (reason === "free_weekly_quota_reached") explanations[reason] = `Raggiunto il limite gratuito di ${freeWeeklyApplyQuota()} candidature ogni 7 giorni. Attiva Pro per inviarne di più`;
   return `Invio in attesa: ${explanations[reason] ?? reason}. Questa elaborazione non ha effettuato nuovi invii.`;
@@ -204,7 +207,14 @@ function nextWorkLease(row: Pick<WorkerGateRow, "leaseToken" | "leaseExpiresAt">
 export async function reserveApplicationWork(id: string, db: DB = prisma): Promise<ApplicationWorkLease | null> {
   return withLockedApplication(id, db, async (tx, row) => {
     if (!row || !["queued", "answers_claimed"].includes(row.status)) return null;
-    if (row.submitStartedAt) return null;
+    if (row.submitStartedAt || blocksUncertainAutoRetry(row)) {
+      if (row.status === "queued") {
+        await tx.application.update({ where: { id }, data: {
+          status: "ready_to_apply", errorMessage: UNCERTAIN_SUBMISSION_MESSAGE,
+        } });
+      }
+      return null;
+    }
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     if (row.answerContinuationJson) {
       if (answerContinuationIneligibility(row, "queued", row.job.url) || currentWorkerIneligibility(row)
@@ -598,6 +608,7 @@ export async function queueAnswerContinuation(input: {
 }, db: DB = prisma): Promise<string> {
   return (await withLockedApplication(input.applicationId, db, async (tx, row) => {
     if (!row || row.userId !== input.userId) return "application_not_found";
+    if (blocksUncertainAutoRetry(row)) return "uncertain_submission";
     if (!row.answerContinuationJson) {
       await handOffContinuationProofMissing(tx, row);
       return "continuation_proof_missing";
@@ -651,6 +662,13 @@ export async function queueAnswerContinuation(input: {
     } });
     if (changed.count !== 1) return "questions_changed_reload";
     if (grantsConsent) console.log(`[consent] ${row.id} consentGrantedAt=${consentAt!.toISOString()} source=domande_answers`);
+    if (!new RecoveryReleaseBudget().consume(row.id)) {
+      await tx.application.updateMany({
+        where: { id: row.id, status: "queued", submittedAt: null, submitStartedAt: null },
+        data: controlledReleaseHoldData(),
+      });
+      return "controlled_release_held";
+    }
     return "queued";
   })) ?? "application_not_found";
 }

@@ -16,6 +16,9 @@ import * as billing from "../src/lib/billing";
 import { heldMessage } from "../src/lib/application-worker-gates";
 import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "../src/lib/job-liveness";
 import * as applicationLease from "../src/lib/application-lease";
+import * as recoveryRelease from "../src/lib/application-recovery-release";
+import * as uncertainSubmission from "../src/lib/uncertain-submission";
+import * as recruiterEmailFallback from "../src/lib/recruiter-email-fallback";
 
 process.env.APPLICATION_SENDING_MODE = "automatic";
 process.env.APPLICATION_ROLLOUT_START_AT = new Date(Date.now() - 3_600_000).toISOString();
@@ -41,6 +44,9 @@ function load(path: string, extra: Record<string, unknown> = {}) {
     "@/lib/ats-skip-hosts": skipHosts,
     "@/lib/billing": billing,
     "@/lib/application-lease": applicationLease,
+    "@/lib/application-recovery-release": recoveryRelease,
+    "@/lib/uncertain-submission": uncertainSubmission,
+    "@/lib/recruiter-email-fallback": recruiterEmailFallback,
     "@/lib/application-worker-gates": { heldMessage, hasPotentialSubmission: (row: any) => !!(row.submitStartedAt || row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus || row.canaryLog || row.answersUsedJson || (row.submitConfirmation && !["NOT_SUBMITTED", "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation))) },
     "@/lib/job-liveness": { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE },
     "@/lib/held-application-release": extra["@/lib/held-application-release"] ?? { releaseUnverifiableLivenessHolds: async () => 0 },
@@ -160,10 +166,18 @@ assert.equal(sendability.weeklyQuotaBlockReason(sendableUser(), 99, now), null);
 assert.equal(sendability.isQueuedRowSendable(row("ok")), true);
 assert.equal(sendability.isQueuedRowSendable(row("ashby", {
   job: { url: "https://jobs.ashbyhq.com/acme/uuid", recruiterEmail: null },
-})), true, "Skip-list rows stay claimable so recruiter-email can run");
+})), false, "Skip-list rows are not auto-sendable before approval");
 assert.equal(sendability.isQueuedRowSendable(row("ashby-email", {
   job: { url: "https://jobs.ashbyhq.com/acme/uuid", recruiterEmail: "jobs@acme.com" },
-})), true);
+})), false, "A recorded inbox does not send until recruiter-email fallback is enabled");
+assert.equal(sendability.skipListBlocksAutoSend(
+  { url: "https://jobs.ashbyhq.com/acme/uuid", recruiterEmail: "talent@acme.com" },
+  { RECRUITER_EMAIL_FALLBACK_ENABLED: "on" },
+), false);
+assert.equal(sendability.skipListBlocksAutoSend(
+  { url: "https://jobs.ashbyhq.com/acme/uuid", recruiterEmail: null },
+  { RECRUITER_EMAIL_FALLBACK_ENABLED: "on" },
+), true);
 
 async function testClaimSelection() {
   const blocked = row("blocked", { userId: "free", user: freeUser({ privacyConsentAt: null }), createdAt: new Date(+freshAt - 10_000) });
@@ -186,7 +200,7 @@ async function testClaimSelection() {
   const db = database([blocked, quota, sendable, ashby, used, ...extras]);
   const claims = load("src/lib/application-claim.ts", { "@/lib/db": { prisma: db.prisma } });
   const ids = await claims.findClaimableQueued(10);
-  assert.equal(Array.from(ids).join(","), "sendable,ashby", "Claim selection skips consent/quota blocks; skip-list rows stay claimable");
+  assert.equal(Array.from(ids).join(","), "sendable", "Claim selection skips consent/quota/skip-list blocks");
   assert.equal(db.counts().writes, 0, "findClaimableQueued stays read-only");
 }
 
@@ -198,7 +212,7 @@ async function testParkUnsendable() {
   const drain = load("src/lib/queue-drain.ts", { "@/lib/db": { prisma: db.prisma } });
   const parked = await drain.parkUnsendableQueued({ db: db.prisma, now });
   assert.equal(parked.blockedByReason.privacy_consent_missing, 1);
-  assert.equal(parked.handoff ?? 0, 0, "Skip-list rows are not parked as handoffs before recruiter-email");
+  assert.equal(parked.handoff ?? 0, 1, "Skip-list rows are parked as manual handoffs");
   const held = db.rows.find((r) => r.id === "blocked")!;
   assert.equal(held.status, "needs_user");
   assert.equal(held.sendStatus, "needs_user");
@@ -206,7 +220,8 @@ async function testParkUnsendable() {
   assert.ok(held.startedAt, "consent hold stamps startedAt so it is not re-claimed");
   assert.equal(held.errorMessage, heldMessage("privacy_consent_missing"));
   const ashbyRow = db.rows.find((r) => r.id === "ashby")!;
-  assert.equal(ashbyRow.status, "queued");
+  assert.equal(ashbyRow.status, "ready_to_apply");
+  assert.equal(ashbyRow.errorMessage, skipHosts.SKIPPED_ATS_MANUAL_MESSAGE);
   assert.equal(ashbyRow.startedAt, null);
   assert.equal(db.rows.find((r) => r.id === "sendable")!.startedAt, null);
 }
@@ -409,6 +424,7 @@ async function testDrainSummaryBuckets() {
 }
 
 async function testExpiredQueuedClaimRecovery() {
+  process.env.APPLICATION_RECOVERY_RELEASE = "on";
   const stale = new Date(Date.now() - 25 * 60_000);
   const recent = new Date();
   const historical = new Date(+start - 1);
@@ -470,6 +486,7 @@ async function testExpiredQueuedClaimRecovery() {
     now, startedMs: Date.now(), maxDurationMs: 300_000, db: db.prisma,
   });
   assert.equal(drainRecoveries, 1, "drain releases expired queued claims before claiming");
+  delete process.env.APPLICATION_RECOVERY_RELEASE;
 }
 
 async function testSkipListEmailPreferred() {

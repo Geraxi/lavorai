@@ -39,7 +39,7 @@ export function skipListManualHandoffWhere(applicationId: string) {
 }
 
 /** Explicit user-action handoff: clear the work lease so the row is not reserved. */
-export function skipListManualHandoffData(now = new Date()) {
+export function skipListManualHandoffData(now = new Date(), extra: { sendFailureReason?: string | null } = {}) {
   return {
     status: "ready_to_apply" as const,
     errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
@@ -48,6 +48,7 @@ export function skipListManualHandoffData(now = new Date()) {
     startedAt: null,
     leaseToken: null,
     leaseExpiresAt: null,
+    ...(extra.sendFailureReason ? { sendFailureReason: extra.sendFailureReason } : {}),
   };
 }
 

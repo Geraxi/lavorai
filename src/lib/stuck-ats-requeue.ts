@@ -1,5 +1,6 @@
 import { resolveAdapterByUrl } from "@/lib/ats-adapter-resolution";
 import { hasPotentialSubmission } from "@/lib/application-worker-gates";
+import { blocksUncertainAutoRetry } from "@/lib/uncertain-submission";
 import type { JobLivenessResult } from "@/lib/job-liveness";
 
 /**
@@ -56,7 +57,7 @@ export function classifyStuck(row: StuckAtsRow): StuckKind | null {
 export function staticSkipReason(row: StuckAtsRow): SkipReason | "not_stuck" | null {
   if (!classifyStuck(row)) return "not_stuck";
   if (row.job.closedAt) return "job_closed";
-  if (hasPotentialSubmission(row)) return "possible_submission";
+  if (blocksUncertainAutoRetry(row) || hasPotentialSubmission(row)) return "possible_submission";
   if (!resolveAdapterByUrl([row.job.url])) return "no_adapter";
   return null;
 }

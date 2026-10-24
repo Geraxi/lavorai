@@ -11,6 +11,12 @@ import { companyWebsiteFromPublishedSource } from "../src/lib/recruiter-email";
 import { lookupPublishedSkipListInbox } from "../src/lib/skip-list-email-lookup";
 import { recheckSkippedAtsHandoffs } from "../src/lib/skip-list-handoff-recheck";
 import { SKIPPED_ATS_MANUAL_MESSAGE } from "../src/lib/ats-skip-hosts";
+import {
+  genericCompanyContactReason,
+  postingNamesApplyAddress,
+  postingSpecificRecruiterDecision,
+  recruiterEmailFallbackEnabled,
+} from "../src/lib/recruiter-email-fallback";
 
 async function testPublishedWebsites() {
   assert.equal(
@@ -142,9 +148,12 @@ async function testOneTimeRecheck() {
   });
   assert.equal(first.checked, 1);
   assert.equal(first.found, 1);
-  assert.equal(enqueued.join(","), "pre95");
-  assert.ok(updates.some((u) => u.status === "queued" && u.errorMessage === null));
+  assert.equal(first.queued, 0, "fallback off: record the address, do not queue");
+  assert.equal(first.rejected, 1);
+  assert.equal(enqueued.join(","), "");
+  assert.ok(!updates.some((u) => u.status === "queued"));
   assert.ok(updates.some((u) => u.recruiterEmail === "talent@acme.com"));
+  assert.ok(updates.some((u) => u.sendFailureReason === "recruiter_email_fallback_disabled"));
 
   const second = await recheckSkippedAtsHandoffs({
     now, db, limit: 8,
@@ -152,7 +161,7 @@ async function testOneTimeRecheck() {
     enqueue: async () => { throw new Error("must not enqueue twice"); },
   });
   assert.equal(second.checked, 0, "Timestamp makes the recheck idempotent");
-  assert.equal(enqueued.length, 1);
+  assert.equal(enqueued.length, 0);
 
   const missDb = {
     application: {
@@ -167,7 +176,91 @@ async function testOneTimeRecheck() {
   assert.equal(missed.checked, 1);
   assert.equal(missed.found, 0);
   assert.equal(missed.missed, 1);
+  assert.equal(missed.queued, 0);
   assert.equal(SKIPPED_ATS_MANUAL_MESSAGE.length > 20, true);
+}
+
+function testRecruiterEmailFallbackPolicy() {
+  assert.equal(recruiterEmailFallbackEnabled({}), false);
+  assert.equal(recruiterEmailFallbackEnabled({ RECRUITER_EMAIL_FALLBACK_ENABLED: "on" }), true);
+  assert.equal(genericCompanyContactReason("info@acme.com", false), "generic_company_contact");
+  assert.equal(genericCompanyContactReason("contact@acme.com", false), "generic_company_contact");
+  assert.equal(genericCompanyContactReason("hello@acme.com", false), "generic_company_contact");
+  assert.equal(genericCompanyContactReason("support@acme.com", false), "generic_company_contact");
+  assert.equal(genericCompanyContactReason("privacy@acme.com", false), "generic_company_contact");
+  assert.equal(genericCompanyContactReason("press@acme.com", false), "generic_company_contact");
+  assert.equal(genericCompanyContactReason("sales@acme.com", false), "generic_company_contact");
+  assert.equal(genericCompanyContactReason("admin@acme.com", false), "generic_company_contact");
+  assert.equal(genericCompanyContactReason("noreply@acme.com", false), "generic_company_contact");
+  assert.equal(genericCompanyContactReason("careers@acme.com", false), "generic_careers_inbox");
+  assert.equal(genericCompanyContactReason("jobs@acme.com", false), "generic_careers_inbox");
+  assert.equal(genericCompanyContactReason("careers@acme.com", true), null);
+  assert.equal(genericCompanyContactReason("jobs@acme.com", true), null);
+  assert.equal(genericCompanyContactReason("talent@acme.com", false), null);
+  assert.equal(postingNamesApplyAddress("Send your CV to careers@acme.com for this role.", "careers@acme.com"), true);
+  const jobSpecific = postingSpecificRecruiterDecision({
+    email: "hiring-this-role@acme.com",
+    provenance: { sourceType: "job_description", extraction: "job_description" } as never,
+  }, { description: "Apply by email to hiring-this-role@acme.com" });
+  assert.deepEqual(jobSpecific, { ok: true });
+  const genericPage = postingSpecificRecruiterDecision({
+    email: "talent@acme.com",
+    provenance: { sourceType: "employer_domain_page", extraction: "visible_application_instruction" } as never,
+  }, { description: "Apply on the site." });
+  assert.deepEqual(genericPage, { ok: false, reason: "not_job_specific_inbox" });
+  const info = postingSpecificRecruiterDecision({
+    email: "info@acme.com",
+    provenance: { sourceType: "job_description", extraction: "job_description" } as never,
+  }, { description: "Contact info@acme.com" });
+  assert.deepEqual(info, { ok: false, reason: "generic_company_contact" });
+}
+
+async function testEnabledJobSpecificQueue() {
+  process.env.RECRUITER_EMAIL_FALLBACK_ENABLED = "on";
+  const now = new Date("2026-10-24T12:00:00.000Z");
+  const updates: Array<Record<string, unknown>> = [];
+  const enqueued: string[] = [];
+  const db = {
+    application: {
+      findMany: async () => [{
+        id: "job-specific",
+        submitStartedAt: null, submittedAt: null, submittedVia: null, submitConfirmation: null,
+        canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+        job: {
+          id: "job-ashby", url: "https://jobs.ashbyhq.com/acme/uuid", company: "Acme",
+          description: "Send your CV to hiring@acme.com for this role.",
+          recruiterEmail: null, recruiterEmailSourceUrl: null, companyWebsite: "https://www.acme.com",
+        },
+      }],
+      updateMany: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+        updates.push({ id: where.id, ...data });
+        return { count: 1 };
+      },
+    },
+    job: {
+      update: async ({ data }: { data: Record<string, unknown> }) => {
+        updates.push({ job: true, ...data });
+        return data;
+      },
+    },
+  };
+  const queued = await recheckSkippedAtsHandoffs({
+    now, db, limit: 8,
+    lookup: async () => ({
+      email: "hiring@acme.com",
+      provenance: {
+        version: 1, sourceType: "job_description", requestedUrl: "https://jobs.ashbyhq.com/acme/uuid",
+        sourceUrl: "https://jobs.ashbyhq.com/acme/uuid", observedAt: now.toISOString(), pageSha256: "x",
+        evidence: "Send your CV to hiring@acme.com", company: "Acme", extraction: "job_description",
+      },
+    }),
+    enqueue: async (id) => { enqueued.push(id); },
+  });
+  assert.equal(queued.found, 1);
+  assert.equal(queued.queued, 1);
+  assert.equal(queued.rejected, 0);
+  assert.deepEqual(enqueued, ["job-specific"]);
+  delete process.env.RECRUITER_EMAIL_FALLBACK_ENABLED;
 }
 
 function testSourceFences() {
@@ -184,7 +277,9 @@ async function main() {
   await testPublishedWebsites();
   await testCheapLookup();
   await testOneTimeRecheck();
+  testRecruiterEmailFallbackPolicy();
+  await testEnabledJobSpecificQueue();
   testSourceFences();
-  console.log("PASS skip-list inbox followup: JSON websites, cheap lookup, one-time recheck, no invented addresses.");
+  console.log("PASS skip-list inbox followup: JSON websites, cheap lookup, one-time recheck records without queue, job-specific only when enabled.");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

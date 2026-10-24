@@ -2,7 +2,8 @@ import { applicationRolloutConfig, rolloutCreationBlocked } from "@/lib/applicat
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { heldMessage } from "@/lib/application-worker-gates";
-import { SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData } from "@/lib/ats-skip-hosts";
+import { RecoveryReleaseBudget, controlledReleaseHoldData } from "@/lib/application-recovery-release";
 import { canClaimAnotherDrainRow, drainProcessConcurrency, drainQueueBatch, maxDrainAttempts } from "@/lib/drain-limits";
 import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "@/lib/job-liveness";
 import { releaseUnverifiableLivenessHolds } from "@/lib/held-application-release";
@@ -14,6 +15,7 @@ import {
   isQueuedRowSendable,
   loadQuotaUsageMaps,
   MAX_ATTEMPTS_MESSAGE_PREFIX,
+  skipListBlocksAutoSend,
   usageFor,
   type ClaimHoldReason,
 } from "@/lib/queue-sendability";
@@ -134,6 +136,17 @@ export async function parkUnsendableQueued(opts: {
     const usage = usageFor(maps, row.userId);
     usage.weekly += parkedWeekly.get(row.userId) ?? 0;
     usage.daily += parkedDaily.get(row.userId) ?? 0;
+    if (skipListBlocksAutoSend(row.job)) {
+      const handed = await db.application.updateMany({
+        where: { id: row.id, status: "queued", startedAt: null, submittedAt: null },
+        data: skipListManualHandoffData(now),
+      });
+      if (handed.count === 1) {
+        result.parked++;
+        result.handoff++;
+      }
+      continue;
+    }
     const reason = claimBlockReason(row, usage, now);
     if (!reason) continue;
     if (reason === "max_attempts") {
@@ -236,9 +249,20 @@ export async function releaseQuotaHoldsIfAvailable(opts: {
     orderBy: { createdAt: "asc" },
   });
   const maps = await loadQuotaUsageMaps(db, rows.map((r) => r.userId), rows.map((r) => r.id), now);
+  const budget = new RecoveryReleaseBudget();
   let released = 0;
   for (const row of rows) {
     if (!isQueuedRowSendable(row, usageFor(maps, row.userId), now)) continue;
+    if (!budget.consume(row.id)) {
+      await db.application.updateMany({
+        where: {
+          id: row.id, status: "queued", startedAt: { not: null }, retryCount: 0,
+          errorMessage: { in: messages },
+        },
+        data: controlledReleaseHoldData(now),
+      });
+      continue;
+    }
     const changed = await db.application.updateMany({
       where: {
         id: row.id, status: "queued", startedAt: { not: null }, retryCount: 0,

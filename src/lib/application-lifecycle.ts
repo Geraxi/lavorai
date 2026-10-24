@@ -20,6 +20,7 @@ import { ROLLOUT_BUDGET_HELD_MESSAGE } from "@/lib/application-rollout";
 import { JOB_CLOSED_HELD_MESSAGE, JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "@/lib/job-liveness";
 import { isAiCreditFailure } from "@/lib/credit-failure-retry";
 import { DUPLICATE_POSTING_MESSAGE } from "@/lib/posting-key";
+import { SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import type { Prisma } from "@prisma/client";
 import { attemptOutcomeLabel, deriveAttemptOutcome, type AttemptOutcome } from "@/lib/attempt-outcome";
 
@@ -34,7 +35,7 @@ export type FailureReason =
 
 export type ManualReason =
   | "captcha" | "unsupported_route" | "no_recruiter_email" | "ats_handoff" | "destination_unverified"
-  | "portal_session_required" | "daily_cap_held";
+  | "portal_session_required" | "daily_cap_held" | "skip_list";
 
 export type EvidenceType =
   | "ats_http_receipt" | "ats_confirmation_page" | "email_delivered" | "email_accepted"
@@ -144,6 +145,7 @@ export const MANUAL_MESSAGES: Record<ManualReason, Localized> = {
   unsupported_route: { it: "Questo portale non supporta l'invio automatico. CV e lettera sono pronti: candidati dal link.", en: "This portal does not support automatic sending. Your CV and letter are ready: apply from the link." },
   no_recruiter_email: { it: "Nessun canale di invio verificato per questo annuncio. CV e lettera sono pronti: candidati dal link.", en: "No verified sending channel for this posting. Your CV and letter are ready: apply from the link." },
   ats_handoff: { it: "L'azienda usa un portale ufficiale: candidati da lì con CV e lettera già pronti.", en: "The company uses an official portal: apply there with your ready CV and letter." },
+  skip_list: { it: "Documenti pronti: invia sul sito dell'azienda. Invio automatico non disponibile su questo portale (CAPTCHA / verifica manuale).", en: "Documents ready: apply on the company site. Automatic sending is not available on this portal (CAPTCHA / manual verification)." },
   destination_unverified: { it: "Non abbiamo potuto collegare con certezza il portale a questo annuncio. Verifica il link ufficiale e candidati da lì.", en: "We could not reliably match the portal to this posting. Check the official link and apply there." },
   portal_session_required: { it: "Serve collegare il tuo account del portale, oppure candidati dal link.", en: "Connect your portal account, or apply from the link." },
   daily_cap_held: { it: "Limite giornaliero raggiunto: la candidatura è conservata e non inviata.", en: "Daily limit reached: the application is kept and not sent." },
@@ -177,6 +179,7 @@ function manualReasonFor(input: LifecycleInput): ManualReason {
   const message = input.errorMessage ?? "";
   if (input.submitConfirmation === "CAPTCHA") return "captcha";
   if (input.status === "needs_session") return "portal_session_required";
+  if (message === SKIPPED_ATS_MANUAL_MESSAGE || /CAPTCHA \/ verifica manuale/i.test(message)) return "skip_list";
   if (/non correlabile/i.test(message)) return "destination_unverified";
   if (/sistema di candidatura ufficiale|copia da aggregatore/i.test(message)) return "ats_handoff";
   if (/email del recruiter|senza email recruiter|Email non inviata/i.test(message)) return "no_recruiter_email";
@@ -311,6 +314,8 @@ export function deriveApplicationLifecycle(
     if (input.submitConfirmation === "NOT_SUBMITTED" && input.errorMessage === ROLLOUT_BUDGET_HELD_MESSAGE) {
       status = "approved"; held = true; nextAction = "wait";
       messageOverride = MANUAL_MESSAGES.daily_cap_held;
+    } else if (input.errorMessage === SKIPPED_ATS_MANUAL_MESSAGE) {
+      status = "needs_manual"; manualReason = "skip_list"; nextAction = "apply_manually";
     } else if (input.submitConfirmation === "CAPTCHA" || input.submitConfirmation === "NOT_SUBMITTED" || input.completedAt) {
       status = "needs_manual"; manualReason = manualReasonFor(input); nextAction = "apply_manually";
     } else {

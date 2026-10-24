@@ -6,6 +6,7 @@ import { enqueueApplication, cancelApplication } from "@/lib/application-queue";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
 import { findPortalAdapter } from "@/lib/portal-adapters";
+import { blocksUncertainAutoRetry } from "@/lib/uncertain-submission";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -52,12 +53,17 @@ export async function POST(req: NextRequest) {
         { status: "needs_answers" },
       ],
     },
-    select: { id: true, job: { select: { url: true } } },
+    select: {
+      id: true, submitStartedAt: true, submittedAt: true, submittedVia: true,
+      submitConfirmation: true, canaryLog: true, answersUsedJson: true,
+      viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
+      job: { select: { url: true } },
+    },
     orderBy: { createdAt: "asc" },
     take: limit,
   });
 
-  const targets = rows.filter((r) => findPortalAdapter(r.job.url));
+  const targets = rows.filter((r) => findPortalAdapter(r.job.url) && !blocksUncertainAutoRetry(r));
   let requeued = 0;
   for (const app of targets) {
     try {

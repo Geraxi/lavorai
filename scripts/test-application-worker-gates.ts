@@ -71,9 +71,14 @@ assert(worker.includes("isSkippedPortalUrl"), "Skip-list hosts skip portal submi
 assert(worker.includes("SKIPPED_ATS_MANUAL_MESSAGE"), "Skip-list handoff happens only after email lookup fails");
 assert(worker.includes("skipListManualHandoffWhere"), "Skip-list miss must include answers_claimed / NOT_SUBMITTED resumes");
 assert(worker.includes("skipListManualHandoffData"), "Skip-list miss must clear the work lease on handoff");
+assert(worker.includes("skipListEmailSendDecision"), "Skip-list inbox must pass the recruiter-email fallback gate before send");
+assert(worker.includes("blocksUncertainAutoRetry"), "Worker skip-list path refuses uncertain rows");
 const gates = readFileSync(new URL("../src/lib/application-worker-gates.ts", import.meta.url), "utf8");
 assert(gates.includes("CONTINUATION_PROOF_MISSING_MESSAGE"), "Missing continuation proof must persist a visible user-action");
 assert(gates.includes("handOffContinuationProofMissing"), "continuation_proof_missing must rewrite the row, not return silently");
+assert(gates.includes("blocksUncertainAutoRetry"), "Reserve and resume refuse uncertain rows as a standalone check");
+assert(gates.includes("RecoveryReleaseBudget"), "Answer resume stays held until the recovery-release gate");
+assert(gates.includes("controlled_release"), "Controlled-release hold has a visible Italian reason");
 assert(readFileSync(new URL("../src/lib/skip-list-email-lookup.ts", import.meta.url), "utf8").includes("skipPageFetch"),
   "Cheap skip-list lookup must not crawl the ATS job page");
 assert(!readFileSync(new URL("../src/lib/application-worker-gates.ts", import.meta.url), "utf8").includes("requiresManualAtsHandoff"),
@@ -93,7 +98,7 @@ assert(!worker.includes("markSessionSentSuccess"), "Success accounting must be a
 assert(!worker.includes('submitConfirmation: "DETECTED_LEGACY"'), "A click is not a confirmed receipt");
 const claim = readFileSync(new URL("../src/lib/application-claim.ts", import.meta.url), "utf8");
 assert(claim.includes('["applying", "submitting"].includes(app.status)'));
-assert(claim.includes("hasPotentialSubmission(app)"));
+assert(claim.includes("blocksUncertainAutoRetry(app)"));
 assert(claim.includes("expiredLeaseWhere"));
 assert(claim.includes("submitStartedAt"));
 assert(claim.includes('status: app.status, startedAt: app.startedAt, completedAt: null'));

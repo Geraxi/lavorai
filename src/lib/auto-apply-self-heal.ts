@@ -67,6 +67,7 @@ const NO_PRIOR_DELIVERY = {
   submittedAt: null, submittedVia: null, submitConfirmation: null,
   canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null,
   replyCount: 0, userStatus: null, cvDocxPath: null, cvPdfPath: null, coverLetterPath: null,
+  submitStartedAt: null,
 } as const;
 const RETRY_MAX = 1;
 const RETRY_MIN_AGE_MS = 30 * 60 * 1000; // aspetta almeno 30 min prima di ritentare

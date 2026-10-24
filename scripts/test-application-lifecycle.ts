@@ -5,6 +5,7 @@ import { automaticRetryDecision, classifyFailure, deriveApplicationLifecycle, LI
 import { postingAlreadyClaimed, NOT_SUBMITTED, SUBMISSION_STARTED } from "../src/lib/application-worker-gates";
 import { ROLLOUT_BUDGET_HELD_MESSAGE } from "../src/lib/application-rollout";
 import { JOB_CLOSED_HELD_MESSAGE, JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "../src/lib/job-liveness";
+import { SKIPPED_ATS_MANUAL_MESSAGE } from "../src/lib/ats-skip-hosts";
 import { submissionSubjectKey } from "../src/lib/application-submission-budget";
 
 // ── posting keys ───────────────────────────────────────────────────────
@@ -111,6 +112,9 @@ assert.deepEqual(captcha.manual?.documents, { cvPdf: true, cvDocx: true, coverLe
 assert.equal(s({ status: "ready_to_apply", completedAt: now, errorMessage: "Questo portale non è supportato per invio automatico." }).manualReason, "unsupported_route");
 assert.equal(s({ status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED, errorMessage: "Destinazione ATS non correlabile con certezza a questo annuncio." }).manualReason, "destination_unverified");
 assert.equal(s({ status: "ready_to_apply", completedAt: now, errorMessage: "Acme usa un sistema di candidatura ufficiale (ATS)." }).manualReason, "ats_handoff");
+const skipList = s({ status: "ready_to_apply", completedAt: now, errorMessage: SKIPPED_ATS_MANUAL_MESSAGE, job: { url: "https://jobs.ashbyhq.com/acme/uuid", source: "ashby" } });
+assert.deepEqual([skipList.status, skipList.manualReason, skipList.nextAction], ["needs_manual", "skip_list", "apply_manually"]);
+assert.match(skipList.message.it, /Documenti pronti: invia sul sito dell'azienda/);
 assert.equal(s({ status: "needs_session" }).manualReason, "portal_session_required");
 assert.equal(s({ status: "ready_to_apply", job: { url: "javascript:alert(1)" }, submitConfirmation: "CAPTCHA" }).manual?.applyUrl, null, "only http(s) apply links");
 assert.equal(s({ status: "ready_to_apply" }).status, "approved");

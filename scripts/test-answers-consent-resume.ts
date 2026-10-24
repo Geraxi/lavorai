@@ -21,6 +21,8 @@ import * as guidance from "../src/lib/application-continuation-guidance";
 import * as answers from "../src/lib/application-answers";
 import { prefersRemoteOrHybrid } from "../src/lib/auto-apply-preferences";
 
+process.env.APPLICATION_RECOVERY_RELEASE = "on";
+
 const ASHBY_URL = "https://jobs.ashbyhq.com/alan/93455a8c-fbc5-4421-986b-9a63e3f22b36";
 const GH_URL = "https://boards.greenhouse.io/doctolib/jobs/8000653003";
 const QUESTIONS = [{ label: "Describe a specific project that you’re proud of", kind: "textarea" }];

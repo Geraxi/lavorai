@@ -8,6 +8,8 @@ import {
   weeklyQuotaUsageWhere,
 } from "@/lib/daily-application-cap";
 import { maxDrainAttempts } from "@/lib/drain-limits";
+import { isSkippedPortalUrl } from "@/lib/ats-skip-hosts";
+import { recruiterEmailFallbackEnabled } from "@/lib/recruiter-email-fallback";
 
 export const HELD_MESSAGE_PREFIX = "Invio in attesa:";
 export const MAX_ATTEMPTS_MESSAGE_PREFIX = "Invio interrotto dopo";
@@ -107,11 +109,23 @@ export function claimBlockReason(
     ?? dailyQuotaBlockReason(row.user, usage.daily, now);
 }
 
+/** Skip-list hosts are never auto-sendable unless the fallback flag is on
+ * and this posting already has a recorded inbox. */
+export function skipListBlocksAutoSend(
+  job?: { url?: string; recruiterEmail?: string | null } | null,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  if (!job?.url || !isSkippedPortalUrl(job.url, env)) return false;
+  if (!recruiterEmailFallbackEnabled(env)) return true;
+  return !job.recruiterEmail?.trim();
+}
+
 export function isQueuedRowSendable(
   row: ClaimableRow,
   usage: { weekly: number; daily: number } = { weekly: 0, daily: 0 },
   now = new Date(),
 ): boolean {
+  if (skipListBlocksAutoSend(row.job)) return false;
   return claimBlockReason(row, usage, now) === null;
 }
 

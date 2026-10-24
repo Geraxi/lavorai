@@ -23,6 +23,13 @@ function load(path: string, extra: Record<string, any> = {}): any {
       backfillMissingCvProfiles: async () => ({ created: 0, filled: 0, failed: 0, noCv: 0, emptyExtraction: 0, skipped: 0 }),
     },
     "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
+    "@/lib/application-recovery-release": {
+      RecoveryReleaseBudget: class { consume() { return false; } },
+      controlledReleaseHoldData: () => ({ startedAt: new Date(), errorMessage: "held" }),
+      controlledReleaseMessage: () => "held",
+    },
+    "@/lib/uncertain-submission": { blocksUncertainAutoRetry: () => false },
+    "@/lib/recruiter-email-fallback": { skipListEmailSendDecision: () => ({ ok: false, reason: "off" }), recruiterEmailFallbackEnabled: () => false },
     "@/lib/daily-application-cap": {
       countDailyCapUsage: async () => 0,
       countsTowardQuota: () => false,

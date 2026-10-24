@@ -2,6 +2,7 @@ import { historicalRetriesBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
 
 export const runtime = "nodejs";
 
@@ -28,21 +29,49 @@ export async function POST(req: NextRequest) {
   );
   const cutoff = new Date(Date.now() - minutes * 60_000);
 
-  const res = await prisma.application.updateMany({
+  const stuck = await prisma.application.findMany({
     where: {
       status: "applying",
       startedAt: { lt: cutoff },
       completedAt: null,
     },
-    data: {
-      status: "ready_to_apply",
-      completedAt: new Date(),
+    select: {
+      id: true, startedAt: true, submitStartedAt: true, submittedAt: true,
+      submittedVia: true, submitConfirmation: true, canaryLog: true,
+      answersUsedJson: true, viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
     },
+    take: 200,
   });
+
+  let updated = 0;
+  let uncertain = 0;
+  const now = new Date();
+  for (const app of stuck) {
+    if (blocksUncertainAutoRetry(app)) {
+      const changed = await prisma.application.updateMany({
+        where: { id: app.id, status: "applying", startedAt: app.startedAt, completedAt: null },
+        data: {
+          status: "ready_to_apply",
+          submitConfirmation: "UNCONFIRMED",
+          completedAt: now,
+          errorMessage: UNCERTAIN_SUBMISSION_MESSAGE,
+        },
+      });
+      updated += changed.count;
+      uncertain += changed.count;
+      continue;
+    }
+    const changed = await prisma.application.updateMany({
+      where: { id: app.id, status: "applying", startedAt: app.startedAt, completedAt: null },
+      data: { status: "ready_to_apply", completedAt: now },
+    });
+    updated += changed.count;
+  }
 
   return NextResponse.json({
     ok: true,
-    updated: res.count,
+    updated,
+    uncertain,
     cutoffMinutes: minutes,
   });
 }

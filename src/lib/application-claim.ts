@@ -2,7 +2,6 @@ import { answerContinuationIneligibility, continuationSelect } from "./applicati
 import { applicationRolloutConfig, historicalRetriesBlocked, rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
-import { hasPotentialSubmission } from "@/lib/application-worker-gates";
 import { claimScanWindow, sortByPaidPriority, type PriorityUser } from "@/lib/paid-priority";
 import { maxDrainAttempts } from "@/lib/drain-limits";
 import { SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
@@ -12,6 +11,8 @@ import {
   MAX_ATTEMPTS_MESSAGE_PREFIX, usageFor,
 } from "@/lib/queue-sendability";
 import { expiredLeaseWhere, issueApplicationLease } from "@/lib/application-lease";
+import { RecoveryReleaseBudget, controlledReleaseHoldData, controlledReleaseMessage } from "@/lib/application-recovery-release";
+import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
 
 /**
  * Presa in carico atomica di una candidatura in coda, indipendente da Redis.
@@ -55,6 +56,7 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
     select: { ...continuationSelect },
   });
   if (!app || rolloutApplicationIneligibility(app)) return false;
+  if (blocksUncertainAutoRetry(app)) return false;
   if (app.answerContinuationJson) {
     if (app.status !== "queued" || answerContinuationIneligibility(app, "queued")) return false;
     const lease = issueApplicationLease();
@@ -92,7 +94,9 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
  */
 export async function recoverStuckApplications(): Promise<number> {
   if (applicationsPaused()) return 0;
-  let recovered = await recoverExpiredQueuedClaims();
+  const budget = new RecoveryReleaseBudget();
+  let recovered = await recoverExpiredQueuedClaims(undefined, budget);
+  recovered += await releaseControlledRecoveryHolds(budget);
   if (!historicalRetriesBlocked()) recovered += await recoverStuckInFlight();
   return recovered;
 }
@@ -106,7 +110,7 @@ const stuckEvidenceSelect = {
 } as const;
 
 /** Claimed `queued` rows whose worker died before reserve/process. */
-export async function recoverExpiredQueuedClaims(now = new Date()): Promise<number> {
+export async function recoverExpiredQueuedClaims(now = new Date(), budget = new RecoveryReleaseBudget()): Promise<number> {
   if (applicationsPaused()) return 0;
   const config = applicationRolloutConfig(now);
   if (!config.enabled || !config.startedAt) return 0;
@@ -131,7 +135,7 @@ export async function recoverExpiredQueuedClaims(now = new Date()): Promise<numb
       id: app.id, status: "queued" as const, startedAt: app.startedAt, completedAt: null,
       ...expiredLeaseWhere(now),
     };
-    if (app.submitStartedAt || hasPotentialSubmission(app)) {
+    if (blocksUncertainAutoRetry(app)) {
       const changed = await prisma.application.updateMany({
         where: reclaimWhere,
         data: {
@@ -140,7 +144,7 @@ export async function recoverExpiredQueuedClaims(now = new Date()): Promise<numb
           startedAt: null, leaseToken: null, leaseExpiresAt: null,
           errorMessage: app.submitStartedAt
             ? "Invio già avviato da un worker precedente. Esito da riconciliare, nessun nuovo tentativo automatico."
-            : "Invio interrotto con esito non verificato. Verifica prima di ritentare per evitare un doppio invio.",
+            : UNCERTAIN_SUBMISSION_MESSAGE,
         },
       });
       recovered += changed.count;
@@ -158,15 +162,54 @@ export async function recoverExpiredQueuedClaims(now = new Date()): Promise<numb
         retryCount: next,
         startedAt: null, leaseToken: null, leaseExpiresAt: null,
         errorMessage: staleQueuedClaimExhaustedMessage(maxAttempts),
-      } : {
+      } : budget.consume(app.id) ? {
         startedAt: null, leaseToken: null, leaseExpiresAt: null,
         retryCount: next,
         errorMessage: staleQueuedClaimReleaseMessage(),
+      } : {
+        retryCount: next,
+        ...controlledReleaseHoldData(),
       },
     });
     recovered += changed.count;
   }
   return recovered;
+}
+
+export async function releaseControlledRecoveryHolds(
+  budget = new RecoveryReleaseBudget(),
+  now = new Date(),
+): Promise<number> {
+  const config = applicationRolloutConfig(now);
+  if (applicationsPaused() || !config.enabled || !config.startedAt) return 0;
+  const held = await prisma.application.findMany({
+    where: {
+      status: "queued",
+      errorMessage: controlledReleaseMessage(),
+      startedAt: { not: null },
+      completedAt: null,
+      submittedAt: null,
+      submittedVia: null,
+      submitStartedAt: null,
+      createdAt: { gt: config.startedAt, lte: now },
+    },
+    select: { id: true },
+    take: 50,
+    orderBy: { createdAt: "asc" },
+  });
+  let released = 0;
+  for (const row of held) {
+    if (!budget.consume(row.id)) continue;
+    const changed = await prisma.application.updateMany({
+      where: {
+        id: row.id, status: "queued", errorMessage: controlledReleaseMessage(),
+        submittedAt: null, submitStartedAt: null,
+      },
+      data: { startedAt: null, leaseToken: null, leaseExpiresAt: null, errorMessage: null },
+    });
+    released += changed.count;
+  }
+  return released;
 }
 
 async function recoverStuckInFlight(): Promise<number> {
@@ -186,7 +229,7 @@ async function recoverStuckInFlight(): Promise<number> {
     // A timed-out applying worker may already have delivered. Never replay it.
     // submit_started means the old worker may have crossed the send boundary.
     const ambiguous = ["applying", "submitting"].includes(app.status)
-      || !!app.submitStartedAt || hasPotentialSubmission(app);
+      || blocksUncertainAutoRetry(app);
     const changed = await prisma.application.updateMany({
       where: { id: app.id, status: app.status, startedAt: app.startedAt, completedAt: null, ...expiredLeaseWhere(now) },
       data: ambiguous ? {

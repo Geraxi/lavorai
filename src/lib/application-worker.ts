@@ -34,6 +34,8 @@ import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { discoverPublishedHiringInbox } from "@/lib/employer-hiring-inbox";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
 import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData, skipListManualHandoffWhere } from "@/lib/ats-skip-hosts";
+import { skipListEmailSendDecision } from "@/lib/recruiter-email-fallback";
+import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
 import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
 import {
   recruiterFromAddress,
@@ -167,6 +169,21 @@ async function processApplicationRun(
     }).catch(() => undefined);
     app.job.recruiterEmail = cheap.email;
     app.job.recruiterEmailSourceUrl = cheap.provenance.sourceUrl;
+    if (blocksUncertainAutoRetry(app)) {
+      await prisma.application.updateMany({
+        where: skipListManualHandoffWhere(applicationId),
+        data: { ...skipListManualHandoffData(), errorMessage: UNCERTAIN_SUBMISSION_MESSAGE, sendFailureReason: "uncertain_submission" },
+      });
+      return;
+    }
+    const cheapDecision = skipListEmailSendDecision(cheap, app.job);
+    if (!cheapDecision.ok) {
+      await prisma.application.updateMany({
+        where: skipListManualHandoffWhere(applicationId),
+        data: skipListManualHandoffData(undefined, { sendFailureReason: cheapDecision.reason }),
+      });
+      return;
+    }
   }
 
   // Atomic admission rechecks the current account/round and reserves capacity.
@@ -873,6 +890,45 @@ async function processApplicationRun(
   }
 
   const recruiterEmail = verifiedRecruiter?.email ?? null;
+
+  if (skipPortal && recruiterEmail) {
+    if (blocksUncertainAutoRetry(app)) {
+      await prisma.application.updateMany({
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "optimizing"] } },
+        data: {
+          status: "ready_to_apply",
+          errorMessage: UNCERTAIN_SUBMISSION_MESSAGE,
+          sendFailureReason: "uncertain_submission",
+        },
+      });
+      return;
+    }
+    const fallbackHit = verifiedRecruiter ?? {
+      email: recruiterEmail,
+      provenance: {
+        version: 1 as const,
+        sourceType: "employer_domain_page" as const,
+        requestedUrl: app.job.url,
+        sourceUrl: app.job.recruiterEmailSourceUrl ?? app.job.url,
+        observedAt: new Date().toISOString(),
+        pageSha256: "",
+        evidence: "",
+        company: app.job.company ?? "",
+        extraction: "visible_application_instruction" as const,
+      },
+    };
+    const fallbackDecision = skipListEmailSendDecision(fallbackHit, app.job);
+    if (!fallbackDecision.ok) {
+      await prisma.application.updateMany({
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "optimizing"] } },
+        data: skipListManualHandoffData(undefined, { sendFailureReason: fallbackDecision.reason }),
+      });
+      await notifyApplicationManual(applicationId).catch((err) =>
+        console.error(`[worker] ${applicationId} notify manual (skip-list fallback held) failed`, err),
+      );
+      return;
+    }
+  }
 
   if (recruiterEmail) {
     const appRow = await prisma.application.findUnique({

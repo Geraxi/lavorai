@@ -314,7 +314,7 @@ async function main() {
       proofDigest: "c".repeat(64),
       expectedAnswersJson: submitted.userProvidedAnswersJson,
     }, fakeLockedDb(submitted)),
-    "continuation_proof_missing",
+    "uncertain_submission",
   );
   assert.equal(submitted.status, "needs_answers", "a sent row must not be rewritten as a handoff");
   assert.notEqual(submitted.errorMessage, CONTINUATION_PROOF_MISSING_MESSAGE);
