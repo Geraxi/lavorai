@@ -9,6 +9,7 @@ import {
   EMAIL_TEST,
   LEGACY_CANARY_ATTEMPT_KEY,
   adminEmailTestAuthorized,
+  authorizeEmailTestRequest,
   emailTestAttemptKey,
   emailTestDeliveryFromRecords,
   emailTestPayload,
@@ -172,6 +173,24 @@ async function main() {
   assert.equal(adminEmailTestAuthorized({ headerKey: "" }, { ADMIN_SYNC_KEY: "" }), false);
   assert.equal(adminEmailTestAuthorized({ headerKey: null }, { ADMIN_SYNC_KEY: "k" }), false);
   assert.equal(adminEmailTestAuthorized({ headerKey: "k" }, { ADMIN_SYNC_KEY: "" }), false, "empty admin key never authorizes");
+  assert.deepEqual(authorizeEmailTestRequest({
+    headerKey: "k", userId: null, isAdminUser: false, originOk: false, mutating: true,
+  }, { ADMIN_SYNC_KEY: "k" }), { ok: true, method: "admin_key" });
+  assert.deepEqual(authorizeEmailTestRequest({
+    headerKey: null, userId: null, isAdminUser: false, originOk: false, mutating: true,
+  }, { ADMIN_SYNC_KEY: "k" }), { ok: false, status: 401, error: "unauthorized" });
+  assert.deepEqual(authorizeEmailTestRequest({
+    headerKey: null, userId: "u-user", isAdminUser: false, originOk: true, mutating: true,
+  }, { ADMIN_SYNC_KEY: "k" }), { ok: false, status: 403, error: "forbidden" });
+  assert.deepEqual(authorizeEmailTestRequest({
+    headerKey: null, userId: "u-admin", isAdminUser: true, originOk: false, mutating: true,
+  }, { ADMIN_SYNC_KEY: "k" }), { ok: false, status: 403, error: "forbidden" });
+  assert.deepEqual(authorizeEmailTestRequest({
+    headerKey: null, userId: "u-admin", isAdminUser: true, originOk: true, mutating: true,
+  }, { ADMIN_SYNC_KEY: "k" }), { ok: true, method: "session", userId: "u-admin" });
+  assert.deepEqual(authorizeEmailTestRequest({
+    headerKey: null, userId: "u-admin", isAdminUser: true, originOk: false, mutating: false,
+  }, { ADMIN_SYNC_KEY: "k" }), { ok: true, method: "session", userId: "u-admin" });
 
   const { prepareAndRunEmailTest, authorizeEmailTest, readEmailTestDelivery } = await import("../src/lib/email-test-capability");
   const { db, users, apps, grants, attempts, inbound } = memoryDb();
@@ -417,31 +436,72 @@ async function main() {
   assert.equal(posts, 1);
 
   process.env.ADMIN_SYNC_KEY = "email-test-admin-key";
+  const { isAdmin } = await import("../src/lib/admin");
+  const { checkOrigin } = await import("../src/lib/csrf");
+  let currentUser: { id: string; email: string } | null = null;
   const route = load("src/app/api/admin/email-test-send/route.ts", {
     "next/server": {
       NextResponse: { json: (body: unknown, options: any) => ({ body, status: options?.status ?? 200 }) },
     },
-    "@/lib/session": { getCurrentUser: async () => ({ email: "umbertogeraci0@gmail.com" }) },
-    "@/lib/admin": { isAdmin: () => true },
+    "@/lib/session": { getCurrentUser: async () => currentUser },
+    "@/lib/admin": { isAdmin },
+    "@/lib/csrf": { checkOrigin },
     "@/lib/db": { prisma: db },
     "@/lib/recruiter-delivery": { sendRecruiterEmailOnce: send },
     "@/lib/email-test-capability": await import("../src/lib/email-test-capability"),
   });
-  const noAdmin = await route.POST({
+  const ownedDest = RELEASE_CANARY.replyTo;
+  const postBody = (runKey: string, destination = ownedDest) => ({
     headers: new Headers({ "content-type": "application/json" }),
-    json: async () => ({ destination: "delivered@resend.dev", runKey: "route-1" }),
+    json: async () => ({ destination, runKey }),
   });
-  assert.equal(noAdmin.status, 401);
-  assert.equal(noAdmin.body.error, "unauthorized");
-  assert.equal(noAdmin.status, 401, "admin session without X-Admin-Key is refused");
+  const sessionHeaders = (extra: Record<string, string> = {}) => new Headers({
+    "content-type": "application/json",
+    host: "localhost:3000",
+    origin: "http://localhost:3000",
+    ...extra,
+  });
 
-  const wrongKey = await route.POST({
-    headers: new Headers({ "x-admin-key": "nope", "content-type": "application/json" }),
-    json: async () => ({ destination: "delivered@resend.dev", runKey: "route-1" }),
+  const sentBeforeAuth = sent;
+  currentUser = { id: "u-user", email: "not-an-admin@example.invalid" };
+  const nonAdmin = await route.POST(postBody("session-nonadmin"));
+  assert.ok(nonAdmin.status === 401 || nonAdmin.status === 403, "non-admin session is refused");
+  assert.equal(sent, sentBeforeAuth);
+
+  currentUser = null;
+  const noSession = await route.POST(postBody("session-none"));
+  assert.equal(noSession.status, 401);
+  assert.equal(noSession.body.error, "unauthorized");
+  assert.equal(sent, sentBeforeAuth);
+
+  currentUser = { id: "u-admin", email: "umbertogeraci0@gmail.com" };
+  const badOrigin = await route.POST({
+    headers: sessionHeaders({ origin: "https://evil.example" }),
+    json: async () => ({ destination: ownedDest, runKey: "session-badorigin" }),
   });
-  assert.equal(wrongKey.status, 401);
+  assert.equal(badOrigin.status, 403);
+  assert.equal(badOrigin.body.error, "forbidden");
+  assert.equal(sent, sentBeforeAuth);
 
   const before = sent;
+  const sessionOk = await route.POST({
+    headers: sessionHeaders(),
+    json: async () => ({ destination: ownedDest, runKey: "session-ok" }),
+  });
+  assert.equal(sessionOk.status, 200);
+  assert.equal(sessionOk.body.ok, true);
+  assert.equal(sessionOk.body.employerConfirmed, false);
+  assert.equal(sent, before + 1);
+
+  const sessionGet = await route.GET({
+    url: `http://localhost:3000/api/admin/email-test-send?runKey=session-ok&destination=${encodeURIComponent(ownedDest)}`,
+    headers: sessionHeaders(),
+  });
+  assert.equal(sessionGet.status, 200);
+  assert.equal(sessionGet.body.ok, true);
+  assert.ok(sessionGet.body.delivery?.evidenceLevel);
+
+  currentUser = null;
   const adminOk = await route.POST({
     headers: new Headers({ "x-admin-key": "email-test-admin-key", "content-type": "application/json" }),
     json: async () => ({ destination: "complained@resend.dev", runKey: "route-1" }),
@@ -449,7 +509,7 @@ async function main() {
   assert.equal(adminOk.status, 200);
   assert.equal(adminOk.body.ok, true);
   assert.equal(adminOk.body.employerConfirmed, false);
-  assert.equal(sent, before + 1);
+  assert.equal(sent, before + 2);
 
   const adminDup = await route.POST({
     headers: new Headers({ "x-admin-key": "email-test-admin-key", "content-type": "application/json" }),
@@ -457,12 +517,38 @@ async function main() {
   });
   assert.equal(adminDup.status, 409);
   assert.equal(adminDup.body.error, "email_test_duplicate_key");
-  assert.equal(sent, before + 1);
+  assert.equal(sent, before + 2);
+
+  currentUser = { id: "u-admin", email: "umbertogeraci0@gmail.com" };
+  const sessionDup = await route.POST({
+    headers: sessionHeaders(),
+    json: async () => ({ destination: ownedDest, runKey: "session-ok" }),
+  });
+  assert.equal(sessionDup.status, 409);
+  assert.equal(sessionDup.body.error, "email_test_duplicate_key");
+  assert.equal(sent, before + 2);
 
   const routeSource = readFileSync("src/app/api/admin/email-test-send/route.ts", "utf8");
   assert.doesNotMatch(routeSource, /applicationsPaused\(\)/);
   assert.doesNotMatch(routeSource, /process\.env\.(APPLICATION_RECOVERY_RELEASE|LAVORAI_RELEASE_CANARY)/);
+  assert.match(routeSource, /isAdmin\(/);
+  assert.match(routeSource, /checkOrigin\(/);
+  assert.match(routeSource, /\[email-test\] authorized/);
+  assert.match(routeSource, /method: "admin_key"/);
+  assert.doesNotMatch(routeSource, /console\.info\([^;]*ADMIN_SYNC_KEY|console\.info\([^;]*x-admin-key/);
   assert.match(readFileSync("src/lib/recruiter-delivery.ts", "utf8"), /emailTest \? "email_test"/);
+  assert.match(readFileSync("src/lib/admin.ts", "utf8").split("\n")[37] ?? "", /export function isAdmin/);
+  const pageSrc = readFileSync("src/app/(app)/admin/email-test/page.tsx", "utf8");
+  const panelSrc = readFileSync("src/app/(app)/admin/email-test/_panel.tsx", "utf8");
+  assert.match(pageSrc, /20261025-owned-inbound-1/);
+  assert.match(pageSrc, /RELEASE_CANARY\.replyTo/);
+  assert.match(panelSrc, /window\.confirm/);
+  assert.match(panelSrc, /Send one test email/);
+  assert.match(panelSrc, /Check status/);
+  assert.match(panelSrc, /method: "GET"/);
+  assert.match(panelSrc, /setSendLocked\(true\)/);
+  assert.doesNotMatch(panelSrc, /setInterval|setTimeout\(|X-Admin-Key|ADMIN_SYNC_KEY/);
+  assert.match(readFileSync("src/app/(app)/admin/layout.tsx", "utf8"), /if \(!isAdmin\(user\?\.email\)\) notFound\(\)/);
 
   const capabilitySrc = readFileSync("src/lib/email-test-capability.ts", "utf8");
   assert.doesNotMatch(capabilitySrc, /inboundEmail\.findFirst/);
