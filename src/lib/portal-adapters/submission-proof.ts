@@ -7,6 +7,7 @@ import { captureSubmitEvidence } from "./submit-evidence";
 import { SECURITY_CODE_FIELD } from "../application-security-code";
 import {
   emptyAttemptEvidence,
+  type DestinationResponseEvidence,
   type OutboundSubmissionEvidence,
   type SubmissionAttemptEvidence,
 } from "./submission-attempt-evidence";
@@ -276,6 +277,26 @@ function withCanary(outcome: ApplyOutcome, canary: CanaryLog | undefined): Apply
   return canary ? { ...outcome, canary } : outcome;
 }
 
+function destinationResponseEvidence(
+  response: SubmissionResponse | null,
+  outbound: OutboundSubmissionEvidence | null,
+  rejected: boolean,
+  receipt: SubmissionReceipt | null | undefined,
+): DestinationResponseEvidence | null {
+  if (response) {
+    return {
+      capturedAt: new Date().toISOString(),
+      httpStatus: response.status,
+      rejected,
+      ambiguous: !rejected && !receipt,
+      signal: receipt?.signal,
+      receiptId: receipt?.receiptId,
+    };
+  }
+  if (!outbound) return null;
+  return { capturedAt: outbound.capturedAt, rejected: false, ambiguous: true };
+}
+
 /** Observe only requests STARTED in this click's window; never click twice. */
 export async function observeSubmission(page: Page, provider: string, jobUrl: string, click: () => Promise<unknown>, beforeSubmit?: () => Promise<boolean>, opts?: ObserveSubmissionOptions): Promise<ObservedSubmission> {
   const before = await snapshotPage(page);
@@ -354,18 +375,7 @@ export async function observeSubmission(page: Page, provider: string, jobUrl: st
     clickPerformed,
     clickPerformedAt,
     outboundRequest,
-    destinationResponse: response
-      ? {
-          capturedAt: new Date().toISOString(),
-          httpStatus: response.status,
-          rejected,
-          ambiguous: !rejected && !receipt,
-          signal: receipt?.signal,
-          receiptId: receipt?.receiptId,
-        }
-      : outboundRequest
-        ? { capturedAt: outboundRequest.capturedAt, rejected: false, ambiguous: true }
-        : null,
+    destinationResponse: destinationResponseEvidence(response, outboundRequest, rejected, receipt),
   };
   const withEvidence = (outcome: ObservedSubmission["outcome"]): ObservedSubmission => ({
     response,

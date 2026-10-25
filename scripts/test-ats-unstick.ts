@@ -59,8 +59,11 @@ const base: Row = {
   errorMessage: UNSUPPORTED_PORTAL_MESSAGE,
   submittedAt: null, submittedVia: null, submitConfirmation: null, canaryLog: null, answersUsedJson: null,
   viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+  submitClickPerformedAt: null, outboundSubmissionJson: null, destinationResponseJson: null,
   job: { id: "j1", url: "https://boards.greenhouse.io/acme/jobs/1", closedAt: null },
 };
+assert.equal(staticSkipReason({ ...base, submitClickPerformedAt: new Date() }), "possible_submission");
+assert.equal(staticSkipReason({ ...base, outboundSubmissionJson: "{}" }), "possible_submission");
 const rows: Row[] = [
   base,
   { ...base, id: "a2", jobId: "j2", status: "failed", errorMessage: '400 {"type":"error","error":{"type":"not_found_error","message":"model: claude-3-x"}}', job: { id: "j2", url: "https://jobs.lever.co/acme/2", closedAt: null } },
