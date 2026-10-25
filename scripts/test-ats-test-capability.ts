@@ -235,6 +235,9 @@ assert.match(capability, /claimAtsTestAttempt/);
 assert.match(capability, /ATS_TEST_CLAIMED/);
 assert.match(worker, /adoptAtsTestWorkLease/);
 assert.match(worker, /if \(!input\.atsTestAuth && !await beginApplicationSubmission/);
+assert.match(worker, /ATS test: claimAtsTestAttempt is the send fence/);
+assert.match(worker, /requiresBrowser === false/);
+assert.match(recruitee, /requiresBrowser:\s*false/);
 assert.doesNotMatch(capability, /enqueueApplication/);
 assert.doesNotMatch(capability, /autoApplyMode/);
 

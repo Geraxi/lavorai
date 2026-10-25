@@ -14,7 +14,7 @@ import {
   type AtsTestAuthorization,
 } from "@/lib/ats-test-capability";
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
-import { notSubmitted } from "@/lib/proof-of-send";
+import { notSubmitted, portalProof, submittedWithProof } from "@/lib/proof-of-send";
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
 import { liveLeaseFields, renewLeaseData } from "@/lib/application-lease";
 import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS, needsAnswersSubmitConfirmation } from "@/lib/application-answer-continuation";
@@ -715,14 +715,28 @@ async function processApplicationRun(
             : null,
       };
       if (isConfirmed) {
-        if (!await completeApplicationSubmission(applicationId, workToken, completionData)) return;
+        if (atsTestAuth) {
+          // Claim is the ATS-test fence; this path never reserved a rollout
+          // slot, so completeApplicationSubmission (SUBMISSION_STARTED +
+          // reservation) cannot apply. Persist the receipt on the claimed row.
+          const proof = portalProof({
+            receipt: outcome.receipt,
+            postSubmitScreenshotUrl: "canary" in outcome ? outcome.canary?.postSubmitScreenshotUrl : null,
+          });
+          await prisma.application.updateMany({
+            where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
+            data: { ...completionData, ...(proof ? submittedWithProof(proof, now) : {}) },
+          });
+        } else if (!await completeApplicationSubmission(applicationId, workToken, completionData)) {
+          return;
+        }
       } else {
         await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: completionData });
       }
       // Solo confirmed (= conferma rilevata davvero) bumpa sessione e
       // manda l'email "candidatura inviata". UNCONFIRMED resta in coda
-      // di review, niente email fuorviante.
-      if (!isDryRun && !isUnconfirmed) {
+      // di review, niente email fuorviante. ATS tests are not a user notice.
+      if (!isDryRun && !isUnconfirmed && !atsTestAuth) {
         console.log(`[worker] ${applicationId} sent via portal_${adapter.id}`);
         await notifyApplicationSent(applicationId).catch((err) =>
           console.error(`[worker] ${applicationId} notify email failed`, err),
@@ -1515,6 +1529,8 @@ async function recheckBeforePortalSubmit(applicationId: string, workToken: Date,
     } });
     return false;
   }
+  // ATS test: claimAtsTestAttempt is the send fence; do not require SUBMISSION_STARTED.
+  if (atsTestAuth) return true;
   return recheckApplicationSubmission(applicationId, workToken, undefined, channel, boundary, atsTestAuth);
 }
 
@@ -2250,9 +2266,13 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
 
   let browser: import("playwright").Browser | undefined;
   try {
-    browser = await launchBrowser();
-    const context = await humanContext(browser);
-    const page = await context.newPage();
+    const page = adapter.requiresBrowser === false
+      ? null as unknown as import("playwright").Page
+      : await (async () => {
+        browser = await launchBrowser();
+        const context = await humanContext(browser);
+        return context.newPage();
+      })();
     if (!input.atsTestAuth && !await beginApplicationSubmission(applicationId, input.workToken, undefined, `portal_${adapter.id}`, input.atsTestAuth)) {
       return { ok: false, status: "worker_gate_blocked", error: "Current worker gates blocked delivery." };
     }

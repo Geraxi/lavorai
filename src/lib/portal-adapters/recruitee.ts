@@ -58,6 +58,7 @@ export function recruiteeOfferValidation(
 export const recruiteeAdapter: PortalAdapter = {
   id: "recruitee",
   label: "Recruitee",
+  requiresBrowser: false,
   matches(url: string): boolean {
     try {
       const u = new URL(url);
@@ -154,7 +155,12 @@ export const recruiteeAdapter: PortalAdapter = {
       const name = input.cvLocalPath.split(/[\\/]/).pop() || "cv.pdf";
       fd.set("candidate[cv]", new Blob([buf], { type: name.endsWith(".pdf") ? "application/pdf" : "application/octet-stream" }), name);
     } catch (err) {
-      return { ok: false, status: "missing_field", error: `CV non leggibile: ${err instanceof Error ? err.message : err}` };
+      return {
+        ok: false,
+        status: "missing_field",
+        error: `CV non leggibile: ${err instanceof Error ? err.message : err}`,
+        refusedBeforeSubmit: true,
+      };
     }
     answers.forEach((a, i) => {
       fd.set(`candidate[open_question_answers_attributes][${i}][open_question_id]`, String(a.open_question_id));

@@ -206,6 +206,11 @@ export interface PortalAdapter {
   label: string;
   /** true se questo adapter gestisce l'URL passato */
   matches(url: string): boolean;
+  /**
+   * False when apply() is HTTP-only and ignores `page` (Recruitee careers API).
+   * Default is true: the worker launches Chromium. Not a TLS/HTTPS switch.
+   */
+  requiresBrowser?: boolean;
   /** Esegue la candidatura. Il worker gestisce il browser / ensureLocalPath. */
   apply(page: Page, input: ApplyInput): Promise<ApplyOutcome>;
 }

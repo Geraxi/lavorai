@@ -15,6 +15,7 @@
     "test:ats-unstick": "node --import tsx scripts/test-ats-unstick.ts",
     "test:ats-submit": "node --import tsx scripts/test-ats-submit-reliability.ts && node --import tsx scripts/test-ats-profile-answers.ts && node --import tsx scripts/test-employer-email-gate.ts && node --import tsx scripts/test-historical-row-lock.ts && node --import tsx scripts/test-ats-test-capability.ts",
     "test:ats-test-claim-postgres": "NODE_ENV=test node --import tsx scripts/test-ats-test-claim-postgres.ts",
+    "test:ats-test-e2e-postgres": "NODE_ENV=test node --import tsx scripts/test-ats-test-e2e-postgres.ts",
     "test:answers-consent": "node --import tsx scripts/test-answers-consent-resume.ts && node --import tsx scripts/test-answer-resume-handoff.ts && node --import tsx scripts/test-incident-release-gates.ts && node --import tsx scripts/test-uncertain-admin-retry.ts",
     "test:google-auth": "node --import tsx scripts/test-google-auth.ts",
     "test:inbox-replies-postgres": "node --import tsx scripts/test-inbox-replies-postgres.ts",
