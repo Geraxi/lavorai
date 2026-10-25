@@ -56,10 +56,17 @@ function harness(options: HarnessOptions = {}) {
       user: { findUnique: async () => ({ id: "owner", email: "owner@example.test", name: "<img> Owner", locale: options.locale ?? "en" }) },
       emailLog: { count: async (query: unknown) => { queries.cooldown = query; return options.cooldown ? 1 : 0; } },
     } },
-    "@/lib/email-quota": { sendWithinQuota: async (kind: string, to: string, callback: () => Promise<void>) => {
+    "@/lib/email-quota": { sendWithinQuota: async (kind: string, to: string, callback: () => Promise<unknown>) => {
       quotaCalls++; assert.equal(kind, "daily_summary"); assert.equal(to, "owner@example.test");
       if (options.quota === false) return { sent: false, reason: "daily quota" };
-      await callback(); successfulQuotaLogs++; return { sent: true, reason: null };
+      const raw = await callback();
+      if (raw && typeof raw === "object") {
+        const row = raw as { error?: unknown; data?: { id?: string } };
+        if (row.error || !row.data?.id) return { sent: false, reason: "not_sent" };
+      } else if (raw == null) {
+        return { sent: false, reason: "not_sent" };
+      }
+      successfulQuotaLogs++; return { sent: true, reason: null };
     } },
   };
   const source = ts.transpileModule(readFileSync("src/lib/daily-summary.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
@@ -110,8 +117,10 @@ async function main() {
   assert.ok(legacy.sent[0].text.includes("3: Applications with unverified"));
   for (const provider of ["error", "missing-id", "throw"] as const) {
     const h = harness({ provider }); const result = await h.run();
-    assert.equal(result.sent, 0, provider); assert.equal(result.errors, 1, provider); assert.equal(h.logs(), 0, provider);
+    assert.equal(result.sent, 0, provider); assert.equal(h.logs(), 0, provider);
     assert.notEqual(result.details[0].status, "accepted");
+    if (provider === "throw") assert.equal(result.errors, 1, provider);
+    else assert.equal(result.skipped, 1, provider);
   }
   const quota = harness({ quota: false }); const quotaResult = await quota.run();
   assert.equal(quotaResult.sent, 0); assert.equal(quotaResult.skipped, 1); assert.equal(quota.sent.length, 0); assert.equal(quotaResult.details[0].status, "quota_blocked");

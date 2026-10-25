@@ -41,8 +41,7 @@ export async function POST(req: NextRequest) {
     const { subject, html, text } = render(u, waiting, link, site);
     try {
       const r = await sendWithinQuota("auto_apply_invite", u.email, async () => {
-        const { error } = await resend.emails.send({ from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>", to: u.email, subject, html, text });
-        if (error) throw new Error(JSON.stringify(error));
+        return resend.emails.send({ from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>", to: u.email, subject, html, text });
       });
       details.push({ email: u.email, waiting, status: r.sent ? "sent" : r.reason ?? "skipped" });
       if (r.sent) sent++;

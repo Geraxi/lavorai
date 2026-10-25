@@ -86,12 +86,11 @@ export async function runCheckoutFeedbackCampaign(opts: { dryRun?: boolean } = {
     });
     try {
       const sent = await sendWithinQuota("checkout_feedback", user.email, async () => {
-        const { error } = await new Resend(apiKey).emails.send({
+        return new Resend(apiKey).emails.send({
           from: from(), to: user.email,
           subject: en ? "What stopped you from completing LavorAI?" : "Cosa ti ha fermato prima di completare LavorAI?",
           html: email.html, text: email.text,
         });
-        if (error) throw new Error(JSON.stringify(error));
       });
       if (sent.sent) result.sent++; else result.skipped++;
       result.details.push({ email: user.email, status: sent.sent ? "sent" : (sent.reason ?? "skipped") });

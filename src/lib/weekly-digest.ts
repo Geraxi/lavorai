@@ -94,14 +94,13 @@ export async function runWeeklyDigest(opts?: {
     try {
       const r = await sendWithinQuota(KIND, u.email, async () => {
         const { subject, html, text } = renderDigest(u, roles, matches);
-        const { error } = await resend.emails.send({
+        return resend.emails.send({
           from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>",
           to: u.email,
           subject,
           html,
           text,
         });
-        if (error) throw new Error(JSON.stringify(error));
       });
       if (r.sent) { sent++; details.push({ email: u.email, matches: matches.length, status: "sent" }); }
       else { skipped++; details.push({ email: u.email, matches: matches.length, status: r.reason ?? "skipped" }); }

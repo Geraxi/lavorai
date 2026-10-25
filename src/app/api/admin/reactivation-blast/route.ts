@@ -153,14 +153,13 @@ async function sendSegment(
     const { subject, html, text } = renderFn();
     
     const result = await sendWithinQuota("reactivation_blast", user.email, async () => {
-      const { error } = await resend.emails.send({
+      return resend.emails.send({
         from,
         to: user.email,
         subject,
         html,
         text,
       });
-      if (error) throw new Error(JSON.stringify(error));
     });
 
     if (result.sent) {

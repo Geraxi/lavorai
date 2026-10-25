@@ -199,14 +199,13 @@ export async function runUpgradeNudges(opts?: {
     try {
       const result = await sendWithinQuota("upgrade_nudge", c.email, async () => {
         const { subject, html, text } = renderUpgrade(c);
-        const { error } = await resend.emails.send({
+        return resend.emails.send({
           from: process.env.RESEND_FROM_OVERRIDE ?? "LavorAI <noreply@lavorai.it>",
           to: c.email,
           subject,
           html,
           text,
         });
-        if (error) throw new Error(JSON.stringify(error));
       });
       if (result.sent) {
         sent++;

@@ -118,6 +118,7 @@ export async function sendRecruiterEmailOnce(input: {
       // An idempotent DB write may be retried, but the provider send may not.
       await deps.accepted(attempt.id, response.data.id);
       result = { kind: "accepted", attemptId: attempt.id, providerEmailId: response.data.id };
+      return response;
     });
     if (!quota.sent) return { kind: "not_sent", reason: "email_quota_unavailable" };
     return result;

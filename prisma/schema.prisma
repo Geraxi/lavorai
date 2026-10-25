@@ -1010,10 +1010,11 @@ model InterviewSession {
 /// l'invio quando ci avviciniamo al limite (mantiene solo il conteggio,
 /// no content / allegati / PII non necessarie).
 model EmailLog {
-  id        String   @id @default(cuid())
-  kind      String   // "cv_ready" | "application_sent" | "signup_verify" | "password_reset" | "welcome" | "magic_link" | "other"
-  to        String
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  kind            String   // "cv_ready" | "application_sent" | "application_needs_answers" | "signup_verify" | "other"
+  to              String
+  providerEmailId String?  // Resend message id when the provider accepted. Additive; unapplied.
+  createdAt       DateTime @default(now())
 
   @@index([createdAt])
   @@index([kind, createdAt])

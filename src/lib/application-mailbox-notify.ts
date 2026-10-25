@@ -79,12 +79,11 @@ export async function sendMailboxPriorityNotice(input: {
 }): Promise<boolean> {
   const rendered = renderMailboxPriorityEmail(input.user, input.message);
   const result = await sendWithinQuota("other", input.userEmail, async () => {
-    const id = await input.send({
+    return input.send({
       to: input.userEmail,
       ...rendered,
       idempotencyKey: `mailbox-priority/${input.message.id}`,
     });
-    if (!id) throw new Error("mailbox_priority_not_accepted");
   });
   return result.sent;
 }
@@ -98,12 +97,11 @@ export async function sendMailboxDigest(input: {
   if (!input.messages.length) return false;
   const rendered = renderMailboxDigestEmail(input.user, input.messages);
   const result = await sendWithinQuota("daily_summary", input.userEmail, async () => {
-    const id = await input.send({
+    return input.send({
       to: input.userEmail,
       ...rendered,
       idempotencyKey: `mailbox-digest/${input.userEmail}/${new Date().toISOString().slice(0, 10)}`,
     });
-    if (!id) throw new Error("mailbox_digest_not_accepted");
   });
   return result.sent;
 }

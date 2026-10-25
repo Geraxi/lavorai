@@ -92,10 +92,9 @@ export async function runDailySummary(opts?: { onlyEmail?: string; dryRun?: bool
     try {
       const { subject, html, text } = renderSummary(user, activity);
       const notification = await sendWithinQuota("daily_summary", user.email, async () => {
-        const response = await new Resend(apiKey).emails.send({
+        return new Resend(apiKey).emails.send({
           from: process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>", to: user.email, subject, html, text,
         });
-        if (response.error || !response.data?.id) throw new Error("Daily summary was not accepted by the email provider.");
       });
       if (!notification.sent) {
         result.details.push({ email: user.email, status: "quota_blocked", counts }); result.skipped++; continue;

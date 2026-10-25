@@ -339,7 +339,7 @@ export async function POST(request: NextRequest) {
               const { sendWithinQuota } = await import("@/lib/email-quota");
               const amount = inv.amount_due ? `${(inv.amount_due / 100).toFixed(2).replace(".", ",")} €` : "";
               await sendWithinQuota("payment_failed", u.email, async () => {
-                await new Resend(process.env.RESEND_API_KEY).emails.send({
+                return new Resend(process.env.RESEND_API_KEY).emails.send({
                   from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>",
                   to: u.email,
                   subject: "Pagamento non riuscito — aggiorna la carta per non perdere il piano",
