@@ -29,6 +29,10 @@ async function main() {
   process.env.INBOUND_EMAIL_DOMAIN = "inbound.example.invalid";
   process.env.RESEND_FROM_OVERRIDE = "LavorAI <notifications@example.invalid>";
   process.env.RESEND_WEBHOOK_SECRET = `whsec_${Buffer.from("local-test-signature-key").toString("base64")}`;
+  // Existing send/receive cases expect a live forward. Fail-closed hold (unset
+  // cutoff) would mark every reply held and skip the provider POST.
+  process.env.USER_NOTIFICATIONS_HOLD = "false";
+  process.env.USER_NOTIFICATIONS_NOT_BEFORE = "2026-01-01T00:00:00.000Z";
   const dir = await mkdtemp(join(tmpdir(), "lavorai-send-reply-postgres-"));
   let pg: { initialise(): Promise<void>; start(): Promise<void>; stop(): Promise<void> } | undefined;
   if (!fixtureUrl) {
@@ -142,6 +146,26 @@ async function main() {
     const reply = await db.applicationReply.findFirstOrThrow({ where: { applicationId: app.id } });
     assert.equal(reply.forwardStatus, "sent"); assert.equal(reply.kind, "colloquio");
     console.log("PASS PostgreSQL: concurrent duplicate inbound creates one owner-scoped visible reply, increments once and forwards once.");
+
+    process.env.USER_NOTIFICATIONS_HOLD = "true";
+    const heldInbound = {
+      ...inbound,
+      data: { ...inbound.data, email_id: "inbound-held-pg", subject: "Interview slots?", text: "Could you share two slots next week?" },
+      providerEventId: "inbound-event-held",
+    };
+    const forwardsBeforeHold = forwarded.size;
+    await processInboundReply(heldInbound);
+    const heldReply = await db.applicationReply.findFirstOrThrow({ where: { providerMessageId: "inbound-held-pg" } });
+    assert.equal(heldReply.notifyStatus, "held");
+    assert.equal(heldReply.forwardStatus, "pending");
+    assert.equal(heldReply.forwardStartedAt, null);
+    assert.equal(forwarded.size, forwardsBeforeHold, "hold must not call the provider");
+    process.env.USER_NOTIFICATIONS_HOLD = "false";
+    await processInboundReply(heldInbound);
+    await retryPendingReplyForwards(20);
+    assert.equal((await db.applicationReply.findFirstOrThrow({ where: { providerMessageId: "inbound-held-pg" } })).notifyStatus, "held");
+    assert.equal(forwarded.size, forwardsBeforeHold, "held rows are not sent after the hold is lifted");
+    console.log("PASS PostgreSQL: hold marks reply pending/held with zero forwards; lift does not send the backlog.");
 
     for (const [suffix, subject, text, from] of [
       ["receipt", "Application received", "We have received your application. Do not reply to this email.", "noreply@acme.example.invalid"],
