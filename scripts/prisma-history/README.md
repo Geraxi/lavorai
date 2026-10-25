@@ -1,30 +1,23 @@
 # 24/10 Prisma history — per-migration procedure
 
-REVIEWED, NOT APPLIED. Do not run `prisma migrate deploy` against EU until
-each history row below has been inserted **after** its verification query
-passes on that database.
+REVIEWED, NOT APPLIED. Official procedure:
 
-The seven migrations already have objects in EU, but `_prisma_migrations`
-has no rows for them. A blanket insert is forbidden: a history row may be
-written only after that migration's objects are verified to match
-(columns, types, nullability, defaults, indexes).
+`docs/ops/migration-history-resolution-20261024.md`
 
-## Procedure (one migration at a time)
+That document is the only write path. It uses `npx prisma migrate resolve --applied <name>` after a per-migration object check on EU. A blanket
+reconcile SQL script is forbidden and has been removed. Do not batch-insert.
+Never run `prisma migrate deploy` until every listed history row exists.
+Every write is pending approval.
 
-1. Run `scripts/prisma-history/<name>.verify.sql` on EU (read-only).
-2. Require `objects_match = true` and `mismatch_count = 0`.
-3. Only then run `scripts/prisma-history/<name>.insert.sql` (history row only).
-4. Repeat for the next name. Do not skip. Do not batch-insert.
+The seven 24/10 objects were verified as matching on EU at 25/10 14:08 CET.
 
-Never run a combined insert of all seven. Never run `prisma migrate deploy`
-until every listed history row exists.
-
-## Order
+Prisma sort order (`20261024190000_greenhouse_job_form` before
+`20261024190000_recruiter_email_recheck`):
 
 1. `20261024160000_recruiter_email_source_url`
 2. `20261024180000_employer_hiring_inbox`
-3. `20261024190000_recruiter_email_recheck`
-4. `20261024190000_greenhouse_job_form`
+3. `20261024190000_greenhouse_job_form`
+4. `20261024190000_recruiter_email_recheck`
 5. `20261024200000_application_mailbox`
 6. `20261024210000_job_description_full`
 7. `20261024220000_job_description_fetch_backoff`

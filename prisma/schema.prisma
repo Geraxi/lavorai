@@ -1282,9 +1282,10 @@ model EmailTestAttempt {
   id            String   @id @default(cuid())
   runKey        String
   destination   String
-  attemptKey    String   @unique
-  applicationId String
-  createdAt     DateTime @default(now())
+  attemptKey      String   @unique
+  applicationId   String
+  providerResult  String?
+  createdAt       DateTime @default(now())
 
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 

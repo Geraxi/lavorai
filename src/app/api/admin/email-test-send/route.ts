@@ -14,6 +14,12 @@ export const maxDuration = 60;
  * Controlled email test. Works while APPLICATIONS_PAUSED=true.
  * No APPLICATION_RECOVERY_RELEASE / LAVORAI_RELEASE_CANARY gate.
  * Auth: X-Admin-Key == ADMIN_SYNC_KEY only. An admin session is not enough.
+ *
+ * First post-deploy step: one POST to this route with destination
+ * reply+release_canary_email_20261013_owner@inbound.lavorai.it and a fresh
+ * runKey. The JSON records the sanitized provider result (error name,
+ * statusCode, message, or email id if accepted). Then GET the same runKey
+ * and destination to see inbound delivery. Never put the admin key in logs.
  */
 function authorized(req: NextRequest): boolean {
   return adminEmailTestAuthorized({ headerKey: req.headers.get("x-admin-key") });
@@ -39,6 +45,7 @@ export async function POST(req: NextRequest) {
     destination: result.destination,
     attemptKey: result.attemptKey,
     result: result.result,
+    provider: result.provider,
     delivery: result.delivery,
     employerConfirmed: false,
   });

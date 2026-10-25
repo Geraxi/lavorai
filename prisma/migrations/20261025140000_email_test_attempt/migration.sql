@@ -8,6 +8,7 @@ CREATE TABLE "EmailTestAttempt" (
     "destination" TEXT NOT NULL,
     "attemptKey" TEXT NOT NULL,
     "applicationId" TEXT NOT NULL,
+    "providerResult" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "EmailTestAttempt_pkey" PRIMARY KEY ("id"),

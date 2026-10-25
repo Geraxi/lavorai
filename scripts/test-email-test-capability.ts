@@ -32,7 +32,7 @@ function memoryDb() {
   const users = new Map<string, { id: string; email: string }>();
   const jobs = new Map<string, { id: string; source: string; [k: string]: unknown }>();
   const apps = new Map<string, any>();
-  const grants = new Map<string, { id: string; runKey: string; destination: string; attemptKey: string; applicationId: string }>();
+  const grants = new Map<string, { id: string; runKey: string; destination: string; attemptKey: string; applicationId: string; providerResult: string | null }>();
   const attempts = new Map<string, { status: string; providerEmailId: string | null; acceptedAt: Date | null; lastEventType: string | null }>();
   const inbound: Array<{ id: string; applicationId: string; toAddress: string; receivedAt: Date }> = [];
   const db = {
@@ -70,9 +70,19 @@ function memoryDb() {
         if (data.attemptKey === LEGACY_CANARY_ATTEMPT_KEY) {
           const err = new Error("legacy key"); (err as any).code = "P2002"; throw err;
         }
-        const row = { id: `grant-${grants.size + 1}`, ...data };
+        const row = { id: `grant-${grants.size + 1}`, providerResult: data.providerResult ?? null, ...data };
         grants.set(key, row);
         return row;
+      },
+      updateMany: async ({ where, data }: { where: any; data: any }) => {
+        let count = 0;
+        for (const row of grants.values()) {
+          if (where.attemptKey && row.attemptKey === where.attemptKey) {
+            Object.assign(row, data);
+            count++;
+          }
+        }
+        return { count };
       },
     },
     applicationEmailAttempt: {
@@ -136,7 +146,12 @@ async function main() {
     attempts.set(input.attemptKey, {
       status: "accepted", providerEmailId: "re_test_1", acceptedAt: new Date(), lastEventType: "email.sent",
     });
-    return { kind: "accepted", attemptId: "att-1", providerEmailId: "re_test_1" };
+    return {
+      kind: "accepted",
+      attemptId: "att-1",
+      providerEmailId: "re_test_1",
+      provider: { accepted: true, emailId: "re_test_1" },
+    };
   };
 
   process.env.APPLICATIONS_PAUSED = "true";
@@ -199,9 +214,13 @@ async function main() {
     assert.equal(ok.delivery.label, "Email accettata");
     assert.equal(ok.delivery.employerConfirmed, false);
     assert.equal(ok.delivery.providerEmailId, "re_test_1");
+    assert.deepEqual(ok.provider, { accepted: true, emailId: "re_test_1" });
+    assert.deepEqual(ok.delivery.provider, { accepted: true, emailId: "re_test_1" });
   }
   assert.equal(sent, 1);
   assert.equal(grants.size, 1);
+  const stored = [...grants.values()][0];
+  assert.match(stored.providerResult ?? "", /re_test_1/);
 
   const dup = await prepareAndRunEmailTest(
     { destination: "delivered@resend.dev", runKey: "20261025-preview-1" },
@@ -329,6 +348,27 @@ async function main() {
   assert.deepEqual(await sender({ ...testInput, attemptKey: LEGACY_CANARY_ATTEMPT_KEY }, sendDeps), { kind: "not_sent", reason: "email_test_legacy_key_forbidden" });
   assert.equal(posts, 0);
   assert.equal((await sender(testInput, sendDeps)).kind, "accepted");
+  assert.equal(posts, 1);
+  const failInput = {
+    ...testInput,
+    attemptKey: emailTestAttemptKey("send-fail", "delivered@resend.dev"),
+    runKey: "send-fail",
+    recipientProvenanceJson: emailTestProvenance(EMAIL_TEST.applicationId, "send-fail", "delivered@resend.dev"),
+  };
+  const failed = await sender(failInput, {
+    ...sendDeps,
+    send: async () => ({
+      data: null,
+      error: { name: "validation_error", statusCode: 401, message: "Bearer re_secret123 denied" },
+    }),
+  });
+  assert.equal(failed.kind, "not_sent");
+  assert.equal(failed.reason, "provider_rejected");
+  assert.equal(failed.provider?.errorName, "validation_error");
+  assert.equal(failed.provider?.statusCode, 401);
+  assert.equal(failed.provider?.accepted, false);
+  assert.match(failed.provider?.message ?? "", /denied/);
+  assert.doesNotMatch(JSON.stringify(failed.provider), /re_secret123/);
   assert.equal(posts, 1);
 
   process.env.ADMIN_SYNC_KEY = "email-test-admin-key";

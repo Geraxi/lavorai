@@ -6,9 +6,23 @@ import {
   RELEASE_CANARY,
 } from "@/lib/release-email-canary";
 type RecruiterDeliveryResult =
-  | { kind: "accepted"; attemptId: string; providerEmailId: string }
-  | { kind: "not_sent"; reason: string }
-  | { kind: "uncertain"; attemptId: string | null };
+  | { kind: "accepted"; attemptId: string; providerEmailId: string; provider?: { accepted: boolean; emailId?: string; errorName?: string; statusCode?: number | null; message?: string } }
+  | { kind: "not_sent"; reason: string; provider?: { accepted: boolean; emailId?: string; errorName?: string; statusCode?: number | null; message?: string } }
+  | { kind: "uncertain"; attemptId: string | null; provider?: { accepted: boolean; emailId?: string; errorName?: string; statusCode?: number | null; message?: string } };
+
+export type EmailTestProviderResult = {
+  accepted: boolean;
+  emailId?: string;
+  errorName?: string;
+  statusCode?: number | null;
+  message?: string;
+};
+
+export function providerFromDeliveryResult(result: RecruiterDeliveryResult): EmailTestProviderResult | null {
+  if (result.provider) return result.provider;
+  if (result.kind === "accepted") return { accepted: true, emailId: result.providerEmailId };
+  return null;
+}
 
 /** New diagnostic fixture. Never the 14/10 canary application or attempt key. */
 export const EMAIL_TEST = Object.freeze({
@@ -176,6 +190,7 @@ export type EmailTestDelivery = {
   attemptStatus: string | null;
   lastEventType: string | null;
   inboundId: string | null;
+  provider: EmailTestProviderResult | null;
 };
 
 export function emailTestDeliveryFromRecords(input: {
@@ -186,9 +201,13 @@ export function emailTestDeliveryFromRecords(input: {
     lastEventType: string | null;
   } | null;
   inbound?: { id: string } | null;
+  provider?: EmailTestProviderResult | null;
 }): EmailTestDelivery {
   const attempt = input.attempt ?? null;
   const inbound = input.inbound ?? null;
+  const provider = input.provider ?? (attempt?.providerEmailId
+    ? { accepted: true, emailId: attempt.providerEmailId }
+    : null);
   const base = {
     employerConfirmed: false as const,
     providerEmailId: attempt?.providerEmailId ?? null,
@@ -196,6 +215,7 @@ export function emailTestDeliveryFromRecords(input: {
     attemptStatus: attempt?.status ?? null,
     lastEventType: attempt?.lastEventType ?? null,
     inboundId: inbound?.id ?? null,
+    provider,
   };
   if (attempt && ["complained"].includes(attempt.status)) {
     return { ...base, evidenceLevel: "provider_complained", label: "Email segnalata" };
@@ -247,11 +267,27 @@ export type PrepareEmailTestInput = {
 };
 
 export type PrepareEmailTestResult =
-  | { ok: true; applicationId: string; runKey: string; destination: string; attemptKey: string; result: RecruiterDeliveryResult; delivery: EmailTestDelivery }
+  | { ok: true; applicationId: string; runKey: string; destination: string; attemptKey: string; result: RecruiterDeliveryResult; delivery: EmailTestDelivery; provider: EmailTestProviderResult | null }
   | { ok: false; reason: EmailTestRefuseReason };
 
+function parseStoredProvider(raw: string | null | undefined): EmailTestProviderResult | null {
+  if (!raw?.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as EmailTestProviderResult;
+    if (!parsed || typeof parsed !== "object") return null;
+    const out: EmailTestProviderResult = { accepted: parsed.accepted === true };
+    if (typeof parsed.emailId === "string") out.emailId = parsed.emailId;
+    if (typeof parsed.errorName === "string") out.errorName = parsed.errorName;
+    if (typeof parsed.statusCode === "number" || parsed.statusCode === null) out.statusCode = parsed.statusCode;
+    if (typeof parsed.message === "string") out.message = parsed.message;
+    return out;
+  } catch {
+    return null;
+  }
+}
+
 async function readDelivery(db: EmailTestTables, applicationId: string, attemptKey: string, destination: string): Promise<EmailTestDelivery> {
-  const [attempt, inbound] = await Promise.all([
+  const [attempt, inbound, grant] = await Promise.all([
     db.applicationEmailAttempt.findUnique({
       where: { attemptKey },
       select: { status: true, providerEmailId: true, acceptedAt: true, lastEventType: true },
@@ -261,8 +297,16 @@ async function readDelivery(db: EmailTestTables, applicationId: string, attemptK
       orderBy: { receivedAt: "desc" },
       select: { id: true },
     }),
+    db.emailTestAttempt.findUnique({
+      where: { attemptKey },
+      select: { providerResult: true },
+    }),
   ]);
-  return emailTestDeliveryFromRecords({ attempt, inbound });
+  return emailTestDeliveryFromRecords({
+    attempt,
+    inbound,
+    provider: parseStoredProvider(grant?.providerResult),
+  });
 }
 
 async function ensureFixture(tx: EmailTestTables, userId: string, requestedId: string | null): Promise<{ ok: true; applicationId: string } | { ok: false; reason: EmailTestRefuseReason }> {
@@ -363,6 +407,13 @@ export async function prepareAndRunEmailTest(
     runKey,
   };
   const result = await deps.send(sendInput);
+  const provider = providerFromDeliveryResult(result);
+  if (provider) {
+    await deps.prisma.emailTestAttempt.updateMany({
+      where: { attemptKey: prepared.attemptKey },
+      data: { providerResult: JSON.stringify(provider) },
+    });
+  }
   const delivery = await readDelivery(deps.prisma, prepared.applicationId, prepared.attemptKey, destination);
   return {
     ok: true,
@@ -372,6 +423,7 @@ export async function prepareAndRunEmailTest(
     attemptKey: prepared.attemptKey,
     result,
     delivery,
+    provider,
   };
 }
 
