@@ -94,6 +94,9 @@ assert.equal(historicalRetriesBlocked(), true);
 const recruitee = readFileSync("src/lib/portal-adapters/recruitee.ts", "utf8");
 assert.match(recruitee, /allowUnpublishedRecruiteeOffer/);
 assert.match(recruitee, /status !== "published" && !allowUnpublishedRecruiteeOffer/);
+const dryRunAt = recruitee.indexOf("if (input.dryRun) return");
+const candidatesPostAt = recruitee.indexOf('method: "POST"');
+assert.ok(dryRunAt > 0 && candidatesPostAt > dryRunAt, "dry-run returns before the Recruitee candidates POST");
 
 const liveness = readFileSync("src/lib/job-liveness.ts", "utf8");
 assert.match(liveness, /allowUnpublishedRecruiteeOffer\(url\.href\)/);
@@ -221,6 +224,16 @@ async function testPrepareAndRun() {
   const forbidden = await prepareAndRunAtsTest({ adminOk: false }, { ...fakeDb(), env });
   assert.equal(forbidden.ok, false);
   if (!forbidden.ok) assert.equal(forbidden.reason, "forbidden");
+
+  const notAllowlisted = await prepareAndRunAtsTest({
+    adminOk: true, jobUrl: "https://bunq.recruitee.com/o/other",
+  }, { ...fakeDb(), env });
+  assert.equal(notAllowlisted.ok, false);
+  if (!notAllowlisted.ok) assert.equal(notAllowlisted.reason, "ats_test_destination_not_allowlisted");
+
+  const notTestUser = authorizeAtsTest({ adminOk: true, targetUserId: "customer-user" }, env);
+  assert.equal(notTestUser.ok, false);
+  if (!notTestUser.ok) assert.equal(notTestUser.reason, "ats_test_user_mismatch");
 
   const missingUser = await prepareAndRunAtsTest({ adminOk: true }, { ...fakeDb({ user: false }), env });
   assert.equal(missingUser.ok, false);
