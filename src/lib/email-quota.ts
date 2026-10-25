@@ -1,5 +1,6 @@
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
+import { isScheduledUserNotificationKind, scheduledUserNotificationsHeld } from "@/lib/user-notification-guard";
 
 /**
  * Quota email platform-wide. Resend free tier: 100/giorno, 3000/mese.
@@ -126,6 +127,9 @@ export async function sendWithinQuota(
 ): Promise<{ sent: boolean; reason: string | null }> {
   if (applicationsPaused() && ["cv_ready", "application_sent", "application_manual", "application_no_reply_yet", "daily_summary"].includes(kind)) {
     return { sent: false, reason: "applications_paused" };
+  }
+  if (isScheduledUserNotificationKind(kind) && scheduledUserNotificationsHeld().held) {
+    return { sent: false, reason: "user_notifications_held" };
   }
   const q = await canSendEmail();
   if (!q.allowed) {

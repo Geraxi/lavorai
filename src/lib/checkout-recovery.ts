@@ -4,11 +4,15 @@ import { isTestAccount } from "@/lib/admin";
 import { renderBrandEmail } from "@/lib/email-brand";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { isCheckoutRecoveryWindow } from "@/lib/lifecycle-cadence";
+import {
+  isStaleScheduledReminder,
+  scheduledUserNotificationsHeld,
+} from "@/lib/user-notification-guard";
 
 const site = () => process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 const from = () => process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>";
 
-export interface CheckoutRecoveryResult { sent: number; skipped: number; details: string[] }
+export interface CheckoutRecoveryResult { sent: number; skipped: number; held: number; details: string[] }
 
 /**
  * A gentle, single reminder for a real checkout that was opened but never
@@ -16,7 +20,13 @@ export interface CheckoutRecoveryResult { sent: number; skipped: number; details
  * Stripe Checkout URL, so payment details always stay on Stripe.
  */
 export async function runCheckoutRecovery(opts?: { dryRun?: boolean }): Promise<CheckoutRecoveryResult> {
-  const result: CheckoutRecoveryResult = { sent: 0, skipped: 0, details: [] };
+  const result: CheckoutRecoveryResult = { sent: 0, skipped: 0, held: 0, details: [] };
+  const gate = scheduledUserNotificationsHeld();
+  if (gate.held) {
+    result.held = 1;
+    result.details.push("user_notifications_held");
+    return result;
+  }
   const apiKey = process.env.RESEND_API_KEY;
   const now = Date.now();
   const [starts, sentLogs] = await Promise.all([
@@ -45,7 +55,7 @@ export async function runCheckoutRecovery(opts?: { dryRun?: boolean }): Promise<
     if (!user || seenUsers.has(user.id)) continue;
     seenUsers.add(user.id);
     const paid = user.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(user.subscriptionStatus ?? "");
-    if (!isCheckoutRecoveryWindow(start.createdAt, now) || paid || isTestAccount(user.email) || alreadySent.has(user.email.toLowerCase())) {
+    if (!isCheckoutRecoveryWindow(start.createdAt, now) || isStaleScheduledReminder(start.createdAt, gate.cutoff) || paid || isTestAccount(user.email) || alreadySent.has(user.email.toLowerCase())) {
       result.skipped++;
       continue;
     }

@@ -4,6 +4,10 @@ import { sendWithinQuota } from "@/lib/email-quota";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { isTestAccount } from "@/lib/admin";
 import { esc, renderBrandEmail } from "@/lib/email-brand";
+import {
+  scheduledUserNotificationsHeld,
+  weeklyDigestWeekEligible,
+} from "@/lib/user-notification-guard";
 
 /**
  * Digest settimanale "le offerte che ti stai perdendo" per gli utenti Free.
@@ -22,6 +26,7 @@ const WEEK_MS = 7 * 24 * 3600 * 1000;
 export interface WeeklyDigestResult {
   sent: number;
   skipped: number;
+  held: number;
   candidates: number;
   details: { email: string; matches: number; status: string }[];
 }
@@ -44,9 +49,22 @@ export async function runWeeklyDigest(opts?: {
   cap?: number;
 }): Promise<WeeklyDigestResult> {
   const details: WeeklyDigestResult["details"] = [];
+  const gate = scheduledUserNotificationsHeld();
+  if (gate.held) {
+    return {
+      sent: 0,
+      skipped: 0,
+      held: 1,
+      candidates: 0,
+      details: [{ email: "-", matches: 0, status: "user_notifications_held" }],
+    };
+  }
   const rome = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Rome" }));
   if (!opts?.force && !opts?.onlyEmail && rome.getDay() !== 1) {
-    return { sent: 0, skipped: 0, candidates: 0, details: [{ email: "-", matches: 0, status: "not_monday" }] };
+    return { sent: 0, skipped: 0, held: 0, candidates: 0, details: [{ email: "-", matches: 0, status: "not_monday" }] };
+  }
+  if (!weeklyDigestWeekEligible(new Date(), gate.cutoff)) {
+    return { sent: 0, skipped: 0, held: 0, candidates: 0, details: [{ email: "-", matches: 0, status: "before_cutoff" }] };
   }
 
   const users = await prisma.user.findMany({
@@ -110,7 +128,7 @@ export async function runWeeklyDigest(opts?: {
       details.push({ email: u.email, matches: matches.length, status: "error: " + (err instanceof Error ? err.message.slice(0, 80) : "?") });
     }
   }
-  return { sent, skipped, candidates, details };
+  return { sent, skipped, held: 0, candidates, details };
 }
 
 /** Top 5 match: titolo compatibile con i ruoli, preferenza a città/remote. */

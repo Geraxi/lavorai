@@ -6,6 +6,10 @@ import { renderBrandEmail } from "@/lib/email-brand";
 import { trialState } from "@/lib/billing";
 import { isTestAccount } from "@/lib/admin";
 import { trialLifecycleStage } from "@/lib/lifecycle-cadence";
+import {
+  isStaleScheduledReminder,
+  scheduledUserNotificationsHeld,
+} from "@/lib/user-notification-guard";
 
 /**
  * Finestra di prova dalla registrazione; accesso dopo conferma della carta.
@@ -64,10 +68,29 @@ export async function sendTrialStartedEmail(u: { id: string; email: string; name
   });
 }
 
-export interface TrialNudgeResult { day3: number; day6: number; ending: number; ended: number; skipped: number; details: string[] }
+export interface TrialNudgeResult { day3: number; day6: number; ending: number; ended: number; skipped: number; held: number; details: string[] }
+
+/** Instant this trial stage became due. A pre-cutoff entry is not replayed. */
+export function trialStageEntryAt(
+  kind: "trial_day_3" | "trial_day_6" | "trial_ended",
+  createdAt: Date,
+  trialEndsAt: Date,
+): Date {
+  if (kind === "trial_day_3") return new Date(createdAt.getTime() + 3 * 86_400_000);
+  if (kind === "trial_ended") return trialEndsAt;
+  const age5 = new Date(createdAt.getTime() + 5 * 86_400_000);
+  const twoDaysBeforeEnd = new Date(trialEndsAt.getTime() - 2 * 86_400_000);
+  return age5.getTime() > twoDaysBeforeEnd.getTime() ? age5 : twoDaysBeforeEnd;
+}
 
 export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<TrialNudgeResult> {
-  const res: TrialNudgeResult = { day3: 0, day6: 0, ending: 0, ended: 0, skipped: 0, details: [] };
+  const res: TrialNudgeResult = { day3: 0, day6: 0, ending: 0, ended: 0, skipped: 0, held: 0, details: [] };
+  const gate = scheduledUserNotificationsHeld();
+  if (gate.held) {
+    res.held = 1;
+    res.details.push("user_notifications_held");
+    return res;
+  }
   const apiKey = process.env.RESEND_API_KEY;
   const now = Date.now();
   const users = await prisma.user.findMany({
@@ -95,6 +118,11 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
       ? sentKey.has(`trial_day_6:${emailKey}`) || sentKey.has(`trial_ending:${emailKey}`)
       : kind ? sentKey.has(`${kind}:${emailKey}`) : false;
     if (!kind || alreadySent) continue;
+    if (isStaleScheduledReminder(trialStageEntryAt(kind, u.createdAt, u.trialEndsAt), gate.cutoff)) {
+      res.skipped++;
+      res.details.push(`${u.email} ${kind} before_cutoff`);
+      continue;
+    }
     if (opts?.dryRun || !apiKey) { res.skipped++; res.details.push(`${u.email} ${kind} dry`); continue; }
 
     const pricing = `${site()}/settings#billing`;
