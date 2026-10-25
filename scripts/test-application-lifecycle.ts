@@ -5,6 +5,7 @@ import { automaticRetryDecision, classifyFailure, deriveApplicationLifecycle, LI
 import { postingAlreadyClaimed, NOT_SUBMITTED, SUBMISSION_STARTED } from "../src/lib/application-worker-gates";
 import { ROLLOUT_BUDGET_HELD_MESSAGE } from "../src/lib/application-rollout";
 import { JOB_CLOSED_HELD_MESSAGE, JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "../src/lib/job-liveness";
+import { SKIPPED_ATS_MANUAL_MESSAGE } from "../src/lib/ats-skip-hosts";
 import { submissionSubjectKey } from "../src/lib/application-submission-budget";
 
 // ── posting keys ───────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ assert.equal(s({ status: "success", submittedVia: "portal_lever", submissionRece
 // email channel
 const email = (status: string, providerEmailId: string | null = "re_1") => s({ status: "success", submittedVia: "email_recruiter", submitConfirmation: "EMAIL_SENT", submittedAt: now,
   emailAttempts: [{ status, providerEmailId, acceptedAt: now, createdAt: now, lastEventAt: now, lastEventType: `email.${status}` }] });
-assert.equal(email("delivered").status, "confirmed_submitted");
+assert.equal(email("delivered").status, "submitted_unverified", "Resend delivered is not an employer receipt");
 assert.equal(email("delivered").evidence.type, "email_delivered");
 assert.equal(email("accepted").status, "submitted_unverified");
 assert.equal(email("delayed").status, "submitted_unverified");
@@ -62,6 +63,19 @@ assert.deepEqual([email("bounced").status, email("bounced").failureReason], ["fa
 assert.equal(email("complained").failureReason, "email_complaint");
 assert.equal(email("failed").failureReason, "email_rejected");
 assert.equal(email("unknown").status, "submitted_unverified");
+assert.equal(email("unknown").evidence.type, "outcome_unknown");
+const mailboxNoBounce = s({
+  status: "success", submittedVia: "mailbox_gmail", submitConfirmation: "MAILBOX_NO_BOUNCE",
+  submittedAt: now,
+});
+assert.equal(mailboxNoBounce.status, "submitted_unverified", "no-bounce is never ATS-accepted");
+assert.equal(mailboxNoBounce.evidence.type, "email_no_bounce");
+assert.notEqual(mailboxNoBounce.attemptOutcome, "APPLIED");
+const mailboxThenAts = s({
+  status: "success", submittedVia: "mailbox_gmail", submitConfirmation: "MAILBOX_NO_BOUNCE",
+  submittedAt: now, confirmedAt: now,
+});
+assert.equal(mailboxThenAts.status, "confirmed_submitted", "stored destination response stays ATS-accepted");
 assert.equal(s({ status: "applying", submitConfirmation: SUBMISSION_STARTED, emailAttempts: [{ status: "sending", providerEmailId: null }] }).status, "submitting");
 
 // in-flight and possibly-sent rows
@@ -111,6 +125,9 @@ assert.deepEqual(captcha.manual?.documents, { cvPdf: true, cvDocx: true, coverLe
 assert.equal(s({ status: "ready_to_apply", completedAt: now, errorMessage: "Questo portale non è supportato per invio automatico." }).manualReason, "unsupported_route");
 assert.equal(s({ status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED, errorMessage: "Destinazione ATS non correlabile con certezza a questo annuncio." }).manualReason, "destination_unverified");
 assert.equal(s({ status: "ready_to_apply", completedAt: now, errorMessage: "Acme usa un sistema di candidatura ufficiale (ATS)." }).manualReason, "ats_handoff");
+const skipList = s({ status: "ready_to_apply", completedAt: now, errorMessage: SKIPPED_ATS_MANUAL_MESSAGE, job: { url: "https://jobs.ashbyhq.com/acme/uuid", source: "ashby" } });
+assert.deepEqual([skipList.status, skipList.manualReason, skipList.nextAction], ["needs_manual", "skip_list", "apply_manually"]);
+assert.match(skipList.message.it, /Documenti pronti: invia sul sito dell'azienda/);
 assert.equal(s({ status: "needs_session" }).manualReason, "portal_session_required");
 assert.equal(s({ status: "ready_to_apply", job: { url: "javascript:alert(1)" }, submitConfirmation: "CAPTCHA" }).manual?.applyUrl, null, "only http(s) apply links");
 assert.equal(s({ status: "ready_to_apply" }).status, "approved");

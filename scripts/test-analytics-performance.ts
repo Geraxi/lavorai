@@ -44,12 +44,14 @@ const delivery = aggregatePerformance([
   base, email("accepted"), email("delayed"), email("delivered"), email("failed"), email("bounced"),
   email("complained"), email("sending"), email("unknown"), email("delivered", null),
 ], 7, now);
-assert.equal(delivery.sent, 2);
+assert.equal(delivery.sent, 1, "Resend delivered webhook is not a confirmed send");
 assert.equal(delivery.portalConfirmed, 1);
-assert.equal(delivery.emailDelivered, 1);
+assert.equal(delivery.emailDelivered, 1, "provider delivered stays a separate bucket");
 assert.equal(delivery.providerAccepted, 2);
 assert.equal(delivery.deliveryProblems, 3);
-assert.equal(delivery.pending, 3);
+assert.equal(delivery.pending, 1, "only in-flight sending stays pending");
+assert.equal(delivery.outcomeUnknown, 2, "unknown and delivered-without-id are outcome-unknown");
+assert.equal(delivery.sentNoBounce, 0);
 assert.equal(aggregatePerformance([{ ...email("bounced"), emailAttempts: [...email("bounced").emailAttempts!, ...email("delivered").emailAttempts!] }], 7, now).sent, 0, "Latest attempt controls evidence, not an earlier success");
 assert.equal(aggregatePerformance([{ ...base, emailAttempts: email("failed").emailAttempts }], 7, now).sent, 1, "Old email failures do not override a new verified portal receipt");
 assert.equal(aggregatePerformance([{ ...base, submissionReceiptJson: "{}" }], 7, now).sent, 0);

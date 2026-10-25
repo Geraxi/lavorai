@@ -65,9 +65,11 @@ export function aggregatePerformance(applications: PerformanceApplication[], day
     return { count: group.length, responses, rate: group.length ? responses / group.length * 100 : null };
   });
   return { ...period, buckets, sent: rows.length,
-    portalConfirmed: cohort.filter(a => a.evidence === "confirmed_portal").length,
-    emailDelivered: cohort.filter(a => a.evidence === "confirmed_email").length,
+    portalConfirmed: cohort.filter(a => a.evidence === "confirmed_portal" || a.evidence === "confirmed_email").length,
+    emailDelivered: cohort.filter(a => a.evidence === "provider_delivered").length,
     providerAccepted: cohort.filter(a => a.evidence === "provider_accepted").length,
+    sentNoBounce: cohort.filter(a => a.evidence === "sent_no_bounce").length,
+    outcomeUnknown: cohort.filter(a => a.evidence === "outcome_unknown").length,
     legacyUnverified: cohort.filter(a => a.evidence === "legacy_unverified").length,
     deliveryProblems: cohort.filter(a => a.evidence === "delivery_problem").length,
     pending: cohort.filter(a => a.evidence === "pending").length,

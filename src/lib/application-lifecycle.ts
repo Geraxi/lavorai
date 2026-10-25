@@ -7,8 +7,8 @@
  *   draft                 prepared or preparing, waiting on the user (approve / answer questions)
  *   approved              the user approved (explicit consent or auto mode); queued, preparing or held
  *   submitting            a delivery attempt is in flight right now
- *   confirmed_submitted   positive evidence: verified ATS receipt (HTTP/DOM) or email delivered event
- *   submitted_unverified  sent or possibly sent, with no confirmation evidence (never auto-retried)
+ *   confirmed_submitted   ATS-accepted only: stored receipt / candidate id / destination response (confirmedAt)
+ *   submitted_unverified  sent or possibly sent: provider-accepted, Resend delivered, mailbox no-bounce, unknown outcome
  *   failed                stopped before/without delivery, with a typed reason
  *   needs_manual          no supported automated route: apply URL + prepared documents for the user
  *
@@ -20,6 +20,7 @@ import { ROLLOUT_BUDGET_HELD_MESSAGE } from "@/lib/application-rollout";
 import { JOB_CLOSED_HELD_MESSAGE, JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "@/lib/job-liveness";
 import { isAiCreditFailure } from "@/lib/credit-failure-retry";
 import { DUPLICATE_POSTING_MESSAGE } from "@/lib/posting-key";
+import { SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
 import type { Prisma } from "@prisma/client";
 import { attemptOutcomeLabel, deriveAttemptOutcome, type AttemptOutcome } from "@/lib/attempt-outcome";
 
@@ -34,11 +35,11 @@ export type FailureReason =
 
 export type ManualReason =
   | "captcha" | "unsupported_route" | "no_recruiter_email" | "ats_handoff" | "destination_unverified"
-  | "portal_session_required" | "daily_cap_held";
+  | "portal_session_required" | "daily_cap_held" | "skip_list";
 
 export type EvidenceType =
   | "ats_http_receipt" | "ats_confirmation_page" | "email_delivered" | "email_accepted"
-  | "user_reported" | "legacy_detected_no_receipt" | "none";
+  | "email_no_bounce" | "outcome_unknown" | "user_reported" | "legacy_detected_no_receipt" | "none";
 
 export type NextAction =
   | "none" | "wait" | "approve" | "answer_questions" | "apply_manually" | "verify_on_portal" | "fix_account";
@@ -53,6 +54,7 @@ export interface LifecycleInput {
   startedAt?: Date | null;
   completedAt?: Date | null;
   submittedAt?: Date | null;
+  confirmedAt?: Date | string | null;
   createdAt?: Date;
   retryCount?: number;
   cvPdfPath?: string | null;
@@ -61,6 +63,8 @@ export interface LifecycleInput {
   coverLetterText?: string | null;
   /** Internal-only: used to surface an ALREADY captured screenshot key to admins. */
   canaryLog?: string | null;
+  submitClickPerformedAt?: Date | string | null;
+  outboundSubmissionJson?: string | null;
   job?: { url: string | null; source?: string | null } | null;
   /** Newest first, as every other evidence reader queries them. */
   emailAttempts?: Array<{
@@ -144,12 +148,17 @@ export const MANUAL_MESSAGES: Record<ManualReason, Localized> = {
   unsupported_route: { it: "Questo portale non supporta l'invio automatico. CV e lettera sono pronti: candidati dal link.", en: "This portal does not support automatic sending. Your CV and letter are ready: apply from the link." },
   no_recruiter_email: { it: "Nessun canale di invio verificato per questo annuncio. CV e lettera sono pronti: candidati dal link.", en: "No verified sending channel for this posting. Your CV and letter are ready: apply from the link." },
   ats_handoff: { it: "L'azienda usa un portale ufficiale: candidati da lì con CV e lettera già pronti.", en: "The company uses an official portal: apply there with your ready CV and letter." },
+  skip_list: { it: "Documenti pronti: invia sul sito dell'azienda. Invio automatico non disponibile su questo portale (CAPTCHA / verifica manuale).", en: "Documents ready: apply on the company site. Automatic sending is not available on this portal (CAPTCHA / manual verification)." },
   destination_unverified: { it: "Non abbiamo potuto collegare con certezza il portale a questo annuncio. Verifica il link ufficiale e candidati da lì.", en: "We could not reliably match the portal to this posting. Check the official link and apply there." },
   portal_session_required: { it: "Serve collegare il tuo account del portale, oppure candidati dal link.", en: "Connect your portal account, or apply from the link." },
   daily_cap_held: { it: "Limite giornaliero raggiunto: la candidatura è conservata e non inviata.", en: "Daily limit reached: the application is kept and not sent." },
 };
 
-const iso = (d: Date | null | undefined) => (d instanceof Date && Number.isFinite(+d) ? d.toISOString() : null);
+const iso = (d: Date | string | null | undefined) => {
+  if (d instanceof Date && Number.isFinite(+d)) return d.toISOString();
+  if (typeof d === "string" && Number.isFinite(Date.parse(d))) return new Date(d).toISOString();
+  return null;
+};
 const noEvidence: DeliveryEvidenceRecord = { type: "none", at: null, ats: null, snippet: null, receiptId: null, httpStatus: null };
 
 function screenshotFrom(canaryLog: string | null | undefined): string | null {
@@ -163,6 +172,7 @@ function screenshotFrom(canaryLog: string | null | undefined): string | null {
 
 export function classifyFailure(input: Pick<LifecycleInput, "status" | "submitConfirmation" | "errorMessage">): FailureReason {
   const message = input.errorMessage ?? "";
+  if (input.submitConfirmation === "REJECTED_NOT_SENT" || /rifiutato la candidatura \(validazione\)/i.test(message)) return "ats_form_unsupported";
   if (input.submitConfirmation === "JOB_CLOSED" || input.submitConfirmation === "EXPIRED" || message === JOB_CLOSED_HELD_MESSAGE || /annuncio (?:non più online|chiuso)/i.test(message)) return "job_closed";
   if (message === DUPLICATE_POSTING_MESSAGE) return "duplicate_posting";
   if (isAiCreditFailure(message)) return "ai_unavailable";
@@ -177,6 +187,7 @@ function manualReasonFor(input: LifecycleInput): ManualReason {
   const message = input.errorMessage ?? "";
   if (input.submitConfirmation === "CAPTCHA") return "captcha";
   if (input.status === "needs_session") return "portal_session_required";
+  if (message === SKIPPED_ATS_MANUAL_MESSAGE || /CAPTCHA \/ verifica manuale/i.test(message)) return "skip_list";
   if (/non correlabile/i.test(message)) return "destination_unverified";
   if (/sistema di candidatura ufficiale|copia da aggregatore/i.test(message)) return "ats_handoff";
   if (/email del recruiter|senza email recruiter|Email non inviata/i.test(message)) return "no_recruiter_email";
@@ -196,6 +207,7 @@ export function automaticRetryDecision(
   const possibleSubmission = !!(input.submittedAt || input.submittedVia || input.submissionReceiptJson
     || attempt?.providerEmailId || (attempt && !["failed"].includes(attempt.status))
     || ["SUBMISSION_STARTED", "UNCONFIRMED", "EMAIL_SENT", "MANUAL"].includes(input.submitConfirmation ?? "")
+    || !!input.submitClickPerformedAt || !!input.outboundSubmissionJson
     || (input.submitConfirmation ?? "").startsWith("DETECTED"));
   if (possibleSubmission || ["submitting", "confirmed_submitted", "submitted_unverified"].includes(lifecycle.status)) {
     return { automatic: false, reason: "possible_submission" };
@@ -237,20 +249,26 @@ export function deriveApplicationLifecycle(
     excludedFromMetrics = true;
     status = "draft";
     messageOverride = { it: "Anteprima o test: nessuna candidatura inviata.", en: "Preview or test: nothing was sent." };
+  } else if (input.confirmedAt) {
+    status = "confirmed_submitted";
+    evidence = { ...noEvidence, type: "ats_confirmation_page", ats: portal ?? "email", at: iso(input.confirmedAt),
+      snippet: "Destination confirmation stored (ATS receipt email). Not mailbox no-bounce." };
   } else if (input.submittedVia?.startsWith("mailbox_")) {
-    // Invio dalla casella dell'utente: mai "confermato" senza id provider + finestra rimbalzi superata.
     const at = iso(input.submittedAt ?? input.completedAt ?? null);
     if (input.submitConfirmation === "MAILBOX_BOUNCED") {
       status = "failed"; failureReason = "email_bounced";
       evidence = { ...noEvidence, ats: "email", at, snippet: "Bounce (DSN) found in the mailbox thread" };
     } else if (input.submitConfirmation === "MAILBOX_NO_BOUNCE") {
-      status = "confirmed_submitted";
-      evidence = { ...noEvidence, type: "email_delivered", ats: "email", at, snippet: "Sent from the user's mailbox; no bounce in the thread after the observation window" };
+      status = "submitted_unverified"; nextAction = "wait";
+      evidence = { ...noEvidence, type: "email_no_bounce", ats: "email", at,
+        snippet: "Sent from the user's mailbox; no bounce after the observation window. Not confirmed acceptance." };
+      messageOverride = { it: "Inviata dalla tua casella, nessun rimbalzo. Non è una conferma di ricezione dell'azienda.", en: "Sent from your mailbox, no bounce. This is not an employer receipt." };
     } else if (input.submitConfirmation === "MAILBOX_ACCEPTED") {
       status = "submitted_unverified"; nextAction = "wait";
       evidence = { ...noEvidence, type: "email_accepted", ats: "email", at, snippet: "Accepted by the user's mail provider; bounce window still open" };
     } else {
       status = "submitted_unverified"; nextAction = "verify_on_portal";
+      evidence = { ...noEvidence, type: "outcome_unknown", ats: "email", at, snippet: "Mailbox send outcome unknown" };
     }
   } else if (attempt && (input.submittedVia === "email_recruiter" || !input.submittedVia)) {
     const at = iso(attempt.lastEventAt ?? attempt.acceptedAt ?? attempt.createdAt ?? null);
@@ -259,8 +277,8 @@ export function deriveApplicationLifecycle(
       failureReason = attempt.status === "bounced" ? "email_bounced" : attempt.status === "complained" ? "email_complaint" : "email_rejected";
       evidence = { ...noEvidence, ats: "email", at, snippet: `Email provider reported ${attempt.status}` };
     } else if (attempt.status === "delivered" && attempt.providerEmailId) {
-      status = "confirmed_submitted";
-      evidence = { ...noEvidence, type: "email_delivered", ats: "email", at, snippet: "Recipient mail server accepted the message (provider delivered event)" };
+      status = "submitted_unverified"; nextAction = "wait";
+      evidence = { ...noEvidence, type: "email_delivered", ats: "email", at, snippet: "Provider delivered event: recipient mail server accepted the message. Not an employer receipt." };
     } else if (attempt.providerEmailId && ["accepted", "delayed"].includes(attempt.status)) {
       status = "submitted_unverified";
       evidence = { ...noEvidence, type: "email_accepted", ats: "email", at,
@@ -270,7 +288,7 @@ export function deriveApplicationLifecycle(
       status = "submitting"; nextAction = "wait";
     } else {
       status = "submitted_unverified"; nextAction = "verify_on_portal";
-      evidence = { ...noEvidence, ats: "email", at, snippet: "Email send outcome unknown" };
+      evidence = { ...noEvidence, type: "outcome_unknown", ats: "email", at, snippet: "Email send outcome unknown" };
     }
   } else if (input.status === "success" && portal && hasVerifiedSubmissionReceipt(input.submissionReceiptJson, input.submittedVia)) {
     status = "confirmed_submitted";
@@ -286,6 +304,9 @@ export function deriveApplicationLifecycle(
       snippet: input.submitConfirmation ? `Recorded as ${input.submitConfirmation} without a verifiable receipt` : null };
   } else if (["applying", "submitting", "answers_claimed"].includes(input.status)) {
     status = "submitting"; nextAction = "wait";
+  } else if (input.submitConfirmation === "REJECTED_NOT_SENT") {
+    status = "failed"; failureReason = "ats_form_unsupported"; nextAction = "apply_manually";
+    messageOverride = { it: "Il portale ha rifiutato la candidatura (validazione). Nessun invio accettato.", en: "The portal rejected the application (validation). Nothing was accepted." };
   } else if (["SUBMISSION_STARTED", "UNCONFIRMED"].includes(input.submitConfirmation ?? "")) {
     // A delivery boundary may have been crossed: never shown as failed, never retried.
     status = "submitted_unverified"; nextAction = "verify_on_portal";
@@ -311,6 +332,8 @@ export function deriveApplicationLifecycle(
     if (input.submitConfirmation === "NOT_SUBMITTED" && input.errorMessage === ROLLOUT_BUDGET_HELD_MESSAGE) {
       status = "approved"; held = true; nextAction = "wait";
       messageOverride = MANUAL_MESSAGES.daily_cap_held;
+    } else if (input.errorMessage === SKIPPED_ATS_MANUAL_MESSAGE) {
+      status = "needs_manual"; manualReason = "skip_list"; nextAction = "apply_manually";
     } else if (input.submitConfirmation === "CAPTCHA" || input.submitConfirmation === "NOT_SUBMITTED" || input.completedAt) {
       status = "needs_manual"; manualReason = manualReasonFor(input); nextAction = "apply_manually";
     } else {
@@ -374,6 +397,7 @@ function safeHttpUrl(value: string | null): string | null {
 export const lifecycleSelect = {
   id: true, status: true, submittedVia: true, submitConfirmation: true, submissionReceiptJson: true, errorMessage: true,
   consentGrantedAt: true, startedAt: true, completedAt: true, submittedAt: true, createdAt: true, retryCount: true,
+  submitClickPerformedAt: true, outboundSubmissionJson: true,
   cvPdfPath: true, cvDocxPath: true, coverLetterPath: true,
   job: { select: { url: true, source: true } },
   emailAttempts: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1,

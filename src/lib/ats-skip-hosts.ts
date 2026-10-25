@@ -10,6 +10,48 @@ export const PREFERRED_PORTAL_FAMILIES = ["greenhouse", "lever", "workable", "re
 export const SKIPPED_ATS_MANUAL_MESSAGE =
   "Invio automatico non disponibile su questo portale (CAPTCHA / verifica manuale). Completa la candidatura dal link dell'annuncio. Nessun invio effettuato.";
 
+/** Statuses the cheap skip-list miss may convert into a visible manual handoff. */
+export const SKIP_LIST_HANDOFF_FROM_STATUSES = [
+  "queued",
+  "ready_to_apply",
+  "answers_claimed",
+  "needs_answers",
+] as const;
+
+/** Proof-of-no-send confirmations a paused/resumed skip-list row may already carry. */
+export const SKIP_LIST_HANDOFF_CONFIRMATIONS = ["NOT_SUBMITTED", "NEEDS_ANSWERS"] as const;
+
+/** CAS filter: never match a row that may already have crossed a send boundary. */
+export function skipListManualHandoffWhere(applicationId: string) {
+  return {
+    id: applicationId,
+    status: { in: [...SKIP_LIST_HANDOFF_FROM_STATUSES] },
+    submittedAt: null,
+    submittedVia: null,
+    canaryLog: null,
+    answersUsedJson: null,
+    submitStartedAt: null,
+    OR: [
+      { submitConfirmation: null },
+      { submitConfirmation: { in: [...SKIP_LIST_HANDOFF_CONFIRMATIONS] } },
+    ],
+  };
+}
+
+/** Explicit user-action handoff: clear the work lease so the row is not reserved. */
+export function skipListManualHandoffData(now = new Date(), extra: { sendFailureReason?: string | null } = {}) {
+  return {
+    status: "ready_to_apply" as const,
+    errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
+    completedAt: now,
+    recruiterEmailRecheckedAt: now,
+    startedAt: null,
+    leaseToken: null,
+    leaseExpiresAt: null,
+    ...(extra.sendFailureReason ? { sendFailureReason: extra.sendFailureReason } : {}),
+  };
+}
+
 export function skipPortalHosts(env: Record<string, string | undefined> = process.env): string[] {
   if (!Object.prototype.hasOwnProperty.call(env, "ATS_SKIP_HOSTS")) {
     return [...DEFAULT_SKIP_PORTAL_HOSTS];

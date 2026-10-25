@@ -3,6 +3,7 @@ import { applicationsPaused } from "@/lib/application-pause";
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { enqueueApplication } from "@/lib/application-queue";
+import { blocksUncertainAutoRetry } from "@/lib/uncertain-submission";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -39,7 +40,12 @@ export async function POST(req: NextRequest) {
         { startedAt: null, createdAt: { lt: cutoff } },
       ],
     },
-    select: { id: true, status: true, createdAt: true },
+    select: {
+      id: true, status: true, createdAt: true, submitStartedAt: true,
+      submittedAt: true, submittedVia: true, submitConfirmation: true,
+      canaryLog: true, answersUsedJson: true, viewedAt: true, lastReplyAt: true,
+      replyCount: true, userStatus: true,
+    },
     orderBy: { createdAt: "asc" },
     take: 200,
   });
@@ -48,6 +54,7 @@ export async function POST(req: NextRequest) {
   // e startedAt a null così il monitoring conta da capo.
   let requeued = 0;
   for (const app of stuck) {
+    if (blocksUncertainAutoRetry(app)) continue;
     try {
       await prisma.application.update({
         where: { id: app.id },

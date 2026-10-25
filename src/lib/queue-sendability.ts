@@ -1,5 +1,15 @@
-import { dailyApplicationLimit, FREE_QUOTA_WORKER_INFLIGHT_STATUSES, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
+import { dailyApplicationLimit, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
+import {
+  countsTowardDailyCap,
+  countsTowardWeeklyQuota,
+  isQuotaExcludedHandoffOrHold,
+  quotaConsumingFilter,
+  romeDayStart,
+  weeklyQuotaUsageWhere,
+} from "@/lib/daily-application-cap";
 import { maxDrainAttempts } from "@/lib/drain-limits";
+import { isSkippedPortalUrl } from "@/lib/ats-skip-hosts";
+import { recruiterEmailFallbackEnabled } from "@/lib/recruiter-email-fallback";
 
 export const HELD_MESSAGE_PREFIX = "Invio in attesa:";
 export const MAX_ATTEMPTS_MESSAGE_PREFIX = "Invio interrotto dopo";
@@ -99,11 +109,23 @@ export function claimBlockReason(
     ?? dailyQuotaBlockReason(row.user, usage.daily, now);
 }
 
+/** Skip-list hosts are never auto-sendable unless the fallback flag is on
+ * and this posting already has a recorded inbox. */
+export function skipListBlocksAutoSend(
+  job?: { url?: string; recruiterEmail?: string | null } | null,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  if (!job?.url || !isSkippedPortalUrl(job.url, env)) return false;
+  if (!recruiterEmailFallbackEnabled(env)) return true;
+  return !job.recruiterEmail?.trim();
+}
+
 export function isQueuedRowSendable(
   row: ClaimableRow,
   usage: { weekly: number; daily: number } = { weekly: 0, daily: 0 },
   now = new Date(),
 ): boolean {
+  if (skipListBlocksAutoSend(row.job)) return false;
   return claimBlockReason(row, usage, now) === null;
 }
 
@@ -119,38 +141,40 @@ export function usageFor(maps: QuotaUsageMaps, userId: string | undefined): { we
 
 /** Prisma filter shared by claim and park: a row that consumed quota this window. */
 export function quotaUsageWhere(userIds: string[], excludeIds: string[], now: Date) {
-  const weekStart = freeQuotaWindowStart(now);
-  const dayStart = new Date(now);
-  dayStart.setHours(0, 0, 0, 0);
+  const exclude = excludeIds.length === 1 ? { id: { not: excludeIds[0] } }
+    : excludeIds.length ? { id: { notIn: excludeIds } } : {};
   return {
-    userId: { in: userIds },
-    ...(excludeIds.length ? { id: { notIn: excludeIds } } : {}),
     OR: [
-      { status: "success" as const, OR: [
-        { submittedAt: { gte: weekStart } },
-        { submittedAt: null, createdAt: { gte: weekStart } },
-      ] },
-      { status: { in: [...FREE_QUOTA_WORKER_INFLIGHT_STATUSES] } },
+      weeklyQuotaUsageWhere({ in: userIds }, now, excludeIds),
+      {
+        userId: { in: userIds },
+        ...exclude,
+        createdAt: { gte: romeDayStart(now) },
+        ...quotaConsumingFilter(),
+      },
     ],
   };
 }
 
-export function countsTowardWeekly(row: { status: string; submittedAt?: Date | null; createdAt?: Date }, now: Date): boolean {
-  if (FREE_QUOTA_WORKER_INFLIGHT_STATUSES.includes(row.status)) return true;
-  if (row.status !== "success") return false;
-  const start = +freeQuotaWindowStart(now);
-  const when = +(row.submittedAt ?? row.createdAt ?? 0);
-  return when >= start;
+export function countsTowardWeekly(row: {
+  status: string;
+  submittedAt?: Date | null;
+  createdAt?: Date;
+  submitConfirmation?: string | null;
+  errorMessage?: string | null;
+}, now: Date): boolean {
+  return countsTowardWeeklyQuota(row, now);
 }
 
-export function countsTowardDaily(row: { status: string; submittedAt?: Date | null; createdAt?: Date }, now: Date): boolean {
-  const dayStart = new Date(now);
-  dayStart.setHours(0, 0, 0, 0);
-  if (FREE_QUOTA_WORKER_INFLIGHT_STATUSES.includes(row.status)) {
-    return +(row.createdAt ?? 0) >= +dayStart || +(row.submittedAt ?? 0) >= +dayStart;
-  }
-  if (row.status !== "success") return false;
-  return +(row.submittedAt ?? row.createdAt ?? 0) >= +dayStart;
+export function countsTowardDaily(row: {
+  status: string;
+  submittedAt?: Date | null;
+  createdAt?: Date;
+  submitConfirmation?: string | null;
+  errorMessage?: string | null;
+}, now: Date): boolean {
+  if (isQuotaExcludedHandoffOrHold(row) || !countsTowardDailyCap(row)) return false;
+  return +(row.createdAt ?? 0) >= +romeDayStart(now);
 }
 
 export async function loadQuotaUsageMaps(
@@ -162,9 +186,12 @@ export async function loadQuotaUsageMaps(
   const maps: QuotaUsageMaps = { weekly: new Map(), daily: new Map() };
   const unique = [...new Set(userIds.filter(Boolean))];
   if (!unique.length) return maps;
-  const used: Array<{ userId: string; status: string; submittedAt: Date | null; createdAt: Date }> = await db.application.findMany({
+  const used: Array<{
+    userId: string; status: string; submittedAt: Date | null; createdAt: Date;
+    submitConfirmation: string | null; errorMessage: string | null;
+  }> = await db.application.findMany({
     where: quotaUsageWhere(unique, excludeIds, now),
-    select: { userId: true, status: true, submittedAt: true, createdAt: true },
+    select: { userId: true, status: true, submittedAt: true, createdAt: true, submitConfirmation: true, errorMessage: true },
   });
   for (const row of used) {
     if (countsTowardWeekly(row, now)) maps.weekly.set(row.userId, (maps.weekly.get(row.userId) ?? 0) + 1);

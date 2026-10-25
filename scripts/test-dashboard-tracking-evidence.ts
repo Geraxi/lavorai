@@ -51,15 +51,15 @@ async function main() {
     job: { id: "job", title: "Designer", company: "Example", location: "Milan" },
   };
   const fixture = [
-    { ...base, id: "legacy" },
+    { ...base, id: "legacy", submittedAt: new Date("2026-10-01") },
     { ...base, id: "accepted", emailAttempts: [{ status: "accepted", providerEmailId: "accepted-id" }] },
     { ...base, id: "delivered", emailAttempts: [{ status: "delivered", providerEmailId: "delivered-id" }] },
     { ...base, id: "portal", submittedVia: "portal_greenhouse", submitConfirmation: "DETECTED_DOM", submissionReceiptJson: JSON.stringify({ version: 1, provider: "greenhouse", kind: "dom", jobId: "123", capturedAt: new Date().toISOString(), signal: "new_receipt_and_form_removed" }) },
-    { ...base, id: "unverified-portal", submittedVia: "portal_greenhouse", submitConfirmation: "DETECTED_HTTP_200" },
+    { ...base, id: "unverified-portal", submittedVia: "portal_greenhouse", submitConfirmation: "DETECTED_HTTP_200", submittedAt: new Date("2026-10-01") },
     { ...base, id: "bounce", emailAttempts: [{ status: "bounced", providerEmailId: "bounced-id" }] },
     { ...base, id: "mock", submittedVia: "mock_demo", submitConfirmation: "DETECTED_DOM" },
     { ...base, id: "foreign", userId: "someone-else", emailAttempts: [{ status: "delivered", providerEmailId: "foreign-id" }] },
-    ...Array.from({ length: 196 }, (_, i) => ({ ...base, id: `old-${i}` })),
+    ...Array.from({ length: 196 }, (_, i) => ({ ...base, id: `old-${i}`, submittedAt: new Date("2026-10-01") })),
   ];
   let pages = 0;
   const db = { application: {
@@ -185,14 +185,17 @@ async function main() {
     walk(node.props?.children);
   };
   walk(rendered);
-  assert.equal(kpis.confirmed, "2", "Only real delivered email + verified portal receipt count");
+  assert.equal(kpis.confirmed, "1", "Only verified portal receipt / confirmedAt count; Resend delivered is not confirmed");
   assert.equal(kpis.replies, "1", "Recruiter replies come from human, non-security-code source rows");
   assert.equal(kpis.interviews, "1", "Interviews count recruiter/user evidence only");
   assert.equal(kpis.offers, "1", "Manual offer status remains intact");
-  assert.equal(stageCounts.sent, 2, "Progress 'sent' uses the evidence-backed count, not raw success rows");
-  assert.equal(stageCounts.submitted, 1, "Provider-accepted email is 'sent, delivery pending', not confirmed");
+  assert.equal(stageCounts.sent, 1, "Progress 'sent' uses receipts/confirmedAt only, not Resend delivered");
+  assert.equal(stageCounts.submitted, 1, "Resend accepted is provider-accepted, not ATS-accepted");
+  assert.equal(stageCounts.email_delivered, 1, "Resend delivered stays a distinct email-delivered count");
+  assert.equal(uiStatus.STAGE_LABEL.sent_unverified.it, "Invii registrati, senza conferma");
   assert.equal(stageCounts.stopped, 1, "A bounced email is not sent");
-  assert.equal(stageCounts.unverified, 199, "Success rows without evidence (legacy, unverified portal, mock) stay 'outcome unverified'");
+  assert.equal(stageCounts.sent_unverified, 198, "Legacy success+submittedAt rows are sent-unverified, not fabricated receipts");
+  assert.equal(stageCounts.unverified, 1, "Mock/demo success without a send timestamp stays outcome-unverified");
   console.log("PASS dashboard owner isolation, complete bounded pagination, real receipt/delivery evidence and source-row response counts.");
 
   const globe = load("src/lib/dashboard-globe-data.ts", {
@@ -212,7 +215,7 @@ async function main() {
     "@/lib/globe-geometry": load("src/lib/globe-geometry.ts", {}),
   });
   const map = await globe.getDashboardGlobeData("owner");
-  assert.equal(map.stats.counts.sent, 2); assert.equal(map.markers[0].counts.sent, 2);
+  assert.equal(map.stats.counts.sent, 1); assert.equal(map.markers[0].counts.sent, 1);
   console.log("PASS globe sent pins exclude legacy success, provider-only acceptance, failures, mocks and foreign owners.");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

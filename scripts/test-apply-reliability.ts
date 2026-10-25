@@ -113,13 +113,13 @@ async function main() {
     assert.equal(persistAttemptConfirmation("FAILED:stuck"), "FAILED:stuck");
     assert.equal(deriveAttemptOutcome({
       status: "success", submitConfirmation: "DETECTED_HTTP_2xx",
-    }), "APPLIED");
+    }), null, "DETECTED without a stored receipt is not APPLIED");
     assert.equal(deriveAttemptOutcome({
       status: "success", submitConfirmation: "EMAIL_SENT",
-    }), "APPLIED");
+    }), null, "EMAIL_SENT without a stored receipt is not APPLIED");
     assert.equal(deriveAttemptOutcome({
       status: "success", submitConfirmation: "MAILBOX_NO_BOUNCE",
-    }), "APPLIED");
+    }), null, "mailbox no-bounce is not confirmed acceptance");
     assert.equal(deriveAttemptOutcome({
       status: "success", submitConfirmation: null,
     }), null);

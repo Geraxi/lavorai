@@ -73,10 +73,12 @@ async function testCronBothPasses() {
   const api = loadModule("src/lib/auto-apply-cron.ts", {
     "@/lib/ats-skip-hosts": await import("../src/lib/ats-skip-hosts"),
     "@/lib/skip-list-email-lookup": { lookupPublishedSkipListInbox: async () => null },
+    "@/lib/recruiter-email-fallback": await import("../src/lib/recruiter-email-fallback"),
     "@/lib/daily-application-cap": await import("../src/lib/daily-application-cap"),
     "@/lib/paid-priority": { sortByPaidPriority: <T,>(items: readonly T[]) => [...items] },
     "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
     "@/lib/application-pause": { applicationsPaused: () => false },
+    "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
     "@/lib/auto-apply-preferences": preferenceHelpers,
     "@/lib/db": { prisma },
     "@/lib/admin-user-actions": { monthlyQuotaSince: () => new Date(0) },

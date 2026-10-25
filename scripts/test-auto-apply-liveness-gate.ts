@@ -42,9 +42,14 @@ async function main() {
   for (const bad of ["-1", "abc", "1.5", "9999"]) assert.equal(livenessMaxChecksFromEnv(bad), DEFAULT_LIVENESS_MAX_CHECKS);
   // Wiring: both cron producers and the consent endpoint gate before queueing.
   const cron = readFileSync("src/lib/auto-apply-cron.ts", "utf8");
+  const helper = cron.indexOf("async function admitAutoApplyApplication");
+  assert.ok(helper > 0, "creates go through admitAutoApplyApplication");
   const creates = [...cron.matchAll(/prisma\.application\.create\(/g)].map((m) => m.index!);
   assert.equal(creates.length, 2);
-  for (const at of creates) assert.ok(cron.slice(Math.max(0, at - 600), at).includes('livenessGate.verdict(job) === "closed"'), "create is preceded by liveness gate");
+  assert.ok(creates.every((at) => at > helper), "application rows are created only inside the admission helper");
+  const admissions = [...cron.matchAll(/admitAutoApplyApplication\(/g)].map((m) => m.index!).filter((at) => at < helper);
+  assert.ok(admissions.length >= 2);
+  for (const at of admissions) assert.ok(cron.slice(Math.max(0, at - 600), at).includes('livenessGate.verdict(job) === "closed"'), "create is preceded by liveness gate");
   const consent = readFileSync("src/app/api/applications/consent/route.ts", "utf8");
   assert.ok(consent.indexOf("gate.verdict(a.job)") < consent.indexOf('data: { status: "queued", consentGrantedAt'), "consent checks liveness before queueing");
   console.log("auto-apply liveness gate tests passed");

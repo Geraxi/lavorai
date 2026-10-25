@@ -5,6 +5,7 @@ import { applicationDeliveryView } from "../src/lib/application-delivery-view";
 async function main() {
   process.env.DATABASE_URL = "postgresql://synthetic:synthetic@127.0.0.1:59999/test_only";
   process.env.DIRECT_URL = process.env.DATABASE_URL;
+  process.env.RECRUITER_EMAIL_FALLBACK_ENABLED = "on";
   const { sendRecruiterEmailOnce } = await import("../src/lib/recruiter-delivery");
   const input = { applicationId: "synthetic", attemptKey: "attempt-1", recipient: "jobs@acme.invalid", recipientProvenanceJson: "{}",
     payload: { from: "test@example.invalid", to: "must-be-overridden@example.invalid", subject: "Test", text: "Synthetic" } };

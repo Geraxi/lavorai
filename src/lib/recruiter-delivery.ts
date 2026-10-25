@@ -1,5 +1,6 @@
 import { applicationsPaused } from "@/lib/application-pause";
 import { authorizeReleaseCanary } from "@/lib/release-email-canary";
+import { recruiterEmailFallbackEnabled } from "@/lib/recruiter-email-fallback";
 import { Resend, type CreateEmailOptions } from "resend";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { createApplicationEmailAttempt, recordApplicationEmailAccepted, recordApplicationEmailUncertain } from "@/lib/application-delivery";
@@ -40,6 +41,9 @@ export async function sendRecruiterEmailOnce(input: {
   const canary = input.releaseCanary === true;
   if (canary ? !await authorizeReleaseCanary(input) : applicationsPaused()) {
     return { kind: "not_sent", reason: "applications_paused" };
+  }
+  if (!canary && !recruiterEmailFallbackEnabled()) {
+    return { kind: "not_sent", reason: "recruiter_email_fallback_disabled" };
   }
   const deps: Dependencies = {
     withinQuota: sendWithinQuota,

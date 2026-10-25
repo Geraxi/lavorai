@@ -28,11 +28,16 @@ const evidence = load("src/lib/application-evidence.ts", { "@/lib/submission-rec
 
 const delivered = (id: string, days: number, userId = "owner") => ({
   id, userId, status: "success", submittedVia: "email_recruiter", submitConfirmation: "EMAIL_SENT", submissionReceiptJson: null,
-  submittedAt: ago(days), completedAt: ago(days), createdAt: ago(days + 1),
+  submittedAt: ago(days), completedAt: ago(days), createdAt: ago(days + 1), confirmedAt: null as Date | null,
   emailAttempts: [{ status: "delivered", providerEmailId: `p-${id}`, acceptedAt: ago(days), createdAt: ago(days) }],
 });
+const confirmed = (id: string, days: number, userId = "owner") => ({
+  ...delivered(id, days, userId),
+  confirmedAt: ago(days),
+});
 const applications = [
-  delivered("d1", 1), delivered("d2", 3), delivered("d3", 10), delivered("d4", 40), delivered("d5", 70 /* outside 8 weeks */),
+  confirmed("d1", 1), confirmed("d2", 3), confirmed("d3", 10), confirmed("d4", 40), confirmed("d5", 70 /* outside 8 weeks */),
+  delivered("webhook-only", 1),
   { ...delivered("accepted", 2), emailAttempts: [{ status: "accepted", providerEmailId: "p-acc", acceptedAt: ago(2), createdAt: ago(2) }] },
   { ...delivered("bounced", 2), emailAttempts: [{ status: "bounced", providerEmailId: "p-b", acceptedAt: ago(2), createdAt: ago(2) }] },
   { ...delivered("legacy", 2), emailAttempts: [] },
@@ -88,12 +93,12 @@ async function main() {
   const series = await metrics.getDashboardTimeSeries("owner", now);
   assert.equal(applicationQueries, 1);
   const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
-  assert.equal(sum(series.daily.confirmed), 3, "30-day confirmed = delivered only (no accepted/bounced/legacy/mock/foreign, no 40-day-old)");
+  assert.equal(sum(series.daily.confirmed), 3, "30-day confirmed = confirmedAt only (no Resend delivered/accepted/bounced/legacy/mock/foreign, no 40-day-old)");
   assert.equal(sum(series.daily.replies), 3, "replies de-duplicated per application per day across channels (Gmail copy of d2 not counted twice)");
   assert.equal(sum(series.daily.interviews), 1, "one interview per application");
   assert.equal(series.offersHistoryAvailable, false, "offers have no timestamps, so no fabricated history");
   assert.equal(series.weeks.length, 8);
-  assert.equal(sum(series.weeks.map((w: any) => w.sent)), 4, "8-week sends include the 40-day-old one, exclude the 70-day-old one");
+  assert.equal(sum(series.weeks.map((w: any) => w.sent)), 4, "8-week confirmed sends include the 40-day-old one, exclude the 70-day-old one and Resend-delivered-only");
   assert.equal(series.weeks[7].sent, 2); assert.equal(series.weeks[6].sent, 1);
   assert.equal(series.weeks[7].end, "2026-10-19"); assert.equal(series.weeks[0].start, "2026-08-25");
   const chart = load("src/components/ui-premium/chart-path.ts", {});

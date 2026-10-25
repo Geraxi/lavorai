@@ -29,6 +29,9 @@ export const BLANK_FORM_EVIDENCE: Record<string, PreTransmissionEvidence> = {
   portal_greenhouse: "greenhouse_blank_form_v1", portal_ashby: "ashby_blank_form_v1",
 };
 export const ANSWERS_CONSENT_NOTE = "Consenso per questa candidatura dato confermando le risposte su Domande";
+/** Visible user-action when Domande cannot resume: no attested pause proof. */
+export const CONTINUATION_PROOF_MISSING_MESSAGE =
+  "Impossibile riprendere l'invio automatico: manca la prova della pausa sul portale. Completa la candidatura dal link dell'annuncio. Nessun invio effettuato.";
 export const continuationSelect = {
   id: true, userId: true, jobId: true, createdAt: true, consentGrantedAt: true, retryCount: true,
   status: true, startedAt: true, completedAt: true, submittedAt: true, submittedVia: true,
@@ -95,7 +98,19 @@ export function answerContinuationIneligibility(row: ContinuationRow, phase: Ans
     || (phase === "paused" && Date.parse(proof.workToken) > Date.parse(proof.pausedAt)) || Date.parse(proof.pausedAt) > +now
     || (phase !== "paused" && (!proof.confirmedAt || Date.parse(proof.confirmedAt) < Date.parse(proof.pausedAt) || Date.parse(proof.confirmedAt) > +now))) return "continuation_proof_mismatch";
   const statuses = phase === "paused" ? ["needs_answers"] : phase === "queued" ? ["queued", "answers_claimed"] : ["optimizing", "ready_to_apply"];
-  if (!statuses.includes(row.status) || row.submitConfirmation !== "NOT_SUBMITTED" || row.completedAt
+  if (!statuses.includes(row.status) || !continuationConfirmationAccepted(row.submitConfirmation) || row.completedAt
     || row.submittedAt || row.submittedVia || row.submissionReceiptJson || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) return "continuation_delivery_uncertain";
   return null;
+}
+
+/** attestAnswerPause writes NOT_SUBMITTED. A later needs-answers write used to
+ * overwrite that with NEEDS_ANSWERS and strand the proof. Both markers are
+ * valid while a paused/queued continuation exists. */
+export function continuationConfirmationAccepted(confirmation: string | null | undefined): boolean {
+  return confirmation === "NOT_SUBMITTED" || confirmation === "NEEDS_ANSWERS";
+}
+
+/** Keep NOT_SUBMITTED when a paused proof is already on the row. */
+export function needsAnswersSubmitConfirmation(row: { answerContinuationJson?: string | null }): "NEEDS_ANSWERS" | undefined {
+  return parseAnswerContinuation(row.answerContinuationJson) ? undefined : "NEEDS_ANSWERS";
 }

@@ -755,6 +755,18 @@ model Application {
   recruiterEmailRecheckedAt DateTime?
   createdAt       DateTime  @default(now())
   startedAt       DateTime?
+  /// Random worker ownership token. Additive; null on historical rows.
+  leaseToken      String?
+  /// Exclusive claim ends at this instant. Recovery may reclaim only after it.
+  leaseExpiresAt  DateTime?
+  /// Written immediately before an irreversible submit. Never auto-retried.
+  submitStartedAt DateTime?
+  /// Playwright submit control invoked (evidence level 1). Null on historical rows.
+  submitClickPerformedAt DateTime?
+  /// Matched application-write POST observed in the click window (level 2).
+  outboundSubmissionJson String? @db.Text
+  /// Destination status/body/rejection/ambiguity when level 3 is not a verified receipt.
+  destinationResponseJson String? @db.Text
   completedAt     DateTime?
 
   user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -772,6 +784,7 @@ model Application {
   @@index([userId, createdAt])
   @@index([sessionId])
   @@index([userId, sendStatus])
+  @@index([status, leaseExpiresAt])
 }
 
 /// Stato di invio verificabile. "submitted" richiede sempre una prova.

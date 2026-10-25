@@ -11,8 +11,8 @@ the worker already writes. Nothing is backfilled or rewritten.
 | `draft` | Prepared or preparing, waiting on the user (approve, answer questions), or a preview/test | Bozza | Draft |
 | `approved` | User approved (explicit consent or auto mode). Queued, preparing, or **held** (`held: true`) | Approvata, in coda / Approvata, in attesa | Approved, queued / Approved, on hold |
 | `submitting` | A delivery attempt is in flight | Invio in corso | Submitting |
-| `confirmed_submitted` | Positive evidence: verified ATS receipt (HTTP response or confirmation page) or email `delivered` provider event | Inviata, confermata | Submitted, confirmed |
-| `submitted_unverified` | Sent or possibly sent, no confirmation evidence. Never auto-retried | Inviata, non verificata | Submitted, unverified |
+| `confirmed_submitted` | Positive evidence: verified ATS receipt (HTTP/DOM), mailbox no-bounce, or `confirmedAt`. A Resend `delivered` webhook is not this. | Inviata, confermata | Submitted, confirmed |
+| `submitted_unverified` | Sent or possibly sent, including Resend delivered (MTA accept, not an employer receipt). Never auto-retried | Inviata, non verificata | Submitted, unverified |
 | `failed` | Stopped without delivery; `failureReason` says why | Non inviata | Not submitted |
 | `needs_manual` | No supported automated route; `manual.applyUrl` + prepared documents | Da inviare a mano | Apply manually |
 

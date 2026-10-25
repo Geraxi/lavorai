@@ -1,5 +1,6 @@
 import { resolveAdapterByUrl } from "@/lib/ats-adapter-resolution";
 import { hasPotentialSubmission } from "@/lib/application-worker-gates";
+import { blocksUncertainAutoRetry } from "@/lib/uncertain-submission";
 import type { JobLivenessResult } from "@/lib/job-liveness";
 
 /**
@@ -18,6 +19,7 @@ export const stuckAtsSelect = {
   id: true, userId: true, jobId: true, status: true, errorMessage: true, portal: true, startedAt: true,
   submittedAt: true, submittedVia: true, submitConfirmation: true, canaryLog: true,
   answersUsedJson: true, viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
+  submitStartedAt: true, submitClickPerformedAt: true, outboundSubmissionJson: true, destinationResponseJson: true,
   job: { select: { id: true, url: true, closedAt: true } },
 } as const;
 
@@ -26,6 +28,10 @@ export type StuckAtsRow = {
   startedAt: Date | null;
   submittedAt: Date | null; submittedVia: string | null; submitConfirmation: string | null; canaryLog: string | null;
   answersUsedJson: string | null; viewedAt: Date | null; lastReplyAt: Date | null; replyCount: number; userStatus: string | null;
+  submitStartedAt?: Date | null;
+  submitClickPerformedAt: Date | null;
+  outboundSubmissionJson: string | null;
+  destinationResponseJson: string | null;
   job: { id: string; url: string; closedAt: Date | null };
 };
 
@@ -54,7 +60,7 @@ export function classifyStuck(row: StuckAtsRow): StuckKind | null {
 export function staticSkipReason(row: StuckAtsRow): SkipReason | "not_stuck" | null {
   if (!classifyStuck(row)) return "not_stuck";
   if (row.job.closedAt) return "job_closed";
-  if (hasPotentialSubmission(row)) return "possible_submission";
+  if (blocksUncertainAutoRetry(row) || hasPotentialSubmission(row)) return "possible_submission";
   if (!resolveAdapterByUrl([row.job.url])) return "no_adapter";
   return null;
 }

@@ -1,4 +1,5 @@
 import { historicalRetriesBlocked } from "@/lib/application-rollout";
+import { blocksUncertainAutoRetry } from "@/lib/uncertain-submission";
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { z } from "zod";
@@ -69,7 +70,7 @@ export function isAiCreditFailure(message: string | null): boolean {
 const evidenceSelect = {
   submittedAt: true, submittedVia: true, submitConfirmation: true, canaryLog: true,
   viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
-  answersUsedJson: true, pendingQuestionsJson: true,
+  answersUsedJson: true, pendingQuestionsJson: true, submitStartedAt: true,
   cvDocxPath: true, cvPdfPath: true, coverLetterPath: true, coverLetterText: true,
 } as const;
 
@@ -113,7 +114,7 @@ export function creditRetryEligibility(row: CreditRetryRow, since: Date, now = n
   if (row.createdAt < since) return "outside_window";
   if (!isAiCreditFailure(row.errorMessage)) return "not_ai_credit_failure";
   if (!row.completedAt) return "failure_not_completed";
-  if (hasPriorAttemptEvidence(row)) return "prior_attempt_evidence";
+  if (hasPriorAttemptEvidence(row) || blocksUncertainAutoRetry(row)) return "prior_attempt_evidence";
   const user = row.user;
   if (user.suspendedAt) return "user_suspended";
   if (!user.emailVerified || !user.privacyConsentAt) return "consent_or_verification_missing";

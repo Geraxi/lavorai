@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { applicationsPaused } from "@/lib/application-pause";
 import { runOnboardingNudges } from "@/lib/onboarding-nudge";
 import { runUpgradeNudges } from "@/lib/upgrade-nudge";
 import { runAutoApplyCron } from "@/lib/auto-apply-cron";
@@ -34,15 +35,19 @@ export async function GET(request: NextRequest) {
   if (!authorized) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const t0 = Date.now();
+  const paused = applicationsPaused();
 
   // 1. Sync pool (nuovi job entrano) — fallisce silente se rate-limit.
   const sync = await syncAtsJobs().catch((err) => ({ error: String(err) }));
 
-  // 2. Self-heal: re-parse CVProfile vuoti + unstuck app ferme.
-  const heal = await runCronSelfHeal().catch((err) => ({ error: String(err) }));
-
-  // 3. Auto-apply: crea candidature nuove per utenti auto+hybrid.
-  const autoApply = await runAutoApplyCron().catch((err) => ({ error: String(err) }));
+  // 2–3. Application work is kill-switched. User-facing notification
+  // emails below still run (onboarding, digest, trial — to our users).
+  const heal = paused
+    ? { paused: true, reason: "applications_paused" }
+    : await runCronSelfHeal().catch((err) => ({ error: String(err) }));
+  const autoApply = paused
+    ? { paused: true, reason: "applications_paused" }
+    : await runAutoApplyCron().catch((err) => ({ error: String(err) }));
 
   // 4. Nudges + follow-up "no reply yet" per candidature silenti da >3gg
   //    + daily summary a ogni utente attivo nelle 24h (copre il gap

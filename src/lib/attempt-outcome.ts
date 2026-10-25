@@ -1,8 +1,11 @@
+import { hasVerifiedSubmissionReceipt } from "@/lib/submission-receipt";
+
 /**
  * Standardised submit-attempt outcomes. Every portal/email attempt ends in
  * exactly one of these. Stored on Application.submitConfirmation (except
- * APPLIED, which is derived from a confirmed DETECTED_* / EMAIL_SENT proof
- * so we never mark sent without confirmation).
+ * APPLIED, which is derived from a stored ATS receipt or destination response).
+ * MAILBOX_NO_BOUNCE / EMAIL_SENT / DETECTED_* without a stored receipt are
+ * never APPLIED.
  *
  * No new database columns.
  */
@@ -74,16 +77,19 @@ export type OutcomeRow = {
   submitConfirmation: string | null;
   submittedVia?: string | null;
   submittedAt?: Date | null;
+  submissionReceiptJson?: string | null;
+  confirmedAt?: Date | string | null;
   errorMessage?: string | null;
 };
 
 /**
  * Exactly one outcome, or null while the row has not finished an attempt.
- * APPLIED only when a confirmation was recorded (thank-you / ATS receipt / email).
+ * APPLIED only when an ATS receipt or destination confirmation is stored.
  */
 export function deriveAttemptOutcome(row: OutcomeRow): AttemptOutcome | null {
   const conf = row.submitConfirmation ?? "";
-  if (row.status === "success" && (conf.startsWith("DETECTED") || conf === "EMAIL_SENT" || conf === "MAILBOX_NO_BOUNCE")) {
+  if (row.submittedVia !== "mock_demo" && conf !== "DRY_RUN"
+    && (row.confirmedAt || hasVerifiedSubmissionReceipt(row.submissionReceiptJson, row.submittedVia))) {
     return "APPLIED";
   }
   if (conf === "EXPIRED" || conf === "JOB_CLOSED") return "EXPIRED";

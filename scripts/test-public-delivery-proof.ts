@@ -53,19 +53,21 @@ async function main() {
   assert.equal(queries[1].skip, 1);
   assert.equal(queries[0].select.replies.where.isSecurityCode, false);
   assert.equal(queries[0].select.replies.where.isHuman, true);
-  assert.equal(proof.confirmed, 4);
-  assert.equal(proof.confirmedMonth, 3);
+  assert.equal(proof.confirmed, 3, "Resend delivered is not an employer confirmation");
+  assert.equal(proof.confirmedMonth, 2);
   assert.equal(proof.portalConfirmed, 3);
   assert.equal(proof.emailDelivered, 1);
   assert.equal(proof.providerAccepted, 2);
   assert.equal(proof.deliveryProblems, 3);
   assert.equal(proof.legacyUnverified, 499);
-  assert.equal(proof.pending, 1);
+  assert.equal(proof.pending, 0);
+  assert.equal(proof.outcomeUnknown, 1);
+  assert.equal(proof.sentNoBounce, 0);
   assert.equal(proof.replies, 2, "A foreign-linked Gmail message must not inflate the public response numerator");
   assert.ok(!JSON.stringify(proof).includes("PRIVATE-PROVIDER-ID"));
   assert.ok(!JSON.stringify(proof).includes("owner"));
   assert.ok(!JSON.stringify(proof).includes("12345"));
-  assert.equal(proof.recent.length, 4);
+  assert.equal(proof.recent.length, 3);
   const { default: Page } = loadModule("src/app/(marketing)/proof/page.tsx", {
     "react/jsx-runtime": jsx,
     "next/link": { __esModule: true, default: (props: any) => React.createElement("a", props) },
@@ -75,7 +77,7 @@ async function main() {
   assert.ok(html.includes("Accettate dal provider"));
   assert.ok(html.includes("Storico non verificato"));
   assert.ok(html.includes("Problemi di consegna"));
-  assert.ok(html.includes("50%"), "Response rate must use confirmed cohort only");
+  assert.ok(html.includes("67%"), "Response rate must use confirmed cohort only");
   assert.ok(!html.includes("HTTP 2xx/3xx"));
   assert.ok(!html.includes("DETECTED_HTTP_200"));
   assert.ok(!html.includes("PRIVATE-PROVIDER-ID"));

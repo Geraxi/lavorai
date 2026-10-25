@@ -5,7 +5,7 @@ const REPLY_KINDS = ["risposta", "colloquio", "rifiutata"];
 /** Aggregate-only public output. No recipient, candidate, body or receipt payload leaves this helper. */
 export async function getPublicDeliveryProof(now = new Date()) {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const totals = { confirmed: 0, confirmedMonth: 0, portalConfirmed: 0, emailDelivered: 0, providerAccepted: 0, legacyUnverified: 0, deliveryProblems: 0, pending: 0, replies: 0 };
+  const totals = { confirmed: 0, confirmedMonth: 0, portalConfirmed: 0, emailDelivered: 0, providerAccepted: 0, sentNoBounce: 0, outcomeUnknown: 0, legacyUnverified: 0, deliveryProblems: 0, pending: 0, replies: 0 };
   const portals = new Map<string, number>();
   let recent: { date: Date; source: string; label: string }[] = [];
   let cursor: string | undefined;
@@ -29,19 +29,21 @@ export async function getPublicDeliveryProof(now = new Date()) {
       const date = applicationEvidenceDate(row);
       if (+date > +now) continue;
       if (evidence === "provider_accepted") totals.providerAccepted++;
+      if (evidence === "provider_delivered") totals.emailDelivered++;
       if (evidence === "legacy_unverified") totals.legacyUnverified++;
       if (evidence === "delivery_problem") totals.deliveryProblems++;
+      if (evidence === "sent_no_bounce") totals.sentNoBounce++;
+      if (evidence === "outcome_unknown") totals.outcomeUnknown++;
       if (evidence === "pending") totals.pending++;
       if (!isConfirmedDelivery(evidence)) continue;
       totals.confirmed++;
       if (+date >= +monthStart) totals.confirmedMonth++;
       if (evidence === "confirmed_portal") totals.portalConfirmed++;
-      if (evidence === "confirmed_email") totals.emailDelivered++;
       const responseDates = [...row.replies.map(reply => reply.receivedAt), ...row.gmailMessages.filter(message => message.userId === row.userId).map(message => message.date)];
       if (responseDates.some(responseDate => +responseDate >= +date && +responseDate <= +now)) totals.replies++;
       const source = evidence === "confirmed_email" ? "Email" : (row.submittedVia ?? "ATS").replace("portal_", "");
       portals.set(source, (portals.get(source) ?? 0) + 1);
-      recent.push({ date, source, label: evidence === "confirmed_email" ? "Consegna al server destinatario" : "Ricevuta di candidatura ATS" });
+      recent.push({ date, source, label: evidence === "confirmed_email" ? "Conferma di ricezione" : "Ricevuta di candidatura ATS" });
     }
     recent = recent.sort((a, b) => +b.date - +a.date).slice(0, 20);
     if (rows.length < 500) break;

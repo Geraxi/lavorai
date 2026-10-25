@@ -1,4 +1,4 @@
-import { answerContinuationIneligibility, answerConfirmationDigest, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
+import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, CONTINUATION_PROOF_MISSING_MESSAGE, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
 import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
 import { parseAnswers } from "./application-answers";
 import { isValidProof, portalProof, submittedWithProof, type SentProof } from "./proof-of-send";
@@ -14,10 +14,17 @@ import { titleMatchesAnyRole } from "@/lib/role-match";
 import { parseVerifiedSubmissionReceipt, receiptJobId } from "@/lib/submission-receipt";
 import { canonicalPostingKey, DUPLICATE_POSTING_MESSAGE } from "@/lib/posting-key";
 import { prisma } from "@/lib/db";
-import { FREE_QUOTA_WORKER_INFLIGHT_STATUSES, freeQuotaWindowStart, freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
+import { freeWeeklyApplyQuota, hasPaidOrTrialApplicationAccess, usesFreeWeeklyQuota } from "@/lib/billing";
+import { weeklyQuotaUsageWhere } from "@/lib/daily-application-cap";
 import { maxDrainAttempts } from "@/lib/drain-limits";
 import { MAX_ATTEMPTS_MESSAGE_PREFIX } from "@/lib/queue-sendability";
 import { matchesApplicationEmailProofKey } from "@/lib/recruiter-email-send";
+import {
+  asIssuedWorkLease, issueApplicationLease, leaseTokenOf, liveLeaseWhere, renewLeaseData,
+  type ApplicationWorkLease,
+} from "@/lib/application-lease";
+import { RecoveryReleaseBudget, controlledReleaseHoldData } from "@/lib/application-recovery-release";
+import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
 
 // Persisted before crossing a delivery boundary. A crash/timeout never releases
 // this reservation: only a proved no-send outcome or an atomic success does.
@@ -27,9 +34,11 @@ export const WORK_RESERVED_STATUSES = ["optimizing", "applying", "submitting", "
 const evidenceSelect = {
   submittedAt: true, submittedVia: true, submitConfirmation: true, canaryLog: true,
   answersUsedJson: true, viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
+  submitStartedAt: true, submitClickPerformedAt: true, outboundSubmissionJson: true, destinationResponseJson: true,
 } as const;
 export const workerGateSelect = {
-  sessionId: true, cvDocxPath: true, ...evidenceSelect, ...continuationSelect,
+  sessionId: true, leaseToken: true, leaseExpiresAt: true, cvDocxPath: true,
+  ...evidenceSelect, ...continuationSelect,
   job: { select: { closedAt: true, url: true, recruiterEmail: true, company: true, title: true, description: true, location: true,
     remote: true, contractType: true, salaryMin: true, salaryMax: true } },
   session: { select: { id: true, userId: true, status: true, sentCount: true, targetCount: true, title: true, label: true } },
@@ -46,7 +55,14 @@ export const workerGateSelect = {
 export type WorkerGateRow = Prisma.ApplicationGetPayload<{ select: typeof workerGateSelect }>;
 type DB = Pick<PrismaClient, "application" | "$transaction">;
 
-export function hasPotentialSubmission(row: Pick<WorkerGateRow, keyof typeof evidenceSelect>): boolean {
+function ownershipWhere(id: string, token: Date, extra: Prisma.ApplicationWhereInput = {}): Prisma.ApplicationWhereInput {
+  const leaseToken = leaseTokenOf(token);
+  if (leaseToken) return liveLeaseWhere(id, token, extra);
+  return { id, startedAt: token, leaseToken: null, ...extra };
+}
+
+export function hasPotentialSubmission(row: Pick<WorkerGateRow, Exclude<keyof typeof evidenceSelect, "submitStartedAt">> & { submitStartedAt?: Date | null }): boolean {
+  if (row.submitStartedAt || row.submitClickPerformedAt || row.outboundSubmissionJson) return true;
   if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) return true;
   // Only explicit proof of no delivery can clear earlier form/debug evidence.
   if ([NOT_SUBMITTED, "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation ?? "")) return false;
@@ -112,13 +128,18 @@ async function withLockedApplication<T>(id: string, db: DB, operation: (tx: Pris
   });
 }
 
-/** Free-quota users: sends/attempts in the rolling window, excluding this row. */
+/**
+ * Free-quota users: accepted sends in the rolling 7-day window plus live
+ * submitting reservations, excluding this row. Must run under the same
+ * per-user advisory lock as reserve/begin so concurrent drains cannot
+ * exceed the limit. A reservation is released when the row fails, is
+ * handed back, needs answers, or is held.
+ */
 export async function freeQuotaAvailable(tx: Pick<Prisma.TransactionClient, "application">, row: Pick<WorkerGateRow, "id" | "userId" | "user">, now = new Date()): Promise<boolean> {
   if (!usesFreeWeeklyQuota(row.user, now)) return true;
-  const used = await tx.application.count({ where: { userId: row.userId, id: { not: row.id }, OR: [
-    { status: "success", OR: [{ submittedAt: { gte: freeQuotaWindowStart(now) } }, { submittedAt: null, createdAt: { gte: freeQuotaWindowStart(now) } }] },
-    { status: { in: FREE_QUOTA_WORKER_INFLIGHT_STATUSES } },
-  ] } });
+  const used = await tx.application.count({
+    where: weeklyQuotaUsageWhere(row.userId, now, [row.id]),
+  });
   return used < freeWeeklyApplyQuota();
 }
 
@@ -164,6 +185,7 @@ export function heldMessage(reason: string): string {
     preference_salary: "Retribuzione inferiore alla preferenza corrente",
     preference_match_threshold: "Compatibilità con il profilo inferiore alla soglia scelta",
     daily_quota_reached: "Raggiunto il limite giornaliero di candidature. Riprova domani",
+    controlled_release: "in attesa di rilascio controllato",
   };
   if (reason === "free_weekly_quota_reached") explanations[reason] = `Raggiunto il limite gratuito di ${freeWeeklyApplyQuota()} candidature ogni 7 giorni. Attiva Pro per inviarne di più`;
   return `Invio in attesa: ${explanations[reason] ?? reason}. Questa elaborazione non ha effettuato nuovi invii.`;
@@ -173,19 +195,38 @@ export function heldMessage(reason: string): string {
  * Queued backlog is preserved; it cannot consume additional slots concurrently.
  * startedAt is an ownership token so a recovered/stale worker cannot submit.
  */
-export async function reserveApplicationWork(id: string, db: DB = prisma): Promise<Date | null> {
+function nextWorkLease(row: Pick<WorkerGateRow, "leaseToken" | "leaseExpiresAt">, now = new Date()): ApplicationWorkLease | null {
+  if (row.leaseToken && row.leaseExpiresAt && +row.leaseExpiresAt <= +now) return null;
+  const issued = issueApplicationLease(now);
+  if (row.leaseToken && row.leaseExpiresAt && +row.leaseExpiresAt > +now) {
+    return asIssuedWorkLease({ startedAt: issued.startedAt, leaseToken: row.leaseToken });
+  }
+  return asIssuedWorkLease(issued);
+}
+
+export async function reserveApplicationWork(id: string, db: DB = prisma): Promise<ApplicationWorkLease | null> {
   return withLockedApplication(id, db, async (tx, row) => {
     if (!row || !["queued", "answers_claimed"].includes(row.status)) return null;
+    if (row.submitStartedAt || blocksUncertainAutoRetry(row)) {
+      if (row.status === "queued") {
+        await tx.application.update({ where: { id }, data: {
+          status: "ready_to_apply", errorMessage: UNCERTAIN_SUBMISSION_MESSAGE,
+        } });
+      }
+      return null;
+    }
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     if (row.answerContinuationJson) {
       if (answerContinuationIneligibility(row, "queued", row.job.url) || currentWorkerIneligibility(row)
         || await admissionBlock(tx, row) || !await continuationReservationMatches(tx, row, continuation!)) return null;
-      const token = new Date(Math.max(Date.now(), +row.startedAt! + 1));
+      const lease = nextWorkLease(row);
+      if (!lease) return null;
       await tx.application.update({ where: { id }, data: {
-        status: "optimizing", startedAt: token, errorMessage: null,
-        answerContinuationJson: JSON.stringify({ ...continuation, phase: "running", workToken: token.toISOString() }),
+        status: "optimizing", startedAt: lease, leaseToken: lease.leaseToken,
+        leaseExpiresAt: issueApplicationLease().leaseExpiresAt, errorMessage: null,
+        answerContinuationJson: JSON.stringify({ ...continuation, phase: "running", workToken: lease.toISOString() }),
       } });
-      return token;
+      return lease;
     }
     if (row.status !== "queued") return null;
     if (rolloutApplicationIneligibility(row)) return null;
@@ -239,11 +280,13 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
       } });
       return null;
     }
-    const token = new Date();
+    const lease = nextWorkLease(row);
+    if (!lease) return null;
     await tx.application.update({ where: { id }, data: {
-      status: "optimizing", startedAt: token, completedAt: null, errorMessage: null,
+      status: "optimizing", startedAt: lease, leaseToken: lease.leaseToken,
+      leaseExpiresAt: issueApplicationLease().leaseExpiresAt, completedAt: null, errorMessage: null,
     } });
-    return token;
+    return lease;
   });
 }
 
@@ -253,12 +296,14 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
 export async function beginApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = ""): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
+      || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
+      || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
       || !["optimizing", "ready_to_apply"].includes(row.status) || hasPotentialSubmission(row)) return false;
     if (rolloutApplicationIneligibility(row)) return false;
     const reason = currentWorkerIneligibility(row) ?? await admissionBlock(tx, row);
     if (reason) {
-      await tx.application.update({ where: { id }, data: {
-        status: "queued", startedAt: new Date(), submitConfirmation: NOT_SUBMITTED,
+      await tx.application.updateMany({ where: ownershipWhere(id, token, { status: { in: ["optimizing", "ready_to_apply"] } }), data: {
+        status: "queued", startedAt: new Date(), leaseToken: null, leaseExpiresAt: null, submitConfirmation: NOT_SUBMITTED,
         errorMessage: heldMessage(reason),
       } });
       return false;
@@ -266,7 +311,7 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
     if (await postingAlreadyClaimed(tx, row)) {
       // Nothing crossed a delivery boundary for THIS row (hasPotentialSubmission
       // was false above): record a typed, user-readable no-send outcome.
-      await tx.application.update({ where: { id }, data: {
+      await tx.application.updateMany({ where: ownershipWhere(id, token), data: {
         status: "failed", submitConfirmation: NOT_SUBMITTED, errorMessage: DUPLICATE_POSTING_MESSAGE, completedAt: new Date(),
       } });
       return false;
@@ -278,15 +323,18 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
     const budgetReason = await reserveSubmissionBudget(tx, { applicationId: id,
       subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, continuation ? "recheck" : "begin");
     if (budgetReason) {
-      await tx.application.update({ where: { id }, data: {
+      await tx.application.updateMany({ where: ownershipWhere(id, token), data: {
         status: "ready_to_apply",
         submitConfirmation: budgetReason === "rollout_daily_budget_reached" ? NOT_SUBMITTED : "UNCONFIRMED",
         errorMessage: budgetReason === "rollout_daily_budget_reached" ? ROLLOUT_BUDGET_HELD_MESSAGE : heldMessage(budgetReason),
       } });
       return false;
     }
-    await tx.application.update({ where: { id }, data: { status: "applying", submitConfirmation: SUBMISSION_STARTED } });
-    return true;
+    const started = await tx.application.updateMany({
+      where: ownershipWhere(id, token, { status: { in: ["optimizing", "ready_to_apply"] } }),
+      data: { status: "applying", submitConfirmation: SUBMISSION_STARTED, ...renewLeaseData() },
+    });
+    return started.count === 1;
   })) === true;
 }
 
@@ -297,6 +345,8 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
 export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit"): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
+      || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
+      || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
       || row.status !== "applying" || row.submitConfirmation !== SUBMISSION_STARTED) return false;
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     const staged = STAGED_CHANNELS.includes(channel);
@@ -323,19 +373,26 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
         subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, "recheck")
       ?? await admissionBlock(tx, row);
     if (reason) {
-      await tx.application.update({ where: { id }, data: {
+      await tx.application.updateMany({ where: ownershipWhere(id, token, { status: "applying" }), data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
         errorMessage: `Invio finale interrotto: ${reason}. Il portale potrebbe aver già ricevuto dati o allegati. Verifica l'esito prima di un nuovo tentativo.`,
       } });
       return false;
     }
-    if (continuation) await tx.application.update({ where: { id }, data: {
-      answerContinuationJson: JSON.stringify({ ...continuation,
-        ...(boundary === "candidate_data" ? { candidateDataStartedAt: new Date().toISOString() }
-          : boundary === "verification_submit" ? { verificationSubmitStarted: true } : { finalSubmitStarted: true }),
-      }),
-    } });
-    return true;
+    const marked = await tx.application.updateMany({
+      where: ownershipWhere(id, token, { status: "applying", submitConfirmation: SUBMISSION_STARTED }),
+      data: {
+        ...renewLeaseData(),
+        ...(boundary === "final_submit" ? { submitStartedAt: row.submitStartedAt ?? new Date() } : {}),
+        ...(continuation ? {
+          answerContinuationJson: JSON.stringify({ ...continuation,
+            ...(boundary === "candidate_data" ? { candidateDataStartedAt: new Date().toISOString() }
+              : boundary === "verification_submit" ? { verificationSubmitStarted: true } : { finalSubmitStarted: true }),
+          }),
+        } : {}),
+      },
+    });
+    return marked.count === 1;
   })) === true;
 }
 
@@ -357,7 +414,9 @@ export async function completeApplicationSubmission(
     || !(data.submitConfirmation.startsWith("DETECTED") || data.submitConfirmation === "EMAIL_SENT")
     || data.submittedVia === "mock_demo") return false;
   return (await withLockedApplication(id, db, async (tx, row) => {
-    if (!row || row.startedAt?.getTime() !== token.getTime()) return false;
+    if (!row || row.startedAt?.getTime() !== token.getTime()
+      || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
+      || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())) return false;
     const inFlight = row.status === "applying" && row.submitConfirmation === SUBMISSION_STARTED;
     const recovered = row.status === "ready_to_apply" && row.submitConfirmation === "UNCONFIRMED";
     if (!inFlight && !recovered) return false;
@@ -388,9 +447,9 @@ export async function completeApplicationSubmission(
     if (!proof || !isValidProof(proof)) return false;
     // Recovery does not replace the owner token. A late, proved receipt from
     // that same attempt is still recorded once, without ever replaying it.
-    const changed = await tx.application.updateMany({ where: {
-      id, startedAt: token, status: row.status, submitConfirmation: row.submitConfirmation,
-    }, data: { ...data, status: "success", ...submittedWithProof(proof, data.submittedAt instanceof Date ? data.submittedAt : new Date()) } });
+    const changed = await tx.application.updateMany({ where: ownershipWhere(id, token, {
+      status: row.status, submitConfirmation: row.submitConfirmation,
+    }), data: { ...data, status: "success", ...submittedWithProof(proof, data.submittedAt instanceof Date ? data.submittedAt : new Date()) } });
     if (changed.count !== 1) return false;
     if (row.session) {
       const successes = await tx.application.count({ where: { sessionId: row.session.id, status: "success" } });
@@ -483,6 +542,8 @@ export async function attestAnswerPause(id: string, token: Date, channel: string
     const consentPending = !row.consentGrantedAt;
     if (consentPending && channel === "portal_recruitee") return false;
     if (!row || row.job.url !== jobUrl || row.status !== "applying" || row.startedAt?.getTime() !== +token
+      || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
+      || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
       || row.submitConfirmation !== SUBMISSION_STARTED || rolloutApplicationIneligibility(row)
       || row.submittedAt || row.submittedVia || row.submissionReceiptJson || row.completedAt
       || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) return false;
@@ -500,12 +561,44 @@ export async function attestAnswerPause(id: string, token: Date, channel: string
       ...(BLANK_FORM_EVIDENCE[channel] ? { preTransmissionEvidence: evidence } : {}),
     };
     if (!await continuationReservationMatches(tx, row, proof)) return false;
-    await tx.application.update({ where: { id }, data: {
+    const paused = await tx.application.updateMany({ where: ownershipWhere(id, token, { status: "applying", submitConfirmation: SUBMISSION_STARTED }), data: {
       status: "needs_answers", submitConfirmation: NOT_SUBMITTED, pendingQuestionsJson,
       answerContinuationJson: JSON.stringify(proof),
     } });
-    return true;
+    return paused.count === 1;
   })) === true;
+}
+
+/** CAS: unsent paused/queued/claimed rows with no usable proof become a visible handoff. */
+async function handOffContinuationProofMissing(
+  tx: Prisma.TransactionClient,
+  row: Pick<WorkerGateRow, "id">,
+): Promise<void> {
+  await tx.application.updateMany({
+    where: {
+      id: row.id,
+      status: { in: ["needs_answers", "queued", "answers_claimed"] },
+      submittedAt: null,
+      submittedVia: null,
+      completedAt: null,
+      submitStartedAt: null,
+      canaryLog: null,
+      answersUsedJson: null,
+      OR: [
+        { submitConfirmation: null },
+        { submitConfirmation: { in: [NOT_SUBMITTED, "NEEDS_ANSWERS"] } },
+      ],
+    },
+    data: {
+      status: "ready_to_apply",
+      submitConfirmation: NOT_SUBMITTED,
+      errorMessage: CONTINUATION_PROOF_MISSING_MESSAGE,
+      completedAt: new Date(),
+      startedAt: null,
+      leaseToken: null,
+      leaseExpiresAt: null,
+    },
+  });
 }
 
 /** Authenticated, candidate-confirmed continuation of the same reserved attempt.
@@ -515,15 +608,27 @@ export async function queueAnswerContinuation(input: {
 }, db: DB = prisma): Promise<string> {
   return (await withLockedApplication(input.applicationId, db, async (tx, row) => {
     if (!row || row.userId !== input.userId) return "application_not_found";
-    if (!row.answerContinuationJson) return "continuation_proof_missing";
+    if (blocksUncertainAutoRetry(row)) return "uncertain_submission";
+    if (!row.answerContinuationJson) {
+      await handOffContinuationProofMissing(tx, row);
+      return "continuation_proof_missing";
+    }
     if (row.userProvidedAnswersJson !== input.expectedAnswersJson) return "questions_changed_reload";
     const proof = parseAnswerContinuation(row.answerContinuationJson);
+    if (row.status === "queued" && proof?.phase === "queued" && continuationConfirmationAccepted(row.submitConfirmation)) {
+      return "already_queued";
+    }
     // Confirming the answers IS the per-application consent when the proof
     // was recorded consent-pending. Evaluate the current gates as if granted.
     const grantsConsent = proof?.consentGrantedAt === null && proof.consentSource === "answers" && !row.consentGrantedAt;
     const consentAt = grantsConsent ? new Date(Math.max(Date.now(), Date.parse(proof!.pausedAt))) : row.consentGrantedAt;
     const reason = answerContinuationIneligibility(row, "paused", row.job.url) ?? currentWorkerIneligibility({ ...row, consentGrantedAt: consentAt });
-    if (reason || !proof) return reason ?? "continuation_proof_missing";
+    if (reason || !proof) {
+      if (!proof || (reason === "continuation_proof_missing" && row.status === "needs_answers")) {
+        await handOffContinuationProofMissing(tx, row);
+      }
+      return reason ?? "continuation_proof_missing";
+    }
     if (!await continuationReservationMatches(tx, row, proof)) return "continuation_reservation_mismatch";
     const block = await admissionBlock(tx, row);
     if (block) return block;
@@ -550,13 +655,20 @@ export async function queueAnswerContinuation(input: {
     const confirmedAt = grantsConsent ? consentAt!.toISOString() : new Date().toISOString();
     // Compare-and-set on the consent we evaluated: a concurrent grant/revoke reloads.
     const changed = await tx.application.updateMany({ where: { id: row.id, consentGrantedAt: row.consentGrantedAt, answerContinuationJson: row.answerContinuationJson }, data: {
-      status: "queued", errorMessage: null,
+      status: "queued", submitConfirmation: NOT_SUBMITTED, errorMessage: null,
       ...(grantsConsent ? { consentGrantedAt: consentAt } : {}),
       answerContinuationJson: JSON.stringify({ ...proof, phase: "queued", confirmedAt,
         ...(grantsConsent ? { consentGrantedAt: consentAt!.toISOString(), consentSource: "answers", consentNote: ANSWERS_CONSENT_NOTE } : {}) }),
     } });
     if (changed.count !== 1) return "questions_changed_reload";
     if (grantsConsent) console.log(`[consent] ${row.id} consentGrantedAt=${consentAt!.toISOString()} source=domande_answers`);
+    if (!new RecoveryReleaseBudget().consume(row.id)) {
+      await tx.application.updateMany({
+        where: { id: row.id, status: "queued", submittedAt: null, submitStartedAt: null },
+        data: controlledReleaseHoldData(),
+      });
+      return "controlled_release_held";
+    }
     return "queued";
   })) ?? "application_not_found";
 }

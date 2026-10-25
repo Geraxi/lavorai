@@ -12,7 +12,11 @@ export const STAGE_ORDER: JourneyStage[] = [
   "approved",
   "in_flight",
   "submitted",
+  "email_delivered",
   "sent",
+  "sent_no_bounce",
+  "sent_unverified",
+  "outcome_unknown",
   "unverified",
   "stopped",
 ];
@@ -30,7 +34,11 @@ export const STAGE_TONE: Record<JourneyStage, Tone> = {
   manual: "amber",
   in_flight: "neutral",
   submitted: "neutral",
+  email_delivered: "neutral",
   sent: "green",
+  sent_no_bounce: "amber",
+  sent_unverified: "amber",
+  outcome_unknown: "amber",
   unverified: "amber",
   stopped: "red",
 };

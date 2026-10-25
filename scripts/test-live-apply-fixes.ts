@@ -72,10 +72,12 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
   const api = loadModule("src/lib/auto-apply-cron.ts", {
     "@/lib/ats-skip-hosts": { ...skip, compareJobsForAutoApply: () => 0 },
     "@/lib/skip-list-email-lookup": { lookupPublishedSkipListInbox: async () => null },
+    "@/lib/recruiter-email-fallback": { skipListEmailSendDecision: () => ({ ok: false, reason: "recruiter_email_fallback_disabled" }) },
     "@/lib/daily-application-cap": await import("../src/lib/daily-application-cap"),
     "@/lib/paid-priority": { sortByPaidPriority: <T,>(items: readonly T[]) => [...items] },
     "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
     "@/lib/application-pause": { applicationsPaused: () => false },
+    "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
     "@/lib/auto-apply-preferences": preferenceHelpers,
     "@/lib/db": { prisma },
     "@/lib/admin-user-actions": { monthlyQuotaSince: () => new Date(0) },

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { applicationsPaused } from "@/lib/application-pause";
 import { checkMailboxDeliveries } from "@/lib/mailbox/service";
 import { realMailboxDeps } from "@/lib/mailbox/runtime";
 
@@ -11,5 +12,6 @@ export async function GET(request: NextRequest) {
   const adminKey = process.env.ADMIN_SYNC_KEY;
   const authorized = (cronSecret && request.headers.get("authorization") === `Bearer ${cronSecret}`) || (adminKey && request.headers.get("x-admin-key") === adminKey);
   if (!authorized) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (applicationsPaused()) return NextResponse.json({ ok: true, paused: true, reason: "applications_paused" });
   return NextResponse.json({ ok: true, ...(await checkMailboxDeliveries(realMailboxDeps())) });
 }

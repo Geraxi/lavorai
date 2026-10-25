@@ -2,7 +2,8 @@ import { applicationRolloutConfig, rolloutCreationBlocked } from "@/lib/applicat
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { heldMessage } from "@/lib/application-worker-gates";
-import { SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData } from "@/lib/ats-skip-hosts";
+import { RecoveryReleaseBudget, controlledReleaseHoldData } from "@/lib/application-recovery-release";
 import { canClaimAnotherDrainRow, drainProcessConcurrency, drainQueueBatch, maxDrainAttempts } from "@/lib/drain-limits";
 import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "@/lib/job-liveness";
 import { releaseUnverifiableLivenessHolds } from "@/lib/held-application-release";
@@ -14,10 +15,12 @@ import {
   isQueuedRowSendable,
   loadQuotaUsageMaps,
   MAX_ATTEMPTS_MESSAGE_PREFIX,
+  skipListBlocksAutoSend,
   usageFor,
   type ClaimHoldReason,
 } from "@/lib/queue-sendability";
 import { usesFreeWeeklyQuota } from "@/lib/billing";
+import { deployedAppVersion } from "@/lib/deployed-version";
 import type { PrismaClient } from "@prisma/client";
 
 type DB = Pick<PrismaClient, "application">;
@@ -26,6 +29,8 @@ export type DrainOutcome = "sent" | "blocked" | "skipped" | "failed" | "queued" 
 
 export type DrainSummary = {
   claimed: number;
+  attempted: number;
+  accepted: number;
   sent: number;
   emailSent: number;
   portalSent: number;
@@ -36,10 +41,24 @@ export type DrainSummary = {
   needsAnswers: number;
   handoff: number;
   held: number;
+  awaitingAction: number;
+  deployedVersion: string;
 };
 
 export function emptyDrainSummary(): DrainSummary {
-  return { claimed: 0, sent: 0, emailSent: 0, portalSent: 0, blockedByReason: {}, skipped: 0, failed: 0, parked: 0, needsAnswers: 0, handoff: 0, held: 0 };
+  return {
+    claimed: 0, attempted: 0, accepted: 0, sent: 0, emailSent: 0, portalSent: 0,
+    blockedByReason: {}, skipped: 0, failed: 0, parked: 0, needsAnswers: 0,
+    handoff: 0, held: 0, awaitingAction: 0, deployedVersion: deployedAppVersion(),
+  };
+}
+
+export function finalizeDrainSummary(summary: DrainSummary): DrainSummary {
+  summary.attempted = summary.claimed;
+  summary.accepted = summary.sent;
+  summary.awaitingAction = summary.needsAnswers + summary.handoff + summary.held;
+  summary.deployedVersion = deployedAppVersion();
+  return summary;
 }
 
 export function bumpReason(map: Record<string, number>, reason: string, n = 1): void {
@@ -117,6 +136,17 @@ export async function parkUnsendableQueued(opts: {
     const usage = usageFor(maps, row.userId);
     usage.weekly += parkedWeekly.get(row.userId) ?? 0;
     usage.daily += parkedDaily.get(row.userId) ?? 0;
+    if (skipListBlocksAutoSend(row.job)) {
+      const handed = await db.application.updateMany({
+        where: { id: row.id, status: "queued", startedAt: null, submittedAt: null },
+        data: skipListManualHandoffData(now),
+      });
+      if (handed.count === 1) {
+        result.parked++;
+        result.handoff++;
+      }
+      continue;
+    }
     const reason = claimBlockReason(row, usage, now);
     if (!reason) continue;
     if (reason === "max_attempts") {
@@ -219,9 +249,20 @@ export async function releaseQuotaHoldsIfAvailable(opts: {
     orderBy: { createdAt: "asc" },
   });
   const maps = await loadQuotaUsageMaps(db, rows.map((r) => r.userId), rows.map((r) => r.id), now);
+  const budget = new RecoveryReleaseBudget();
   let released = 0;
   for (const row of rows) {
     if (!isQueuedRowSendable(row, usageFor(maps, row.userId), now)) continue;
+    if (!budget.consume(row.id)) {
+      await db.application.updateMany({
+        where: {
+          id: row.id, status: "queued", startedAt: { not: null }, retryCount: 0,
+          errorMessage: { in: messages },
+        },
+        data: controlledReleaseHoldData(now),
+      });
+      continue;
+    }
     const changed = await db.application.updateMany({
       where: {
         id: row.id, status: "queued", startedAt: { not: null }, retryCount: 0,
@@ -268,8 +309,18 @@ export async function drainQueuedApplications(opts: {
   await releaseQuotaHoldsIfAvailable({ db: opts.db, now });
   if (!opts.db) await releaseUnverifiableLivenessHolds({ now });
 
-  const find = opts.findClaimableQueued ?? (await import("@/lib/application-claim")).findClaimableQueued;
-  const claim = opts.claimApplication ?? (await import("@/lib/application-claim")).claimApplication;
+  const claims = await import("@/lib/application-claim");
+  // Release expired queued leases before claim so a dead worker cannot
+  // pin a row forever. In-flight recovery stays gated inside the helper.
+  if (typeof claims.recoverStuckApplications === "function") {
+    try {
+      await claims.recoverStuckApplications();
+    } catch (err) {
+      console.error("[drain] queued-claim recovery failed", err);
+    }
+  }
+  const find = opts.findClaimableQueued ?? claims.findClaimableQueued;
+  const claim = opts.claimApplication ?? claims.claimApplication;
   const process = opts.processApplication ?? (await import("@/lib/application-worker")).processApplication;
   const read = opts.readOutcome ?? (async (id: string) => {
     const row = await (opts.db ?? prisma).application.findUnique({
@@ -329,7 +380,7 @@ export async function drainQueuedApplications(opts: {
     }
   });
   await Promise.all(workers);
-  return summary;
+  return finalizeDrainSummary(summary);
 }
 
 export type { ClaimHoldReason };

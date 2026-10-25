@@ -2,17 +2,24 @@
  * Bounded one-time recruiter-email recheck for skip-list handoffs created
  * before employer-domain discovery. Each row is attempted at most once
  * (Application.recruiterEmailRecheckedAt). No hand-edited data.
+ *
+ * Default: record a found address, never queue a send. Queuing requires
+ * RECRUITER_EMAIL_FALLBACK_ENABLED plus a posting-specific inbox.
  */
 import { prisma } from "@/lib/db";
 import { enqueueApplication } from "@/lib/application-queue";
 import { SKIPPED_ATS_MANUAL_MESSAGE, isSkippedPortalUrl } from "@/lib/ats-skip-hosts";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
+import { skipListEmailSendDecision } from "@/lib/recruiter-email-fallback";
+import { blocksUncertainAutoRetry } from "@/lib/uncertain-submission";
 
 export const SKIP_LIST_RECHECK_LIMIT = 20;
 
 export type SkipListRecheckReport = {
   checked: number;
   found: number;
+  queued: number;
+  rejected: number;
   missed: number;
 };
 
@@ -33,7 +40,7 @@ export async function recheckSkippedAtsHandoffs(opts: {
   lookup?: typeof lookupPublishedSkipListInbox;
   enqueue?: (id: string) => Promise<void>;
 } = {}): Promise<SkipListRecheckReport> {
-  const report: SkipListRecheckReport = { checked: 0, found: 0, missed: 0 };
+  const report: SkipListRecheckReport = { checked: 0, found: 0, queued: 0, rejected: 0, missed: 0 };
   const db = opts.db ?? prisma;
   const now = opts.now ?? new Date();
   const take = Math.min(40, Math.max(1, opts.limit ?? SKIP_LIST_RECHECK_LIMIT));
@@ -53,6 +60,16 @@ export async function recheckSkippedAtsHandoffs(opts: {
     },
     select: {
       id: true,
+      submitStartedAt: true,
+      submittedAt: true,
+      submittedVia: true,
+      submitConfirmation: true,
+      canaryLog: true,
+      answersUsedJson: true,
+      viewedAt: true,
+      lastReplyAt: true,
+      replyCount: true,
+      userStatus: true,
       job: {
         select: {
           id: true,
@@ -104,6 +121,38 @@ export async function recheckSkippedAtsHandoffs(opts: {
         recruiterScrapedAt: now,
       },
     }).catch(() => undefined);
+    report.found++;
+
+    if (blocksUncertainAutoRetry(row)) {
+      await db.application.updateMany({
+        where: {
+          id: row.id,
+          status: "ready_to_apply",
+          errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
+          submittedAt: null,
+          submittedVia: null,
+        },
+        data: { sendFailureReason: "uncertain_submission" },
+      }).catch(() => undefined);
+      report.rejected++;
+      continue;
+    }
+
+    const decision = skipListEmailSendDecision(hit, row.job);
+    if (!decision.ok) {
+      await db.application.updateMany({
+        where: {
+          id: row.id,
+          status: "ready_to_apply",
+          errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
+          submittedAt: null,
+          submittedVia: null,
+        },
+        data: { sendFailureReason: decision.reason },
+      }).catch(() => undefined);
+      report.rejected++;
+      continue;
+    }
 
     const reopened = await db.application.updateMany({
       where: {
@@ -113,12 +162,14 @@ export async function recheckSkippedAtsHandoffs(opts: {
         submittedAt: null,
         submittedVia: null,
         sendStatus: "not_sent",
+        submitStartedAt: null,
       },
       data: {
         status: "queued",
         errorMessage: null,
         completedAt: null,
         startedAt: null,
+        sendFailureReason: null,
       },
     });
     if (reopened.count !== 1) {
@@ -126,7 +177,7 @@ export async function recheckSkippedAtsHandoffs(opts: {
       continue;
     }
     await enqueue(row.id).catch(() => undefined);
-    report.found++;
+    report.queued++;
   }
 
   return report;

@@ -14,6 +14,10 @@ const noAccess = new Proxy({}, { get() { forbiddenAccesses++; throw new Error("U
 const json = (body: unknown, options?: { status?: number }) => ({ body, status: options?.status ?? 200 });
 import * as liveness from "../src/lib/auto-apply-liveness-gate";
 import * as paidPriority from "../src/lib/paid-priority";
+import * as applicationLease from "../src/lib/application-lease";
+import * as recoveryRelease from "../src/lib/application-recovery-release";
+import * as uncertainSubmission from "../src/lib/uncertain-submission";
+import * as recruiterEmailFallback from "../src/lib/recruiter-email-fallback";
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-rollout": rollout,
@@ -42,9 +46,25 @@ function load(path: string, extra: Record<string, any> = {}) {
       maxDrainAttempts: () => 3, drainQueueBatch: () => 5, drainProcessConcurrency: () => 2,
       DRAIN_TIME_RESERVE_MS: 60_000, drainPerRowBudgetMs: () => 90_000, canClaimAnotherDrainRow: () => true,
     },
-    "@/lib/queue-sendability": extra["@/lib/queue-sendability"] ?? { claimUserSelect: {}, isQueuedRowSendable: () => true, loadQuotaUsageMaps: async () => ({ weekly: new Map(), daily: new Map() }), usageFor: () => ({ weekly: 0, daily: 0 }), HELD_MESSAGE_PREFIX: "Invio in attesa:" },
+    "@/lib/queue-sendability": extra["@/lib/queue-sendability"] ?? { claimUserSelect: {}, isQueuedRowSendable: () => true, loadQuotaUsageMaps: async () => ({ weekly: new Map(), daily: new Map() }), usageFor: () => ({ weekly: 0, daily: 0 }), HELD_MESSAGE_PREFIX: "Invio in attesa:", MAX_ATTEMPTS_MESSAGE_PREFIX: "Invio interrotto dopo" },
+    "@/lib/application-claim": extra["@/lib/application-claim"] ?? {
+      recoverStuckApplications: async () => 0,
+      findClaimableQueued: async () => [],
+      claimApplication: async () => false,
+      resetClaim: async () => {},
+    },
     "@/lib/queue-drain": extra["@/lib/queue-drain"] ?? {},
-    "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "unknown", reason: "test_no_network" }), markJobClosed: async () => {}, JOB_CLOSED_HELD_MESSAGE: "closed" },
+    "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "unknown", reason: "test_no_network" }), markJobClosed: async () => {}, JOB_CLOSED_HELD_MESSAGE: "closed", JOB_LIVENESS_UNKNOWN_HELD_MESSAGE: "Disponibilità dell'annuncio non verificabile: invio sospeso, nuovo controllo più tardi." },
+    "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
+    "@/lib/application-lease": extra["@/lib/application-lease"] ?? applicationLease,
+    "@/lib/application-recovery-release": extra["@/lib/application-recovery-release"] ?? recoveryRelease,
+    "@/lib/uncertain-submission": extra["@/lib/uncertain-submission"] ?? uncertainSubmission,
+    "@/lib/recruiter-email-fallback": extra["@/lib/recruiter-email-fallback"] ?? recruiterEmailFallback,
+    "@/lib/application-worker-gates": extra["@/lib/application-worker-gates"] ?? {
+      hasPotentialSubmission: (row: any) => !!(row.submitStartedAt || row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus
+        || row.canaryLog || row.answersUsedJson
+        || (row.submitConfirmation && !["NOT_SUBMITTED", "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation))),
+    },
     zod: { z }, ...extra,
   };
   const module = { exports: {} as Record<string, any> };
@@ -69,7 +89,8 @@ function enable() {
 }
 function row(id: string, overrides: Record<string, any> = {}) {
   return { id, userId: "owner", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
-    answerContinuationJson: null, retryCount: 0, startedAt: null, completedAt: null, submittedAt: null, submittedVia: null,
+    answerContinuationJson: null, retryCount: 0, startedAt: null, leaseToken: null, leaseExpiresAt: null,
+    submitStartedAt: null, completedAt: null, submittedAt: null, submittedVia: null,
     submitConfirmation: null, canaryLog: null, answersUsedJson: null, viewedAt: null,
     lastReplyAt: null, replyCount: 0, userStatus: null, job: { id: `job-${id}`, url: `https://jobs.example.invalid/${id}` }, ...overrides };
 }
@@ -119,7 +140,9 @@ async function testBlockedEntrypoints() {
     assert.equal(await load("src/lib/trial-quota.ts").reserveTrialApplication("owner", "old"), false);
     assert.equal((await load("src/lib/cron-self-heal.ts").runCronSelfHeal()).appsRecoveredSafely, 0);
     }
-    const claim = load("src/lib/application-claim.ts");
+    const claim = load("src/lib/application-claim.ts", {
+      "@/lib/db": { prisma: { application: { findMany: async () => [], updateMany: async () => ({ count: 0 }) } } },
+    });
     assert.equal(await claim.recoverStuckApplications(), 0);
     await claim.resetClaim("old");
     const request = { headers: new Headers({ authorization: "Bearer fixture-cron" }), json: async () => ({}) };
@@ -164,8 +187,13 @@ async function testClaimsAndQueue() {
   assert.equal(db.counts().writes, 1);
   const snapshot = structuredClone(db.rows);
   await claims.resetClaim("fresh");
-  assert.equal(await claims.recoverStuckApplications(), 0);
-  assert.deepEqual(db.rows, snapshot, "Neither claimed new work nor historical rows are reset");
+  assert.equal(await claims.recoverStuckApplications(), 1, "Expired queued lease is recovered under the release gate");
+  const claimed = db.rows.find((r: any) => r.id === "claimed")!;
+  assert.ok(claimed.startedAt, "default gate keeps the recovered lease held");
+  assert.match(claimed.errorMessage ?? "", /rilascio controllato/);
+  assert.equal(claimed.retryCount, 1);
+  assert.equal(db.rows.find((r: any) => r.id === "historical")!.startedAt, snapshot.find((r: any) => r.id === "historical")!.startedAt, "Historical rows are not reset");
+  assert.equal(db.rows.find((r: any) => r.id === "fresh")!.status, "queued");
 
   const queueDb = database(fixtures);
   const queued: string[] = [];
@@ -196,7 +224,9 @@ async function testAutomaticClaimsAndQueue() {
   for (const fixture of fixtures.slice(2)) assert.equal(await claims.claimApplication(fixture.id), false, fixture.id);
   const results = await Promise.all([claims.claimApplication("auto"), claims.claimApplication("auto")]);
   assert.equal(results.filter(Boolean).length, 1, "Automatic claim is atomic");
-  assert.equal(await claims.recoverStuckApplications(), 0, "Stale-claim recovery stays suspended in automatic mode");
+  assert.equal(await claims.recoverStuckApplications(), 1, "Expired queued lease is recovered; in-flight historical replay stays blocked");
+  assert.ok(db.rows.find((r: any) => r.id === "claimed")!.startedAt, "default gate keeps the recovered lease held");
+  assert.match(db.rows.find((r: any) => r.id === "claimed")!.errorMessage ?? "", /rilascio controllato/);
   const queueDb = database(fixtures);
   const queued: string[] = [];
   process.env.QUEUE_MODE = "bullmq"; process.env.REDIS_URL = "redis://synthetic.invalid";

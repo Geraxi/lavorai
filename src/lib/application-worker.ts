@@ -3,7 +3,8 @@ import { applicationsPaused, assertApplicationsRunning } from "@/lib/application
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
 import { notSubmitted } from "@/lib/proof-of-send";
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
-import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS } from "@/lib/application-answer-continuation";
+import { liveLeaseFields, renewLeaseData } from "@/lib/application-lease";
+import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS, needsAnswersSubmitConfirmation } from "@/lib/application-answer-continuation";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { getUserInboxAddress } from "@/lib/inbound/service";
@@ -32,7 +33,10 @@ import { humanContext, launchBrowser } from "@/lib/browser";
 import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { discoverPublishedHiringInbox } from "@/lib/employer-hiring-inbox";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
-import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE } from "@/lib/ats-skip-hosts";
+import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData, skipListManualHandoffWhere } from "@/lib/ats-skip-hosts";
+import { recruiterEmailFallbackEnabled, skipListEmailSendDecision } from "@/lib/recruiter-email-fallback";
+import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
+import { attemptEvidenceWrite, REJECTED_NOT_SENT } from "@/lib/portal-adapters/submission-attempt-evidence";
 import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
 import {
   recruiterFromAddress,
@@ -151,21 +155,8 @@ async function processApplicationRun(
     }).catch(() => null);
     if (!cheap) {
       await prisma.application.updateMany({
-        where: {
-          id: applicationId,
-          status: { in: ["queued", "ready_to_apply"] },
-          submittedAt: null,
-          submittedVia: null,
-          submitConfirmation: null,
-          canaryLog: null,
-          answersUsedJson: null,
-        },
-        data: {
-          status: "ready_to_apply",
-          errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
-          completedAt: new Date(),
-          recruiterEmailRecheckedAt: new Date(),
-        },
+        where: skipListManualHandoffWhere(applicationId),
+        data: skipListManualHandoffData(),
       });
       return;
     }
@@ -179,6 +170,21 @@ async function processApplicationRun(
     }).catch(() => undefined);
     app.job.recruiterEmail = cheap.email;
     app.job.recruiterEmailSourceUrl = cheap.provenance.sourceUrl;
+    if (blocksUncertainAutoRetry(app)) {
+      await prisma.application.updateMany({
+        where: skipListManualHandoffWhere(applicationId),
+        data: { ...skipListManualHandoffData(), errorMessage: UNCERTAIN_SUBMISSION_MESSAGE, sendFailureReason: "uncertain_submission" },
+      });
+      return;
+    }
+    const cheapDecision = skipListEmailSendDecision(cheap, app.job);
+    if (!cheapDecision.ok) {
+      await prisma.application.updateMany({
+        where: skipListManualHandoffWhere(applicationId),
+        data: skipListManualHandoffData(undefined, { sendFailureReason: cheapDecision.reason }),
+      });
+      return;
+    }
   }
 
   // Atomic admission rechecks the current account/round and reserves capacity.
@@ -201,7 +207,7 @@ async function processApplicationRun(
   const startedToday = await prisma.application.count({ where: { startedAt: { gte: dayStart }, status: { not: "queued" }, id: { not: applicationId } } });
   const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 300);
   if (startedToday >= budget) {
-    await prisma.application.updateMany({ where: { id: applicationId, status: "optimizing", startedAt: workToken }, data: { status: "queued", startedAt: new Date() } });
+    await prisma.application.updateMany({ where: { id: applicationId, status: "optimizing", ...liveLeaseFields(workToken) }, data: { status: "queued", startedAt: null, leaseToken: null, leaseExpiresAt: null } });
     console.warn(`[worker] budget AI giornaliero raggiunto (${startedToday}/${budget}): ${applicationId} rimandata di 20 min (alza AI_DAILY_APP_BUDGET per cambiare)`);
     return;
   }
@@ -402,9 +408,10 @@ async function processApplicationRun(
 
   // A recovered worker cannot overwrite a newer owner or reach delivery.
   const prepared = await prisma.application.updateMany({
-    where: { id: applicationId, status: "optimizing", startedAt: workToken },
+    where: { id: applicationId, status: "optimizing", ...liveLeaseFields(workToken) },
     data: {
       status: "ready_to_apply",
+      ...renewLeaseData(),
       atsScore: result.atsScore,
       suggestionsJson: JSON.stringify(result.suggestions),
       cvDocxPath: cvPath,
@@ -473,7 +480,7 @@ async function processApplicationRun(
   const { isContractorMarketplace } = await import("@/lib/portal-adapters/safety-stops");
   if (isContractorMarketplace(resolvedUrl) || isContractorMarketplace(app.job.url)) {
     await prisma.application.updateMany({
-      where: { id: applicationId, startedAt: workToken, status: { in: ["optimizing", "ready_to_apply", "applying"] } },
+      where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["optimizing", "ready_to_apply", "applying"] } },
       data: {
         status: "failed",
         submitConfirmation: "FAILED:marketplace",
@@ -519,7 +526,7 @@ async function processApplicationRun(
   if (adapter && !preferRecruiterEmail) {
     const canonicalJobId = receiptJobId(adapter.id, app.job.url);
     if (!canonicalJobId || canonicalJobId !== receiptJobId(adapter.id, adapterUrl)) {
-      await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: "ready_to_apply" }, data: {
+      await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: "ready_to_apply" }, data: {
         submitConfirmation: NOT_SUBMITTED,
         errorMessage: "Destinazione ATS non correlabile con certezza a questo annuncio. Nessun invio effettuato: verifica il link ufficiale.",
       } });
@@ -640,6 +647,7 @@ async function processApplicationRun(
         ...("canary" in outcome && outcome.canary
           ? { canaryLog: JSON.stringify(outcome.canary) }
           : {}),
+        ...attemptEvidenceWrite(outcome.attemptEvidence),
         errorMessage: isDryRun
           ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
           : isUnconfirmed
@@ -649,7 +657,7 @@ async function processApplicationRun(
       if (isConfirmed) {
         if (!await completeApplicationSubmission(applicationId, workToken, completionData)) return;
       } else {
-        await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } }, data: completionData });
+        await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: completionData });
       }
       // Solo confirmed (= conferma rilevata davvero) bumpa sessione e
       // manda l'email "candidatura inviata". UNCONFIRMED resta in coda
@@ -663,18 +671,30 @@ async function processApplicationRun(
       return; // fatto
     }
 
-    if (["submission_unconfirmed", "unknown_error", "validation_failed", "missing_field"].includes(outcome.status)) {
-      await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } }, data: {
+    if (outcome.status === "validation_failed") {
+      await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: {
+        status: "ready_to_apply", submitConfirmation: REJECTED_NOT_SENT,
+        errorMessage: outcome.error,
+        ...notSubmitted("failed", "portal_rejected_not_sent"),
+        canaryLog: JSON.stringify(("canary" in outcome ? outcome.canary : null) ?? { adapterFailure: outcome.status, error: outcome.error }),
+        ...attemptEvidenceWrite(outcome.attemptEvidence),
+      } });
+      return;
+    }
+
+    if (["submission_unconfirmed", "unknown_error", "missing_field"].includes(outcome.status)) {
+      await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
         errorMessage: outcome.error,
         ...notSubmitted("needs_user", `portal_${outcome.status}`),
         canaryLog: JSON.stringify(("canary" in outcome ? outcome.canary : null) ?? { adapterFailure: outcome.status, error: outcome.error }),
+        ...attemptEvidenceWrite("attemptEvidence" in outcome ? outcome.attemptEvidence : undefined),
       } });
       return; // A missing receipt is not permission to submit the same application again.
     }
 
     if (["needs_user_input", "form_not_found", "job_closed"].includes(outcome.status)) {
-      await prisma.application.updateMany({ where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } }, data: {
+      await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: {
         status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED,
       } });
     }
@@ -704,11 +724,16 @@ async function processApplicationRun(
             console.error(`[worker] upsert UserAnswer failed`, err),
           );
       }
+      const paused = await prisma.application.findFirst({
+        where: { id: applicationId, ...liveLeaseFields(workToken) },
+        select: { answerContinuationJson: true },
+      });
+      const confirmation = needsAnswersSubmitConfirmation(paused ?? {});
       await prisma.application.updateMany({
-        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply", "needs_answers"] } },
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "needs_answers"] } },
         data: {
           status: "needs_answers",
-          submitConfirmation: "NEEDS_ANSWERS",
+          ...(confirmation ? { submitConfirmation: confirmation } : {}),
           pendingQuestionsJson: JSON.stringify(questions),
           errorMessage: `${questions.length} domande del form richiedono la tua risposta. Rispondi per completare questa candidatura dopo i controlli di consenso e validità.`,
           canaryLog:
@@ -734,7 +759,7 @@ async function processApplicationRun(
       console.warn(`[worker] ${applicationId} job chiuso rilevato dall'adapter ${adapter.id}: ${app.job.url}`);
       await markJobClosed(app.job.id);
       await prisma.application.updateMany({
-        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
         data: {
           status: "failed",
           submitConfirmation: "JOB_CLOSED",
@@ -749,7 +774,7 @@ async function processApplicationRun(
       const { confirmationForFailureStatus, persistAttemptConfirmation } = await import("@/lib/attempt-outcome");
       const confirmation = persistAttemptConfirmation(confirmationForFailureStatus(outcome.status) ?? `FAILED:${outcome.status}`);
       await prisma.application.updateMany({
-        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
         data: {
           status: "failed",
           submitConfirmation: confirmation,
@@ -761,6 +786,33 @@ async function processApplicationRun(
     }
 
     if (outcome.status === "captcha") {
+      const clickedOrPosted = !!(outcome.attemptEvidence?.clickPerformed || outcome.attemptEvidence?.outboundRequest);
+      if (clickedOrPosted || !recruiterEmailFallbackEnabled()) {
+        const { captchaHandoff } = await import("@/lib/captcha-handoff");
+        const handoff = captchaHandoff({ mode: app.user.preferences?.autoApplyMode, company: app.job.company,
+          adapterLabel: adapter.label, detail: outcome.error });
+        await prisma.application.updateMany({
+          where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
+          data: {
+            status: handoff.status,
+            submitConfirmation: clickedOrPosted && outcome.attemptEvidence?.outboundRequest ? "UNCONFIRMED" : handoff.submitConfirmation,
+            errorMessage: clickedOrPosted && outcome.attemptEvidence?.outboundRequest
+              ? UNCERTAIN_SUBMISSION_MESSAGE
+              : handoff.errorMessage,
+            canaryLog: "canary" in outcome && outcome.canary ? JSON.stringify(outcome.canary) : handoff.canaryLog,
+            ...attemptEvidenceWrite(outcome.attemptEvidence),
+            ...(clickedOrPosted && outcome.attemptEvidence?.outboundRequest
+              ? notSubmitted("needs_user", "portal_captcha_after_outbound")
+              : {}),
+          },
+        });
+        if (handoff.notifyUser) {
+          await notifyApplicationManual(applicationId).catch((err) =>
+            console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
+          );
+        }
+        return;
+      }
       verifiedRecruiter = verifiedRecruiter ?? await findVerifiedRecruiterEmail(
         resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
       );
@@ -771,7 +823,7 @@ async function processApplicationRun(
         const handoff = captchaHandoff({ mode: app.user.preferences?.autoApplyMode, company: app.job.company,
           adapterLabel: adapter.label, detail: outcome.error });
         await prisma.application.updateMany({
-          where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+          where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
           data: {
             status: handoff.status,
             submitConfirmation: handoff.submitConfirmation,
@@ -794,7 +846,7 @@ async function processApplicationRun(
       `[worker] ${applicationId} adapter ${adapter.id} → ${outcome.status}: ${outcome.error}`,
     );
     await prisma.application.updateMany({
-      where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+      where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
       data: {
         errorMessage: `Portal ${adapter.label}: ${outcome.error}`,
         // Persisti SEMPRE il motivo del fallimento adapter in canaryLog (anche
@@ -827,7 +879,7 @@ async function processApplicationRun(
       // submit (form cambiato, campo mancante, ecc.). NON mandiamo a email
       // scrapate: marchiamo failed così viene ritentato al ciclo successivo.
       await prisma.application.updateMany({
-        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
         data: {
           status: "failed",
           errorMessage:
@@ -858,7 +910,7 @@ async function processApplicationRun(
     const mode = app.user.preferences?.autoApplyMode ?? "manual";
     const handoff = mode !== "auto";
     await prisma.application.updateMany({
-      where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+      where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
       data: {
         status: "ready_to_apply",
         submittedVia: null,
@@ -880,7 +932,46 @@ async function processApplicationRun(
 
   const recruiterEmail = verifiedRecruiter?.email ?? null;
 
-  if (recruiterEmail) {
+  if (skipPortal && recruiterEmail) {
+    if (blocksUncertainAutoRetry(app)) {
+      await prisma.application.updateMany({
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "optimizing"] } },
+        data: {
+          status: "ready_to_apply",
+          errorMessage: UNCERTAIN_SUBMISSION_MESSAGE,
+          sendFailureReason: "uncertain_submission",
+        },
+      });
+      return;
+    }
+    const fallbackHit = verifiedRecruiter ?? {
+      email: recruiterEmail,
+      provenance: {
+        version: 1 as const,
+        sourceType: "employer_domain_page" as const,
+        requestedUrl: app.job.url,
+        sourceUrl: app.job.recruiterEmailSourceUrl ?? app.job.url,
+        observedAt: new Date().toISOString(),
+        pageSha256: "",
+        evidence: "",
+        company: app.job.company ?? "",
+        extraction: "visible_application_instruction" as const,
+      },
+    };
+    const fallbackDecision = skipListEmailSendDecision(fallbackHit, app.job);
+    if (!fallbackDecision.ok) {
+      await prisma.application.updateMany({
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "optimizing"] } },
+        data: skipListManualHandoffData(undefined, { sendFailureReason: fallbackDecision.reason }),
+      });
+      await notifyApplicationManual(applicationId).catch((err) =>
+        console.error(`[worker] ${applicationId} notify manual (skip-list fallback held) failed`, err),
+      );
+      return;
+    }
+  }
+
+  if (recruiterEmail && recruiterEmailFallbackEnabled()) {
     const appRow = await prisma.application.findUnique({
       where: { id: applicationId },
       select: { trackingToken: true },
@@ -920,7 +1011,7 @@ async function processApplicationRun(
     });
     if (duplicate && duplicate.applicationId !== applicationId) {
       await prisma.application.updateMany({
-        where: { id: applicationId, startedAt: workToken, status: { in: ["optimizing", "ready_to_apply", "applying"] } },
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["optimizing", "ready_to_apply", "applying"] } },
         data: {
           status: "ready_to_apply",
           submitConfirmation: NOT_SUBMITTED,
@@ -968,7 +1059,7 @@ async function processApplicationRun(
       );
     } else {
       await prisma.application.updateMany({
-        where: { id: applicationId, startedAt: workToken,
+        where: { id: applicationId, ...liveLeaseFields(workToken),
           ...(delivered.kind === "not_sent" ? {
             // The final pre-send gate may already have held the row. This
             // invocation proved it never crossed the provider boundary; only
@@ -993,7 +1084,7 @@ async function processApplicationRun(
     }
   } else if (skipPortal) {
     await prisma.application.updateMany({
-      where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+      where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
       data: {
         status: "ready_to_apply",
         errorMessage: SKIPPED_ATS_MANUAL_MESSAGE,
@@ -1031,7 +1122,7 @@ async function processApplicationRun(
       const userAutoMode = app.user.preferences?.autoApplyMode ?? "manual";
       const isAutoMode = userAutoMode === "auto";
       await prisma.application.updateMany({
-        where: { id: applicationId, startedAt: workToken, status: { in: ["applying", "ready_to_apply"] } },
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
         data: {
           status: isAutoMode ? "awaiting_consent" : "ready_to_apply",
           errorMessage: isAutoMode
@@ -1055,7 +1146,7 @@ async function processApplicationRun(
 
 async function markFailed(id: string, message: string, workToken: Date): Promise<void> {
   await prisma.application.updateMany({
-    where: { id, status: "optimizing", startedAt: workToken },
+    where: { id, status: "optimizing", ...liveLeaseFields(workToken) },
     data: {
       status: "failed",
       errorMessage: message,
@@ -1069,7 +1160,7 @@ async function ensureLiveJobForApplication(id: string, token: Date, jobId: strin
   if (check.state !== "closed") return true;
   await markJobClosed(jobId);
   await prisma.application.updateMany({
-    where: { id, startedAt: token, status: { in: ["optimizing", "ready_to_apply"] },
+    where: { id, ...liveLeaseFields(token), status: { in: ["optimizing", "ready_to_apply"] },
       OR: [{ submitConfirmation: null }, { submitConfirmation: { in: [NOT_SUBMITTED, "DRY_RUN", "JOB_CLOSED"] } }] },
     data: {
       status: "failed",
@@ -1205,7 +1296,7 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
     jobUrl.includes("example.com") || jobUrl.includes("example.org");
   if (isMockOrDemo) {
     await prisma.application.updateMany({ where: {
-      id: applicationId, startedAt: input.workToken, status: "ready_to_apply",
+      id: applicationId, ...liveLeaseFields(input.workToken), status: "ready_to_apply",
     }, data: {
       status: "ready_to_apply", submitConfirmation: "DRY_RUN",
       errorMessage: "Demo: nessuna candidatura inviata.",
@@ -1218,7 +1309,7 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
   // "candidati a mano" se l'utente è in auto mode (vedi gate sotto).
   if (!isPortalId(portal)) {
     await prisma.application.updateMany({
-      where: { id: applicationId, startedAt: input.workToken, status: "ready_to_apply" },
+      where: { id: applicationId, ...liveLeaseFields(input.workToken), status: "ready_to_apply" },
       data: {
         status: "ready_to_apply",
         // ATS supportato per host (adapter non riuscito/disattivato) ≠ portale non supportato.
@@ -1251,7 +1342,7 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
   const session = input.userSessions.find((s) => s.portal === portal);
   if (!session) {
     await prisma.application.updateMany({
-      where: { id: applicationId, startedAt: input.workToken, status: "ready_to_apply" },
+      where: { id: applicationId, ...liveLeaseFields(input.workToken), status: "ready_to_apply" },
       data: {
         status: "needs_session",
         errorMessage: `Collega prima il portale ${cfg.label}.`,
@@ -1294,14 +1385,14 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
 
     // The legacy strategy only reports a click, not a server receipt. It
     // cannot release a slot as confirmed success or be retried automatically.
-    await prisma.application.updateMany({ where: { id: applicationId, startedAt: input.workToken, status: "applying", submitConfirmation: "SUBMISSION_STARTED" }, data: {
+    await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(input.workToken), status: "applying", submitConfirmation: "SUBMISSION_STARTED" }, data: {
       status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
       errorMessage: applied.error ?? "Submit eseguito senza ricevuta verificata. Verifica sul portale prima di ritentare.",
     } });
   } catch (err) {
     console.error(`[worker/${portal}] playwright error`, err);
     await prisma.application.updateMany({
-      where: { id: applicationId, startedAt: input.workToken, status: "applying", submitConfirmation: "SUBMISSION_STARTED" },
+      where: { id: applicationId, ...liveLeaseFields(input.workToken), status: "applying", submitConfirmation: "SUBMISSION_STARTED" },
       data: {
         status: "ready_to_apply",
         submitConfirmation: "UNCONFIRMED",
@@ -1340,7 +1431,7 @@ async function recheckBeforePortalSubmit(applicationId: string, workToken: Date,
       if (row) await markJobClosed(row.jobId);
     }
     await prisma.application.updateMany({ where: {
-      id: applicationId, startedAt: workToken, status: "applying", submitConfirmation: "SUBMISSION_STARTED",
+      id: applicationId, ...liveLeaseFields(workToken), status: "applying", submitConfirmation: "SUBMISSION_STARTED",
     }, data: {
       status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
       errorMessage: live.state === "closed"
@@ -2164,7 +2255,7 @@ function firstPreferredCity(locationsJson: string | null | undefined): string | 
 async function persistAiAnswers(userId: string, applicationId: string, token: Date,
   given: import("@/lib/portal-adapters/ai-answer").GivenAnswer[]): Promise<void> {
   await prisma.application.updateMany({
-    where: { id: applicationId, userId, startedAt: token, status: "applying" },
+    where: { id: applicationId, userId, ...liveLeaseFields(token), status: "applying" },
     data: { answersUsedJson: JSON.stringify(given) },
   });
 }

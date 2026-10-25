@@ -12,6 +12,7 @@ import {
 } from "@/lib/reply-parser";
 import { bestApplicationMatch, scoreCandidate, type MatchCandidate } from "@/lib/inbound/match";
 import { isSkippedPortalUrl } from "@/lib/ats-skip-hosts";
+import { isSentUnverified } from "@/lib/application-evidence";
 
 export const MAILBOX_KINDS = [
   "confirmation",
@@ -217,16 +218,22 @@ export function jobApplySupport(url: string): "supported" | "unsupported" {
 }
 
 export function countsAsSentUsage(app: {
+  status?: string | null;
   confirmedAt?: Date | string | null;
   sendStatus?: string | null;
   submitConfirmation?: string | null;
   submissionReceiptJson?: string | null;
   submittedVia?: string | null;
+  submittedAt?: Date | string | null;
 }): boolean {
-  if (app.confirmedAt) return true;
-  if (app.sendStatus === "submitted") return true;
-  const conf = (app.submitConfirmation ?? "").toUpperCase();
-  return conf.startsWith("DETECTED") || conf === "APPLIED" || conf.includes("RECEIPT");
+  return isSentUnverified({
+    status: app.status ?? "success",
+    submittedVia: app.submittedVia ?? null,
+    submitConfirmation: app.submitConfirmation,
+    submissionReceiptJson: app.submissionReceiptJson,
+    confirmedAt: app.confirmedAt,
+    submittedAt: app.submittedAt ?? null,
+  });
 }
 
 export function mailboxRetentionCutoff(now = new Date(), days = MAILBOX_RETENTION_DAYS): Date {

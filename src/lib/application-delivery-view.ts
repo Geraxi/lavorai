@@ -14,6 +14,7 @@ export function applicationDeliveryView(app: {
   submissionReceiptJson?: string | null;
   errorMessage?: string | null;
   confirmedAt?: Date | string | null;
+  submittedAt?: Date | string | null;
   emailAttempts?: Array<{ status: string; acceptedAt?: Date | string | null; providerEmailId?: string | null }>;
 }): DeliveryView {
   const email = app.emailAttempts?.[0];
@@ -22,6 +23,8 @@ export function applicationDeliveryView(app: {
   if (app.confirmedAt) return { phase: "confirmed", label: "Ricevuta ATS confermata", tone: "positive",
     detail: "L'azienda ha inviato una conferma di ricezione. Non è ancora una risposta umana." };
   if (app.submittedVia === "mock_demo" || app.submitConfirmation === "DRY_RUN") return { phase: "pending", label: "Anteprima, non inviata", tone: "neutral", detail: "Materiali dimostrativi, senza invio a un'azienda." };
+  if (app.submitConfirmation === "MAILBOX_NO_BOUNCE") return { phase: "delivered", label: "Inviata, nessun rimbalzo", tone: "neutral",
+    detail: "Inviata dalla casella; nessun rimbalzo nel thread. Non è un'accettazione confermata dall'azienda." };
   if (app.submitConfirmation === "UNCONFIRMED") return { phase: "unconfirmed", label: "Esito da verificare", tone: "warning", detail: "Manca una prova verificabile. Controlla il portale prima di un altro tentativo." };
   if (email && ["failed", "bounced", "complained"].includes(email.status)) {
     return { phase: "failed", label: email.status === "complained" ? "Email segnalata" : "Email non consegnata", tone: "warning",
@@ -39,6 +42,10 @@ export function applicationDeliveryView(app: {
   }
   if (app.submittedVia === "manual" || app.submitConfirmation === "MANUAL") {
     return { phase: "manual", label: "Invio dichiarato da te", tone: "neutral", detail: "Candidatura importata manualmente, senza verifica di invio da LavorAI." };
+  }
+  if (app.status === "success" && app.submittedAt) {
+    return { phase: "unconfirmed", label: "Invii registrati, senza conferma", tone: "warning",
+      detail: "Candidatura registrata come inviata, senza ricevuta verificabile. Non è una nuova prova e non rilanciamo l'invio." };
   }
   if (app.submitConfirmation === "UNCONFIRMED" || app.submitConfirmation === "SUBMISSION_STARTED" || email?.status === "unknown" || app.status === "success") {
     return { phase: "unconfirmed", label: "Esito da verificare", tone: "warning",

@@ -84,7 +84,8 @@ function testResponses() {
     assert.equal(result.receipt, undefined);
   }
   assert.equal(verifySubmissionResponse("ashby", job, { ...accepted, status: 422 }).rejected, true);
-  assert.equal(verifySubmissionResponse("ashby", job, { ...accepted, status: 500 }).rejected, true);
+  assert.equal(verifySubmissionResponse("ashby", job, { ...accepted, status: 500 }).rejected, false);
+  assert.equal(verifySubmissionResponse("ashby", job, { ...accepted, status: 500 }).receipt, undefined);
   const explicitMutation = JSON.stringify({ operationName: "ApplyToJobPosting", variables: { jobPostingId: "job-123" }, query: "mutation ApplyToJobPosting($jobPostingId: ID!) { applyToJobPosting(jobPostingId: $jobPostingId) { success } }" });
   assert.ok(verifySubmissionResponse("ashby", job, { ...accepted, postData: explicitMutation }).receipt);
   const apiMutation = JSON.stringify({ operationName: "ApiJobBoardApplicationFormSubmit", variables: { input: { jobPostingId: "job-123" } } });
@@ -148,7 +149,7 @@ class MockPage extends EventEmitter {
   codeVisible = false;
   captchaVisible = false;
   snapshots = { before: { ...before }, after: { ...before } };
-  events: Array<{ response: SubmissionResponse; started?: boolean; bodyFails?: boolean }> = [];
+  events: Array<{ response: SubmissionResponse; started?: boolean; bodyFails?: boolean; noResponse?: boolean }> = [];
   url() { return this.snapshots[this.phase].url; }
   async evaluate(argument: unknown) { return typeof argument === "string" ? this.snapshots[this.phase] : true; }
   async goto() {}
@@ -156,7 +157,7 @@ class MockPage extends EventEmitter {
   async waitForTimeout() {}
   async screenshot() { return Buffer.from("png"); }
   locator(selector: string): any {
-    const isCaptcha = /recaptcha|hcaptcha|turnstile|grecaptcha/.test(selector);
+    const isCaptcha = /recaptcha|hcaptcha|turnstile|grecaptcha|robot/i.test(selector);
     const isCode = selector === securityCode.SECURITY_CODE_FIELD;
     const locator = {
       first: () => locator, nth: () => locator,
@@ -174,6 +175,7 @@ class MockPage extends EventEmitter {
       const r = item.response;
       const request = { url: () => r.url, method: () => r.method, postData: () => r.postData } as Request;
       if (item.started !== false) this.emit("request", request);
+      if (item.noResponse) continue;
       const response = { request: () => request, url: () => r.url, status: () => r.status, text: async () => {
         if (item.bodyFails) throw Error("Body unavailable");
         return r.body ?? "";
@@ -196,7 +198,6 @@ async function testClickObservation() {
     [{ response: accepted, started: false }], // request began before this click
     [{ response: accepted, bodyFails: true }],
     [{ response: { ...accepted, body: null } }],
-    [{ response: { ...accepted, body: '{"errors":["invalid email"]}' } }],
     [{ response: { ...accepted, postData: '{"operationName":"Analytics"}' } }],
   ]) {
     page = new MockPage(); page.events = events;
@@ -205,6 +206,22 @@ async function testClickObservation() {
     assert.equal(result.outcome.status, "submission_unconfirmed");
     assert.equal(page.clicks, 1);
   }
+  page = new MockPage(); page.events = [{ response: { ...accepted, body: '{"errors":["invalid email"]}' } }];
+  result = await observeSubmission(page.asPage(), "ashby", job, () => page.click());
+  assert.equal(result.outcome.status, "validation_failed", "Body validation with no acceptance is rejected-not-sent");
+  assert.equal(result.outcome.attemptEvidence?.destinationResponse?.rejected, true);
+  assert.equal(page.clicks, 1);
+  page = new MockPage(); page.events = [{ response: { ...accepted, status: 422 } }];
+  result = await observeSubmission(page.asPage(), "ashby", job, () => page.click());
+  assert.equal(result.outcome.status, "validation_failed", "422 validation with no acceptance is rejected-not-sent");
+  assert.equal(result.outcome.attemptEvidence?.clickPerformed, true);
+  assert.ok(result.outcome.attemptEvidence?.outboundRequest);
+  page = new MockPage(); page.events = [{ response: accepted, noResponse: true }];
+  result = await observeSubmission(page.asPage(), "ashby", job, () => page.click());
+  assert.equal(result.outcome.status, "submission_unconfirmed", "click + POST + timeout is uncertain");
+  assert.equal(result.outcome.attemptEvidence?.clickPerformed, true);
+  assert.ok(result.outcome.attemptEvidence?.outboundRequest);
+  assert.equal(result.outcome.attemptEvidence?.destinationResponse?.ambiguous, true);
   page = new MockPage(); page.snapshots.after = { ...after };
   result = await observeSubmission(page.asPage(), "ashby", job, () => page.click());
   assert.equal(result.outcome.ok && result.outcome.receipt?.kind, "dom");
@@ -214,8 +231,18 @@ async function testClickObservation() {
   assert.equal((await observeSubmission(page.asPage(), "ashby", job, () => page.click())).outcome.status, "captcha");
   assert.equal(page.clicks, 0, "Interactive captcha must stay user-owned");
   page = new MockPage(); page.events = [{ response: accepted }];
-  assert.equal((await observeSubmission(page.asPage(), "ashby", job, async () => { await page.click(); page.captchaVisible = true; })).outcome.status, "captcha");
+  const afterClick = await observeSubmission(page.asPage(), "ashby", job, async () => { await page.click(); page.captchaVisible = true; });
+  assert.equal(afterClick.outcome.ok, true, "A POST/receipt after click is never labelled CAPTCHA");
+  assert.equal(afterClick.outcome.ok && afterClick.outcome.status, "submitted");
   assert.equal(page.clicks, 1, "A challenge appearing after submit must not trigger a second click");
+  page = new MockPage(); page.events = [{ response: { ...accepted, body: null } }];
+  const afterPostChallenge = await observeSubmission(page.asPage(), "ashby", job, async () => { await page.click(); page.captchaVisible = true; });
+  assert.equal(afterPostChallenge.outcome.status, "submission_unconfirmed", "click + visible challenge after POST is uncertain, not captcha");
+  assert.equal(page.clicks, 1);
+  page = new MockPage();
+  const challengeOnly = await observeSubmission(page.asPage(), "ashby", job, async () => { await page.click(); page.captchaVisible = true; });
+  assert.equal(challengeOnly.outcome.status, "captcha", "A visible challenge with no POST is CAPTCHA");
+  assert.equal(page.clicks, 1);
   page = new MockPage(); page.events = [{ response: accepted }]; page.codeVisible = true;
   assert.equal((await observeSubmission(page.asPage(), "ashby", job, () => page.click())).outcome.ok, false, "OTP prompt is not acceptance");
   page = new MockPage();

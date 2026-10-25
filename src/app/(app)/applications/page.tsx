@@ -18,7 +18,7 @@ import "@/components/application-pagination.css";
 import { applicationLabel, deliveryCopy } from "@/lib/application-presentation";
 import type { DeliveryView } from "@/lib/application-delivery-view";
 import { STAGE_LABEL, STAGE_ROW_LABEL, type JourneyStage } from "@/lib/ui-application-status";
-import { Briefcase, CalendarCheck, Check, ChevronRight, Download, ListTodo, Plus, Search, SearchX, Send } from "lucide-react";
+import { Briefcase, CalendarCheck, Check, ChevronRight, CircleAlert, Download, ListTodo, Plus, Search, SearchX, Send } from "lucide-react";
 import { KpiCard } from "@/components/ui-premium/kpi-card";
 import { Pill } from "@/components/ui-premium/pill";
 import { Avatar } from "@/components/ui-premium/avatar";
@@ -339,6 +339,7 @@ export default function ApplicationsPage() {
         <section className="apps-kpis" aria-label={tr("Riepilogo", "Summary")}>
           <KpiCard id="total" label={tr("Candidature", "Applications")} value={num(summary?.total)} hint={tr("registrate, ogni stato", "recorded, any stage")} icon={Briefcase} locale={lang} />
           <KpiCard id="confirmed" label={tr("Invii confermati", "Confirmed sends")} value={num(summary?.confirmed)} hint={tr("con prova di consegna", "with delivery evidence")} icon={Send} locale={lang} />
+          <KpiCard id="sent_unverified" label={tr("Invii registrati, senza conferma", "Recorded sends, unconfirmed")} value={num(summary?.stages?.sent_unverified)} hint={tr("inviate, senza ricevuta verificabile", "sent, without a verifiable receipt")} icon={CircleAlert} locale={lang} />
           <KpiCard id="action" label={tr("Da fare", "To do")} value={num(summary?.actionNeeded)} hint={tr("da approvare o completare", "to approve or complete")} icon={ListTodo} locale={lang} />
           <KpiCard id="interviews" label={tr("Colloqui", "Interviews")} value={num(summary?.interviews)} hint={tr("inviti ricevuti", "invites received")} icon={CalendarCheck} locale={lang} />
         </section>

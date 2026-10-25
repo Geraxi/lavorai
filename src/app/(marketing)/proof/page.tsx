@@ -57,17 +57,21 @@ export default async function ProofPage() {
           lineHeight: 1.55,
         }}
       >
-        Contiamo le candidature con una ricevuta ATS verificata e le email con
-        un evento di consegna al server destinatario. Un codice HTTP generico o
-        l’accettazione del provider email non dimostrano la consegna. La consegna
-        non prova che il recruiter abbia letto o valutato la candidatura.
+        Contiamo separatamente: accettazione ATS (ricevuta / id candidato /
+        risposta di destinazione), accettazione Resend, evento delivered,
+        invio senza rimbalzo e esito sconosciuto. Nessun rimbalzo non è una
+        conferma. Lo storico senza ricevuta resta etichettato e non viene
+        aggiornato.
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginTop: 28 }}>
-        <Stat label="Accettate dal provider" value={proof.providerAccepted} sub="Email in attesa di consegna verificata" />
+        <Stat label="Accettate dal provider" value={proof.providerAccepted} sub="Resend accepted, con message id" />
+        <Stat label="Email consegnate" value={proof.emailDelivered} sub="Evento delivered Resend, non una ricevuta" />
+        <Stat label="Inviate, nessun rimbalzo" value={proof.sentNoBounce} sub="Casella inviata, nessun bounce. Non è accettazione" />
+        <Stat label="Esito sconosciuto" value={proof.outcomeUnknown} sub="Invio tentato, nessuna prova memorizzata" />
         <Stat label="Storico non verificato" value={proof.legacyUnverified} sub="Conservato, escluso dai conteggi verificati" />
         <Stat label="Problemi di consegna" value={proof.deliveryProblems} sub="Invii falliti, bounce o reclami" />
-        <Stat label="Esito da verificare" value={proof.pending} sub="Tentativi in corso o con esito incerto" />
+        <Stat label="Esito da verificare" value={proof.pending} sub="Tentativi ancora in corso" />
       </div>
       {detectedTotal > 0 ? (
         <>

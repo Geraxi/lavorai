@@ -138,9 +138,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: P
                 <p className="pm-muted an-small">Nessun invio registrato nel periodo.</p>
               ) : (
                 <StatusBar showShare={false} segments={[
-                  { key: "sent", label: "Consegna confermata", count: data.sent, tone: "green" },
+                  { key: "sent", label: "Accettate dall'ATS", count: data.sent, tone: "green" },
                   { key: "accepted", label: "Accettate dal provider", count: data.providerAccepted, tone: "neutral" },
-                  { key: "unverified", label: "Esito da verificare", count: data.pending + data.legacyUnverified, tone: "amber" },
+                  { key: "email_delivered", label: "Email consegnate", count: data.emailDelivered, tone: "neutral" },
+                  { key: "sent_no_bounce", label: "Inviate, nessun rimbalzo", count: data.sentNoBounce, tone: "amber" },
+                  { key: "outcome_unknown", label: "Esito sconosciuto", count: data.outcomeUnknown, tone: "amber" },
+                  { key: "sent_unverified", label: "Invii registrati, senza conferma", count: data.legacyUnverified, tone: "amber" },
+                  { key: "unverified", label: "Esito da verificare", count: data.pending, tone: "amber" },
                   { key: "problem", label: "Problemi di consegna", count: data.deliveryProblems, tone: "red" },
                 ]} />
               )}

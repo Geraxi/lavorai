@@ -16,6 +16,7 @@ import {
 const legacyModule = { exports: {} as Record<string, any> };
 const legacyDependencies: Record<string, unknown> = {
   "@/lib/application-rollout": { automaticApplicationsBlocked: () => false, historicalRetriesBlocked: () => false },
+  "@/lib/uncertain-submission": { blocksUncertainAutoRetry: (row: { submitStartedAt?: Date | null; submitConfirmation?: string | null }) => !!(row.submitStartedAt || row.submitConfirmation === "UNCONFIRMED" || row.submitConfirmation === "SUBMISSION_STARTED") },
   "@/lib/billing": billing, "node:crypto": { createHash }, "@prisma/client": { Prisma }, zod: { z },
 };
 new Function("require", "module", "exports", ts.transpileModule(readFileSync("src/lib/credit-failure-retry.ts", "utf8"), {
@@ -34,7 +35,7 @@ const row = (id = "app-a"): CreditRetryRow => ({
   startedAt: ago(2), completedAt: ago(2), createdAt: ago(3), retryCount: 0,
   submittedAt: null, submittedVia: null, submitConfirmation: null, canaryLog: null,
   viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
-  answersUsedJson: null, pendingQuestionsJson: null, cvDocxPath: null, cvPdfPath: null,
+  answersUsedJson: null, pendingQuestionsJson: null, submitStartedAt: null, cvDocxPath: null, cvPdfPath: null,
   coverLetterPath: null, coverLetterText: null,
   user: {
     id: "user-a", email: "fixture@example.com", tier: "pro", createdAt: ago(30),

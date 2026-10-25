@@ -2,9 +2,15 @@ import { receiptJobId as submissionJobId } from "../submission-receipt";
 export { receiptJobId as submissionJobId } from "../submission-receipt";
 import type { Page, Request, Response } from "playwright";
 import type { ApplyOutcome, CanaryLog, SubmissionReceipt } from "./types";
-import { detectBlockingCaptcha } from "./captcha";
+import { challengeAppearedAfterSubmit, detectBlockingCaptcha } from "./captcha";
 import { captureSubmitEvidence } from "./submit-evidence";
 import { SECURITY_CODE_FIELD } from "../application-security-code";
+import {
+  emptyAttemptEvidence,
+  type DestinationResponseEvidence,
+  type OutboundSubmissionEvidence,
+  type SubmissionAttemptEvidence,
+} from "./submission-attempt-evidence";
 
 /** A status code is transport evidence, never proof that an application exists. */
 export interface SubmissionRequest {
@@ -194,7 +200,9 @@ function successSignal(value: unknown, provider: string): { signal: string; rece
 export function verifySubmissionResponse(provider: string, jobUrl: string, response: SubmissionResponse): { receipt?: SubmissionReceipt; rejected: boolean } {
   const proof = matchSubmissionRequest(provider, jobUrl, response);
   if (!proof) return { rejected: false };
-  if (response.status >= 400) return { rejected: true };
+  // 4xx is explicit rejection without acceptance. 5xx after a write is
+  // ambiguous (the destination may have processed the request).
+  if (response.status >= 400 && response.status < 500) return { rejected: true };
   if (response.status < 200 || response.status >= 300) return { rejected: false };
   const body = parseJson(response.body);
   if (!body) return { rejected: false };
@@ -269,17 +277,59 @@ function withCanary(outcome: ApplyOutcome, canary: CanaryLog | undefined): Apply
   return canary ? { ...outcome, canary } : outcome;
 }
 
+function destinationResponseEvidence(
+  response: SubmissionResponse | null,
+  outbound: OutboundSubmissionEvidence | null,
+  rejected: boolean,
+  receipt: SubmissionReceipt | null | undefined,
+): DestinationResponseEvidence | null {
+  if (response) {
+    return {
+      capturedAt: new Date().toISOString(),
+      httpStatus: response.status,
+      rejected,
+      ambiguous: !rejected && !receipt,
+      signal: receipt?.signal,
+      receiptId: receipt?.receiptId,
+    };
+  }
+  if (!outbound) return null;
+  return { capturedAt: outbound.capturedAt, rejected: false, ambiguous: true };
+}
+
 /** Observe only requests STARTED in this click's window; never click twice. */
 export async function observeSubmission(page: Page, provider: string, jobUrl: string, click: () => Promise<unknown>, beforeSubmit?: () => Promise<boolean>, opts?: ObserveSubmissionOptions): Promise<ObservedSubmission> {
   const before = await snapshotPage(page);
   const initialCaptcha = await detectBlockingCaptcha(page);
-  if (initialCaptcha.blocking) return { response: null, outcome: { ok: false, status: "captcha", error: "Il portale richiede un captcha (anche invisibile). Completa la verifica manualmente prima di procedere." } };
+  if (initialCaptcha.blocking) {
+    return {
+      response: null,
+      outcome: {
+        ok: false,
+        status: "captcha",
+        error: "Il portale richiede un captcha interattivo. Completa la verifica manualmente prima di procedere.",
+        attemptEvidence: emptyAttemptEvidence(),
+      },
+    };
+  }
   const started = new Set<Request>();
   const responses: SubmissionResponse[] = [];
   const pending: Promise<void>[] = [];
+  let outboundRequest: OutboundSubmissionEvidence | null = null;
   const onRequest = (request: Request) => {
     try {
-      if (matchSubmissionRequest(provider, jobUrl, { url: request.url(), method: request.method(), postData: request.postData() })) started.add(request);
+      const proof = matchSubmissionRequest(provider, jobUrl, { url: request.url(), method: request.method(), postData: request.postData() });
+      if (!proof) return;
+      started.add(request);
+      const endpoint = new URL(request.url());
+      outboundRequest = {
+        capturedAt: new Date().toISOString(),
+        provider,
+        jobId: proof.jobId,
+        endpoint: `${endpoint.origin}${endpoint.pathname}`,
+        operation: proof.operation,
+        method: request.method(),
+      };
     } catch { /* an unreadable request is not proof */ }
   };
   const onResponse = (response: Response) => {
@@ -292,12 +342,16 @@ export async function observeSubmission(page: Page, provider: string, jobUrl: st
   };
   page.on("request", onRequest);
   page.on("response", onResponse);
+  let clickPerformed = false;
+  let clickPerformedAt: string | undefined;
   try {
     if (beforeSubmit && !(await beforeSubmit().catch(() => false))) {
-      return { response: null, outcome: { ok: false, status: "submission_unconfirmed", error: "Invio bloccato: le condizioni o le autorizzazioni della candidatura sono cambiate. Nessun nuovo invio eseguito." } };
+      return { response: null, outcome: { ok: false, status: "submission_unconfirmed", error: "Invio bloccato: le condizioni o le autorizzazioni della candidatura sono cambiate. Nessun nuovo invio eseguito.", attemptEvidence: emptyAttemptEvidence() } };
     }
     // A timeout after dispatch is ambiguous, so never force-click/replay it.
     await click().catch(() => void 0);
+    clickPerformed = true;
+    clickPerformedAt = new Date().toISOString();
     await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
     await page.waitForTimeout(1_200);
   } finally {
@@ -311,17 +365,69 @@ export async function observeSubmission(page: Page, provider: string, jobUrl: st
     applicationId: opts?.applicationId,
     urlBeforeSubmit: before.url,
   }).catch(() => undefined);
-  const captcha = await detectBlockingCaptcha(page);
-  const codeVisible = await page.locator(SECURITY_CODE_FIELD).first().isVisible().catch(() => false);
-  if (captcha.blocking || codeVisible) {
-    return { response, outcome: withCanary({ ok: false, status: captcha.blocking ? "captcha" : "submission_unconfirmed", error: "Il portale richiede una verifica prima di confermare la ricezione. Non reinviare automaticamente la candidatura." }, canary) };
-  }
   const proofs = responses.map((r) => verifySubmissionResponse(provider, jobUrl, r));
-  // A validation/challenge response cannot be rescued by generic DOM text.
-  if (proofs.some((r) => r.rejected)) {
-    return { response, outcome: withCanary({ ok: false, status: "submission_unconfirmed", error: `Il portale ${provider} ha risposto con un errore alla richiesta di candidatura. Ricezione non confermata; verificare prima di un nuovo invio.` }, canary) };
+  const receipt = proofs.some((r) => r.rejected)
+    ? undefined
+    : proofs.find((r) => r.receipt)?.receipt ?? verifyPageReceipt(provider, jobUrl, before, after);
+  const rejected = proofs.some((r) => r.rejected);
+  const attemptEvidence: SubmissionAttemptEvidence = {
+    version: 1,
+    clickPerformed,
+    clickPerformedAt,
+    outboundRequest,
+    destinationResponse: destinationResponseEvidence(response, outboundRequest, rejected, receipt),
+  };
+  const withEvidence = (outcome: ObservedSubmission["outcome"]): ObservedSubmission => ({
+    response,
+    outcome: withCanary({ ...outcome, attemptEvidence }, canary),
+  });
+  const codeVisible = await page.locator(SECURITY_CODE_FIELD).first().isVisible().catch(() => false);
+  // Explicit 4xx / body validation with no acceptance: rejected-not-sent.
+  if (rejected && !receipt) {
+    return withEvidence({
+      ok: false,
+      status: "validation_failed",
+      error: `Il portale ${provider} ha rifiutato la candidatura (validazione). Nessun invio accettato.`,
+    });
   }
-  const receipt = proofs.find((r) => r.receipt)?.receipt ?? verifyPageReceipt(provider, jobUrl, before, after);
-  if (receipt) return { response, outcome: withCanary({ ok: true, status: "submitted", confirmation: receipt.kind === "http" ? `DETECTED_HTTP_${receipt.httpStatus}` : "DETECTED_DOM", receipt }, canary) };
-  return { response, outcome: withCanary({ ok: false, status: "submission_unconfirmed", error: `Invio ${provider} tentato, ma manca una ricevuta verificabile per questo annuncio. Verifica la ricezione prima di riprovare per evitare duplicati.` }, canary) };
+  // A security-code prompt is not destination acceptance, even if the POST
+  // returned an identifier for a draft / pending verification.
+  if (codeVisible) {
+    return withEvidence({
+      ok: false,
+      status: "submission_unconfirmed",
+      error: "Il portale richiede una verifica prima di confermare la ricezione. Non reinviare automaticamente la candidatura.",
+    });
+  }
+  if (receipt) {
+    return withEvidence({
+      ok: true,
+      status: "submitted",
+      confirmation: receipt.kind === "http" ? `DETECTED_HTTP_${receipt.httpStatus}` : "DETECTED_DOM",
+      receipt,
+    });
+  }
+  // After a click or an outgoing POST, a challenge / timeout / missing
+  // response stays uncertain. Only a visible challenge with no outbound
+  // request is CAPTCHA (nothing crossed the form endpoint).
+  const challengeAfterClick = await challengeAppearedAfterSubmit(page);
+  if (response || outboundRequest) {
+    return withEvidence({
+      ok: false,
+      status: "submission_unconfirmed",
+      error: `Invio ${provider} tentato, ma manca una ricevuta verificabile per questo annuncio. Verifica la ricezione prima di riprovare per evitare duplicati.`,
+    });
+  }
+  if (challengeAfterClick) {
+    return withEvidence({
+      ok: false,
+      status: "captcha",
+      error: "Il portale richiede una verifica prima di confermare la ricezione. Non reinviare automaticamente la candidatura.",
+    });
+  }
+  return withEvidence({
+    ok: false,
+    status: "submission_unconfirmed",
+    error: `Invio ${provider} tentato, ma manca una ricevuta verificabile per questo annuncio. Verifica la ricezione prima di riprovare per evitare duplicati.`,
+  });
 }

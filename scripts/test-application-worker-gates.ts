@@ -9,7 +9,9 @@ process.env.APPLICATION_SENDING_MODE = "manual_only";
 process.env.APPLICATION_ROLLOUT_START_AT = new Date(+now - 60000).toISOString();
 process.env.APPLY_GLOBAL_DAILY_CAP = "10";
 const base = {
-  id: "app", userId: "user", jobId: "job", sessionId: "round", status: "queued", startedAt: null, consentGrantedAt: now, createdAt: now, retryCount: 0,
+  id: "app", userId: "user", jobId: "job", sessionId: "round", status: "queued", startedAt: null,
+  leaseToken: null, leaseExpiresAt: null, submitStartedAt: null, submitClickPerformedAt: null,
+  outboundSubmissionJson: null, destinationResponseJson: null, consentGrantedAt: now, createdAt: now, retryCount: 0,
   submissionReceiptJson: null, userProvidedAnswersJson: null, answerContinuationJson: null, pendingQuestionsJson: null, completedAt: null,
   cvDocxPath: null, submittedAt: null, submittedVia: null, submitConfirmation: null,
   canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
@@ -52,7 +54,7 @@ assert.equal(currentWorkerIneligibility({ ...base, user: { ...base.user, prefere
 assert.equal(hasPotentialSubmission(base), false);
 for (const patch of [{ submitConfirmation: SUBMISSION_STARTED }, { submitConfirmation: "UNCONFIRMED" },
   { submittedAt: now }, { submittedVia: "email_recruiter" }, { canaryLog: "{}" },
-  { answersUsedJson: "[]" }, { replyCount: 1 }, { viewedAt: now }]) {
+  { answersUsedJson: "[]" }, { replyCount: 1 }, { viewedAt: now }, { submitStartedAt: now }]) {
   assert.equal(hasPotentialSubmission({ ...base, ...patch }), true);
 }
 assert.equal(hasPotentialSubmission({ ...base, submitConfirmation: NOT_SUBMITTED, canaryLog: "{}" }), false);
@@ -68,6 +70,17 @@ assert(worker.indexOf("lookupPublishedSkipListInbox") < worker.indexOf("reserveA
 assert(worker.includes("discoverPublishedHiringInbox"), "Worker discovers published hiring inboxes on the employer domain");
 assert(worker.includes("isSkippedPortalUrl"), "Skip-list hosts skip portal submit and try email first");
 assert(worker.includes("SKIPPED_ATS_MANUAL_MESSAGE"), "Skip-list handoff happens only after email lookup fails");
+assert(worker.includes("skipListManualHandoffWhere"), "Skip-list miss must include answers_claimed / NOT_SUBMITTED resumes");
+assert(worker.includes("skipListManualHandoffData"), "Skip-list miss must clear the work lease on handoff");
+assert(worker.includes("skipListEmailSendDecision"), "Skip-list inbox must pass the recruiter-email fallback gate before send");
+assert(worker.includes("recruiterEmailFallbackEnabled"), "Every employer-email send path checks the default-off gate");
+assert(worker.includes("blocksUncertainAutoRetry"), "Worker skip-list path refuses uncertain rows");
+const gates = readFileSync(new URL("../src/lib/application-worker-gates.ts", import.meta.url), "utf8");
+assert(gates.includes("CONTINUATION_PROOF_MISSING_MESSAGE"), "Missing continuation proof must persist a visible user-action");
+assert(gates.includes("handOffContinuationProofMissing"), "continuation_proof_missing must rewrite the row, not return silently");
+assert(gates.includes("blocksUncertainAutoRetry"), "Reserve and resume refuse uncertain rows as a standalone check");
+assert(gates.includes("RecoveryReleaseBudget"), "Answer resume stays held until the recovery-release gate");
+assert(gates.includes("controlled_release"), "Controlled-release hold has a visible Italian reason");
 assert(readFileSync(new URL("../src/lib/skip-list-email-lookup.ts", import.meta.url), "utf8").includes("skipPageFetch"),
   "Cheap skip-list lookup must not crawl the ATS job page");
 assert(!readFileSync(new URL("../src/lib/application-worker-gates.ts", import.meta.url), "utf8").includes("requiresManualAtsHandoff"),
@@ -79,12 +92,17 @@ assert(worker.includes('notSubmitted("failed", "recruiter_email_not_sent")'), "E
 assert(worker.includes('notSubmitted("needs_user", "recruiter_email_acceptance_unknown")'), "Uncertain email must persist proof-of-send");
 const postgresFailureVm = readFileSync(new URL("./test-send-receive-postgres.ts", import.meta.url), "utf8");
 assert(postgresFailureVm.includes("notSubmitted,"), "Postgres email-failure VM must bind notSubmitted");
-assert(worker.includes('status: "optimizing", startedAt: workToken'));
+assert(postgresFailureVm.includes("liveLeaseFields,"), "Postgres email-failure VM must bind liveLeaseFields");
+assert(worker.includes("...liveLeaseFields(workToken)"));
+assert(worker.includes("...renewLeaseData()"));
 assert(!worker.includes("MAX_ATTEMPTS"), "Unknown portal outcomes must not be retried");
 assert(!worker.includes("markSessionSentSuccess"), "Success accounting must be atomic with the application result");
 assert(!worker.includes('submitConfirmation: "DETECTED_LEGACY"'), "A click is not a confirmed receipt");
 const claim = readFileSync(new URL("../src/lib/application-claim.ts", import.meta.url), "utf8");
-assert(claim.includes('["applying", "submitting"].includes(app.status) || hasPotentialSubmission(app)'));
+assert(claim.includes('["applying", "submitting"].includes(app.status)'));
+assert(claim.includes("blocksUncertainAutoRetry(app)"));
+assert(claim.includes("expiredLeaseWhere"));
+assert(claim.includes("submitStartedAt"));
 assert(claim.includes('status: app.status, startedAt: app.startedAt, completedAt: null'));
 const healing = readFileSync(new URL("../src/lib/auto-apply-self-heal.ts", import.meta.url), "utf8");
 assert(healing.includes("await recoverStuckApplications()"));

@@ -388,10 +388,10 @@ export const greenhouseAdapter: PortalAdapter = {
         pendingQuestions = [{ label: "Verifica dei campi obbligatori non disponibile: controlla il form prima di inviare.", kind: "text" }];
       }
 
-      // Captcha: bloccante SOLO se interattivo (checkbox/challenge/hCaptcha/
-      // Turnstile visibili). Il badge reCAPTCHA invisibile — presente su quasi
-      // tutti i form Greenhouse — NON blocca: il token nasce al click su Invia.
-      // (Prima: badge + textarea vuota = "captcha" → 0 submit in produzione.)
+      // Captcha: blocking only when an interactive challenge is visible
+      // (bframe / checkbox / hCaptcha / Turnstile). The score-based
+      // enterprise.js?render= badge on every Greenhouse page (256×60,
+      // no data-sitekey, no challenge iframe) is reported, not blocking.
       const captcha = await detectBlockingCaptcha(page);
       console.log(`[greenhouse] captcha check: ${captcha.kind ?? "none"} → ${captcha.blocking ? "BLOCCANTE" : "ok"} (${captcha.detail})`);
       if (captcha.blocking) {
@@ -399,7 +399,7 @@ export const greenhouseAdapter: PortalAdapter = {
           ok: false,
           status: "captcha",
           error:
-            `Il form ha un captcha interattivo (${captcha.kind}) che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.`,
+            `Il form mostra un captcha interattivo (${captcha.kind}) che blocca l'invio automatico (per design non aggirabile). CV e risposte pronti: completa il captcha e invia manualmente.`,
         };
       }
 

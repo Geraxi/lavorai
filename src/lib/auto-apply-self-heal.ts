@@ -67,6 +67,7 @@ const NO_PRIOR_DELIVERY = {
   submittedAt: null, submittedVia: null, submitConfirmation: null,
   canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null,
   replyCount: 0, userStatus: null, cvDocxPath: null, cvPdfPath: null, coverLetterPath: null,
+  submitStartedAt: null,
 } as const;
 const RETRY_MAX = 1;
 const RETRY_MIN_AGE_MS = 30 * 60 * 1000; // aspetta almeno 30 min prima di ritentare
@@ -87,6 +88,14 @@ export async function runSelfHeal(): Promise<SelfHealReport> {
     detectedSampleSize: 0,
     transientFailuresRetried: 0,
   };
+
+  // Queued lease release is not a historical replay: a claim was taken
+  // and never reserved/sent. Run it even while other retries stay blocked.
+  try {
+    await recoverStuckApplications();
+  } catch (err) {
+    console.error("[self-heal] queued-claim recovery failed", err);
+  }
 
   // Temporary manual-only rollout never rewrites or replays historical work.
   if (historicalRetriesBlocked()) return report;

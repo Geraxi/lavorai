@@ -125,10 +125,11 @@ export default async function DashboardPage() {
   ]);
 
   // ── Progress by journey stage ────────────────────────────────────────
-  // Evidence-aware stages from the shared metrics module: "success" alone is
-  // NOT delivery; "sent" is the same number as the "Invii confermati" KPI.
+  // Evidence-aware stages: "sent" is confirmed-with-proof only.
+  // Legacy success+submittedAt rows are "sent_unverified", not "Esito da verificare".
   const { total: totalApplications, stages: stageCounts } = stageData;
   const confirmed = stageCounts.sent;
+  const sentUnverified = stageCounts.sent_unverified;
   const stages = STAGE_ORDER.map((stage) => ({ stage, count: stageCounts[stage] })).filter((s) => s.count > 0);
   const trendHasData = !!series && series.weeks.some((w) => w.sent > 0 || w.replies > 0);
 
@@ -166,6 +167,7 @@ export default async function DashboardPage() {
 
   const kpis: { key: string; label: string; value: number; hint: string; href: string; icon: LucideIcon; daily: number[] | null; noHistory?: string }[] = [
     { key: "confirmed", label: tr("Invii confermati", "Confirmed sends"), value: confirmed, hint: tr("con prova di consegna", "with delivery evidence"), href: "/applications?filter=sent", icon: Send, daily: series?.daily.confirmed ?? null },
+    { key: "sent_unverified", label: tr("Invii registrati, senza conferma", "Recorded sends, unconfirmed"), value: sentUnverified, hint: tr("inviate, senza ricevuta verificabile", "sent, without a verifiable receipt"), href: "/applications?filter=sent_unverified", icon: CircleAlert, daily: null },
     { key: "replies", label: tr("Risposte recruiter", "Recruiter replies"), value: replies, hint: tr("candidature con risposta", "applications with a reply"), href: "/inbox", icon: MessageSquare, daily: series?.daily.replies ?? null },
     { key: "interviews", label: tr("Colloqui", "Interviews"), value: interviews, hint: tr("inviti ricevuti", "invites received"), href: "/interview", icon: CalendarCheck, daily: series?.daily.interviews ?? null },
     { key: "offers", label: tr("Offerte", "Offers"), value: offers, hint: tr("segnate da te", "marked by you"), href: "/applications?filter=offerta", icon: Trophy, daily: null, noHistory: tr("storico non disponibile", "no history available") },
