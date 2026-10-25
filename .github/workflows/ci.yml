@@ -77,6 +77,22 @@ jobs:
           psql -h 127.0.0.1 -U ci_user -d ci_db -c 'CREATE DATABASE lavorai_send_reply_test'
           npm run test:send-reply-postgres
 
+      - name: ATS test claim PostgreSQL concurrency
+        env:
+          PGPASSWORD: ci_password
+          ATS_TEST_CLAIM_DATABASE_URL: "postgresql://ci_user:ci_password@127.0.0.1:5432/lavorai_ats_test_claim_test?connection_limit=16"
+        run: |
+          psql -h 127.0.0.1 -U ci_user -d ci_db -c 'CREATE DATABASE lavorai_ats_test_claim_test'
+          npm run test:ats-test-claim-postgres
+
+      - name: ATS test end-to-end fake Recruitee PostgreSQL
+        env:
+          PGPASSWORD: ci_password
+          ATS_TEST_E2E_DATABASE_URL: "postgresql://ci_user:ci_password@127.0.0.1:5432/lavorai_ats_test_e2e_test?connection_limit=16"
+        run: |
+          psql -h 127.0.0.1 -U ci_user -d ci_db -c 'CREATE DATABASE lavorai_ats_test_e2e_test'
+          npm run test:ats-test-e2e-postgres
+
       - name: MCP protocol tests
         run: npm run test:mcp
 

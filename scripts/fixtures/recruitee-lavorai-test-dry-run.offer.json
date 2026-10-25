@@ -1,0 +1,20 @@
+{
+  "source": "GET https://produzioneweb.recruitee.com/api/offers/lavorai-test-dry-run",
+  "method": "GET",
+  "capturedAt": "2026-10-25T20:39:11.000Z",
+  "httpStatus": 200,
+  "note": "Read-only public careers API. Never POST to the real host. mailbox_email and other unused fields omitted.",
+  "offer": {
+    "id": 2796587,
+    "slug": "lavorai-test-dry-run",
+    "title": "LavorAI TEST — Dry Run",
+    "status": "published",
+    "options_phone": "optional",
+    "options_cv": "optional",
+    "options_cover_letter": "optional",
+    "options_photo": "off",
+    "options_salutation": "off",
+    "options_title": "off",
+    "open_questions": []
+  }
+}

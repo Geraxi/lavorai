@@ -1,7 +1,20 @@
 import { resolveAdapterByUrl, noAdapterMessageFor } from "@/lib/ats-adapter-resolution";
 import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
+import {
+  ATS_TEST_FICTIONAL_MARK,
+  ATS_TEST_REFUSED_BEFORE_SUBMIT,
+  adoptAtsTestWorkLease,
+  atsTestCandidateEmail,
+  atsTestPauseExemptionForId,
+  atsTestSkipsDocumentTailoring,
+  atsTestSkipsRecruiterLookup,
+  isAtsTestAuthorization,
+  syntheticAtsTestCvText,
+  syntheticAtsTestProfile,
+  type AtsTestAuthorization,
+} from "@/lib/ats-test-capability";
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
-import { notSubmitted } from "@/lib/proof-of-send";
+import { notSubmitted, portalProof, submittedWithProof } from "@/lib/proof-of-send";
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
 import { liveLeaseFields, renewLeaseData } from "@/lib/application-lease";
 import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS, needsAnswersSubmitConfirmation } from "@/lib/application-answer-continuation";
@@ -110,7 +123,7 @@ function applicationDocumentFilename(
 
 export async function processApplication(
   applicationId: string,
-  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean },
+  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean; atsTestAuth?: AtsTestAuthorization },
 ): Promise<void> {
   // Binds AI token usage of this run to the application (cost per application).
   return withAiUsageContext({ applicationId }, () => processApplicationRun(applicationId, opts));
@@ -118,9 +131,10 @@ export async function processApplication(
 
 async function processApplicationRun(
   applicationId: string,
-  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean },
+  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean; atsTestAuth?: AtsTestAuthorization },
 ): Promise<void> {
-  if (applicationsPaused()) return;
+  const atsTestAuth = isAtsTestAuthorization(opts?.atsTestAuth) ? opts.atsTestAuth : undefined;
+  if (applicationsPaused() && !atsTestPauseExemptionForId(atsTestAuth, applicationId)) return;
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -141,6 +155,7 @@ async function processApplicationRun(
     console.error(`[worker] Application ${applicationId} non trovata`);
     return;
   }
+  if (atsTestAuth && !atsTestPauseExemptionForId(atsTestAuth, applicationId)) return;
 
   // Skip-list hosts: look up a published inbox first. A miss hands off
   // without reserving a daily slot or running CV/AI.
@@ -188,13 +203,16 @@ async function processApplicationRun(
   }
 
   // Atomic admission rechecks the current account/round and reserves capacity.
-  // All queue backends, including direct invocations, pass through this guard.
-  const workToken = await reserveApplicationWork(applicationId);
+  // ATS tests are claimed in prepareAndRunAtsTest before this function; adopt
+  // that lease instead of reserveApplicationWork (which only admits queued).
+  const workToken = atsTestAuth
+    ? await adoptAtsTestWorkLease(prisma, applicationId)
+    : await reserveApplicationWork(applicationId, prisma, atsTestAuth);
   if (!workToken) return;
   if (!await ensureLiveJobForApplication(applicationId, workToken, app.job.id, app.job.url)) return;
 
   const cv = app.user.cvDocuments[0];
-  if (!cv) {
+  if (!cv && !atsTestAuth) {
     await markFailed(applicationId, "CV utente mancante.", workToken);
     return;
   }
@@ -206,7 +224,7 @@ async function processApplicationRun(
   // Queue/eligibility backoff timestamps are not AI work and must not consume the budget.
   const startedToday = await prisma.application.count({ where: { startedAt: { gte: dayStart }, status: { not: "queued" }, id: { not: applicationId } } });
   const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 300);
-  if (startedToday >= budget) {
+  if (!atsTestAuth && startedToday >= budget) {
     await prisma.application.updateMany({ where: { id: applicationId, status: "optimizing", ...liveLeaseFields(workToken) }, data: { status: "queued", startedAt: null, leaseToken: null, leaseExpiresAt: null } });
     console.warn(`[worker] budget AI giornaliero raggiunto (${startedToday}/${budget}): ${applicationId} rimandata di 20 min (alza AI_DAILY_APP_BUDGET per cambiare)`);
     return;
@@ -247,8 +265,35 @@ async function processApplicationRun(
         prefs?.vatNumber != null ||
         prefs?.portfolioUrl != null);
 
-    result = await optimizeCV({
-      cvText: cv.extractedText,
+    result = atsTestAuth ? {
+      optimizedCV: {
+        fullName: `${syntheticAtsTestProfile().firstName} ${syntheticAtsTestProfile().lastName}`,
+        targetRole: app.job.title,
+        email: syntheticAtsTestProfile().email,
+        phone: syntheticAtsTestProfile().phone,
+        location: syntheticAtsTestProfile().city,
+        linkedinUrl: null,
+        summary: syntheticAtsTestProfile().summary,
+        experiences: syntheticAtsTestProfile().experiences.map((item) => ({
+          role: item.role,
+          company: item.company,
+          location: item.location,
+          startDate: item.startDate,
+          endDate: item.endDate,
+          bullets: item.bullets,
+        })),
+        education: [],
+        skills: { technical: ["ATS test"], soft: [], tools: [] },
+        languages: syntheticAtsTestProfile().languages.map((item) => ({
+          language: item.name,
+          level: item.level,
+        })),
+      },
+      coverLetter: `${ATS_TEST_FICTIONAL_MARK} Synthetic cover letter. Not a real candidate.`,
+      atsScore: 0,
+      suggestions: [] as string[],
+    } : await optimizeCV({
+      cvText: cv?.extractedText ?? syntheticAtsTestCvText(),
       jobPosting,
       jobLang,
       coverLetterHints,
@@ -350,7 +395,9 @@ async function processApplicationRun(
   }
 
   // 3b. PDF tailoring (structured CVProfile → tailored → ATS PDF). Non-fatal.
+  // Token path: skip so the test does not write a CVProfile or burn tailoring credits.
   let cvPdfPath: string | null = null;
+  if (!atsTestSkipsDocumentTailoring(atsTestAuth)) {
   try {
     let profileRow = await prisma.cVProfile.findUnique({
       where: { userId: app.userId },
@@ -404,6 +451,7 @@ async function processApplicationRun(
     );
   } catch (err) {
     console.error(`[worker] ${applicationId} PDF tailoring failed`, err);
+  }
   }
 
   // A recovered worker cannot overwrite a newer owner or reach delivery.
@@ -505,22 +553,29 @@ async function processApplicationRun(
     companyWebsite: app.job.companyWebsite,
     discoverEmployerInbox: discoverPublishedHiringInbox,
   };
-  let verifiedRecruiter = await findVerifiedRecruiterEmail(
-    resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
-  );
-  if (verifiedRecruiter) {
-    await prisma.job.update({
-      where: { id: app.job.id },
-      data: {
-        recruiterEmail: verifiedRecruiter.email,
-        recruiterEmailSourceUrl: verifiedRecruiter.provenance.sourceUrl,
-        recruiterScrapedAt: new Date(),
-      },
-    }).catch(() => undefined);
-    if (adapter) {
-      console.log(`[worker] ${applicationId} published recruiter email — skipping portal ${adapter.id}, using email_recruiter`);
+  let verifiedRecruiter = null as Awaited<ReturnType<typeof findVerifiedRecruiterEmail>>;
+  if (!atsTestSkipsRecruiterLookup(atsTestAuth)) {
+    verifiedRecruiter = await findVerifiedRecruiterEmail(
+      resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
+    );
+    if (verifiedRecruiter) {
+      await prisma.job.update({
+        where: { id: app.job.id },
+        data: {
+          recruiterEmail: verifiedRecruiter.email,
+          recruiterEmailSourceUrl: verifiedRecruiter.provenance.sourceUrl,
+          recruiterScrapedAt: new Date(),
+        },
+      }).catch(() => undefined);
+      if (adapter) {
+        console.log(`[worker] ${applicationId} published recruiter email — skipping portal ${adapter.id}, using email_recruiter`);
+      }
     }
   }
+  // Restricted ATS-test jobs must stay on the production adapter path.
+  // Never substitute a recruiter-email fallback for an allowlisted test dest.
+  if (app.job.source === "ats_test") verifiedRecruiter = null;
+
   const preferRecruiterEmail = !!verifiedRecruiter;
 
   if (adapter && !preferRecruiterEmail) {
@@ -574,8 +629,9 @@ async function processApplicationRun(
       jobTitle: app.job.title,
       company: app.job.company,
       jobDescription: clipJobDescriptionForAi(app.job.description),
-      forceRealSubmit: opts?.forceRealSubmit === true,
-      forceDryRun: opts?.forceDryRun === true,
+      forceRealSubmit: atsTestAuth ? atsTestAuth.mode === "real_submit" : opts?.forceRealSubmit === true,
+      forceDryRun: atsTestAuth ? atsTestAuth.mode === "dry_run" : opts?.forceDryRun === true,
+      atsTestAuth,
     }).catch((err) => {
       console.error(
         `[worker] ${applicationId} adapter ${adapter.id} threw`,
@@ -649,20 +705,38 @@ async function processApplicationRun(
           : {}),
         ...attemptEvidenceWrite(outcome.attemptEvidence),
         errorMessage: isDryRun
-          ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
+          ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).${
+              "offerValidation" in outcome && outcome.offerValidation
+                ? ` Required: ${outcome.offerValidation.requiredFields.join(", ") || "none"}. Real submit would be accepted: ${outcome.offerValidation.wouldAcceptRealSubmit ? "yes" : "no"}.`
+                : ""
+            }`
           : isUnconfirmed
             ? `Submit cliccato ma non abbiamo rilevato la pagina di conferma di ${adapter.label}. La candidatura potrebbe non essere stata accettata (validazione silenziosa, captcha, errore modale). Verifica manualmente sul portale.`
             : null,
       };
       if (isConfirmed) {
-        if (!await completeApplicationSubmission(applicationId, workToken, completionData)) return;
+        if (atsTestAuth) {
+          // Claim is the ATS-test fence; this path never reserved a rollout
+          // slot, so completeApplicationSubmission (SUBMISSION_STARTED +
+          // reservation) cannot apply. Persist the receipt on the claimed row.
+          const proof = portalProof({
+            receipt: outcome.receipt,
+            postSubmitScreenshotUrl: "canary" in outcome ? outcome.canary?.postSubmitScreenshotUrl : null,
+          });
+          await prisma.application.updateMany({
+            where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
+            data: { ...completionData, ...(proof ? submittedWithProof(proof, now) : {}) },
+          });
+        } else if (!await completeApplicationSubmission(applicationId, workToken, completionData)) {
+          return;
+        }
       } else {
         await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: completionData });
       }
       // Solo confirmed (= conferma rilevata davvero) bumpa sessione e
       // manda l'email "candidatura inviata". UNCONFIRMED resta in coda
-      // di review, niente email fuorviante.
-      if (!isDryRun && !isUnconfirmed) {
+      // di review, niente email fuorviante. ATS tests are not a user notice.
+      if (!isDryRun && !isUnconfirmed && !atsTestAuth) {
         console.log(`[worker] ${applicationId} sent via portal_${adapter.id}`);
         await notifyApplicationSent(applicationId).catch((err) =>
           console.error(`[worker] ${applicationId} notify email failed`, err),
@@ -771,6 +845,18 @@ async function processApplicationRun(
     }
 
     if (["login_required", "not_eligible", "stuck", "unsafe_permissions", "sso_required", "marketplace", "id_verification", "not_a_job_application"].includes(outcome.status)) {
+      if (atsTestAuth && "refusedBeforeSubmit" in outcome && outcome.refusedBeforeSubmit) {
+        await prisma.application.updateMany({
+          where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "queued", "optimizing"] } },
+          data: {
+            status: "ready_to_apply",
+            submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT,
+            errorMessage: outcome.error,
+            completedAt: null,
+          },
+        });
+        return;
+      }
       const { confirmationForFailureStatus, persistAttemptConfirmation } = await import("@/lib/attempt-outcome");
       const confirmation = persistAttemptConfirmation(confirmationForFailureStatus(outcome.status) ?? `FAILED:${outcome.status}`);
       await prisma.application.updateMany({
@@ -813,9 +899,11 @@ async function processApplicationRun(
         }
         return;
       }
-      verifiedRecruiter = verifiedRecruiter ?? await findVerifiedRecruiterEmail(
-        resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
-      );
+      if (!atsTestSkipsRecruiterLookup(atsTestAuth)) {
+        verifiedRecruiter = verifiedRecruiter ?? await findVerifiedRecruiterEmail(
+          resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
+        );
+      }
       if (verifiedRecruiter) {
         console.log(`[worker] ${applicationId} captcha on ${adapter.id} — sending published recruiter email instead of handoff`);
       } else {
@@ -871,7 +959,7 @@ async function processApplicationRun(
   // job (diversa dall'aggregatore Adzuna), puntiamo l'utente lì in manuale;
   // al prossimo ciclo l'auto-apply userà direttamente quella copia.
   if (!skipPortal && !verifiedRecruiter && !app.job.recruiterEmail && isKnownAtsCompany(app.job.company)) {
-    const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr", "breezy", "pinpoint"];
+    const ATS_SOURCES = ["greenhouse", "lever", "workable", "ashby", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr", "breezy", "pinpoint", "ats_test"];
     const isAtsSourceJob = ATS_SOURCES.includes(app.job.source);
 
     if (isAtsSourceJob) {
@@ -1283,10 +1371,11 @@ interface AutoSubmitInput {
   clPath: string;
   jobTitle: string;
   portalSubmitEnabled?: boolean;
+  atsTestAuth?: AtsTestAuthorization;
 }
 
 async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
-  assertApplicationsRunning();
+  if (!input.atsTestAuth) assertApplicationsRunning();
   const { applicationId, portal, jobUrl } = input;
 
   // Job mock/demo ESPLICITO: solo URL di sviluppo (example.com/org).
@@ -1423,7 +1512,7 @@ async function ensureLocalPath(
   return localPath;
 }
 
-async function recheckBeforePortalSubmit(applicationId: string, workToken: Date, jobUrl: string, channel: string, boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit"): Promise<boolean> {
+async function recheckBeforePortalSubmit(applicationId: string, workToken: Date, jobUrl: string, channel: string, boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit", atsTestAuth?: AtsTestAuthorization): Promise<boolean> {
   const live = await checkJobUrlLiveness(jobUrl);
   if (live.state !== "live") {
     if (live.state === "closed") {
@@ -1440,7 +1529,9 @@ async function recheckBeforePortalSubmit(applicationId: string, workToken: Date,
     } });
     return false;
   }
-  return recheckApplicationSubmission(applicationId, workToken, undefined, channel, boundary);
+  // ATS test: claimAtsTestAttempt is the send fence; do not require SUBMISSION_STARTED.
+  if (atsTestAuth) return true;
+  return recheckApplicationSubmission(applicationId, workToken, undefined, channel, boundary, atsTestAuth);
 }
 
 async function portalSubmitStrategy(
@@ -2091,26 +2182,30 @@ interface AdapterSubmitInput {
    *  flag globale (che farebbe partire il backlog dal worker locale). */
   forceRealSubmit?: boolean;
   forceDryRun?: boolean;
+  atsTestAuth?: AtsTestAuthorization;
 }
 
 async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   import("@/lib/portal-adapters").ApplyOutcome | { ok: false; status: "worker_gate_blocked"; error: string }
 > {
   const { applicationId, adapter, jobUrl, cvPath, clPath, userId } = input;
-  assertApplicationsRunning();
+  if (!input.atsTestAuth) assertApplicationsRunning();
 
-  // Profilo utente per compilare i campi del form
-  const profileRow = await prisma.cVProfile.findUnique({
-    where: { userId },
-  });
-  if (!profileRow) {
+  // Profilo utente per compilare i campi del form.
+  // The ATS-test path uses an in-memory synthetic profile and never writes one.
+  const profile = input.atsTestAuth
+    ? syntheticAtsTestProfile()
+    : await (async () => {
+      const profileRow = await prisma.cVProfile.findUnique({ where: { userId } });
+      return profileRow ? rowToProfile(profileRow) : null;
+    })();
+  if (!profile) {
     return {
       ok: false,
       status: "missing_field",
       error: "Profilo CV mancante — vai su /cv per compilarlo.",
     };
   }
-  const profile = rowToProfile(profileRow);
 
   // Email candidato nei form ATS: se l'inbound è configurato
   // (INBOUND_EMAIL_DOMAIN), usiamo SEMPRE l'alias reply+<appId>@inbound così le
@@ -2121,26 +2216,41 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   //
   // FAIL LOUD: se manca INBOUND_EMAIL_DOMAIN su Railway/worker, il submit di
   // portali che richiedono OTP (Greenhouse, Ashby) fallirà con errore chiaro.
-  const inboundAlias = process.env.INBOUND_ROUTE_ATS_EMAIL === "false" ? null : inboundReplyAddress(applicationId);
-  
-  // Per portali ATS che richiedono verifica OTP (Greenhouse/Ashby), l'inbound
-  // è OBBLIGATORIO. Se manca, fail con messaggio chiaro invece di usare l'email
-  // personale dell'utente (che causerebbe invio di codici alla sua casella).
-  const portalNeedsOtp = adapter.id === "greenhouse" || adapter.id === "ashby";
-  if (portalNeedsOtp && !inboundAlias) {
-    return {
-      ok: false,
-      status: "missing_field",
-      error: `${adapter.label} richiede verifica email automatica. Configura INBOUND_EMAIL_DOMAIN sul worker (Railway) per abilitare l'auto-OTP. Senza, i codici arriverebbero all'utente invece che al sistema.`,
-    };
+  let formEmail: string;
+  if (input.atsTestAuth) {
+    const candidate = atsTestCandidateEmail();
+    if (!candidate.ok) {
+      return {
+        ok: false,
+        status: "not_eligible",
+        error: `ATS test submit blocked: ${candidate.reason}. Nessun invio eseguito.`,
+        refusedBeforeSubmit: true,
+      };
+    }
+    profile.email = candidate.email;
+    formEmail = candidate.email;
+  } else {
+    const inboundAlias = process.env.INBOUND_ROUTE_ATS_EMAIL === "false" ? null : inboundReplyAddress(applicationId);
+
+    // Per portali ATS che richiedono verifica OTP (Greenhouse/Ashby), l'inbound
+    // è OBBLIGATORIO. Se manca, fail con messaggio chiaro invece di usare l'email
+    // personale dell'utente (che causerebbe invio di codici alla sua casella).
+    const portalNeedsOtp = adapter.id === "greenhouse" || adapter.id === "ashby";
+    if (portalNeedsOtp && !inboundAlias) {
+      return {
+        ok: false,
+        status: "missing_field",
+        error: `${adapter.label} richiede verifica email automatica. Configura INBOUND_EMAIL_DOMAIN sul worker (Railway) per abilitare l'auto-OTP. Senza, i codici arriverebbero all'utente invece che al sistema.`,
+      };
+    }
+
+    // Per-user LavorAI inbox (<slug>@apply.lavorai.it) when present: ATS
+    // confirmations land in /api/inbound/email and become proof-of-send.
+    // OTP portals keep the per-application alias (auto-OTP is keyed by appId).
+    const userInbox = portalNeedsOtp ? null : await getUserInboxAddress(prisma, userId).catch(() => null);
+    formEmail = userInbox ?? inboundAlias ?? input.userEmail;
+    if (formEmail !== input.userEmail) profile.email = formEmail;
   }
-  
-  // Per-user LavorAI inbox (<slug>@apply.lavorai.it) when present: ATS
-  // confirmations land in /api/inbound/email and become proof-of-send.
-  // OTP portals keep the per-application alias (auto-OTP is keyed by appId).
-  const userInbox = portalNeedsOtp ? null : await getUserInboxAddress(prisma, userId).catch(() => null);
-  const formEmail = userInbox ?? inboundAlias ?? input.userEmail;
-  if (formEmail !== input.userEmail) profile.email = formEmail;
 
   // Scarica i file localmente se storage remoto (Blob/Supabase)
   const [cvLocalPath, clLocalPath] = await Promise.all([
@@ -2156,10 +2266,14 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
 
   let browser: import("playwright").Browser | undefined;
   try {
-    browser = await launchBrowser();
-    const context = await humanContext(browser);
-    const page = await context.newPage();
-    if (!await beginApplicationSubmission(applicationId, input.workToken, undefined, `portal_${adapter.id}`)) {
+    const page = adapter.requiresBrowser === false
+      ? null as unknown as import("playwright").Page
+      : await (async () => {
+        browser = await launchBrowser();
+        const context = await humanContext(browser);
+        return context.newPage();
+      })();
+    if (!input.atsTestAuth && !await beginApplicationSubmission(applicationId, input.workToken, undefined, `portal_${adapter.id}`, input.atsTestAuth)) {
       return { ok: false, status: "worker_gate_blocked", error: "Current worker gates blocked delivery." };
     }
     let finalBoundaryEntered = false;
@@ -2175,7 +2289,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       beforeSubmit: () => {
         if (finalBoundaryEntered || pauseEntered || (staged && !candidateDataEntered)) return Promise.resolve(false);
         finalBoundaryEntered = true;
-        return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, `portal_${adapter.id}`);
+        return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, `portal_${adapter.id}`, "final_submit", input.atsTestAuth);
       },
       ...(staged ? {
         onPreTransmissionPause: (questions: import("./portal-adapters/types").PendingQuestion[]) => {
@@ -2186,14 +2300,14 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
         beforeCandidateData: () => {
           if (candidateDataEntered || finalBoundaryEntered || pauseEntered) return Promise.resolve(false);
           candidateDataEntered = true;
-          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, stagedChannel, "candidate_data");
+          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, stagedChannel, "candidate_data", input.atsTestAuth);
         },
       } : {}),
       ...(adapter.id === "greenhouse" ? {
         beforeVerificationSubmit: () => {
           if (!candidateDataEntered || !finalBoundaryEntered || verificationEntered || pauseEntered) return Promise.resolve(false);
           verificationEntered = true;
-          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, "portal_greenhouse", "verification_submit");
+          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, "portal_greenhouse", "verification_submit", input.atsTestAuth);
         },
       } : {}),
       userEmail: formEmail,
@@ -2207,6 +2321,9 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       dryRun: input.forceRealSubmit
         ? false
         : input.forceDryRun === true || process.env.PORTAL_SUBMIT_DRY_RUN === "true",
+      atsTestAuth: input.atsTestAuth,
+      atsTestOwnerUserId: userId,
+      atsTestJobSource: input.atsTestAuth ? "ats_test" : undefined,
       answers: input.answers,
       storedAnswers: input.storedAnswers,
       reusableAnswers: input.reusableAnswers,

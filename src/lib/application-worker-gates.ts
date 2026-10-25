@@ -4,6 +4,7 @@ import { parseAnswers } from "./application-answers";
 import { isValidProof, portalProof, submittedWithProof, type SentProof } from "./proof-of-send";
 import { completesApplicationQuestion, resolveExplicitApplicationAnswer, parseApplicationQuestion } from "./application-question-answers";
 import { applicationsPaused } from "@/lib/application-pause";
+import { atsTestPauseExemption, syntheticAtsTestProfile } from "@/lib/ats-test-capability";
 import { applicationRolloutConfig, rolloutApplicationIneligibility, ROLLOUT_BUDGET_HELD_MESSAGE } from "@/lib/application-rollout";
 import { reserveSubmissionBudget, submissionSubjectKey } from "@/lib/application-submission-budget";
 import type { Prisma, PrismaClient } from "@prisma/client";
@@ -69,41 +70,86 @@ export function hasPotentialSubmission(row: Pick<WorkerGateRow, Exclude<keyof ty
   return !!(row.submitConfirmation || row.canaryLog || row.answersUsedJson);
 }
 
-export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date()): string | null {
-  if (applicationsPaused()) return "applications_paused";
-  const rolloutReason = rolloutApplicationIneligibility(row, now);
+function overlayAtsTestGateRow(row: WorkerGateRow, now: Date): WorkerGateRow {
+  const profile = syntheticAtsTestProfile();
+  return {
+    ...row,
+    consentGrantedAt: row.consentGrantedAt ?? now,
+    sessionId: null,
+    session: null,
+    user: {
+      ...row.user,
+      privacyConsentAt: row.user.privacyConsentAt ?? now,
+      emailVerified: row.user.emailVerified ?? now,
+      subscriptionStatus: row.user.subscriptionStatus === "paused" ? row.user.subscriptionStatus : (row.user.subscriptionStatus || "active"),
+      currentPeriodEnd: row.user.currentPeriodEnd && row.user.currentPeriodEnd > now
+        ? row.user.currentPeriodEnd
+        : new Date(+now + 86_400_000),
+      preferences: {
+        autoApplyMode: "manual",
+        rolesJson: row.user.preferences?.rolesJson ?? "[]",
+        locationsJson: row.user.preferences?.locationsJson ?? "[]",
+        applicationAnswersJson: row.user.preferences?.applicationAnswersJson ?? "{}",
+        employmentType: row.user.preferences?.employmentType ?? "employee",
+        salaryMin: row.user.preferences?.salaryMin ?? 0,
+        matchMin: row.user.preferences?.matchMin ?? 0,
+        sourcesJson: row.user.preferences?.sourcesJson ?? "[]",
+      },
+      cvProfile: {
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        email: profile.email,
+        phone: profile.phone,
+        city: profile.city,
+        title: profile.title,
+        summary: profile.summary,
+        experiencesJson: JSON.stringify(profile.experiences),
+        educationJson: JSON.stringify(profile.education),
+        skillsJson: JSON.stringify(profile.skills),
+        languagesJson: JSON.stringify(profile.languages),
+        linksJson: JSON.stringify(profile.links),
+      },
+    },
+  };
+}
+
+export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date(), atsTestAuth?: unknown): string | null {
+  const testOk = atsTestPauseExemption(atsTestAuth, row);
+  if (applicationsPaused() && !testOk) return "applications_paused";
+  const gated = testOk ? overlayAtsTestGateRow(row, now) : row;
+  const rolloutReason = rolloutApplicationIneligibility(gated, now);
   if (rolloutReason) return rolloutReason;
-  const user = row.user;
+  const user = gated.user;
   if (user.suspendedAt) return "user_suspended";
   if (!user.privacyConsentAt) return "privacy_consent_missing";
   if (!user.emailVerified) return "email_verification_missing";
   const mode = user.preferences?.autoApplyMode;
-  if (mode === "off" || !mode || (mode !== "auto" && !(["manual", "hybrid"].includes(mode) && row.consentGrantedAt))) return "auto_apply_not_enabled";
+  if (mode === "off" || !mode || (mode !== "auto" && !(["manual", "hybrid"].includes(mode) && gated.consentGrantedAt))) return "auto_apply_not_enabled";
   if (user.subscriptionStatus === "paused" || (user.pausedUntil && user.pausedUntil > now)) return "subscription_paused";
   // Senza accesso pagato/prova si passa dalla quota gratuita settimanale,
   // verificata sotto lock in admissionBlock (serve un conteggio su DB).
   if (!hasPaidOrTrialApplicationAccess(user, now) && !usesFreeWeeklyQuota(user, now)) return "billing_ineligible";
-  if (row.job.closedAt) return "job_closed";
-  if (isAvoidedCompany(row.job.company, user.avoidCompanies)) return "company_avoided";
-  if (row.sessionId && (!row.session || row.session.userId !== row.userId
-    || !["active", "auto"].includes(row.session.status))) return "session_inactive";
-  if (row.session && row.session.sentCount >= row.session.targetCount) return "session_capacity_reached";
+  if (gated.job.closedAt) return "job_closed";
+  if (isAvoidedCompany(gated.job.company, user.avoidCompanies)) return "company_avoided";
+  if (gated.sessionId && (!gated.session || gated.session.userId !== gated.userId
+    || !["active", "auto"].includes(gated.session.status))) return "session_inactive";
+  if (gated.session && gated.session.sentCount >= gated.session.targetCount) return "session_capacity_reached";
   // Explicit single-job consent may override search preferences. Automatic
   // selection must re-evaluate current facts after the queue wait and at send.
-  if (mode === "auto" && !row.consentGrantedAt) {
+  if (mode === "auto" && !gated.consentGrantedAt) {
     const preferences = user.preferences!;
     const locations = parsePreferenceList(preferences.locationsJson);
     const roles = parsePreferenceList(preferences.rolesJson);
     if (!locations?.length || roles === null) return "preferences_unverified";
-    const roundRole = row.session?.title?.trim() || row.session?.label?.trim();
+    const roundRole = gated.session?.title?.trim() || gated.session?.label?.trim();
     const currentRoles = [...roles, ...(roundRole && !roundRole.includes("·") ? [roundRole] : [])];
-    if (!currentRoles.length || !titleMatchesAnyRole(row.job.title, currentRoles)) return "preference_role";
-    const mismatch = autoApplyPreferenceMismatch(row.job, preferences, locations);
+    if (!currentRoles.length || !titleMatchesAnyRole(gated.job.title, currentRoles)) return "preference_role";
+    const mismatch = autoApplyPreferenceMismatch(gated.job, preferences, locations);
     if (mismatch) return `preference_${mismatch}`;
     if (!user.cvProfile) return "profile_unverified";
     const profile = rowToProfile(user.cvProfile);
     if (!profile.title && !profile.summary && !profile.skills.length && !profile.experiences.length) return "profile_unverified";
-    const score = quickMatchScore(profile, `${row.job.title}\n${row.job.company ?? ""}\n${row.job.description}`);
+    const score = quickMatchScore(profile, `${gated.job.title}\n${gated.job.company ?? ""}\n${gated.job.description}`);
     if (preferences.matchMin > 0 && score < preferences.matchMin) return "preference_match_threshold";
   }
   return null;
@@ -204,7 +250,7 @@ function nextWorkLease(row: Pick<WorkerGateRow, "leaseToken" | "leaseExpiresAt">
   return asIssuedWorkLease(issued);
 }
 
-export async function reserveApplicationWork(id: string, db: DB = prisma): Promise<ApplicationWorkLease | null> {
+export async function reserveApplicationWork(id: string, db: DB = prisma, atsTestAuth?: unknown): Promise<ApplicationWorkLease | null> {
   return withLockedApplication(id, db, async (tx, row) => {
     if (!row || !["queued", "answers_claimed"].includes(row.status)) return null;
     if (row.submitStartedAt || blocksUncertainAutoRetry(row)) {
@@ -217,7 +263,7 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
     }
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     if (row.answerContinuationJson) {
-      if (answerContinuationIneligibility(row, "queued", row.job.url) || currentWorkerIneligibility(row)
+      if (answerContinuationIneligibility(row, "queued", row.job.url) || currentWorkerIneligibility(row, new Date(), atsTestAuth)
         || await admissionBlock(tx, row) || !await continuationReservationMatches(tx, row, continuation!)) return null;
       const lease = nextWorkLease(row);
       if (!lease) return null;
@@ -260,7 +306,7 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
       } });
       return null;
     }
-    const reason = currentWorkerIneligibility(row) ?? await admissionBlock(tx, row);
+    const reason = currentWorkerIneligibility(row, new Date(), atsTestAuth) ?? await admissionBlock(tx, row);
     if (reason) {
       await tx.application.update({ where: { id }, data: {
         startedAt: new Date(), errorMessage: heldMessage(reason),
@@ -293,14 +339,14 @@ export async function reserveApplicationWork(id: string, db: DB = prisma): Promi
 /** Recheck fresh gates immediately before form/data transmission or email.
  * This marker must never be reset by recovery or ordinary queue publication.
  */
-export async function beginApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = ""): Promise<boolean> {
+export async function beginApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", atsTestAuth?: unknown): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
       || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
       || !["optimizing", "ready_to_apply"].includes(row.status) || hasPotentialSubmission(row)) return false;
     if (rolloutApplicationIneligibility(row)) return false;
-    const reason = currentWorkerIneligibility(row) ?? await admissionBlock(tx, row);
+    const reason = currentWorkerIneligibility(row, new Date(), atsTestAuth) ?? await admissionBlock(tx, row);
     if (reason) {
       await tx.application.updateMany({ where: ownershipWhere(id, token, { status: { in: ["optimizing", "ready_to_apply"] } }), data: {
         status: "queued", startedAt: new Date(), leaseToken: null, leaseExpiresAt: null, submitConfirmation: NOT_SUBMITTED,
@@ -342,7 +388,7 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
  * stopped attempt may already have transmitted uploads; retain its reservation
  * and uncertainty rather than permitting an automatic replay.
  */
-export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit"): Promise<boolean> {
+export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit", atsTestAuth?: unknown): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
@@ -368,7 +414,7 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
       || answerContinuationIneligibility({ ...row, answerContinuationJson: preTransmissionProof, status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED }, "running", row.job.url)
       || !await continuationReservationMatches(tx, row, continuation))) return false;
     if (["portal_greenhouse", "portal_recruitee"].includes(channel) && !await destinationIsUnique(tx, row, channel)) return false;
-    const reason = currentWorkerIneligibility(row)
+    const reason = currentWorkerIneligibility(row, new Date(), atsTestAuth)
       ?? await reserveSubmissionBudget(tx, { applicationId: id,
         subjectKey: submissionSubjectKey(row.userId, row.jobId), attemptStartedAt: continuation ? new Date(continuation.attemptStartedAt) : token, channel }, "recheck")
       ?? await admissionBlock(tx, row);

@@ -28,6 +28,18 @@ function load(path: string, extra: Record<string, any> = {}): any {
       controlledReleaseHoldData: () => ({ startedAt: new Date(), errorMessage: "held" }),
       controlledReleaseMessage: () => "held",
     },
+    "@/lib/ats-test-capability": {
+      isAtsTestAuthorization: () => false,
+      atsTestPauseExemptionForId: () => false,
+      adoptAtsTestWorkLease: async () => null,
+      atsTestSkipsDocumentTailoring: () => false,
+      atsTestSkipsRecruiterLookup: () => false,
+      atsTestCandidateEmail: () => ({ ok: false, reason: "ats_test_candidate_email_unconfigured" }),
+      syntheticAtsTestProfile: () => ({}),
+      syntheticAtsTestCvText: () => "",
+      ATS_TEST_FICTIONAL_MARK: "[LavorAI TEST · FICTIONAL]",
+      ATS_TEST_REFUSED_BEFORE_SUBMIT: "REFUSED_BEFORE_SUBMIT",
+    },
     "@/lib/uncertain-submission": { blocksUncertainAutoRetry: () => false },
     "@/lib/recruiter-email-fallback": { skipListEmailSendDecision: () => ({ ok: false, reason: "off" }), recruiterEmailFallbackEnabled: () => false },
     "@/lib/daily-application-cap": {

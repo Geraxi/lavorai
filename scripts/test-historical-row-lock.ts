@@ -36,7 +36,7 @@ assert.equal(blocksUncertainAutoRetry(unproven), true);
 const PATHS: Array<{ file: string; needle: RegExp; note: string }> = [
   { file: "src/lib/application-claim.ts", needle: /historicalRetriesBlocked|rolloutApplicationIneligibility/, note: "claim/recovery" },
   { file: "src/lib/application-worker-gates.ts", needle: /rolloutApplicationIneligibility/, note: "reserve / begin / recheck" },
-  { file: "src/lib/application-worker.ts", needle: /reserveApplicationWork\(applicationId\)/, note: "worker documents only after reserve" },
+  { file: "src/lib/application-worker.ts", needle: /reserveApplicationWork\(applicationId,/, note: "worker documents only after reserve" },
   { file: "src/lib/queue-drain.ts", needle: /claimApplication|findClaimableQueued|processApplication/, note: "drain uses claim+worker" },
   { file: "src/lib/auto-apply-cron.ts", needle: /automaticApplicationsBlocked/, note: "auto-apply producer creates only new rows" },
   { file: "src/lib/cron-self-heal.ts", needle: /recoverStuckApplications|historicalRetriesBlocked/, note: "self-heal recovery" },
@@ -56,11 +56,11 @@ for (const path of PATHS) {
 
 const worker = readFileSync("src/lib/application-worker.ts", "utf8");
 assert.ok(
-  worker.indexOf("reserveApplicationWork(applicationId)") < worker.indexOf("await optimizeCV("),
+  worker.indexOf("reserveApplicationWork(applicationId,") < worker.indexOf("optimizeCV("),
   "Document generation cannot run before admission, which rejects historical rows",
 );
 assert.ok(
-  worker.indexOf("reserveApplicationWork(applicationId)") < worker.indexOf("generateOptimizedCVDocx({"),
+  worker.indexOf("reserveApplicationWork(applicationId,") < worker.indexOf("generateOptimizedCVDocx({"),
   "CV DOCX generation cannot run for a row admission refused",
 );
 assert.doesNotMatch(

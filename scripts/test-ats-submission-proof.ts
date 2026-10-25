@@ -321,11 +321,15 @@ async function testRealAshbyAndOtp() {
 }
 
 async function testRecruiteeBoundary() {
-  for (const scenario of ["receipt", "boolean-no", "unanswered", "error", "empty", "rejected", "timeout", "paused", "gate-error", "lookup-error", "not-an-offer"]) {
+  for (const scenario of ["receipt", "boolean-no", "unanswered", "error", "empty", "rejected", "timeout", "paused", "gate-error", "lookup-error", "not-an-offer", "dry-run"]) {
     let posts = 0;
     const formValues = new Map<string, unknown>();
     const { recruiteeAdapter } = loadAdapter("recruitee", {
       "./submission-proof": proofModule,
+      "@/lib/ats-test-capability": {
+        allowUnpublishedRecruiteeOffer: () => false,
+        recheckAtsTestBeforeSubmitHttp: () => ({ ok: true }),
+      },
       "node:fs/promises": { readFile: async () => new Uint8Array([1, 2, 3]) },
       "./ai-answer": { answerOffline: async (_ctx: unknown, fields: Array<{ kind: string; options: string[] }>) => {
         if (scenario === "boolean-no") { assert.equal(fields[0].kind, "radio"); assert.equal(fields[0].options.join(","), "Yes,No"); }
@@ -333,7 +337,10 @@ async function testRecruiteeBoundary() {
       } },
       "./web-form": { buildAnswerContext: () => ({}) },
     }, {
-      FormData: class { set(name: string, value: unknown) { formValues.set(name, value); } }, Blob: class {},
+      FormData: class {
+        set(name: string, value: unknown) { formValues.set(name, value); }
+        get(name: string) { return formValues.get(name); }
+      }, Blob: class {},
       AbortSignal: { timeout: () => ({}) },
       fetch: async (url: string, options: { method?: string; redirect?: string }) => {
         assert.ok(url.startsWith("https://acme.recruitee.com/api/offers/job-123"));
@@ -343,6 +350,7 @@ async function testRecruiteeBoundary() {
           json: async () => scenario === "not-an-offer" ? {} : { offer: { status: "published", open_questions: ["boolean-no", "unanswered"].includes(scenario) ? [{ id: 17, kind: "boolean", body: "Do you need visa sponsorship?", required: true }] : [] } },
         };
         posts++;
+        if (scenario === "dry-run") throw new Error("dry-run must not POST /candidates");
         assert.equal(options.redirect, "error");
         if (scenario === "timeout") throw Error("Timed out after dispatch");
         return {
@@ -353,17 +361,21 @@ async function testRecruiteeBoundary() {
     });
     const outcome = await recruiteeAdapter.apply({}, {
       jobUrl: restFixtures[3][1], profile: { firstName: "Test", lastName: "Applicant" },
-      userEmail: "private@example.test", cvLocalPath: "/mock/cv.pdf", coverLetterText: "", dryRun: false,
+      userEmail: "private@example.test", cvLocalPath: "/mock/cv.pdf", coverLetterText: "", dryRun: scenario === "dry-run",
       beforeSubmit: async () => {
         if (scenario === "gate-error") throw Error("Cannot authorize");
         return scenario !== "paused";
       },
     });
-    assert.equal(outcome.ok, ["receipt", "boolean-no"].includes(scenario), scenario);
+    assert.equal(outcome.ok, ["receipt", "boolean-no", "dry-run"].includes(scenario), scenario);
+    if (scenario === "dry-run") {
+      assert.equal(outcome.confirmation, "DRY_RUN");
+      assert.equal(outcome.receipt, undefined);
+    }
     if (scenario === "unanswered") { assert.equal(outcome.status, "needs_user_input"); assert.equal(formValues.size, 0, "No candidate payload constructed before the missing-answer return"); }
     if (scenario === "boolean-no") assert.equal(formValues.get("candidate[open_question_answers_attributes][0][flag]"), "false", "An explicit No must stay false for required API booleans");
-    assert.equal(posts, ["unanswered", "paused", "gate-error", "lookup-error", "not-an-offer"].includes(scenario) ? 0 : 1, scenario);
-    if (outcome.ok) assert.equal(outcome.receipt.receiptId, "recruitee-receipt");
+    assert.equal(posts, ["unanswered", "paused", "gate-error", "lookup-error", "not-an-offer", "dry-run"].includes(scenario) ? 0 : 1, scenario);
+    if (outcome.ok && scenario !== "dry-run") assert.equal(outcome.receipt.receiptId, "recruitee-receipt");
   }
   console.log("Real Recruitee adapter: receipt/error/empty/timeout and final-gate paths passed with isolated HTTP/files.");
 }

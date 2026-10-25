@@ -1,3 +1,4 @@
+import { allowUnpublishedRecruiteeOffer } from "@/lib/ats-test-capability";
 import { prisma } from "@/lib/db";
 
 /** Persisted by the worker when a posting could not be verified (temporary).
@@ -116,7 +117,7 @@ async function checkViaAtsApi(url: URL): Promise<ApiVerdict | null> {
     const open = offers.some((offer) => object(offer) && (
       String(offer.slug ?? "").toLowerCase() === slug.toLowerCase()
       || String(offer.id ?? "") === slug
-    ) && (!offer.status || offer.status === "published"));
+    ) && (!offer.status || offer.status === "published" || allowUnpublishedRecruiteeOffer(url.href)));
     return open ? { state: "live", reason: "ats_api_posting_present" } : { state: "closed", reason: "ats_api_posting_removed" };
   } else if (/\.jobs\.personio\.(?:de|com)$/i.test(host)) {
     const tenant = host.split(".")[0];

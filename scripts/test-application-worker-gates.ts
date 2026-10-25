@@ -60,12 +60,12 @@ for (const patch of [{ submitConfirmation: SUBMISSION_STARTED }, { submitConfirm
 assert.equal(hasPotentialSubmission({ ...base, submitConfirmation: NOT_SUBMITTED, canaryLog: "{}" }), false);
 assert.equal(hasPotentialSubmission({ ...base, submitConfirmation: NOT_SUBMITTED, submittedAt: now }), true);
 const worker = readFileSync(new URL("../src/lib/application-worker.ts", import.meta.url), "utf8");
-assert(worker.indexOf("reserveApplicationWork(applicationId)") < worker.indexOf("result = await optimizeCV("));
+assert(worker.indexOf("reserveApplicationWork(applicationId,") < worker.indexOf("optimizeCV("));
 assert(worker.includes("if (prepared.count !== 1) return;"));
 assert(worker.includes("published recruiter email"), "Verified published recruiter email must win over portal submit");
 assert(worker.includes("findVerifiedRecruiterEmail"), "Recruiter email is resolved before portal submit");
 assert(worker.includes("lookupPublishedSkipListInbox"), "Skip-list lookup is cheap and shared");
-assert(worker.indexOf("lookupPublishedSkipListInbox") < worker.indexOf("reserveApplicationWork(applicationId)"),
+assert(worker.indexOf("lookupPublishedSkipListInbox") < worker.indexOf("reserveApplicationWork(applicationId,"),
   "Skip-list email lookup must run before reserving a daily slot or CV/AI");
 assert(worker.includes("discoverPublishedHiringInbox"), "Worker discovers published hiring inboxes on the employer domain");
 assert(worker.includes("isSkippedPortalUrl"), "Skip-list hosts skip portal submit and try email first");

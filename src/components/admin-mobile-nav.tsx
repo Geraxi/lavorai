@@ -21,6 +21,7 @@ const ITEMS: Array<{ href: string; label: string }> = [
   { href: "/admin/traffic", label: "Traffico" },
   { href: "/admin/delivery", label: "Consegna" },
   { href: "/admin/email-test", label: "Email test" },
+  { href: "/admin/ats-test", label: "ATS test" },
   { href: "/admin/reliability", label: "Affidabilità" },
   { href: "/admin/jobs", label: "Job pool" },
   { href: "/admin/automation", label: "Automazione & Utenti" },

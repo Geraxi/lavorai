@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { searchJobs, type AdzunaSearchParams, type JobListItem } from "@/lib/adzuna";
 import type { Job } from "@prisma/client";
+import { excludeAtsTestJobsWhere, isAtsTestJobSource } from "@/lib/ats-test-capability";
 import { isProtectedCategoryJob } from "@/lib/protected-category";
 
 /**
@@ -110,7 +111,7 @@ export async function searchAndCacheJobs(
     | undefined
     ? NonNullable<W>
     : never;
-  const and: WhereClause[] = [];
+  const and: WhereClause[] = [excludeAtsTestJobsWhere()];
   if (filter.what) {
     const q = filter.what.trim();
     and.push({
@@ -215,7 +216,9 @@ export function dedupePreferAts(jobs: Job[]): Job[] {
 }
 
 export async function getJobById(id: string): Promise<Job | null> {
-  return prisma.job.findUnique({ where: { id } });
+  const job = await prisma.job.findUnique({ where: { id } });
+  if (!job || isAtsTestJobSource(job.source)) return null;
+  return job;
 }
 
 /**
@@ -224,6 +227,7 @@ export async function getJobById(id: string): Promise<Job | null> {
  */
 export async function getJobFacets() {
   const jobs = await prisma.job.findMany({
+    where: excludeAtsTestJobsWhere(),
     select: { location: true, category: true, contractType: true },
     take: 500,
   });

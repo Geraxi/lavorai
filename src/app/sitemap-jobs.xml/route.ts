@@ -15,7 +15,7 @@ export const revalidate = 3600;
 export async function GET() {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
   const jobs = await prisma.job.findMany({
-    where: { closedAt: null, cachedAt: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) } },
+    where: { source: { not: "ats_test" }, closedAt: null, cachedAt: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) } },
     orderBy: { cachedAt: "desc" },
     take: 5000,
     select: { id: true, cachedAt: true, postedAt: true },

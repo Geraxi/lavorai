@@ -40,6 +40,10 @@ export interface ApplyInput {
   jobUrl: string;
   /** "dryRun" → non preme submit, solo verifica che il form si compili */
   dryRun: boolean;
+  /** Branded ATS-test token. Ordinary callers cannot construct it. */
+  atsTestAuth?: unknown;
+  atsTestOwnerUserId?: string;
+  atsTestJobSource?: string;
   /** Fresh worker authorization immediately before the irreversible submission. */
   beforeSubmit?: () => Promise<boolean>;
   /** Greenhouse only: called on the blank public form, before filling any
@@ -130,6 +134,12 @@ export interface CanaryLog {
   capturedAt: string;
 }
 
+export type RecruiteeOfferValidation = {
+  requiredFields: string[];
+  unsupportedRequired: string[];
+  wouldAcceptRealSubmit: boolean;
+};
+
 export type ApplyOutcome =
   | {
       ok: true;
@@ -138,6 +148,7 @@ export type ApplyOutcome =
       receipt?: SubmissionReceipt;
       canary?: CanaryLog;
       attemptEvidence?: SubmissionAttemptEvidence;
+      offerValidation?: RecruiteeOfferValidation;
     }
   | {
       ok: false;
@@ -161,6 +172,8 @@ export type ApplyOutcome =
       error: string;
       canary?: CanaryLog;
       attemptEvidence?: SubmissionAttemptEvidence;
+      refusedBeforeSubmit?: boolean;
+      offerValidation?: RecruiteeOfferValidation;
     }
   | {
       // Form trovato e compilato per quanto possibile, ma restano campi
@@ -193,6 +206,11 @@ export interface PortalAdapter {
   label: string;
   /** true se questo adapter gestisce l'URL passato */
   matches(url: string): boolean;
+  /**
+   * False when apply() is HTTP-only and ignores `page` (Recruitee careers API).
+   * Default is true: the worker launches Chromium. Not a TLS/HTTPS switch.
+   */
+  requiresBrowser?: boolean;
   /** Esegue la candidatura. Il worker gestisce il browser / ensureLocalPath. */
   apply(page: Page, input: ApplyInput): Promise<ApplyOutcome>;
 }

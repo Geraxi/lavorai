@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { CompanyLogo } from "@/components/design/company-logo";
+import { excludeAtsTestJobsWhere, isAtsTestJobSource } from "@/lib/ats-test-capability";
 import { prisma } from "@/lib/db";
 import { formatSalary } from "@/lib/jobs-repo";
 import { employmentType, isRemoteJob, jobDatePosted, jobPostingJsonLd, jobValidThrough, publicJobPath } from "@/lib/job-seo";
@@ -25,7 +26,7 @@ const EMPLOYMENT_LABEL: Record<string, string> = { FULL_TIME: "Tempo pieno", PAR
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { id } = await params;
   const job = await prisma.job.findUnique({ where: { id } });
-  if (!job) return {};
+  if (!job || isAtsTestJobSource(job.source)) return {};
   const closed = !!job.closedAt || jobValidThrough(job) < new Date();
   const where = isRemoteJob(job) ? "Remoto" : job.location ?? "Italia";
   const title = `${job.title} · ${job.company ?? "Azienda"} · ${where}`;
@@ -44,7 +45,7 @@ const fmtDate = (d: Date) => d.toLocaleDateString("it-IT", { day: "numeric", mon
 export default async function PublicJobPage({ params }: { params: Promise<Params> }) {
   const { id } = await params;
   const job = await prisma.job.findUnique({ where: { id } });
-  if (!job) notFound();
+  if (!job || isAtsTestJobSource(job.source)) notFound();
 
   const closed = !!job.closedAt || jobValidThrough(job) < new Date();
   const remote = isRemoteJob(job);
@@ -54,6 +55,7 @@ export default async function PublicJobPage({ params }: { params: Promise<Params
 
   const similar = await prisma.job.findMany({
     where: {
+      ...excludeAtsTestJobsWhere(),
       id: { not: job.id },
       closedAt: null,
       cachedAt: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) },

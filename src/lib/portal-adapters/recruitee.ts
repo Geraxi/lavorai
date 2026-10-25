@@ -1,3 +1,4 @@
+import { allowUnpublishedRecruiteeOffer, recheckAtsTestBeforeSubmitHttp } from "@/lib/ats-test-capability";
 import { verifySubmissionResponse } from "./submission-proof";
 import { readFile } from "node:fs/promises";
 import type { PortalAdapter, ApplyInput, ApplyOutcome, PendingQuestion } from "./types";
@@ -14,9 +15,50 @@ const OFFER_RE = /\/o\/([^/?#]+)/i;
 
 interface OpenQuestion { id: number; kind?: string; body?: string; required?: boolean; open_question_options?: Array<{ id: number; body: string }> }
 
+const ADAPTER_SENT_OPTIONS = new Set(["cv", "cover_letter", "phone", "name", "email", "referrer"]);
+const UNSUPPORTED_QUESTION_KINDS = new Set(["file", "photo", "attachment", "image", "video"]);
+
+function isRequiredOption(value: unknown): boolean {
+  if (value === true) return true;
+  const raw = String(value ?? "").trim().toLowerCase();
+  return raw === "required" || raw === "on";
+}
+
+export function recruiteeOfferValidation(
+  offer: Record<string, unknown>,
+  input: { phone?: string | null; coverLetterText?: string | null },
+): { requiredFields: string[]; unsupportedRequired: string[]; wouldAcceptRealSubmit: boolean } {
+  const requiredFields: string[] = [];
+  const unsupportedRequired: string[] = [];
+  for (const [key, value] of Object.entries(offer)) {
+    if (!key.startsWith("options_") || !isRequiredOption(value)) continue;
+    const field = key.slice("options_".length);
+    requiredFields.push(field);
+    if (field === "cv" || field === "name" || field === "email" || field === "referrer") continue;
+    if (field === "cover_letter" && input.coverLetterText?.trim()) continue;
+    if (field === "phone" && input.phone?.trim()) continue;
+    if (!ADAPTER_SENT_OPTIONS.has(field) || field === "phone" || field === "cover_letter") {
+      unsupportedRequired.push(field);
+    }
+  }
+  const questions = Array.isArray(offer.open_questions) ? offer.open_questions as OpenQuestion[] : [];
+  for (const question of questions) {
+    if (!question.required || (question.kind ?? "") === "infobox") continue;
+    const kind = (question.kind ?? "text").toLowerCase();
+    requiredFields.push(`open_question:${kind}`);
+    if (UNSUPPORTED_QUESTION_KINDS.has(kind)) unsupportedRequired.push(`open_question:${kind}`);
+  }
+  return {
+    requiredFields,
+    unsupportedRequired,
+    wouldAcceptRealSubmit: unsupportedRequired.length === 0,
+  };
+}
+
 export const recruiteeAdapter: PortalAdapter = {
   id: "recruitee",
   label: "Recruitee",
+  requiresBrowser: false,
   matches(url: string): boolean {
     try {
       const u = new URL(url);
@@ -35,17 +77,37 @@ export const recruiteeAdapter: PortalAdapter = {
     if (!origin || !slug) return { ok: false, status: "form_not_found", error: `URL Recruitee non riconosciuto: ${input.jobUrl}` };
 
     const headers = { Accept: "application/json", "User-Agent": "Mozilla/5.0 LavorAI/1.0" };
-    // 1. Offerta: esiste ancora? domande obbligatorie?
+    // 1. Offerta: esiste ancora? domande obbligatorie? options_* required?
     let questions: OpenQuestion[] = [];
+    let offerValidation: ReturnType<typeof recruiteeOfferValidation> = {
+      requiredFields: [],
+      unsupportedRequired: [],
+      wouldAcceptRealSubmit: true,
+    };
     try {
       const r = await fetch(`${origin}/api/offers/${encodeURIComponent(slug)}`, { headers, signal: AbortSignal.timeout(15_000) });
       if (r.status === 404) return { ok: false, status: "job_closed", error: "Annuncio non più online (Recruitee 404)." };
       if (!r.ok) return { ok: false, status: "unknown_error", error: `Verifica annuncio Recruitee non riuscita (HTTP ${r.status}). Nessun invio eseguito.` };
       if (r.ok) {
-        const j = (await r.json()) as { offer?: { status?: string; open_questions?: OpenQuestion[] } };
+        const j = (await r.json()) as { offer?: Record<string, unknown> & { status?: string; open_questions?: OpenQuestion[] } };
         if (!j.offer || typeof j.offer !== "object") return { ok: false, status: "form_not_found", error: "Offerta Recruitee non riconosciuta. Nessun invio eseguito." };
-        if (j.offer?.status && j.offer.status !== "published") return { ok: false, status: "job_closed", error: `Annuncio Recruitee in stato ${j.offer.status}.` };
+        if (j.offer?.status && j.offer.status !== "published" && !allowUnpublishedRecruiteeOffer(input.jobUrl)) {
+          return { ok: false, status: "job_closed", error: `Annuncio Recruitee in stato ${j.offer.status}.` };
+        }
         questions = j.offer?.open_questions ?? [];
+        offerValidation = recruiteeOfferValidation(j.offer, {
+          phone: input.profile.phone?.trim() || input.userPhone,
+          coverLetterText: input.coverLetterText,
+        });
+        if (!offerValidation.wouldAcceptRealSubmit) {
+          return {
+            ok: false,
+            status: "not_eligible",
+            error: `Recruitee required fields not sent by this adapter: ${offerValidation.unsupportedRequired.join(", ")}. Required: ${offerValidation.requiredFields.join(", ") || "none"}. Nessun invio eseguito.`,
+            refusedBeforeSubmit: true,
+            offerValidation,
+          };
+        }
       }
     } catch (err) {
       return { ok: false, status: "unknown_error", error: `Recruitee offer lookup fallito: ${err instanceof Error ? err.message : err}` };
@@ -75,9 +137,11 @@ export const recruiteeAdapter: PortalAdapter = {
       else answers.push({ open_question_id: f.q.id, content: v });
     }
     if (pending.length > 0) return { ok: false, status: "needs_user_input", error: `${pending.length} domande obbligatorie richiedono la tua risposta prima dell'invio.`, pendingQuestions: pending };
-    if (input.dryRun) return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
+    if (input.dryRun) {
+      return { ok: true, status: "submitted", confirmation: "DRY_RUN", offerValidation };
+    }
 
-    // 3. Invio multipart
+    // 3. Invio multipart — build first so the ATS-test recheck can see the email field.
     const p = input.profile;
     const fd = new FormData();
     fd.set("candidate[name]", [p.firstName, p.lastName].filter(Boolean).join(" ").trim() || input.userEmail);
@@ -91,13 +155,35 @@ export const recruiteeAdapter: PortalAdapter = {
       const name = input.cvLocalPath.split(/[\\/]/).pop() || "cv.pdf";
       fd.set("candidate[cv]", new Blob([buf], { type: name.endsWith(".pdf") ? "application/pdf" : "application/octet-stream" }), name);
     } catch (err) {
-      return { ok: false, status: "missing_field", error: `CV non leggibile: ${err instanceof Error ? err.message : err}` };
+      return {
+        ok: false,
+        status: "missing_field",
+        error: `CV non leggibile: ${err instanceof Error ? err.message : err}`,
+        refusedBeforeSubmit: true,
+      };
     }
     answers.forEach((a, i) => {
       fd.set(`candidate[open_question_answers_attributes][${i}][open_question_id]`, String(a.open_question_id));
       if (a.content != null) fd.set(`candidate[open_question_answers_attributes][${i}][content]`, a.content);
       if (a.flag != null) fd.set(`candidate[open_question_answers_attributes][${i}][flag]`, String(a.flag));
     });
+
+    const submitGuard = recheckAtsTestBeforeSubmitHttp(input.atsTestAuth, {
+      ownerUserId: input.atsTestOwnerUserId ?? "",
+      destinationUrl: input.jobUrl,
+      applicationId: input.applicationId ?? "",
+      jobSource: input.atsTestJobSource,
+      realSubmit: true,
+      multipartEmail: String(typeof fd.get === "function" ? fd.get("candidate[email]") ?? "" : ""),
+    });
+    if (!submitGuard.ok) {
+      return {
+        ok: false,
+        status: "not_eligible",
+        error: `ATS test submit blocked: ${submitGuard.reason}. Nessun invio eseguito.`,
+        refusedBeforeSubmit: true,
+      };
+    }
 
     try {
       if (input.beforeSubmit && !(await input.beforeSubmit().catch(() => false))) {

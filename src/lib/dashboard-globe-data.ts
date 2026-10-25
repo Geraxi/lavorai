@@ -93,7 +93,7 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
     // (MB per ogni apertura della dashboard). Il testo serve solo al match
     // score dei ≤600 job del pool e viene letto sotto, solo per quelli.
     prisma.job.findMany({
-      where: { closedAt: null, cachedAt: { gte: since30 }, dismissals: { none: { userId } } },
+      where: { source: { not: "ats_test" }, closedAt: null, cachedAt: { gte: since30 }, dismissals: { none: { userId } } },
       select: { id: true, title: true, company: true, location: true, cachedAt: true },
       orderBy: { cachedAt: "desc" },
       take: 4000,

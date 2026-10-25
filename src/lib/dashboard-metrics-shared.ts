@@ -748,6 +748,7 @@ export async function getAnalyticsCohort(
  * `jobs` is the newest-first list (callers slice it, e.g. Scopri shows 50).
  */
 export const MATCHING_SOURCES = ["greenhouse", "lever", "ashby", "smartrecruiters", "linkedin"];
+/** `ats_test` is intentionally absent: restricted test jobs never match. */
 export const MATCHING_WINDOW_DAYS = 14;
 const MATCHING_SCAN = 1000;
 export async function getMatchingOpportunities(userId: string) {

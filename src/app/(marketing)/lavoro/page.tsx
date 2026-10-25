@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { CompanyLogo } from "@/components/design/company-logo";
+import { excludeAtsTestJobsWhere } from "@/lib/ats-test-capability";
 import { prisma } from "@/lib/db";
 import { isRemoteJob } from "@/lib/job-seo";
 
@@ -37,6 +38,7 @@ export default async function LavoroHub({ searchParams }: { searchParams: Promis
 
   const jobs = await prisma.job.findMany({
     where: {
+      ...excludeAtsTestJobsWhere(),
       closedAt: null,
       cachedAt: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) },
       ...(citta ? { location: { contains: citta, mode: "insensitive" } } : {}),

@@ -79,6 +79,7 @@ export const SMARTRECRUITERS_COMPANIES: AtsCompany[] = [
   { slug: "Santen", name: "Santen", country: "IT" },
 ];
 
+/** Restricted ATS-test Recruitee trials are NOT listed here. */
 export const RECRUITEE_COMPANIES: AtsCompany[] = [
   { slug: "bunq", name: "bunq", country: "NL" },
   { slug: "jobandtalent", name: "Job&Talent", country: "ES" },
