@@ -266,7 +266,7 @@ async function testEnabledJobSpecificQueue() {
 function testSourceFences() {
   const worker = readFileSync("src/lib/application-worker.ts", "utf8");
   assert.match(worker, /lookupPublishedSkipListInbox/);
-  assert.ok(worker.indexOf("lookupPublishedSkipListInbox") < worker.indexOf("reserveApplicationWork(applicationId)"));
+  assert.ok(worker.indexOf("lookupPublishedSkipListInbox") < worker.indexOf("reserveApplicationWork(applicationId,"));
   assert.match(readFileSync("src/lib/auto-apply-cron.ts", "utf8"), /admitAutoApplyApplication/);
   assert.match(readFileSync("src/lib/cron-self-heal.ts", "utf8"), /recheckSkippedAtsHandoffs/);
   assert.doesNotMatch(readFileSync("src/lib/cron-self-heal.ts", "utf8"), /prisma\.application\.update/);

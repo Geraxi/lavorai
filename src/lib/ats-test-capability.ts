@@ -6,13 +6,22 @@
  *   ATS_TEST_USER_ID          dedicated test user id
  *   ATS_TEST_DESTINATIONS     comma/space list of host/o/slug
  *                             e.g. produzioneweb.recruitee.com/o/trial-offer
- *   ATS_TEST_REAL_SUBMIT      default off; real submit also needs an admin flag
+ *   ATS_TEST_REAL_SUBMIT      must be exactly "true" for a real submit
  *
  * Test jobs use source `ats_test` and are excluded from feeds, matching,
  * other users and quota. Do not add the tenant to RECRUITEE_COMPANIES.
+ *
+ * Pause exemption is a module-private branded token. Only
+ * POST /api/admin/ats-test-apply → prepareAndRunAtsTest may mint it and
+ * pass it into processApplication. Cron, drain, claim, auto-apply,
+ * recruiter-delivery and sendWithinQuota cannot construct or inherit it.
  */
 
+import { createHash } from "node:crypto";
+import type { CVProfile } from "@/lib/cv-profile-types";
+
 export const ATS_TEST_JOB_SOURCE = "ats_test";
+export const ATS_TEST_FICTIONAL_MARK = "[LavorAI TEST · FICTIONAL]";
 
 export type AtsTestEnv = Record<string, string | undefined>;
 
@@ -23,6 +32,41 @@ export type AtsTestDestination = {
 };
 
 const DEST_RE = /^(?:https:\/\/)?([^/\s?#]+)\/o\/([^/?#\s]+)/i;
+
+/** Module-private brand. Ordinary object literals cannot satisfy it. */
+const ATS_TEST_AUTH_BRAND = Symbol("lavorai.atsTestAuthorization");
+
+export type AtsTestAuthorization = {
+  readonly [ATS_TEST_AUTH_BRAND]: typeof ATS_TEST_AUTH_BRAND;
+  readonly userId: string;
+  readonly destination: AtsTestDestination;
+  readonly applicationId: string;
+  readonly mode: "dry_run" | "real_submit";
+  readonly realSubmitRequested: boolean;
+};
+
+export function isAtsTestAuthorization(value: unknown): value is AtsTestAuthorization {
+  return !!value
+    && typeof value === "object"
+    && (value as { [ATS_TEST_AUTH_BRAND]?: unknown })[ATS_TEST_AUTH_BRAND] === ATS_TEST_AUTH_BRAND;
+}
+
+function mintAtsTestAuthorization(input: {
+  userId: string;
+  destination: AtsTestDestination;
+  applicationId: string;
+  mode: "dry_run" | "real_submit";
+  realSubmitRequested: boolean;
+}): AtsTestAuthorization {
+  return {
+    [ATS_TEST_AUTH_BRAND]: ATS_TEST_AUTH_BRAND,
+    userId: input.userId,
+    destination: input.destination,
+    applicationId: input.applicationId,
+    mode: input.mode,
+    realSubmitRequested: input.realSubmitRequested,
+  };
+}
 
 export function atsTestUserId(env: AtsTestEnv = process.env): string | null {
   const id = env.ATS_TEST_USER_ID?.trim();
@@ -46,9 +90,9 @@ export function excludeAtsTestJobRelationWhere() {
   return { job: { source: { not: ATS_TEST_JOB_SOURCE } } } as const;
 }
 
+/** Real submit requires the env value to be exactly "true" (after trim). */
 export function atsTestRealSubmitEnabled(env: AtsTestEnv = process.env): boolean {
-  const value = env.ATS_TEST_REAL_SUBMIT?.trim().toLowerCase();
-  return value === "1" || value === "true" || value === "on" || value === "yes";
+  return env.ATS_TEST_REAL_SUBMIT?.trim() === "true";
 }
 
 function parseDestinationToken(value: string): AtsTestDestination | null {
@@ -135,6 +179,135 @@ export function atsTestJobExternalId(destination: AtsTestDestination): string {
   return `${destination.host}/o/${destination.slug}`;
 }
 
+/** One application row per normalized destination. Dry and real need two offers. */
+export function atsTestApplicationId(destination: AtsTestDestination): string {
+  const hex = createHash("sha256").update(destination.url).digest("hex").slice(0, 24);
+  return `ats_test_${hex}`;
+}
+
+export function atsTestDestinationLockKey(destination: AtsTestDestination): string {
+  return `ats_test:${destination.host}/o/${destination.slug}`;
+}
+
+export function isAtsTestDiagnosticApplication(applicationId: string, destination: AtsTestDestination): boolean {
+  return applicationId === atsTestApplicationId(destination);
+}
+
+export type AtsTestRecheckInput = {
+  ownerUserId: string;
+  destinationUrl: string;
+  applicationId: string;
+  jobSource?: string | null;
+  realSubmit: boolean;
+};
+
+export type AtsTestRecheckResult = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Re-validate the branded token plus the four submit checks.
+ * Call immediately before the adapter's submit HTTP POST.
+ */
+export function recheckAtsTestBeforeSubmitHttp(
+  auth: unknown,
+  input: AtsTestRecheckInput,
+  env: AtsTestEnv = process.env,
+): AtsTestRecheckResult {
+  const isTestJob = isAtsTestJobSource(input.jobSource) || isAtsTestAuthorization(auth);
+  if (!isTestJob) return { ok: true };
+  if (!isAtsTestAuthorization(auth)) return { ok: false, reason: "ats_test_authorization_required" };
+
+  if (!isAtsTestUser(input.ownerUserId, env) || auth.userId !== input.ownerUserId) {
+    return { ok: false, reason: "ats_test_user_mismatch" };
+  }
+
+  const destination = matchAtsTestDestination(input.destinationUrl, env);
+  if (!destination || destination.url !== auth.destination.url) {
+    return { ok: false, reason: "ats_test_destination_not_allowlisted" };
+  }
+
+  if (
+    !isAtsTestDiagnosticApplication(input.applicationId, destination)
+    || auth.applicationId !== input.applicationId
+    || (input.jobSource != null && !isAtsTestJobSource(input.jobSource))
+  ) {
+    return { ok: false, reason: "ats_test_application_not_diagnostic" };
+  }
+
+  if (input.realSubmit) {
+    if (!atsTestRealSubmitEnabled(env) || auth.realSubmitRequested !== true || auth.mode !== "real_submit") {
+      return { ok: false, reason: "ats_test_real_submit_disabled" };
+    }
+  } else if (auth.mode !== "dry_run") {
+    return { ok: false, reason: "ats_test_mode_mismatch" };
+  }
+
+  return { ok: true };
+}
+
+/** Pause exemption only: branded token bound to this application id. */
+export function atsTestPauseExemption(
+  auth: unknown,
+  row: { id: string; userId: string; job: { url: string } },
+  env: AtsTestEnv = process.env,
+): boolean {
+  if (!isAtsTestAuthorization(auth)) return false;
+  const destination = matchAtsTestDestination(row.job.url, env);
+  return !!destination
+    && auth.applicationId === row.id
+    && auth.userId === row.userId
+    && isAtsTestUser(row.userId, env)
+    && isAtsTestDiagnosticApplication(row.id, destination)
+    && auth.destination.url === destination.url;
+}
+
+export function atsTestPauseExemptionForId(
+  auth: unknown,
+  applicationId: string,
+  env: AtsTestEnv = process.env,
+): boolean {
+  if (!isAtsTestAuthorization(auth)) return false;
+  return auth.applicationId === applicationId
+    && isAtsTestUser(auth.userId, env)
+    && !!matchAtsTestDestination(auth.destination.url, env)
+    && isAtsTestDiagnosticApplication(applicationId, auth.destination);
+}
+
+export function syntheticAtsTestProfile(): CVProfile {
+  return {
+    firstName: "LavorAI",
+    lastName: "Test",
+    email: "ats-test@example.invalid",
+    phone: "",
+    city: "Test City",
+    title: `${ATS_TEST_FICTIONAL_MARK} Diagnostic candidate`,
+    summary: `${ATS_TEST_FICTIONAL_MARK} Synthetic profile. Not a real person. Used only on the restricted ATS test path.`,
+    experiences: [{
+      role: "Diagnostic stand-in",
+      company: "LavorAI Test",
+      location: "Test City",
+      startDate: "2024-01",
+      endDate: "Present",
+      description: `${ATS_TEST_FICTIONAL_MARK} Fictional experience.`,
+      bullets: [`${ATS_TEST_FICTIONAL_MARK} No real employer.`],
+    }],
+    education: [],
+    skills: [{ name: "ATS test" }],
+    languages: [{ name: "Italian", level: "Native" }],
+    links: [],
+  };
+}
+
+export function syntheticAtsTestCvText(): string {
+  const profile = syntheticAtsTestProfile();
+  return [
+    ATS_TEST_FICTIONAL_MARK,
+    `${profile.firstName} ${profile.lastName}`,
+    profile.title,
+    profile.summary,
+    profile.experiences.map((item) => `${item.role} @ ${item.company}: ${item.description}`).join("\n"),
+  ].join("\n");
+}
+
 export type AtsTestPriorRow = {
   id: string;
   userId: string;
@@ -165,7 +338,7 @@ export function atsTestUncertainReason(row: AtsTestPriorRow): string | null {
     }
     return null;
   }
-  if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus
+  if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.userStatus
     || row.submitConfirmation || row.canaryLog || row.answersUsedJson) {
     return "uncertain_prior_attempt";
   }
@@ -188,6 +361,10 @@ function randomToken(): string {
   return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function isUniqueConstraint(error: unknown): boolean {
+  return !!error && typeof error === "object" && "code" in error && (error as { code: string }).code === "P2002";
+}
+
 export type AtsTestJobRow = {
   id: string;
   source: string;
@@ -206,9 +383,30 @@ export type AtsTestAppResult = {
   submitStartedAt: Date | null;
 };
 
+export type AtsTestTx = {
+  $executeRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
+  application: {
+    findUnique: (args: { where: { id: string } }) => Promise<AtsTestPriorRow | null>;
+    findMany: (args: { where: { jobId: string } }) => Promise<AtsTestPriorRow[]>;
+    create: (args: {
+      data: {
+        id: string;
+        userId: string;
+        jobId: string;
+        portal: string;
+        status: string;
+        createdAt: Date;
+        consentGrantedAt: Date;
+        trackingToken: string;
+      };
+    }) => Promise<{ id: string }>;
+  };
+};
+
 export type AtsTestDeps = {
   env?: AtsTestEnv;
   prisma: {
+    $transaction: <T>(fn: (tx: AtsTestTx) => Promise<T>) => Promise<T>;
     user: { findUnique: (args: { where: { id: string } }) => Promise<{ id: string } | null> };
     job: {
       findFirst: (args: { where: { source?: string; url?: string } }) => Promise<AtsTestJobRow | null>;
@@ -228,9 +426,11 @@ export type AtsTestDeps = {
       }) => Promise<AtsTestJobRow>;
     };
     application: {
+      findUnique: (args: { where: { id: string } }) => Promise<(AtsTestAppResult & AtsTestPriorRow) | null>;
       findMany: (args: { where: { jobId: string } }) => Promise<AtsTestPriorRow[]>;
       create: (args: {
         data: {
+          id: string;
           userId: string;
           jobId: string;
           portal: string;
@@ -240,14 +440,13 @@ export type AtsTestDeps = {
           trackingToken: string;
         };
       }) => Promise<{ id: string }>;
-      findUnique: (args: { where: { id: string } }) => Promise<AtsTestAppResult | null>;
       updateMany: (args: {
         where: { id: string; status: string };
         data: { status: string; errorMessage: string };
       }) => Promise<{ count: number }>;
     };
   };
-  processApplication: (id: string, opts: { forceDryRun?: boolean; forceRealSubmit?: boolean }) => Promise<void>;
+  processApplication: (id: string, opts: { atsTestAuth: AtsTestAuthorization }) => Promise<void>;
   findPortalAdapter: (url: string) => { id: string } | null;
 };
 
@@ -265,8 +464,8 @@ export type AtsTestRunResult =
 
 /**
  * Create one fresh ats_test application for the dedicated user and run it
- * through processApplication. Never enqueues (the poller would drop the
- * dry-run / single-shot flags). Never auto-retries.
+ * through processApplication with a non-inheritable branded token.
+ * Never enqueues. Never auto-retries. One row per destination.
  */
 export async function prepareAndRunAtsTest(input: {
   adminOk: boolean;
@@ -306,29 +505,65 @@ export async function prepareAndRunAtsTest(input: {
     return { ok: false, reason: "ats_test_job_source_required", status: 409 };
   }
 
-  const existing = await deps.prisma.application.findMany({
-    where: { jobId: job.id },
-  });
+  const applicationId = atsTestApplicationId(auth.destination);
+  const existingById = await deps.prisma.application.findUnique({ where: { id: applicationId } });
+  if (existingById) {
+    return { ok: false, reason: atsTestPriorAttemptReason([existingById], auth.mode, env) ?? "ats_test_already_attempted", status: 409 };
+  }
+  const existing = await deps.prisma.application.findMany({ where: { jobId: job.id } });
   const prior = atsTestPriorAttemptReason(existing, auth.mode, env);
   if (prior) return { ok: false, reason: prior, status: 409 };
 
   const createdAt = new Date();
-  const created = await deps.prisma.application.create({
-    data: {
-      userId: auth.userId,
-      jobId: job.id,
-      portal: adapter.id,
-      status: "queued",
-      createdAt,
-      consentGrantedAt: createdAt,
-      trackingToken: randomToken(),
-    },
+  const lockKey = atsTestDestinationLockKey(auth.destination);
+  let created: { id: string };
+  try {
+    created = await deps.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      const locked = await tx.application.findUnique({ where: { id: applicationId } });
+      if (locked) {
+        const error = Object.assign(new Error("ats_test_already_attempted"), { code: "P2002" });
+        throw error;
+      }
+      const siblings = await tx.application.findMany({ where: { jobId: job.id } });
+      const siblingReason = atsTestPriorAttemptReason(siblings, auth.mode, env);
+      if (siblingReason) {
+        throw Object.assign(new Error(siblingReason), { code: "P2002" });
+      }
+      return tx.application.create({
+        data: {
+          id: applicationId,
+          userId: auth.userId,
+          jobId: job.id,
+          portal: adapter.id,
+          status: "queued",
+          createdAt,
+          consentGrantedAt: createdAt,
+          trackingToken: randomToken(),
+        },
+      });
+    });
+  } catch (error) {
+    if (isUniqueConstraint(error) || (error instanceof Error && /ats_test_already_attempted|uncertain_/.test(error.message))) {
+      const again = await deps.prisma.application.findUnique({ where: { id: applicationId } });
+      const reason = again
+        ? (atsTestPriorAttemptReason([again], auth.mode, env) ?? "ats_test_already_attempted")
+        : "ats_test_already_attempted";
+      return { ok: false, reason, status: 409 };
+    }
+    throw error;
+  }
+
+  const token = mintAtsTestAuthorization({
+    userId: auth.userId,
+    destination: auth.destination,
+    applicationId: created.id,
+    mode: auth.mode,
+    realSubmitRequested: input.realSubmit === true,
   });
 
   try {
-    await deps.processApplication(created.id, auth.mode === "real_submit"
-      ? { forceRealSubmit: true }
-      : { forceDryRun: true });
+    await deps.processApplication(created.id, { atsTestAuth: token });
   } catch (err) {
     await deps.prisma.application.updateMany({
       where: { id: created.id, status: "queued" },
@@ -341,7 +576,7 @@ export async function prepareAndRunAtsTest(input: {
   }
 
   // Never leave a queued row for the poller: it would call processApplication
-  // without the dry-run / single-shot flags.
+  // without the branded token.
   await deps.prisma.application.updateMany({
     where: { id: created.id, status: "queued" },
     data: {

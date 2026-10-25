@@ -28,6 +28,13 @@ function load(path: string, extra: Record<string, any> = {}): any {
       controlledReleaseHoldData: () => ({ startedAt: new Date(), errorMessage: "held" }),
       controlledReleaseMessage: () => "held",
     },
+    "@/lib/ats-test-capability": {
+      isAtsTestAuthorization: () => false,
+      atsTestPauseExemptionForId: () => false,
+      syntheticAtsTestProfile: () => ({}),
+      syntheticAtsTestCvText: () => "",
+      ATS_TEST_FICTIONAL_MARK: "[LavorAI TEST · FICTIONAL]",
+    },
     "@/lib/uncertain-submission": { blocksUncertainAutoRetry: () => false },
     "@/lib/recruiter-email-fallback": { skipListEmailSendDecision: () => ({ ok: false, reason: "off" }), recruiterEmailFallbackEnabled: () => false },
     "@/lib/daily-application-cap": {

@@ -40,6 +40,10 @@ export interface ApplyInput {
   jobUrl: string;
   /** "dryRun" → non preme submit, solo verifica che il form si compili */
   dryRun: boolean;
+  /** Branded ATS-test token. Ordinary callers cannot construct it. */
+  atsTestAuth?: unknown;
+  atsTestOwnerUserId?: string;
+  atsTestJobSource?: string;
   /** Fresh worker authorization immediately before the irreversible submission. */
   beforeSubmit?: () => Promise<boolean>;
   /** Greenhouse only: called on the blank public form, before filling any

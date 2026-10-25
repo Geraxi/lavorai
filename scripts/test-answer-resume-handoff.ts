@@ -202,6 +202,13 @@ function loadWorker(opts: {
       recheckApplicationSubmission: async () => false,
       NOT_SUBMITTED: "NOT_SUBMITTED",
     },
+    "@/lib/ats-test-capability": {
+      isAtsTestAuthorization: () => false,
+      atsTestPauseExemptionForId: () => false,
+      syntheticAtsTestProfile: () => ({}),
+      syntheticAtsTestCvText: () => "",
+      ATS_TEST_FICTIONAL_MARK: "[LavorAI TEST · FICTIONAL]",
+    },
     "@/lib/application-lease": applicationLease,
     "@/lib/application-answer-continuation": continuation,
     "@/lib/proof-of-send": { notSubmitted: () => ({}) },

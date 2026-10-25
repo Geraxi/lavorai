@@ -1,5 +1,13 @@
 import { resolveAdapterByUrl, noAdapterMessageFor } from "@/lib/ats-adapter-resolution";
 import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
+import {
+  ATS_TEST_FICTIONAL_MARK,
+  atsTestPauseExemptionForId,
+  isAtsTestAuthorization,
+  syntheticAtsTestCvText,
+  syntheticAtsTestProfile,
+  type AtsTestAuthorization,
+} from "@/lib/ats-test-capability";
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
 import { notSubmitted } from "@/lib/proof-of-send";
 import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
@@ -110,7 +118,7 @@ function applicationDocumentFilename(
 
 export async function processApplication(
   applicationId: string,
-  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean },
+  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean; atsTestAuth?: AtsTestAuthorization },
 ): Promise<void> {
   // Binds AI token usage of this run to the application (cost per application).
   return withAiUsageContext({ applicationId }, () => processApplicationRun(applicationId, opts));
@@ -118,9 +126,10 @@ export async function processApplication(
 
 async function processApplicationRun(
   applicationId: string,
-  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean },
+  opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean; atsTestAuth?: AtsTestAuthorization },
 ): Promise<void> {
-  if (applicationsPaused()) return;
+  const atsTestAuth = isAtsTestAuthorization(opts?.atsTestAuth) ? opts.atsTestAuth : undefined;
+  if (applicationsPaused() && !atsTestPauseExemptionForId(atsTestAuth, applicationId)) return;
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -141,6 +150,7 @@ async function processApplicationRun(
     console.error(`[worker] Application ${applicationId} non trovata`);
     return;
   }
+  if (atsTestAuth && !atsTestPauseExemptionForId(atsTestAuth, applicationId)) return;
 
   // Skip-list hosts: look up a published inbox first. A miss hands off
   // without reserving a daily slot or running CV/AI.
@@ -189,12 +199,12 @@ async function processApplicationRun(
 
   // Atomic admission rechecks the current account/round and reserves capacity.
   // All queue backends, including direct invocations, pass through this guard.
-  const workToken = await reserveApplicationWork(applicationId);
+  const workToken = await reserveApplicationWork(applicationId, prisma, atsTestAuth);
   if (!workToken) return;
   if (!await ensureLiveJobForApplication(applicationId, workToken, app.job.id, app.job.url)) return;
 
   const cv = app.user.cvDocuments[0];
-  if (!cv) {
+  if (!cv && !atsTestAuth) {
     await markFailed(applicationId, "CV utente mancante.", workToken);
     return;
   }
@@ -247,8 +257,35 @@ async function processApplicationRun(
         prefs?.vatNumber != null ||
         prefs?.portfolioUrl != null);
 
-    result = await optimizeCV({
-      cvText: cv.extractedText,
+    result = atsTestAuth ? {
+      optimizedCV: {
+        fullName: `${syntheticAtsTestProfile().firstName} ${syntheticAtsTestProfile().lastName}`,
+        targetRole: app.job.title,
+        email: syntheticAtsTestProfile().email,
+        phone: syntheticAtsTestProfile().phone,
+        location: syntheticAtsTestProfile().city,
+        linkedinUrl: null,
+        summary: syntheticAtsTestProfile().summary,
+        experiences: syntheticAtsTestProfile().experiences.map((item) => ({
+          role: item.role,
+          company: item.company,
+          location: item.location,
+          startDate: item.startDate,
+          endDate: item.endDate,
+          bullets: item.bullets,
+        })),
+        education: [],
+        skills: { technical: ["ATS test"], soft: [], tools: [] },
+        languages: syntheticAtsTestProfile().languages.map((item) => ({
+          language: item.name,
+          level: item.level,
+        })),
+      },
+      coverLetter: `${ATS_TEST_FICTIONAL_MARK} Synthetic cover letter. Not a real candidate.`,
+      atsScore: 0,
+      suggestions: [] as string[],
+    } : await optimizeCV({
+      cvText: cv?.extractedText ?? syntheticAtsTestCvText(),
       jobPosting,
       jobLang,
       coverLetterHints,
@@ -578,8 +615,9 @@ async function processApplicationRun(
       jobTitle: app.job.title,
       company: app.job.company,
       jobDescription: clipJobDescriptionForAi(app.job.description),
-      forceRealSubmit: opts?.forceRealSubmit === true,
-      forceDryRun: opts?.forceDryRun === true,
+      forceRealSubmit: atsTestAuth ? atsTestAuth.mode === "real_submit" : opts?.forceRealSubmit === true,
+      forceDryRun: atsTestAuth ? atsTestAuth.mode === "dry_run" : opts?.forceDryRun === true,
+      atsTestAuth,
     }).catch((err) => {
       console.error(
         `[worker] ${applicationId} adapter ${adapter.id} threw`,
@@ -1287,10 +1325,11 @@ interface AutoSubmitInput {
   clPath: string;
   jobTitle: string;
   portalSubmitEnabled?: boolean;
+  atsTestAuth?: AtsTestAuthorization;
 }
 
 async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
-  assertApplicationsRunning();
+  if (!input.atsTestAuth) assertApplicationsRunning();
   const { applicationId, portal, jobUrl } = input;
 
   // Job mock/demo ESPLICITO: solo URL di sviluppo (example.com/org).
@@ -1427,7 +1466,7 @@ async function ensureLocalPath(
   return localPath;
 }
 
-async function recheckBeforePortalSubmit(applicationId: string, workToken: Date, jobUrl: string, channel: string, boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit"): Promise<boolean> {
+async function recheckBeforePortalSubmit(applicationId: string, workToken: Date, jobUrl: string, channel: string, boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit", atsTestAuth?: AtsTestAuthorization): Promise<boolean> {
   const live = await checkJobUrlLiveness(jobUrl);
   if (live.state !== "live") {
     if (live.state === "closed") {
@@ -1444,7 +1483,7 @@ async function recheckBeforePortalSubmit(applicationId: string, workToken: Date,
     } });
     return false;
   }
-  return recheckApplicationSubmission(applicationId, workToken, undefined, channel, boundary);
+  return recheckApplicationSubmission(applicationId, workToken, undefined, channel, boundary, atsTestAuth);
 }
 
 async function portalSubmitStrategy(
@@ -2095,26 +2134,30 @@ interface AdapterSubmitInput {
    *  flag globale (che farebbe partire il backlog dal worker locale). */
   forceRealSubmit?: boolean;
   forceDryRun?: boolean;
+  atsTestAuth?: AtsTestAuthorization;
 }
 
 async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   import("@/lib/portal-adapters").ApplyOutcome | { ok: false; status: "worker_gate_blocked"; error: string }
 > {
   const { applicationId, adapter, jobUrl, cvPath, clPath, userId } = input;
-  assertApplicationsRunning();
+  if (!input.atsTestAuth) assertApplicationsRunning();
 
-  // Profilo utente per compilare i campi del form
-  const profileRow = await prisma.cVProfile.findUnique({
-    where: { userId },
-  });
-  if (!profileRow) {
+  // Profilo utente per compilare i campi del form.
+  // The ATS-test path uses an in-memory synthetic profile and never writes one.
+  const profile = input.atsTestAuth
+    ? syntheticAtsTestProfile()
+    : await (async () => {
+      const profileRow = await prisma.cVProfile.findUnique({ where: { userId } });
+      return profileRow ? rowToProfile(profileRow) : null;
+    })();
+  if (!profile) {
     return {
       ok: false,
       status: "missing_field",
       error: "Profilo CV mancante — vai su /cv per compilarlo.",
     };
   }
-  const profile = rowToProfile(profileRow);
 
   // Email candidato nei form ATS: se l'inbound è configurato
   // (INBOUND_EMAIL_DOMAIN), usiamo SEMPRE l'alias reply+<appId>@inbound così le
@@ -2163,7 +2206,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     browser = await launchBrowser();
     const context = await humanContext(browser);
     const page = await context.newPage();
-    if (!await beginApplicationSubmission(applicationId, input.workToken, undefined, `portal_${adapter.id}`)) {
+    if (!await beginApplicationSubmission(applicationId, input.workToken, undefined, `portal_${adapter.id}`, input.atsTestAuth)) {
       return { ok: false, status: "worker_gate_blocked", error: "Current worker gates blocked delivery." };
     }
     let finalBoundaryEntered = false;
@@ -2179,7 +2222,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       beforeSubmit: () => {
         if (finalBoundaryEntered || pauseEntered || (staged && !candidateDataEntered)) return Promise.resolve(false);
         finalBoundaryEntered = true;
-        return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, `portal_${adapter.id}`);
+        return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, `portal_${adapter.id}`, "final_submit", input.atsTestAuth);
       },
       ...(staged ? {
         onPreTransmissionPause: (questions: import("./portal-adapters/types").PendingQuestion[]) => {
@@ -2190,14 +2233,14 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
         beforeCandidateData: () => {
           if (candidateDataEntered || finalBoundaryEntered || pauseEntered) return Promise.resolve(false);
           candidateDataEntered = true;
-          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, stagedChannel, "candidate_data");
+          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, stagedChannel, "candidate_data", input.atsTestAuth);
         },
       } : {}),
       ...(adapter.id === "greenhouse" ? {
         beforeVerificationSubmit: () => {
           if (!candidateDataEntered || !finalBoundaryEntered || verificationEntered || pauseEntered) return Promise.resolve(false);
           verificationEntered = true;
-          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, "portal_greenhouse", "verification_submit");
+          return recheckBeforePortalSubmit(applicationId, input.workToken, jobUrl, "portal_greenhouse", "verification_submit", input.atsTestAuth);
         },
       } : {}),
       userEmail: formEmail,
@@ -2211,6 +2254,9 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       dryRun: input.forceRealSubmit
         ? false
         : input.forceDryRun === true || process.env.PORTAL_SUBMIT_DRY_RUN === "true",
+      atsTestAuth: input.atsTestAuth,
+      atsTestOwnerUserId: userId,
+      atsTestJobSource: input.atsTestAuth ? "ats_test" : undefined,
       answers: input.answers,
       storedAnswers: input.storedAnswers,
       reusableAnswers: input.reusableAnswers,

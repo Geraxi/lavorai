@@ -1,4 +1,4 @@
-import { allowUnpublishedRecruiteeOffer } from "@/lib/ats-test-capability";
+import { allowUnpublishedRecruiteeOffer, recheckAtsTestBeforeSubmitHttp } from "@/lib/ats-test-capability";
 import { verifySubmissionResponse } from "./submission-proof";
 import { readFile } from "node:fs/promises";
 import type { PortalAdapter, ApplyInput, ApplyOutcome, PendingQuestion } from "./types";
@@ -79,6 +79,17 @@ export const recruiteeAdapter: PortalAdapter = {
     }
     if (pending.length > 0) return { ok: false, status: "needs_user_input", error: `${pending.length} domande obbligatorie richiedono la tua risposta prima dell'invio.`, pendingQuestions: pending };
     if (input.dryRun) return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
+
+    const submitGuard = recheckAtsTestBeforeSubmitHttp(input.atsTestAuth, {
+      ownerUserId: input.atsTestOwnerUserId ?? "",
+      destinationUrl: input.jobUrl,
+      applicationId: input.applicationId ?? "",
+      jobSource: input.atsTestJobSource,
+      realSubmit: true,
+    });
+    if (!submitGuard.ok) {
+      return { ok: false, status: "not_eligible", error: `ATS test submit blocked: ${submitGuard.reason}. Nessun invio eseguito.` };
+    }
 
     // 3. Invio multipart
     const p = input.profile;

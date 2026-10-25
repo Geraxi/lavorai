@@ -326,7 +326,10 @@ async function testRecruiteeBoundary() {
     const formValues = new Map<string, unknown>();
     const { recruiteeAdapter } = loadAdapter("recruitee", {
       "./submission-proof": proofModule,
-      "@/lib/ats-test-capability": { allowUnpublishedRecruiteeOffer: () => false },
+      "@/lib/ats-test-capability": {
+        allowUnpublishedRecruiteeOffer: () => false,
+        recheckAtsTestBeforeSubmitHttp: () => ({ ok: true }),
+      },
       "node:fs/promises": { readFile: async () => new Uint8Array([1, 2, 3]) },
       "./ai-answer": { answerOffline: async (_ctx: unknown, fields: Array<{ kind: string; options: string[] }>) => {
         if (scenario === "boolean-no") { assert.equal(fields[0].kind, "radio"); assert.equal(fields[0].options.join(","), "Yes,No"); }
