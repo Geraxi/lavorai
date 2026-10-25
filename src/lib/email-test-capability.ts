@@ -206,6 +206,78 @@ export function inboundReceiptFromProviderResult(raw: string | null | undefined)
   return { receivedAt, providerMessageId };
 }
 
+export function providerResultPatch(provider: EmailTestProviderResult): Record<string, unknown> {
+  const patch: Record<string, unknown> = { accepted: provider.accepted === true };
+  if (typeof provider.emailId === "string") patch.emailId = provider.emailId;
+  if (typeof provider.errorName === "string") patch.errorName = provider.errorName;
+  if (typeof provider.statusCode === "number" || provider.statusCode === null) patch.statusCode = provider.statusCode;
+  if (typeof provider.message === "string") patch.message = provider.message;
+  return patch;
+}
+
+export function inboundReceiptPatch(receipt: { receivedAt: Date; providerMessageId: string }): Record<string, unknown> {
+  return {
+    inboundReceivedAt: receipt.receivedAt.toISOString(),
+    inboundProviderMessageId: receipt.providerMessageId,
+  };
+}
+
+/** In-process stand-in of the SQL `jsonb || patch` merge. Production writes use $executeRaw. */
+export function mergeEmailTestResultJson(
+  existing: string | null | undefined,
+  patch: Record<string, unknown>,
+  opts?: { preserveInboundReceipt?: boolean },
+): string {
+  const current = parseResultJson(existing);
+  const next = { ...current };
+  const keepInbound = opts?.preserveInboundReceipt === true && typeof current.inboundReceivedAt === "string";
+  for (const [key, value] of Object.entries(patch)) {
+    if (keepInbound && (key === "inboundReceivedAt" || key === "inboundProviderMessageId")) continue;
+    next[key] = value;
+  }
+  return JSON.stringify(next);
+}
+
+export type EmailTestResultDb = {
+  $executeRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<number>;
+};
+
+export async function recordEmailTestProviderResult(
+  db: EmailTestResultDb,
+  attemptKey: string,
+  provider: EmailTestProviderResult,
+): Promise<void> {
+  const patch = JSON.stringify(providerResultPatch(provider));
+  await db.$executeRaw`
+    UPDATE "EmailTestAttempt"
+    SET "providerResult" = (
+      COALESCE(NULLIF(btrim("providerResult"), ''), '{}')::jsonb
+      || ${patch}::jsonb
+    )::text
+    WHERE "attemptKey" = ${attemptKey}
+  `;
+}
+
+export async function recordEmailTestInboundReceipt(
+  db: EmailTestResultDb,
+  attemptId: string,
+  receipt: { receivedAt: Date; providerMessageId: string },
+): Promise<void> {
+  const patch = JSON.stringify(inboundReceiptPatch(receipt));
+  await db.$executeRaw`
+    UPDATE "EmailTestAttempt"
+    SET "providerResult" = (
+      CASE
+        WHEN COALESCE(NULLIF(btrim("providerResult"), ''), '{}')::jsonb ? 'inboundReceivedAt'
+        THEN COALESCE(NULLIF(btrim("providerResult"), ''), '{}')::jsonb
+        ELSE COALESCE(NULLIF(btrim("providerResult"), ''), '{}')::jsonb
+          || ${patch}::jsonb
+      END
+    )::text
+    WHERE "id" = ${attemptId}
+  `;
+}
+
 export async function tryRecordEmailTestInbound(
   input: {
     to?: unknown;
@@ -217,8 +289,8 @@ export async function tryRecordEmailTestInbound(
   db: {
     emailTestAttempt: {
       findUnique: typeof prisma.emailTestAttempt.findUnique;
-      update: typeof prisma.emailTestAttempt.update;
     };
+    $executeRaw: EmailTestResultDb["$executeRaw"];
   } = prisma,
 ): Promise<"recorded" | "unmatched_skip" | null> {
   if (!inboundTargetsEmailTestDestination(input.to)) return null;
@@ -228,17 +300,9 @@ export async function tryRecordEmailTestInbound(
     ?? await db.emailTestAttempt.findUnique({ where: { attemptKey: token } });
   if (!attempt) return "unmatched_skip";
   if (!(input.receivedAt.getTime() > new Date(attempt.createdAt).getTime())) return "unmatched_skip";
-  const already = inboundReceiptFromProviderResult(attempt.providerResult);
-  if (already?.providerMessageId === input.providerMessageId) return "recorded";
-  if (already) return "recorded";
-  const merged = {
-    ...parseResultJson(attempt.providerResult),
-    inboundReceivedAt: input.receivedAt.toISOString(),
-    inboundProviderMessageId: input.providerMessageId,
-  };
-  await db.emailTestAttempt.update({
-    where: { id: attempt.id },
-    data: { providerResult: JSON.stringify(merged) },
+  await recordEmailTestInboundReceipt(db, attempt.id, {
+    receivedAt: input.receivedAt,
+    providerMessageId: input.providerMessageId,
   });
   return "recorded";
 }
@@ -383,7 +447,7 @@ export type EmailTestTables = Pick<
   "user" | "job" | "application" | "emailTestAttempt" | "applicationEmailAttempt" | "inboundEmail"
 >;
 
-export type EmailTestDb = EmailTestTables & {
+export type EmailTestDb = EmailTestTables & EmailTestResultDb & {
   $transaction: <T>(fn: (tx: EmailTestTables) => Promise<T>) => Promise<T>;
 };
 
@@ -410,9 +474,10 @@ export type PrepareEmailTestResult =
 function parseStoredProvider(raw: string | null | undefined): EmailTestProviderResult | null {
   if (!raw?.trim()) return null;
   try {
-    const parsed = JSON.parse(raw) as EmailTestProviderResult;
-    if (!parsed || typeof parsed !== "object") return null;
-    const out: EmailTestProviderResult = { accepted: parsed.accepted === true };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    if (typeof parsed.accepted !== "boolean") return null;
+    const out: EmailTestProviderResult = { accepted: parsed.accepted };
     if (typeof parsed.emailId === "string") out.emailId = parsed.emailId;
     if (typeof parsed.errorName === "string") out.errorName = parsed.errorName;
     if (typeof parsed.statusCode === "number" || parsed.statusCode === null) out.statusCode = parsed.statusCode;
@@ -545,10 +610,7 @@ export async function prepareAndRunEmailTest(
   const result = await deps.send(sendInput);
   const provider = providerFromDeliveryResult(result);
   if (provider) {
-    await deps.prisma.emailTestAttempt.updateMany({
-      where: { attemptKey: prepared.attemptKey },
-      data: { providerResult: JSON.stringify(provider) },
-    });
+    await recordEmailTestProviderResult(deps.prisma, prepared.attemptKey, provider);
   }
   const delivery = await readDelivery(deps.prisma, prepared.applicationId, prepared.attemptKey, destination);
   return {

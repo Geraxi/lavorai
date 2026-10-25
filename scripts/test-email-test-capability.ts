@@ -18,8 +18,11 @@ import {
   extractEmailTestToken,
   inboundReceiptFromProviderResult,
   inboundTargetsEmailTestDestination,
+  mergeEmailTestResultJson,
   parseEmailTestDestination,
   parseEmailTestRunKey,
+  recordEmailTestInboundReceipt,
+  recordEmailTestProviderResult,
   tryRecordEmailTestInbound,
 } from "../src/lib/email-test-capability";
 import { RELEASE_CANARY } from "../src/lib/release-email-canary";
@@ -104,6 +107,24 @@ function memoryDb() {
       findFirst: async ({ where }: { where: { applicationId: string; toAddress: string } }) =>
         inbound.filter((row) => row.applicationId === where.applicationId && row.toAddress === where.toAddress)
           .sort((a, b) => b.receivedAt.getTime() - a.receivedAt.getTime())[0] ?? null,
+    },
+    $executeRaw: async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = strings.join("?");
+      if (!sql.includes('"EmailTestAttempt"') || !sql.includes('"providerResult"')) {
+        throw new Error(`unexpected email-test merge sql: ${sql}`);
+      }
+      const patchJson = values[0];
+      const key = values[1];
+      if (typeof patchJson !== "string" || typeof key !== "string") throw new Error("merge params");
+      const patch = JSON.parse(patchJson) as Record<string, unknown>;
+      const byId = /WHERE\s+"id"\s*=/.test(sql);
+      const preserveInbound = sql.includes("? 'inboundReceivedAt'");
+      const row = [...grants.values()].find((g) => (byId ? g.id === key : g.attemptKey === key));
+      if (!row) return 0;
+      row.providerResult = mergeEmailTestResultJson(row.providerResult, patch, {
+        preserveInboundReceipt: preserveInbound,
+      });
+      return 1;
     },
     $transaction: async <T,>(fn: (tx: typeof db) => Promise<T>) => fn(db),
   };
@@ -327,6 +348,7 @@ async function main() {
       LEGACY_CANARY_ATTEMPT_KEY,
       authorizeEmailTest: async (input: { applicationId: string; recipient: string }) =>
         input.applicationId === EMAIL_TEST.applicationId && input.recipient === "delivered@resend.dev",
+      recordEmailTestProviderResult: async () => {},
     },
     "@/lib/recruiter-email-fallback": { recruiterEmailFallbackEnabled: () => false },
     "@/lib/email-quota": { sendWithinQuota: async (_k: string, _to: string, fn: () => Promise<void>) => { await fn(); return { sent: true, reason: null }; } },
@@ -445,7 +467,13 @@ async function main() {
   const capabilitySrc = readFileSync("src/lib/email-test-capability.ts", "utf8");
   assert.doesNotMatch(capabilitySrc, /inboundEmail\.findFirst/);
   assert.match(capabilitySrc, /inboundReceivedAt/);
+  assert.match(capabilitySrc, /\$executeRaw/);
+  assert.doesNotMatch(capabilitySrc, /providerResult:\s*JSON\.stringify\(provider\)/);
+  assert.doesNotMatch(capabilitySrc, /data:\s*\{\s*providerResult:\s*JSON\.stringify\(merged\)/);
   assert.match(readFileSync("src/lib/application-reply-processing.ts", "utf8"), /tryRecordEmailTestInbound/);
+  const deliverySrc = readFileSync("src/lib/recruiter-delivery.ts", "utf8");
+  assert.match(deliverySrc, /recordEmailTestProviderResult/);
+  assert.doesNotMatch(deliverySrc, /providerResult:\s*JSON\.stringify\(provider\)/);
 
   const alias = RELEASE_CANARY.replyTo;
   assert.equal(inboundTargetsEmailTestDestination(alias), true);
@@ -594,7 +622,78 @@ async function main() {
   assert.equal(forwardCalls, 0);
   assert.equal(applyCalls, 0);
 
-  console.log("PASS email test: fenced destinations, correlation token, inbound receipt without classify/forward/apply, pause/no-gate, honest labels.");
+  const firstInboundAt = new Date("2026-10-25T14:10:00.000Z");
+  const laterInboundAt = new Date("2026-10-25T14:20:00.000Z");
+  function seedGrant(id: string, runKey: string) {
+    const row = {
+      id,
+      runKey,
+      destination: alias,
+      attemptKey: emailTestAttemptKey(runKey, alias),
+      applicationId: EMAIL_TEST.applicationId,
+      providerResult: null as string | null,
+      createdAt,
+    };
+    grants.set(`${row.runKey}\0${row.destination}`, row);
+    return row;
+  }
+  function parsed(row: { providerResult: string | null }) {
+    return JSON.parse(row.providerResult ?? "{}");
+  }
+
+  const mergeBefore = seedGrant("merge-before", "merge-before");
+  await recordEmailTestInboundReceipt(db as any, mergeBefore.id, { receivedAt: firstInboundAt, providerMessageId: "mail-before" });
+  attempts.set(mergeBefore.attemptKey, {
+    status: "accepted", providerEmailId: "re_before", acceptedAt: new Date(), lastEventType: "email.sent",
+  });
+  const beforeProviderMissing = await readEmailTestDelivery({ runKey: mergeBefore.runKey, destination: alias }, db as any);
+  assert.equal(beforeProviderMissing.ok, true);
+  if (beforeProviderMissing.ok) {
+    assert.equal(beforeProviderMissing.delivery.evidenceLevel, "inbound_received");
+    assert.equal(beforeProviderMissing.delivery.inboundId, "mail-before");
+    assert.equal(beforeProviderMissing.delivery.provider?.accepted, true);
+    assert.equal(beforeProviderMissing.delivery.provider?.emailId, "re_before");
+  }
+  await recordEmailTestProviderResult(db as any, mergeBefore.attemptKey, { accepted: true, emailId: "re_before" });
+  assert.equal(parsed(mergeBefore).inboundProviderMessageId, "mail-before");
+  assert.equal(parsed(mergeBefore).inboundReceivedAt, firstInboundAt.toISOString());
+  assert.equal(parsed(mergeBefore).emailId, "re_before");
+  assert.equal(parsed(mergeBefore).accepted, true);
+  const beforeBoth = await readEmailTestDelivery({ runKey: mergeBefore.runKey, destination: alias }, db as any);
+  assert.equal(beforeBoth.ok, true);
+  if (beforeBoth.ok) {
+    assert.equal(beforeBoth.delivery.evidenceLevel, "inbound_received");
+    assert.equal(beforeBoth.delivery.inboundId, "mail-before");
+    assert.equal(beforeBoth.delivery.provider?.emailId, "re_before");
+    assert.equal(beforeBoth.delivery.provider?.accepted, true);
+  }
+
+  const after = seedGrant("merge-after", "merge-after");
+  await recordEmailTestProviderResult(db as any, after.attemptKey, { accepted: true, emailId: "re_after" });
+  await recordEmailTestInboundReceipt(db as any, after.id, { receivedAt: firstInboundAt, providerMessageId: "mail-after" });
+  assert.equal(parsed(after).inboundProviderMessageId, "mail-after");
+  assert.equal(parsed(after).emailId, "re_after");
+
+  const interleaved = seedGrant("merge-stale", "merge-stale");
+  const stale = interleaved.providerResult;
+  await recordEmailTestInboundReceipt(db as any, interleaved.id, { receivedAt: firstInboundAt, providerMessageId: "mail-stale" });
+  const naiveClobber = JSON.stringify({ ...JSON.parse(stale || "{}"), accepted: true, emailId: "re_stale" });
+  assert.equal(JSON.parse(naiveClobber).inboundProviderMessageId, undefined, "stale whole-object write would drop inbound");
+  await Promise.all([
+    recordEmailTestProviderResult(db as any, interleaved.attemptKey, { accepted: true, emailId: "re_stale" }),
+    recordEmailTestInboundReceipt(db as any, interleaved.id, { receivedAt: laterInboundAt, providerMessageId: "mail-stale-2" }),
+  ]);
+  assert.equal(parsed(interleaved).emailId, "re_stale");
+  assert.equal(parsed(interleaved).inboundProviderMessageId, "mail-stale", "first inbound receipt is kept");
+  assert.equal(parsed(interleaved).inboundReceivedAt, firstInboundAt.toISOString());
+
+  const mergeDup = seedGrant("merge-dup", "merge-dup");
+  await recordEmailTestInboundReceipt(db as any, mergeDup.id, { receivedAt: firstInboundAt, providerMessageId: "mail-first" });
+  await recordEmailTestInboundReceipt(db as any, mergeDup.id, { receivedAt: laterInboundAt, providerMessageId: "mail-second" });
+  assert.equal(parsed(mergeDup).inboundProviderMessageId, "mail-first");
+  assert.equal(parsed(mergeDup).inboundReceivedAt, firstInboundAt.toISOString());
+
+  console.log("PASS email test: fenced destinations, correlation token, inbound receipt without classify/forward/apply, atomic providerResult merge, pause/no-gate, honest labels.");
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1; });
