@@ -19,6 +19,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { asIssuedWorkLease, issueApplicationLease, type ApplicationWorkLease } from "@/lib/application-lease";
 import { DEFAULT_USER_INBOX_DOMAIN } from "@/lib/inbound/address";
 import type { CVProfile } from "@/lib/cv-profile-types";
 
@@ -27,6 +28,24 @@ export const ATS_TEST_FICTIONAL_MARK = "[LavorAI TEST · FICTIONAL]";
 /** Placeholder in the in-memory profile. Must never be the submitted address. */
 export const ATS_TEST_PLACEHOLDER_EMAIL = "ats-test@example.invalid";
 export const ATS_TEST_REFUSED_BEFORE_SUBMIT = "REFUSED_BEFORE_SUBMIT";
+/**
+ * In-flight marker written by claimAtsTestAttempt. String column — no migration.
+ *
+ * State machine (one diagnostic row per destination; dry and real are two offers):
+ *   queued + null                  → fresh, claimable
+ *   ready_to_apply + REFUSED_BEFORE_SUBMIT + no submitStartedAt
+ *                                  → pre-POST refusal, claimable retry
+ *   optimizing + ATS_TEST_CLAIMED + lease
+ *                                  → claimed; only count===1 proceeds to the sender
+ *                                    crash here is non-retryable (ats_test_in_progress)
+ *   ready_to_apply + DRY_RUN       → dry finished; dest consumed (real uses the other offer)
+ *   ready_to_apply + REFUSED_…     → adapter refused again; retryable
+ *   applying/ready_to_apply + SUBMISSION_STARTED / UNCONFIRMED / submitStartedAt
+ *                                  → uncertain after a send claim; non-retryable
+ *   success + DETECTED_*           → sent; dest consumed
+ */
+export const ATS_TEST_CLAIMED = "ATS_TEST_CLAIMED";
+export const ATS_TEST_IN_PROGRESS = "ats_test_in_progress";
 
 const EMAIL_RE = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$/i;
 const HARDCODED_INBOUND_DOMAINS = ["inbound.lavorai.it", "apply.lavorai.it"] as const;
@@ -423,6 +442,7 @@ export function atsTestPriorAttemptReason(rows: AtsTestPriorRow[], _mode: "dry_r
   if (rows.some((row) => !isAtsTestUser(row.userId, env))) return "ats_test_other_user_application";
   let blocking = false;
   for (const row of rows) {
+    if (row.submitConfirmation === ATS_TEST_CLAIMED) return ATS_TEST_IN_PROGRESS;
     if (row.submitConfirmation === ATS_TEST_REFUSED_BEFORE_SUBMIT) {
       if (row.submitStartedAt) return "uncertain_submit_started";
       if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) {
@@ -436,6 +456,104 @@ export function atsTestPriorAttemptReason(rows: AtsTestPriorRow[], _mode: "dry_r
   }
   if (blocking) return "ats_test_already_attempted";
   return null;
+}
+
+/** Rows that may enter the sender. Predicate must change on a successful claim. */
+export function atsTestClaimWhere(applicationId: string) {
+  return {
+    id: applicationId,
+    submitStartedAt: null,
+    submittedAt: null,
+    submittedVia: null,
+    OR: [
+      { status: "queued", submitConfirmation: null },
+      {
+        status: { in: ["queued", "ready_to_apply"] },
+        submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT,
+      },
+    ],
+  } as const;
+}
+
+export type AtsTestClaimClient = {
+  application: {
+    updateMany: (args: {
+      where: ReturnType<typeof atsTestClaimWhere>;
+      data: {
+        status: string;
+        startedAt: Date;
+        leaseToken: string;
+        leaseExpiresAt: Date;
+        submitConfirmation: string;
+        errorMessage: null;
+        completedAt: null;
+      };
+    }) => Promise<{ count: number }>;
+    findUnique: (args: {
+      where: { id: string };
+      select: {
+        startedAt: true;
+        leaseToken: true;
+        leaseExpiresAt: true;
+        submitConfirmation: true;
+        status: true;
+      };
+    }) => Promise<{
+      startedAt: Date | null;
+      leaseToken: string | null;
+      leaseExpiresAt: Date | null;
+      submitConfirmation: string | null;
+      status: string | null;
+    } | null>;
+  };
+};
+
+/**
+ * Single conditional transition to an in-flight state before any Recruitee
+ * GET/POST. Proceed only when count===1. Held across the send via the lease.
+ * Does not set submitStartedAt — that stays the actual send-boundary marker.
+ */
+export async function claimAtsTestAttempt(
+  prisma: AtsTestClaimClient,
+  applicationId: string,
+): Promise<{ ok: true; lease: ApplicationWorkLease } | { ok: false; reason: string }> {
+  const issued = issueApplicationLease();
+  const claimed = await prisma.application.updateMany({
+    where: atsTestClaimWhere(applicationId),
+    data: {
+      status: "optimizing",
+      startedAt: issued.startedAt,
+      leaseToken: issued.leaseToken,
+      leaseExpiresAt: issued.leaseExpiresAt,
+      submitConfirmation: ATS_TEST_CLAIMED,
+      errorMessage: null,
+      completedAt: null,
+    },
+  });
+  if (claimed.count !== 1) return { ok: false, reason: ATS_TEST_IN_PROGRESS };
+  return { ok: true, lease: asIssuedWorkLease(issued) };
+}
+
+export async function adoptAtsTestWorkLease(
+  prisma: AtsTestClaimClient,
+  applicationId: string,
+  now = new Date(),
+): Promise<ApplicationWorkLease | null> {
+  const row = await prisma.application.findUnique({
+    where: { id: applicationId },
+    select: {
+      startedAt: true,
+      leaseToken: true,
+      leaseExpiresAt: true,
+      submitConfirmation: true,
+      status: true,
+    },
+  });
+  if (!row?.startedAt || !row.leaseToken) return null;
+  if (row.submitConfirmation !== ATS_TEST_CLAIMED) return null;
+  if (!["queued", "optimizing", "ready_to_apply", "applying"].includes(row.status ?? "")) return null;
+  if (row.leaseExpiresAt && +row.leaseExpiresAt <= +now) return null;
+  return asIssuedWorkLease({ startedAt: row.startedAt, leaseToken: row.leaseToken });
 }
 
 function randomToken(): string {
@@ -524,8 +642,8 @@ export type AtsTestDeps = {
         };
       }) => Promise<{ id: string }>;
       updateMany: (args: {
-        where: { id: string; status: string };
-        data: { status: string; errorMessage: string };
+        where: Record<string, unknown>;
+        data: Record<string, unknown>;
       }) => Promise<{ count: number }>;
     };
   };
@@ -640,6 +758,9 @@ export async function prepareAndRunAtsTest(input: {
     }
     throw error;
   }
+
+  const claimed = await claimAtsTestAttempt(deps.prisma as AtsTestClaimClient, created.id);
+  if (!claimed.ok) return { ok: false, reason: claimed.reason, status: 409 };
 
   const token = mintAtsTestAuthorization({
     userId: auth.userId,

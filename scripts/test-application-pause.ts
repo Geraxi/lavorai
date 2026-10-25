@@ -31,6 +31,7 @@ function load(path: string, extra: Record<string, any> = {}): any {
     "@/lib/ats-test-capability": {
       isAtsTestAuthorization: () => false,
       atsTestPauseExemptionForId: () => false,
+      adoptAtsTestWorkLease: async () => null,
       atsTestSkipsDocumentTailoring: () => false,
       atsTestSkipsRecruiterLookup: () => false,
       atsTestCandidateEmail: () => ({ ok: false, reason: "ats_test_candidate_email_unconfigured" }),

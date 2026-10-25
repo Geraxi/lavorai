@@ -3,6 +3,7 @@ import { applicationsPaused, assertApplicationsRunning } from "@/lib/application
 import {
   ATS_TEST_FICTIONAL_MARK,
   ATS_TEST_REFUSED_BEFORE_SUBMIT,
+  adoptAtsTestWorkLease,
   atsTestCandidateEmail,
   atsTestPauseExemptionForId,
   atsTestSkipsDocumentTailoring,
@@ -202,8 +203,11 @@ async function processApplicationRun(
   }
 
   // Atomic admission rechecks the current account/round and reserves capacity.
-  // All queue backends, including direct invocations, pass through this guard.
-  const workToken = await reserveApplicationWork(applicationId, prisma, atsTestAuth);
+  // ATS tests are claimed in prepareAndRunAtsTest before this function; adopt
+  // that lease instead of reserveApplicationWork (which only admits queued).
+  const workToken = atsTestAuth
+    ? await adoptAtsTestWorkLease(prisma, applicationId)
+    : await reserveApplicationWork(applicationId, prisma, atsTestAuth);
   if (!workToken) return;
   if (!await ensureLiveJobForApplication(applicationId, workToken, app.job.id, app.job.url)) return;
 
@@ -220,7 +224,7 @@ async function processApplicationRun(
   // Queue/eligibility backoff timestamps are not AI work and must not consume the budget.
   const startedToday = await prisma.application.count({ where: { startedAt: { gte: dayStart }, status: { not: "queued" }, id: { not: applicationId } } });
   const budget = Number(process.env.AI_DAILY_APP_BUDGET ?? 300);
-  if (startedToday >= budget) {
+  if (!atsTestAuth && startedToday >= budget) {
     await prisma.application.updateMany({ where: { id: applicationId, status: "optimizing", ...liveLeaseFields(workToken) }, data: { status: "queued", startedAt: null, leaseToken: null, leaseExpiresAt: null } });
     console.warn(`[worker] budget AI giornaliero raggiunto (${startedToday}/${budget}): ${applicationId} rimandata di 20 min (alza AI_DAILY_APP_BUDGET per cambiare)`);
     return;
@@ -2249,7 +2253,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     browser = await launchBrowser();
     const context = await humanContext(browser);
     const page = await context.newPage();
-    if (!await beginApplicationSubmission(applicationId, input.workToken, undefined, `portal_${adapter.id}`, input.atsTestAuth)) {
+    if (!input.atsTestAuth && !await beginApplicationSubmission(applicationId, input.workToken, undefined, `portal_${adapter.id}`, input.atsTestAuth)) {
       return { ok: false, status: "worker_gate_blocked", error: "Current worker gates blocked delivery." };
     }
     let finalBoundaryEntered = false;

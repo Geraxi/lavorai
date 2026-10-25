@@ -6,7 +6,9 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import ts from "typescript";
 import {
+  ATS_TEST_CLAIMED,
   ATS_TEST_FICTIONAL_MARK,
+  ATS_TEST_IN_PROGRESS,
   ATS_TEST_JOB_SOURCE,
   ATS_TEST_PLACEHOLDER_EMAIL,
   ATS_TEST_REFUSED_BEFORE_SUBMIT,
@@ -14,6 +16,7 @@ import {
   atsTestApplicationId,
   atsTestCandidateEmail,
   atsTestCandidateEmailState,
+  atsTestClaimWhere,
   atsTestDestinationLockKey,
   atsTestJobExternalId,
   atsTestPauseExemption,
@@ -24,6 +27,7 @@ import {
   atsTestSkipsRecruiterLookup,
   atsTestUserId,
   authorizeAtsTest,
+  claimAtsTestAttempt,
   excludeAtsTestJobRelationWhere,
   excludeAtsTestJobsWhere,
   isAtsTestAuthorization,
@@ -137,9 +141,12 @@ assert.equal(atsTestPriorAttemptReason([{
 assert.equal(atsTestPriorAttemptReason([{
   id: "a", userId: TEST_USER,
 }], "dry_run", env), "ats_test_already_attempted");
-assert.equal(atsTestPriorAttemptReason([{
-  id: expectedId, userId: TEST_USER, submitStartedAt: new Date(),
-}], "dry_run", env), "uncertain_submit_started");
+  assert.equal(atsTestPriorAttemptReason([{
+    id: expectedId, userId: TEST_USER, submitStartedAt: new Date(),
+  }], "dry_run", env), "uncertain_submit_started");
+  assert.equal(atsTestPriorAttemptReason([{
+    id: expectedId, userId: TEST_USER, submitConfirmation: ATS_TEST_CLAIMED,
+  }], "dry_run", env), ATS_TEST_IN_PROGRESS);
 
 assert.equal(countsTowardDailyCap({ status: "success", submittedAt: new Date(), jobSource: "ats_test" }), false);
 assert.equal(occupiesWeeklyQuotaSlot({ status: "success", submittedAt: new Date(), jobSource: "ats_test" }), false);
@@ -224,6 +231,10 @@ assert.match(capability, /pg_advisory_xact_lock/);
 assert.match(capability, /atsTestApplicationId/);
 assert.match(capability, /P2002/);
 assert.match(capability, /ATS_TEST_AUTH_BRAND/);
+assert.match(capability, /claimAtsTestAttempt/);
+assert.match(capability, /ATS_TEST_CLAIMED/);
+assert.match(worker, /adoptAtsTestWorkLease/);
+assert.match(worker, /if \(!input\.atsTestAuth && !await beginApplicationSubmission/);
 assert.doesNotMatch(capability, /enqueueApplication/);
 assert.doesNotMatch(capability, /autoApplyMode/);
 
@@ -247,15 +258,36 @@ assert.match(readFileSync("src/app/(app)/admin/ats-test/page.tsx", "utf8"), /Ats
 
 type FakeApp = Record<string, unknown> & { id: string; userId: string };
 
+function matchesWhere(row: Record<string, unknown>, where: Record<string, unknown> | undefined): boolean {
+  if (!where) return true;
+  return Object.entries(where).every(([key, value]) => {
+    if (key === "OR") return (value as Record<string, unknown>[]).some((branch) => matchesWhere(row, branch));
+    if (key === "AND") return (value as Record<string, unknown>[]).every((branch) => matchesWhere(row, branch));
+    if (value && typeof value === "object" && !(value instanceof Date)) {
+      if ("in" in value) return (value as { in: unknown[] }).in.includes(row[key]);
+      if ("not" in value) return row[key] !== (value as { not: unknown }).not;
+    }
+    return row[key] === value || (value === null && row[key] == null);
+  });
+}
+
 function fakeDb(opts: {
   user?: boolean;
-  existing?: Array<{ id: string; userId: string; submitConfirmation?: string | null; submitStartedAt?: Date | null }>;
+  existing?: Array<{ id: string; userId: string; submitConfirmation?: string | null; submitStartedAt?: Date | null; status?: string }>;
   submitCalls?: { count: number };
+  processApplication?: (id: string, flags: { atsTestAuth?: AtsTestAuthorization }, apps: FakeApp[]) => Promise<void>;
 } = {}) {
   const jobs: Array<{ id: string; source: string; url: string; externalId: string; title: string }> = [];
-  const apps: FakeApp[] = [...(opts.existing ?? [])] as FakeApp[];
+  const apps: FakeApp[] = (opts.existing ?? []).map((row) => ({
+    status: row.submitConfirmation === ATS_TEST_REFUSED_BEFORE_SUBMIT ? "ready_to_apply" : "queued",
+    submittedAt: null,
+    submittedVia: null,
+    submitStartedAt: null,
+    ...row,
+  })) as FakeApp[];
   let processed: { id: string; opts: { atsTestAuth?: AtsTestAuthorization } } | null = null;
   let lock = Promise.resolve();
+  let writeLock = Promise.resolve();
   const submitCalls = opts.submitCalls ?? { count: 0 };
   const prisma = {
     user: {
@@ -282,7 +314,7 @@ function fakeDb(opts: {
         where?.jobId ? apps.filter((app) => app.jobId === where.jobId) : apps
       ) as never,
       findUnique: async ({ where }: { where: { id: string } }) => (
-        apps.find((a) => a.id === where.id) as never ?? null
+        apps.find((a) => a.id === where.id || matchesWhere(a, where)) as never ?? null
       ),
       create: async ({ data }: { data: Record<string, unknown> }) => {
         if (apps.some((app) => app.id === data.id)) {
@@ -291,25 +323,33 @@ function fakeDb(opts: {
         const row = {
           id: String(data.id),
           status: "queued",
-          ...data,
+          submittedAt: null,
           submittedVia: null,
           submitConfirmation: null,
           submissionReceiptJson: null,
           errorMessage: null,
           submitStartedAt: null,
+          ...data,
         } as FakeApp;
         apps.push(row);
         return { id: row.id };
       },
-      updateMany: async ({ where, data }: { where: { id?: string; status?: string }; data: Record<string, unknown> }) => {
-        let count = 0;
-        for (const app of apps) {
-          if (where.id && app.id !== where.id) continue;
-          if (where.status && app.status !== where.status) continue;
-          Object.assign(app, data);
-          count++;
+      updateMany: async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        const prev = writeLock;
+        let release!: () => void;
+        writeLock = new Promise<void>((resolve) => { release = resolve; });
+        await prev;
+        try {
+          let count = 0;
+          for (const app of apps) {
+            if (!matchesWhere(app, where)) continue;
+            Object.assign(app, data);
+            count++;
+          }
+          return { count };
+        } finally {
+          release();
         }
-        return { count };
       },
     },
     $executeRaw: async () => undefined,
@@ -333,6 +373,10 @@ function fakeDb(opts: {
     processApplication: async (id: string, flags: { atsTestAuth?: AtsTestAuthorization }) => {
       processed = { id, opts: flags };
       submitCalls.count += 1;
+      if (opts.processApplication) {
+        await opts.processApplication(id, flags, apps);
+        return;
+      }
       const app = apps.find((a) => a.id === id);
       if (app) {
         app.status = flags.atsTestAuth?.mode === "real_submit" ? "success" : "ready_to_apply";
@@ -510,7 +554,12 @@ async function testConcurrentAndUncertainRetry() {
   const refused = [first, second].filter((run) => !run.ok);
   assert.equal(oks.length, 1, "concurrent double POST yields exactly one success");
   assert.equal(refused.length, 1);
-  if (!refused[0].ok) assert.equal(refused[0].reason, "ats_test_already_attempted");
+  if (!refused[0].ok) {
+    assert.ok(
+      refused[0].reason === "ats_test_already_attempted" || refused[0].reason === ATS_TEST_IN_PROGRESS,
+      refused[0].reason,
+    );
+  }
   assert.equal(db.apps().filter((app) => app.id === expectedId).length, 1);
   assert.ok(submitCalls.count <= 1, "at most one adapter/processApplication call");
 
@@ -605,6 +654,7 @@ function loadWorker() {
           INBOUND_EMAIL_DOMAIN: process.env.INBOUND_EMAIL_DOMAIN,
           INBOUND_USER_DOMAIN: process.env.INBOUND_USER_DOMAIN,
         }),
+        adoptAtsTestWorkLease: async () => null,
         atsTestPauseExemptionForId,
         atsTestSkipsDocumentTailoring,
         atsTestSkipsRecruiterLookup,
@@ -935,17 +985,199 @@ function testCronDrainStayPaused() {
   }
 }
 
+async function testRefusedRetryAtMostOnceClaim() {
+  const refusedExisting = {
+    id: expectedId,
+    userId: TEST_USER,
+    status: "ready_to_apply",
+    submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT,
+    submitStartedAt: null,
+    submittedAt: null,
+    submittedVia: null,
+  };
+
+  const claimDb = fakeDb({ existing: [refusedExisting] });
+  const originalUpdate = claimDb.prisma.application.updateMany.bind(claimDb.prisma.application);
+  let entered = 0;
+  let releaseBarrier!: () => void;
+  const barrier = new Promise<void>((resolve) => { releaseBarrier = resolve; });
+  claimDb.prisma.application.updateMany = async (args) => {
+    if (args.data?.submitConfirmation === ATS_TEST_CLAIMED) {
+      entered++;
+      if (entered === 2) releaseBarrier();
+      await barrier;
+    }
+    return originalUpdate(args);
+  };
+  const [left, right] = await Promise.all([
+    claimAtsTestAttempt(claimDb.prisma, expectedId),
+    claimAtsTestAttempt(claimDb.prisma, expectedId),
+  ]);
+  const wins = [left, right].filter((result) => result.ok);
+  const losses = [left, right].filter((result) => !result.ok);
+  assert.equal(entered, 2, "both retries reached the claim");
+  assert.equal(wins.length, 1, "exactly one claim succeeds");
+  assert.equal(losses.length, 1);
+  if (!losses[0].ok) assert.equal(losses[0].reason, ATS_TEST_IN_PROGRESS);
+  assert.equal(claimDb.apps()[0].submitConfirmation, ATS_TEST_CLAIMED);
+  assert.equal(claimDb.apps()[0].status, "optimizing");
+  assert.ok(atsTestClaimWhere(expectedId));
+
+  const { recruiteeAdapter } = await import("../src/lib/portal-adapters/recruitee");
+
+  async function runConcurrentRetries(mode: "dry_run" | "real_submit") {
+    const previous = {
+      user: process.env.ATS_TEST_USER_ID,
+      dest: process.env.ATS_TEST_DESTINATIONS,
+      real: process.env.ATS_TEST_REAL_SUBMIT,
+      candidate: process.env.ATS_TEST_CANDIDATE_EMAIL,
+    };
+    process.env.ATS_TEST_USER_ID = TEST_USER;
+    process.env.ATS_TEST_DESTINATIONS = env.ATS_TEST_DESTINATIONS;
+    process.env.ATS_TEST_CANDIDATE_EMAIL = CANDIDATE_EMAIL;
+    if (mode === "real_submit") process.env.ATS_TEST_REAL_SUBMIT = "true";
+    else delete process.env.ATS_TEST_REAL_SUBMIT;
+    const { writeFile, unlink } = await import("node:fs/promises");
+    const cvPath = "/tmp/lavorai-ats-test-claim-cv.bin";
+    await writeFile(cvPath, Buffer.from("cv"));
+    const posts: string[] = [];
+    const processCalls = { count: 0 };
+    const submitCalls = { count: 0 };
+    let enteredClaim = 0;
+    let releaseClaim!: () => void;
+    const claimBarrier = new Promise<void>((resolve) => { releaseClaim = resolve; });
+    const db = fakeDb({
+      existing: [{ ...refusedExisting }],
+      submitCalls,
+      processApplication: async (id, flags, apps) => {
+        processCalls.count++;
+        const originalFetch = globalThis.fetch;
+        globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+          const method = (init?.method ?? "GET").toUpperCase();
+          if (method === "POST") {
+            posts.push(String(input));
+            return {
+              ok: true,
+              status: 201,
+              json: async () => ({ candidate: { id: "recruitee-receipt" } }),
+              text: async () => '{"candidate":{"id":"recruitee-receipt"}}',
+            } as Response;
+          }
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({ offer: { status: "published", open_questions: [] } }),
+            text: async () => "",
+          } as Response;
+        }) as typeof fetch;
+        try {
+          const token = flags.atsTestAuth;
+          const profile = { ...syntheticAtsTestProfile(), email: CANDIDATE_EMAIL };
+          const outcome = await recruiteeAdapter.apply({} as never, {
+            profile,
+            userEmail: "user@example.test",
+            cvLocalPath: cvPath,
+            clLocalPath: cvPath,
+            coverLetterText: `${ATS_TEST_FICTIONAL_MARK} letter`,
+            jobUrl: DEST_URL,
+            dryRun: mode === "dry_run",
+            atsTestAuth: token,
+            atsTestOwnerUserId: TEST_USER,
+            atsTestJobSource: "ats_test",
+            applicationId: id,
+          });
+          const app = apps.find((row) => row.id === id);
+          if (app && outcome.ok) {
+            app.status = mode === "real_submit" ? "success" : "ready_to_apply";
+            app.submitConfirmation = mode === "real_submit" ? "DETECTED_HTTP_201" : "DRY_RUN";
+          }
+        } finally {
+          globalThis.fetch = originalFetch;
+        }
+      },
+    });
+    const original = db.prisma.application.updateMany.bind(db.prisma.application);
+    db.prisma.application.updateMany = async (args) => {
+      if (args.data?.submitConfirmation === ATS_TEST_CLAIMED) {
+        enteredClaim++;
+        if (enteredClaim === 2) releaseClaim();
+        await claimBarrier;
+      }
+      return original(args);
+    };
+    const runEnv = mode === "real_submit" ? { ...env, ATS_TEST_REAL_SUBMIT: "true" } : env;
+    try {
+      const [first, second] = await Promise.all([
+        prepareAndRunAtsTest({ adminOk: true, realSubmit: mode === "real_submit", jobUrl: DEST_URL }, { ...db, env: runEnv }),
+        prepareAndRunAtsTest({ adminOk: true, realSubmit: mode === "real_submit", jobUrl: DEST_URL }, { ...db, env: runEnv }),
+      ]);
+      const ok = [first, second].filter((run) => run.ok);
+      const denied = [first, second].filter((run) => !run.ok);
+      assert.equal(enteredClaim, 2, `${mode}: both retries reached the claim`);
+      assert.equal(ok.length, 1, `${mode}: exactly one retry proceeds`);
+      assert.equal(denied.length, 1, `${mode}: loser is 409`);
+      if (!denied[0].ok) assert.equal(denied[0].reason, ATS_TEST_IN_PROGRESS);
+      assert.equal(processCalls.count, 1, `${mode}: processApplication once`);
+      if (mode === "dry_run") {
+        assert.equal(posts.length, 0, "dry-run retries make zero POSTs");
+      } else {
+        assert.equal(posts.length, 1, "real-submit retries POST exactly once");
+      }
+    } finally {
+      await unlink(cvPath).catch(() => undefined);
+      if (previous.user === undefined) delete process.env.ATS_TEST_USER_ID; else process.env.ATS_TEST_USER_ID = previous.user;
+      if (previous.dest === undefined) delete process.env.ATS_TEST_DESTINATIONS; else process.env.ATS_TEST_DESTINATIONS = previous.dest;
+      if (previous.real === undefined) delete process.env.ATS_TEST_REAL_SUBMIT; else process.env.ATS_TEST_REAL_SUBMIT = previous.real;
+      if (previous.candidate === undefined) delete process.env.ATS_TEST_CANDIDATE_EMAIL; else process.env.ATS_TEST_CANDIDATE_EMAIL = previous.candidate;
+    }
+  }
+
+  await runConcurrentRetries("dry_run");
+  await runConcurrentRetries("real_submit");
+
+  const uncertainDb = fakeDb({
+    existing: [{
+      id: expectedId,
+      userId: TEST_USER,
+      status: "applying",
+      submitConfirmation: "SUBMISSION_STARTED",
+      submitStartedAt: new Date(),
+    }],
+    submitCalls: { count: 0 },
+  });
+  const uncertainCalls = { count: 0 };
+  uncertainDb.submitCalls.count = 0;
+  const afterUncertain = await prepareAndRunAtsTest({ adminOk: true, jobUrl: DEST_URL }, {
+    ...fakeDb({
+      submitCalls: uncertainCalls,
+      existing: [{
+        id: expectedId,
+        userId: TEST_USER,
+        status: "applying",
+        submitConfirmation: "SUBMISSION_STARTED",
+        submitStartedAt: new Date(),
+      }],
+    }),
+    env,
+  });
+  assert.equal(afterUncertain.ok, false);
+  if (!afterUncertain.ok) assert.equal(afterUncertain.reason, "uncertain_submit_started");
+  assert.equal(uncertainCalls.count, 0, "uncertain result then retry is still blocked");
+  void uncertainDb;
+}
+
 async function main() {
   await testPrepareAndRun();
   await testFourSubmitChecks();
   await testConcurrentAndUncertainRetry();
+  await testRefusedRetryAtMostOnceClaim();
   await testPauseExemptionNotInheritable();
   await testRoute();
   await testRecruiteeFetchMock();
   testOrdinaryGatesWithoutToken();
   testOfferValidationAndHeldRetry();
   testCronDrainStayPaused();
-  console.log("PASS ats-test-capability: branded token, pause skip only on that path, deterministic PK, dry-run zero POST, real one POST, candidate email, offer validation, fakes");
+  console.log("PASS ats-test-capability: branded token, pause skip only on that path, deterministic PK, dry-run zero POST, real one POST, candidate email, offer validation, at-most-once claim, fakes");
 }
 
 main().catch((error) => { console.error(error); process.exit(1); });
