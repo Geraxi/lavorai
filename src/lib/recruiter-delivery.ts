@@ -185,7 +185,7 @@ export async function sendRecruiterEmailOnce(input: {
         const rejectedStatuses = new Set([400, 401, 403, 404, 405, 413, 415, 422, 429]);
         const knownRejected = typeof response.error.statusCode === "number"
           && rejectedStatuses.has(response.error.statusCode)
-          && !["application_error", "internal_server_error", "concurrent_idempotent_requests", "invalid_idempotent_request"].includes(response.error.name);
+          && !["application_error", "internal_server_error", "concurrent_idempotent_requests", "invalid_idempotent_request"].includes(response.error.name ?? "");
         await deps.uncertain(attempt.id, knownRejected);
         result = knownRejected
           ? { kind: "not_sent", reason: "provider_rejected", provider }
