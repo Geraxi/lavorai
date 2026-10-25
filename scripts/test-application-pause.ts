@@ -106,6 +106,22 @@ async function main() {
     const previousDrainCron = process.env.CRON_SECRET;
     process.env.ADMIN_SYNC_KEY = "synthetic-test-only";
     process.env.CRON_SECRET = "synthetic-pause-test";
+    const emailTestRoute = load("src/app/api/admin/email-test-send/route.ts", {
+      ...routeMocks,
+      "@/lib/admin": { isAdmin: () => false },
+      "@/lib/email-test-capability": {
+        adminEmailTestAuthorized: () => true,
+        prepareAndRunEmailTest: async () => ({ ok: true, applicationId: "email_test_diagnostic_20261025", runKey: "pause-check", destination: "delivered@resend.dev", attemptKey: "email-test/pause-check/delivered@resend.dev", result: { kind: "accepted" }, delivery: { evidenceLevel: "provider_accepted", employerConfirmed: false } }),
+        readEmailTestDelivery: async () => ({ ok: true }),
+      },
+      "@/lib/recruiter-delivery": { sendRecruiterEmailOnce: async () => ({ kind: "accepted" }) },
+    });
+    const emailTestWhilePaused = await emailTestRoute.POST({
+      headers: new Headers({ "x-admin-key": process.env.ADMIN_SYNC_KEY, "content-type": "application/json" }),
+      json: async () => ({ destination: "delivered@resend.dev", runKey: "pause-check" }),
+    });
+    assert.notEqual(emailTestWhilePaused.status, 503, "controlled email test works while APPLICATIONS_PAUSED=true");
+    assert.equal(emailTestWhilePaused.status, 200);
     try {
       const cronRoute = load("src/app/api/cron/auto-apply/route.ts", routeMocks);
       assert.equal((await cronRoute.GET({ headers: new Headers({ "x-admin-key": process.env.ADMIN_SYNC_KEY }) })).body.paused, true);

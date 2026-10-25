@@ -780,6 +780,7 @@ model Application {
   inboxReplies      InboxReply[]
   mailboxSends      MailboxSend[]
   inboundEmails     InboundEmail[]
+  emailTestAttempts EmailTestAttempt[]
 
   @@index([userId, createdAt])
   @@index([sessionId])
@@ -1273,4 +1274,20 @@ model ApplicationReleaseGrant {
   batch         ApplicationReleaseBatch @relation(fields: [batchId], references: [id])
 
   @@index([batchId])
+}
+
+/// One-time controlled email test. Unique per (runKey, destination).
+/// Never reuses the 14/10 canary attempt key.
+model EmailTestAttempt {
+  id            String   @id @default(cuid())
+  runKey        String
+  destination   String
+  attemptKey    String   @unique
+  applicationId String
+  createdAt     DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([runKey, destination])
+  @@index([applicationId])
 }

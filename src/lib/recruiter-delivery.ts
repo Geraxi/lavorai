@@ -1,4 +1,5 @@
 import { applicationsPaused } from "@/lib/application-pause";
+import { authorizeEmailTest, LEGACY_CANARY_ATTEMPT_KEY } from "@/lib/email-test-capability";
 import { authorizeReleaseCanary, isDedicatedTestDestination, RELEASE_CANARY } from "@/lib/release-email-canary";
 import { recruiterEmailFallbackEnabled } from "@/lib/recruiter-email-fallback";
 import { Resend, type CreateEmailOptions } from "resend";
@@ -37,22 +38,40 @@ export async function sendRecruiterEmailOnce(input: {
   beforeSend?: () => Promise<boolean>;
   /** Only the fixed server-side fictional diagnostic can use this path. */
   releaseCanary?: true;
+  /** Admin-triggered paused email test. Distinct from the 14/10 canary. */
+  emailTest?: true;
+  runKey?: string;
 }, overrides: Partial<Dependencies> = {}): Promise<RecruiterDeliveryResult> {
   const canary = input.releaseCanary === true;
-  // Canary is only the dedicated test user + exact allowlisted addresses +
-  // the fixed diagnostic application id. User inbound aliases, ordinary ids,
-  // customers, and employer mailboxes stay refused while paused/gated.
-  if (canary && (
+  const emailTest = input.emailTest === true;
+  if (canary && emailTest) {
+    return { kind: "not_sent", reason: "email_test_refused" };
+  }
+  if (emailTest) {
+    if (input.attemptKey === LEGACY_CANARY_ATTEMPT_KEY) {
+      return { kind: "not_sent", reason: "email_test_legacy_key_forbidden" };
+    }
+    if (!isDedicatedTestDestination(input.recipient)
+      || (typeof input.payload.to === "string" && !isDedicatedTestDestination(input.payload.to))) {
+      return { kind: "not_sent", reason: "email_test_destination_refused" };
+    }
+    if (!await authorizeEmailTest({ ...input, runKey: input.runKey ?? "" })) {
+      return { kind: "not_sent", reason: "email_test_refused" };
+    }
+  } else if (canary && (
     input.applicationId !== RELEASE_CANARY.applicationId
     || !isDedicatedTestDestination(input.recipient)
     || (typeof input.payload.to === "string" && !isDedicatedTestDestination(input.payload.to))
   )) {
+    // Canary is only the dedicated test user + exact allowlisted addresses +
+    // the fixed diagnostic application id. User inbound aliases, ordinary ids,
+    // customers, and employer mailboxes stay refused while paused/gated.
     return { kind: "not_sent", reason: "applications_paused" };
   }
-  if (canary ? !await authorizeReleaseCanary(input) : applicationsPaused()) {
+  if (!emailTest && (canary ? !await authorizeReleaseCanary(input) : applicationsPaused())) {
     return { kind: "not_sent", reason: "applications_paused" };
   }
-  if (!canary && !recruiterEmailFallbackEnabled()) {
+  if (!emailTest && !canary && !recruiterEmailFallbackEnabled()) {
     return { kind: "not_sent", reason: "recruiter_email_fallback_disabled" };
   }
   const deps: Dependencies = {
@@ -85,9 +104,11 @@ export async function sendRecruiterEmailOnce(input: {
         return { kind: "uncertain", attemptId: existing.id };
       }
     }
-    const domainQuota = await deps.recipientDomainAllowed(input.recipient);
+    const domainQuota = emailTest
+      ? { allowed: true as const, reason: null }
+      : await deps.recipientDomainAllowed(input.recipient);
     if (!domainQuota.allowed) return { kind: "not_sent", reason: domainQuota.reason ?? "recipient_domain_rate_limited" };
-    const quota = await deps.withinQuota(canary ? "release_canary" : "application_sent", input.recipient, async () => {
+    const quota = await deps.withinQuota(emailTest ? "email_test" : canary ? "release_canary" : "application_sent", input.recipient, async () => {
       attemptCreationStarted = true;
       const attempt = await deps.createAttempt({
         applicationId: input.applicationId,
@@ -98,7 +119,8 @@ export async function sendRecruiterEmailOnce(input: {
       attemptId = attempt.id;
       // Re-read current eligibility after quota/attempt persistence and just
       // before transmission. A denied gate cannot contact the employer.
-      if ((canary ? !await authorizeReleaseCanary(input) : applicationsPaused())
+      if ((emailTest ? !await authorizeEmailTest({ ...input, runKey: input.runKey ?? "" })
+        : canary ? !await authorizeReleaseCanary(input) : applicationsPaused())
         || (input.beforeSend && !await input.beforeSend())) {
         await deps.uncertain(attempt.id, true);
         result = { kind: "not_sent", reason: "current_gate_blocked" };

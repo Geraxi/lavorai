@@ -248,7 +248,13 @@ export function deriveApplicationLifecycle(
   if (input.status === "diagnostic" || input.submittedVia === "mock_demo" || input.submitConfirmation === "DRY_RUN") {
     excludedFromMetrics = true;
     status = "draft";
-    messageOverride = { it: "Anteprima o test: nessuna candidatura inviata.", en: "Preview or test: nothing was sent." };
+    if (input.status === "diagnostic" && attempt?.providerEmailId && attempt.status === "delivered") {
+      messageOverride = { it: "Email di test consegnata. Non è una conferma del datore di lavoro.", en: "Test email delivered. This is not employer confirmation." };
+    } else if (input.status === "diagnostic" && attempt?.providerEmailId && ["accepted", "delayed"].includes(attempt.status)) {
+      messageOverride = { it: "Email di test accettata dal provider. Non è una conferma del datore di lavoro.", en: "Test email accepted by the provider. This is not employer confirmation." };
+    } else {
+      messageOverride = { it: "Anteprima o test: nessuna candidatura inviata.", en: "Preview or test: nothing was sent." };
+    }
   } else if (input.confirmedAt) {
     status = "confirmed_submitted";
     evidence = { ...noEvidence, type: "ats_confirmation_page", ats: portal ?? "email", at: iso(input.confirmedAt),

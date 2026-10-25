@@ -18,8 +18,22 @@ export function applicationDeliveryView(app: {
   emailAttempts?: Array<{ status: string; acceptedAt?: Date | string | null; providerEmailId?: string | null }>;
 }): DeliveryView {
   const email = app.emailAttempts?.[0];
-  if (app.status === "diagnostic") return { phase: "pending", label: "Test diagnostico", tone: "neutral",
-    detail: `Dati fittizi, esclusi da quote e risultati. Stato provider: ${email?.status ?? "non inviato"}.` };
+  if (app.status === "diagnostic") {
+    if (email?.status === "delivered" && email.providerEmailId) {
+      return { phase: "delivered", label: "Email consegnata", tone: "neutral",
+        detail: "Test: il server destinatario ha accettato il messaggio. Non è una conferma del datore di lavoro." };
+    }
+    if (email && ["accepted", "delayed"].includes(email.status) && email.providerEmailId) {
+      return { phase: "accepted", label: "Email accettata", tone: "neutral",
+        detail: "Test: Resend ha accettato l'invio (id registrato). Non è una conferma del datore di lavoro." };
+    }
+    if (email && ["failed", "bounced", "complained"].includes(email.status)) {
+      return { phase: "failed", label: email.status === "complained" ? "Email segnalata" : "Email non consegnata", tone: "warning",
+        detail: "Test: il provider ha segnalato un problema. Non è un esito del datore di lavoro." };
+    }
+    return { phase: "pending", label: "Test diagnostico", tone: "neutral",
+      detail: `Dati fittizi, esclusi da quote e risultati. Stato provider: ${email?.status ?? "non inviato"}.` };
+  }
   if (app.confirmedAt) return { phase: "confirmed", label: "Ricevuta ATS confermata", tone: "positive",
     detail: "L'azienda ha inviato una conferma di ricezione. Non è ancora una risposta umana." };
   if (app.submittedVia === "mock_demo" || app.submitConfirmation === "DRY_RUN") return { phase: "pending", label: "Anteprima, non inviata", tone: "neutral", detail: "Materiali dimostrativi, senza invio a un'azienda." };
