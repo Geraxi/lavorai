@@ -1,11 +1,22 @@
 # 24/10 Prisma history — per-migration procedure
 
-REVIEWED, NOT APPLIED. Official procedure:
+REVIEWED, NOT APPLIED. Official procedure for **(A)** only
+(seven history rows, no schema change):
 
 `docs/ops/migration-history-resolution-20261024.md`
 
-That document is the only write path. It uses `npx prisma migrate resolve --applied <name>` after a per-migration object check on EU. A blanket
-reconcile SQL script is forbidden and has been removed. Do not batch-insert.
+**(B)** new schema migrations (email-test table, release budget, #105
+outcome columns) are separate:
+
+`docs/ops/new-schema-migrations.md`
+
+(A) is not required for the one owned-destination email test.
+
+That (A) document is the only write path for the seven 24/10 history
+rows. Each `npx prisma migrate resolve --applied <name>` runs only after
+`./scripts/ops/assert-eu-target.sh` in the same `set -euo pipefail`
+shell. A blanket reconcile SQL script is forbidden and has been removed.
+Do not batch-insert.
 Never run `prisma migrate deploy` until every listed history row exists.
 Every write is pending approval.
 

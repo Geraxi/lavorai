@@ -1,4 +1,10 @@
-# 24/10 Prisma history resolution (EU only)
+# (A) 24/10 Prisma history resolution (EU only)
+
+This document is (A) only: seven `_prisma_migrations` rows from 24/10.
+Those rows change no schema. New schema migrations live in (B):
+`docs/ops/new-schema-migrations.md`. (A) is not a prerequisite of the
+one owned-destination email test. The Vercel build is
+`prisma generate && next build` and does not run a Prisma migrate command.
 
 REVIEWED, NOT APPLIED. Every write is pending approval.
 
@@ -13,46 +19,48 @@ seven are resolved.
 Prisma sort order is lexicographic. `20261024190000_greenhouse_job_form`
 comes **before** `20261024190000_recruiter_email_recheck`.
 
-## EU host guard (required before every command)
+## EU target guard (required before every write)
 
-The US host is never used. Abort on anything else.
+Visual hostname inspection is not enough. `scripts/ops/assert-eu-target.sh`
+is fail-closed. It exits non-zero, and `set -euo pipefail` aborts the
+shell, unless all of these hold:
+
+- host parsed from both `DIRECT_URL` and `DATABASE_URL` equals
+  `ep-gentle-butterfly-aljrsiuw.c-3.eu-central-1.aws.neon.tech`, and both
+  URLs name the same database (`neondb`);
+- a live `SELECT current_database(), current_schema(), inet_server_addr()`
+  returns `neondb` and schema `public` (the Prisma schema target);
+- `_prisma_migrations` has `20261025003000_submission_attempt_evidence`
+  and `"Application"` has a non-zero row count;
+- the US host `ep-raspy-violet` appears nowhere.
+
+The script prints hostnames only. It never prints URLs or passwords.
+The US host is never used.
+
+Load the URLs into the same shell without printing them, then run every
+write in that shell:
 
 ```bash
-EU_HOST='ep-gentle-butterfly-aljrsiuw.c-3.eu-central-1.aws.neon.tech'
-
+set -euo pipefail
 printf 'DIRECT_URL: '
 read -rs DIRECT_URL
 printf '\nDATABASE_URL: '
 read -rs DATABASE_URL
 printf '\n'
-
 export DIRECT_URL DATABASE_URL
-
-print_host() {
-  node -e 'const u=process.env[process.argv[1]]; if(!u){console.error("missing"); process.exit(2)}
-    let h; try { h=new URL(u).hostname } catch { console.error("unparseable"); process.exit(2) }
-    console.log(h)' "$1"
-}
-
-DIRECT_HOST="$(print_host DIRECT_URL)"
-DATABASE_HOST="$(print_host DATABASE_URL)"
-echo "DIRECT_URL host: $DIRECT_HOST"
-echo "DATABASE_URL host: $DATABASE_HOST"
-
-if [ "$DIRECT_HOST" != "$EU_HOST" ] || [ "$DATABASE_HOST" != "$EU_HOST" ]; then
-  echo "ABORT: hostname is not EU. US host is never used."
-  exit 1
-fi
+./scripts/ops/assert-eu-target.sh
 ```
 
-Do not print the URLs or passwords. `read -rs` is required.
+Each `prisma migrate resolve` below repeats the guard in the same
+`set -euo pipefail` shell so a failed guard never reaches the write.
 
 ## Per-migration procedure
 
 For each name below, in this order:
 
 1. Run the pre-check `SELECT` (read-only). Expected: `mismatch_count = 0`, `objects_match = true`.
-2. Pending approval, resolve the history row only:
+2. Pending approval, resolve the history row only, after the guard:
+   `./scripts/ops/assert-eu-target.sh` then
    `npx prisma migrate resolve --applied <name>`
 3. Run the post-check `SELECT` on `_prisma_migrations`. Expected: one row,
    `checksum` equals the sha256 of that migration's `migration.sql`,
@@ -95,6 +103,8 @@ FROM (
 Expected: `mismatch_count = 0`, `objects_match = true`.
 
 ```bash
+set -euo pipefail
+./scripts/ops/assert-eu-target.sh
 npx prisma migrate resolve --applied 20261024160000_recruiter_email_source_url
 ```
 
@@ -162,6 +172,8 @@ FROM (
 Expected: `mismatch_count = 0`, `objects_match = true`.
 
 ```bash
+set -euo pipefail
+./scripts/ops/assert-eu-target.sh
 npx prisma migrate resolve --applied 20261024180000_employer_hiring_inbox
 ```
 
@@ -224,6 +236,8 @@ FROM (
 Expected: `mismatch_count = 0`, `objects_match = true`.
 
 ```bash
+set -euo pipefail
+./scripts/ops/assert-eu-target.sh
 npx prisma migrate resolve --applied 20261024190000_greenhouse_job_form
 ```
 
@@ -272,6 +286,8 @@ FROM (
 Expected: `mismatch_count = 0`, `objects_match = true`.
 
 ```bash
+set -euo pipefail
+./scripts/ops/assert-eu-target.sh
 npx prisma migrate resolve --applied 20261024190000_recruiter_email_recheck
 ```
 
@@ -337,6 +353,8 @@ FROM (
 Expected: `mismatch_count = 0`, `objects_match = true`.
 
 ```bash
+set -euo pipefail
+./scripts/ops/assert-eu-target.sh
 npx prisma migrate resolve --applied 20261024200000_application_mailbox
 ```
 
@@ -384,6 +402,8 @@ FROM (
 Expected: `mismatch_count = 0`, `objects_match = true`.
 
 ```bash
+set -euo pipefail
+./scripts/ops/assert-eu-target.sh
 npx prisma migrate resolve --applied 20261024210000_job_description_full
 ```
 
@@ -429,6 +449,8 @@ FROM (
 Expected: `mismatch_count = 0`, `objects_match = true`.
 
 ```bash
+set -euo pipefail
+./scripts/ops/assert-eu-target.sh
 npx prisma migrate resolve --applied 20261024220000_job_description_fetch_backoff
 ```
 
@@ -446,9 +468,11 @@ Expected checksum: `8d0050742c4ee96908db1da156217b92eadc2d69cf44207703b274a70820
 
 ## Final checks (after all seven, still pending approval)
 
-Repeat the EU host guard. Then:
+Repeat the executable EU guard in the same shell. Then:
 
 ```bash
+set -euo pipefail
+./scripts/ops/assert-eu-target.sh
 npx prisma migrate status
 ```
 

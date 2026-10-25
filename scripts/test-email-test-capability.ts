@@ -105,6 +105,12 @@ async function main() {
   assert.equal(LEGACY_CANARY_ATTEMPT_KEY, "release-canary-email-20261013-owner-v1");
   assert.match(readFileSync("prisma/migrations/20261025140000_email_test_attempt/migration.sql", "utf8"), /release-canary-email-20261013-owner-v1/);
   assert.match(readFileSync("prisma/migrations/20261025140000_email_test_attempt/migration.sql", "utf8"), /Not applied by this change/);
+  assert.doesNotMatch(readFileSync("src/lib/email-test-capability.ts", "utf8"), /application-recovery-release|ApplicationReleaseBatch|ApplicationReleaseGrant/);
+  const schemaDoc = readFileSync("docs/ops/new-schema-migrations.md", "utf8");
+  assert.match(schemaDoc, /20261025140000_email_test_attempt/);
+  assert.match(schemaDoc, /\(A\) is not required/);
+  assert.match(schemaDoc, /20261025020000_application_release_budget/);
+  assert.match(schemaDoc, /not a prerequisite of the email test/);
 
   const dests = [
     "delivered@resend.dev",
