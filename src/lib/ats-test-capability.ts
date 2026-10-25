@@ -19,6 +19,7 @@
  */
 
 import { createHash } from "node:crypto";
+import type { PrismaClient } from "@prisma/client";
 import { asIssuedWorkLease, issueApplicationLease, type ApplicationWorkLease } from "@/lib/application-lease";
 import { DEFAULT_USER_INBOX_DOMAIN } from "@/lib/inbound/address";
 import type { CVProfile } from "@/lib/cv-profile-types";
@@ -472,41 +473,10 @@ export function atsTestClaimWhere(applicationId: string) {
         submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT,
       },
     ],
-  } as const;
+  };
 }
 
-export type AtsTestClaimClient = {
-  application: {
-    updateMany: (args: {
-      where: ReturnType<typeof atsTestClaimWhere>;
-      data: {
-        status: string;
-        startedAt: Date;
-        leaseToken: string;
-        leaseExpiresAt: Date;
-        submitConfirmation: string;
-        errorMessage: null;
-        completedAt: null;
-      };
-    }) => Promise<{ count: number }>;
-    findUnique: (args: {
-      where: { id: string };
-      select: {
-        startedAt: true;
-        leaseToken: true;
-        leaseExpiresAt: true;
-        submitConfirmation: true;
-        status: true;
-      };
-    }) => Promise<{
-      startedAt: Date | null;
-      leaseToken: string | null;
-      leaseExpiresAt: Date | null;
-      submitConfirmation: string | null;
-      status: string | null;
-    } | null>;
-  };
-};
+export type AtsTestClaimClient = Pick<PrismaClient, "application">;
 
 /**
  * Single conditional transition to an in-flight state before any Recruitee
@@ -759,7 +729,7 @@ export async function prepareAndRunAtsTest(input: {
     throw error;
   }
 
-  const claimed = await claimAtsTestAttempt(deps.prisma as AtsTestClaimClient, created.id);
+  const claimed = await claimAtsTestAttempt(deps.prisma as unknown as AtsTestClaimClient, created.id);
   if (!claimed.ok) return { ok: false, reason: claimed.reason, status: 409 };
 
   const token = mintAtsTestAuthorization({
