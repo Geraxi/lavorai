@@ -277,13 +277,50 @@ async function main() {
   const names = readdirSync("prisma/migrations").filter((n) => n.startsWith("20261025150000"));
   assert.equal(names.length, 1);
 
+  const label = loadPlain("scripts/label-reviewed-email-log.ts");
+  const reviewedIds = label.reviewedEmailLogIds() as string[];
+  assert.equal(reviewedIds.length, 37);
+  assert.equal(new Set(reviewedIds).size, 37);
+  assert.throws(() => label.reviewedEmailLogIds([...reviewedIds, "extra"]), /exactly 37/);
+  assert.throws(() => label.reviewedEmailLogIds(reviewedIds.slice(1)), /exactly 37/);
+  const labelSrc = readFileSync("scripts/label-reviewed-email-log.ts", "utf8");
+  assert.doesNotMatch(labelSrc, /2026-10-24 00:00:00|TIMESTAMPTZ|WHERE "createdAt"/);
+  assert.match(labelSrc, /Dry-run by default/);
+  const complete = reviewedIds.map((id) => ({ id, outcome: null }));
+  assert.deepEqual(await label.labelReviewedEmailLogs({
+    findByIds: async () => complete,
+  }), { dryRun: true, count: 37, wouldUpdate: reviewedIds });
+  assert.throws(
+    () => label.diffReviewedEmailLogs(complete.slice(1)),
+    /missing \[reviewed-24-10-email-log-01\]/,
+  );
+  assert.throws(
+    () => label.diffReviewedEmailLogs([...complete, { id: "extra-id", outcome: null }]),
+    /extra \[extra-id\]/,
+  );
+  let applied = 0;
+  assert.deepEqual(await label.labelReviewedEmailLogs({
+    apply: true,
+    findByIds: async () => complete,
+    updateOutcomes: async (ids: string[]) => {
+      applied = ids.length;
+      return ids.length;
+    },
+  }), { dryRun: false, count: 37, updated: 37 });
+  assert.equal(applied, 37);
+
   const labelSql = readFileSync("scripts/label-20261024-email-log.sql", "utf8");
+  assert.equal(labelSql, label.reviewedEmailLogUpdateSql());
   assert.match(labelSql, /UNAPPLIED/);
   assert.match(labelSql, /acceptance_unknown/);
-  assert.match(labelSql, /2026-10-24/);
+  assert.match(labelSql, /WHERE id IN/);
+  assert.doesNotMatch(labelSql, /2026-10-24 00:00:00|TIMESTAMPTZ|WHERE "createdAt"/);
   assert.doesNotMatch(labelSql, /unknown_not_accepted|provider_failed/);
   assert.doesNotMatch(labelSql.replace(/^--.*$/gm, ""), /\bDELETE\b|\bINSERT\s+INTO\s+"EmailLog"/i);
   assert.doesNotMatch(labelSql, /emails\.send/i);
+  for (const id of reviewedIds) {
+    assert.match(labelSql, new RegExp(`'${id}'`));
+  }
 
   const keys = loadPlain("src/lib/resend-keys.ts");
   assert.equal(keys.resendReceivingApiKey({ RESEND_API_KEY: "re_send" }), "re_send");
