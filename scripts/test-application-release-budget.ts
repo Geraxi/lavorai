@@ -124,15 +124,14 @@ async function testSourceFences() {
   assert.deepEqual(tableFiles, ["src/lib/application-recovery-release.ts"], "only the gated helper may name the unapplied tables");
 
   const callSites = [
-    ["src/lib/queue-drain.ts", 255],
-    ["src/lib/application-claim.ts", 165],
-    ["src/lib/application-claim.ts", 201],
-    ["src/lib/application-worker-gates.ts", 665],
-    ["src/lib/held-application-release.ts", 83],
+    ["src/lib/queue-drain.ts", 1],
+    ["src/lib/application-claim.ts", 2],
+    ["src/lib/application-worker-gates.ts", 1],
+    ["src/lib/held-application-release.ts", 1],
   ] as const;
-  for (const [file, line] of callSites) {
-    const text = readFileSync(file, "utf8").split("\n")[line - 1] ?? "";
-    assert.match(text, /tryConsumeRecoveryRelease/, `${file}:${line} must go through the gate`);
+  for (const [file, count] of callSites) {
+    const text = readFileSync(file, "utf8");
+    assert.equal((text.match(/await tryConsumeRecoveryRelease\(/g) ?? []).length, count, `${file} must retain every awaited release gate`);
     assert.doesNotMatch(text, /applicationReleaseGrant|applicationReleaseBatch/);
   }
 

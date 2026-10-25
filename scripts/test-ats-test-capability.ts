@@ -43,7 +43,11 @@ import {
   syntheticAtsTestProfile,
   type AtsTestAuthorization,
 } from "../src/lib/ats-test-capability";
-import { recruiteeOfferValidation } from "../src/lib/portal-adapters/recruitee";
+import { recruiteeOfferValidation, requiresRecruiteeOriginReview } from "../src/lib/portal-adapters/recruitee";
+assert.equal(requiresRecruiteeOriginReview(["https://careers.employer.test/o/engineer"], "unknown"), true);
+assert.equal(requiresRecruiteeOriginReview(["https://careers.employer.test/jobs/engineer"], "recruitee"), true);
+assert.equal(requiresRecruiteeOriginReview(["https://tenant.recruitee.com/o/engineer"], "recruitee", "recruitee"), false);
+assert.equal(requiresRecruiteeOriginReview(["https://employer.test/jobs/engineer"], "unknown"), false);
 import { currentWorkerIneligibility, type WorkerGateRow } from "../src/lib/application-worker-gates";
 import { historicalRetriesBlocked } from "../src/lib/application-rollout";
 import { applicationsPaused } from "../src/lib/application-pause";
@@ -758,11 +762,29 @@ async function testRecruiteeFetchMock() {
       text: async () => "",
     } as Response;
   }) as typeof fetch;
+  const { mkdtemp, writeFile: writeDryFile, rm: removeDryDir } = await import("node:fs/promises");
+  const dryDir = await mkdtemp("/tmp/lavorai-dry-attachment-");
+  const dryCv = `${dryDir}/cv.txt`;
+  await writeDryFile(dryCv, "FICTIONAL TEST CV");
   try {
+    for (const url of ["https://evil.test/o/job", "https://acme.recruitee.com.evil.test/o/job", "https://user:pass@acme.recruitee.com/o/job", "https://acme.recruitee.com:444/o/job"]) {
+      assert.equal(recruiteeAdapter.matches(url), false);
+      const before = calls.length;
+      const rejected = await recruiteeAdapter.apply({} as never, { profile, userEmail: "test@example.test", cvLocalPath: dryCv, clLocalPath: "", coverLetterText: "", jobUrl: url, dryRun: true });
+      assert.equal(rejected.ok, false);
+      assert.equal(calls.length, before, "untrusted origin must not be fetched");
+    }
+    for (const file of [`${dryDir}/missing`, `${dryDir}/empty`]) {
+      if (file.endsWith("empty")) await writeDryFile(file, "");
+      const refused = await recruiteeAdapter.apply({} as never, { profile, userEmail: "test@example.test", cvLocalPath: file, clLocalPath: "", coverLetterText: "", jobUrl: DEST_URL, dryRun: true });
+      assert.equal(refused.ok, false);
+      assert.equal(refused.status, "missing_field");
+      assert.equal(refused.refusedBeforeSubmit, true);
+    }
     const dryOutcome = await recruiteeAdapter.apply({} as never, {
       profile,
       userEmail: "user@example.test",
-      cvLocalPath: "/tmp/synthetic-cv.txt",
+      cvLocalPath: dryCv,
       clLocalPath: "/tmp/synthetic-cl.txt",
       coverLetterText: `${ATS_TEST_FICTIONAL_MARK} letter`,
       jobUrl: DEST_URL,
@@ -782,6 +804,7 @@ async function testRecruiteeFetchMock() {
     assert.ok(calls.some((call) => call.method === "GET" && call.url.includes("/api/offers/")), "read-only offer GET is allowed");
   } finally {
     globalThis.fetch = originalFetch;
+    await removeDryDir(dryDir, { recursive: true, force: true });
   }
 
   process.env.ATS_TEST_REAL_SUBMIT = "true";
@@ -1169,7 +1192,39 @@ async function testRefusedRetryAtMostOnceClaim() {
   void uncertainDb;
 }
 
+function testAtsTestNoticeGuardsInWorker() {
+  const worker = readFileSync(new URL("../src/lib/application-worker.ts", import.meta.url), "utf8");
+  assert.match(worker, /function isAtsTestNoticeSuppressed/);
+  assert.match(worker, /ATS test mode=dry_run; no careers API POST/);
+  assert.match(worker, /if \(isAtsTestNoticeSuppressed\(atsTestAuth\)\) return;/);
+  assert.match(worker, /notifyNeedsAnswers\(applicationId, atsTestAuth\)/);
+  assert.match(worker, /notifyApplicationManual\(applicationId, atsTestAuth\)/);
+  assert.match(worker, /Token path never substitutes recruiter-email or user notices/);
+  assert.match(worker, /leaseToken: null, leaseExpiresAt: null/);
+  assert.doesNotMatch(
+    worker,
+    /notifyNeedsAnswers\(applicationId\)\.catch/,
+    "needs-answers notify must receive the token so it can return before side effects",
+  );
+}
+
 async function main() {
+  // Execute the actual worker handoff block: no recruiter/browser continuation.
+  const source = readFileSync("src/lib/application-worker.ts", "utf8");
+  const start = source.indexOf("  if (requiresRecruiteeOriginReview(");
+  const end = source.indexOf("  const recruiterLookup =", start);
+  assert.ok(start > 0 && end > start);
+  const writes: unknown[] = [];
+  const guard = new Function("requiresRecruiteeOriginReview", "prisma", "liveLeaseFields", "NOT_SUBMITTED", `return async function(app, resolvedUrl, adapter) {
+    const applicationId = 'synthetic', workToken = 'lease';
+    ${source.slice(start, end)}
+    return 'continued';
+  }`)(requiresRecruiteeOriginReview, { application: { updateMany: async (data: unknown) => { writes.push(data); return { count: 1 }; } } }, () => ({ leaseToken: "lease" }), "NOT_SUBMITTED");
+  assert.equal(await guard({ job: { url: "https://careers.employer.test/o/engineer", source: "recruitee" } }, "https://careers.employer.test/o/engineer", null), undefined);
+  assert.equal(writes.length, 1);
+  assert.deepEqual((writes[0] as { where: unknown }).where, { id: "synthetic", leaseToken: "lease", status: "ready_to_apply" });
+  assert.equal((writes[0] as { data: { leaseToken: unknown } }).data.leaseToken, null);
+  assert.equal(await guard({ job: { url: DEST_URL, source: "recruitee" } }, DEST_URL, { id: "recruitee" }), "continued");
   await testPrepareAndRun();
   await testFourSubmitChecks();
   await testConcurrentAndUncertainRetry();
@@ -1180,6 +1235,7 @@ async function main() {
   testOrdinaryGatesWithoutToken();
   testOfferValidationAndHeldRetry();
   testCronDrainStayPaused();
+  testAtsTestNoticeGuardsInWorker();
   console.log("PASS ats-test-capability: branded token, pause skip only on that path, deterministic PK, dry-run zero POST, real one POST, candidate email, offer validation, at-most-once claim, fakes");
 }
 

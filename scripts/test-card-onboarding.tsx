@@ -151,6 +151,7 @@ async function main() {
 
   // Route handlers reject bypasses before reads, uploads, AI or writes.
   const extras: Record<string, any> = {
+    "@/lib/cv-extraction-log": { logCvExtractionFailure: () => { throw new Error("CV extraction must not run before the card gate"); }, logCvExtraction: () => { throw new Error("CV extraction must not run before the card gate"); } },
     "@/lib/crypto": {}, "@/lib/portals": {}, "@/lib/cv-parser": {}, "@/lib/storage": {}, "@/lib/rate-limit": {}, "@/lib/claude": {},
     "@/lib/onboarding-preferences": { OnboardingPreferencesSchema }, "@/lib/auto-apply-cron": {}, "@/lib/cv-profile-ensure": {},
   };

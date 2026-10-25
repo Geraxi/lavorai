@@ -52,7 +52,7 @@ const CANDIDATE_PATH = /^\/api\/offers\/([^/]+)\/candidates\/?$/;
 const PAGE_PATH = /^\/o\/([^/]+)\/?/;
 
 function offerPayload(slug: string): Record<string, unknown> | null {
-  if (slug === "missing-offer") return null;
+  if (slug === "missing-offer" || slug === "no-form") return null;
   return {
     id: realOfferFixture.offer.id,
     slug,
@@ -62,7 +62,9 @@ function offerPayload(slug: string): Record<string, unknown> | null {
     // Variant used only by the missing-CV refusal case. Default slugs keep
     // the published trial shape (phone/CV/cover_letter optional, photo off).
     ...(slug === "cv-required" ? { options_cv: "required" } : {}),
-    open_questions: [],
+    open_questions: slug === "needs-answers"
+      ? [{ id: 9001, kind: "text", body: "Work authorization declaration only the candidate can answer", required: true }]
+      : [],
   };
 }
 
@@ -129,14 +131,21 @@ export async function startFakeRecruiteeServer(): Promise<{
     try {
       if (method === "GET" && url.pathname === "/api/offers/") {
         requests.push(record);
-        const offers = ["dry-optional", "real-optional", "race-two", "race-ten", "cv-required", "server-500"]
-          .map((item) => offerPayload(item));
+        const offers = ["dry-optional", "real-optional", "race-two", "race-ten", "cv-required", "server-500", "needs-answers", "force-captcha", "no-form", "missing-cv"]
+          .map((item) => item === "no-form"
+            ? { id: realOfferFixture.offer.id, slug: "no-form", title: "Fake Recruitee no form", status: "published", ...REAL_RECRUITEE_OFFER_OPTIONS, open_questions: [] }
+            : offerPayload(item));
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify({ offers }));
         return;
       }
       if (method === "GET" && offer) {
         requests.push(record);
+        if (slug === "no-form") {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({}));
+          return;
+        }
         const payload = offerPayload(slug);
         if (!payload) {
           res.writeHead(404, { "content-type": "application/json" });
