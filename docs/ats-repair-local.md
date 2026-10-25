@@ -39,3 +39,5 @@ Tests: scripts/fake-recruitee-server.ts, scripts/test-ats-test-capability.ts, sc
 Documentation: docs/ats-repair-local.md.
 
 Commands use PostgreSQL URLs restricted to 127.0.0.1:55459 with per-script fixture database names; build uses DATABASE_URL/DIRECT_URL for lavorai_build_test and a dummy AUTH_SECRET. Typecheck command: node node_modules/typescript/bin/tsc --noEmit --incremental false. Local runtime: Node25.2.1/PostgreSQL16; Linux/Node20 CI still requires an authorized integration run.
+
+Linux CI follow-up: run 40243078223 exposed a Node20/tsx module-instance mismatch in the forced-outcome test harness. The worker and adapter fixture now share a CJS module graph and assert that all four forced outcomes were reached. Local PostgreSQL/HTTPS E2E passed again on Node25.2.1 and Node20.19.6; no production behavior changed in this follow-up.

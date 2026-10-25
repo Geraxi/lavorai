@@ -5,6 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -144,9 +145,13 @@ async function main() {
     console.log(`Using throwaway PostgreSQL ${new URL(databaseUrl).hostname}${new URL(databaseUrl).pathname} + fake Recruitee HTTPS 127.0.0.1:${fake.port}`);
 
     const { prisma } = await import("../src/lib/db");
-    const { processApplication } = await import("../src/lib/application-worker");
-    const { findPortalAdapter } = await import("../src/lib/portal-adapters");
-    const { recruiteeAdapter } = await import("../src/lib/portal-adapters/recruitee");
+    // Use one CJS graph for the worker and its registry. Node20/tsx can give a
+    // direct dynamic ESM adapter import a different instance than the worker.
+    const workerRequire = createRequire(resolve("src/lib/application-worker.ts"));
+    const { processApplication } = workerRequire("./application-worker") as typeof import("../src/lib/application-worker");
+    const { findPortalAdapter } = workerRequire("./portal-adapters") as typeof import("../src/lib/portal-adapters");
+    const { resolveAdapterByUrl } = workerRequire("./ats-adapter-resolution") as typeof import("../src/lib/ats-adapter-resolution");
+    const recruiteeAdapter = resolveAdapterByUrl([destUrl("dry-optional")])!.adapter;
     const { drainQueuedApplications } = await import("../src/lib/queue-drain");
 
     assert.equal(findPortalAdapter(destUrl("dry-optional"))?.id, "recruitee", "host *.recruitee.com matches the Recruitee adapter");
@@ -366,9 +371,11 @@ async function main() {
 
     // j. Forced needs_user_input / captcha / form_not_found: no notices
     const originalApply = recruiteeAdapter.apply.bind(recruiteeAdapter);
+    let forcedOutcomes = 0;
     recruiteeAdapter.apply = async (page, input) => {
       const slug = new URL(input.jobUrl).pathname.match(/\/o\/([^/?#]+)/)?.[1] ?? "";
       if (slug === "needs-answers") {
+        forcedOutcomes++;
         return {
           ok: false,
           status: "needs_user_input",
@@ -377,12 +384,15 @@ async function main() {
         };
       }
       if (slug === "force-captcha") {
+        forcedOutcomes++;
         return { ok: false, status: "captcha", error: "forced captcha" };
       }
       if (slug === "no-form") {
+        forcedOutcomes++;
         return { ok: false, status: "form_not_found", error: "forced form_not_found" };
       }
       if (slug === "missing-cv") {
+        forcedOutcomes++;
         return { ok: false, status: "missing_field", error: "synthetic unreadable attachment", refusedBeforeSubmit: true };
       }
       return originalApply(page, input);
@@ -430,6 +440,7 @@ async function main() {
         assert.equal(forbidden.filter((url) => /resend\.com|api\.resend/i.test(url)).length, 0, `${item.slug}: no email-provider calls`);
         record(item.name, 0);
       }
+      assert.equal(forcedOutcomes, noticeCases.length, "every forced outcome must reach the worker's registered adapter");
     } finally {
       recruiteeAdapter.apply = originalApply;
       if (previousPaused === undefined) delete process.env.APPLICATIONS_PAUSED;
