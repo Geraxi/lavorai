@@ -49,7 +49,7 @@ export function resetUserNotificationsHoldLogForTests(): void {
   holdLogged = false;
 }
 
-function logHeld(reason: UserNotificationsGate extends { held: true } ? "hold" | "cutoff_unset" : never): void {
+function logHeld(reason: "hold" | "cutoff_unset"): void {
   if (holdLogged) return;
   holdLogged = true;
   console.warn("[user-notifications] user_notifications_held", { reason });
