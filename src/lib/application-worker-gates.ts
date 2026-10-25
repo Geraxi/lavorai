@@ -23,7 +23,7 @@ import {
   asIssuedWorkLease, issueApplicationLease, leaseTokenOf, liveLeaseWhere, renewLeaseData,
   type ApplicationWorkLease,
 } from "@/lib/application-lease";
-import { RecoveryReleaseBudget, controlledReleaseHoldData } from "@/lib/application-recovery-release";
+import { tryConsumeRecoveryRelease, controlledReleaseHoldData } from "@/lib/application-recovery-release";
 import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
 
 // Persisted before crossing a delivery boundary. A crash/timeout never releases
@@ -662,7 +662,7 @@ export async function queueAnswerContinuation(input: {
     } });
     if (changed.count !== 1) return "questions_changed_reload";
     if (grantsConsent) console.log(`[consent] ${row.id} consentGrantedAt=${consentAt!.toISOString()} source=domande_answers`);
-    if (!new RecoveryReleaseBudget().consume(row.id)) {
+    if (!await tryConsumeRecoveryRelease(row.id, { db: tx })) {
       await tx.application.updateMany({
         where: { id: row.id, status: "queued", submittedAt: null, submitStartedAt: null },
         data: controlledReleaseHoldData(),

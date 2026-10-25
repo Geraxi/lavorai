@@ -42,18 +42,23 @@ const HOUR = 3_600_000;
 const NOW = new Date("2026-10-18T10:00:00.000Z");
 const CUTOFF = new Date("2026-10-14T11:47:00.000Z");
 process.env.APPLICATION_ROLLOUT_START_AT = CUTOFF.toISOString();
-process.env.APPLICATION_RECOVERY_RELEASE = "on";
-process.env.APPLICATION_RECOVERY_RELEASE_CAP = "20";
+delete process.env.APPLICATION_RECOVERY_RELEASE;
+delete process.env.APPLICATION_RECOVERY_RELEASE_CAP;
 delete process.env.APPLICATION_SENDING_MODE;
 delete process.env.APPLY_GLOBAL_DAILY_CAP;
 delete process.env.APPLICATIONS_PAUSED;
 
 const pause = { applicationsPaused: () => process.env.APPLICATIONS_PAUSED === "true" };
+const alwaysRelease = {
+  tryConsumeRecoveryRelease: async () => true,
+  controlledReleaseHoldData: () => ({ startedAt: new Date(), errorMessage: "held" }),
+  controlledReleaseMessage: () => "held",
+};
 const budget = load("src/lib/application-submission-budget.ts", { "node:crypto": require("node:crypto"), "@/lib/application-rollout": rollout });
 const gates = load("src/lib/application-worker-gates.ts", {
   "@/lib/application-rollout": rollout, "@/lib/application-pause": pause, "@/lib/application-submission-budget": budget,
   "@/lib/recruiter-email-send": { matchesApplicationEmailProofKey: () => false },
-  "@/lib/application-recovery-release": load("src/lib/application-recovery-release.ts", {}, false),
+  "@/lib/application-recovery-release": alwaysRelease,
   "@/lib/uncertain-submission": { blocksUncertainAutoRetry: () => false, UNCERTAIN_SUBMISSION_MESSAGE: "uncertain" },
 }, false);
 const LIVENESS = "Disponibilità dell'annuncio non verificabile: invio sospeso, nuovo controllo più tardi.";
@@ -97,9 +102,8 @@ function app(id: string, extra: Record<string, any> = {}) {
 }
 
 async function testConsentRelease() {
-  const recovery = load("src/lib/application-recovery-release.ts", {}, false);
   const rel = load("src/lib/held-application-release.ts", { "@/lib/db": { prisma: null }, "@/lib/application-pause": pause,
-    "@/lib/application-rollout": rollout, "@/lib/application-submission-budget": budget, "@/lib/application-worker-gates": gates, "@/lib/job-liveness": liveness, "@/lib/application-recovery-release": recovery });
+    "@/lib/application-rollout": rollout, "@/lib/application-submission-budget": budget, "@/lib/application-worker-gates": gates, "@/lib/job-liveness": liveness, "@/lib/application-recovery-release": alwaysRelease });
   const subject = budget.submissionSubjectKey("u1", "job-reserved-subject");
   const state = {
     users: { u1: { ...READY } } as Record<string, any>,
@@ -175,9 +179,8 @@ async function testConsentRelease() {
 }
 
 async function testLivenessRecheck() {
-  const recovery = load("src/lib/application-recovery-release.ts", {}, false);
   const rel = load("src/lib/held-application-release.ts", { "@/lib/db": { prisma: null }, "@/lib/application-pause": pause,
-    "@/lib/application-rollout": rollout, "@/lib/application-submission-budget": budget, "@/lib/application-worker-gates": gates, "@/lib/job-liveness": liveness, "@/lib/application-recovery-release": recovery });
+    "@/lib/application-rollout": rollout, "@/lib/application-submission-budget": budget, "@/lib/application-worker-gates": gates, "@/lib/job-liveness": liveness, "@/lib/application-recovery-release": alwaysRelease });
 
   // Backoff schedule: bounded number of checks inside the window.
   let checks = 0;

@@ -66,7 +66,7 @@ async function applyEvent(tx: Prisma.TransactionClient, attempt: ApplicationEmai
       } });
       if (["failed", "bounced", "complained"].includes(status)) {
         await tx.application.updateMany({
-          where: { id: attempt.applicationId },
+          where: { id: attempt.applicationId, status: { not: "diagnostic" } },
           data: {
             status: "failed",
             sendStatus: "failed",

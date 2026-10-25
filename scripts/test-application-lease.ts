@@ -17,6 +17,7 @@ import * as billing from "../src/lib/billing";
 import { hasPotentialSubmission, reserveApplicationWork } from "../src/lib/application-worker-gates";
 import * as applicationLease from "../src/lib/application-lease";
 import * as recoveryRelease from "../src/lib/application-recovery-release";
+import { attachMemoryRelease } from "../src/lib/application-recovery-release";
 import * as uncertainSubmission from "../src/lib/uncertain-submission";
 import {
   APPLICATION_LEASE_MS, asWorkLease, expiredLeaseWhere, issueApplicationLease,
@@ -26,7 +27,7 @@ import {
 process.env.APPLICATION_SENDING_MODE = "automatic";
 process.env.APPLICATION_ROLLOUT_START_AT = new Date(Date.now() - 3_600_000).toISOString();
 process.env.APPLY_GLOBAL_DAILY_CAP = "10";
-process.env.APPLICATION_RECOVERY_RELEASE = "on";
+process.env.APPLICATION_RECOVERY_RELEASE = "takeover";
 delete process.env.APPLICATIONS_PAUSED;
 delete process.env.DRAIN_MAX_ATTEMPTS;
 
@@ -140,7 +141,7 @@ function database(initial: ReturnType<typeof row>[]) {
       return r;
     },
   };
-  return { rows, prisma: { application } };
+  return { rows, prisma: attachMemoryRelease({ application }) };
 }
 
 function ownedStatusWrite(db: ReturnType<typeof database>, id: string, token: Date, data: Record<string, unknown>) {

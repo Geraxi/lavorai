@@ -1,5 +1,6 @@
 import { applicationsPaused } from "@/lib/application-pause";
-import { authorizeReleaseCanary } from "@/lib/release-email-canary";
+import { authorizeEmailTest, LEGACY_CANARY_ATTEMPT_KEY } from "@/lib/email-test-capability";
+import { authorizeReleaseCanary, isDedicatedTestDestination, RELEASE_CANARY } from "@/lib/release-email-canary";
 import { recruiterEmailFallbackEnabled } from "@/lib/recruiter-email-fallback";
 import { Resend, type CreateEmailOptions } from "resend";
 import { sendWithinQuota } from "@/lib/email-quota";
@@ -8,10 +9,38 @@ import { canSendToRecipientDomain } from "@/lib/recipient-domain-quota";
 import { isActiveRecruiterEmailStatus } from "@/lib/recruiter-email-send";
 import { prisma } from "@/lib/db";
 
+export type SanitizedProviderResult = {
+  accepted: boolean;
+  emailId?: string;
+  errorName?: string;
+  statusCode?: number | null;
+  message?: string;
+};
+
 export type RecruiterDeliveryResult =
-  | { kind: "accepted"; attemptId: string; providerEmailId: string }
-  | { kind: "not_sent"; reason: string }
-  | { kind: "uncertain"; attemptId: string | null };
+  | { kind: "accepted"; attemptId: string; providerEmailId: string; provider: SanitizedProviderResult }
+  | { kind: "not_sent"; reason: string; provider?: SanitizedProviderResult }
+  | { kind: "uncertain"; attemptId: string | null; provider?: SanitizedProviderResult };
+
+function sanitizeProviderResult(input: {
+  data?: { id?: string | null } | null;
+  error?: { name?: string; statusCode?: number | null; message?: string | null } | null;
+}): SanitizedProviderResult {
+  if (input.error) {
+    const raw = input.error.message?.trim();
+    return {
+      accepted: false,
+      errorName: input.error.name ?? "provider_error",
+      statusCode: input.error.statusCode ?? null,
+      message: raw
+        ? raw.replace(/re_[A-Za-z0-9]+/g, "re_[redacted]").replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+        : undefined,
+    };
+  }
+  const emailId = input.data?.id?.trim();
+  if (emailId) return { accepted: true, emailId };
+  return { accepted: false, errorName: "missing_provider_email_id" };
+}
 
 interface Dependencies {
   withinQuota: typeof sendWithinQuota;
@@ -22,7 +51,7 @@ interface Dependencies {
   findAttempt: (attemptKey: string) => Promise<{
     id: string; status: string; providerEmailId: string | null; acceptedAt: Date | null;
   } | null>;
-  send: (payload: CreateEmailOptions, key: string) => Promise<{ data: { id: string } | null; error: { name: string; statusCode?: number | null } | null }>;
+  send: (payload: CreateEmailOptions, key: string) => Promise<{ data: { id?: string | null } | null; error: { name?: string; statusCode?: number | null; message?: string | null } | null }>;
 }
 
 /** A durable attempt is recorded BEFORE sending. This function never retries a
@@ -37,12 +66,40 @@ export async function sendRecruiterEmailOnce(input: {
   beforeSend?: () => Promise<boolean>;
   /** Only the fixed server-side fictional diagnostic can use this path. */
   releaseCanary?: true;
+  /** Admin-triggered paused email test. Distinct from the 14/10 canary. */
+  emailTest?: true;
+  runKey?: string;
 }, overrides: Partial<Dependencies> = {}): Promise<RecruiterDeliveryResult> {
   const canary = input.releaseCanary === true;
-  if (canary ? !await authorizeReleaseCanary(input) : applicationsPaused()) {
+  const emailTest = input.emailTest === true;
+  if (canary && emailTest) {
+    return { kind: "not_sent", reason: "email_test_refused" };
+  }
+  if (emailTest) {
+    if (input.attemptKey === LEGACY_CANARY_ATTEMPT_KEY) {
+      return { kind: "not_sent", reason: "email_test_legacy_key_forbidden" };
+    }
+    if (!isDedicatedTestDestination(input.recipient)
+      || (typeof input.payload.to === "string" && !isDedicatedTestDestination(input.payload.to))) {
+      return { kind: "not_sent", reason: "email_test_destination_refused" };
+    }
+    if (!await authorizeEmailTest({ ...input, runKey: input.runKey ?? "" })) {
+      return { kind: "not_sent", reason: "email_test_refused" };
+    }
+  } else if (canary && (
+    input.applicationId !== RELEASE_CANARY.applicationId
+    || !isDedicatedTestDestination(input.recipient)
+    || (typeof input.payload.to === "string" && !isDedicatedTestDestination(input.payload.to))
+  )) {
+    // Canary is only the dedicated test user + exact allowlisted addresses +
+    // the fixed diagnostic application id. User inbound aliases, ordinary ids,
+    // customers, and employer mailboxes stay refused while paused/gated.
     return { kind: "not_sent", reason: "applications_paused" };
   }
-  if (!canary && !recruiterEmailFallbackEnabled()) {
+  if (!emailTest && (canary ? !await authorizeReleaseCanary(input) : applicationsPaused())) {
+    return { kind: "not_sent", reason: "applications_paused" };
+  }
+  if (!emailTest && !canary && !recruiterEmailFallbackEnabled()) {
     return { kind: "not_sent", reason: "recruiter_email_fallback_disabled" };
   }
   const deps: Dependencies = {
@@ -69,15 +126,22 @@ export async function sendRecruiterEmailOnce(input: {
     const existing = await deps.findAttempt(input.attemptKey);
     if (existing) {
       if (existing.providerEmailId && existing.acceptedAt) {
-        return { kind: "accepted", attemptId: existing.id, providerEmailId: existing.providerEmailId };
+        return {
+          kind: "accepted",
+          attemptId: existing.id,
+          providerEmailId: existing.providerEmailId,
+          provider: { accepted: true, emailId: existing.providerEmailId },
+        };
       }
       if (existing.providerEmailId || isActiveRecruiterEmailStatus(existing.status)) {
         return { kind: "uncertain", attemptId: existing.id };
       }
     }
-    const domainQuota = await deps.recipientDomainAllowed(input.recipient);
+    const domainQuota = emailTest
+      ? { allowed: true as const, reason: null }
+      : await deps.recipientDomainAllowed(input.recipient);
     if (!domainQuota.allowed) return { kind: "not_sent", reason: domainQuota.reason ?? "recipient_domain_rate_limited" };
-    const quota = await deps.withinQuota(canary ? "release_canary" : "application_sent", input.recipient, async () => {
+    const quota = await deps.withinQuota(emailTest ? "email_test" : canary ? "release_canary" : "application_sent", input.recipient, async () => {
       attemptCreationStarted = true;
       const attempt = await deps.createAttempt({
         applicationId: input.applicationId,
@@ -88,7 +152,8 @@ export async function sendRecruiterEmailOnce(input: {
       attemptId = attempt.id;
       // Re-read current eligibility after quota/attempt persistence and just
       // before transmission. A denied gate cannot contact the employer.
-      if ((canary ? !await authorizeReleaseCanary(input) : applicationsPaused())
+      if ((emailTest ? !await authorizeEmailTest({ ...input, runKey: input.runKey ?? "" })
+        : canary ? !await authorizeReleaseCanary(input) : applicationsPaused())
         || (input.beforeSend && !await input.beforeSend())) {
         await deps.uncertain(attempt.id, true);
         result = { kind: "not_sent", reason: "current_gate_blocked" };
@@ -102,6 +167,17 @@ export async function sendRecruiterEmailOnce(input: {
         to: input.recipient,
         tags: [{ name: "app_id", value: input.applicationId }, { name: "attempt_id", value: attempt.id }],
       }, input.attemptKey);
+      const provider = sanitizeProviderResult(response);
+      if (emailTest) {
+        try {
+          await prisma.emailTestAttempt.updateMany({
+            where: { attemptKey: input.attemptKey },
+            data: { providerResult: JSON.stringify(provider) },
+          });
+        } catch {
+          // Recording must not change send classification.
+        }
+      }
       if (response.error) {
         // Resend also RETURNS application_error for transport/JSON failures,
         // which may occur after acceptance. Only an explicit rejection status
@@ -109,15 +185,20 @@ export async function sendRecruiterEmailOnce(input: {
         const rejectedStatuses = new Set([400, 401, 403, 404, 405, 413, 415, 422, 429]);
         const knownRejected = typeof response.error.statusCode === "number"
           && rejectedStatuses.has(response.error.statusCode)
-          && !["application_error", "internal_server_error", "concurrent_idempotent_requests", "invalid_idempotent_request"].includes(response.error.name);
+          && !["application_error", "internal_server_error", "concurrent_idempotent_requests", "invalid_idempotent_request"].includes(response.error.name ?? "");
         await deps.uncertain(attempt.id, knownRejected);
-        if (knownRejected) result = { kind: "not_sent", reason: "provider_rejected" };
+        result = knownRejected
+          ? { kind: "not_sent", reason: "provider_rejected", provider }
+          : { kind: "uncertain", attemptId: attempt.id, provider };
         throw new Error(knownRejected ? "provider_rejected" : "provider_acceptance_unknown");
       }
-      if (!response.data?.id) throw new Error("missing_provider_email_id");
+      if (!response.data?.id) {
+        result = { kind: "uncertain", attemptId: attempt.id, provider };
+        throw new Error("missing_provider_email_id");
+      }
       // An idempotent DB write may be retried, but the provider send may not.
       await deps.accepted(attempt.id, response.data.id);
-      result = { kind: "accepted", attemptId: attempt.id, providerEmailId: response.data.id };
+      result = { kind: "accepted", attemptId: attempt.id, providerEmailId: response.data.id, provider };
     });
     if (!quota.sent) return { kind: "not_sent", reason: "email_quota_unavailable" };
     return result;

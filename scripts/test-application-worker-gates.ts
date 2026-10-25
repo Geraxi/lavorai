@@ -79,7 +79,7 @@ const gates = readFileSync(new URL("../src/lib/application-worker-gates.ts", imp
 assert(gates.includes("CONTINUATION_PROOF_MISSING_MESSAGE"), "Missing continuation proof must persist a visible user-action");
 assert(gates.includes("handOffContinuationProofMissing"), "continuation_proof_missing must rewrite the row, not return silently");
 assert(gates.includes("blocksUncertainAutoRetry"), "Reserve and resume refuse uncertain rows as a standalone check");
-assert(gates.includes("RecoveryReleaseBudget"), "Answer resume stays held until the recovery-release gate");
+assert(gates.includes("tryConsumeRecoveryRelease"), "Answer resume stays held until the recovery-release gate");
 assert(gates.includes("controlled_release"), "Controlled-release hold has a visible Italian reason");
 assert(readFileSync(new URL("../src/lib/skip-list-email-lookup.ts", import.meta.url), "utf8").includes("skipPageFetch"),
   "Cheap skip-list lookup must not crawl the ATS job page");

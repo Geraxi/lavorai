@@ -11,7 +11,7 @@ import {
   MAX_ATTEMPTS_MESSAGE_PREFIX, usageFor,
 } from "@/lib/queue-sendability";
 import { expiredLeaseWhere, issueApplicationLease } from "@/lib/application-lease";
-import { RecoveryReleaseBudget, controlledReleaseHoldData, controlledReleaseMessage } from "@/lib/application-recovery-release";
+import { tryConsumeRecoveryRelease, controlledReleaseHoldData, controlledReleaseMessage } from "@/lib/application-recovery-release";
 import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
 
 /**
@@ -94,9 +94,8 @@ export async function claimApplication(applicationId: string): Promise<boolean> 
  */
 export async function recoverStuckApplications(): Promise<number> {
   if (applicationsPaused()) return 0;
-  const budget = new RecoveryReleaseBudget();
-  let recovered = await recoverExpiredQueuedClaims(undefined, budget);
-  recovered += await releaseControlledRecoveryHolds(budget);
+  let recovered = await recoverExpiredQueuedClaims();
+  recovered += await releaseControlledRecoveryHolds();
   if (!historicalRetriesBlocked()) recovered += await recoverStuckInFlight();
   return recovered;
 }
@@ -111,7 +110,7 @@ const stuckEvidenceSelect = {
 } as const;
 
 /** Claimed `queued` rows whose worker died before reserve/process. */
-export async function recoverExpiredQueuedClaims(now = new Date(), budget = new RecoveryReleaseBudget()): Promise<number> {
+export async function recoverExpiredQueuedClaims(now = new Date()): Promise<number> {
   if (applicationsPaused()) return 0;
   const config = applicationRolloutConfig(now);
   if (!config.enabled || !config.startedAt) return 0;
@@ -163,7 +162,7 @@ export async function recoverExpiredQueuedClaims(now = new Date(), budget = new 
         retryCount: next,
         startedAt: null, leaseToken: null, leaseExpiresAt: null,
         errorMessage: staleQueuedClaimExhaustedMessage(maxAttempts),
-      } : budget.consume(app.id) ? {
+      } : await tryConsumeRecoveryRelease(app.id, { db: prisma }) ? {
         startedAt: null, leaseToken: null, leaseExpiresAt: null,
         retryCount: next,
         errorMessage: staleQueuedClaimReleaseMessage(),
@@ -178,7 +177,6 @@ export async function recoverExpiredQueuedClaims(now = new Date(), budget = new 
 }
 
 export async function releaseControlledRecoveryHolds(
-  budget = new RecoveryReleaseBudget(),
   now = new Date(),
 ): Promise<number> {
   const config = applicationRolloutConfig(now);
@@ -200,7 +198,7 @@ export async function releaseControlledRecoveryHolds(
   });
   let released = 0;
   for (const row of held) {
-    if (!budget.consume(row.id)) continue;
+    if (!await tryConsumeRecoveryRelease(row.id, { db: prisma })) continue;
     const changed = await prisma.application.updateMany({
       where: {
         id: row.id, status: "queued", errorMessage: controlledReleaseMessage(),

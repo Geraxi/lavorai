@@ -780,6 +780,7 @@ model Application {
   inboxReplies      InboxReply[]
   mailboxSends      MailboxSend[]
   inboundEmails     InboundEmail[]
+  emailTestAttempts EmailTestAttempt[]
 
   @@index([userId, createdAt])
   @@index([sessionId])
@@ -1252,5 +1253,42 @@ model InboundEmail {
 
   @@unique([provider, providerMessageId])
   @@index([userId, receivedAt])
+  @@index([applicationId])
+}
+
+/// Shared first-activation budget. Concurrent Vercel and GitHub Actions
+/// drains increment usedCount with WHERE usedCount < maxCount. Not process memory.
+model ApplicationReleaseBatch {
+  id        String   @id
+  maxCount  Int
+  usedCount Int      @default(0)
+  createdAt DateTime @default(now())
+  grants    ApplicationReleaseGrant[]
+}
+
+/// One grant per application id. Unique so an id is never released twice.
+model ApplicationReleaseGrant {
+  applicationId String   @id
+  batchId       String
+  releasedAt    DateTime @default(now())
+  batch         ApplicationReleaseBatch @relation(fields: [batchId], references: [id])
+
+  @@index([batchId])
+}
+
+/// One-time controlled email test. Unique per (runKey, destination).
+/// Never reuses the 14/10 canary attempt key.
+model EmailTestAttempt {
+  id            String   @id @default(cuid())
+  runKey        String
+  destination   String
+  attemptKey      String   @unique
+  applicationId   String
+  providerResult  String?
+  createdAt       DateTime @default(now())
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([runKey, destination])
   @@index([applicationId])
 }

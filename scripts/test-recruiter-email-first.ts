@@ -34,7 +34,8 @@ function load(path: string, dependencies: Record<string, unknown>) {
 
 const deliveryDeps = {
   "@/lib/application-pause": { applicationsPaused: () => false },
-  "@/lib/release-email-canary": { authorizeReleaseCanary: async () => false },
+  "@/lib/release-email-canary": { authorizeReleaseCanary: async () => false, isDedicatedTestDestination: () => false, RELEASE_CANARY: { applicationId: "release-canary" } },
+  "@/lib/email-test-capability": { authorizeEmailTest: async () => false, LEGACY_CANARY_ATTEMPT_KEY: "release-canary-email-20261013-owner-v1" },
   "@/lib/recruiter-email-fallback": { recruiterEmailFallbackEnabled: () => process.env.RECRUITER_EMAIL_FALLBACK_ENABLED === "on" },
   resend: { Resend: class { emails = { send: async () => { throw new Error("real Resend must not run in tests"); } }; } },
   "@/lib/email-quota": { sendWithinQuota: async () => { throw new Error("default quota unused"); } },
