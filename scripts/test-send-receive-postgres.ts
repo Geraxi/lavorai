@@ -159,6 +159,7 @@ async function main() {
     assert.equal(heldReply.notifyStatus, "held");
     assert.equal(heldReply.forwardStatus, "pending");
     assert.equal(heldReply.forwardStartedAt, null);
+    assert.equal((await db.application.findUniqueOrThrow({ where: { id: app.id } })).replyCount, 2, "apply-to-application still runs while held");
     assert.equal(forwarded.size, forwardsBeforeHold, "hold must not call the provider");
     process.env.USER_NOTIFICATIONS_HOLD = "false";
     await processInboundReply(heldInbound);
@@ -172,7 +173,7 @@ async function main() {
       ["bounce", "Mail delivery failed", "Delivery failure", "mailer-daemon@acme.example.invalid"],
       ["otp", "Security code", "Your verification code is 654321.", "no-reply@greenhouse.io"],
     ]) await processInboundReply({ ...inbound, data: { ...inbound.data, email_id: `inbound-${suffix}`, subject, text, from }, providerEventId: `event-${suffix}` });
-    assert.equal((await db.application.findUniqueOrThrow({ where: { id: app.id } })).replyCount, 1);
+    assert.equal((await db.application.findUniqueOrThrow({ where: { id: app.id } })).replyCount, 2, "receipts/bounces/OTP must not increment past the two human interviews");
     const otp = await db.applicationReply.findFirstOrThrow({ where: { providerMessageId: "inbound-otp" } });
     assert.equal(otp.isSecurityCode, true); assert.equal(otp.forwardStatus, "skipped");
     console.log("PASS PostgreSQL: receipts/bounces/OTP never inflate human replies; machine security code remains hidden and unforwarded.");
