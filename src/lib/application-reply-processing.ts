@@ -14,6 +14,7 @@ import {
   notifyDecision,
 } from "@/lib/application-mailbox";
 import { inboundTargetsEmailTestDestination, tryRecordEmailTestInbound } from "@/lib/email-test-capability";
+import { fetchResendReceivedEmail } from "@/lib/resend-keys";
 
 export interface InboundEmail {
   email_id: string;
@@ -52,13 +53,13 @@ export function inboundApplicationIds(to: InboundEmail["to"], domain: string): s
 
 export async function hydrateInboundEmail(data: InboundEmail): Promise<InboundEmail> {
   if (data.text?.trim() || data.html?.trim()) return data;
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("inbound_body_credentials_unavailable");
-  const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(data.email_id)}`, {
-    headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(15_000), cache: "no-store",
-  });
-  if (!response.ok) throw new Error("inbound_body_unavailable");
-  const full = await response.json() as Partial<InboundEmail>;
+  let full: Partial<InboundEmail>;
+  try {
+    full = await fetchResendReceivedEmail(data.email_id) as Partial<InboundEmail>;
+  } catch (error) {
+    if ((error as { message?: string }).message === "inbound_body_credentials_unavailable") throw error;
+    throw new Error("inbound_body_unavailable");
+  }
   if (!full || typeof full !== "object" || !("text" in full || "html" in full)) throw new Error("inbound_body_invalid");
   return { ...data, text: full.text, html: full.html, to: data.to ?? full.to, from: data.from ?? full.from, subject: data.subject ?? full.subject, message_id: data.message_id ?? full.message_id, headers: full.headers, reply_to: full.reply_to };
 }

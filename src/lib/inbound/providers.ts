@@ -3,6 +3,7 @@
  * webhook signature and normalizes the payload; `hydrate` fetches the body
  * when the webhook carries metadata only (Resend). `fetch` is injectable.
  */
+import { fetchResendReceivedEmail } from "@/lib/resend-keys";
 import { verifySvixSignature } from "./signature";
 
 export type Fetch = (url: string, init?: RequestInit) => Promise<Response>;
@@ -53,12 +54,7 @@ export const resendInbound: InboundProvider = {
   },
   async hydrate(mail, env, f = fetch) {
     if (mail.text?.trim() || mail.html?.trim()) return mail;
-    if (!env.RESEND_API_KEY) throw new Error("inbound_body_credentials_unavailable");
-    const res = await f(`https://api.resend.com/emails/receiving/${encodeURIComponent(mail.providerMessageId)}`, {
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}` }, signal: AbortSignal.timeout(15_000), cache: "no-store",
-    });
-    if (!res.ok) throw new Error(`inbound_body_unavailable_${res.status}`);
-    const full = (await res.json()) as Record<string, unknown>;
+    const full = await fetchResendReceivedEmail(mail.providerMessageId, env, f);
     const headers = (full.headers && typeof full.headers === "object" ? full.headers : {}) as Record<string, unknown>;
     return { ...mail, text: str(full.text), html: str(full.html), from: str(headers.from) ?? (mail.from || str(full.from) || ""), subject: mail.subject || str(full.subject) || "" };
   },

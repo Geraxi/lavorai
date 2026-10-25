@@ -79,9 +79,18 @@ async function main() {
   assert.equal(parsed.providerMessageId, "em_1");
   assert.equal(resendInbound.parse(JSON.stringify({ type: "email.sent", data: {} })), null);
   assert.throws(() => resendInbound.parse(JSON.stringify({ type: "email.received", data: {} })));
-  const calls: string[] = [];
-  const hydrated = await resendInbound.hydrate(parsed, { RESEND_API_KEY: "test" }, async (url) => { calls.push(url); return new Response(JSON.stringify({ text: "We have received your application for the Backend Engineer position.", html: null, headers: { from: "Acme Careers <no-reply@greenhouse.io>" } }), { status: 200 }); });
-  assert.equal(calls[0], "https://api.resend.com/emails/receiving/em_1");
+  const calls: Array<{ url: string; authorization?: string }> = [];
+  const hydrated = await resendInbound.hydrate(parsed, { RESEND_API_KEY: "re_send", RESEND_RECEIVING_API_KEY: "re_recv" }, async (url, init) => {
+    calls.push({ url, authorization: (init?.headers as { Authorization?: string } | undefined)?.Authorization });
+    return new Response(JSON.stringify({ text: "We have received your application for the Backend Engineer position.", html: null, headers: { from: "Acme Careers <no-reply@greenhouse.io>" } }), { status: 200 });
+  });
+  assert.equal(calls[0]?.url, "https://api.resend.com/emails/receiving/em_1");
+  assert.equal(calls[0]?.authorization, "Bearer re_recv");
+  const fallback = await resendInbound.hydrate(parsed, { RESEND_API_KEY: "re_send" }, async (_url, init) => {
+    assert.equal((init?.headers as { Authorization?: string } | undefined)?.Authorization, "Bearer re_send");
+    return new Response(JSON.stringify({ text: "fallback body", html: null, headers: {} }), { status: 200 });
+  });
+  assert.match(fallback.text ?? "", /fallback body/);
   assert.match(hydrated.text ?? "", /Backend Engineer/);
 
   // processing with fake DB
