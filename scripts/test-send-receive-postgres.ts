@@ -24,6 +24,7 @@ async function main() {
   process.env.DATABASE_URL = fixtureUrl ?? `postgresql://postgres:password@127.0.0.1:${port}/postgres?connection_limit=16`;
   process.env.DIRECT_URL = process.env.DATABASE_URL;
   (process.env as Record<string, string>).NODE_ENV = "test";
+  process.env.RECRUITER_EMAIL_FALLBACK_ENABLED = "on";
   process.env.RESEND_API_KEY = "re_synthetic_test_only";
   process.env.INBOUND_EMAIL_DOMAIN = "inbound.example.invalid";
   process.env.RESEND_FROM_OVERRIDE = "LavorAI <notifications@example.invalid>";

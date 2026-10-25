@@ -74,6 +74,14 @@ assert.equal(deriveApplicationLifecycle(noBounce).evidence.type, "email_no_bounc
 assert.match(applicationDeliveryView(noBounce).label, /nessun rimbalzo/i);
 assert.notEqual(applicationDeliveryView(noBounce).phase, "confirmed");
 
+const rejected = {
+  status: "ready_to_apply", submittedVia: null, submitConfirmation: "REJECTED_NOT_SENT",
+};
+assert.equal(deliveryEvidence(rejected), "excluded");
+assert.equal(deriveApplicationLifecycle(rejected).status, "failed");
+assert.equal(deriveApplicationLifecycle(rejected).failureReason, "ats_form_unsupported");
+assert.equal(deriveAttemptOutcome(rejected), null);
+
 const unknown = {
   status: "success", submittedVia: "email_recruiter", submitConfirmation: "EMAIL_SENT",
   submittedAt: now, emailAttempts: [{ status: "unknown", providerEmailId: "re_x" }],

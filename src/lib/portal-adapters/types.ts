@@ -3,6 +3,8 @@ export type { VerifiedSubmissionReceipt as SubmissionReceipt } from "../submissi
 import type { Browser, Page } from "playwright";
 import type { CVProfile } from "@/lib/cv-profile-types";
 import type { ApplicationAnswers } from "@/lib/application-answers";
+import type { SubmissionAttemptEvidence } from "./submission-attempt-evidence";
+export type { SubmissionAttemptEvidence } from "./submission-attempt-evidence";
 
 /**
  * Portal Adapter: plug-in che sa come compilare il form di candidatura
@@ -135,6 +137,7 @@ export type ApplyOutcome =
       confirmation?: string;
       receipt?: SubmissionReceipt;
       canary?: CanaryLog;
+      attemptEvidence?: SubmissionAttemptEvidence;
     }
   | {
       ok: false;
@@ -157,6 +160,7 @@ export type ApplyOutcome =
         | "not_a_job_application";
       error: string;
       canary?: CanaryLog;
+      attemptEvidence?: SubmissionAttemptEvidence;
     }
   | {
       // Form trovato e compilato per quanto possibile, ma restano campi
@@ -169,6 +173,7 @@ export type ApplyOutcome =
       /** Diagnostica: cosa ha fatto l'AI-answer (per capire i fallimenti prod). */
       debug?: string;
       canary?: CanaryLog;
+      attemptEvidence?: SubmissionAttemptEvidence;
     };
 
 /** Domanda obbligatoria di un form che richiede input dell'utente. */

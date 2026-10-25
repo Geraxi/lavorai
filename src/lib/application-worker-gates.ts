@@ -34,7 +34,7 @@ export const WORK_RESERVED_STATUSES = ["optimizing", "applying", "submitting", "
 const evidenceSelect = {
   submittedAt: true, submittedVia: true, submitConfirmation: true, canaryLog: true,
   answersUsedJson: true, viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true,
-  submitStartedAt: true,
+  submitStartedAt: true, submitClickPerformedAt: true, outboundSubmissionJson: true, destinationResponseJson: true,
 } as const;
 export const workerGateSelect = {
   sessionId: true, leaseToken: true, leaseExpiresAt: true, cvDocxPath: true,
@@ -62,7 +62,7 @@ function ownershipWhere(id: string, token: Date, extra: Prisma.ApplicationWhereI
 }
 
 export function hasPotentialSubmission(row: Pick<WorkerGateRow, Exclude<keyof typeof evidenceSelect, "submitStartedAt">> & { submitStartedAt?: Date | null }): boolean {
-  if (row.submitStartedAt) return true;
+  if (row.submitStartedAt || row.submitClickPerformedAt || row.outboundSubmissionJson) return true;
   if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) return true;
   // Only explicit proof of no delivery can clear earlier form/debug evidence.
   if ([NOT_SUBMITTED, "DRY_RUN", "JOB_CLOSED"].includes(row.submitConfirmation ?? "")) return false;

@@ -11,7 +11,8 @@ import { verifyOfficialApiResponse, submitViaOfficialApi, employerApiKey, boardS
 import { captchaHandoff } from "../src/lib/captcha-handoff";
 import { reusableFactKey } from "../src/lib/candidate-facts";
 import { greenhouseAdapter } from "../src/lib/portal-adapters/greenhouse";
-import { detectBlockingCaptcha } from "../src/lib/portal-adapters/captcha";
+import { challengeAppearedAfterSubmit, detectBlockingCaptcha } from "../src/lib/portal-adapters/captcha";
+import { DEFAULT_SKIP_PORTAL_HOSTS } from "../src/lib/ats-skip-hosts";
 import { networkEvidence } from "../src/lib/portal-adapters/submit-evidence";
 import { ashbyContactFromProfile } from "../src/lib/portal-adapters/ashby-contact";
 import { preferredDeliveryChannel } from "../src/lib/delivery-channel";
@@ -62,12 +63,12 @@ await test("Ashby success for ANOTHER posting is not a receipt for this job", ()
 });
 
 // Fake Playwright page: the click emits the Ashby request/response pair.
-function fakePage(opts: { body: string; status?: number; formVisibleAfter?: boolean }) {
+function fakePage(opts: { body: string; status?: number; formVisibleAfter?: boolean; badge?: boolean }) {
   const ev = new EventEmitter();
   let clicked = false;
   const locator = (sel?: string) => ({
-    count: async () => 0,
-    nth: () => ({ isVisible: async () => false }),
+    count: async () => (opts.badge && sel && sel.includes("grecaptcha-badge") ? 1 : 0),
+    nth: () => ({ isVisible: async () => !!(opts.badge && sel && sel.includes("grecaptcha-badge")) }),
     first: () => ({ isVisible: async () => false }),
     innerText: async () => (sel === "body" ? "Grazie per la candidatura. We received your application." : ""),
   });
@@ -103,12 +104,13 @@ await test("observeSubmission: Ashby click with FormSubmitSuccess → submitted 
   assert.match(outcome.canary!.bodyTextAfterSubmit, /Grazie per la candidatura/);
   assert.equal(outcome.canary!.postSubmitScreenshotUrl, null, "no Blob token → screenshot skipped");
 });
-await test("observeSubmission: Ashby FormRender → submission_unconfirmed with portal error message", async () => {
+await test("observeSubmission: Ashby FormRender → rejected-not-sent (validation, no acceptance)", async () => {
   const { page, click } = fakePage({ body: ashbyBody(FORM_RENDER) });
   const { outcome } = await observeSubmission(page, "ashby", ASHBY_JOB, click, async () => true);
   assert.equal(outcome.ok, false);
-  assert.equal(!outcome.ok && outcome.status, "submission_unconfirmed");
-  assert.match(!outcome.ok ? outcome.error : "", /errore/);
+  assert.equal(!outcome.ok && outcome.status, "validation_failed");
+  assert.match(!outcome.ok ? outcome.error : "", /rifiutato|validazione/i);
+  assert.equal(outcome.attemptEvidence?.destinationResponse?.rejected, true);
 });
 
 // ---------- A/B: official employer APIs ----------
@@ -183,16 +185,83 @@ await test("Greenhouse: unattestable pause before any data → needs_user_input 
   assert.equal(candidateDataCalled, false);
 });
 
-// ---------- C: captcha ----------
-await test("invisible reCAPTCHA badge is blocking — never auto-submit", async () => {
-  const locator = (sel: string) => ({
-    count: async () => (sel.includes("grecaptcha-badge") || sel.includes('data-size="invisible"') ? 1 : 0),
-    nth: () => ({ isVisible: async () => false }),
-    first: () => ({ isVisible: async () => false }),
-  });
-  const r = await detectBlockingCaptcha({ locator } as never);
-  assert.equal(r.blocking, true);
+// ---------- C: captcha (HTML fixtures from the Oct 2026 Greenhouse diagnostic) ----------
+type CaptchaFixture = {
+  badge?: boolean;
+  invisibleWidget?: boolean;
+  bframe?: boolean;
+  checkboxAnchor?: boolean;
+  hcaptcha?: boolean;
+  turnstile?: boolean;
+  robotText?: boolean;
+};
+
+function captchaPage(fx: CaptchaFixture) {
+  const hit = (sel: string): boolean => {
+    if (sel.includes("bframe") || (sel.includes("challenge") && sel.includes("recaptcha"))) return !!fx.bframe;
+    if (sel.includes("grecaptcha-badge")) return !!fx.badge;
+    if (sel.includes("anchor") && sel.includes("g-recaptcha")) return !!fx.checkboxAnchor;
+    if (sel.includes('data-size="invisible"') && !sel.includes(":not")) return !!fx.invisibleWidget;
+    if (/hcaptcha|h-captcha/.test(sel)) return !!fx.hcaptcha;
+    if (/turnstile/.test(sel)) return !!fx.turnstile;
+    if (/robot/i.test(sel)) return !!fx.robotText;
+    return false;
+  };
+  return {
+    locator: (sel: string) => {
+      const on = hit(sel);
+      return {
+        count: async () => on ? 1 : 0,
+        nth: () => ({ isVisible: async () => on }),
+        first: () => ({ isVisible: async () => on }),
+      };
+    },
+  } as never;
+}
+
+await test("invisible reCAPTCHA badge is reported but not blocking (no visible challenge)", async () => {
+  const r = await detectBlockingCaptcha(captchaPage({ badge: true }));
+  assert.equal(r.blocking, false);
   assert.equal(r.kind, "recaptcha_invisible_badge");
+  assert.equal(await challengeAppearedAfterSubmit(captchaPage({ badge: true })), false);
+});
+await test("badge-only Greenhouse HTML (enterprise.js?render=, 256x60, no sitekey) is not blocking", async () => {
+  const r = await detectBlockingCaptcha(captchaPage({ badge: true, invisibleWidget: false }));
+  assert.equal(r.blocking, false);
+  assert.equal(r.kind, "recaptcha_invisible_badge");
+});
+await test("visible reCAPTCHA challenge iframe is blocking", async () => {
+  const r = await detectBlockingCaptcha(captchaPage({ badge: true, bframe: true }));
+  assert.equal(r.blocking, true);
+  assert.equal(r.kind, "recaptcha_challenge");
+  assert.equal(await challengeAppearedAfterSubmit(captchaPage({ bframe: true })), true);
+});
+await test("visible checkbox / I'm not a robot is blocking", async () => {
+  const checkbox = await detectBlockingCaptcha(captchaPage({ checkboxAnchor: true }));
+  assert.equal(checkbox.blocking, true);
+  assert.equal(checkbox.kind, "recaptcha_checkbox");
+  const robot = await detectBlockingCaptcha(captchaPage({ robotText: true }));
+  assert.equal(robot.blocking, true);
+  assert.equal(robot.kind, "recaptcha_checkbox");
+});
+await test("hCaptcha and Turnstile widgets are blocking", async () => {
+  const h = await detectBlockingCaptcha(captchaPage({ hcaptcha: true }));
+  assert.equal(h.blocking, true);
+  assert.equal(h.kind, "hcaptcha");
+  const t = await detectBlockingCaptcha(captchaPage({ turnstile: true }));
+  assert.equal(t.blocking, true);
+  assert.equal(t.kind, "turnstile");
+});
+await test("post-click POST with a badge is not captcha (submitted/unconfirmed per evidence)", async () => {
+  const { page, click } = fakePage({ body: ashbyBody(SUCCESS), badge: true });
+  const { outcome } = await observeSubmission(page, "ashby", ASHBY_JOB, click, async () => true);
+  assert.equal(outcome.ok, true);
+  assert.notEqual(outcome.ok && outcome.status, "captcha");
+  assert.equal(outcome.ok && outcome.confirmation, "DETECTED_HTTP_200");
+});
+await test("Ashby remains on the skip-list (route policy unchanged)", () => {
+  assert.ok(DEFAULT_SKIP_PORTAL_HOSTS.includes("ashbyhq.com"));
+  assert.ok(DEFAULT_SKIP_PORTAL_HOSTS.includes("jobs.ashbyhq.com"));
 });
 await test("captured submit responses keep URL, operation, status, first 2KB", () => {
   const ev = networkEvidence([{

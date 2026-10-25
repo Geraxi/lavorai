@@ -34,8 +34,9 @@ import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { discoverPublishedHiringInbox } from "@/lib/employer-hiring-inbox";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
 import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData, skipListManualHandoffWhere } from "@/lib/ats-skip-hosts";
-import { skipListEmailSendDecision } from "@/lib/recruiter-email-fallback";
+import { recruiterEmailFallbackEnabled, skipListEmailSendDecision } from "@/lib/recruiter-email-fallback";
 import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
+import { attemptEvidenceWrite, REJECTED_NOT_SENT } from "@/lib/portal-adapters/submission-attempt-evidence";
 import { sendRecruiterEmailOnce, type RecruiterDeliveryResult } from "@/lib/recruiter-delivery";
 import {
   recruiterFromAddress,
@@ -646,6 +647,7 @@ async function processApplicationRun(
         ...("canary" in outcome && outcome.canary
           ? { canaryLog: JSON.stringify(outcome.canary) }
           : {}),
+        ...attemptEvidenceWrite(outcome.attemptEvidence),
         errorMessage: isDryRun
           ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
           : isUnconfirmed
@@ -669,12 +671,24 @@ async function processApplicationRun(
       return; // fatto
     }
 
-    if (["submission_unconfirmed", "unknown_error", "validation_failed", "missing_field"].includes(outcome.status)) {
+    if (outcome.status === "validation_failed") {
+      await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: {
+        status: "ready_to_apply", submitConfirmation: REJECTED_NOT_SENT,
+        errorMessage: outcome.error,
+        ...notSubmitted("failed", "portal_rejected_not_sent"),
+        canaryLog: JSON.stringify(("canary" in outcome ? outcome.canary : null) ?? { adapterFailure: outcome.status, error: outcome.error }),
+        ...attemptEvidenceWrite(outcome.attemptEvidence),
+      } });
+      return;
+    }
+
+    if (["submission_unconfirmed", "unknown_error", "missing_field"].includes(outcome.status)) {
       await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
         errorMessage: outcome.error,
         ...notSubmitted("needs_user", `portal_${outcome.status}`),
         canaryLog: JSON.stringify(("canary" in outcome ? outcome.canary : null) ?? { adapterFailure: outcome.status, error: outcome.error }),
+        ...attemptEvidenceWrite("attemptEvidence" in outcome ? outcome.attemptEvidence : undefined),
       } });
       return; // A missing receipt is not permission to submit the same application again.
     }
@@ -772,6 +786,33 @@ async function processApplicationRun(
     }
 
     if (outcome.status === "captcha") {
+      const clickedOrPosted = !!(outcome.attemptEvidence?.clickPerformed || outcome.attemptEvidence?.outboundRequest);
+      if (clickedOrPosted || !recruiterEmailFallbackEnabled()) {
+        const { captchaHandoff } = await import("@/lib/captcha-handoff");
+        const handoff = captchaHandoff({ mode: app.user.preferences?.autoApplyMode, company: app.job.company,
+          adapterLabel: adapter.label, detail: outcome.error });
+        await prisma.application.updateMany({
+          where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } },
+          data: {
+            status: handoff.status,
+            submitConfirmation: clickedOrPosted && outcome.attemptEvidence?.outboundRequest ? "UNCONFIRMED" : handoff.submitConfirmation,
+            errorMessage: clickedOrPosted && outcome.attemptEvidence?.outboundRequest
+              ? UNCERTAIN_SUBMISSION_MESSAGE
+              : handoff.errorMessage,
+            canaryLog: "canary" in outcome && outcome.canary ? JSON.stringify(outcome.canary) : handoff.canaryLog,
+            ...attemptEvidenceWrite(outcome.attemptEvidence),
+            ...(clickedOrPosted && outcome.attemptEvidence?.outboundRequest
+              ? notSubmitted("needs_user", "portal_captcha_after_outbound")
+              : {}),
+          },
+        });
+        if (handoff.notifyUser) {
+          await notifyApplicationManual(applicationId).catch((err) =>
+            console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
+          );
+        }
+        return;
+      }
       verifiedRecruiter = verifiedRecruiter ?? await findVerifiedRecruiterEmail(
         resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
       );
@@ -930,7 +971,7 @@ async function processApplicationRun(
     }
   }
 
-  if (recruiterEmail) {
+  if (recruiterEmail && recruiterEmailFallbackEnabled()) {
     const appRow = await prisma.application.findUnique({
       where: { id: applicationId },
       select: { trackingToken: true },

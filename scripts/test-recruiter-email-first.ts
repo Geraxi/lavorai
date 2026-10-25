@@ -35,6 +35,7 @@ function load(path: string, dependencies: Record<string, unknown>) {
 const deliveryDeps = {
   "@/lib/application-pause": { applicationsPaused: () => false },
   "@/lib/release-email-canary": { authorizeReleaseCanary: async () => false },
+  "@/lib/recruiter-email-fallback": { recruiterEmailFallbackEnabled: () => process.env.RECRUITER_EMAIL_FALLBACK_ENABLED === "on" },
   resend: { Resend: class { emails = { send: async () => { throw new Error("real Resend must not run in tests"); } }; } },
   "@/lib/email-quota": { sendWithinQuota: async () => { throw new Error("default quota unused"); } },
   "@/lib/application-delivery": {
@@ -132,6 +133,7 @@ function testGenericInboxEmployerDomain() {
 }
 
 async function testFakeMailer() {
+  process.env.RECRUITER_EMAIL_FALLBACK_ENABLED = "on";
   let realSend = 0;
   const delivery = load("src/lib/recruiter-delivery.ts", {
     ...deliveryDeps,

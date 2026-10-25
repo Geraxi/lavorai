@@ -5,6 +5,9 @@ export const UNCERTAIN_SUBMISSION_MESSAGE =
 
 export type UncertainEvidenceRow = {
   submitStartedAt?: Date | null;
+  submitClickPerformedAt?: Date | null;
+  outboundSubmissionJson?: string | null;
+  destinationResponseJson?: string | null;
   submittedAt?: Date | null;
   submittedVia?: string | null;
   submitConfirmation?: string | null;
@@ -16,13 +19,20 @@ export type UncertainEvidenceRow = {
   userStatus?: string | null;
 };
 
-const NO_SEND_CONFIRMATIONS = new Set(["NOT_SUBMITTED", "NEEDS_ANSWERS", "DRY_RUN", "JOB_CLOSED"]);
+const NO_SEND_CONFIRMATIONS = new Set(["NOT_SUBMITTED", "NEEDS_ANSWERS", "DRY_RUN", "JOB_CLOSED", "REJECTED_NOT_SENT"]);
 
 /** Standalone: prior attempt / submit_started / unconfirmed evidence.
  * Independent of historicalRetriesBlocked(). Never auto-resubmit.
- * NEEDS_ANSWERS / NOT_SUBMITTED are proof of no send and stay resumable. */
+ * NEEDS_ANSWERS / NOT_SUBMITTED / REJECTED_NOT_SENT are proof of no send and stay resumable. */
 export function uncertainAutoRetryReason(row: UncertainEvidenceRow): string | null {
-  if (row.submitStartedAt) return "uncertain_submit_started";
+  if (row.submitConfirmation === "REJECTED_NOT_SENT") {
+    if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) {
+      return "uncertain_prior_attempt";
+    }
+    return null;
+  }
+  if (row.submitStartedAt || row.submitClickPerformedAt) return "uncertain_submit_started";
+  if (row.outboundSubmissionJson) return "uncertain_outbound_request";
   if (row.submitConfirmation === "UNCONFIRMED" || row.submitConfirmation === "SUBMISSION_STARTED") {
     return "uncertain_submission";
   }

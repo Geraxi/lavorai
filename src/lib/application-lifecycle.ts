@@ -63,6 +63,8 @@ export interface LifecycleInput {
   coverLetterText?: string | null;
   /** Internal-only: used to surface an ALREADY captured screenshot key to admins. */
   canaryLog?: string | null;
+  submitClickPerformedAt?: Date | string | null;
+  outboundSubmissionJson?: string | null;
   job?: { url: string | null; source?: string | null } | null;
   /** Newest first, as every other evidence reader queries them. */
   emailAttempts?: Array<{
@@ -170,6 +172,7 @@ function screenshotFrom(canaryLog: string | null | undefined): string | null {
 
 export function classifyFailure(input: Pick<LifecycleInput, "status" | "submitConfirmation" | "errorMessage">): FailureReason {
   const message = input.errorMessage ?? "";
+  if (input.submitConfirmation === "REJECTED_NOT_SENT" || /rifiutato la candidatura \(validazione\)/i.test(message)) return "ats_form_unsupported";
   if (input.submitConfirmation === "JOB_CLOSED" || input.submitConfirmation === "EXPIRED" || message === JOB_CLOSED_HELD_MESSAGE || /annuncio (?:non più online|chiuso)/i.test(message)) return "job_closed";
   if (message === DUPLICATE_POSTING_MESSAGE) return "duplicate_posting";
   if (isAiCreditFailure(message)) return "ai_unavailable";
@@ -204,6 +207,7 @@ export function automaticRetryDecision(
   const possibleSubmission = !!(input.submittedAt || input.submittedVia || input.submissionReceiptJson
     || attempt?.providerEmailId || (attempt && !["failed"].includes(attempt.status))
     || ["SUBMISSION_STARTED", "UNCONFIRMED", "EMAIL_SENT", "MANUAL"].includes(input.submitConfirmation ?? "")
+    || !!input.submitClickPerformedAt || !!input.outboundSubmissionJson
     || (input.submitConfirmation ?? "").startsWith("DETECTED"));
   if (possibleSubmission || ["submitting", "confirmed_submitted", "submitted_unverified"].includes(lifecycle.status)) {
     return { automatic: false, reason: "possible_submission" };
@@ -300,6 +304,9 @@ export function deriveApplicationLifecycle(
       snippet: input.submitConfirmation ? `Recorded as ${input.submitConfirmation} without a verifiable receipt` : null };
   } else if (["applying", "submitting", "answers_claimed"].includes(input.status)) {
     status = "submitting"; nextAction = "wait";
+  } else if (input.submitConfirmation === "REJECTED_NOT_SENT") {
+    status = "failed"; failureReason = "ats_form_unsupported"; nextAction = "apply_manually";
+    messageOverride = { it: "Il portale ha rifiutato la candidatura (validazione). Nessun invio accettato.", en: "The portal rejected the application (validation). Nothing was accepted." };
   } else if (["SUBMISSION_STARTED", "UNCONFIRMED"].includes(input.submitConfirmation ?? "")) {
     // A delivery boundary may have been crossed: never shown as failed, never retried.
     status = "submitted_unverified"; nextAction = "verify_on_portal";
@@ -390,6 +397,7 @@ function safeHttpUrl(value: string | null): string | null {
 export const lifecycleSelect = {
   id: true, status: true, submittedVia: true, submitConfirmation: true, submissionReceiptJson: true, errorMessage: true,
   consentGrantedAt: true, startedAt: true, completedAt: true, submittedAt: true, createdAt: true, retryCount: true,
+  submitClickPerformedAt: true, outboundSubmissionJson: true,
   cvPdfPath: true, cvDocxPath: true, coverLetterPath: true,
   job: { select: { url: true, source: true } },
   emailAttempts: { orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 1,

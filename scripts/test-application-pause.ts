@@ -103,15 +103,76 @@ async function main() {
       process.env.APPLICATIONS_PAUSED = "true";
     }
     const previousKey = process.env.ADMIN_SYNC_KEY;
+    const previousDrainCron = process.env.CRON_SECRET;
     process.env.ADMIN_SYNC_KEY = "synthetic-test-only";
+    process.env.CRON_SECRET = "synthetic-pause-test";
     try {
       const cronRoute = load("src/app/api/cron/auto-apply/route.ts", routeMocks);
       assert.equal((await cronRoute.GET({ headers: new Headers({ "x-admin-key": process.env.ADMIN_SYNC_KEY }) })).body.paused, true);
       assert.equal((await cronRoute.GET({ headers: new Headers() })).status, 401);
-    } finally { if (previousKey === undefined) delete process.env.ADMIN_SYNC_KEY; else process.env.ADMIN_SYNC_KEY = previousKey; }
+      const drainRoute = load("src/app/api/cron/drain-queue/route.ts", routeMocks);
+      const drainPaused = await drainRoute.GET({ headers: new Headers({ authorization: `Bearer ${process.env.CRON_SECRET}` }) });
+      assert.equal(drainPaused.body.paused, true, "Vercel drain-queue cron honors APPLICATIONS_PAUSED");
+      assert.equal((await drainRoute.GET({ headers: new Headers() })).status, 401);
+      const mailboxDelivery = load("src/app/api/cron/mailbox-delivery/route.ts", {
+        ...routeMocks,
+        "@/lib/mailbox/service": { checkMailboxDeliveries: async () => { throw new Error("paused mailbox-delivery must not run"); } },
+        "@/lib/mailbox/runtime": { realMailboxDeps: () => ({}) },
+      });
+      assert.equal((await mailboxDelivery.GET({ headers: new Headers({ authorization: `Bearer ${process.env.CRON_SECRET}` }) })).body.paused, true);
+      let healCalls = 0;
+      let applyCalls = 0;
+      let userMail = 0;
+      const nudges = load("src/app/api/cron/nudges/route.ts", {
+        ...routeMocks,
+        "@/lib/onboarding-nudge": { runOnboardingNudges: async () => { userMail++; return { sent: 0 }; } },
+        "@/lib/upgrade-nudge": { runUpgradeNudges: async () => { userMail++; return { sent: 0 }; } },
+        "@/lib/auto-apply-cron": { runAutoApplyCron: async () => { applyCalls++; throw new Error("paused nudges must not auto-apply"); } },
+        "@/lib/scrapers/sync-jobs": { syncAtsJobs: async () => ({}) },
+        "@/lib/cron-self-heal": { runCronSelfHeal: async () => { healCalls++; throw new Error("paused nudges must not self-heal"); } },
+        "@/lib/no-reply-followup": { runNoReplyFollowups: async () => ({}) },
+        "@/lib/daily-summary": { runDailySummary: async () => { userMail++; return { sent: 0 }; } },
+        "@/lib/weekly-digest": { runWeeklyDigest: async () => { userMail++; return { sent: 0 }; } },
+        "@/lib/trial": { runTrialNudges: async () => { userMail++; return { sent: 0 }; } },
+        "@/lib/checkout-recovery": { runCheckoutRecovery: async () => { userMail++; return { sent: 0 }; } },
+        "@/lib/application-mailbox-digest": { runMailboxDigest: async () => { userMail++; return { sent: 0 }; } },
+        "@/lib/application-mailbox-notify": { createResendMailboxMailer: () => async () => "user-mail" },
+        "@/lib/application-mailbox-store": { purgeExpiredMailbox: async () => ({}) },
+      });
+      const nudgeOut = await nudges.GET({ headers: new Headers({ authorization: `Bearer ${process.env.CRON_SECRET}` }) });
+      assert.equal(nudgeOut.body.ok, true);
+      assert.deepEqual(nudgeOut.body.heal, { paused: true, reason: "applications_paused" });
+      assert.deepEqual(nudgeOut.body.autoApply, { paused: true, reason: "applications_paused" });
+      assert.equal(healCalls, 0, "nudges kill-switch skips self-heal / skip-list recheck");
+      assert.equal(applyCalls, 0, "nudges kill-switch skips auto-apply");
+      assert.ok(userMail > 0, "user-facing notification emails stay allowed while sending is paused");
+      const workflow = readFileSync(".github/workflows/drain-queue.yml", "utf8");
+      assert.match(workflow, /https:\/\/lavorai\.it\/api\/cron\/drain-queue/, "GitHub Actions backup calls the same drain-queue endpoint");
+      assert.match(workflow, /\*\/15 \* \* \* \*/);
+    } finally {
+      if (previousKey === undefined) delete process.env.ADMIN_SYNC_KEY; else process.env.ADMIN_SYNC_KEY = previousKey;
+      if (previousDrainCron === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = previousDrainCron;
+    }
     const source = readFileSync("src/lib/application-worker.ts", "utf8");
     assert.match(source, /attemptAutoSubmit[\s\S]*?assertApplicationsRunning\(\)/);
     assert.match(source, /async function attemptPortalAdapterSubmit[\s\S]*?assertApplicationsRunning\(\)/);
+    for (const [file, needle] of [
+      ["src/lib/recruiter-delivery.ts", /applicationsPaused/],
+      ["src/lib/queue-drain.ts", /applicationsPaused/],
+      ["src/app/api/cron/drain-queue/route.ts", /applicationsPaused/],
+      ["src/app/api/applications/process/route.ts", /applicationsPaused/],
+      ["src/lib/auto-apply-cron.ts", /applicationsPaused/],
+      ["src/lib/cron-self-heal.ts", /applicationsPaused/],
+      ["src/lib/mailbox/send-guard.ts", /APPLICATIONS_PAUSED/],
+      ["src/lib/inbox-replies.ts", /applicationsPaused/],
+      ["src/lib/email-quota.ts", /applicationsPaused/],
+      ["src/lib/application-claim.ts", /applicationsPaused/],
+      ["src/app/api/cron/mailbox-delivery/route.ts", /applicationsPaused/],
+      ["src/app/api/cron/nudges/route.ts", /applicationsPaused/],
+      ["src/app/api/cron/auto-apply/route.ts", /applicationsPaused/],
+    ] as const) {
+      assert.match(readFileSync(file, "utf8"), needle, `${file} must honor APPLICATIONS_PAUSED`);
+    }
     assert(!readFileSync("src/app/api/webhooks/resend/route.ts", "utf8").includes("applicationsPaused"), "Receiving and signed delivery webhooks must remain live");
     console.log("PASS release pause: producers, manual/auth, cron/GitHub, queue/fallback, worker force flag, claims, notification sends, inbound kept live, no DB/provider side effects.");
   } finally { if (previous === undefined) delete process.env.APPLICATIONS_PAUSED; else process.env.APPLICATIONS_PAUSED = previous; }

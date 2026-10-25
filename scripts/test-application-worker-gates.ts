@@ -10,7 +10,8 @@ process.env.APPLICATION_ROLLOUT_START_AT = new Date(+now - 60000).toISOString();
 process.env.APPLY_GLOBAL_DAILY_CAP = "10";
 const base = {
   id: "app", userId: "user", jobId: "job", sessionId: "round", status: "queued", startedAt: null,
-  leaseToken: null, leaseExpiresAt: null, submitStartedAt: null, consentGrantedAt: now, createdAt: now, retryCount: 0,
+  leaseToken: null, leaseExpiresAt: null, submitStartedAt: null, submitClickPerformedAt: null,
+  outboundSubmissionJson: null, destinationResponseJson: null, consentGrantedAt: now, createdAt: now, retryCount: 0,
   submissionReceiptJson: null, userProvidedAnswersJson: null, answerContinuationJson: null, pendingQuestionsJson: null, completedAt: null,
   cvDocxPath: null, submittedAt: null, submittedVia: null, submitConfirmation: null,
   canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
@@ -72,6 +73,7 @@ assert(worker.includes("SKIPPED_ATS_MANUAL_MESSAGE"), "Skip-list handoff happens
 assert(worker.includes("skipListManualHandoffWhere"), "Skip-list miss must include answers_claimed / NOT_SUBMITTED resumes");
 assert(worker.includes("skipListManualHandoffData"), "Skip-list miss must clear the work lease on handoff");
 assert(worker.includes("skipListEmailSendDecision"), "Skip-list inbox must pass the recruiter-email fallback gate before send");
+assert(worker.includes("recruiterEmailFallbackEnabled"), "Every employer-email send path checks the default-off gate");
 assert(worker.includes("blocksUncertainAutoRetry"), "Worker skip-list path refuses uncertain rows");
 const gates = readFileSync(new URL("../src/lib/application-worker-gates.ts", import.meta.url), "utf8");
 assert(gates.includes("CONTINUATION_PROOF_MISSING_MESSAGE"), "Missing continuation proof must persist a visible user-action");

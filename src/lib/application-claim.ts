@@ -103,7 +103,8 @@ export async function recoverStuckApplications(): Promise<number> {
 
 const stuckEvidenceSelect = {
   id: true, status: true, startedAt: true, leaseToken: true, leaseExpiresAt: true,
-  submitStartedAt: true, retryCount: true, errorMessage: true,
+  submitStartedAt: true, submitClickPerformedAt: true, outboundSubmissionJson: true,
+  retryCount: true, errorMessage: true,
   createdAt: true, submittedAt: true, submittedVia: true, submitConfirmation: true,
   canaryLog: true, answersUsedJson: true, viewedAt: true, lastReplyAt: true,
   replyCount: true, userStatus: true, answerContinuationJson: true,

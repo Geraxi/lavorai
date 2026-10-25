@@ -240,7 +240,8 @@ export const ashbyAdapter: PortalAdapter = {
       const { prepareRequiredAnswers } = await import("./web-form");
       const unanswered = await prepareRequiredAnswers(page, input);
       if (unanswered) return unanswered;
-      // Any captcha, including invisible reCAPTCHA: never auto-submit.
+      // Interactive captcha only. Ashby stays on the skip-list for auto-apply;
+      // this adapter still refuses a visible challenge if it is ever invoked.
       const captcha = await detectBlockingCaptcha(page);
       console.log(`[ashby] captcha check: ${captcha.kind ?? "none"} → ${captcha.blocking ? "BLOCCANTE" : "ok"} (${captcha.detail})`);
       if (captcha.blocking) {

@@ -5,7 +5,8 @@ import { createResendMailboxMailer } from "@/lib/application-mailbox-notify";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-/** Daily digest of non-priority application mailbox mail. Never replies to employers. */
+/** Daily digest of non-priority application mailbox mail to our users (10:15 UTC).
+ * User-facing notification — allowed while APPLICATIONS_PAUSED. Never replies to employers. */
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   const adminKey = process.env.ADMIN_SYNC_KEY;

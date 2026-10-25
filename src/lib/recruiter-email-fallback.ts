@@ -1,9 +1,12 @@
 /**
- * Recruiter-email fallback is opt-in. Default off: skip-list recheck may
- * record a found address but must not queue a send.
+ * Recruiter / employer application-email gate. Default off: no automated
+ * application email is sent to an employer (skip-list fallback, published
+ * recruiter inbox, captcha fallback, drain, admin test-apply). Skip-list
+ * recheck may still record a found address.
  *
  * When enabled, only a posting-specific published inbox is accepted.
  * Generic company contacts are rejected and the reason is recorded.
+ * An empty address is not a control — callers must check this flag.
  */
 import type { VerifiedRecruiterEmail } from "@/lib/recruiter-email";
 

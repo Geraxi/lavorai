@@ -55,10 +55,14 @@ assert.deepEqual([...recoveryReleaseConfig({ APPLICATION_RECOVERY_RELEASE: "app-
 assert.match(CONTROLLED_RELEASE_MESSAGE, /in attesa di rilascio controllato/);
 
 assert.equal(uncertainAutoRetryReason({ submitStartedAt: new Date() }), "uncertain_submit_started");
+assert.equal(uncertainAutoRetryReason({ submitClickPerformedAt: new Date() }), "uncertain_submit_started");
+assert.equal(uncertainAutoRetryReason({ outboundSubmissionJson: "{}" }), "uncertain_outbound_request");
 assert.equal(uncertainAutoRetryReason({ submitConfirmation: "UNCONFIRMED" }), "uncertain_submission");
+assert.equal(uncertainAutoRetryReason({ submitConfirmation: "REJECTED_NOT_SENT" }), null, "explicit 4xx rejection is not uncertain");
 assert.equal(uncertainAutoRetryReason({ submittedAt: new Date() }), "uncertain_prior_attempt");
 assert.equal(uncertainAutoRetryReason({}), null);
 assert.equal(blocksUncertainAutoRetry({ submitConfirmation: "UNCONFIRMED" }), true);
+assert.equal(blocksUncertainAutoRetry({ submitConfirmation: "REJECTED_NOT_SENT" }), false);
 assert.equal(UNCERTAIN_SUBMISSION_MESSAGE.includes("Nessun nuovo invio automatico"), true);
 
 assert.equal(recruiterEmailFallbackEnabled({}), false);
