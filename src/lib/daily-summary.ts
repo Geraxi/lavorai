@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { EMAIL_LOG_SUCCESS_WHERE, sendWithinQuota } from "@/lib/email-quota";
 import { isTestAccount } from "@/lib/admin";
 import { deliveryEvidence, type DeliveryEvidenceInput } from "@/lib/application-evidence";
 
@@ -59,7 +59,7 @@ export async function runDailySummary(opts?: { onlyEmail?: string; dryRun?: bool
       result.details.push({ email: user?.email ?? "?", status: user ? "test_skip" : "user_not_found" });
       result.skipped++; continue;
     }
-    const recent = await prisma.emailLog.count({ where: { kind: "daily_summary", to: user.email, createdAt: { gte: since } } });
+    const recent = await prisma.emailLog.count({ where: { kind: "daily_summary", to: user.email, createdAt: { gte: since }, ...EMAIL_LOG_SUCCESS_WHERE } });
     if (recent > 0) { result.details.push({ email: user.email, status: "cooldown" }); result.skipped++; continue; }
     const apps = await prisma.application.findMany({
       where: { userId: user.id, ...recentActivity },
@@ -92,12 +92,15 @@ export async function runDailySummary(opts?: { onlyEmail?: string; dryRun?: bool
     try {
       const { subject, html, text } = renderSummary(user, activity);
       const notification = await sendWithinQuota("daily_summary", user.email, async () => {
-        const response = await new Resend(apiKey).emails.send({
+        return new Resend(apiKey).emails.send({
           from: process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>", to: user.email, subject, html, text,
         });
-        if (response.error || !response.data?.id) throw new Error("Daily summary was not accepted by the email provider.");
       });
       if (!notification.sent) {
+        if (notification.outcome === "failed" || notification.outcome === "unknown") {
+          result.details.push({ email: user.email, status: "error: " + (notification.reason ?? notification.outcome), counts });
+          result.errors++; continue;
+        }
         result.details.push({ email: user.email, status: "quota_blocked", counts }); result.skipped++; continue;
       }
       result.details.push({ email: user.email, status: "accepted", counts }); result.sent++;

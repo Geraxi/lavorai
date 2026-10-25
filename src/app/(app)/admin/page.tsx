@@ -4,6 +4,7 @@ import { AdminRangeSelect } from "@/components/admin-range-select";
 import { parseRange, rangeLabel } from "@/components/admin-range";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
+import { EMAIL_LOG_SUCCESS_WHERE, emailLogAdminLabel } from "@/lib/email-quota";
 import { TIERS } from "@/lib/billing";
 import {
   PageTitle,
@@ -122,7 +123,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
     prisma.job.count({ where: { cachedAt: { gte: since(24 * 7) } } }),
     prisma.application.count({ where: { status: "ready_to_apply" } }),
     prisma.application.count({ where: { status: "awaiting_consent" } }),
-    prisma.emailLog.count({ where: { createdAt: { gte: since(24 * 7) } } }).catch(() => 0),
+    prisma.emailLog.count({ where: { createdAt: { gte: since(24 * 7) }, ...EMAIL_LOG_SUCCESS_WHERE } }).catch(() => 0),
     prisma.job
       .findMany({ where: { company: { not: null } }, distinct: ["company"], select: { company: true }, take: 10000 })
       .then((r) => r.length),
@@ -136,7 +137,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
       select: { createdAt: true, status: true, user: { select: { email: true } }, job: { select: { title: true, company: true } } },
     }),
     prisma.popupResponse.findMany({ orderBy: { createdAt: "desc" }, take: 2, select: { createdAt: true, popup: { select: { title: true } }, user: { select: { email: true } } } }).catch(() => []),
-    prisma.emailLog.findMany({ orderBy: { createdAt: "desc" }, take: 2, select: { createdAt: true, kind: true, to: true } }).catch(() => []),
+    prisma.emailLog.findMany({ orderBy: { createdAt: "desc" }, take: 2, select: { createdAt: true, kind: true, to: true, outcome: true } }).catch(() => []),
     prisma.conversionEvent.findMany({
       where: { createdAt: { gte: since(24 * DAYS) } },
       select: { name: true, userId: true, sessionId: true, plan: true, createdAt: true },
@@ -282,7 +283,7 @@ export default async function AdminOverviewPage({ searchParams }: { searchParams
       who: a.user?.email ?? "",
     })),
     ...recentPopups.map((p) => ({ when: p.createdAt, icon: <MessageSquare size={12} />, tone: "info" as const, desc: "Risposta popup", meta: p.popup?.title ?? "", who: p.user?.email ?? "anonimo" })),
-    ...recentEmails.map((e) => ({ when: e.createdAt, icon: <Mail size={12} />, tone: "info" as const, desc: `Email ${e.kind}`, meta: "", who: e.to })),
+    ...recentEmails.map((e) => ({ when: e.createdAt, icon: <Mail size={12} />, tone: "info" as const, desc: `Email ${e.kind} · ${emailLogAdminLabel(e.outcome)}`, meta: "", who: e.to })),
   ]
     .sort((a, b) => b.when.getTime() - a.when.getTime())
     .slice(0, 6);

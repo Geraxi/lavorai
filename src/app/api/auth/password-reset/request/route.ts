@@ -5,6 +5,7 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { authLimiter } from "@/lib/rate-limit";
 import { checkOrigin } from "@/lib/csrf";
+import { sendWithinQuota } from "@/lib/email-quota";
 
 export const runtime = "nodejs";
 
@@ -88,15 +89,15 @@ export async function POST(request: NextRequest) {
     } else {
       const resend = new Resend(apiKey);
       const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
-      await resend.emails
-        .send({
+      await sendWithinQuota("password_reset", email, async () => {
+        return resend.emails.send({
           from,
           to: email,
           subject: "Reimposta la tua password LavorAI",
           html: renderResetEmail(resetUrl),
           text: `Reimposta la password:\n\n${resetUrl}\n\nIl link scade tra 30 minuti.`,
-        })
-        .catch((err) => console.error("[pw-reset] resend error", err));
+        });
+      }).catch((err) => console.error("[pw-reset] resend error", err));
     }
 
     return NextResponse.json({ ok: true });

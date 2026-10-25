@@ -86,7 +86,7 @@ export async function sendInboxReply(userId: string, id: string) {
     const day = new Date(now); day.setUTCHours(0,0,0,0);
     const month = new Date(day); month.setUTCDate(1);
     // Reservation and check are serialized; ambiguous attempts still consume capacity.
-    const quota = async (start: Date) => (await tx.emailLog.count({ where: { createdAt: { gte: start } } })) + (await tx.inboxReply.count({ where: { firstAttemptAt: { gte: start }, acceptedAt: null, id: { not: id } } }));
+    const quota = async (start: Date) => (await tx.emailLog.count({ where: { createdAt: { gte: start }, outcome: { in: ["accepted", "delivered"] } } })) + (await tx.inboxReply.count({ where: { firstAttemptAt: { gte: start }, acceptedAt: null, id: { not: id } } }));
     const daily = Number(process.env.RESEND_DAILY_LIMIT) || 95;
     const monthly = Number(process.env.RESEND_MONTHLY_LIMIT) || 2900;
     if (!row.firstAttemptAt && (await quota(day) >= daily || await quota(month) >= monthly)) throw new InboxReplyError("email_quota_reached", 429);
@@ -113,7 +113,7 @@ export async function sendInboxReply(userId: string, id: string) {
         const current = await tx.inboxReply.findUniqueOrThrow({ where: { id } });
         if (current.providerEmailId && current.providerEmailId !== result.data!.id) throw new Error("reply_provider_conflict");
         // Share accepted usage with the existing platform-wide quota ledger.
-        await tx.emailLog.upsert({ where: { id: `inbox-reply:${id}` }, update: {}, create: { id: `inbox-reply:${id}`, kind: "inbox_reply", to: row.recipient } });
+        await tx.emailLog.upsert({ where: { id: `inbox-reply:${id}` }, update: {}, create: { id: `inbox-reply:${id}`, kind: "inbox_reply", to: row.recipient, outcome: "accepted", providerEmailId: result.data!.id } });
         await tx.inboxReply.update({ where: { id }, data: { providerEmailId: result.data!.id, acceptedAt: current.acceptedAt ?? new Date(),
           ...(["sending", "unknown"].includes(current.status) ? { status: "accepted", failureCode: null } : {}), leaseToken: null, leaseUntil: null } });
       });

@@ -274,6 +274,7 @@ async function main() {
     "@/lib/resend-webhook-signature": { verifyResendWebhook: () => true },
     "@/lib/application-delivery": { DELIVERY_EVENT_STATUS: delivery.DELIVERY_EVENT_STATUS, recordApplicationDeliveryEvent: async () => { throw new Error("synthetic_db_failure"); } },
     "@/lib/application-reply-processing": { processInboundReply: async () => { throw new Error("synthetic_db_failure"); } },
+    "@/lib/email-quota": { markEmailLogDelivered: async () => 0 },
   }, globals);
   const request = (type: string) => ({ text: async () => JSON.stringify({ type, data: { email_id: "test" } }), headers: new Headers({ "svix-id": "test" }) });
   assert.equal((await route.POST(request("email.received"))).status, 503, "Missing secret blocks production");

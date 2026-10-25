@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./automation.css";
 import { prisma } from "@/lib/db";
 import { PageTitle, KpiTrendCard, compactNumber } from "../_ui";
+import { EMAIL_LOG_SUCCESS_WHERE } from "@/lib/email-quota";
 import { AdminTestApply } from "@/components/admin-test-apply";
 import { AdminNudges } from "@/components/admin-nudges";
 import { AdminCheckoutFeedback } from "@/components/admin-checkout-feedback";
@@ -43,8 +44,8 @@ export default async function AdminAutomationPage() {
   const [apps14d, appsPrev7, emails14d, emailsPrev7, activeUsers, activePrev, testRows, nudges7d, popups] = await Promise.all([
     prisma.application.findMany({ where: { createdAt: { gte: since(24 * DAYS) } }, select: { createdAt: true, status: true } }),
     prisma.application.count({ where: { createdAt: { gte: since(24 * 14), lt: since(24 * 7) } } }),
-    prisma.emailLog.findMany({ where: { createdAt: { gte: since(24 * DAYS) } }, select: { createdAt: true, kind: true } }).catch(() => [] as { createdAt: Date; kind: string }[]),
-    prisma.emailLog.count({ where: { createdAt: { gte: since(24 * 14), lt: since(24 * 7) } } }).catch(() => 0),
+    prisma.emailLog.findMany({ where: { createdAt: { gte: since(24 * DAYS) }, ...EMAIL_LOG_SUCCESS_WHERE }, select: { createdAt: true, kind: true } }).catch(() => [] as { createdAt: Date; kind: string }[]),
+    prisma.emailLog.count({ where: { createdAt: { gte: since(24 * 14), lt: since(24 * 7) }, ...EMAIL_LOG_SUCCESS_WHERE } }).catch(() => 0),
     prisma.user.count({ where: { lastLoginAt: { gte: since(24 * 30) } } }),
     prisma.user.count({ where: { lastLoginAt: { gte: since(24 * 60), lt: since(24 * 30) } } }),
     prisma.application.findMany({
@@ -53,7 +54,7 @@ export default async function AdminAutomationPage() {
       take: 20,
       select: { id: true, createdAt: true, status: true, portal: true, submitConfirmation: true, canaryLog: true, job: { select: { title: true, company: true, url: true } } },
     }),
-    prisma.emailLog.findMany({ where: { createdAt: { gte: since(24 * 7) }, kind: { contains: "nudge" } }, select: { createdAt: true } }).catch(() => [] as { createdAt: Date }[]),
+    prisma.emailLog.findMany({ where: { createdAt: { gte: since(24 * 7) }, kind: { contains: "nudge" }, ...EMAIL_LOG_SUCCESS_WHERE }, select: { createdAt: true } }).catch(() => [] as { createdAt: Date }[]),
     prisma.adminPopup.findMany({ orderBy: { createdAt: "desc" }, take: 4, select: { id: true, title: true, kind: true, active: true, _count: { select: { responses: true } } } }).catch(() => []),
   ]);
 
@@ -99,7 +100,7 @@ export default async function AdminAutomationPage() {
       <div className="adm-automation-kpis">
         <KpiTrendCard label="Candidature inviate (7g)" value={compactNumber(apps7)} delta={dPct(apps7, appsPrev7)} series={appsSeries} color="hsl(var(--primary))" icon={<Send size={15} />} />
         <KpiTrendCard label="Utenti attivi" value={compactNumber(activeUsers)} delta={dPct(activeUsers, activePrev)} series={appsSeries.map((v, i) => activeUsers * (0.8 + i * 0.015) + v * 0)} color="#60a5fa" icon={<Users size={15} />} />
-        <KpiTrendCard label="Email inviate" value={compactNumber(emails7)} delta={dPct(emails7, emailsPrev7)} series={emailSeries} color="#a78bfa" icon={<Mail size={15} />} />
+        <KpiTrendCard label="Email accettate" value={compactNumber(emails7)} delta={dPct(emails7, emailsPrev7)} series={emailSeries} color="#a78bfa" icon={<Mail size={15} />} />
         <KpiTrendCard label="Tasso di completamento" value={`${rate.toFixed(1)}%`} deltaLabel={`${success14}/${apps14d.length}`} series={succSeries} color="hsl(var(--primary))" icon={<Target size={15} />} />
       </div>
 
@@ -136,7 +137,7 @@ export default async function AdminAutomationPage() {
         <Section icon={<Target size={16} />} title="Statistiche nudge" sub="Andamento degli ultimi 7 giorni." cols="1fr" right={<span className="adm-section-period">7 giorni</span>}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, alignItems: "stretch" }}>
             <div style={{ display: "grid", gap: 8, alignContent: "start" }}>
-              <KV k="Email inviate" v={<b>{nudges7d.length}</b>} />
+              <KV k="Email accettate" v={<b>{nudges7d.length}</b>} />
               <KV k="Tasso apertura" v="—" />
               <KV k="Click completamento" v="—" />
               <KV k="Utenti completati" v="—" />

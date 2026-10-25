@@ -70,8 +70,8 @@ async function main() {
     assert.equal((await cron.runAutoApplyCron()).applicationsEnqueued, 0);
     assert.equal((await cron.runAutoApplyForUser("customer")).applicationsEnqueued, 0);
     const quota = load("src/lib/email-quota.ts");
-    for (const kind of ["cv_ready", "application_sent", "application_manual", "application_no_reply_yet", "daily_summary"]) {
-      assert.deepEqual(await quota.sendWithinQuota(kind, "customer@example.invalid", () => { throw new Error("Must not transmit"); }), { sent: false, reason: "applications_paused" });
+    for (const kind of ["cv_ready", "application_sent", "application_manual", "application_needs_answers", "application_no_reply_yet", "daily_summary"]) {
+      assert.deepEqual(await quota.sendWithinQuota(kind, "customer@example.invalid", () => { throw new Error("Must not transmit"); }), { sent: false, reason: "applications_paused", outcome: null });
     }
     const { z } = await import("zod");
     const routeMocks = { zod: { z }, "next/server": { NextResponse: { json: (body: unknown, options: any) => ({ body, status: options?.status ?? 200 }) } }, "@/lib/session": { getCurrentUser: async () => ({ id: "customer" }) } };

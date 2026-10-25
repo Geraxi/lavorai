@@ -1,0 +1,5 @@
+id,kind,to,created_at,evidence_error_name,evidence_error_code
+# Replace this header-only template with the 24/10 EmailLog evidence export.
+# evidence_error_name / evidence_error_code: set only when a provider error is evidenced.
+# Leave both empty for rows that were logged without a Resend id and without an error.
+# This file is never applied by CI. Nothing is resent from it.
