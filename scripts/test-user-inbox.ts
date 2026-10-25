@@ -101,6 +101,12 @@ async function main() {
     inboundEmail: {
       findUnique: async ({ where }: any) => stored.find((s) => s.providerMessageId === where.provider_providerMessageId.providerMessageId) ?? null,
       create: async ({ data }: any) => { const r = { id: `ie${stored.length + 1}`, ...data }; stored.push(r); return r; },
+      update: async ({ where, data }: any) => {
+        const row = stored.find((s) => s.id === where.id);
+        if (!row) throw new Error("missing inbound email");
+        Object.assign(row, data);
+        return row;
+      },
     },
     application: { findMany: async () => [
       { id: "a1", submittedAt: null, createdAt: new Date("2026-10-20"), job: { company: "Acme", title: "Backend Engineer", url: "https://boards.greenhouse.io/acme/jobs/1" } },
@@ -130,6 +136,7 @@ async function main() {
   assert.ok(!JSON.stringify(errs).includes("greenhouse"), "no sender in logs");
 
   const notices: string[] = [];
+  const holdOffEnv = { USER_NOTIFICATIONS_HOLD: "false", USER_NOTIFICATIONS_NOT_BEFORE: "2026-01-01T00:00:00.000Z" };
   const interview = await processUserInboundEmail({
     ...hydrated,
     providerMessageId: "em_interview",
@@ -138,13 +145,57 @@ async function main() {
     from: "jane@acme.com",
   }, {
     db,
-    env: {},
+    env: holdOffEnv,
     notify: async (n) => { notices.push(n.kind); return true; },
   });
   assert.equal(interview.stored, 1);
   assert.equal(stored.at(-1)?.mailboxKind, "interview");
-  assert.equal(stored.at(-1)?.notifyStatus, "pending");
+  assert.equal(stored.at(-1)?.notifyStatus, "immediate_sent");
   assert.deepEqual(notices, ["interview"]);
+
+  const heldNotices: string[] = [];
+  const heldMail = {
+    ...hydrated,
+    providerMessageId: "em_interview_held",
+    subject: "Interview invitation",
+    text: "We would like to invite you to an interview. Please share your availability.",
+    from: "jane@acme.com",
+  };
+  const heldInterview = await processUserInboundEmail(heldMail, {
+    db,
+    env: { USER_NOTIFICATIONS_HOLD: "true", USER_NOTIFICATIONS_NOT_BEFORE: "2026-01-01T00:00:00.000Z" },
+    notify: async (n) => { heldNotices.push(n.kind); return true; },
+  });
+  assert.equal(heldInterview.stored, 1);
+  const heldInbound = stored.find((row) => row.providerMessageId === "em_interview_held");
+  assert.equal(heldInbound?.mailboxKind, "interview");
+  assert.equal(heldInbound?.notifyStatus, "held");
+  assert.equal(heldInbound?.subject, "Interview invitation");
+  assert.ok(heldInbound?.bodyText);
+  assert.deepEqual(heldNotices, []);
+  const afterLift = await processUserInboundEmail(heldMail, {
+    db,
+    env: holdOffEnv,
+    notify: async (n) => { heldNotices.push(n.kind); return true; },
+  });
+  assert.equal(afterLift.duplicates, 1);
+  assert.equal(heldInbound?.notifyStatus, "held");
+  assert.deepEqual(heldNotices, [], "held inbox notices are not sent after the hold is lifted");
+  const failClosedNotices: string[] = [];
+  await processUserInboundEmail({
+    ...hydrated,
+    providerMessageId: "em_interview_cutoff",
+    subject: "Interview invitation",
+    text: "We would like to invite you to an interview. Please share your availability.",
+    from: "jane@acme.com",
+  }, {
+    db,
+    env: { USER_NOTIFICATIONS_HOLD: "false" },
+    notify: async (n) => { failClosedNotices.push(n.kind); return true; },
+  });
+  assert.equal(stored.find((row) => row.providerMessageId === "em_interview_cutoff")?.notifyStatus, "held");
+  assert.deepEqual(failClosedNotices, [], "unset cutoff holds inbox notices");
+  console.log("PASS inbox notice hold: no notify, row stored/held/visible, no send after lift.");
 
   // ensureUserInbox: idempotent + collision retry
   const rows: any[] = [{ id: "x", userId: "other", slug: "mario.rossi.aaaaaa", address: "mario.rossi.aaaaaa@apply.lavorai.it" }];

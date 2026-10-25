@@ -47,6 +47,7 @@ async function testRepository() {
       applicationReply: { async findMany(query: any) {
         replyQuery = query;
         return [reply("shared-id"), reply("receipt", { kind: "ricevuta" }), reply("bounce", { kind: "bounce" }),
+          reply("held-pending", { notifyStatus: "held", subject: "Held interview", bodyText: "Could you share two slots?" }),
           reply("flagged-secret", { isSecurityCode: true, bodyText: "SECRET-123" }),
           reply("legacy-secret", { fromAddress: "no-reply@us.greenhouse-mail.io", subject: "Security code", bodyText: "Your security code is ABC123" }),
           reply("generic-secret", { fromAddress: "no-reply@workable.test", subject: "One-time code", bodyText: "Your one-time code is 654321" }),
@@ -70,8 +71,9 @@ async function testRepository() {
   assert.deepEqual(JSON.parse(JSON.stringify(gmailQuery.where)), { userId: "owner", archived: false });
   assert.equal(replyQuery.take, 200);
   assert.equal(gmailQuery.take, 200);
-  assert.equal(messages.length, 6);
+  assert.equal(messages.length, 7);
   assert.ok(messages.find((message) => message.id === "application_reply:shared-id"));
+  assert.ok(messages.find((message) => message.id === "application_reply:held-pending"), "held replies stay visible in the inbox query");
   assert.ok(messages.find((message) => message.id === "gmail:shared-id"));
   assert.equal(new Set(messages.map((message) => message.id)).size, messages.length);
   assert.ok(!JSON.stringify(messages).includes("SECRET"));
@@ -245,7 +247,7 @@ async function testInteractions(messages: InboxMessage[]) {
   assert.ok(filterInboxMessages(messages, filterOptions).every((message) => message.jobRelated));
   assert.equal(filterInboxMessages(messages, { ...filterOptions, kind: "bounce" }).length, 1);
   assert.equal(filterInboxMessages(messages, { ...filterOptions, search: "no-match" }).length, 0);
-  assert.equal(filterInboxMessages(messages, { ...filterOptions, search: "Engineer" }).length, 4);
+  assert.equal(filterInboxMessages(messages, { ...filterOptions, search: "Engineer" }).length, 5);
   assert.equal(filterInboxMessages(messages, { ...filterOptions, oldestFirst: true })[0].source, "gmail");
   console.log("[inbound-inbox] Source-specific refresh, repeat-click guards, application switching and filters passed.");
 }
