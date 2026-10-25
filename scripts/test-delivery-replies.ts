@@ -85,6 +85,10 @@ const processing = load("src/lib/application-reply-processing.ts", {
     inboundTargetsEmailTestDestination: () => false,
     tryRecordEmailTestInbound: async () => null,
   },
+  "@/lib/resend-keys": {
+    fetchResendReceivedEmail: async () => { fetchCalls++; return { text: fetchedBody, html: null }; },
+    resendReceivingApiKey: () => env.RESEND_RECEIVING_API_KEY || env.RESEND_API_KEY,
+  },
   "@/lib/application-mailbox": {
     classifyMailbox: async (input: { fromAddress: string; subject?: string | null; bodyText?: string | null }) => {
       const classified = parser.classifyReply(input);

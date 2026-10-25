@@ -40,7 +40,12 @@ const CHECKS: EnvCheck[] = [
   {
     name: "RESEND_API_KEY",
     required: false,
-    description: "Resend API key — senza, email features (verify/reset) sono no-op",
+    description: "Resend sending key — senza, email features (verify/reset) sono no-op. Never log.",
+  },
+  {
+    name: "RESEND_RECEIVING_API_KEY",
+    required: false,
+    description: "Resend receiving key for inbound body fetch. Falls back to RESEND_API_KEY until set. Never log.",
   },
   {
     name: "EMAIL_FROM",

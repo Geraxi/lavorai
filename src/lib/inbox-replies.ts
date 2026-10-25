@@ -7,6 +7,7 @@ import { applicationsPaused } from "@/lib/application-pause";
 import { isApplicationVerificationMessage } from "@/lib/reply-security-message";
 import { canReplyToAddress, InboxReplyError, referenceIds, replyMetadata, replySubject, singleMailbox } from "@/lib/inbox-reply-policy";
 import { inboundApplicationIds } from "@/lib/application-reply-processing";
+import { fetchResendReceivedEmail, resendReceivingApiKey } from "@/lib/resend-keys";
 import type { InboxReply } from "@prisma/client";
 
 export function publicReply(row: InboxReply) {
@@ -23,15 +24,16 @@ export async function getReplyContext(userId: string, sourceId: string) {
   let parent = await prisma.applicationReply.findFirst({ where: { id, application: { userId } }, include: { application: { include: { user: { select: { email: true, name: true } } } } } });
   if (!parent || parent.isSecurityCode || isApplicationVerificationMessage(parent)) throw new InboxReplyError("message_unavailable", 404);
   const replyTo = inboundReplyAddress(parent.applicationId);
-  if (!replyTo || !process.env.RESEND_API_KEY) throw new InboxReplyError("reply_service_unavailable", 503);
+  if (!replyTo || !resendReceivingApiKey()) throw new InboxReplyError("reply_service_unavailable", 503);
   // Legacy rows lack RFC metadata. Fetch authenticated provider data, not email URLs.
   if (!parent.rfcMessageId || !parent.replyToAddress || !parent.directRecipient) {
     if (parent.provider !== "resend" || !parent.providerMessageId) throw new InboxReplyError("thread_metadata_unavailable", 409);
-    const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(parent.providerMessageId)}`, {
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }, cache: "no-store", signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) throw new InboxReplyError("thread_metadata_unavailable", 503);
-    const data = await response.json();
+    let data: { to?: string[] | string; from?: string; [key: string]: unknown };
+    try {
+      data = await fetchResendReceivedEmail(parent.providerMessageId);
+    } catch {
+      throw new InboxReplyError("thread_metadata_unavailable", 503);
+    }
     const ids = inboundApplicationIds(data.to, process.env.INBOUND_EMAIL_DOMAIN!.trim());
     if (ids.length !== 1 || ids[0] !== parent.applicationId || singleMailbox(data.from) !== singleMailbox(parent.fromAddress)) throw new InboxReplyError("reply_routing_unverified", 409);
     const metadata = replyMetadata(data);

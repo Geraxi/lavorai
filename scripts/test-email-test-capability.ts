@@ -661,6 +661,7 @@ async function main() {
       notifyDecision: () => "skipped",
     },
     "@/lib/email-test-capability": await import("../src/lib/email-test-capability"),
+    "@/lib/resend-keys": await import("../src/lib/resend-keys"),
   });
   const receivedAt = new Date("2026-10-25T14:10:00Z");
   const inboundResult = await processing.processInboundReply({
