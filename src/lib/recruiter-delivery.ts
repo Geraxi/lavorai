@@ -1,5 +1,5 @@
 import { applicationsPaused } from "@/lib/application-pause";
-import { authorizeEmailTest, LEGACY_CANARY_ATTEMPT_KEY } from "@/lib/email-test-capability";
+import { authorizeEmailTest, LEGACY_CANARY_ATTEMPT_KEY, recordEmailTestProviderResult } from "@/lib/email-test-capability";
 import { authorizeReleaseCanary, isDedicatedTestDestination, RELEASE_CANARY } from "@/lib/release-email-canary";
 import { recruiterEmailFallbackEnabled } from "@/lib/recruiter-email-fallback";
 import { Resend, type CreateEmailOptions } from "resend";
@@ -170,10 +170,7 @@ export async function sendRecruiterEmailOnce(input: {
       const provider = sanitizeProviderResult(response);
       if (emailTest) {
         try {
-          await prisma.emailTestAttempt.updateMany({
-            where: { attemptKey: input.attemptKey },
-            data: { providerResult: JSON.stringify(provider) },
-          });
+          await recordEmailTestProviderResult(prisma, input.attemptKey, provider);
         } catch {
           // Recording must not change send classification.
         }
