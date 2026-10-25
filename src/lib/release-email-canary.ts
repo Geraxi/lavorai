@@ -20,23 +20,31 @@ export const RELEASE_CANARY = Object.freeze({
   text: "LavorAI controlled diagnostic. THIS IS A TEST, NOT A REAL JOB APPLICATION.\n\nFictional applicant: Alex Example.\nFictional role: Test Engineer at Example Company (fictional).\nFictional experience: Creating synthetic test cases. No customer CV or personal candidate data is included.\n\nThis single email tests LavorAI's persisted send, provider delivery event, reply routing and Inbox display.\nPlease reply with: LavorAI fictional test reply received.\n\nCustomer applications remain paused. This diagnostic does not count as employer interest or an application outcome.",
 });
 
-/** The authorized-canary exception may only target these hosts. */
-export const DEDICATED_TEST_DESTINATION_HOSTS = Object.freeze(["inbound.lavorai.it", "resend.dev"]);
-
-export function dedicatedTestDestinationHost(email: string): string | null {
-  const at = email.lastIndexOf("@");
-  if (at < 1 || at === email.length - 1) return null;
-  return email.slice(at + 1).trim().toLowerCase();
+export function normalizeCanaryAddress(email: string): string {
+  return email.trim().toLowerCase();
 }
 
+/**
+ * Exact canary recipients only. inbound.lavorai.it is not an open host:
+ * user mailbox aliases live there and must not pass this fence.
+ */
+export const DEDICATED_TEST_DESTINATION_ADDRESSES = Object.freeze([
+  normalizeCanaryAddress(RELEASE_CANARY.replyTo),
+  "delivered@resend.dev",
+  "bounced@resend.dev",
+  "complained@resend.dev",
+]);
+
 export function isDedicatedTestDestination(email: string): boolean {
-  const host = dedicatedTestDestinationHost(email);
-  return host !== null && (DEDICATED_TEST_DESTINATION_HOSTS as readonly string[]).includes(host);
+  const normalized = normalizeCanaryAddress(email);
+  const at = normalized.indexOf("@");
+  if (at < 1 || at === normalized.length - 1) return false;
+  return (DEDICATED_TEST_DESTINATION_ADDRESSES as readonly string[]).includes(normalized);
 }
 
 // Public-safe pin for the approved exact [account ID, recipient] tuple.
 // Values remain in server-only deployment configuration, never in this repo.
-// The recipient must also be a dedicated test destination (inbound.lavorai.it or resend.dev).
+// The recipient must also be one of DEDICATED_TEST_DESTINATION_ADDRESSES.
 const PINNED_OWNER_SHA256 = "5b54c0b214f7fc44298a02336a7960b90ae4a5b38e7c6da39f0b048831033ec6";
 export function releaseCanaryOwner(): { userId: string; email: string } | null {
   const userId = process.env.LAVORAI_RELEASE_CANARY_OWNER_ID;

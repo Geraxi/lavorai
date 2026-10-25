@@ -39,9 +39,9 @@ export async function sendRecruiterEmailOnce(input: {
   releaseCanary?: true;
 }, overrides: Partial<Dependencies> = {}): Promise<RecruiterDeliveryResult> {
   const canary = input.releaseCanary === true;
-  // Canary is only the dedicated test user + dedicated test destinations +
-  // the fixed diagnostic application id. Ordinary ids, customers, and employer
-  // mailboxes stay refused while paused/gated.
+  // Canary is only the dedicated test user + exact allowlisted addresses +
+  // the fixed diagnostic application id. User inbound aliases, ordinary ids,
+  // customers, and employer mailboxes stay refused while paused/gated.
   if (canary && (
     input.applicationId !== RELEASE_CANARY.applicationId
     || !isDedicatedTestDestination(input.recipient)
