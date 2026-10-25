@@ -67,12 +67,42 @@ async function testTwoFakeDrainProcessesShareBudget() {
   assert.equal(drainB.usedCount, 0);
 }
 
+function trapReleaseBudgetDb() {
+  const hits: string[] = [];
+  const trap = (label: string) => new Proxy({}, {
+    get(_target, prop) {
+      hits.push(`${label}.${String(prop)}`);
+      throw new Error(`release-budget query ran: ${label}.${String(prop)}`);
+    },
+  });
+  return {
+    hits,
+    db: {
+      applicationReleaseGrant: trap("applicationReleaseGrant"),
+      applicationReleaseBatch: trap("applicationReleaseBatch"),
+    },
+  };
+}
+
+async function testGateUnsetNeverQueriesBudgetTables() {
+  const { hits, db } = trapReleaseBudgetDb();
+  assert.equal(await tryConsumeRecoveryRelease("any", { db, env: {} }), false);
+  assert.equal(await tryConsumeRecoveryRelease("any", { db, env: { APPLICATION_RECOVERY_RELEASE: "off" } }), false);
+  assert.equal(await tryConsumeRecoveryRelease("any", { db, env: { APPLICATION_RECOVERY_RELEASE: "on" } }), false);
+  assert.equal(await tryConsumeRecoveryRelease("listed", { db, env: { APPLICATION_RECOVERY_RELEASE: "other-id" } }), false);
+  assert.deepEqual(hits, [], "unset/off/on-without-ids must not query ApplicationReleaseGrant/Batch");
+}
+
 async function testSourceFences() {
   const recovery = readFileSync("src/lib/application-recovery-release.ts", "utf8");
   assert.match(recovery, /ApplicationReleaseGrant/);
   assert.match(recovery, /usedCount < maxCount|usedCount: \{ lt:/);
   assert.doesNotMatch(recovery, /class RecoveryReleaseBudget/);
   assert.match(recovery, /APPLICATION_RECOVERY_RELEASE_CAP` is not a global cap/);
+  assert.match(recovery, /gate unset\) never queries those unapplied tables/);
+  const gateReturn = recovery.indexOf("if (!cfg.enabled || !cfg.allowIds.has(applicationId)) return false;");
+  const grantQuery = recovery.indexOf("tx.applicationReleaseGrant.create");
+  assert.ok(gateReturn >= 0 && grantQuery > gateReturn, "table access must be after the allowlist return");
   const migration = readFileSync("prisma/migrations/20261025020000_application_release_budget/migration.sql", "utf8");
   assert.match(migration, /Not applied by this change/);
   assert.match(migration, /ApplicationReleaseBatch/);
@@ -80,6 +110,47 @@ async function testSourceFences() {
   assert.match(migration, /activation-1/);
   assert.doesNotMatch(migration, /DROP /);
   assert.doesNotMatch(migration, /ALTER TABLE "Application"/);
+
+  const { readdirSync } = await import("node:fs");
+  const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = `${dir}/${entry.name}`;
+    return entry.isDirectory() ? walk(path) : [path];
+  });
+  const srcFiles = walk("src").filter((path) => path.endsWith(".ts") || path.endsWith(".tsx"));
+  const tableFiles = srcFiles.filter((path) => {
+    const text = readFileSync(path, "utf8");
+    return /applicationReleaseGrant|applicationReleaseBatch|ApplicationReleaseGrant|ApplicationReleaseBatch/.test(text);
+  });
+  assert.deepEqual(tableFiles, ["src/lib/application-recovery-release.ts"], "only the gated helper may name the unapplied tables");
+
+  const callSites = [
+    ["src/lib/queue-drain.ts", 255],
+    ["src/lib/application-claim.ts", 165],
+    ["src/lib/application-claim.ts", 201],
+    ["src/lib/application-worker-gates.ts", 665],
+    ["src/lib/held-application-release.ts", 83],
+  ] as const;
+  for (const [file, line] of callSites) {
+    const text = readFileSync(file, "utf8").split("\n")[line - 1] ?? "";
+    assert.match(text, /tryConsumeRecoveryRelease/, `${file}:${line} must go through the gate`);
+    assert.doesNotMatch(text, /applicationReleaseGrant|applicationReleaseBatch/);
+  }
+
+  for (const file of [
+    "src/lib/email-test-capability.ts",
+    "src/app/api/admin/email-test-send/route.ts",
+    "src/app/api/cron/nudges/route.ts",
+    "src/app/api/cron/mailbox-delivery/route.ts",
+    "src/app/api/cron/mailbox-digest/route.ts",
+    "src/app/api/cron/mailbox-retention/route.ts",
+    "worker.ts",
+    "vercel.json",
+  ]) {
+    const text = readFileSync(file, "utf8");
+    assert.doesNotMatch(text, /applicationReleaseGrant|applicationReleaseBatch|ApplicationReleaseGrant|ApplicationReleaseBatch/);
+  }
+  assert.match(readFileSync("vercel.json", "utf8"), /prisma generate && next build/);
+  assert.doesNotMatch(readFileSync("vercel.json", "utf8"), /migrate/);
 }
 
 async function main() {
@@ -87,8 +158,9 @@ async function main() {
   await testConcurrentSameId();
   await testConcurrentDrainsHonorBudget();
   await testTwoFakeDrainProcessesShareBudget();
+  await testGateUnsetNeverQueriesBudgetTables();
   await testSourceFences();
-  console.log("PASS application release budget: unique per-id grant, atomic global cap of 5, no in-memory RecoveryReleaseBudget");
+  console.log("PASS application release budget: unique per-id grant, atomic global cap of 5, gate unset never queries tables");
 }
 
 main().catch((error) => { console.error(error); process.exit(1); });

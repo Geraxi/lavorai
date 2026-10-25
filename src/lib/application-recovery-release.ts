@@ -97,6 +97,9 @@ export async function tryConsumeRecoveryRelease(
   opts: { db?: ReleaseDb | object; env?: Record<string, string | undefined> } = {},
 ): Promise<boolean> {
   const cfg = recoveryReleaseAllowlist(opts.env ?? process.env);
+  // Fail-closed: ApplicationReleaseGrant / ApplicationReleaseBatch stay
+  // untouched unless APPLICATION_RECOVERY_RELEASE lists this id. Ordinary
+  // production (gate unset) never queries those unapplied tables.
   if (!cfg.enabled || !cfg.allowIds.has(applicationId)) return false;
   const db = (opts.db ?? prisma) as ReleaseDb;
   try {
