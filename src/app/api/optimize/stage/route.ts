@@ -117,7 +117,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, expiresAt: expiresAt.toISOString() });
   } catch (err) {
-    console.error("[/api/optimize/stage]", err);
+    const { logCvExtractionFailure } = await import("@/lib/cv-extraction-log");
+    logCvExtractionFailure("api/optimize-stage", err);
     return NextResponse.json(
       { error: "internal", message: "Errore interno. Riprova." },
       { status: 500 },

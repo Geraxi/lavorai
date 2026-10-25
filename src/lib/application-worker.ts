@@ -361,7 +361,7 @@ async function processApplicationRun(
         !profileRow.lastName &&
         profileRow.experiencesJson === "[]")
     ) {
-      const seeded = await extractFullProfile(cv.extractedText);
+      const seeded = await extractFullProfile(cv.extractedText, app.userId);
       const row = profileToRow(seeded);
       profileRow = await prisma.cVProfile.upsert({
         where: { userId: app.userId },

@@ -2,6 +2,7 @@ import { complete } from "@/lib/ai-router";
 import { parseModelJson, extractJsonBlock, stripFences } from "@/lib/model-json";
 import type { ExtractedProfile } from "@/lib/cv-profile";
 import { extractProfile as extractProfileRegex } from "@/lib/cv-profile";
+import { cvFieldPresence, hashUserRef, logCvExtraction, logCvExtractionFailure } from "@/lib/cv-extraction-log";
 
 /**
  * Extract structured profile from CV text using the configured AI provider.
@@ -54,6 +55,7 @@ function userPrompt(cvText: string): string {
 export async function extractProfileAI(
   cvText: string,
   sessionEmail: string | null,
+  userId?: string,
 ): Promise<ExtractedProfile> {
   if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
     return extractProfileRegex(cvText, sessionEmail);
@@ -62,7 +64,6 @@ export async function extractProfileAI(
   try {
     const ai = await complete({ task: "cv_profile_quick", system: SYSTEM_PROMPT, user: userPrompt(cvText), maxTokens: 600, json: true });
     const raw = ai.text.trim();
-    console.log("[cv-profile-ai] RAW RESPONSE:", raw);
     const cleaned = stripCodeFence(raw);
     const parsed = parseModelJson(cleaned) as Partial<ExtractedProfile>;
 
@@ -84,7 +85,7 @@ export async function extractProfileAI(
           .map((c) => c.trim())
       : [];
 
-    return {
+    const profile = {
       firstName: toTitleCase(str(parsed.firstName)),
       lastName: toTitleCase(str(parsed.lastName)),
       title: str(parsed.title).slice(0, 80),
@@ -102,8 +103,20 @@ export async function extractProfileAI(
       suggestedRoles,
       suggestedCities,
     };
+    logCvExtraction({
+      tag: "cv-profile-ai",
+      model: ai.model,
+      provider: ai.provider,
+      latencyMs: ai.latencyMs,
+      inputTokens: ai.usage?.inputTokens,
+      outputTokens: ai.usage?.outputTokens,
+      parseOk: true,
+      fields: cvFieldPresence(parsed as Record<string, unknown>),
+      userRef: hashUserRef(userId),
+    });
+    return profile;
   } catch (err) {
-    console.error("[cv-profile-ai] AI extraction failed, fallback to regex", err);
+    logCvExtractionFailure("cv-profile-ai", err, { userRef: hashUserRef(userId) });
     return extractProfileRegex(cvText, sessionEmail);
   }
 }

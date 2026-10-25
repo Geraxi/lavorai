@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
     try {
-      const profile = await extractFullProfile(text);
+      const profile = await extractFullProfile(text, u.id);
       if (!profile.firstName && !profile.lastName && !profile.title) {
         results.push({ email: u.email, status: "skip: empty_extract" });
         failed++;

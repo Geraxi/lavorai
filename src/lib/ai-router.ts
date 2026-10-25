@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import { recordAiHealth } from "@/lib/ai-health-state";
-import { recordAiUsage } from "@/lib/ai-usage";
+import { normalizeUsage, recordAiUsage, type ProviderUsage } from "@/lib/ai-usage";
 
 /**
  * Router AI multi-provider. Ogni feature ("task") ha un provider+modello
@@ -101,7 +101,15 @@ export interface CompleteInput {
  * gli input possono contenere CV e altri dati personali. Anthropic resta il
  * fallback per i task configurati nel router.
  */
-export async function complete(input: CompleteInput): Promise<{ text: string; provider: Provider; model: string }> {
+export type CompleteResult = {
+  text: string;
+  provider: Provider;
+  model: string;
+  latencyMs: number;
+  usage: ProviderUsage | null;
+};
+
+export async function complete(input: CompleteInput): Promise<CompleteResult> {
   const order = providerOrder(input.task);
   if (order.length === 0) throw new Error("Nessun provider AI configurato (ANTHROPIC_API_KEY / OPENAI_API_KEY)");
   let lastErr: unknown = null;
@@ -132,14 +140,15 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
             `OpenAI empty response (${res.status}${res.incomplete_details?.reason ? `: ${res.incomplete_details.reason}` : ""})`,
           );
         }
+        const latencyMs = Date.now() - startedAt;
         await recordAiHealth({
           provider: p,
           ok: true,
           model: m,
           source: input.task,
-          latencyMs: Date.now() - startedAt,
+          latencyMs,
         });
-        return { text, provider: p, model: m };
+        return { text, provider: p, model: m, latencyMs, usage: normalizeUsage(p, res.usage) };
       }
       const res = await anthropic().messages.create({
         model: m,
@@ -150,26 +159,29 @@ export async function complete(input: CompleteInput): Promise<{ text: string; pr
       });
       recordAiUsage({ task: input.task, provider: p, model: m, usage: res.usage });
       const text = res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+      const latencyMs = Date.now() - startedAt;
       await recordAiHealth({
         provider: p,
         ok: true,
         model: m,
         source: input.task,
-        latencyMs: Date.now() - startedAt,
+        latencyMs,
       });
-      return { text, provider: p, model: m };
+      return { text, provider: p, model: m, latencyMs, usage: normalizeUsage(p, res.usage) };
     } catch (err) {
       lastErr = err;
+      const status = typeof (err as { status?: number })?.status === "number" ? (err as { status: number }).status : undefined;
+      const errorClass = err instanceof Error ? err.name : "Error";
       await recordAiHealth({
         provider: p,
         ok: false,
         model: m,
         source: input.task,
-        message: err instanceof Error ? err.message : String(err),
+        message: `${errorClass}${status != null ? ` ${status}` : ""}`,
         latencyMs: Date.now() - startedAt,
       });
       if (!isFailoverError(err) || p === order[order.length - 1]) throw err;
-      console.warn(`[ai-router] ${input.task}: ${p}/${m} fallito (${err instanceof Error ? err.message.slice(0, 80) : "?"}), passo al fallback`);
+      console.warn(`[ai-router] ${input.task}: ${p}/${m} fallito (${errorClass}${status != null ? ` ${status}` : ""}), passo al fallback`);
     }
   }
   throw lastErr instanceof Error ? lastErr : new Error("AI: nessun provider disponibile");

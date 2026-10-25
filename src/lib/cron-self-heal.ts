@@ -56,7 +56,8 @@ export async function runCronSelfHeal(): Promise<SelfHealReport> {
     report.cvSkipped = cv.noCv + cv.emptyExtraction + cv.skipped;
   } catch (err) {
     report.cvFailed++;
-    console.error("[self-heal] CV profile backfill failed", err instanceof Error ? err.message : err);
+    const { logCvExtractionFailure } = await import("@/lib/cv-extraction-log");
+    logCvExtractionFailure("cv-profile-backfill", err);
   }
 
   // ---------- 1b. Re-check rows held on a temporary job-availability failure ----------

@@ -8,6 +8,7 @@ import { uploadLimiter } from "@/lib/rate-limit";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { ensureCvProfileFromUpload } from "@/lib/cv-profile-ensure";
+import { hashUserRef, logCvExtractionFailure } from "@/lib/cv-extraction-log";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -73,10 +74,10 @@ export async function POST(request: NextRequest) {
     let parsedProfileJson: string | null = null;
     try {
       const { extractProfileAI } = await import("@/lib/cv-profile-ai");
-      const profile = await extractProfileAI(text, user.email);
+      const profile = await extractProfileAI(text, user.email, user.id);
       parsedProfileJson = JSON.stringify(profile);
     } catch (err) {
-      console.warn("[/api/onboarding/cv] profile extraction failed", err);
+      logCvExtractionFailure("onboarding-cv", err, { userRef: hashUserRef(user.id) });
     }
 
     const cv = await prisma.$transaction(async (tx) => {
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
       chars: text.length,
     });
   } catch (err) {
-    console.error("[/api/onboarding/cv]", err);
+    logCvExtractionFailure("onboarding-cv", err);
     return NextResponse.json(
       {
         error: "internal",

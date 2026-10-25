@@ -1,3 +1,4 @@
+import { logCvExtractionFailure } from "@/lib/cv-extraction-log";
 import mammoth from "mammoth";
 // pdf-parse v1 (API diversa da v2) — v2 richiede DOMMatrix che non esiste
 // in Node serverless (Vercel). v1 usa solo Node primitives.
@@ -40,7 +41,7 @@ export async function parseCV(file: File): Promise<string> {
     );
   } catch (err) {
     if (err instanceof CVParseError) throw err;
-    console.error("[parseCV] parsing fallito", err);
+    logCvExtractionFailure("parseCV", err);
     throw new CVParseError(USER_FRIENDLY_ERROR, err);
   }
 }
@@ -52,7 +53,7 @@ async function parsePdf(buffer: Buffer): Promise<string> {
     const result = await pdfParse(buffer);
     text = sanitizePdfText(result.text ?? "").trim();
   } catch (err) {
-    console.warn("[parseCV] pdf-parse fallito, provo pdfjs-dist", err);
+    logCvExtractionFailure("parseCV-pdf-parse", err);
   }
 
   // Step 2: se pdf-parse ha estratto poco testo o lo ha estratto rotto
@@ -70,7 +71,7 @@ async function parsePdf(buffer: Buffer): Promise<string> {
         text = cleaned;
       }
     } catch (err) {
-      console.warn("[parseCV] fallback pdfjs-dist fallito", err);
+      logCvExtractionFailure("parseCV-pdfjs", err);
     }
   }
 

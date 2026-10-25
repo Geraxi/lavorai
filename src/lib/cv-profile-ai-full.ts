@@ -5,6 +5,7 @@ import {
   EMPTY_PROFILE,
   type CVProfile,
 } from "@/lib/cv-profile-types";
+import { cvFieldPresence, hashUserRef, logCvExtraction, logCvExtractionFailure } from "@/lib/cv-extraction-log";
 
 /**
  * Two jobs:
@@ -87,12 +88,13 @@ Schema esatto (rispondi SOLO con JSON valido, nessun markdown):
 
 NOTA su sezioni aggiuntive del CV: certificazioni, corsi, pubblicazioni, volontariato, progetti personali → aggiungi come esperienza separata in "experiences" (role = nome certificazione/corso/progetto, company = ente emittente/contesto) oppure come bullet dell'esperienza/istruzione più rilevante. NON perdere questa informazione.`;
 
-export async function extractFullProfile(cvText: string): Promise<CVProfile> {
+export async function extractFullProfile(cvText: string, userId?: string): Promise<CVProfile> {
   if (!process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
     return { ...EMPTY_PROFILE };
   }
 
   const clipped = cvText.slice(0, 24000);
+  const userRef = hashUserRef(userId);
   try {
     const response = await complete({
       task: "cv_profile_full",
@@ -106,12 +108,33 @@ export async function extractFullProfile(cvText: string): Promise<CVProfile> {
     const parsed = parseModelJson(cleaned);
     const r = CVProfileSchema.safeParse(clipProfileStrings(parsed));
     if (!r.success) {
-      console.error("[cv-profile-ai-full] schema mismatch", r.error.issues);
+      logCvExtraction({
+        tag: "cv-profile-ai-full",
+        model: response.model,
+        provider: response.provider,
+        latencyMs: response.latencyMs,
+        inputTokens: response.usage?.inputTokens,
+        outputTokens: response.usage?.outputTokens,
+        parseOk: false,
+        errorClass: "SchemaError",
+        userRef,
+      });
       return { ...EMPTY_PROFILE };
     }
+    logCvExtraction({
+      tag: "cv-profile-ai-full",
+      model: response.model,
+      provider: response.provider,
+      latencyMs: response.latencyMs,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens,
+      parseOk: true,
+      fields: cvFieldPresence(r.data as unknown as Record<string, unknown>),
+      userRef,
+    });
     return r.data;
   } catch (err) {
-    console.error("[cv-profile-ai-full] extraction failed", err);
+    logCvExtractionFailure("cv-profile-ai-full", err, { userRef });
     return { ...EMPTY_PROFILE };
   }
 }
@@ -175,7 +198,16 @@ Riscrivi il profilo per questo job, rispettando le regole ferree. Output in ${in
     const parsed = parseModelJson(cleaned);
     const r = CVProfileSchema.safeParse(clipProfileStrings(parsed));
     if (!r.success) {
-      console.error("[tailor] schema mismatch, falling back", r.error.issues);
+      logCvExtraction({
+        tag: "cv-profile-tailor",
+        model: response.model,
+        provider: response.provider,
+        latencyMs: response.latencyMs,
+        inputTokens: response.usage?.inputTokens,
+        outputTokens: response.usage?.outputTokens,
+        parseOk: false,
+        errorClass: "SchemaError",
+      });
       return input.profile;
     }
     // Guardrail anti-allucinazione: tutte le aziende nel tailored devono
@@ -189,12 +221,29 @@ Riscrivi il profilo per questo job, rispettando le regole ferree. Output in ${in
         !srcCompanies.has(e.company.toLowerCase().trim()),
     );
     if (hallucinated) {
-      console.warn("[tailor] hallucinated company detected, using source");
+      logCvExtraction({
+        tag: "cv-profile-tailor",
+        model: response.model,
+        provider: response.provider,
+        latencyMs: response.latencyMs,
+        parseOk: false,
+        errorClass: "SchemaError",
+      });
       return input.profile;
     }
+    logCvExtraction({
+      tag: "cv-profile-tailor",
+      model: response.model,
+      provider: response.provider,
+      latencyMs: response.latencyMs,
+      inputTokens: response.usage?.inputTokens,
+      outputTokens: response.usage?.outputTokens,
+      parseOk: true,
+      fields: cvFieldPresence(r.data as unknown as Record<string, unknown>),
+    });
     return r.data;
   } catch (err) {
-    console.error("[tailor] failed, using source", err);
+    logCvExtractionFailure("cv-profile-tailor", err);
     return input.profile;
   }
 }
