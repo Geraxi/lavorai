@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { extractFullProfile } from "@/lib/cv-profile-ai-full";
+import { hashUserRef, logCvExtractionFailure } from "@/lib/cv-extraction-log";
 import { EMPTY_PROFILE, profileToRow, rowToProfile, type CVProfile } from "@/lib/cv-profile-types";
 import { releaseHeldApplicationsForUser } from "@/lib/held-application-release";
 
@@ -19,7 +20,7 @@ import { releaseHeldApplicationsForUser } from "@/lib/held-application-release";
  */
 
 type DB = Pick<PrismaClient, "cVProfile" | "cVDocument" | "user">;
-type Extract = (cvText: string) => Promise<CVProfile>;
+type Extract = (cvText: string, userId?: string) => Promise<CVProfile>;
 
 export type EnsureCvProfileResult = "created" | "filled" | "exists" | "no_cv" | "empty_extraction" | "skipped" | "error";
 
@@ -64,7 +65,7 @@ export async function ensureCvProfileFromUpload(userId: string, opts: {
     if (existing && !isEmptyProfile(rowToProfile(existing))) return "exists";
     if (!cv || !cv.extractedText || cv.extractedText.trim().length < MIN_CV_TEXT) return "no_cv";
 
-    let profile = await extract(cv.extractedText).catch(() => ({ ...EMPTY_PROFILE }));
+    let profile = await extract(cv.extractedText, userId).catch(() => ({ ...EMPTY_PROFILE }));
     if (!hasUsableContent(profile)) profile = quickProfileFallback(cv.parsedProfileJson) ?? profile;
     if (!hasUsableContent(profile)) return "empty_extraction";
     const email = opts.sessionEmail ?? user.email;
@@ -94,7 +95,7 @@ export async function ensureCvProfileFromUpload(userId: string, opts: {
     }
     return result;
   } catch (err) {
-    console.error("[cv-profile-ensure] failed", err instanceof Error ? err.message : err);
+    logCvExtractionFailure("cv-profile-ensure", err, { userRef: hashUserRef(userId) });
     return "error";
   }
 }

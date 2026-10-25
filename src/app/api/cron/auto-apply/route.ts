@@ -42,7 +42,10 @@ export async function GET(request: NextRequest) {
     // Utenti con CV ma senza CVProfile: backfill con budget breve (function 300s).
     const { backfillMissingCvProfiles } = await import("@/lib/cv-profile-ensure");
     await backfillMissingCvProfiles({ max: 20, budgetMs: 60_000 })
-      .catch((err) => console.error("[cron/auto-apply] CV profile backfill failed", err instanceof Error ? err.message : err));
+      .catch(async (err) => {
+        const { logCvExtractionFailure } = await import("@/lib/cv-extraction-log");
+        logCvExtractionFailure("cv-profile-backfill", err);
+      });
     const stats = await runAutoApplyCron();
     const remaining = 280_000 - (Date.now() - t0);
     let drain = null;

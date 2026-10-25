@@ -38,7 +38,7 @@ export default async function CVPage() {
 
   if (cv && isEmpty) {
     try {
-      const seeded = await extractFullProfile(cv.extractedText);
+      const seeded = await extractFullProfile(cv.extractedText, session.user.id);
       // prefill email dalla session se vuota
       if (!seeded.email && session.user.email) seeded.email = session.user.email;
       await prisma.cVProfile.upsert({

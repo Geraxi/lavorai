@@ -47,6 +47,7 @@ export default async function OnboardingPage() {
         profile = await extractProfileAI(
           cv.extractedText,
           session.user.email ?? null,
+          session.user.id,
         );
         await prisma.cVDocument
           .update({

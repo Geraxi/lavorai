@@ -62,7 +62,8 @@ export async function GET(
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch (error) {
-    console.error("[api/applications/:id/cv-preview]", error);
+    const { logCvExtractionFailure } = await import("@/lib/cv-extraction-log");
+    logCvExtractionFailure("cv-preview", error);
     return NextResponse.json({ error: "read_failed" }, { status: 500 });
   }
 }

@@ -49,7 +49,7 @@ export async function POST() {
     }
   }
 
-  const profile = await extractFullProfile(cv.extractedText);
+  const profile = await extractFullProfile(cv.extractedText, user.id);
   const row = profileToRow(profile);
   await prisma.cVProfile.upsert({
     where: { userId: user.id },
