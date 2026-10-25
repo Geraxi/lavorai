@@ -7,6 +7,7 @@ import { applicationsPaused } from "@/lib/application-pause";
 import { isApplicationVerificationMessage } from "@/lib/reply-security-message";
 import { canReplyToAddress, InboxReplyError, referenceIds, replyMetadata, replySubject, singleMailbox } from "@/lib/inbox-reply-policy";
 import { inboundApplicationIds } from "@/lib/application-reply-processing";
+import { resendReceivingApiKey, resendSendingApiKey } from "@/lib/resend-keys";
 import type { InboxReply } from "@prisma/client";
 
 export function publicReply(row: InboxReply) {
@@ -23,12 +24,12 @@ export async function getReplyContext(userId: string, sourceId: string) {
   let parent = await prisma.applicationReply.findFirst({ where: { id, application: { userId } }, include: { application: { include: { user: { select: { email: true, name: true } } } } } });
   if (!parent || parent.isSecurityCode || isApplicationVerificationMessage(parent)) throw new InboxReplyError("message_unavailable", 404);
   const replyTo = inboundReplyAddress(parent.applicationId);
-  if (!replyTo || !process.env.RESEND_API_KEY) throw new InboxReplyError("reply_service_unavailable", 503);
+  if (!replyTo || !resendReceivingApiKey()) throw new InboxReplyError("reply_service_unavailable", 503);
   // Legacy rows lack RFC metadata. Fetch authenticated provider data, not email URLs.
   if (!parent.rfcMessageId || !parent.replyToAddress || !parent.directRecipient) {
     if (parent.provider !== "resend" || !parent.providerMessageId) throw new InboxReplyError("thread_metadata_unavailable", 409);
     const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(parent.providerMessageId)}`, {
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }, cache: "no-store", signal: AbortSignal.timeout(15000),
+      headers: { Authorization: `Bearer ${resendReceivingApiKey()}` }, cache: "no-store", signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) throw new InboxReplyError("thread_metadata_unavailable", 503);
     const data = await response.json();
@@ -73,7 +74,7 @@ export async function saveInboxDraft(userId: string, input: { id: string; parent
 /** Only invoked by an authenticated explicit Send/Retry. No automatic resends. */
 export async function sendInboxReply(userId: string, id: string) {
   if (applicationsPaused()) throw new InboxReplyError("sending_paused", 503);
-  if (!process.env.RESEND_API_KEY) throw new InboxReplyError("reply_service_unavailable", 503);
+  if (!resendSendingApiKey()) throw new InboxReplyError("reply_service_unavailable", 503);
   const now = new Date(); const token = randomUUID();
   const claimed = await emailTransaction(async tx => {
     const row = await tx.inboxReply.findFirst({ where: { id, application: { userId } } });
@@ -86,7 +87,7 @@ export async function sendInboxReply(userId: string, id: string) {
     const day = new Date(now); day.setUTCHours(0,0,0,0);
     const month = new Date(day); month.setUTCDate(1);
     // Reservation and check are serialized; ambiguous attempts still consume capacity.
-    const quota = async (start: Date) => (await tx.emailLog.count({ where: { createdAt: { gte: start } } })) + (await tx.inboxReply.count({ where: { firstAttemptAt: { gte: start }, acceptedAt: null, id: { not: id } } }));
+    const quota = async (start: Date) => (await tx.emailLog.count({ where: { createdAt: { gte: start }, outcome: { in: ["accepted", "delivered"] } } })) + (await tx.inboxReply.count({ where: { firstAttemptAt: { gte: start }, acceptedAt: null, id: { not: id } } }));
     const daily = Number(process.env.RESEND_DAILY_LIMIT) || 95;
     const monthly = Number(process.env.RESEND_MONTHLY_LIMIT) || 2900;
     if (!row.firstAttemptAt && (await quota(day) >= daily || await quota(month) >= monthly)) throw new InboxReplyError("email_quota_reached", 429);
@@ -96,7 +97,7 @@ export async function sendInboxReply(userId: string, id: string) {
   if (!claimed.send) return claimed.row;
   const row = claimed.row;
   try {
-    const result = await new Resend(process.env.RESEND_API_KEY).emails.send({ from: row.fromAddress, to: row.recipient,
+    const result = await new Resend(resendSendingApiKey()).emails.send({ from: row.fromAddress, to: row.recipient,
       replyTo: row.replyToAddress, subject: row.subject, text: row.bodyText,
       headers: { "In-Reply-To": row.inReplyTo, "References": row.referencesHeader },
       tags: [{ name: "inbox_reply_id", value: row.id }],
@@ -113,7 +114,7 @@ export async function sendInboxReply(userId: string, id: string) {
         const current = await tx.inboxReply.findUniqueOrThrow({ where: { id } });
         if (current.providerEmailId && current.providerEmailId !== result.data!.id) throw new Error("reply_provider_conflict");
         // Share accepted usage with the existing platform-wide quota ledger.
-        await tx.emailLog.upsert({ where: { id: `inbox-reply:${id}` }, update: {}, create: { id: `inbox-reply:${id}`, kind: "inbox_reply", to: row.recipient } });
+        await tx.emailLog.upsert({ where: { id: `inbox-reply:${id}` }, update: {}, create: { id: `inbox-reply:${id}`, kind: "inbox_reply", to: row.recipient, outcome: "accepted", providerEmailId: result.data!.id } });
         await tx.inboxReply.update({ where: { id }, data: { providerEmailId: result.data!.id, acceptedAt: current.acceptedAt ?? new Date(),
           ...(["sending", "unknown"].includes(current.status) ? { status: "accepted", failureCode: null } : {}), leaseToken: null, leaseUntil: null } });
       });

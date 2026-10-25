@@ -80,6 +80,7 @@ const processing = load("src/lib/application-reply-processing.ts", {
   "node:crypto": crypto, "@/lib/db": { prisma }, "@/lib/reply-parser": parser,
   "@/lib/reply-security-message": replySecurity, "@/lib/application-delivery": delivery,
   "@/lib/apply-reply-to-application": projection,
+  "@/lib/resend-keys": { resendReceivingApiKey: () => env.RESEND_API_KEY },
   "@/lib/inbound/service": { recordAtsConfirmation: async () => true },
   "@/lib/application-mailbox": {
     classifyMailbox: async (input: { fromAddress: string; subject?: string | null; bodyText?: string | null }) => {
@@ -274,6 +275,7 @@ async function main() {
     "@/lib/resend-webhook-signature": { verifyResendWebhook: () => true },
     "@/lib/application-delivery": { DELIVERY_EVENT_STATUS: delivery.DELIVERY_EVENT_STATUS, recordApplicationDeliveryEvent: async () => { throw new Error("synthetic_db_failure"); } },
     "@/lib/application-reply-processing": { processInboundReply: async () => { throw new Error("synthetic_db_failure"); } },
+    "@/lib/email-quota": { markEmailLogDelivered: async () => 0 },
   }, globals);
   const request = (type: string) => ({ text: async () => JSON.stringify({ type, data: { email_id: "test" } }), headers: new Headers({ "svix-id": "test" }) });
   assert.equal((await route.POST(request("email.received"))).status, 503, "Missing secret blocks production");

@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { renderBrandEmail } from "@/lib/email-brand";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { EMAIL_LOG_SUCCESS_WHERE, sendWithinQuota } from "@/lib/email-quota";
 
 const site = () => process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 const from = () => process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>";
@@ -50,7 +50,7 @@ export async function runCheckoutFeedbackCampaign(opts: { dryRun?: boolean } = {
         user: { select: { id: true, email: true, name: true, locale: true, stripeSubscriptionId: true, subscriptionStatus: true } },
       },
     }),
-    prisma.emailLog.findMany({ where: { kind: "checkout_feedback" }, select: { to: true } }),
+    prisma.emailLog.findMany({ where: { kind: "checkout_feedback", ...EMAIL_LOG_SUCCESS_WHERE }, select: { to: true } }),
   ]);
   const alreadyContacted = new Set(logs.map((entry) => entry.to.toLowerCase()));
   const seen = new Set<string>();
@@ -86,12 +86,11 @@ export async function runCheckoutFeedbackCampaign(opts: { dryRun?: boolean } = {
     });
     try {
       const sent = await sendWithinQuota("checkout_feedback", user.email, async () => {
-        const { error } = await new Resend(apiKey).emails.send({
+        return new Resend(apiKey).emails.send({
           from: from(), to: user.email,
           subject: en ? "What stopped you from completing LavorAI?" : "Cosa ti ha fermato prima di completare LavorAI?",
           html: email.html, text: email.text,
         });
-        if (error) throw new Error(JSON.stringify(error));
       });
       if (sent.sent) result.sent++; else result.skipped++;
       result.details.push({ email: user.email, status: sent.sent ? "sent" : (sent.reason ?? "skipped") });

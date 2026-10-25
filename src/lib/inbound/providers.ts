@@ -53,9 +53,10 @@ export const resendInbound: InboundProvider = {
   },
   async hydrate(mail, env, f = fetch) {
     if (mail.text?.trim() || mail.html?.trim()) return mail;
-    if (!env.RESEND_API_KEY) throw new Error("inbound_body_credentials_unavailable");
+    const apiKey = env.RESEND_RECEIVING_API_KEY?.trim() || env.RESEND_API_KEY?.trim();
+    if (!apiKey) throw new Error("inbound_body_credentials_unavailable");
     const res = await f(`https://api.resend.com/emails/receiving/${encodeURIComponent(mail.providerMessageId)}`, {
-      headers: { Authorization: `Bearer ${env.RESEND_API_KEY}` }, signal: AbortSignal.timeout(15_000), cache: "no-store",
+      headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(15_000), cache: "no-store",
     });
     if (!res.ok) throw new Error(`inbound_body_unavailable_${res.status}`);
     const full = (await res.json()) as Record<string, unknown>;

@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyResendWebhook } from "@/lib/resend-webhook-signature";
 import { DELIVERY_EVENT_STATUS, recordApplicationDeliveryEvent } from "@/lib/application-delivery";
 import { processInboundReply, type InboundEmail } from "@/lib/application-reply-processing";
+import { markEmailLogDelivered } from "@/lib/email-quota";
 
 export const runtime = "nodejs";
 
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
     const attemptId = Array.isArray(tags) ? tags.find((tag) => tag?.name === "attempt_id")?.value : tags?.attempt_id;
     const recipients = Array.isArray(event.data.to) ? event.data.to : typeof event.data.to === "string" ? [event.data.to] : [];
     const replyId = Array.isArray(tags) ? tags.find((tag) => tag?.name === "inbox_reply_id")?.value : tags?.inbox_reply_id;
+    if (event.type === "email.delivered") await markEmailLogDelivered(event.data.email_id);
     if (await recordInboxReplyEvent({ providerEmailId: event.data.email_id, type: event.type, occurredAt,
       replyId: typeof replyId === "string" ? replyId : undefined, recipients })) return NextResponse.json({ ok: true });
     await recordApplicationDeliveryEvent({ providerEventId, providerEmailId: event.data.email_id, type: event.type, occurredAt,

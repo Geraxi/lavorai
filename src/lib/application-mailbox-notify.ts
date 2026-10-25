@@ -84,7 +84,7 @@ export async function sendMailboxPriorityNotice(input: {
       ...rendered,
       idempotencyKey: `mailbox-priority/${input.message.id}`,
     });
-    if (!id) throw new Error("mailbox_priority_not_accepted");
+    return id ? { data: { id } } : { error: { name: "mailbox_priority_not_accepted" } };
   });
   return result.sent;
 }
@@ -103,7 +103,7 @@ export async function sendMailboxDigest(input: {
       ...rendered,
       idempotencyKey: `mailbox-digest/${input.userEmail}/${new Date().toISOString().slice(0, 10)}`,
     });
-    if (!id) throw new Error("mailbox_digest_not_accepted");
+    return id ? { data: { id } } : { error: { name: "mailbox_digest_not_accepted" } };
   });
   return result.sent;
 }

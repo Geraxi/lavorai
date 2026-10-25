@@ -1,19 +1,35 @@
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
-
-/**
- * Quota email platform-wide. Resend free tier: 100/giorno, 3000/mese.
- * Lavoriamo a margine (95/2900 di default) per evitare hard-fail.
- * Override via env: RESEND_DAILY_LIMIT, RESEND_MONTHLY_LIMIT.
- *
- * Quando ci avviciniamo/superiamo il limite:
- *  - NON inviamo l'email
- *  - MA la candidatura continua il suo processing (AI, DB, Playwright)
- *  - logghiamo il fatto
- */
+import { redactEmailAddress, scrubResendSecretText } from "@/lib/resend-keys";
 
 const DEFAULT_DAILY = 95;
 const DEFAULT_MONTHLY = 2900;
+
+export const EMAIL_SUCCESS_OUTCOMES = ["accepted", "delivered"] as const;
+export const EMAIL_ATTEMPT_OUTCOMES = ["attempted", "failed", "unknown"] as const;
+
+export type EmailLogOutcome =
+  | "attempted"
+  | "accepted"
+  | "delivered"
+  | "failed"
+  | "unknown"
+  | "acceptance_unknown"
+  | "provider_failed"
+  | "unknown_not_accepted";
+
+export type ProviderSendResult = {
+  data?: { id?: string | null } | null;
+  error?: { name?: string; statusCode?: number | null; message?: string | null } | null;
+};
+
+export type EmailSendResult = {
+  sent: boolean;
+  reason: string | null;
+  outcome: EmailLogOutcome | null;
+  logId?: string;
+  providerEmailId?: string;
+};
 
 function limits(): { daily: number; monthly: number } {
   const daily = Number(process.env.RESEND_DAILY_LIMIT ?? DEFAULT_DAILY);
@@ -24,21 +40,79 @@ function limits(): { daily: number; monthly: number } {
   };
 }
 
-function dayStart(): Date {
-  const d = new Date();
+function dayStart(now = new Date()): Date {
+  const d = new Date(now);
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
-function monthStart(): Date {
-  const d = new Date();
+function monthStart(now = new Date()): Date {
+  const d = new Date(now);
   d.setDate(1);
   d.setHours(0, 0, 0, 0);
   return d;
 }
 
-/** Ritorna { allowed, reason } — allowed=false se siamo oltre il limite. */
-export async function canSendEmail(): Promise<{
+export const EMAIL_LOG_SUCCESS_WHERE = { outcome: { in: [...EMAIL_SUCCESS_OUTCOMES] } };
+const SUCCESS_WHERE = EMAIL_LOG_SUCCESS_WHERE;
+
+export function classifyProviderResult(result: ProviderSendResult | void): {
+  outcome: "accepted" | "failed" | "unknown";
+  providerEmailId?: string;
+  errorName?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  statusCode?: number;
+} {
+  if (!result) return { outcome: "unknown" };
+  if (result.error) {
+    const message = result.error.message?.trim();
+    return {
+      outcome: "failed",
+      errorName: result.error.name ?? "provider_error",
+      errorCode: result.error.statusCode != null ? String(result.error.statusCode) : undefined,
+      errorMessage: message ? scrubResendSecretText(message) : undefined,
+      statusCode: result.error.statusCode ?? undefined,
+    };
+  }
+  const id = result.data?.id?.trim();
+  if (id) return { outcome: "accepted", providerEmailId: id };
+  return { outcome: "unknown" };
+}
+
+export function emailLogAdminLabel(outcome: string | null | undefined): string {
+  switch (outcome) {
+    case "accepted": return "accettata dal provider";
+    case "delivered": return "consegnata";
+    case "failed":
+    case "provider_failed": return "fallita";
+    case "unknown":
+    case "acceptance_unknown":
+    case "unknown_not_accepted": return "esito sconosciuto";
+    case "attempted": return "tentata";
+    default: return "esito non etichettato";
+  }
+}
+
+export function attemptBackoffMs(failedOrUnknownCount: number): number {
+  if (failedOrUnknownCount <= 0) return 0;
+  return Math.min(60, 2 ** Math.min(failedOrUnknownCount, 6)) * 60_000;
+}
+
+export type EmailQuotaDb = {
+  emailLog: {
+    count: typeof prisma.emailLog.count;
+    create: typeof prisma.emailLog.create;
+    update: typeof prisma.emailLog.update;
+    findMany: typeof prisma.emailLog.findMany;
+    updateMany: typeof prisma.emailLog.updateMany;
+  };
+};
+
+export async function canSendEmail(
+  db: EmailQuotaDb = prisma,
+  now = new Date(),
+): Promise<{
   allowed: boolean;
   reason: string | null;
   today: number;
@@ -48,38 +122,59 @@ export async function canSendEmail(): Promise<{
 }> {
   const { daily, monthly } = limits();
   const [today, month] = await Promise.all([
-    prisma.emailLog.count({ where: { createdAt: { gte: dayStart() } } }),
-    prisma.emailLog.count({ where: { createdAt: { gte: monthStart() } } }),
+    db.emailLog.count({ where: { createdAt: { gte: dayStart(now) }, ...SUCCESS_WHERE } }),
+    db.emailLog.count({ where: { createdAt: { gte: monthStart(now) }, ...SUCCESS_WHERE } }),
   ]);
   if (today >= daily) {
-    return {
-      allowed: false,
-      reason: `daily limit reached (${today}/${daily})`,
-      today,
-      month,
-      daily,
-      monthly,
-    };
+    return { allowed: false, reason: `daily limit reached (${today}/${daily})`, today, month, daily, monthly };
   }
   if (month >= monthly) {
-    return {
-      allowed: false,
-      reason: `monthly limit reached (${month}/${monthly})`,
-      today,
-      month,
-      daily,
-      monthly,
-    };
+    return { allowed: false, reason: `monthly limit reached (${month}/${monthly})`, today, month, daily, monthly };
   }
   return { allowed: true, reason: null, today, month, daily, monthly };
 }
 
+export async function hasSuccessfulSendRecently(
+  to: string,
+  kind: string,
+  cooldownHours: number,
+  db: EmailQuotaDb = prisma,
+  now = new Date(),
+): Promise<boolean> {
+  const since = new Date(now.getTime() - cooldownHours * 3600_000);
+  const recent = await db.emailLog.count({
+    where: { to, kind, createdAt: { gte: since }, ...SUCCESS_WHERE },
+  });
+  return recent > 0;
+}
+
+export async function shouldThrottleAttempts(
+  to: string,
+  kind: string,
+  db: EmailQuotaDb = prisma,
+  now = new Date(),
+): Promise<{ throttled: boolean; waitMs: number }> {
+  const since = new Date(now.getTime() - 6 * 3600_000);
+  const recent = await db.emailLog.findMany({
+    where: { to, kind, createdAt: { gte: since }, outcome: { in: [...EMAIL_ATTEMPT_OUTCOMES] } },
+    orderBy: { createdAt: "desc" },
+    take: 8,
+    select: { createdAt: true },
+  });
+  if (recent.length === 0) return { throttled: false, waitMs: 0 };
+  const waitMs = attemptBackoffMs(recent.length);
+  const elapsed = now.getTime() - recent[0].createdAt.getTime();
+  return { throttled: elapsed < waitMs, waitMs };
+}
+
 export type EmailKind =
   | "release_canary"
+  | "email_test"
   | "cv_ready"
   | "payment_failed"
   | "application_sent"
   | "application_manual"
+  | "application_needs_answers"
   | "application_no_reply_yet"
   | "daily_summary"
   | "signup_verify"
@@ -100,45 +195,95 @@ export type EmailKind =
   | "checkout_feedback"
   | "founder_alert"
   | "reactivation_blast"
+  | "inbox_forward"
+  | "inbox_reply"
   | "other";
 
-/** Marca un'email come effettivamente consegnata per il tracking quota. */
-export async function recordEmailSent(
-  kind: EmailKind,
-  to: string,
-): Promise<void> {
+const PAUSED_KINDS = [
+  "cv_ready", "application_sent", "application_manual", "application_needs_answers",
+  "application_no_reply_yet", "daily_summary",
+];
+
+/** @deprecated Use sendWithinQuota; accepted rows are written only after a provider id. */
+export async function recordEmailSent(kind: EmailKind, to: string, db: EmailQuotaDb = prisma): Promise<void> {
   try {
-    await prisma.emailLog.create({ data: { kind, to } });
+    await db.emailLog.create({ data: { kind, to, outcome: "accepted" } });
   } catch (err) {
     console.warn("[email-quota] log write failed", err);
   }
 }
 
-/**
- * Helper unificato: verifica quota + invia + logga. Se bloccato ritorna
- * { sent: false, reason }. Il chiamante decide se loggare/avvisare.
- */
+export async function markEmailLogDelivered(providerEmailId: string, db: EmailQuotaDb = prisma): Promise<number> {
+  if (!providerEmailId.trim()) return 0;
+  const result = await db.emailLog.updateMany({
+    where: { providerEmailId, outcome: "accepted" },
+    data: { outcome: "delivered" },
+  });
+  return result.count;
+}
+
 export async function sendWithinQuota(
   kind: EmailKind,
   to: string,
-  sendFn: () => Promise<void>,
-): Promise<{ sent: boolean; reason: string | null }> {
-  if (applicationsPaused() && ["cv_ready", "application_sent", "application_manual", "application_no_reply_yet", "daily_summary"].includes(kind)) {
-    return { sent: false, reason: "applications_paused" };
+  sendFn: () => Promise<ProviderSendResult>,
+  opts: { db?: EmailQuotaDb; now?: Date } = {},
+): Promise<EmailSendResult> {
+  const db = opts.db ?? prisma;
+  const now = opts.now ?? new Date();
+  if (applicationsPaused() && PAUSED_KINDS.includes(kind)) {
+    return { sent: false, reason: "applications_paused", outcome: null };
   }
-  const q = await canSendEmail();
+  const throttle = await shouldThrottleAttempts(to, kind, db, now);
+  if (throttle.throttled) {
+    return { sent: false, reason: "attempt_throttled", outcome: null };
+  }
+  const q = await canSendEmail(db, now);
   if (!q.allowed) {
-    console.warn(
-      `[email-quota] SKIP ${kind} → ${to} (${q.reason}; today=${q.today}/${q.daily} month=${q.month}/${q.monthly})`,
-    );
-    return { sent: false, reason: q.reason };
+    console.warn(`[email-quota] SKIP kind=${kind} to=${redactEmailAddress(to)} (${q.reason}; today=${q.today}/${q.daily} month=${q.month}/${q.monthly})`);
+    return { sent: false, reason: q.reason, outcome: null };
   }
+  let logId: string | undefined;
+  let crossedProvider = false;
   try {
-    await sendFn();
-    await recordEmailSent(kind, to);
-    return { sent: true, reason: null };
+    const attempted = await db.emailLog.create({
+      data: { kind, to, outcome: "attempted" },
+    });
+    logId = attempted.id;
+    crossedProvider = true;
+    const raw = await sendFn();
+    const classified = classifyProviderResult(raw);
+    await db.emailLog.update({
+      where: { id: attempted.id },
+      data: {
+        outcome: classified.outcome,
+        providerEmailId: classified.providerEmailId ?? null,
+        errorName: classified.errorName ?? null,
+        errorCode: classified.errorCode ?? null,
+      },
+    });
+    if (classified.outcome === "accepted") {
+      return { sent: true, reason: null, outcome: "accepted", logId, providerEmailId: classified.providerEmailId };
+    }
+    console.warn("[email-quota] send_failed", {
+      path: "sendWithinQuota",
+      kind,
+      to: redactEmailAddress(to),
+      outcome: classified.outcome,
+      errorName: classified.errorName ?? null,
+      statusCode: classified.statusCode ?? null,
+      message: classified.errorMessage ?? null,
+    });
+    return { sent: false, reason: classified.outcome === "failed" ? "provider_rejected" : "provider_acceptance_unknown", outcome: classified.outcome, logId };
   } catch (err) {
-    // Non registriamo il log se il send ha fallito → non conta verso la quota
+    if (logId) {
+      await db.emailLog.update({
+        where: { id: logId },
+        data: {
+          outcome: crossedProvider ? "unknown" : "failed",
+          errorName: err instanceof Error ? err.name : "send_error",
+        },
+      }).catch(() => {});
+    }
     throw err;
   }
 }

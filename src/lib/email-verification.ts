@@ -1,6 +1,7 @@
 import { randomBytes, createHash } from "node:crypto";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
+import { sendWithinQuota } from "@/lib/email-quota";
 
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 
@@ -50,12 +51,14 @@ export async function sendVerificationEmail(
     const m = COPY[loc];
     const resend = new Resend(apiKey);
     const from = process.env.EMAIL_FROM ?? "LavorAI <onboarding@resend.dev>";
-    await resend.emails.send({
-      from,
-      to: email,
-      subject: m.subject,
-      html: renderVerifyEmail(verifyUrl, loc),
-      text: `${m.subject}:\n\n${verifyUrl}\n\n${m.expiry}`,
+    await sendWithinQuota("signup_verify", email, async () => {
+      return resend.emails.send({
+        from,
+        to: email,
+        subject: m.subject,
+        html: renderVerifyEmail(verifyUrl, loc),
+        text: `${m.subject}:\n\n${verifyUrl}\n\n${m.expiry}`,
+      });
     });
   } catch (err) {
     console.error("[email-verify] send failed", err);

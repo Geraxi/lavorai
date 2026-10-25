@@ -13,6 +13,7 @@ import { moveFile } from "@/lib/storage";
 import { effectiveTier, type Tier } from "@/lib/billing";
 import { CredentialsSignin } from "next-auth";
 import { createHash } from "node:crypto";
+import { sendWithinQuota } from "@/lib/email-quota";
 
 /**
  * NextAuth v5 config — Email magic link via Resend.
@@ -167,15 +168,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new Error("Email provider non configurato. Contatta il supporto.");
         }
         const resend = new Resend(apiKey);
-        const { error } = await resend.emails.send({
-          from: EMAIL_FROM,
-          to: identifier,
-          subject: "Il tuo link di accesso a LavorAI",
-          html: renderLoginEmail(url),
-          text: `Accedi a LavorAI\n\nClicca per completare l'accesso: ${url}\n\nIl link scade tra 24 ore.\n\n— LavorAI`,
+        const result = await sendWithinQuota("magic_link", identifier, async () => {
+          return resend.emails.send({
+            from: EMAIL_FROM,
+            to: identifier,
+            subject: "Il tuo link di accesso a LavorAI",
+            html: renderLoginEmail(url),
+            text: `Accedi a LavorAI\n\nClicca per completare l'accesso: ${url}\n\nIl link scade tra 24 ore.\n\n— LavorAI`,
+          });
         });
-        if (error) {
-          console.error("[auth] Resend error", error);
+        if (!result.sent) {
+          console.error("[auth] Resend not accepted", result.reason, result.outcome);
           throw new Error("Invio email fallito. Riprova tra qualche minuto.");
         }
       },
@@ -306,17 +309,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       });
       // Primo signup → welcome email
       if (!user.email) return;
+      const welcomeTo = user.email;
       try {
         const apiKey = process.env.RESEND_API_KEY;
         if (!apiKey) return;
         const resend = new Resend(apiKey);
         const siteUrl =
           process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-        await resend.emails.send({
-          from: EMAIL_FROM,
-          to: user.email,
-          subject: "Benvenuto in LavorAI 🎯",
-          html: renderWelcomeEmail(siteUrl),
+        await sendWithinQuota("welcome", welcomeTo, async () => {
+          return resend.emails.send({
+            from: EMAIL_FROM,
+            to: welcomeTo,
+            subject: "Benvenuto in LavorAI 🎯",
+            html: renderWelcomeEmail(siteUrl),
+          });
         });
       } catch (err) {
         console.error("[auth.events.createUser] welcome email failed", err);

@@ -56,10 +56,15 @@ function harness(options: HarnessOptions = {}) {
       user: { findUnique: async () => ({ id: "owner", email: "owner@example.test", name: "<img> Owner", locale: options.locale ?? "en" }) },
       emailLog: { count: async (query: unknown) => { queries.cooldown = query; return options.cooldown ? 1 : 0; } },
     } },
-    "@/lib/email-quota": { sendWithinQuota: async (kind: string, to: string, callback: () => Promise<void>) => {
+    "@/lib/resend-keys": { redactEmailAddress: (value: string) => value[0] + "***@redacted.test", scrubResendSecretText: (value: string) => value },
+    "@/lib/email-quota": { EMAIL_LOG_SUCCESS_WHERE: { outcome: { in: ["accepted", "delivered"] } }, sendWithinQuota: async (kind: string, to: string, callback: () => Promise<unknown>) => {
       quotaCalls++; assert.equal(kind, "daily_summary"); assert.equal(to, "owner@example.test");
       if (options.quota === false) return { sent: false, reason: "daily quota" };
-      await callback(); successfulQuotaLogs++; return { sent: true, reason: null };
+      const raw = await callback() as { data?: { id?: string }; error?: unknown } | void;
+      if (raw && (raw.error || !raw.data?.id)) {
+        return { sent: false, reason: raw.error ? "provider_rejected" : "provider_acceptance_unknown", outcome: raw.error ? "failed" : "unknown" };
+      }
+      successfulQuotaLogs++; return { sent: true, reason: null, outcome: "accepted" };
     } },
   };
   const source = ts.transpileModule(readFileSync("src/lib/daily-summary.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;

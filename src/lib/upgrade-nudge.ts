@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { trialState } from "@/lib/billing";
 import { prisma } from "@/lib/db";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { EMAIL_LOG_SUCCESS_WHERE, sendWithinQuota } from "@/lib/email-quota";
 import { isTestAccount } from "@/lib/admin";
 
 /**
@@ -127,6 +127,7 @@ export async function findUpgradeCandidates(opts?: {
           kind: "upgrade_nudge",
           to: u.email,
           createdAt: { gte: cooldownSince },
+          ...EMAIL_LOG_SUCCESS_WHERE,
         },
       });
       if (recent > 0) continue;
@@ -199,14 +200,13 @@ export async function runUpgradeNudges(opts?: {
     try {
       const result = await sendWithinQuota("upgrade_nudge", c.email, async () => {
         const { subject, html, text } = renderUpgrade(c);
-        const { error } = await resend.emails.send({
+        return resend.emails.send({
           from: process.env.RESEND_FROM_OVERRIDE ?? "LavorAI <noreply@lavorai.it>",
           to: c.email,
           subject,
           html,
           text,
         });
-        if (error) throw new Error(JSON.stringify(error));
       });
       if (result.sent) {
         sent++;

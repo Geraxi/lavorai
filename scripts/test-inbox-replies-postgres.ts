@@ -34,6 +34,7 @@ const service = load("src/lib/inbox-replies.ts", {
   "@/lib/application-pause": { applicationsPaused:()=>process.env.APPLICATIONS_PAUSED !== "false" },
   "@/lib/reply-security-message": { isApplicationVerificationMessage }, "@/lib/inbox-reply-policy":policy,
   "@/lib/application-reply-processing": { inboundApplicationIds:inboundIds },
+  "@/lib/resend-keys": { resendReceivingApiKey: () => process.env.RESEND_API_KEY, resendSendingApiKey: () => process.env.RESEND_API_KEY },
 }, { fetch: async()=> {providerFetch++; throw new Error("External network forbidden in test");} });
 const api = load("src/app/api/inbox/replies/route.ts", {
   "next/server": {NextRequest,NextResponse},zod:{z},"@/lib/auth":{auth:async()=>sessionId?{user:{id:sessionId}}:null},

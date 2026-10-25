@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
+import { emailLogAdminLabel } from "@/lib/email-quota";
 import { UserActions } from "./_user-actions";
 import { PageTitle, KpiTrendCard, TierChip, compactNumber } from "../_ui";
 import { Users, CheckCircle2, Activity, UserPlus, Search, MoreVertical, Copy, Mail, RotateCcw, Ban, Trash2, Download, X } from "lucide-react";
@@ -120,11 +121,11 @@ export default async function AdminUsersPage({ searchParams }: PageProps) {
     : [];
   const selectedLog = selected && tab === "log"
     ? await Promise.all([
-        prisma.emailLog.findMany({ where: { to: { equals: selected.email, mode: "insensitive" } }, orderBy: { createdAt: "desc" }, take: 40, select: { kind: true, createdAt: true } }),
+        prisma.emailLog.findMany({ where: { to: { equals: selected.email, mode: "insensitive" } }, orderBy: { createdAt: "desc" }, take: 40, select: { kind: true, createdAt: true, outcome: true } }),
         prisma.subscriptionEvent.findMany({ where: { userId: selected.id }, orderBy: { createdAt: "desc" }, take: 20, select: { action: true, reason: true, createdAt: true } }).catch(() => []),
       ]).then(([emails, events]) =>
         [
-          ...emails.map((e) => ({ at: e.createdAt, what: `Email · ${e.kind}` })),
+          ...emails.map((e) => ({ at: e.createdAt, what: `Email · ${e.kind} · ${emailLogAdminLabel(e.outcome)}` })),
           ...events.map((e) => ({ at: e.createdAt, what: `Abbonamento · ${e.action}${e.reason ? ` (${e.reason})` : ""}` })),
         ].sort((a, b) => b.at.getTime() - a.at.getTime()),
       )

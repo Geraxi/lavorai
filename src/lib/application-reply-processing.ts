@@ -13,6 +13,7 @@ import {
   mailboxNotifyMode,
   notifyDecision,
 } from "@/lib/application-mailbox";
+import { resendReceivingApiKey } from "@/lib/resend-keys";
 
 export interface InboundEmail {
   email_id: string;
@@ -51,7 +52,7 @@ export function inboundApplicationIds(to: InboundEmail["to"], domain: string): s
 
 export async function hydrateInboundEmail(data: InboundEmail): Promise<InboundEmail> {
   if (data.text?.trim() || data.html?.trim()) return data;
-  const apiKey = process.env.RESEND_API_KEY;
+  const apiKey = resendReceivingApiKey();
   if (!apiKey) throw new Error("inbound_body_credentials_unavailable");
   const response = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(data.email_id)}`, {
     headers: { Authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(15_000), cache: "no-store",

@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { emailLogAdminLabel } from "@/lib/email-quota";
 
 export const runtime = "nodejs";
 
 /**
- * Admin read-only: elenca email inviate recentemente (EmailLog) +
+ * Admin read-only: elenca EmailLog recenti (esito, non "inviate") +
  * applicazioni consegnate via email con Resend — per capire recapiti
  * reali + eventuali bounce/spam.
  *
@@ -28,8 +29,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "user_not_found" }, { status: 404 });
   }
 
-  // Email inviate dalla piattaforma (EmailLog) — filtriamo per recipient
-  // o destinatari correlati all'utente. EmailLog salva `to` grezzo.
+  // EmailLog della piattaforma: esito, non "inviate". EmailLog salva `to` grezzo.
   const recentLogs = await prisma.emailLog.findMany({
     orderBy: { createdAt: "desc" },
     take: 60,
@@ -70,6 +70,11 @@ export async function GET(req: NextRequest) {
       kind: l.kind,
       to: l.to,
       createdAt: l.createdAt,
+      outcome: l.outcome,
+      providerEmailId: l.providerEmailId,
+      errorName: l.errorName,
+      errorCode: l.errorCode,
+      label: emailLogAdminLabel(l.outcome),
     })),
   });
 }

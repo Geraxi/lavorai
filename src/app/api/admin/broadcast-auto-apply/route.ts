@@ -3,7 +3,7 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin, isTestAccount } from "@/lib/admin";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { EMAIL_LOG_SUCCESS_WHERE, sendWithinQuota } from "@/lib/email-quota";
 import { signOneClick } from "@/lib/one-click-token";
 import { renderBrandEmail } from "@/lib/email-brand";
 
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
     where: { suspendedAt: null, emailVerified: { not: null } },
     select: { id: true, email: true, name: true, locale: true, preferences: { select: { autoApplyMode: true } }, _count: { select: { applications: { where: { status: "awaiting_consent" } } } } },
   });
-  const already = new Set((await prisma.emailLog.findMany({ where: { kind: "auto_apply_invite" }, select: { to: true } })).map((l) => l.to.toLowerCase()));
+  const already = new Set((await prisma.emailLog.findMany({ where: { kind: "auto_apply_invite", ...EMAIL_LOG_SUCCESS_WHERE }, select: { to: true } })).map((l) => l.to.toLowerCase()));
   const targets = users.filter((u) => !isTestAccount(u.email) && !isAdmin(u.email) && u.preferences?.autoApplyMode !== "auto" && !already.has(u.email.toLowerCase()));
 
   const apiKey = process.env.RESEND_API_KEY;
@@ -41,8 +41,7 @@ export async function POST(req: NextRequest) {
     const { subject, html, text } = render(u, waiting, link, site);
     try {
       const r = await sendWithinQuota("auto_apply_invite", u.email, async () => {
-        const { error } = await resend.emails.send({ from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>", to: u.email, subject, html, text });
-        if (error) throw new Error(JSON.stringify(error));
+        return resend.emails.send({ from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>", to: u.email, subject, html, text });
       });
       details.push({ email: u.email, waiting, status: r.sent ? "sent" : r.reason ?? "skipped" });
       if (r.sent) sent++;

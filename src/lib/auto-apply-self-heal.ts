@@ -2,6 +2,7 @@ import { historicalRetriesBlocked } from "@/lib/application-rollout";
 import { prisma } from "@/lib/db";
 import { enqueueApplication } from "@/lib/application-queue";
 import { Resend } from "resend";
+import { sendWithinQuota } from "@/lib/email-quota";
 import { recoverStuckApplications } from "@/lib/application-claim";
 import { maxDrainAttempts } from "@/lib/drain-limits";
 import { HELD_MESSAGE_PREFIX } from "@/lib/queue-sendability";
@@ -321,10 +322,12 @@ async function sendAdminAlert(r: SelfHealReport): Promise<void> {
     lines.push(`ℹ️ Archived ${r.garbageSessionsArchived} garbage sessions.`);
   }
 
-  await resend.emails.send({
-    from: process.env.RESEND_FROM_OVERRIDE ?? "LavorAI <noreply@lavorai.it>",
-    to: adminEmail,
-    subject: `[LavorAI self-heal] ${r.creditExhaustedUsers.length > 0 ? "🔴 ACTION REQUIRED" : "auto-recovered"}`,
-    text: lines.join("\n\n"),
+  await sendWithinQuota("founder_alert", adminEmail, async () => {
+    return resend.emails.send({
+      from: process.env.RESEND_FROM_OVERRIDE ?? "LavorAI <noreply@lavorai.it>",
+      to: adminEmail,
+      subject: `[LavorAI self-heal] ${r.creditExhaustedUsers.length > 0 ? "🔴 ACTION REQUIRED" : "auto-recovered"}`,
+      text: lines.join("\n\n"),
+    });
   });
 }

@@ -94,6 +94,7 @@ async function main() {
     "resend": { Resend: class { constructor() { throw new Error("Unexpected email"); } } },
     "bcryptjs": {}, "@/lib/db": { prisma: db }, "@/lib/storage": {},
     "@/lib/billing": billing, "node:crypto": await import("node:crypto"),
+    "@/lib/email-quota": { sendWithinQuota: async () => ({ sent: true, reason: null, outcome: "accepted" }) },
   };
   const code = ts.transpileModule(readFileSync("src/lib/auth.ts", "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },

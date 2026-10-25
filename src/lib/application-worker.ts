@@ -26,7 +26,7 @@ import { detectLanguage } from "@/lib/lang-detect";
 import { clipJobDescriptionForAi } from "@/lib/scrapers/posting-description";
 import { renderCVPdf } from "@/lib/cv-pdf";
 import { coverLetterHintsFor } from "@/lib/cover-letter-hints";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { hasSuccessfulSendRecently, sendWithinQuota } from "@/lib/email-quota";
 import { inboundReplyAddress } from "@/lib/email";
 import { alertFounder, isCreditExhaustedError } from "@/lib/founder-alert";
 import { humanContext, launchBrowser } from "@/lib/browser";
@@ -1201,7 +1201,7 @@ async function sendApplicationEmail(input: {
   const company = input.job.company ?? "l'azienda";
 
   await sendWithinQuota("cv_ready", input.to, async () => {
-    await resend.emails.send({
+    return resend.emails.send({
       from,
       to: input.to,
       subject: `CV pronto per "${input.job.title}" — ${company}`,
@@ -1515,11 +1515,7 @@ async function shouldSuppressForCooldown(
   cooldownHours: number,
 ): Promise<boolean> {
   try {
-    const since = new Date(Date.now() - cooldownHours * 3600_000);
-    const recent = await prisma.emailLog.count({
-      where: { to: email, kind, createdAt: { gte: since } },
-    });
-    return recent > 0;
+    return await hasSuccessfulSendRecently(email, kind, cooldownHours);
   } catch {
     return false; // in caso di errore DB, non blocchiamo (fail-open)
   }
@@ -1609,7 +1605,7 @@ async function notifyApplicationSent(applicationId: string): Promise<void> {
       }\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`;
 
   await sendWithinQuota("application_sent", app.user.email, async () => {
-    await resend.emails.send({
+    return resend.emails.send({
       from,
       to: app.user.email,
       subject,
@@ -1752,7 +1748,7 @@ async function notifyApplicationManual(applicationId: string): Promise<void> {
       : `Ciao ${firstName},\n\nIl tuo CV per "${jobTitle}" presso ${company} è pronto, ma non sono riuscito a inviarlo in automatico (career page custom o form non standard).\n\nApri l'annuncio e clicca "Apply" — i file sono già allegati: ${jobUrl}\n\n— LavorAI`;
 
   await sendWithinQuota("application_manual", app.user.email, async () => {
-    await resend.emails.send({
+    return resend.emails.send({
       from,
       to: app.user.email,
       subject,
@@ -1775,6 +1771,12 @@ async function notifyNeedsAnswers(applicationId: string): Promise<void> {
     },
   });
   if (!app) return;
+  if (await shouldSuppressForCooldown(app.user.email, "application_needs_answers", 6)) {
+    console.log(
+      `[worker] ${applicationId} suppressed application_needs_answers (cooldown 6h — daily_summary catch-up)`,
+    );
+    return;
+  }
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return;
 
@@ -1796,8 +1798,8 @@ async function notifyNeedsAnswers(applicationId: string): Promise<void> {
       ? `Hi ${firstName},\n\nThe application for "${jobTitle}" at ${company} has a few required questions only you can answer (e.g. work authorization, screening questions).\n\nAnswer them once here and we'll submit automatically (and reuse your answers next time): ${url}\n\n— LavorAI`
       : `Ciao ${firstName},\n\nLa candidatura per "${jobTitle}" presso ${company} ha alcune domande obbligatorie a cui solo tu puoi rispondere (es. diritto al lavoro, domande di screening).\n\nRispondi una volta qui e inviamo in automatico (e riusiamo le risposte la prossima volta): ${url}\n\n— LavorAI`;
 
-  await sendWithinQuota("application_manual", app.user.email, async () => {
-    await resend.emails.send({
+  await sendWithinQuota("application_needs_answers", app.user.email, async () => {
+    return resend.emails.send({
       from,
       to: app.user.email,
       subject,

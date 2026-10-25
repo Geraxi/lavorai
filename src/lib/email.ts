@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { sendWithinQuota } from "@/lib/email-quota";
 
 let cachedClient: Resend | null = null;
 
@@ -94,7 +95,8 @@ export async function forwardReplyToUser(input: {
       : "";
   const safeBody = escapeHtml(`${notice}${input.bodyText ?? ""}`).replace(/\n/g, "<br/>");
 
-  const result = await client.emails.send({
+  const result = await sendWithinQuota("inbox_forward", input.userEmail, async () => {
+    return client.emails.send({
     from: getFromAddress(),
     to: input.userEmail,
     replyTo,
@@ -121,10 +123,11 @@ export async function forwardReplyToUser(input: {
   </div>
 </body></html>`,
   }, options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined);
-  if (result.error || !result.data?.id) {
-    throw new Error(`Reply forwarding not accepted (${result.error?.name ?? "missing_provider_id"})`);
+  });
+  if (!result.sent || !result.providerEmailId) {
+    throw new Error(`Reply forwarding not accepted (${result.reason ?? result.outcome ?? "missing_provider_id"})`);
   }
-  return result.data.id;
+  return result.providerEmailId;
 }
 
 type Locale = "it" | "en";
@@ -183,25 +186,27 @@ export async function sendOptimizedCVEmail(
   const loc: Locale = input.locale === "en" ? "en" : "it";
   const m = COPY[loc];
 
-  const { error } = await client.emails.send({
-    from: getFromAddress(),
-    to: input.to,
-    subject: m.subject,
-    html: renderHtml({ ...input, siteUrl, locale: loc }),
-    attachments: [
-      {
-        filename: m.cvFilename,
-        content: input.cvBuffer,
-      },
-      {
-        filename: m.letterFilename,
-        content: input.coverLetterBuffer,
-      },
-    ],
+  const result = await sendWithinQuota("other", input.to, async () => {
+    return client.emails.send({
+      from: getFromAddress(),
+      to: input.to,
+      subject: m.subject,
+      html: renderHtml({ ...input, siteUrl, locale: loc }),
+      attachments: [
+        {
+          filename: m.cvFilename,
+          content: input.cvBuffer,
+        },
+        {
+          filename: m.letterFilename,
+          content: input.coverLetterBuffer,
+        },
+      ],
+    });
   });
 
-  if (error) {
-    console.error("[sendOptimizedCVEmail] Resend error", error);
+  if (!result.sent) {
+    console.error("[sendOptimizedCVEmail] Resend not accepted", result.reason, result.outcome);
     throw new Error(
       "Email send failed. Please retry in a few minutes or contact support.",
     );

@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { EMAIL_LOG_SUCCESS_WHERE, sendWithinQuota } from "@/lib/email-quota";
 import { titleMatchesAnyRole } from "@/lib/role-match";
 import { isTestAccount } from "@/lib/admin";
 import { esc, renderBrandEmail } from "@/lib/email-brand";
@@ -61,7 +61,7 @@ export async function runWeeklyDigest(opts?: {
   });
 
   const recentLogs = await prisma.emailLog.findMany({
-    where: { kind: KIND, createdAt: { gte: new Date(Date.now() - 6 * 24 * 3600 * 1000) } },
+    where: { kind: KIND, createdAt: { gte: new Date(Date.now() - 6 * 24 * 3600 * 1000) }, ...EMAIL_LOG_SUCCESS_WHERE },
     select: { to: true },
   });
   const alreadySent = new Set(recentLogs.map((l) => l.to.toLowerCase()));
@@ -94,14 +94,13 @@ export async function runWeeklyDigest(opts?: {
     try {
       const r = await sendWithinQuota(KIND, u.email, async () => {
         const { subject, html, text } = renderDigest(u, roles, matches);
-        const { error } = await resend.emails.send({
+        return resend.emails.send({
           from: process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>",
           to: u.email,
           subject,
           html,
           text,
         });
-        if (error) throw new Error(JSON.stringify(error));
       });
       if (r.sent) { sent++; details.push({ email: u.email, matches: matches.length, status: "sent" }); }
       else { skipped++; details.push({ email: u.email, matches: matches.length, status: r.reason ?? "skipped" }); }

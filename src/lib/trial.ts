@@ -1,7 +1,7 @@
 import { trialEnd } from "@/lib/billing";
 import { prisma } from "@/lib/db";
 import { Resend } from "resend";
-import { sendWithinQuota } from "@/lib/email-quota";
+import { EMAIL_LOG_SUCCESS_WHERE, sendWithinQuota } from "@/lib/email-quota";
 import { renderBrandEmail } from "@/lib/email-brand";
 import { trialState } from "@/lib/billing";
 import { isTestAccount } from "@/lib/admin";
@@ -59,8 +59,7 @@ export async function sendTrialStartedEmail(u: { id: string; email: string; name
     footnote: en ? "When the trial ends, platform features are locked until you activate a subscription." : "Alla fine della prova le funzionalità sono bloccate finché non attivi un abbonamento.",
   });
   return sendWithinQuota(opts?.granted ? "trial_granted" : "trial_started", u.email, async () => {
-    const { error } = await new Resend(apiKey).emails.send({ from: from(), to: u.email, subject: opts?.granted ? (en ? "Pro is on for you, 7 days" : "Pro attivo per te, 7 giorni") : en ? "Your 7 days of Pro start now" : "I tuoi 7 giorni di Pro iniziano adesso", html, text });
-    if (error) throw new Error(JSON.stringify(error));
+    return new Resend(apiKey).emails.send({ from: from(), to: u.email, subject: opts?.granted ? (en ? "Pro is on for you, 7 days" : "Pro attivo per te, 7 giorni") : en ? "Your 7 days of Pro start now" : "I tuoi 7 giorni di Pro iniziano adesso", html, text });
   });
 }
 
@@ -78,7 +77,7 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
       _count: { select: { cvDocuments: true, applications: { where: { status: "success" } } } },
     },
   });
-  const logs = await prisma.emailLog.findMany({ where: { kind: { in: ["trial_ending", "trial_ended", "trial_day_3", "trial_day_6"] } }, select: { kind: true, to: true } });
+  const logs = await prisma.emailLog.findMany({ where: { kind: { in: ["trial_ending", "trial_ended", "trial_day_3", "trial_day_6"] }, ...EMAIL_LOG_SUCCESS_WHERE }, select: { kind: true, to: true } });
   const sentKey = new Set(logs.map((l) => `${l.kind}:${l.to.toLowerCase()}`));
 
   for (const u of users) {
@@ -149,8 +148,7 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
           : kind === "trial_day_6"
             ? (en ? "Your Pro trial is nearly over" : "La tua prova Pro sta per finire")
             : (en ? "Your Pro trial has ended" : "La tua prova Pro è finita");
-        const { error } = await new Resend(apiKey).emails.send({ from: from(), to: u.email, subject, html: email.html, text: email.text });
-        if (error) throw new Error(JSON.stringify(error));
+        return new Resend(apiKey).emails.send({ from: from(), to: u.email, subject, html: email.html, text: email.text });
       });
       if (r.sent) { if (kind === "trial_day_3") res.day3++; else if (kind === "trial_day_6") { res.day6++; res.ending++; } else res.ended++; } else res.skipped++;
       res.details.push(`${u.email} ${kind} ${r.sent ? "sent" : r.reason}`);

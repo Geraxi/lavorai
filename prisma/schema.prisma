@@ -1014,9 +1014,17 @@ model EmailLog {
   kind      String   // "cv_ready" | "application_sent" | "signup_verify" | "password_reset" | "welcome" | "magic_link" | "other"
   to        String
   createdAt DateTime @default(now())
+  /// attempted | accepted | delivered | failed | unknown
+  /// Legacy 24/10 labels: provider_failed | unknown_not_accepted
+  outcome         String?
+  providerEmailId String?
+  errorName       String?
+  errorCode       String?
 
   @@index([createdAt])
   @@index([kind, createdAt])
+  @@index([to, kind, createdAt])
+  @@index([providerEmailId])
 }
 
 /// CV staged BEFORE user account exists (from /optimize public form).
