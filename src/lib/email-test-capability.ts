@@ -37,6 +37,7 @@ export const EMAIL_TEST = Object.freeze({
   description: "Owner-approved diagnostic with fictional applicant data only. This is not a job vacancy or an application to an employer.",
   url: "https://example.invalid/lavorai-email-test-20261025",
   subjectPrefix: "[LavorAI TEST · FICTIONAL] Email delivery check",
+  header: "X-LavorAI-Email-Test",
   text: "LavorAI controlled email test. THIS IS A TEST, NOT A REAL JOB APPLICATION.\n\nFictional applicant: Alex Example.\nFictional role: Test Engineer at Example Company (fictional).\nFictional experience: Creating synthetic test cases. No customer CV or personal candidate data is included.\n\nThis single email tests persisted send, provider acceptance, delivery events and inbound routing.\nCustomer applications remain paused. This diagnostic does not count as employer interest or an application outcome.",
 });
 
@@ -75,6 +76,18 @@ export type EmailTestRequest = {
   payload: CreateEmailOptions;
 };
 
+/**
+ * EMAIL_TEST_USER_ID (fallback ATS_TEST_USER_ID) must be an existing User.id.
+ * The route does not create the user. Missing id → email_test_user_missing.
+ * Fields the route reads: User.id only (email is selected and unused).
+ * It then attaches the diagnostic Application to that userId.
+ *
+ * The test send goes to the chosen dedicated destination, not to User.email.
+ * Other outgoing mail can still target User.email while APPLICATIONS_PAUSED
+ * is on (onboarding nudge, trial, weekly digest, daily summary, mailbox
+ * digest). Use a dedicated owned address that isTestAccount() skips
+ * (e.g. @lavorai.it) and UserPreferences.mailboxNotifyMode = "off".
+ */
 export function emailTestUserId(env: NodeJS.ProcessEnv = process.env): string | null {
   const id = (env.EMAIL_TEST_USER_ID ?? env.ATS_TEST_USER_ID ?? "").trim();
   return id || null;
@@ -107,15 +120,127 @@ export function emailTestAttemptKey(runKey: string, destination: string): string
   return `email-test/${runKey}/${normalizeCanaryAddress(destination)}`;
 }
 
-export function emailTestPayload(destination: string): CreateEmailOptions {
+export function emailTestSubject(runKey: string, token: string): string {
+  return `${EMAIL_TEST.subjectPrefix} · run ${runKey} · ${token}`;
+}
+
+export function emailTestPayload(
+  destination: string,
+  correlation: { runKey: string; token: string },
+): CreateEmailOptions {
   const to = normalizeCanaryAddress(destination);
   return {
     from: EMAIL_TEST.from,
     to,
     replyTo: EMAIL_TEST.replyTo,
-    subject: `${EMAIL_TEST.subjectPrefix} · ${to}`,
+    subject: emailTestSubject(correlation.runKey, correlation.token),
     text: EMAIL_TEST.text,
+    headers: { [EMAIL_TEST.header]: correlation.token },
   };
+}
+
+function headerValue(
+  headers: Record<string, string | string[] | undefined> | null | undefined,
+  name: string,
+): string | null {
+  if (!headers) return null;
+  const want = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== want) continue;
+    const text = Array.isArray(value) ? value[0] : value;
+    const token = text?.trim() ?? "";
+    return token || null;
+  }
+  return null;
+}
+
+export function extractEmailTestToken(input: {
+  headers?: Record<string, string | string[] | undefined> | null;
+  subject?: string | null;
+}): string | null {
+  const fromHeader = headerValue(input.headers, EMAIL_TEST.header);
+  const subject = (input.subject ?? "").replace(/^\s*(?:(?:re|fw|fwd|i|tr|wg)\s*:\s*)+/i, "").trim();
+  const marker = `${EMAIL_TEST.subjectPrefix} · run `;
+  const at = subject.indexOf(marker);
+  let fromSubject: string | null = null;
+  if (at >= 0) {
+    const rest = subject.slice(at + marker.length);
+    const sep = rest.indexOf(" · ");
+    if (sep >= 0) {
+      const runKey = rest.slice(0, sep).trim();
+      const token = rest.slice(sep + 3).trim();
+      if (parseEmailTestRunKey(runKey) && token && !/\s/.test(token)) fromSubject = token;
+    }
+  }
+  if (fromHeader && fromSubject && fromHeader !== fromSubject) return null;
+  return fromHeader ?? fromSubject;
+}
+
+export function inboundTargetsEmailTestDestination(to: unknown): boolean {
+  const recipients = (Array.isArray(to) ? to : [to ?? ""]).flatMap((value) => String(value).split(","));
+  const wanted = normalizeCanaryAddress(RELEASE_CANARY.replyTo);
+  return recipients.some((value) => {
+    const address = value.trim().match(/^(?:[^<>]*<)?([^<>\s]+@[^<>\s]+)>?$/i)?.[1];
+    return address ? normalizeCanaryAddress(address) === wanted : false;
+  });
+}
+
+function parseResultJson(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw?.trim()) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+export function inboundReceiptFromProviderResult(raw: string | null | undefined): {
+  receivedAt: string;
+  providerMessageId: string;
+} | null {
+  const parsed = parseResultJson(raw);
+  const receivedAt = typeof parsed.inboundReceivedAt === "string" ? parsed.inboundReceivedAt : "";
+  const providerMessageId = typeof parsed.inboundProviderMessageId === "string" ? parsed.inboundProviderMessageId : "";
+  if (!receivedAt || !providerMessageId || !Number.isFinite(new Date(receivedAt).getTime())) return null;
+  return { receivedAt, providerMessageId };
+}
+
+export async function tryRecordEmailTestInbound(
+  input: {
+    to?: unknown;
+    headers?: Record<string, string | string[] | undefined> | null;
+    subject?: string | null;
+    receivedAt: Date;
+    providerMessageId: string;
+  },
+  db: {
+    emailTestAttempt: {
+      findUnique: typeof prisma.emailTestAttempt.findUnique;
+      update: typeof prisma.emailTestAttempt.update;
+    };
+  } = prisma,
+): Promise<"recorded" | "unmatched_skip" | null> {
+  if (!inboundTargetsEmailTestDestination(input.to)) return null;
+  const token = extractEmailTestToken(input);
+  if (!token) return "unmatched_skip";
+  const attempt = await db.emailTestAttempt.findUnique({ where: { id: token } })
+    ?? await db.emailTestAttempt.findUnique({ where: { attemptKey: token } });
+  if (!attempt) return "unmatched_skip";
+  if (!(input.receivedAt.getTime() > new Date(attempt.createdAt).getTime())) return "unmatched_skip";
+  const already = inboundReceiptFromProviderResult(attempt.providerResult);
+  if (already?.providerMessageId === input.providerMessageId) return "recorded";
+  if (already) return "recorded";
+  const merged = {
+    ...parseResultJson(attempt.providerResult),
+    inboundReceivedAt: input.receivedAt.toISOString(),
+    inboundProviderMessageId: input.providerMessageId,
+  };
+  await db.emailTestAttempt.update({
+    where: { id: attempt.id },
+    data: { providerResult: JSON.stringify(merged) },
+  });
+  return "recorded";
 }
 
 export function emailTestProvenance(applicationId: string, runKey: string, destination: string): string {
@@ -129,11 +254,18 @@ export function emailTestProvenance(applicationId: string, runKey: string, desti
   });
 }
 
+function sameValue(expected: unknown, actual: unknown): boolean {
+  if (expected === actual) return true;
+  if (!expected || !actual || typeof expected !== "object" || typeof actual !== "object") return false;
+  const exp = expected as Record<string, unknown>;
+  const act = actual as Record<string, unknown>;
+  const keys = Object.keys(exp);
+  return keys.length === Object.keys(act).length
+    && keys.every((key) => Object.hasOwn(act, key) && sameValue(exp[key], act[key]));
+}
+
 function exactPayload(expected: CreateEmailOptions, actual: CreateEmailOptions): boolean {
-  const exp = expected as unknown as Record<string, unknown>;
-  const act = actual as unknown as Record<string, unknown>;
-  return Object.keys(act).length === Object.keys(exp).length
-    && Object.keys(exp).every((key) => Object.hasOwn(act, key) && act[key] === exp[key]);
+  return sameValue(expected, actual);
 }
 
 const FIXTURE_SELECT = {
@@ -176,7 +308,12 @@ export async function authorizeEmailTest(
   if (typeof input.payload.to === "string" && !isDedicatedTestDestination(input.payload.to)) return false;
   if (input.attemptKey !== emailTestAttemptKey(input.runKey, input.recipient)) return false;
   if (input.recipientProvenanceJson !== emailTestProvenance(input.applicationId, input.runKey, input.recipient)) return false;
-  if (!exactPayload(emailTestPayload(input.recipient), input.payload)) return false;
+  const token = extractEmailTestToken({
+    headers: input.payload.headers as Record<string, string> | undefined,
+    subject: typeof input.payload.subject === "string" ? input.payload.subject : null,
+  });
+  if (!token) return false;
+  if (!exactPayload(emailTestPayload(input.recipient, { runKey: input.runKey, token }), input.payload)) return false;
   const app = await db.application.findUnique({ where: { id: input.applicationId }, select: FIXTURE_SELECT });
   return !!app && fixtureMatches(app, userId);
 }
@@ -286,22 +423,21 @@ function parseStoredProvider(raw: string | null | undefined): EmailTestProviderR
   }
 }
 
-async function readDelivery(db: EmailTestTables, applicationId: string, attemptKey: string, destination: string): Promise<EmailTestDelivery> {
-  const [attempt, inbound, grant] = await Promise.all([
+async function readDelivery(db: EmailTestTables, _applicationId: string, attemptKey: string, _destination: string): Promise<EmailTestDelivery> {
+  const [attempt, grant] = await Promise.all([
     db.applicationEmailAttempt.findUnique({
       where: { attemptKey },
       select: { status: true, providerEmailId: true, acceptedAt: true, lastEventType: true },
     }),
-    db.inboundEmail.findFirst({
-      where: { applicationId, toAddress: destination },
-      orderBy: { receivedAt: "desc" },
-      select: { id: true },
-    }),
     db.emailTestAttempt.findUnique({
       where: { attemptKey },
-      select: { providerResult: true },
+      select: { providerResult: true, createdAt: true },
     }),
   ]);
+  const receipt = inboundReceiptFromProviderResult(grant?.providerResult);
+  const inbound = grant && receipt && new Date(receipt.receivedAt).getTime() > new Date(grant.createdAt).getTime()
+    ? { id: receipt.providerMessageId }
+    : null;
   return emailTestDeliveryFromRecords({
     attempt,
     inbound,
@@ -385,15 +521,15 @@ export async function prepareAndRunEmailTest(
     });
     if (existing) return { ok: false as const, reason: "email_test_duplicate_key" as const };
     try {
-      await tx.emailTestAttempt.create({
+      const created = await tx.emailTestAttempt.create({
         data: { runKey, destination, attemptKey, applicationId: fixture.applicationId },
       });
+      return { ok: true as const, applicationId: fixture.applicationId, attemptKey, token: created.id };
     } catch (error) {
       const code = (error as { code?: string })?.code;
       if (code === "P2002") return { ok: false as const, reason: "email_test_duplicate_key" as const };
       throw error;
     }
-    return { ok: true as const, applicationId: fixture.applicationId, attemptKey };
   });
   if (!prepared.ok) return prepared;
 
@@ -402,7 +538,7 @@ export async function prepareAndRunEmailTest(
     attemptKey: prepared.attemptKey,
     recipient: destination,
     recipientProvenanceJson: emailTestProvenance(prepared.applicationId, runKey, destination),
-    payload: emailTestPayload(destination),
+    payload: emailTestPayload(destination, { runKey, token: prepared.token }),
     emailTest: true as const,
     runKey,
   };

@@ -13,6 +13,7 @@ import {
   mailboxNotifyMode,
   notifyDecision,
 } from "@/lib/application-mailbox";
+import { inboundTargetsEmailTestDestination, tryRecordEmailTestInbound } from "@/lib/email-test-capability";
 
 export interface InboundEmail {
   email_id: string;
@@ -92,6 +93,17 @@ export async function processInboundReply(input: {
   providerEventId: string;
   receivedAt: Date;
 }): Promise<{ matched: boolean; replyId?: string }> {
+  if (inboundTargetsEmailTestDestination(input.data.to)) {
+    const data = await hydrateInboundEmail(input.data);
+    await tryRecordEmailTestInbound({
+      to: data.to,
+      headers: data.headers,
+      subject: data.subject,
+      receivedAt: input.receivedAt,
+      providerMessageId: data.email_id,
+    }, prisma);
+    return { matched: true };
+  }
   const identity = { provider: "resend", providerMessageId: input.data.email_id };
   const existing = await prisma.applicationReply.findUnique({ where: { provider_providerMessageId: identity }, select: { id: true } });
   if (existing) {
@@ -100,6 +112,16 @@ export async function processInboundReply(input: {
   }
   // Receiving webhooks are metadata-only. Fetch BEFORE matching forwarded mail.
   const data = await hydrateInboundEmail(input.data);
+  if (inboundTargetsEmailTestDestination(data.to)) {
+    await tryRecordEmailTestInbound({
+      to: data.to,
+      headers: data.headers,
+      subject: data.subject,
+      receivedAt: input.receivedAt,
+      providerMessageId: data.email_id,
+    }, prisma);
+    return { matched: true };
+  }
   const domain = process.env.INBOUND_EMAIL_DOMAIN?.trim();
   if (!domain) throw new Error("inbound_domain_unconfigured");
   const appIds = inboundApplicationIds(data.to, domain);

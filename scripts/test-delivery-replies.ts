@@ -81,6 +81,10 @@ const processing = load("src/lib/application-reply-processing.ts", {
   "@/lib/reply-security-message": replySecurity, "@/lib/application-delivery": delivery,
   "@/lib/apply-reply-to-application": projection,
   "@/lib/inbound/service": { recordAtsConfirmation: async () => true },
+  "@/lib/email-test-capability": {
+    inboundTargetsEmailTestDestination: () => false,
+    tryRecordEmailTestInbound: async () => null,
+  },
   "@/lib/application-mailbox": {
     classifyMailbox: async (input: { fromAddress: string; subject?: string | null; bodyText?: string | null }) => {
       const classified = parser.classifyReply(input);
