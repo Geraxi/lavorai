@@ -152,7 +152,8 @@ export async function POST(request: NextRequest) {
     });
     return response;
   } catch (err) {
-    console.error("[api/optimize] errore interno", err);
+    const { logCvExtractionFailure } = await import("@/lib/cv-extraction-log");
+    logCvExtractionFailure("api/optimize", err);
     const message =
       err instanceof Error
         ? err.message

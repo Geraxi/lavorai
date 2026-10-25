@@ -408,10 +408,11 @@ async function adoptStagedCv(userId: string, rawEmail: string): Promise<void> {
   let parsedProfileJson: string | null = null;
   try {
     const { extractProfileAI } = await import("@/lib/cv-profile-ai");
-    const profile = await extractProfileAI(staged.extractedText, email);
+    const profile = await extractProfileAI(staged.extractedText, email, userId);
     parsedProfileJson = JSON.stringify(profile);
   } catch (err) {
-    console.warn("[adoptStagedCv] profile extraction failed", err);
+    const { hashUserRef, logCvExtractionFailure } = await import("@/lib/cv-extraction-log");
+    logCvExtractionFailure("adoptStagedCv", err, { userRef: hashUserRef(userId) });
   }
 
   await prisma.cVDocument.create({
