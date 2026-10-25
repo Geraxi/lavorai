@@ -89,6 +89,27 @@ function isKnownAtsCompany(company: string | null | undefined): boolean {
   return KNOWN_ATS_COMPANY_NAMES.has(company.toLowerCase().replace(/[^a-z0-9]/g, ""));
 }
 
+/** These notify* helpers ignore USER_NOTIFICATIONS_HOLD. The branded ATS-test
+ *  token must never reach their email/DB side effects. Ordinary callers omit
+ *  the token and keep the existing notice path. */
+function isAtsTestNoticeSuppressed(atsTestAuth?: AtsTestAuthorization): boolean {
+  return isAtsTestAuthorization(atsTestAuth);
+}
+
+function dryRunSubmitMessage(
+  adapterLabel: string,
+  outcome: { offerValidation?: { requiredFields: string[]; wouldAcceptRealSubmit: boolean } },
+  atsTestAuth?: AtsTestAuthorization,
+): string {
+  const reason = atsTestAuth
+    ? "ATS test mode=dry_run; no careers API POST"
+    : "PORTAL_SUBMIT_DRY_RUN=true";
+  const extra = outcome.offerValidation
+    ? ` Required: ${outcome.offerValidation.requiredFields.join(", ") || "none"}. Real submit would be accepted: ${outcome.offerValidation.wouldAcceptRealSubmit ? "yes" : "no"}.`
+    : "";
+  return `[DRY RUN] Form ${adapterLabel} compilato correttamente ma submit non eseguito (${reason}).${extra}`;
+}
+
 function applicationDocumentFilename(
   prefix: string,
   jobTitle: string | null | undefined,
@@ -705,14 +726,15 @@ async function processApplicationRun(
           : {}),
         ...attemptEvidenceWrite(outcome.attemptEvidence),
         errorMessage: isDryRun
-          ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).${
-              "offerValidation" in outcome && outcome.offerValidation
-                ? ` Required: ${outcome.offerValidation.requiredFields.join(", ") || "none"}. Real submit would be accepted: ${outcome.offerValidation.wouldAcceptRealSubmit ? "yes" : "no"}.`
-                : ""
-            }`
+          ? dryRunSubmitMessage(adapter.label, outcome, atsTestAuth)
           : isUnconfirmed
             ? `Submit cliccato ma non abbiamo rilevato la pagina di conferma di ${adapter.label}. La candidatura potrebbe non essere stata accettata (validazione silenziosa, captcha, errore modale). Verifica manualmente sul portale.`
             : null,
+        // Claimed ATS-test dry runs must drop the lease immediately. Prod
+        // evidence: ats_test_78e434ac721afd1194037169 kept leaseToken until
+        // expiry after DRY_RUN. The where clause still requires this worker's
+        // lease token to match.
+        ...(isDryRun && atsTestAuth ? { leaseToken: null, leaseExpiresAt: null } : {}),
       };
       if (isConfirmed) {
         if (atsTestAuth) {
@@ -738,7 +760,7 @@ async function processApplicationRun(
       // di review, niente email fuorviante. ATS tests are not a user notice.
       if (!isDryRun && !isUnconfirmed && !atsTestAuth) {
         console.log(`[worker] ${applicationId} sent via portal_${adapter.id}`);
-        await notifyApplicationSent(applicationId).catch((err) =>
+        await notifyApplicationSent(applicationId, atsTestAuth).catch((err) =>
           console.error(`[worker] ${applicationId} notify email failed`, err),
         );
       }
@@ -821,7 +843,7 @@ async function processApplicationRun(
                 }),
         },
       });
-      await notifyNeedsAnswers(applicationId).catch((err) =>
+      await notifyNeedsAnswers(applicationId, atsTestAuth).catch((err) =>
         console.error(`[worker] ${applicationId} notify needs-answers failed`, err),
       );
       return; // in attesa delle risposte utente
@@ -893,7 +915,7 @@ async function processApplicationRun(
           },
         });
         if (handoff.notifyUser) {
-          await notifyApplicationManual(applicationId).catch((err) =>
+          await notifyApplicationManual(applicationId, atsTestAuth).catch((err) =>
             console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
           );
         }
@@ -920,7 +942,7 @@ async function processApplicationRun(
           },
         });
         if (handoff.notifyUser) {
-          await notifyApplicationManual(applicationId).catch((err) =>
+          await notifyApplicationManual(applicationId, atsTestAuth).catch((err) =>
             console.error(`[worker] ${applicationId} notify manual (captcha) failed`, err),
           );
         }
@@ -950,7 +972,12 @@ async function processApplicationRun(
               }),
       },
     });
+    if (atsTestAuth) return;
   }
+
+  // Token path never substitutes recruiter-email or user notices for an
+  // allowlisted ATS-test destination. Ordinary users continue below.
+  if (atsTestAuth) return;
 
   // Guardia anti-email-sbagliata: se l'azienda ha un board ATS noto
   // (Greenhouse/Lever/Workable/...), NON facciamo il fallback email a un
@@ -1011,7 +1038,7 @@ async function processApplicationRun(
       },
     });
     if (handoff) {
-      await notifyApplicationManual(applicationId).catch((err) =>
+      await notifyApplicationManual(applicationId, atsTestAuth).catch((err) =>
         console.error(`[worker] ${applicationId} notify manual (ats-known) failed`, err),
       );
     }
@@ -1052,7 +1079,7 @@ async function processApplicationRun(
         where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "optimizing"] } },
         data: skipListManualHandoffData(undefined, { sendFailureReason: fallbackDecision.reason }),
       });
-      await notifyApplicationManual(applicationId).catch((err) =>
+      await notifyApplicationManual(applicationId, atsTestAuth).catch((err) =>
         console.error(`[worker] ${applicationId} notify manual (skip-list fallback held) failed`, err),
       );
       return;
@@ -1142,7 +1169,7 @@ async function processApplicationRun(
           submitConfirmation: "EMAIL_SENT",
       })) return;
       console.log(`[worker] ${applicationId} sent via email_recruiter`);
-      await notifyApplicationSent(applicationId).catch((err) =>
+      await notifyApplicationSent(applicationId, atsTestAuth).catch((err) =>
         console.error(`[worker] ${applicationId} notify email failed`, err),
       );
     } else {
@@ -1179,7 +1206,7 @@ async function processApplicationRun(
         completedAt: new Date(),
       },
     });
-    await notifyApplicationManual(applicationId).catch((err) =>
+    await notifyApplicationManual(applicationId, atsTestAuth).catch((err) =>
       console.error(`[worker] ${applicationId} notify manual (skip-list, no published email) failed`, err),
     );
   } else {
@@ -1197,6 +1224,7 @@ async function processApplicationRun(
         cvPath,
         clPath,
         jobTitle: app.job.title,
+        atsTestAuth,
       });
     } else {
       // Nessuna email recruiter, adapter fallito o non disponibile → stato
@@ -1220,7 +1248,7 @@ async function processApplicationRun(
         },
       });
       if (!isAutoMode) {
-        await notifyApplicationManual(applicationId).catch((err) =>
+        await notifyApplicationManual(applicationId, atsTestAuth).catch((err) =>
           console.error(`[worker] ${applicationId} notify manual failed`, err),
         );
       } else {
@@ -1416,7 +1444,7 @@ async function attemptAutoSubmit(input: AutoSubmitInput): Promise<void> {
     const userAutoMode =
       appForMode?.user?.preferences?.autoApplyMode ?? "manual";
     if (userAutoMode !== "auto") {
-      await notifyApplicationManual(applicationId).catch((err) =>
+      await notifyApplicationManual(applicationId, input.atsTestAuth).catch((err) =>
         console.error(`[worker] ${applicationId} notify manual failed`, err),
       );
     } else {
@@ -1616,7 +1644,8 @@ async function shouldSuppressForCooldown(
   }
 }
 
-async function notifyApplicationSent(applicationId: string): Promise<void> {
+async function notifyApplicationSent(applicationId: string, atsTestAuth?: AtsTestAuthorization): Promise<void> {
+  if (isAtsTestNoticeSuppressed(atsTestAuth)) return;
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -1793,7 +1822,8 @@ function renderSentEmail(data: {
  * Una sola email per applicationId. Ha priorità sull'email "CV pronto"
  * (che ora è rimossa dal flusso).
  */
-async function notifyApplicationManual(applicationId: string): Promise<void> {
+async function notifyApplicationManual(applicationId: string, atsTestAuth?: AtsTestAuthorization): Promise<void> {
+  if (isAtsTestNoticeSuppressed(atsTestAuth)) return;
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -1857,7 +1887,8 @@ async function notifyApplicationManual(applicationId: string): Promise<void> {
  * Avvisa l'utente che una candidatura richiede risposte a domande del form
  * prima di poter essere inviata. Lo manda a /questions.
  */
-async function notifyNeedsAnswers(applicationId: string): Promise<void> {
+async function notifyNeedsAnswers(applicationId: string, atsTestAuth?: AtsTestAuthorization): Promise<void> {
+  if (isAtsTestNoticeSuppressed(atsTestAuth)) return;
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {

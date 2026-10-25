@@ -1169,6 +1169,22 @@ async function testRefusedRetryAtMostOnceClaim() {
   void uncertainDb;
 }
 
+function testAtsTestNoticeGuardsInWorker() {
+  const worker = readFileSync(new URL("../src/lib/application-worker.ts", import.meta.url), "utf8");
+  assert.match(worker, /function isAtsTestNoticeSuppressed/);
+  assert.match(worker, /ATS test mode=dry_run; no careers API POST/);
+  assert.match(worker, /if \(isAtsTestNoticeSuppressed\(atsTestAuth\)\) return;/);
+  assert.match(worker, /notifyNeedsAnswers\(applicationId, atsTestAuth\)/);
+  assert.match(worker, /notifyApplicationManual\(applicationId, atsTestAuth\)/);
+  assert.match(worker, /Token path never substitutes recruiter-email or user notices/);
+  assert.match(worker, /leaseToken: null, leaseExpiresAt: null/);
+  assert.doesNotMatch(
+    worker,
+    /notifyNeedsAnswers\(applicationId\)\.catch/,
+    "needs-answers notify must receive the token so it can return before side effects",
+  );
+}
+
 async function main() {
   await testPrepareAndRun();
   await testFourSubmitChecks();
@@ -1180,6 +1196,7 @@ async function main() {
   testOrdinaryGatesWithoutToken();
   testOfferValidationAndHeldRetry();
   testCronDrainStayPaused();
+  testAtsTestNoticeGuardsInWorker();
   console.log("PASS ats-test-capability: branded token, pause skip only on that path, deterministic PK, dry-run zero POST, real one POST, candidate email, offer validation, at-most-once claim, fakes");
 }
 

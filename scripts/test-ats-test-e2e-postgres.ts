@@ -27,7 +27,7 @@ import {
 const TEST_USER = "ats-test-e2e-user";
 const HOST = "fake-lavorai.recruitee.com";
 const CANDIDATE_EMAIL = "owner-mailbox@example.test";
-const SLUGS = ["dry-optional", "real-optional", "race-two", "race-ten", "cv-required", "server-500"] as const;
+const SLUGS = ["dry-optional", "real-optional", "race-two", "race-ten", "cv-required", "server-500", "needs-answers", "force-captcha", "no-form"] as const;
 const DESTINATIONS = SLUGS.map((slug) => `${HOST}/o/${slug}`).join(" ");
 const FIXTURE_DB = /^\/lavorai_ats_test_e2e_test(?:_[a-z0-9]+)?$/;
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -187,6 +187,15 @@ async function main() {
       assert.equal(dry.result?.submitConfirmation, "DRY_RUN");
       assert.equal(dry.result?.status, "ready_to_apply");
       assert.match(dry.result?.errorMessage ?? "", /Required:/);
+      assert.match(dry.result?.errorMessage ?? "", /ATS test mode=dry_run/);
+      assert.doesNotMatch(dry.result?.errorMessage ?? "", /PORTAL_SUBMIT_DRY_RUN/);
+      const dryRow = await prisma.application.findUnique({
+        where: { id: dry.applicationId },
+        select: { leaseToken: true, leaseExpiresAt: true, errorMessage: true },
+      });
+      assert.equal(dryRow?.leaseToken, null, "DRY_RUN must clear leaseToken");
+      assert.equal(dryRow?.leaseExpiresAt, null, "DRY_RUN must clear leaseExpiresAt");
+      assert.match(dryRow?.errorMessage ?? "", /ATS test mode=dry_run; no careers API POST/);
     }
     const dryCandidatePosts = fake.requests.filter((row) => row.method === "POST" && /\/api\/offers\/[^/]+\/candidates\/?$/.test(row.path));
     const dryPosts = dryCandidatePosts.length;
@@ -354,6 +363,66 @@ async function main() {
     assert.equal(logs, 0, "ATS e2e must not create EmailLog rows");
     assert.equal(forbidden.filter((url) => /resend\.com|api\.resend/i.test(url)).length, 0);
     record("h. no EmailLog rows or email-provider calls", 0);
+
+    // j. Forced needs_user_input / captcha / form_not_found: no notices
+    const originalApply = recruiteeAdapter.apply.bind(recruiteeAdapter);
+    recruiteeAdapter.apply = async (page, input) => {
+      const slug = new URL(input.jobUrl).pathname.match(/\/o\/([^/?#]+)/)?.[1] ?? "";
+      if (slug === "needs-answers") {
+        return {
+          ok: false,
+          status: "needs_user_input",
+          error: "forced needs_user_input",
+          pendingQuestions: [{ label: "Work authorization declaration only the candidate can answer", kind: "text" }],
+        };
+      }
+      if (slug === "force-captcha") {
+        return { ok: false, status: "captcha", error: "forced captcha" };
+      }
+      if (slug === "no-form") {
+        return { ok: false, status: "form_not_found", error: "forced form_not_found" };
+      }
+      return originalApply(page, input);
+    };
+    const previousPaused = process.env.APPLICATIONS_PAUSED;
+    const previousResend = process.env.RESEND_API_KEY;
+    process.env.RESEND_API_KEY = "re_test_forced_notify";
+    process.env.APPLICATIONS_PAUSED = "false";
+    const noticeCases = [
+      { slug: "needs-answers", name: "j. needs_user_input: zero notices", expect: (row: { status: string | null; submitConfirmation: string | null }) => {
+        assert.equal(row.status, "needs_answers");
+      } },
+      { slug: "force-captcha", name: "j. captcha: zero notices", expect: (row: { status: string | null; submitConfirmation: string | null }) => {
+        assert.equal(row.submitConfirmation, "CAPTCHA");
+      } },
+      { slug: "no-form", name: "j. form_not_found/no-recruiter: zero notices", expect: (row: { status: string | null; submitConfirmation: string | null }) => {
+        assert.notEqual(row.status, "success");
+        assert.notEqual(row.submitConfirmation, "EMAIL_SENT");
+      } },
+    ] as const;
+    try {
+      for (const item of noticeCases) {
+        fake.requests.length = 0;
+        const noticeBaseline = new Date();
+        const run = await prepareAndRunAtsTest(
+          { adminOk: true, realSubmit: true, jobUrl: destUrl(item.slug) },
+          asDeps(prisma, realEnv),
+        );
+        assert.equal(run.ok, true, `${item.slug} must finish the token path`);
+        if (run.ok) item.expect(run.result ?? { status: null, submitConfirmation: null });
+        assert.equal(postsOf(fake.requests).length, 0, `${item.slug}: zero Recruitee POSTs`);
+        assert.equal(await prisma.emailLog.count({ where: { createdAt: { gte: noticeBaseline } } }), 0, `${item.slug}: EmailLog`);
+        assert.equal(await prisma.conversionEvent.count({ where: { createdAt: { gte: noticeBaseline } } }), 0, `${item.slug}: ConversionEvent`);
+        assert.equal(forbidden.filter((url) => /resend\.com|api\.resend/i.test(url)).length, 0, `${item.slug}: no email-provider calls`);
+        record(item.name, 0);
+      }
+    } finally {
+      recruiteeAdapter.apply = originalApply;
+      if (previousPaused === undefined) delete process.env.APPLICATIONS_PAUSED;
+      else process.env.APPLICATIONS_PAUSED = previousPaused;
+      if (previousResend === undefined) delete process.env.RESEND_API_KEY;
+      else process.env.RESEND_API_KEY = previousResend;
+    }
 
     // i. Cron/worker without branded token cannot use the exemption
     fake.requests.length = 0;
