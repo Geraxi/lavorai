@@ -93,7 +93,7 @@ export function emailTestUserId(env: NodeJS.ProcessEnv = process.env): string | 
   return id || null;
 }
 
-/** Admin key only. An admin session is not enough. */
+/** Shared admin key. Session auth uses authorizeEmailTestRequest. */
 export function adminEmailTestAuthorized(
   input: { headerKey: string | null },
   env: NodeJS.ProcessEnv = process.env,
@@ -101,6 +101,31 @@ export function adminEmailTestAuthorized(
   const expected = (env.ADMIN_SYNC_KEY ?? "").trim();
   const header = (input.headerKey ?? "").trim();
   return Boolean(expected && header && header === expected);
+}
+
+export type EmailTestAdminAuth =
+  | { ok: true; method: "admin_key" }
+  | { ok: true; method: "session"; userId: string }
+  | { ok: false; status: 401 | 403; error: "unauthorized" | "forbidden" };
+
+/** X-Admin-Key, or an isAdmin() session. POST also needs checkOrigin. */
+export function authorizeEmailTestRequest(
+  input: {
+    headerKey: string | null;
+    userId?: string | null;
+    isAdminUser: boolean;
+    originOk: boolean;
+    mutating: boolean;
+  },
+  env: NodeJS.ProcessEnv = process.env,
+): EmailTestAdminAuth {
+  if (adminEmailTestAuthorized({ headerKey: input.headerKey }, env)) {
+    return { ok: true, method: "admin_key" };
+  }
+  if (!input.userId) return { ok: false, status: 401, error: "unauthorized" };
+  if (!input.isAdminUser) return { ok: false, status: 403, error: "forbidden" };
+  if (input.mutating && !input.originOk) return { ok: false, status: 403, error: "forbidden" };
+  return { ok: true, method: "session", userId: input.userId };
 }
 
 export function parseEmailTestRunKey(raw: unknown): string | null {

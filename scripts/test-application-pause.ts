@@ -108,8 +108,11 @@ async function main() {
     process.env.CRON_SECRET = "synthetic-pause-test";
     const emailTestRoute = load("src/app/api/admin/email-test-send/route.ts", {
       ...routeMocks,
+      "@/lib/admin": { isAdmin: () => true },
+      "@/lib/csrf": { checkOrigin: () => true },
       "@/lib/email-test-capability": {
         adminEmailTestAuthorized: () => true,
+        authorizeEmailTestRequest: () => ({ ok: true, method: "admin_key" }),
         prepareAndRunEmailTest: async () => ({ ok: true, applicationId: "email_test_diagnostic_20261025", runKey: "pause-check", destination: "delivered@resend.dev", attemptKey: "email-test/pause-check/delivered@resend.dev", result: { kind: "accepted" }, delivery: { evidenceLevel: "provider_accepted", employerConfirmed: false } }),
         readEmailTestDelivery: async () => ({ ok: true }),
       },
