@@ -3,6 +3,10 @@ import { prisma } from "@/lib/db";
 import { isTestAccount } from "@/lib/admin";
 import { renderBrandEmail } from "@/lib/email-brand";
 import { sendWithinQuota } from "@/lib/email-quota";
+import {
+  isStaleScheduledReminder,
+  scheduledUserNotificationsHeld,
+} from "@/lib/user-notification-guard";
 
 const site = () => process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 const from = () => process.env.EMAIL_FROM ?? "LavorAI <noreply@lavorai.it>";
@@ -12,6 +16,7 @@ export type CheckoutFeedbackResult = {
   candidates: number;
   sent: number;
   skipped: number;
+  held: number;
   details: Array<{ email: string; status: string }>;
 };
 
@@ -39,7 +44,13 @@ async function ensureFeedbackPopup() {
  * checkout, non semplici account free.
  */
 export async function runCheckoutFeedbackCampaign(opts: { dryRun?: boolean } = {}): Promise<CheckoutFeedbackResult> {
-  const result: CheckoutFeedbackResult = { candidates: 0, sent: 0, skipped: 0, details: [] };
+  const result: CheckoutFeedbackResult = { candidates: 0, sent: 0, skipped: 0, held: 0, details: [] };
+  const gate = scheduledUserNotificationsHeld();
+  if (gate.held) {
+    result.held = 1;
+    result.details.push({ email: "-", status: "user_notifications_held" });
+    return result;
+  }
   const apiKey = process.env.RESEND_API_KEY;
   const [starts, logs] = await Promise.all([
     prisma.conversionEvent.findMany({
@@ -47,6 +58,7 @@ export async function runCheckoutFeedbackCampaign(opts: { dryRun?: boolean } = {
       orderBy: { createdAt: "desc" },
       select: {
         userId: true,
+        createdAt: true,
         user: { select: { id: true, email: true, name: true, locale: true, stripeSubscriptionId: true, subscriptionStatus: true } },
       },
     }),
@@ -54,12 +66,14 @@ export async function runCheckoutFeedbackCampaign(opts: { dryRun?: boolean } = {
   ]);
   const alreadyContacted = new Set(logs.map((entry) => entry.to.toLowerCase()));
   const seen = new Set<string>();
-  const candidates = starts.map((start) => start.user).filter((user): user is NonNullable<typeof user> => !!user).filter((user) => {
-    if (seen.has(user.id)) return false;
+  const candidates = starts.filter((start) => {
+    if (isStaleScheduledReminder(start.createdAt, gate.cutoff)) return false;
+    const user = start.user;
+    if (!user || seen.has(user.id)) return false;
     seen.add(user.id);
     const subscribed = user.stripeSubscriptionId && ["active", "trialing", "past_due"].includes(user.subscriptionStatus ?? "");
     return !subscribed && !isTestAccount(user.email) && !alreadyContacted.has(user.email.toLowerCase());
-  });
+  }).map((start) => start.user).filter((user): user is NonNullable<typeof user> => !!user);
   result.candidates = candidates.length;
   if (!opts.dryRun && candidates.length) await ensureFeedbackPopup();
 

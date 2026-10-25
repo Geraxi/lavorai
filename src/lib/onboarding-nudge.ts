@@ -2,6 +2,10 @@ import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { isTestAccount } from "@/lib/admin";
+import {
+  isStaleScheduledReminder,
+  scheduledUserNotificationsHeld,
+} from "@/lib/user-notification-guard";
 
 /**
  * Nudge di onboarding: email che ricordano agli utenti registrati ma "bloccati"
@@ -18,8 +22,8 @@ import { isTestAccount } from "@/lib/admin";
  *  - rispetta la quota email platform-wide (sendWithinQuota)
  */
 
-const NUDGE_COOLDOWN_DAYS = 5;
-const MIN_AGE_HOURS = 6;
+export const NUDGE_COOLDOWN_DAYS = 5;
+export const MIN_AGE_HOURS = 6;
 const MAX_AGE_DAYS = 30; // oltre, l'utente è probabilmente perso: non insistere
 const DEFAULT_BATCH_CAP = 50;
 
@@ -56,6 +60,34 @@ export interface NudgeCandidate {
   locale: string;
   step: NudgeStep;
   createdAt: Date;
+  dueAt: Date;
+}
+
+/**
+ * Due instant of the specific onboarding stage being considered.
+ * First opportunity: stageEnteredAt + 6h (verify=signup, cv=emailVerified,
+ * preferences=first CV, first_application=preferences.updatedAt).
+ * After a successful nudge: lastNudgeAt + 5d. A stage whose due time is
+ * before USER_NOTIFICATIONS_NOT_BEFORE is skipped and not caught up; a
+ * later stage that becomes due after the cutoff still sends.
+ */
+export function onboardingNudgeDueAt(input: {
+  step: NudgeStep;
+  createdAt: Date;
+  emailVerified: Date | null;
+  firstCvAt: Date | null;
+  preferencesUpdatedAt: Date | null;
+  lastNudgeAt: Date | null;
+}): Date {
+  const stageEnteredAt =
+    input.step === "verify" ? input.createdAt
+    : input.step === "cv" ? (input.emailVerified ?? input.createdAt)
+    : input.step === "preferences" ? (input.firstCvAt ?? input.emailVerified ?? input.createdAt)
+    : (input.preferencesUpdatedAt ?? input.firstCvAt ?? input.createdAt);
+  const firstDue = new Date(stageEnteredAt.getTime() + MIN_AGE_HOURS * 3600_000);
+  if (!input.lastNudgeAt) return firstDue;
+  const nextDue = new Date(input.lastNudgeAt.getTime() + NUDGE_COOLDOWN_DAYS * 86_400_000);
+  return nextDue.getTime() > firstDue.getTime() ? nextDue : firstDue;
 }
 
 /**
@@ -69,12 +101,20 @@ export async function findNudgeCandidates(opts?: {
 }): Promise<NudgeCandidate[]> {
   const now = Date.now();
   const minAge = new Date(now - MIN_AGE_HOURS * 3600_000);
-  const maxAge = new Date(now - MAX_AGE_DAYS * 86_400_000);
+  const recentStage = new Date(now - MAX_AGE_DAYS * 86_400_000);
 
   const users = await prisma.user.findMany({
     where: opts?.onlyEmail
       ? { email: opts.onlyEmail }
-      : { createdAt: { lte: minAge, gte: maxAge } },
+      : {
+          createdAt: { lte: minAge },
+          OR: [
+            { createdAt: { gte: recentStage } },
+            { emailVerified: { gte: recentStage } },
+            { cvDocuments: { some: { createdAt: { gte: recentStage } } } },
+            { preferences: { updatedAt: { gte: recentStage } } },
+          ],
+        },
     select: {
       id: true,
       email: true,
@@ -83,11 +123,26 @@ export async function findNudgeCandidates(opts?: {
       emailVerified: true,
       createdAt: true,
       onboardedAt: true,
-      preferences: { select: { rolesJson: true } },
-      _count: { select: { cvDocuments: true, applications: true } },
+      preferences: { select: { rolesJson: true, updatedAt: true } },
+      cvDocuments: { orderBy: { createdAt: "asc" }, take: 1, select: { createdAt: true } },
+      _count: { select: { applications: true } },
     },
   });
 
+  const logs = users.length
+    ? await prisma.emailLog.findMany({
+      where: { kind: "onboarding_nudge", to: { in: users.map((u) => u.email) } },
+      orderBy: { createdAt: "desc" },
+      select: { to: true, createdAt: true },
+    })
+    : [];
+  const lastNudgeByEmail = new Map<string, Date>();
+  for (const log of logs) {
+    const key = log.to.toLowerCase();
+    if (!lastNudgeByEmail.has(key)) lastNudgeByEmail.set(key, log.createdAt);
+  }
+
+  const cutoff = scheduledUserNotificationsHeld();
   const cooldownSince = new Date(now - NUDGE_COOLDOWN_DAYS * 86_400_000);
   const candidates: NudgeCandidate[] = [];
 
@@ -97,7 +152,7 @@ export async function findNudgeCandidates(opts?: {
     // Step mancante (priorità: verifica → CV → preferenze → 1ª candidatura).
     let step: NudgeStep | null = null;
     if (!u.emailVerified) step = "verify";
-    else if (u._count.cvDocuments === 0) step = "cv";
+    else if (u.cvDocuments.length === 0) step = "cv";
     else if (!u.preferences || u.preferences.rolesJson === "[]")
       step = "preferences";
     else if (u._count.applications === 0) step = "first_application";
@@ -105,17 +160,22 @@ export async function findNudgeCandidates(opts?: {
     if (opts?.incompleteSetupOnly && step === "first_application") continue;
     if (!step) continue; // utente completo: niente nudge
 
-    // Cooldown: niente nudge se ne ha ricevuto uno di recente.
-    if (!opts?.ignoreCooldown) {
-      const recent = await prisma.emailLog.count({
-        where: {
-          kind: "onboarding_nudge",
-          to: u.email,
-          createdAt: { gte: cooldownSince },
-        },
-      });
-      if (recent > 0) continue;
+    const lastNudgeAt = lastNudgeByEmail.get(u.email.toLowerCase()) ?? null;
+    if (!opts?.ignoreCooldown && lastNudgeAt && lastNudgeAt.getTime() >= cooldownSince.getTime()) continue;
+
+    const dueAt = onboardingNudgeDueAt({
+      step,
+      createdAt: u.createdAt,
+      emailVerified: u.emailVerified,
+      firstCvAt: u.cvDocuments[0]?.createdAt ?? null,
+      preferencesUpdatedAt: u.preferences?.updatedAt ?? null,
+      lastNudgeAt,
+    });
+    if (!opts?.onlyEmail) {
+      if (dueAt.getTime() > now) continue;
+      if (dueAt.getTime() < now - MAX_AGE_DAYS * 86_400_000) continue;
     }
+    if (!cutoff.held && isStaleScheduledReminder(dueAt, cutoff.cutoff)) continue;
 
     candidates.push({
       userId: u.id,
@@ -124,6 +184,7 @@ export async function findNudgeCandidates(opts?: {
       locale: u.locale ?? "it",
       step,
       createdAt: u.createdAt,
+      dueAt,
     });
   }
 
@@ -133,6 +194,7 @@ export async function findNudgeCandidates(opts?: {
 export interface NudgeRunResult {
   sent: number;
   skipped: number;
+  held: number;
   candidates: number;
   details: Array<{ email: string; step: NudgeStep; status: string }>;
 }
@@ -147,6 +209,17 @@ export async function runOnboardingNudges(opts?: {
   incompleteSetupOnly?: boolean;
   cap?: number;
 }): Promise<NudgeRunResult> {
+  const gate = scheduledUserNotificationsHeld();
+  if (gate.held) {
+    return {
+      sent: 0,
+      skipped: 0,
+      held: 1,
+      candidates: 0,
+      details: [{ email: "-", step: "verify", status: "user_notifications_held" }],
+    };
+  }
+
   const candidates = await findNudgeCandidates({
     onlyEmail: opts?.onlyEmail,
     ignoreCooldown: opts?.ignoreCooldown,
@@ -163,7 +236,7 @@ export async function runOnboardingNudges(opts?: {
     for (const c of batch) {
       details.push({ email: c.email, step: c.step, status: "dry_run" });
     }
-    return { sent: 0, skipped: 0, candidates: candidates.length, details };
+    return { sent: 0, skipped: 0, held: 0, candidates: candidates.length, details };
   }
 
   const apiKey = process.env.RESEND_API_KEY;
@@ -171,6 +244,7 @@ export async function runOnboardingNudges(opts?: {
     return {
       sent: 0,
       skipped: batch.length,
+      held: 0,
       candidates: candidates.length,
       details: batch.map((c) => ({
         email: c.email,
@@ -215,7 +289,7 @@ export async function runOnboardingNudges(opts?: {
     }
   }
 
-  return { sent, skipped, candidates: candidates.length, details };
+  return { sent, skipped, held: 0, candidates: candidates.length, details };
 }
 
 // ---------- Email content (IT + EN) ----------

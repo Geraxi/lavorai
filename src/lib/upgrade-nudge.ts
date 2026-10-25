@@ -3,6 +3,10 @@ import { trialState } from "@/lib/billing";
 import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
 import { isTestAccount } from "@/lib/admin";
+import {
+  isStaleScheduledReminder,
+  scheduledUserNotificationsHeld,
+} from "@/lib/user-notification-guard";
 
 /**
  * Upgrade nudge: email che spinge utenti FREE attivi al Pro.
@@ -16,10 +20,27 @@ import { isTestAccount } from "@/lib/admin";
  * pressioni FOMO finte. Pricing onesto, motivo concreto per upgrade.
  */
 
-const COOLDOWN_DAYS = 10;
-const MIN_AGE_DAYS = 5;
+export const UPGRADE_COOLDOWN_DAYS = 10;
+export const UPGRADE_MIN_AGE_DAYS = 5;
+const COOLDOWN_DAYS = UPGRADE_COOLDOWN_DAYS;
+const MIN_AGE_DAYS = UPGRADE_MIN_AGE_DAYS;
 const MAX_AGE_DAYS = 90;
 const DEFAULT_CAP = 100;
+
+/** Triggering event for this upgrade reminder. Never user.createdAt alone. */
+export function upgradeNudgeEventAt(input: {
+  reason: "generic" | "limit_hit" | "no_apps";
+  createdAt: Date;
+  limitHitAt: Date | null;
+  latestApplicationAt: Date | null;
+}): Date {
+  if (input.reason === "limit_hit") return input.limitHitAt ?? input.createdAt;
+  if (input.reason === "generic") {
+    return input.latestApplicationAt
+      ?? new Date(input.createdAt.getTime() + MIN_AGE_DAYS * 86_400_000);
+  }
+  return new Date(input.createdAt.getTime() + MIN_AGE_DAYS * 86_400_000);
+}
 
 export interface UpgradeCandidate {
   userId: string;
@@ -84,16 +105,41 @@ export async function findUpgradeCandidates(opts?: {
   // Conteggio candidature del mese corrente per identificare i limit-hit.
   // Un'unica group-by su tutti i free users evita N+1 sulla DB.
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  const monthByUser = await prisma.application.groupBy({
-    by: ["userId"],
-    where: {
-      userId: { in: users.map((u) => u.id) },
-      createdAt: { gte: monthStart },
-      status: { in: ["success", "queued", "optimizing", "applying", "ready_to_apply"] },
-    },
-    _count: { _all: true },
-  });
+  const userIds = users.map((u) => u.id);
+  const [monthByUser, monthApps, latestApps] = await Promise.all([
+    prisma.application.groupBy({
+      by: ["userId"],
+      where: {
+        userId: { in: userIds },
+        createdAt: { gte: monthStart },
+        status: { in: ["success", "queued", "optimizing", "applying", "ready_to_apply"] },
+      },
+      _count: { _all: true },
+    }),
+    prisma.application.findMany({
+      where: {
+        userId: { in: userIds },
+        createdAt: { gte: monthStart },
+        status: { in: ["success", "queued", "optimizing", "applying", "ready_to_apply"] },
+      },
+      orderBy: { createdAt: "asc" },
+      select: { userId: true, createdAt: true },
+    }),
+    prisma.application.groupBy({
+      by: ["userId"],
+      where: { userId: { in: userIds } },
+      _max: { createdAt: true },
+    }),
+  ]);
   const monthlyUsed = new Map(monthByUser.map((r) => [r.userId, r._count._all]));
+  const monthAppsByUser = new Map<string, Date[]>();
+  for (const row of monthApps) {
+    const list = monthAppsByUser.get(row.userId) ?? [];
+    list.push(row.createdAt);
+    monthAppsByUser.set(row.userId, list);
+  }
+  const latestAppAt = new Map(latestApps.map((r) => [r.userId, r._max.createdAt]));
+  const cutoff = scheduledUserNotificationsHeld();
 
   const cooldownSince = new Date(now - COOLDOWN_DAYS * 86_400_000);
   const out: UpgradeCandidate[] = [];
@@ -132,6 +178,15 @@ export async function findUpgradeCandidates(opts?: {
       if (recent > 0) continue;
     }
 
+    const monthCreated = monthAppsByUser.get(u.id) ?? [];
+    const eventAt = upgradeNudgeEventAt({
+      reason,
+      createdAt: u.createdAt,
+      limitHitAt: monthCreated[FREE_MONTHLY_CAP - 1] ?? monthCreated[monthCreated.length - 1] ?? null,
+      latestApplicationAt: latestAppAt.get(u.id) ?? null,
+    });
+    if (!cutoff.held && isStaleScheduledReminder(eventAt, cutoff.cutoff)) continue;
+
     out.push({
       userId: u.id,
       email: u.email,
@@ -158,6 +213,7 @@ export async function findUpgradeCandidates(opts?: {
 export interface UpgradeRunResult {
   sent: number;
   skipped: number;
+  held: number;
   candidates: number;
   details: Array<{ email: string; applications: number; status: string }>;
 }
@@ -168,6 +224,17 @@ export async function runUpgradeNudges(opts?: {
   ignoreCooldown?: boolean;
   cap?: number;
 }): Promise<UpgradeRunResult> {
+  const gate = scheduledUserNotificationsHeld();
+  if (gate.held) {
+    return {
+      sent: 0,
+      skipped: 0,
+      held: 1,
+      candidates: 0,
+      details: [{ email: "-", applications: 0, status: "user_notifications_held" }],
+    };
+  }
+
   const candidates = await findUpgradeCandidates({
     onlyEmail: opts?.onlyEmail,
     ignoreCooldown: opts?.ignoreCooldown,
@@ -181,7 +248,7 @@ export async function runUpgradeNudges(opts?: {
 
   if (opts?.dryRun) {
     for (const c of batch) details.push({ email: c.email, applications: c.applicationsCount, status: "dry_run" });
-    return { sent: 0, skipped: 0, candidates: candidates.length, details };
+    return { sent: 0, skipped: 0, held: 0, candidates: candidates.length, details };
   }
 
   const apiKey = process.env.RESEND_API_KEY;
@@ -190,6 +257,7 @@ export async function runUpgradeNudges(opts?: {
       sent: 0,
       skipped: batch.length,
       candidates: candidates.length,
+      held: 0,
       details: batch.map((c) => ({ email: c.email, applications: c.applicationsCount, status: "no_resend_key" })),
     };
   }
@@ -225,7 +293,7 @@ export async function runUpgradeNudges(opts?: {
     }
   }
 
-  return { sent, skipped, candidates: candidates.length, details };
+  return { sent, skipped, held: 0, candidates: candidates.length, details };
 }
 
 // ---------- Email content ----------
