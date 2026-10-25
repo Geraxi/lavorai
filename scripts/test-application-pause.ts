@@ -147,11 +147,53 @@ async function main() {
       assert.equal(applyCalls, 0, "nudges kill-switch skips auto-apply");
       assert.ok(userMail > 0, "user-facing notification emails stay allowed while sending is paused");
       const workflow = readFileSync(".github/workflows/drain-queue.yml", "utf8");
-      assert.match(workflow, /https:\/\/lavorai\.it\/api\/cron\/drain-queue/, "GitHub Actions backup calls the same drain-queue endpoint");
+      const backupUrl = workflow.match(/https:\/\/lavorai\.it(\/api\/cron\/[a-z0-9-]+)/);
+      assert.equal(backupUrl?.[1], "/api/cron/drain-queue", "GitHub Actions backup calls the same drain-queue endpoint");
       assert.match(workflow, /\*\/15 \* \* \* \*/);
+      let backupDrainCalls = 0;
+      const backupDrain = load("src/app/api/cron/drain-queue/route.ts", {
+        ...routeMocks,
+        "@/lib/queue-drain": { drainQueuedApplications: async () => { backupDrainCalls++; throw new Error("GH Actions backup must not drain while paused"); } },
+      });
+      const backupPaused = await backupDrain.GET({ headers: new Headers({ authorization: `Bearer ${process.env.CRON_SECRET}` }) });
+      assert.equal(backupPaused.body.paused, true, "kill switch stops the GitHub Actions 15-min backup because it hits drain-queue");
+      assert.equal(backupDrainCalls, 0, "paused drain-queue must not import/run the worker for Vercel or GH Actions");
+
+      let digestSends = 0;
+      const digest = load("src/app/api/cron/mailbox-digest/route.ts", {
+        ...routeMocks,
+        "@/lib/application-mailbox-digest": { runMailboxDigest: async ({ send }: { send: (m: { to: string }) => Promise<string | null> }) => {
+          await send({ to: "user@example.test" });
+          return { sent: 1, skipped: 0, errors: 0 };
+        } },
+        "@/lib/application-mailbox-notify": { createResendMailboxMailer: () => async (m: { to: string }) => { digestSends++; assert.match(m.to, /@example\.test$/); return "user-mail"; } },
+      });
+      const digestOut = await digest.GET({ headers: new Headers({ authorization: `Bearer ${process.env.CRON_SECRET}` }) });
+      assert.equal(digestOut.body.ok, true);
+      assert.equal(digestSends, 1, "mailbox-digest is user-facing notification mail and stays allowed while sending is paused");
+      assert.equal(digestOut.body.paused, undefined, "mailbox-digest is not an employer send path");
+
+      const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as { crons: Array<{ path: string; schedule: string }> };
+      const cronOf = (path: string) => vercel.crons.find((c) => c.path === path)?.schedule;
+      assert.equal(cronOf("/api/cron/mailbox-delivery"), "0 * * * *");
+      assert.equal(cronOf("/api/cron/mailbox-digest"), "15 10 * * *");
+      assert.equal(cronOf("/api/cron/drain-queue"), "*/5 * * * *");
+      assert.equal(cronOf("/api/cron/auto-apply"), "0 8,9,12,13,16,17 * * *");
+      assert.equal(cronOf("/api/cron/nudges"), "0 10 * * *");
     } finally {
       if (previousKey === undefined) delete process.env.ADMIN_SYNC_KEY; else process.env.ADMIN_SYNC_KEY = previousKey;
       if (previousDrainCron === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = previousDrainCron;
+    }
+    const pauseDoc = readFileSync("src/lib/application-pause.ts", "utf8");
+    for (const needle of [
+      "/api/cron/drain-queue",
+      "/api/cron/auto-apply",
+      "/api/cron/nudges",
+      "/api/cron/mailbox-delivery",
+      "/api/cron/mailbox-digest",
+      "lavorai.it/api/cron/drain-queue",
+    ]) {
+      assert.ok(pauseDoc.includes(needle), `kill-switch inventory must list ${needle}`);
     }
     const source = readFileSync("src/lib/application-worker.ts", "utf8");
     assert.match(source, /attemptAutoSubmit[\s\S]*?assertApplicationsRunning\(\)/);

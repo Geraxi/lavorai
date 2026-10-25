@@ -224,13 +224,57 @@ assert.match(readFileSync("src/lib/queue-drain.ts", "utf8"), /processApplication
   assert.ok(userMail >= 1, "nudges still send user-facing mail");
 }
 
-const vercel = readFileSync("vercel.json", "utf8");
-assert.match(vercel, /"path": "\/api\/cron\/mailbox-delivery"/);
-assert.match(vercel, /"path": "\/api\/cron\/mailbox-digest"/);
-assert.match(vercel, /"path": "\/api\/cron\/drain-queue"/);
-assert.match(vercel, /"path": "\/api\/cron\/auto-apply"/);
-assert.match(vercel, /"path": "\/api\/cron\/nudges"/);
-assert.match(readFileSync(".github/workflows/drain-queue.yml", "utf8"), /https:\/\/lavorai\.it\/api\/cron\/drain-queue/);
+const vercel = JSON.parse(readFileSync("vercel.json", "utf8")) as { crons: Array<{ path: string; schedule: string }> };
+const cron = (path: string) => vercel.crons.find((c) => c.path === path)?.schedule;
+assert.equal(cron("/api/cron/mailbox-delivery"), "0 * * * *", "mailbox-delivery is hourly");
+assert.equal(cron("/api/cron/mailbox-digest"), "15 10 * * *", "mailbox-digest is 10:15 UTC");
+assert.equal(cron("/api/cron/drain-queue"), "*/5 * * * *", "drain-queue is every 5 min");
+assert.equal(cron("/api/cron/auto-apply"), "0 8,9,12,13,16,17 * * *", "auto-apply is 0 8,9,12,13,16,17 UTC");
+assert.equal(cron("/api/cron/nudges"), "0 10 * * *", "nudges is 0 10 UTC");
+
+const workflow = readFileSync(".github/workflows/drain-queue.yml", "utf8");
+assert.match(workflow, /https:\/\/lavorai\.it\/api\/cron\/drain-queue/);
+assert.match(workflow, /\*\/15 \* \* \* \*/);
+assert.doesNotMatch(workflow, /lavorai\.it\/api\/cron\/(?!drain-queue)/, "GH Actions backup must not hit a different send endpoint");
+
+{
+  const { recheckSkippedAtsHandoffs } = await import("../src/lib/skip-list-handoff-recheck");
+  const enqueued: string[] = [];
+  const now = new Date("2026-10-25T00:00:00.000Z");
+  const out = await recheckSkippedAtsHandoffs({
+    now,
+    limit: 1,
+    lookup: async () => ({
+      email: "hiring@acme.com",
+      provenance: {
+        version: 1, sourceType: "job_description", requestedUrl: "https://jobs.ashbyhq.com/acme/x",
+        sourceUrl: "https://jobs.ashbyhq.com/acme/x", observedAt: now.toISOString(), pageSha256: "x",
+        evidence: "Send your CV to hiring@acme.com", company: "Acme", extraction: "job_description",
+      },
+    }),
+    enqueue: async (id) => { enqueued.push(id); },
+    db: {
+      application: {
+        findMany: async () => [{
+          id: "gate-recheck",
+          submitStartedAt: null, submittedAt: null, submittedVia: null, submitConfirmation: null,
+          canaryLog: null, answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+          job: {
+            id: "job-ashby", url: "https://jobs.ashbyhq.com/acme/x", company: "Acme",
+            description: "Send your CV to hiring@acme.com", recruiterEmail: null,
+            recruiterEmailSourceUrl: null, companyWebsite: "https://www.acme.com",
+          },
+        }],
+        updateMany: async () => ({ count: 1 }),
+      },
+      job: { update: async () => ({}) },
+    },
+  });
+  assert.equal(out.found, 1);
+  assert.equal(out.queued, 0, "skip-list recheck (nudges/self-heal) must not enqueue while the employer gate is off");
+  assert.equal(out.rejected, 1);
+  assert.deepEqual(enqueued, []);
+}
 
 if (previous === undefined) delete process.env.RECRUITER_EMAIL_FALLBACK_ENABLED;
 else process.env.RECRUITER_EMAIL_FALLBACK_ENABLED = previous;
