@@ -71,6 +71,7 @@ async function main() {
     row = fixture();
     const sender = load("src/lib/recruiter-delivery.ts", {
       "@/lib/application-pause": { applicationsPaused }, "@/lib/release-email-canary": canary,
+      "@/lib/email-test-capability": { authorizeEmailTest: async () => false, LEGACY_CANARY_ATTEMPT_KEY: "release-canary-email-20261013-owner-v1" },
     }).sendRecruiterEmailOnce;
     const events: string[] = [];
     const deps = {
