@@ -2,12 +2,23 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import ts from "typescript";
 
+function loadPlain(path: string) {
+  const source = readFileSync(path, "utf8");
+  const exports: Record<string, unknown> = {};
+  const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  new Function("require", "exports", js)((name: string) => {
+    throw new Error(`Unexpected import ${name} from ${path}`);
+  }, exports);
+  return exports as any;
+}
+
 function load(path: string, extra: Record<string, unknown> = {}) {
   const source = readFileSync(path, "utf8");
   const exports: Record<string, unknown> = {};
   const mocks: Record<string, unknown> = {
     "@/lib/application-pause": { applicationsPaused: () => process.env.APPLICATIONS_PAUSED === "true" },
     "@/lib/db": { prisma: extra.prisma ?? { emailLog: {} } },
+    "@/lib/resend-keys": extra.resendKeys ?? loadPlain("src/lib/resend-keys.ts"),
     ...extra,
   };
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
@@ -110,10 +121,11 @@ async function main() {
   assert.equal(failed.errorName, "rate_limit_exceeded");
   assert.equal(failed.errorCode, "429");
 
-  for (const outcome of [null, undefined, "attempted", "failed", "unknown", "provider_failed", "unknown_not_accepted"]) {
+  for (const outcome of [null, undefined, "attempted", "failed", "unknown", "acceptance_unknown", "provider_failed", "unknown_not_accepted"]) {
     const label = quota.emailLogAdminLabel(outcome);
     assert.doesNotMatch(label, /sent|inviata|inviate/i, `admin label for ${outcome} must not say sent`);
   }
+  assert.equal(quota.emailLogAdminLabel("acceptance_unknown"), "esito sconosciuto");
   assert.equal(quota.emailLogAdminLabel("accepted"), "accettata dal provider");
   assert.equal(quota.emailLogAdminLabel("delivered"), "consegnata");
 
@@ -131,10 +143,19 @@ async function main() {
   assert.equal(await quota.hasSuccessfulSendRecently("b@x.test", "cv_ready", 6, db, now), true);
 
   const errDb = memoryDb();
+  const warnings: string[] = [];
+  const origWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map((arg) => typeof arg === "string" ? arg : JSON.stringify(arg)).join(" "));
+  };
   const rejected = await quota.sendWithinQuota("application_sent", "user@x.test", async () => ({
     data: null,
-    error: { name: "validation_error", statusCode: 422 },
+    error: { name: "validation_error", statusCode: 422, message: "The Bearer re_secret123 key was rejected" },
   }), { db: errDb, now });
+  console.warn = origWarn;
+  assert.ok(warnings.some((line) => line.includes("send_failed") && line.includes("validation_error") && line.includes("422")));
+  assert.ok(warnings.every((line) => !line.includes("user@x.test") && !line.includes("re_secret123")));
+  assert.ok(warnings.some((line) => line.includes("u***@x.test") && line.includes("Bearer [redacted]")));
   assert.equal(rejected.sent, false);
   assert.equal(rejected.outcome, "failed");
   assert.equal(errDb.rows.length, 1);
@@ -258,15 +279,25 @@ async function main() {
 
   const labelSql = readFileSync("scripts/label-20261024-email-log.sql", "utf8");
   assert.match(labelSql, /UNAPPLIED/);
-  assert.match(labelSql, /provider_failed/);
-  assert.match(labelSql, /unknown_not_accepted/);
+  assert.match(labelSql, /acceptance_unknown/);
   assert.match(labelSql, /2026-10-24/);
-  assert.match(labelSql, /email_log_2410_evidence/);
+  assert.doesNotMatch(labelSql, /unknown_not_accepted|provider_failed/);
   assert.doesNotMatch(labelSql.replace(/^--.*$/gm, ""), /\bDELETE\b|\bINSERT\s+INTO\s+"EmailLog"/i);
   assert.doesNotMatch(labelSql, /emails\.send/i);
-  const csv = readFileSync("scripts/email-log-2410-evidence.template.csv", "utf8");
-  assert.match(csv, /evidence_error_name/);
-  assert.match(csv, /never applied by CI/i);
+
+  const keys = loadPlain("src/lib/resend-keys.ts");
+  assert.equal(keys.resendReceivingApiKey({ RESEND_API_KEY: "re_send" }), "re_send");
+  assert.equal(keys.resendReceivingApiKey({ RESEND_API_KEY: "re_send", RESEND_RECEIVING_API_KEY: "re_recv" }), "re_recv");
+  assert.equal(keys.resendSendingApiKey({ RESEND_API_KEY: "re_send", RESEND_RECEIVING_API_KEY: "re_recv" }), "re_send");
+  assert.equal(keys.scrubResendSecretText("Bearer re_abc123 failed"), "Bearer [redacted] failed");
+  assert.match(keys.redactEmailAddress("giulia@example.test"), /^g\*\*\*@example\.test$/);
+
+  const inbound = readFileSync("src/lib/inbound/providers.ts", "utf8");
+  assert.match(inbound, /RESEND_RECEIVING_API_KEY/);
+  assert.match(readFileSync("src/lib/application-reply-processing.ts", "utf8"), /resendReceivingApiKey/);
+  assert.match(readFileSync("src/lib/inbox-replies.ts", "utf8"), /resendReceivingApiKey/);
+  assert.match(readFileSync("src/lib/inbox-replies.ts", "utf8"), /resendSendingApiKey/);
+  assert.doesNotMatch(readFileSync("src/lib/resend-keys.ts", "utf8"), /console\.(log|warn|error|info|debug)\(/);
 
   const schema = readFileSync("prisma/schema.prisma", "utf8");
   assert.match(schema, /outcome\s+String\?/);

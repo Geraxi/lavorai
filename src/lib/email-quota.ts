@@ -1,5 +1,6 @@
 import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
+import { redactEmailAddress, scrubResendSecretText } from "@/lib/resend-keys";
 
 const DEFAULT_DAILY = 95;
 const DEFAULT_MONTHLY = 2900;
@@ -13,12 +14,13 @@ export type EmailLogOutcome =
   | "delivered"
   | "failed"
   | "unknown"
+  | "acceptance_unknown"
   | "provider_failed"
   | "unknown_not_accepted";
 
 export type ProviderSendResult = {
   data?: { id?: string | null } | null;
-  error?: { name?: string; statusCode?: number | null } | null;
+  error?: { name?: string; statusCode?: number | null; message?: string | null } | null;
 };
 
 export type EmailSendResult = {
@@ -59,13 +61,18 @@ export function classifyProviderResult(result: ProviderSendResult | void): {
   providerEmailId?: string;
   errorName?: string;
   errorCode?: string;
+  errorMessage?: string;
+  statusCode?: number;
 } {
   if (!result) return { outcome: "unknown" };
   if (result.error) {
+    const message = result.error.message?.trim();
     return {
       outcome: "failed",
       errorName: result.error.name ?? "provider_error",
       errorCode: result.error.statusCode != null ? String(result.error.statusCode) : undefined,
+      errorMessage: message ? scrubResendSecretText(message) : undefined,
+      statusCode: result.error.statusCode ?? undefined,
     };
   }
   const id = result.data?.id?.trim();
@@ -80,6 +87,7 @@ export function emailLogAdminLabel(outcome: string | null | undefined): string {
     case "failed":
     case "provider_failed": return "fallita";
     case "unknown":
+    case "acceptance_unknown":
     case "unknown_not_accepted": return "esito sconosciuto";
     case "attempted": return "tentata";
     default: return "esito non etichettato";
@@ -231,7 +239,7 @@ export async function sendWithinQuota(
   }
   const q = await canSendEmail(db, now);
   if (!q.allowed) {
-    console.warn(`[email-quota] SKIP ${kind} → ${to} (${q.reason}; today=${q.today}/${q.daily} month=${q.month}/${q.monthly})`);
+    console.warn(`[email-quota] SKIP kind=${kind} to=${redactEmailAddress(to)} (${q.reason}; today=${q.today}/${q.daily} month=${q.month}/${q.monthly})`);
     return { sent: false, reason: q.reason, outcome: null };
   }
   let logId: string | undefined;
@@ -256,7 +264,15 @@ export async function sendWithinQuota(
     if (classified.outcome === "accepted") {
       return { sent: true, reason: null, outcome: "accepted", logId, providerEmailId: classified.providerEmailId };
     }
-    console.warn(`[email-quota] ${kind} → ${to} ${classified.outcome}${classified.errorName ? ` ${classified.errorName}` : ""}`);
+    console.warn("[email-quota] send_failed", {
+      path: "sendWithinQuota",
+      kind,
+      to: redactEmailAddress(to),
+      outcome: classified.outcome,
+      errorName: classified.errorName ?? null,
+      statusCode: classified.statusCode ?? null,
+      message: classified.errorMessage ?? null,
+    });
     return { sent: false, reason: classified.outcome === "failed" ? "provider_rejected" : "provider_acceptance_unknown", outcome: classified.outcome, logId };
   } catch (err) {
     if (logId) {

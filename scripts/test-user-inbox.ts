@@ -81,6 +81,12 @@ async function main() {
   assert.throws(() => resendInbound.parse(JSON.stringify({ type: "email.received", data: {} })));
   const calls: string[] = [];
   const hydrated = await resendInbound.hydrate(parsed, { RESEND_API_KEY: "test" }, async (url) => { calls.push(url); return new Response(JSON.stringify({ text: "We have received your application for the Backend Engineer position.", html: null, headers: { from: "Acme Careers <no-reply@greenhouse.io>" } }), { status: 200 }); });
+  const receivingCalls: string[] = [];
+  await resendInbound.hydrate(parsed, { RESEND_API_KEY: "fallback-send", RESEND_RECEIVING_API_KEY: "receiving-only" }, async (_url, init) => {
+    receivingCalls.push(String((init?.headers as { Authorization?: string } | undefined)?.Authorization));
+    return new Response(JSON.stringify({ text: "ok", html: null, headers: {} }), { status: 200 });
+  });
+  assert.equal(receivingCalls[0], "Bearer receiving-only");
   assert.equal(calls[0], "https://api.resend.com/emails/receiving/em_1");
   assert.match(hydrated.text ?? "", /Backend Engineer/);
 

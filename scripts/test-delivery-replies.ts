@@ -80,6 +80,7 @@ const processing = load("src/lib/application-reply-processing.ts", {
   "node:crypto": crypto, "@/lib/db": { prisma }, "@/lib/reply-parser": parser,
   "@/lib/reply-security-message": replySecurity, "@/lib/application-delivery": delivery,
   "@/lib/apply-reply-to-application": projection,
+  "@/lib/resend-keys": { resendReceivingApiKey: () => env.RESEND_API_KEY },
   "@/lib/inbound/service": { recordAtsConfirmation: async () => true },
   "@/lib/application-mailbox": {
     classifyMailbox: async (input: { fromAddress: string; subject?: string | null; bodyText?: string | null }) => {

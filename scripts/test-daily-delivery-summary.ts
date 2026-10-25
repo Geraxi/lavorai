@@ -56,6 +56,7 @@ function harness(options: HarnessOptions = {}) {
       user: { findUnique: async () => ({ id: "owner", email: "owner@example.test", name: "<img> Owner", locale: options.locale ?? "en" }) },
       emailLog: { count: async (query: unknown) => { queries.cooldown = query; return options.cooldown ? 1 : 0; } },
     } },
+    "@/lib/resend-keys": { redactEmailAddress: (value: string) => value[0] + "***@redacted.test", scrubResendSecretText: (value: string) => value },
     "@/lib/email-quota": { EMAIL_LOG_SUCCESS_WHERE: { outcome: { in: ["accepted", "delivered"] } }, sendWithinQuota: async (kind: string, to: string, callback: () => Promise<unknown>) => {
       quotaCalls++; assert.equal(kind, "daily_summary"); assert.equal(to, "owner@example.test");
       if (options.quota === false) return { sent: false, reason: "daily quota" };

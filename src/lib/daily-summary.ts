@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { EMAIL_LOG_SUCCESS_WHERE, sendWithinQuota } from "@/lib/email-quota";
 import { isTestAccount } from "@/lib/admin";
 import { deliveryEvidence, type DeliveryEvidenceInput } from "@/lib/application-evidence";
+import { redactEmailAddress, scrubResendSecretText } from "@/lib/resend-keys";
 
 /** Report observed application states; neither legacy labels nor API acceptance
  * prove employer delivery. One notification per user per 24 hours. */
@@ -98,6 +99,13 @@ export async function runDailySummary(opts?: { onlyEmail?: string; dryRun?: bool
       });
       if (!notification.sent) {
         if (notification.outcome === "failed" || notification.outcome === "unknown") {
+          console.warn("[daily-summary] send_failed", {
+            path: "runDailySummary",
+            kind: "daily_summary",
+            to: redactEmailAddress(user.email),
+            outcome: notification.outcome,
+            reason: notification.reason,
+          });
           result.details.push({ email: user.email, status: "error: " + (notification.reason ?? notification.outcome), counts });
           result.errors++; continue;
         }
@@ -105,7 +113,15 @@ export async function runDailySummary(opts?: { onlyEmail?: string; dryRun?: bool
       }
       result.details.push({ email: user.email, status: "accepted", counts }); result.sent++;
     } catch (error) {
-      result.details.push({ email: user.email, status: "error: " + (error instanceof Error ? error.message.slice(0, 80) : "Provider request failed") });
+      const message = error instanceof Error ? scrubResendSecretText(error.message).slice(0, 80) : "Provider request failed";
+      console.warn("[daily-summary] send_failed", {
+        path: "runDailySummary",
+        kind: "daily_summary",
+        to: redactEmailAddress(user.email),
+        errorName: error instanceof Error ? error.name : "Error",
+        message,
+      });
+      result.details.push({ email: user.email, status: "error: " + message });
       result.errors++;
     }
   }
