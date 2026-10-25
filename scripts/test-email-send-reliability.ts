@@ -292,7 +292,7 @@ async function main() {
   }), { dryRun: true, count: 37, wouldUpdate: reviewedIds });
   assert.throws(
     () => label.diffReviewedEmailLogs(complete.slice(1)),
-    /missing \[reviewed-24-10-email-log-01\]/,
+    new RegExp(`missing \\[${reviewedIds[0]}\\]`),
   );
   assert.throws(
     () => label.diffReviewedEmailLogs([...complete, { id: "extra-id", outcome: null }]),
