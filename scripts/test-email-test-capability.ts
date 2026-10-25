@@ -118,12 +118,11 @@ async function main() {
   assert.equal(emailTestUserId(), "ats-test-user");
   process.env.EMAIL_TEST_USER_ID = "email-test-user";
 
-  assert.equal(adminEmailTestAuthorized({ headerKey: "k", adminSession: false }, { ADMIN_SYNC_KEY: "k" }), true);
-  assert.equal(adminEmailTestAuthorized({ headerKey: "wrong", adminSession: false }, { ADMIN_SYNC_KEY: "k" }), false);
-  assert.equal(adminEmailTestAuthorized({ headerKey: "", adminSession: false }, { ADMIN_SYNC_KEY: "" }), false);
-  assert.equal(adminEmailTestAuthorized({ headerKey: null, adminSession: false }, { ADMIN_SYNC_KEY: "k" }), false);
-  assert.equal(adminEmailTestAuthorized({ headerKey: null, adminSession: true }, { ADMIN_SYNC_KEY: "k" }), true);
-  assert.equal(adminEmailTestAuthorized({ headerKey: null, adminSession: false }, { ADMIN_SYNC_KEY: "k" }), false);
+  assert.equal(adminEmailTestAuthorized({ headerKey: "k" }, { ADMIN_SYNC_KEY: "k" }), true);
+  assert.equal(adminEmailTestAuthorized({ headerKey: "wrong" }, { ADMIN_SYNC_KEY: "k" }), false);
+  assert.equal(adminEmailTestAuthorized({ headerKey: "" }, { ADMIN_SYNC_KEY: "" }), false);
+  assert.equal(adminEmailTestAuthorized({ headerKey: null }, { ADMIN_SYNC_KEY: "k" }), false);
+  assert.equal(adminEmailTestAuthorized({ headerKey: "k" }, { ADMIN_SYNC_KEY: "" }), false, "empty admin key never authorizes");
 
   const { prepareAndRunEmailTest, authorizeEmailTest, readEmailTestDelivery } = await import("../src/lib/email-test-capability");
   const { db, users, apps, grants, attempts, inbound } = memoryDb();
@@ -337,8 +336,8 @@ async function main() {
     "next/server": {
       NextResponse: { json: (body: unknown, options: any) => ({ body, status: options?.status ?? 200 }) },
     },
-    "@/lib/session": { getCurrentUser: async () => ({ email: "customer@example.invalid" }) },
-    "@/lib/admin": { isAdmin: () => false },
+    "@/lib/session": { getCurrentUser: async () => ({ email: "umbertogeraci0@gmail.com" }) },
+    "@/lib/admin": { isAdmin: () => true },
     "@/lib/db": { prisma: db },
     "@/lib/recruiter-delivery": { sendRecruiterEmailOnce: send },
     "@/lib/email-test-capability": await import("../src/lib/email-test-capability"),
@@ -349,6 +348,7 @@ async function main() {
   });
   assert.equal(noAdmin.status, 401);
   assert.equal(noAdmin.body.error, "unauthorized");
+  assert.equal(noAdmin.status, 401, "admin session without X-Admin-Key is refused");
 
   const wrongKey = await route.POST({
     headers: new Headers({ "x-admin-key": "nope", "content-type": "application/json" }),

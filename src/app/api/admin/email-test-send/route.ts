@@ -1,6 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getCurrentUser } from "@/lib/session";
-import { isAdmin } from "@/lib/admin";
 import { prisma } from "@/lib/db";
 import { sendRecruiterEmailOnce } from "@/lib/recruiter-delivery";
 import {
@@ -15,18 +13,14 @@ export const maxDuration = 60;
 /**
  * Controlled email test. Works while APPLICATIONS_PAUSED=true.
  * No APPLICATION_RECOVERY_RELEASE / LAVORAI_RELEASE_CANARY gate.
- * Auth: X-Admin-Key == ADMIN_SYNC_KEY, or an admin session.
+ * Auth: X-Admin-Key == ADMIN_SYNC_KEY only. An admin session is not enough.
  */
-async function authorized(req: NextRequest): Promise<boolean> {
-  const user = await getCurrentUser();
-  return adminEmailTestAuthorized({
-    headerKey: req.headers.get("x-admin-key"),
-    adminSession: isAdmin(user?.email),
-  });
+function authorized(req: NextRequest): boolean {
+  return adminEmailTestAuthorized({ headerKey: req.headers.get("x-admin-key") });
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await authorized(req))) {
+  if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const body = await req.json().catch(() => null);
@@ -51,7 +45,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await authorized(req))) {
+  if (!authorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   const url = new URL(req.url);

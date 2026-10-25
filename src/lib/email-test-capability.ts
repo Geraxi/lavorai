@@ -66,14 +66,14 @@ export function emailTestUserId(env: NodeJS.ProcessEnv = process.env): string | 
   return id || null;
 }
 
+/** Admin key only. An admin session is not enough. */
 export function adminEmailTestAuthorized(
-  input: { headerKey: string | null; adminSession: boolean },
+  input: { headerKey: string | null },
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   const expected = (env.ADMIN_SYNC_KEY ?? "").trim();
   const header = (input.headerKey ?? "").trim();
-  if (expected && header && header === expected) return true;
-  return input.adminSession === true;
+  return Boolean(expected && header && header === expected);
 }
 
 export function parseEmailTestRunKey(raw: unknown): string | null {
