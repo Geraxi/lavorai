@@ -255,6 +255,7 @@ async function testLivenessRecheck() {
 async function testCvProfileEnsure() {
   const releasedFor: string[] = [];
   const ensure = load("src/lib/cv-profile-ensure.ts", { "@/lib/db": { prisma: null }, "@/lib/admin": { isTestAccount: (e: string) => e.endsWith("@test.invalid") },
+    "@/lib/cv-extraction-log": await import("../src/lib/cv-extraction-log"),
     "@/lib/cv-profile-ai-full": { extractFullProfile: async () => { throw new Error("must be injected"); } },
     "@/lib/cv-profile-types": cvTypes, "@/lib/held-application-release": { releaseHeldApplicationsForUser: async () => 0 } });
   const TEXT = "Mario Rossi — Backend Engineer. Esperienza: 5 anni Node.js, PostgreSQL, Kubernetes presso Acme.";

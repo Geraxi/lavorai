@@ -9,9 +9,28 @@ import type { PortalAdapter, ApplyInput, ApplyOutcome, PendingQuestion } from ".
  *   candidate[name], candidate[email], candidate[phone], candidate[cv],
  *   candidate[cover_letter], candidate[referrer], open_question_answers.
  * L'URL dell'annuncio è <careers-host>/o/<slug>[/c/new]; il careers host può
- * essere <tenant>.recruitee.com o un dominio custom (es. careers.bunq.com).
+ * essere custom, ma questo adapter accetta solo <tenant>.recruitee.com verificabili.
  */
-const OFFER_RE = /\/o\/([^/?#]+)/i;
+const OFFER_RE = /^\/o\/([^/?#]+)(?:\/c\/new)?\/?$/i;
+
+export function requiresRecruiteeOriginReview(urls: string[], source: string, adapterId?: string): boolean {
+  if (adapterId) return false;
+  return source === "recruitee" || urls.some((raw) => {
+    try { return /\/o\/[^/?#]+/i.test(new URL(raw).pathname); }
+    catch { return false; }
+  });
+}
+
+/** Only provider-owned HTTPS origins. Unverified custom domains must not select this adapter. */
+export function recruiteeDestination(raw: string): URL | null {
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || url.username || url.password || url.port
+      || !/^[a-z0-9-]+\.recruitee\.com$/i.test(url.hostname)
+      || !OFFER_RE.test(url.pathname)) return null;
+    return url;
+  } catch { return null; }
+}
 
 interface OpenQuestion { id: number; kind?: string; body?: string; required?: boolean; open_question_options?: Array<{ id: number; body: string }> }
 
@@ -60,17 +79,14 @@ export const recruiteeAdapter: PortalAdapter = {
   label: "Recruitee",
   requiresBrowser: false,
   matches(url: string): boolean {
-    try {
-      const u = new URL(url);
-      return /(^|\.)recruitee\.com$/i.test(u.hostname) || OFFER_RE.test(u.pathname);
-    } catch { return false; }
+    return recruiteeDestination(url) !== null;
   },
   async apply(_page, input: ApplyInput): Promise<ApplyOutcome> {
     let origin = "";
     let slug = "";
     try {
-      const u = new URL(input.jobUrl);
-      if (u.protocol !== "https:") return { ok: false, status: "form_not_found", error: "Il portale Recruitee richiede un URL HTTPS verificabile." };
+      const u = recruiteeDestination(input.jobUrl);
+      if (!u) return { ok: false, status: "form_not_found", error: "Il portale Recruitee richiede un URL HTTPS verificabile." };
       origin = u.origin;
       slug = u.pathname.match(OFFER_RE)?.[1] ?? "";
     } catch { /* below */ }
@@ -85,7 +101,7 @@ export const recruiteeAdapter: PortalAdapter = {
       wouldAcceptRealSubmit: true,
     };
     try {
-      const r = await fetch(`${origin}/api/offers/${encodeURIComponent(slug)}`, { headers, signal: AbortSignal.timeout(15_000) });
+      const r = await fetch(`${origin}/api/offers/${encodeURIComponent(slug)}`, { headers, redirect: "error", signal: AbortSignal.timeout(15_000) });
       if (r.status === 404) return { ok: false, status: "job_closed", error: "Annuncio non più online (Recruitee 404)." };
       if (!r.ok) return { ok: false, status: "unknown_error", error: `Verifica annuncio Recruitee non riuscita (HTTP ${r.status}). Nessun invio eseguito.` };
       if (r.ok) {
@@ -137,9 +153,6 @@ export const recruiteeAdapter: PortalAdapter = {
       else answers.push({ open_question_id: f.q.id, content: v });
     }
     if (pending.length > 0) return { ok: false, status: "needs_user_input", error: `${pending.length} domande obbligatorie richiedono la tua risposta prima dell'invio.`, pendingQuestions: pending };
-    if (input.dryRun) {
-      return { ok: true, status: "submitted", confirmation: "DRY_RUN", offerValidation };
-    }
 
     // 3. Invio multipart — build first so the ATS-test recheck can see the email field.
     const p = input.profile;
@@ -152,13 +165,14 @@ export const recruiteeAdapter: PortalAdapter = {
     fd.set("candidate[referrer]", "LavorAI");
     try {
       const buf = await readFile(input.cvLocalPath);
+      if (!buf.length) throw new Error("empty_attachment");
       const name = input.cvLocalPath.split(/[\\/]/).pop() || "cv.pdf";
       fd.set("candidate[cv]", new Blob([buf], { type: name.endsWith(".pdf") ? "application/pdf" : "application/octet-stream" }), name);
-    } catch (err) {
+    } catch {
       return {
         ok: false,
         status: "missing_field",
-        error: `CV non leggibile: ${err instanceof Error ? err.message : err}`,
+        error: "CV non leggibile o vuoto. Nessun invio eseguito.",
         refusedBeforeSubmit: true,
       };
     }
@@ -167,6 +181,11 @@ export const recruiteeAdapter: PortalAdapter = {
       if (a.content != null) fd.set(`candidate[open_question_answers_attributes][${i}][content]`, a.content);
       if (a.flag != null) fd.set(`candidate[open_question_answers_attributes][${i}][flag]`, String(a.flag));
     });
+
+    // Exercise attachment construction in dry mode too, but never cross the POST boundary.
+    if (input.dryRun) {
+      return { ok: true, status: "submitted", confirmation: "DRY_RUN", offerValidation };
+    }
 
     const submitGuard = recheckAtsTestBeforeSubmitHttp(input.atsTestAuth, {
       ownerUserId: input.atsTestOwnerUserId ?? "",

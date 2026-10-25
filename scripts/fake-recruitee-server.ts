@@ -131,7 +131,7 @@ export async function startFakeRecruiteeServer(): Promise<{
     try {
       if (method === "GET" && url.pathname === "/api/offers/") {
         requests.push(record);
-        const offers = ["dry-optional", "real-optional", "race-two", "race-ten", "cv-required", "server-500", "needs-answers", "force-captcha", "no-form"]
+        const offers = ["dry-optional", "real-optional", "race-two", "race-ten", "cv-required", "server-500", "needs-answers", "force-captcha", "no-form", "missing-cv"]
           .map((item) => item === "no-form"
             ? { id: realOfferFixture.offer.id, slug: "no-form", title: "Fake Recruitee no form", status: "published", ...REAL_RECRUITEE_OFFER_OPTIONS, open_questions: [] }
             : offerPayload(item));

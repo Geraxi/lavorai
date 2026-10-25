@@ -1,4 +1,5 @@
 import { resolveAdapterByUrl, noAdapterMessageFor } from "@/lib/ats-adapter-resolution";
+import { requiresRecruiteeOriginReview } from "@/lib/portal-adapters/recruitee";
 import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
 import {
   ATS_TEST_FICTIONAL_MARK,
@@ -568,6 +569,18 @@ async function processApplicationRun(
   const resolvedAdapter = portalSubmitEnabled && !skipPortal ? resolveAdapterByUrl([app.job.url, resolvedUrl]) : null;
   const adapter = resolvedAdapter?.adapter ?? null;
   const adapterUrl = resolvedAdapter?.url ?? app.job.url;
+  // An unverified custom offer URL must not fall through to email or browser submit.
+  if (requiresRecruiteeOriginReview([app.job.url, resolvedUrl], app.job.source, adapter?.id)) {
+    await prisma.application.updateMany({
+      where: { id: applicationId, ...liveLeaseFields(workToken), status: "ready_to_apply" },
+      data: {
+        status: "ready_to_apply", submitConfirmation: NOT_SUBMITTED,
+        errorMessage: "Origine del portale non verificata. Nessun invio effettuato: apri il link ufficiale per candidarti manualmente.",
+        leaseToken: null, leaseExpiresAt: null,
+      },
+    });
+    return;
+  }
   const recruiterLookup = {
     description: app.job.description,
     cachedSourceUrl: app.job.recruiterEmailSourceUrl,
@@ -767,6 +780,22 @@ async function processApplicationRun(
       return; // fatto
     }
 
+    if (atsTestAuth && outcome.status !== "submission_unconfirmed"
+      && !("attemptEvidence" in outcome && (outcome.attemptEvidence?.outboundRequest || outcome.attemptEvidence?.clickPerformed))
+      && "refusedBeforeSubmit" in outcome && outcome.refusedBeforeSubmit) {
+      await prisma.application.updateMany({
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "queued", "optimizing"] } },
+        data: {
+          status: "ready_to_apply",
+          submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT,
+          errorMessage: outcome.error,
+          completedAt: null,
+          leaseToken: null, leaseExpiresAt: null,
+        },
+      });
+      return;
+    }
+
     if (outcome.status === "validation_failed") {
       await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: {
         status: "ready_to_apply", submitConfirmation: REJECTED_NOT_SENT,
@@ -867,18 +896,6 @@ async function processApplicationRun(
     }
 
     if (["login_required", "not_eligible", "stuck", "unsafe_permissions", "sso_required", "marketplace", "id_verification", "not_a_job_application"].includes(outcome.status)) {
-      if (atsTestAuth && "refusedBeforeSubmit" in outcome && outcome.refusedBeforeSubmit) {
-        await prisma.application.updateMany({
-          where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "queued", "optimizing"] } },
-          data: {
-            status: "ready_to_apply",
-            submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT,
-            errorMessage: outcome.error,
-            completedAt: null,
-          },
-        });
-        return;
-      }
       const { confirmationForFailureStatus, persistAttemptConfirmation } = await import("@/lib/attempt-outcome");
       const confirmation = persistAttemptConfirmation(confirmationForFailureStatus(outcome.status) ?? `FAILED:${outcome.status}`);
       await prisma.application.updateMany({

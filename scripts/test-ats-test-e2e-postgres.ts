@@ -27,7 +27,7 @@ import {
 const TEST_USER = "ats-test-e2e-user";
 const HOST = "fake-lavorai.recruitee.com";
 const CANDIDATE_EMAIL = "owner-mailbox@example.test";
-const SLUGS = ["dry-optional", "real-optional", "race-two", "race-ten", "cv-required", "server-500", "needs-answers", "force-captcha", "no-form"] as const;
+const SLUGS = ["dry-optional", "real-optional", "race-two", "race-ten", "cv-required", "server-500", "needs-answers", "force-captcha", "no-form", "missing-cv"] as const;
 const DESTINATIONS = SLUGS.map((slug) => `${HOST}/o/${slug}`).join(" ");
 const FIXTURE_DB = /^\/lavorai_ats_test_e2e_test(?:_[a-z0-9]+)?$/;
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -150,7 +150,7 @@ async function main() {
     const { drainQueuedApplications } = await import("../src/lib/queue-drain");
 
     assert.equal(findPortalAdapter(destUrl("dry-optional"))?.id, "recruitee", "host *.recruitee.com matches the Recruitee adapter");
-    assert.equal(findPortalAdapter("https://careers.example.invalid/o/custom-slug")?.id, "recruitee", "URL shape /o/<slug> also matches");
+    assert.equal(findPortalAdapter("https://careers.example.invalid/o/custom-slug"), null, "unverified custom origins must not select the adapter");
     assert.equal(recruiteeAdapter.requiresBrowser, false);
 
     const now = new Date();
@@ -382,6 +382,9 @@ async function main() {
       if (slug === "no-form") {
         return { ok: false, status: "form_not_found", error: "forced form_not_found" };
       }
+      if (slug === "missing-cv") {
+        return { ok: false, status: "missing_field", error: "synthetic unreadable attachment", refusedBeforeSubmit: true };
+      }
       return originalApply(page, input);
     };
     const previousPaused = process.env.APPLICATIONS_PAUSED;
@@ -389,6 +392,10 @@ async function main() {
     process.env.RESEND_API_KEY = "re_test_forced_notify";
     process.env.APPLICATIONS_PAUSED = "false";
     const noticeCases = [
+      { slug: "missing-cv", name: "j. unreadable CV: truthful refusal and zero notices", expect: (row: { status: string | null; submitConfirmation: string | null }) => {
+        assert.equal(row.status, "ready_to_apply");
+        assert.equal(row.submitConfirmation, "REFUSED_BEFORE_SUBMIT");
+      } },
       { slug: "needs-answers", name: "j. needs_user_input: zero notices", expect: (row: { status: string | null; submitConfirmation: string | null }) => {
         assert.equal(row.status, "needs_answers");
       } },
@@ -410,6 +417,13 @@ async function main() {
         );
         assert.equal(run.ok, true, `${item.slug} must finish the token path`);
         if (run.ok) item.expect(run.result ?? { status: null, submitConfirmation: null });
+        if (item.slug === "missing-cv") {
+          const id = atsTestApplicationId(parseAtsTestDestinations(env).find((d) => d.slug === item.slug)!);
+          const row = await prisma.application.findUniqueOrThrow({ where: { id } });
+          assert.equal(row.leaseToken, null);
+          assert.equal(row.leaseExpiresAt, null);
+          assert.equal(row.completedAt, null);
+        }
         assert.equal(postsOf(fake.requests).length, 0, `${item.slug}: zero Recruitee POSTs`);
         assert.equal(await prisma.emailLog.count({ where: { createdAt: { gte: noticeBaseline } } }), 0, `${item.slug}: EmailLog`);
         assert.equal(await prisma.conversionEvent.count({ where: { createdAt: { gte: noticeBaseline } } }), 0, `${item.slug}: ConversionEvent`);
@@ -441,7 +455,7 @@ async function main() {
     assert.equal(postsOf(fake.requests).length, postsBefore);
     record("i. cron/worker without test token cannot use the exemption", 0);
 
-    console.log("HOST DETECTION: matches() accepts *.recruitee.com or /o/<slug>; apply() uses https jobUrl.origin. Tests keep recruitee.com URLs and rewrite fetch in-process to 127.0.0.1 with a test CA.");
+    console.log("HOST DETECTION: matches()/apply() require a provider-owned HTTPS tenant origin and offer path. Tests keep recruitee.com URLs and rewrite fetch in-process to 127.0.0.1 with a test CA.");
     console.log("ALL ATS TEST E2E CHECKS PASSED. Fake Recruitee HTTPS + throwaway Postgres only.");
     console.log("CASE POST COUNTS:", results.map((row) => `${row.name}=${row.posts}`).join(" | "));
   } finally {
