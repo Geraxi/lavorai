@@ -18,7 +18,11 @@ import {
   prepareAndRunAtsTest,
   type AtsTestDeps,
 } from "../src/lib/ats-test-capability";
-import { installFakeRecruiteeFetch, startFakeRecruiteeServer } from "./fake-recruitee-server";
+import {
+  REAL_RECRUITEE_OFFER_OPTIONS,
+  installFakeRecruiteeFetch,
+  startFakeRecruiteeServer,
+} from "./fake-recruitee-server";
 
 const TEST_USER = "ats-test-e2e-user";
 const HOST = "fake-lavorai.recruitee.com";
@@ -61,7 +65,7 @@ async function withClients<T>(url: string, n: number, fn: (clients: PrismaClient
 }
 
 function postsOf(requests: Array<{ method: string; path: string }>) {
-  return requests.filter((row) => row.method === "POST" && row.path.includes("/candidates"));
+  return requests.filter((row) => row.method === "POST" && /\/candidates\/?$/.test(row.path));
 }
 
 function getsOf(requests: Array<{ method: string; path: string }>) {
@@ -184,9 +188,20 @@ async function main() {
       assert.equal(dry.result?.status, "ready_to_apply");
       assert.match(dry.result?.errorMessage ?? "", /Required:/);
     }
-    const dryPosts = postsOf(fake.requests).length;
+    const dryCandidatePosts = fake.requests.filter((row) => row.method === "POST" && /\/api\/offers\/[^/]+\/candidates\/?$/.test(row.path));
+    const dryPosts = dryCandidatePosts.length;
     assert.ok(getsOf(fake.requests).length >= 1, "dry run must GET the offer");
-    assert.equal(dryPosts, 0, "dry run must POST zero times");
+    assert.equal(dryPosts, 0, "dry run against the fake server records zero POSTs to /candidates");
+    assert.equal(dryCandidatePosts.length, 0, "dry-run /candidates POST count must be exactly 0");
+    console.log("dry-run fake Recruitee /candidates POST count: 0");
+    const dryGet = getsOf(fake.requests).find((row) => row.path.includes("dry-optional"));
+    assert.ok(dryGet, "dry run GETs /api/offers/dry-optional");
+    const fixtureOffer = await (await fetch(destUrl("dry-optional").replace("/o/", "/api/offers/"))).json() as { offer: Record<string, unknown> };
+    assert.equal(fixtureOffer.offer.options_phone, REAL_RECRUITEE_OFFER_OPTIONS.options_phone);
+    assert.equal(fixtureOffer.offer.options_cv, REAL_RECRUITEE_OFFER_OPTIONS.options_cv);
+    assert.equal(fixtureOffer.offer.options_cover_letter, REAL_RECRUITEE_OFFER_OPTIONS.options_cover_letter);
+    assert.equal(fixtureOffer.offer.options_photo, REAL_RECRUITEE_OFFER_OPTIONS.options_photo);
+    assert.deepEqual(fixtureOffer.offer.open_questions, []);
     const dryAgain = await prepareAndRunAtsTest(
       { adminOk: true, jobUrl: destUrl("dry-optional") },
       asDeps(prisma, env),
@@ -234,8 +249,13 @@ async function main() {
         for (const loss of denied) {
           assert.equal(loss.ok, false);
           if (!loss.ok) {
-            assert.equal(loss.reason, ATS_TEST_IN_PROGRESS);
             assert.equal(loss.status, 409);
+            // Losers that still see ATS_TEST_CLAIMED get in_progress. Losers
+            // that start after the winner finished get already_attempted.
+            assert.ok(
+              loss.reason === ATS_TEST_IN_PROGRESS || loss.reason === "ats_test_already_attempted",
+              `${n}-way loser 409 reason: ${loss.reason}`,
+            );
           }
         }
       });

@@ -23,6 +23,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AddressInfo } from "node:net";
 import { Agent, fetch as undiciFetch } from "undici";
+import realOfferFixture from "./fixtures/recruitee-lavorai-test-dry-run.offer.json";
+
+/** Options captured from the published trial GET (never POSTed). */
+export const REAL_RECRUITEE_OFFER_OPTIONS = {
+  options_phone: realOfferFixture.offer.options_phone,
+  options_cv: realOfferFixture.offer.options_cv,
+  options_cover_letter: realOfferFixture.offer.options_cover_letter,
+  options_photo: realOfferFixture.offer.options_photo,
+  options_salutation: realOfferFixture.offer.options_salutation,
+  options_title: realOfferFixture.offer.options_title,
+} as const;
 
 export type FakeRecruiteeFile = { field: string; filename: string; size: number };
 
@@ -42,17 +53,15 @@ const PAGE_PATH = /^\/o\/([^/]+)\/?/;
 
 function offerPayload(slug: string): Record<string, unknown> | null {
   if (slug === "missing-offer") return null;
-  const cvRequired = slug === "cv-required";
   return {
-    id: slug.length,
+    id: realOfferFixture.offer.id,
     slug,
-    title: `Fake Recruitee ${slug}`,
-    status: "published",
-    options_phone: "optional",
-    options_cv: cvRequired ? "required" : "optional",
-    options_cover_letter: "optional",
-    options_name: "required",
-    options_email: "required",
+    title: slug === "cv-required" ? "Fake Recruitee CV required" : realOfferFixture.offer.title,
+    status: realOfferFixture.offer.status,
+    ...REAL_RECRUITEE_OFFER_OPTIONS,
+    // Variant used only by the missing-CV refusal case. Default slugs keep
+    // the published trial shape (phone/CV/cover_letter optional, photo off).
+    ...(slug === "cv-required" ? { options_cv: "required" } : {}),
     open_questions: [],
   };
 }
