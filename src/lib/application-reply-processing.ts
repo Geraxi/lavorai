@@ -15,6 +15,7 @@ import {
 } from "@/lib/application-mailbox";
 import { inboundTargetsEmailTestDestination, tryRecordEmailTestInbound } from "@/lib/email-test-capability";
 import { fetchResendReceivedEmail } from "@/lib/resend-keys";
+import { scheduledUserNotificationsHeld } from "@/lib/user-notification-guard";
 
 export interface InboundEmail {
   email_id: string;
@@ -32,6 +33,31 @@ const MAX_BODY = 8000;
 const FORWARD_LEASE_MS = 60_000;
 // Resend expires idempotency keys at 24h. Stop with a conservative margin.
 const FORWARD_RETRY_WINDOW_MS = 23 * 60 * 60 * 1000;
+/** Persist on notifyStatus (and accepted on forwardStatus) so held rows stay identifiable without a migration. */
+export const REPLY_FORWARD_HELD = "held";
+export type ForwardStoredReplyOutcome = "sent" | "skipped" | "unknown" | "held";
+
+export function replyForwardIsHeld(row: { notifyStatus?: string | null; forwardStatus?: string | null }): boolean {
+  return row.notifyStatus === REPLY_FORWARD_HELD || row.forwardStatus === REPLY_FORWARD_HELD;
+}
+
+/**
+ * notifyStatus becomes immediate_sent only after a successful forward with a
+ * provider id. held / skipped / unknown leave the create-time value unchanged:
+ * we never claimed a send, and there is no existing notify value for unknown.
+ */
+async function markImmediateSentOnSuccessfulForward(replyId: string, outcome: ForwardStoredReplyOutcome): Promise<void> {
+  if (outcome !== "sent") return;
+  const row = await prisma.applicationReply.findUnique({
+    where: { id: replyId },
+    select: { forwardProviderId: true, notifyStatus: true },
+  });
+  if (!row?.forwardProviderId || row.notifyStatus !== "pending") return;
+  await prisma.applicationReply.updateMany({
+    where: { id: replyId, notifyStatus: "pending" },
+    data: { notifyStatus: "immediate_sent" },
+  }).catch(() => undefined);
+}
 
 export function htmlToReplyText(html: string): string {
   return html.replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -108,7 +134,8 @@ export async function processInboundReply(input: {
   const identity = { provider: "resend", providerMessageId: input.data.email_id };
   const existing = await prisma.applicationReply.findUnique({ where: { provider_providerMessageId: identity }, select: { id: true } });
   if (existing) {
-    await forwardStoredReply(existing.id);
+    const outcome = await forwardStoredReply(existing.id);
+    await markImmediateSentOnSuccessfulForward(existing.id, outcome);
     return { matched: true, replyId: existing.id };
   }
   // Receiving webhooks are metadata-only. Fetch BEFORE matching forwarded mail.
@@ -185,11 +212,8 @@ export async function processInboundReply(input: {
     });
   }
   if (immediate) {
-    await forwardStoredReply(reply.id);
-    await prisma.applicationReply.updateMany({
-      where: { id: reply.id, notifyStatus: "pending" },
-      data: { notifyStatus: "immediate_sent" },
-    }).catch(() => undefined);
+    const outcome = await forwardStoredReply(reply.id);
+    await markImmediateSentOnSuccessfulForward(reply.id, outcome);
   }
   return { matched: true, replyId: reply.id };
 }
@@ -197,13 +221,27 @@ export async function processInboundReply(input: {
 /** Atomic outbox lease + stable payload/key make webhook retries safe.
  * Never put the network call in the transaction. Crash after send is recovered
  * with the same provider idempotency key, only during its guaranteed window.
+ *
+ * USER_NOTIFICATIONS_HOLD (fail-closed like scheduled jobs) is checked before
+ * the claim. Held rows keep forwardStatus pending, get notifyStatus=held, and
+ * never start the 23h idempotency window. After the hold is lifted they stay
+ * held until an admin deliberately flips notifyStatus back to pending — webhook
+ * replay, retryPendingReplyForwards, and the digest do not send that backlog.
  */
-export async function forwardStoredReply(replyId: string): Promise<"sent" | "skipped" | "unknown"> {
+export async function forwardStoredReply(replyId: string): Promise<ForwardStoredReplyOutcome> {
   const now = new Date();
   const leaseToken = randomUUID();
   const claim = await emailTransaction(async (tx) => {
     const row = await tx.applicationReply.findUniqueOrThrow({ where: { id: replyId } });
+    if (replyForwardIsHeld(row)) return { kind: "done" as const, outcome: "held" as const };
     if (["sent", "skipped", "unknown"].includes(row.forwardStatus)) return { kind: "done" as const, outcome: row.forwardStatus as "sent" | "skipped" | "unknown" };
+    if (scheduledUserNotificationsHeld().held) {
+      await tx.applicationReply.update({
+        where: { id: replyId },
+        data: { notifyStatus: REPLY_FORWARD_HELD },
+      });
+      return { kind: "done" as const, outcome: "held" as const };
+    }
     if (row.forwardStartedAt && now.getTime() - row.forwardStartedAt.getTime() >= FORWARD_RETRY_WINDOW_MS) {
       await tx.applicationReply.update({ where: { id: replyId }, data: { forwardStatus: "unknown", forwardError: "idempotency_window_expired", forwardLeaseUntil: null, forwardLeaseToken: null } });
       return { kind: "done" as const, outcome: "unknown" as const };
@@ -233,10 +271,15 @@ export async function forwardStoredReply(replyId: string): Promise<"sent" | "ski
   }
 }
 
-/** Existing authenticated cron can drain durable notifications after an outage. */
+/** Existing authenticated cron can drain durable notifications after an outage.
+ * Held-marked rows are excluded so lifting USER_NOTIFICATIONS_HOLD does not
+ * auto-forward the backlog. An admin can release one later by setting
+ * notifyStatus back to pending, then calling this function on purpose.
+ */
 export async function retryPendingReplyForwards(limit = 20): Promise<{ completed: number; failed: number; needsReview: number }> {
   const rows = await prisma.applicationReply.findMany({ where: {
     forwardStatus: { in: ["pending", "failed", "sending"] },
+    notifyStatus: { not: REPLY_FORWARD_HELD },
     OR: [{ forwardLeaseUntil: null }, { forwardLeaseUntil: { lte: new Date() } }],
   }, orderBy: { receivedAt: "asc" }, take: Math.max(1, Math.min(100, limit)), select: { id: true } });
   let completed = 0; let failed = 0; let needsReview = 0;

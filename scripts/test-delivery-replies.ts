@@ -19,8 +19,15 @@ function load(path: string, dependencies: Record<string, unknown>, globals: Reco
   }, { filename: path });
   return module.exports;
 }
-const env: Record<string, string> = { NODE_ENV: "production", RESEND_API_KEY: "synthetic-only", INBOUND_EMAIL_DOMAIN: "inbound.example.test" };
+const env: Record<string, string> = {
+  NODE_ENV: "production",
+  RESEND_API_KEY: "synthetic-only",
+  INBOUND_EMAIL_DOMAIN: "inbound.example.test",
+  USER_NOTIFICATIONS_HOLD: "false",
+  USER_NOTIFICATIONS_NOT_BEFORE: "2026-01-01T00:00:00.000Z",
+};
 const globals = { process: { env } };
+const userNotificationGuard = load("src/lib/user-notification-guard.ts", {}, globals);
 const security = load("src/lib/application-security-code.ts", {});
 const replySecurity = load("src/lib/reply-security-message.ts", { "@/lib/application-security-code": security });
 const parser = load("src/lib/reply-parser.ts", { "@/lib/reply-security-message": replySecurity });
@@ -81,6 +88,7 @@ const processing = load("src/lib/application-reply-processing.ts", {
   "@/lib/reply-security-message": replySecurity, "@/lib/application-delivery": delivery,
   "@/lib/apply-reply-to-application": projection,
   "@/lib/inbound/service": { recordAtsConfirmation: async () => true },
+  "@/lib/user-notification-guard": userNotificationGuard,
   "@/lib/email-test-capability": {
     inboundTargetsEmailTestDestination: () => false,
     tryRecordEmailTestInbound: async () => null,
@@ -156,6 +164,8 @@ async function main() {
   await processing.processInboundReply({ ...incoming, providerEventId: "received-one-replay" });
   assert.equal(replies.length, 1); assert.equal(app.replyCount, 1); assert.equal(replies[0].forwardStatus, "sent");
   assert.equal(replies[0].forwardPayloadJson, stored);
+  assert.equal(replies[0].notifyStatus, "immediate_sent", "sent + provider id is the only immediate_sent path");
+  assert.ok(replies[0].forwardProviderId);
   await processing.processInboundReply(incoming);
   assert.equal(forwardingCalls, 2, "Already sent never sends again");
   assert.equal(fetchCalls, 1, "Duplicate webhook resumes stored outbox without provider read");
@@ -172,6 +182,7 @@ async function main() {
   replies[1].forwardStatus = "failed"; replies[1].forwardStartedAt = new Date(Date.now() - 23 * 60 * 60 * 1000);
   await processing.forwardStoredReply(replies[1].id);
   assert.equal(replies[1].forwardStatus, "unknown"); assert.equal(forwardingCalls, callsBeforeExpiry);
+  assert.equal(replies[1].notifyStatus, "immediate_sent", "unknown after a prior send must not rewrite notifyStatus");
   console.log("PASS acceptance-before-DB-failure recovery and expired idempotency window blocks replay.");
 
   const humanCount = app.replyCount;
@@ -289,6 +300,146 @@ async function main() {
   assert.equal((await route.POST(request("email.received"))).status, 500, "Every inbound storage failure retries");
   assert.equal((await route.POST(request("email.delivered"))).status, 500, "Delivery storage failure retries");
   console.log("PASS webhook fail-closed configuration and non-2xx on all processing/storage failures.");
+
+  const callsBeforeHold = forwardingCalls;
+  const fetchBeforeHold = fetchCalls;
+  const replyCountBeforeHold = replies.length;
+  const humanCountBeforeHold = app.replyCount;
+  env.USER_NOTIFICATIONS_HOLD = "true";
+  const heldIncoming = {
+    data: { email_id: "inbound-held", to: ["reply+app-one@inbound.example.test"], from: "recruiter@example.test", subject: "Can we talk?", text: "Could you share your availability for an interview?" },
+    providerEventId: "received-held",
+    receivedAt: new Date("2026-10-25T12:00:00Z"),
+  };
+  const heldResult = await processing.processInboundReply(heldIncoming);
+  assert.equal(heldResult.matched, true);
+  const heldRow = replies.find((row) => row.providerMessageId === "inbound-held")!;
+  assert.equal(replies.length, replyCountBeforeHold + 1);
+  assert.equal(app.replyCount, humanCountBeforeHold + 1, "apply-to-application still runs while held");
+  assert.equal(heldRow.forwardStatus, "pending");
+  assert.equal(heldRow.notifyStatus, "held");
+  assert.equal(heldRow.forwardStartedAt, null);
+  assert.equal(heldRow.forwardLeaseUntil, null);
+  assert.equal(heldRow.forwardLeaseToken, null);
+  assert.equal(heldRow.forwardedAt, null);
+  assert.ok(heldRow.bodyText?.includes("availability"));
+  assert.equal(forwardingCalls, callsBeforeHold, "hold must not call emails.send");
+  assert.equal(fetchCalls, fetchBeforeHold, "hold must not fetch the inbound body when text is already present");
+  const inboxHeld = load("src/lib/inbox-repository.ts", {
+    "@/lib/release-email-canary": { RELEASE_CANARY: { applicationId: "none" } },
+    "@/lib/db": { prisma: {
+      applicationReply: { findMany: async (query: any) => {
+        assert.equal(query.where.notifyStatus, undefined, "inbox query must not hide held rows");
+        return replies.filter((row) => row.applicationId === app.id && !row.isSecurityCode).map((row) => ({
+          ...row,
+          application: { userId: app.userId, userStatus: null, job: { company: app.job.company, title: app.job.title } },
+        }));
+      } },
+      gmailMessage: { findMany: async () => [] },
+    } },
+    "@/lib/reply-security-message": replySecurity,
+    "@/lib/inbox-email-text": { formatInboxEmailText: (value: string) => value },
+    "@/lib/inbox-message": { inboxKindLabel: (kind: string) => kind },
+    "@/lib/gmail-match": { isLikelyJobMail: () => true },
+  });
+  const inboxMessages = await inboxHeld.getInboxMessages(app.userId);
+  assert.ok(inboxMessages.some((message: { id: string }) => message.id === `application_reply:${heldRow.id}`), "held reply stays visible in the inbox query");
+  delete env.USER_NOTIFICATIONS_NOT_BEFORE;
+  env.USER_NOTIFICATIONS_HOLD = "false";
+  const failClosedIncoming = {
+    data: { email_id: "inbound-fail-closed", to: ["reply+app-one@inbound.example.test"], from: "recruiter@example.test", subject: "Availability?", text: "Could you share two interview slots?" },
+    providerEventId: "received-fail-closed",
+    receivedAt: new Date("2026-10-25T13:00:00Z"),
+  };
+  const callsBeforeFailClosed = forwardingCalls;
+  await processing.processInboundReply(failClosedIncoming);
+  const failClosedRow = replies.find((row) => row.providerMessageId === "inbound-fail-closed")!;
+  assert.equal(failClosedRow.notifyStatus, "held", "unset cutoff is fail-closed like #111");
+  assert.equal(failClosedRow.forwardStatus, "pending");
+  assert.equal(forwardingCalls, callsBeforeFailClosed);
+  env.USER_NOTIFICATIONS_NOT_BEFORE = "2026-01-01T00:00:00.000Z";
+  console.log("PASS hold on: no send/fetch, row pending/held, visible in inbox, notifyStatus not immediate_sent.");
+
+  env.USER_NOTIFICATIONS_HOLD = "false";
+  const webhookReplayCalls = forwardingCalls;
+  await processing.processInboundReply({ ...heldIncoming, providerEventId: "received-held-replay" });
+  assert.equal(forwardingCalls, webhookReplayCalls, "webhook retry must not send a held-marked row after the hold is lifted");
+  assert.equal(heldRow.notifyStatus, "held");
+  assert.equal(heldRow.forwardStatus, "pending");
+  const retryAfterLift = await processing.retryPendingReplyForwards(20);
+  assert.equal(forwardingCalls, webhookReplayCalls, "retry cron must skip held-marked rows after the hold is lifted");
+  assert.equal(retryAfterLift.completed, 0);
+  assert.equal(heldRow.notifyStatus, "held");
+  console.log("PASS after hold lift: webhook retry and retryPendingReplyForwards do not send held rows.");
+
+  heldRow.receivedAt = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const outcomeStillHeld = await processing.forwardStoredReply(heldRow.id);
+  assert.equal(outcomeStillHeld, "held");
+  assert.equal(heldRow.forwardStartedAt, null, "held time must not start the 23h window");
+  assert.equal(heldRow.forwardStatus, "pending");
+  heldRow.notifyStatus = "pending";
+  const releasedAfterHold = await processing.forwardStoredReply(heldRow.id);
+  assert.equal(releasedAfterHold, "sent");
+  assert.ok(heldRow.forwardStartedAt, "23h window starts only at a real send attempt");
+  assert.ok(heldRow.forwardProviderId);
+  await processing.processInboundReply({ ...heldIncoming, providerEventId: "received-held-release" });
+  assert.equal(heldRow.notifyStatus, "immediate_sent", "existing-row path sets immediate_sent only after sent + provider id");
+  console.log("PASS held time does not consume the 23h window; only a real send attempt sets forwardStartedAt.");
+
+  const skippedReceipt = replies.find((row) => row.providerMessageId === "mail-receipt")!;
+  assert.equal(skippedReceipt.forwardStatus, "skipped");
+  assert.notEqual(skippedReceipt.notifyStatus, "immediate_sent");
+  const unknownNeverSent = {
+    data: { email_id: "inbound-unknown", to: ["reply+app-one@inbound.example.test"], from: "recruiter@example.test", subject: "Interview slot?", text: "Could you confirm a time for the interview?" },
+    providerEventId: "received-unknown",
+    receivedAt: new Date(),
+  };
+  failForward = true;
+  await assert.rejects(processing.processInboundReply(unknownNeverSent), /retry_required/);
+  failForward = false;
+  const unknownRow = replies.find((row) => row.providerMessageId === "inbound-unknown")!;
+  assert.equal(unknownRow.notifyStatus, "pending");
+  unknownRow.forwardStartedAt = new Date(Date.now() - 23 * 60 * 60 * 1000);
+  const unknownOutcome = await processing.forwardStoredReply(unknownRow.id);
+  assert.equal(unknownOutcome, "unknown");
+  assert.equal(unknownRow.notifyStatus, "pending", "unknown never sets immediate_sent");
+  const skippedOutcome = await processing.forwardStoredReply(skippedReceipt.id);
+  assert.equal(skippedOutcome, "skipped");
+  assert.notEqual(skippedReceipt.notifyStatus, "immediate_sent");
+  console.log("PASS skipped/unknown never set notifyStatus=immediate_sent.");
+
+  const offIncoming = {
+    data: { email_id: "inbound-hold-off", to: ["reply+app-one@inbound.example.test"], from: "recruiter@example.test", subject: "Next interview?", text: "Could you send two slots for an interview?" },
+    providerEventId: "received-hold-off",
+    receivedAt: new Date(),
+  };
+  const callsBeforeOff = forwardingCalls;
+  await processing.processInboundReply(offIncoming);
+  const offRow = replies.find((row) => row.providerMessageId === "inbound-hold-off")!;
+  assert.equal(offRow.forwardStatus, "sent");
+  assert.equal(offRow.notifyStatus, "immediate_sent");
+  assert.ok(offRow.forwardProviderId);
+  assert.equal(forwardingCalls, callsBeforeOff + 1);
+  console.log("PASS hold off: normal forward is unchanged and sets immediate_sent only on sent.");
+
+  const leaseRow = replies.find((row) => row.providerMessageId === "inbound-hold-off")!;
+  leaseRow.forwardStatus = "pending";
+  leaseRow.notifyStatus = "pending";
+  leaseRow.forwardedAt = null;
+  leaseRow.forwardProviderId = null;
+  leaseRow.forwardStartedAt = null;
+  leaseRow.forwardLeaseUntil = new Date(Date.now() + 30_000);
+  leaseRow.forwardLeaseToken = "other-lease";
+  await assert.rejects(processing.forwardStoredReply(leaseRow.id), /reply_forward_in_progress/);
+  assert.equal(leaseRow.forwardStatus, "pending", "active lease still blocks a concurrent claim");
+  leaseRow.forwardLeaseUntil = null;
+  leaseRow.forwardLeaseToken = null;
+  const replayKey = leaseRow.forwardIdempotencyKey;
+  const idempotent = await processing.forwardStoredReply(leaseRow.id);
+  assert.equal(idempotent, "sent");
+  assert.equal(forwarded.get(replayKey)?.id, leaseRow.forwardProviderId, "same idempotency key is reused");
+  console.log("PASS existing forward concurrency/idempotency is unchanged.");
+
   console.log("ALL DELIVERY/REPLY CHECKS PASSED. Isolated mocks only; database integration is a separate check.");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

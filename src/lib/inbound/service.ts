@@ -14,6 +14,7 @@ import {
   type MailboxKind,
 } from "@/lib/application-mailbox";
 import type { NormalizedInbound } from "./providers";
+import { scheduledUserNotificationsHeld } from "@/lib/user-notification-guard";
 
 type Db = Pick<PrismaClient, "user" | "userInbox" | "inboundEmail" | "application" | "$executeRaw">;
 type MailboxAi = (input: { subject: string; body: string }) => Promise<string | null>;
@@ -142,20 +143,26 @@ export async function processUserInboundEmail(mail: NormalizedInbound, deps: {
         }).catch(() => undefined);
       }
     }
-    if (notifyStatus === "pending" && deps.notify) {
-      const matched = apps.find((a) => a.id === applicationId);
-      const sent = await deps.notify({
-        userId: inbox.userId,
-        emailId: row.id,
-        kind: mailbox.kind,
-        fromAddress: mail.from,
-        subject: mail.subject,
-        receivedAt: mail.receivedAt,
-        jobTitle: matched?.job.title ?? "Candidatura",
-        company: matched?.job.company ?? null,
-      }).catch(() => false);
-      if (sent && typeof deps.db.inboundEmail.update === "function") {
-        await deps.db.inboundEmail.update({ where: { id: row.id }, data: { notifyStatus: "immediate_sent" } }).catch(() => undefined);
+    if (notifyStatus === "pending") {
+      if (scheduledUserNotificationsHeld(deps.env).held) {
+        if (typeof deps.db.inboundEmail.update === "function") {
+          await deps.db.inboundEmail.update({ where: { id: row.id }, data: { notifyStatus: "held" } }).catch(() => undefined);
+        }
+      } else if (deps.notify) {
+        const matched = apps.find((a) => a.id === applicationId);
+        const sent = await deps.notify({
+          userId: inbox.userId,
+          emailId: row.id,
+          kind: mailbox.kind,
+          fromAddress: mail.from,
+          subject: mail.subject,
+          receivedAt: mail.receivedAt,
+          jobTitle: matched?.job.title ?? "Candidatura",
+          company: matched?.job.company ?? null,
+        }).catch(() => false);
+        if (sent && typeof deps.db.inboundEmail.update === "function") {
+          await deps.db.inboundEmail.update({ where: { id: row.id }, data: { notifyStatus: "immediate_sent" } }).catch(() => undefined);
+        }
       }
     }
   }

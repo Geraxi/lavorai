@@ -662,6 +662,7 @@ async function main() {
     },
     "@/lib/email-test-capability": await import("../src/lib/email-test-capability"),
     "@/lib/resend-keys": await import("../src/lib/resend-keys"),
+    "@/lib/user-notification-guard": await import("../src/lib/user-notification-guard"),
   });
   const receivedAt = new Date("2026-10-25T14:10:00Z");
   const inboundResult = await processing.processInboundReply({

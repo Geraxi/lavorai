@@ -28,7 +28,7 @@ export type MailboxKind = (typeof MAILBOX_KINDS)[number];
 
 export const MAILBOX_RETENTION_DAYS = 180;
 export type MailboxNotifyMode = "priority" | "digest" | "off";
-export type MailboxNotifyStatus = "pending" | "immediate_sent" | "digest_queued" | "digest_sent" | "skipped";
+export type MailboxNotifyStatus = "pending" | "immediate_sent" | "digest_queued" | "digest_sent" | "skipped" | "held";
 
 const PRIORITY_KINDS = new Set<MailboxKind>(["interview", "recruiter_question"]);
 const QUESTION = /\?|could you|can you|would you|please (send|share|confirm|provide)|puoi |potresti |per favore|indicaci|inviaci/i;
