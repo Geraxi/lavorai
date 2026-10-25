@@ -337,7 +337,10 @@ async function testRecruiteeBoundary() {
       } },
       "./web-form": { buildAnswerContext: () => ({}) },
     }, {
-      FormData: class { set(name: string, value: unknown) { formValues.set(name, value); } }, Blob: class {},
+      FormData: class {
+        set(name: string, value: unknown) { formValues.set(name, value); }
+        get(name: string) { return formValues.get(name); }
+      }, Blob: class {},
       AbortSignal: { timeout: () => ({}) },
       fetch: async (url: string, options: { method?: string; redirect?: string }) => {
         assert.ok(url.startsWith("https://acme.recruitee.com/api/offers/job-123"));

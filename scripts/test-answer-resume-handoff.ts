@@ -205,9 +205,13 @@ function loadWorker(opts: {
     "@/lib/ats-test-capability": {
       isAtsTestAuthorization: () => false,
       atsTestPauseExemptionForId: () => false,
+      atsTestSkipsDocumentTailoring: () => false,
+      atsTestSkipsRecruiterLookup: () => false,
+      atsTestCandidateEmail: () => ({ ok: false, reason: "ats_test_candidate_email_unconfigured" }),
       syntheticAtsTestProfile: () => ({}),
       syntheticAtsTestCvText: () => "",
       ATS_TEST_FICTIONAL_MARK: "[LavorAI TEST · FICTIONAL]",
+      ATS_TEST_REFUSED_BEFORE_SUBMIT: "REFUSED_BEFORE_SUBMIT",
     },
     "@/lib/application-lease": applicationLease,
     "@/lib/application-answer-continuation": continuation,

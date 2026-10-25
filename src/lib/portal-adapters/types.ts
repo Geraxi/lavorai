@@ -134,6 +134,12 @@ export interface CanaryLog {
   capturedAt: string;
 }
 
+export type RecruiteeOfferValidation = {
+  requiredFields: string[];
+  unsupportedRequired: string[];
+  wouldAcceptRealSubmit: boolean;
+};
+
 export type ApplyOutcome =
   | {
       ok: true;
@@ -142,6 +148,7 @@ export type ApplyOutcome =
       receipt?: SubmissionReceipt;
       canary?: CanaryLog;
       attemptEvidence?: SubmissionAttemptEvidence;
+      offerValidation?: RecruiteeOfferValidation;
     }
   | {
       ok: false;
@@ -165,6 +172,8 @@ export type ApplyOutcome =
       error: string;
       canary?: CanaryLog;
       attemptEvidence?: SubmissionAttemptEvidence;
+      refusedBeforeSubmit?: boolean;
+      offerValidation?: RecruiteeOfferValidation;
     }
   | {
       // Form trovato e compilato per quanto possibile, ma restano campi

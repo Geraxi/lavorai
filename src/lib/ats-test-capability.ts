@@ -3,10 +3,11 @@
  * status and evidence pipeline. Never a parallel submit path.
  *
  * Server-side only:
- *   ATS_TEST_USER_ID          dedicated test user id
- *   ATS_TEST_DESTINATIONS     comma/space list of host/o/slug
- *                             e.g. produzioneweb.recruitee.com/o/trial-offer
- *   ATS_TEST_REAL_SUBMIT      must be exactly "true" for a real submit
+ *   ATS_TEST_USER_ID            dedicated test user id
+ *   ATS_TEST_DESTINATIONS       comma/space list of host/o/slug
+ *                               e.g. produzioneweb.recruitee.com/o/trial-offer
+ *   ATS_TEST_CANDIDATE_EMAIL    owned mailbox outside LavorAI inbound domains
+ *   ATS_TEST_REAL_SUBMIT        must be exactly "true" for a real submit
  *
  * Test jobs use source `ats_test` and are excluded from feeds, matching,
  * other users and quota. Do not add the tenant to RECRUITEE_COMPANIES.
@@ -18,10 +19,17 @@
  */
 
 import { createHash } from "node:crypto";
+import { DEFAULT_USER_INBOX_DOMAIN } from "@/lib/inbound/address";
 import type { CVProfile } from "@/lib/cv-profile-types";
 
 export const ATS_TEST_JOB_SOURCE = "ats_test";
 export const ATS_TEST_FICTIONAL_MARK = "[LavorAI TEST · FICTIONAL]";
+/** Placeholder in the in-memory profile. Must never be the submitted address. */
+export const ATS_TEST_PLACEHOLDER_EMAIL = "ats-test@example.invalid";
+export const ATS_TEST_REFUSED_BEFORE_SUBMIT = "REFUSED_BEFORE_SUBMIT";
+
+const EMAIL_RE = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$/i;
+const HARDCODED_INBOUND_DOMAINS = ["inbound.lavorai.it", "apply.lavorai.it"] as const;
 
 export type AtsTestEnv = Record<string, string | undefined>;
 
@@ -93,6 +101,62 @@ export function excludeAtsTestJobRelationWhere() {
 /** Real submit requires the env value to be exactly "true" (after trim). */
 export function atsTestRealSubmitEnabled(env: AtsTestEnv = process.env): boolean {
   return env.ATS_TEST_REAL_SUBMIT?.trim() === "true";
+}
+
+export function lavoraiInboundDomains(env: AtsTestEnv = process.env): string[] {
+  const domains = new Set<string>(HARDCODED_INBOUND_DOMAINS);
+  const inbound = env.INBOUND_EMAIL_DOMAIN?.trim().toLowerCase();
+  const user = (env.INBOUND_USER_DOMAIN?.trim() || DEFAULT_USER_INBOX_DOMAIN).toLowerCase();
+  if (inbound) domains.add(inbound);
+  if (user) domains.add(user);
+  return [...domains];
+}
+
+function emailDomainIsInbound(domain: string, inboundDomains: string[]): boolean {
+  const d = domain.toLowerCase();
+  return inboundDomains.some((inbound) => d === inbound || d.endsWith(`.${inbound}`));
+}
+
+export type AtsTestCandidateEmail =
+  | { ok: true; email: string }
+  | { ok: false; reason: string };
+
+export function atsTestCandidateEmail(env: AtsTestEnv = process.env): AtsTestCandidateEmail {
+  const raw = env.ATS_TEST_CANDIDATE_EMAIL?.trim() ?? "";
+  if (!raw) return { ok: false, reason: "ats_test_candidate_email_unconfigured" };
+  if (raw.toLowerCase() === ATS_TEST_PLACEHOLDER_EMAIL) {
+    return { ok: false, reason: "ats_test_candidate_email_placeholder" };
+  }
+  const match = raw.match(EMAIL_RE);
+  if (!match) return { ok: false, reason: "ats_test_candidate_email_invalid" };
+  if (emailDomainIsInbound(match[1], lavoraiInboundDomains(env))) {
+    return { ok: false, reason: "ats_test_candidate_email_inbound_domain" };
+  }
+  return { ok: true, email: raw };
+}
+
+export function maskAtsTestCandidateEmail(email: string): string {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return "***";
+  return `${email[0]}***@${email.slice(at + 1)}`;
+}
+
+export function atsTestCandidateEmailState(env: AtsTestEnv = process.env): {
+  configured: boolean;
+  masked: string | null;
+  reason: string | null;
+} {
+  const result = atsTestCandidateEmail(env);
+  if (!result.ok) return { configured: false, masked: null, reason: result.reason };
+  return { configured: true, masked: maskAtsTestCandidateEmail(result.email), reason: null };
+}
+
+export function atsTestSkipsDocumentTailoring(auth: unknown): boolean {
+  return isAtsTestAuthorization(auth);
+}
+
+export function atsTestSkipsRecruiterLookup(auth: unknown): boolean {
+  return isAtsTestAuthorization(auth);
 }
 
 function parseDestinationToken(value: string): AtsTestDestination | null {
@@ -168,6 +232,8 @@ export function authorizeAtsTest(input: AtsTestAuthInput, env: AtsTestEnv = proc
   if (input.jobSource && !isAtsTestJobSource(input.jobSource)) {
     return { ok: false, reason: "ats_test_job_source_required" };
   }
+  const candidate = atsTestCandidateEmail(env);
+  if (!candidate.ok) return { ok: false, reason: candidate.reason };
   if (input.realSubmit) {
     if (!atsTestRealSubmitEnabled(env)) return { ok: false, reason: "ats_test_real_submit_disabled" };
     return { ok: true, mode: "real_submit", userId, destination };
@@ -199,6 +265,8 @@ export type AtsTestRecheckInput = {
   applicationId: string;
   jobSource?: string | null;
   realSubmit: boolean;
+  /** Outgoing multipart `candidate[email]` immediately before POST. */
+  multipartEmail?: string;
 };
 
 export type AtsTestRecheckResult = { ok: true } | { ok: false; reason: string };
@@ -241,6 +309,12 @@ export function recheckAtsTestBeforeSubmitHttp(
     return { ok: false, reason: "ats_test_mode_mismatch" };
   }
 
+  const candidate = atsTestCandidateEmail(env);
+  if (!candidate.ok) return { ok: false, reason: candidate.reason };
+  if (input.multipartEmail !== undefined && input.multipartEmail !== candidate.email) {
+    return { ok: false, reason: "ats_test_candidate_email_mismatch" };
+  }
+
   return { ok: true };
 }
 
@@ -276,7 +350,7 @@ export function syntheticAtsTestProfile(): CVProfile {
   return {
     firstName: "LavorAI",
     lastName: "Test",
-    email: "ats-test@example.invalid",
+    email: ATS_TEST_PLACEHOLDER_EMAIL,
     phone: "",
     city: "Test City",
     title: `${ATS_TEST_FICTIONAL_MARK} Diagnostic candidate`,
@@ -347,11 +421,20 @@ export function atsTestUncertainReason(row: AtsTestPriorRow): string | null {
 
 export function atsTestPriorAttemptReason(rows: AtsTestPriorRow[], _mode: "dry_run" | "real_submit", env: AtsTestEnv = process.env): string | null {
   if (rows.some((row) => !isAtsTestUser(row.userId, env))) return "ats_test_other_user_application";
+  let blocking = false;
   for (const row of rows) {
+    if (row.submitConfirmation === ATS_TEST_REFUSED_BEFORE_SUBMIT) {
+      if (row.submitStartedAt) return "uncertain_submit_started";
+      if (row.submittedAt || row.submittedVia || row.viewedAt || row.lastReplyAt || row.replyCount || row.userStatus) {
+        return "uncertain_prior_attempt";
+      }
+      continue;
+    }
     const uncertain = atsTestUncertainReason(row);
     if (uncertain) return uncertain;
+    blocking = true;
   }
-  if (rows.length > 0) return "ats_test_already_attempted";
+  if (blocking) return "ats_test_already_attempted";
   return null;
 }
 
@@ -508,7 +591,8 @@ export async function prepareAndRunAtsTest(input: {
   const applicationId = atsTestApplicationId(auth.destination);
   const existingById = await deps.prisma.application.findUnique({ where: { id: applicationId } });
   if (existingById) {
-    return { ok: false, reason: atsTestPriorAttemptReason([existingById], auth.mode, env) ?? "ats_test_already_attempted", status: 409 };
+    const existingReason = atsTestPriorAttemptReason([existingById], auth.mode, env);
+    if (existingReason) return { ok: false, reason: existingReason, status: 409 };
   }
   const existing = await deps.prisma.application.findMany({ where: { jobId: job.id } });
   const prior = atsTestPriorAttemptReason(existing, auth.mode, env);
@@ -522,8 +606,11 @@ export async function prepareAndRunAtsTest(input: {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
       const locked = await tx.application.findUnique({ where: { id: applicationId } });
       if (locked) {
-        const error = Object.assign(new Error("ats_test_already_attempted"), { code: "P2002" });
-        throw error;
+        const lockedReason = atsTestPriorAttemptReason([locked], auth.mode, env);
+        if (lockedReason) {
+          throw Object.assign(new Error(lockedReason), { code: "P2002" });
+        }
+        return { id: locked.id };
       }
       const siblings = await tx.application.findMany({ where: { jobId: job.id } });
       const siblingReason = atsTestPriorAttemptReason(siblings, auth.mode, env);

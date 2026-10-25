@@ -2,7 +2,11 @@ import { resolveAdapterByUrl, noAdapterMessageFor } from "@/lib/ats-adapter-reso
 import { applicationsPaused, assertApplicationsRunning } from "@/lib/application-pause";
 import {
   ATS_TEST_FICTIONAL_MARK,
+  ATS_TEST_REFUSED_BEFORE_SUBMIT,
+  atsTestCandidateEmail,
   atsTestPauseExemptionForId,
+  atsTestSkipsDocumentTailoring,
+  atsTestSkipsRecruiterLookup,
   isAtsTestAuthorization,
   syntheticAtsTestCvText,
   syntheticAtsTestProfile,
@@ -387,7 +391,9 @@ async function processApplicationRun(
   }
 
   // 3b. PDF tailoring (structured CVProfile → tailored → ATS PDF). Non-fatal.
+  // Token path: skip so the test does not write a CVProfile or burn tailoring credits.
   let cvPdfPath: string | null = null;
+  if (!atsTestSkipsDocumentTailoring(atsTestAuth)) {
   try {
     let profileRow = await prisma.cVProfile.findUnique({
       where: { userId: app.userId },
@@ -441,6 +447,7 @@ async function processApplicationRun(
     );
   } catch (err) {
     console.error(`[worker] ${applicationId} PDF tailoring failed`, err);
+  }
   }
 
   // A recovered worker cannot overwrite a newer owner or reach delivery.
@@ -542,20 +549,23 @@ async function processApplicationRun(
     companyWebsite: app.job.companyWebsite,
     discoverEmployerInbox: discoverPublishedHiringInbox,
   };
-  let verifiedRecruiter = await findVerifiedRecruiterEmail(
-    resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
-  );
-  if (verifiedRecruiter) {
-    await prisma.job.update({
-      where: { id: app.job.id },
-      data: {
-        recruiterEmail: verifiedRecruiter.email,
-        recruiterEmailSourceUrl: verifiedRecruiter.provenance.sourceUrl,
-        recruiterScrapedAt: new Date(),
-      },
-    }).catch(() => undefined);
-    if (adapter) {
-      console.log(`[worker] ${applicationId} published recruiter email — skipping portal ${adapter.id}, using email_recruiter`);
+  let verifiedRecruiter = null as Awaited<ReturnType<typeof findVerifiedRecruiterEmail>>;
+  if (!atsTestSkipsRecruiterLookup(atsTestAuth)) {
+    verifiedRecruiter = await findVerifiedRecruiterEmail(
+      resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
+    );
+    if (verifiedRecruiter) {
+      await prisma.job.update({
+        where: { id: app.job.id },
+        data: {
+          recruiterEmail: verifiedRecruiter.email,
+          recruiterEmailSourceUrl: verifiedRecruiter.provenance.sourceUrl,
+          recruiterScrapedAt: new Date(),
+        },
+      }).catch(() => undefined);
+      if (adapter) {
+        console.log(`[worker] ${applicationId} published recruiter email — skipping portal ${adapter.id}, using email_recruiter`);
+      }
     }
   }
   // Restricted ATS-test jobs must stay on the production adapter path.
@@ -691,7 +701,11 @@ async function processApplicationRun(
           : {}),
         ...attemptEvidenceWrite(outcome.attemptEvidence),
         errorMessage: isDryRun
-          ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).`
+          ? `[DRY RUN] Form ${adapter.label} compilato correttamente ma submit non eseguito (PORTAL_SUBMIT_DRY_RUN=true).${
+              "offerValidation" in outcome && outcome.offerValidation
+                ? ` Required: ${outcome.offerValidation.requiredFields.join(", ") || "none"}. Real submit would be accepted: ${outcome.offerValidation.wouldAcceptRealSubmit ? "yes" : "no"}.`
+                : ""
+            }`
           : isUnconfirmed
             ? `Submit cliccato ma non abbiamo rilevato la pagina di conferma di ${adapter.label}. La candidatura potrebbe non essere stata accettata (validazione silenziosa, captcha, errore modale). Verifica manualmente sul portale.`
             : null,
@@ -813,6 +827,18 @@ async function processApplicationRun(
     }
 
     if (["login_required", "not_eligible", "stuck", "unsafe_permissions", "sso_required", "marketplace", "id_verification", "not_a_job_application"].includes(outcome.status)) {
+      if (atsTestAuth && "refusedBeforeSubmit" in outcome && outcome.refusedBeforeSubmit) {
+        await prisma.application.updateMany({
+          where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "queued", "optimizing"] } },
+          data: {
+            status: "ready_to_apply",
+            submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT,
+            errorMessage: outcome.error,
+            completedAt: null,
+          },
+        });
+        return;
+      }
       const { confirmationForFailureStatus, persistAttemptConfirmation } = await import("@/lib/attempt-outcome");
       const confirmation = persistAttemptConfirmation(confirmationForFailureStatus(outcome.status) ?? `FAILED:${outcome.status}`);
       await prisma.application.updateMany({
@@ -855,9 +881,11 @@ async function processApplicationRun(
         }
         return;
       }
-      verifiedRecruiter = verifiedRecruiter ?? await findVerifiedRecruiterEmail(
-        resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
-      );
+      if (!atsTestSkipsRecruiterLookup(atsTestAuth)) {
+        verifiedRecruiter = verifiedRecruiter ?? await findVerifiedRecruiterEmail(
+          resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
+        );
+      }
       if (verifiedRecruiter) {
         console.log(`[worker] ${applicationId} captcha on ${adapter.id} — sending published recruiter email instead of handoff`);
       } else {
@@ -2168,26 +2196,41 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   //
   // FAIL LOUD: se manca INBOUND_EMAIL_DOMAIN su Railway/worker, il submit di
   // portali che richiedono OTP (Greenhouse, Ashby) fallirà con errore chiaro.
-  const inboundAlias = process.env.INBOUND_ROUTE_ATS_EMAIL === "false" ? null : inboundReplyAddress(applicationId);
-  
-  // Per portali ATS che richiedono verifica OTP (Greenhouse/Ashby), l'inbound
-  // è OBBLIGATORIO. Se manca, fail con messaggio chiaro invece di usare l'email
-  // personale dell'utente (che causerebbe invio di codici alla sua casella).
-  const portalNeedsOtp = adapter.id === "greenhouse" || adapter.id === "ashby";
-  if (portalNeedsOtp && !inboundAlias) {
-    return {
-      ok: false,
-      status: "missing_field",
-      error: `${adapter.label} richiede verifica email automatica. Configura INBOUND_EMAIL_DOMAIN sul worker (Railway) per abilitare l'auto-OTP. Senza, i codici arriverebbero all'utente invece che al sistema.`,
-    };
+  let formEmail: string;
+  if (input.atsTestAuth) {
+    const candidate = atsTestCandidateEmail();
+    if (!candidate.ok) {
+      return {
+        ok: false,
+        status: "not_eligible",
+        error: `ATS test submit blocked: ${candidate.reason}. Nessun invio eseguito.`,
+        refusedBeforeSubmit: true,
+      };
+    }
+    profile.email = candidate.email;
+    formEmail = candidate.email;
+  } else {
+    const inboundAlias = process.env.INBOUND_ROUTE_ATS_EMAIL === "false" ? null : inboundReplyAddress(applicationId);
+
+    // Per portali ATS che richiedono verifica OTP (Greenhouse/Ashby), l'inbound
+    // è OBBLIGATORIO. Se manca, fail con messaggio chiaro invece di usare l'email
+    // personale dell'utente (che causerebbe invio di codici alla sua casella).
+    const portalNeedsOtp = adapter.id === "greenhouse" || adapter.id === "ashby";
+    if (portalNeedsOtp && !inboundAlias) {
+      return {
+        ok: false,
+        status: "missing_field",
+        error: `${adapter.label} richiede verifica email automatica. Configura INBOUND_EMAIL_DOMAIN sul worker (Railway) per abilitare l'auto-OTP. Senza, i codici arriverebbero all'utente invece che al sistema.`,
+      };
+    }
+
+    // Per-user LavorAI inbox (<slug>@apply.lavorai.it) when present: ATS
+    // confirmations land in /api/inbound/email and become proof-of-send.
+    // OTP portals keep the per-application alias (auto-OTP is keyed by appId).
+    const userInbox = portalNeedsOtp ? null : await getUserInboxAddress(prisma, userId).catch(() => null);
+    formEmail = userInbox ?? inboundAlias ?? input.userEmail;
+    if (formEmail !== input.userEmail) profile.email = formEmail;
   }
-  
-  // Per-user LavorAI inbox (<slug>@apply.lavorai.it) when present: ATS
-  // confirmations land in /api/inbound/email and become proof-of-send.
-  // OTP portals keep the per-application alias (auto-OTP is keyed by appId).
-  const userInbox = portalNeedsOtp ? null : await getUserInboxAddress(prisma, userId).catch(() => null);
-  const formEmail = userInbox ?? inboundAlias ?? input.userEmail;
-  if (formEmail !== input.userEmail) profile.email = formEmail;
 
   // Scarica i file localmente se storage remoto (Blob/Supabase)
   const [cvLocalPath, clLocalPath] = await Promise.all([

@@ -1,5 +1,6 @@
 import { historicalRetriesBlocked } from "@/lib/application-rollout";
 import {
+  atsTestCandidateEmailState,
   atsTestRealSubmitEnabled,
   parseAtsTestDestinations,
   prepareAndRunAtsTest,
@@ -45,6 +46,7 @@ export async function GET(request: NextRequest) {
     ok: true,
     realSubmitEnabled: atsTestRealSubmitEnabled(),
     destinations: parseAtsTestDestinations(),
+    candidateEmail: atsTestCandidateEmailState(),
   });
 }
 

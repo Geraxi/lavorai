@@ -48,9 +48,11 @@ function pickResult(body: unknown): ResultView {
 export function AtsTestAdminPanel({
   destinations,
   realSubmitEnabled,
+  candidateEmail,
 }: {
   destinations: Destination[];
   realSubmitEnabled: boolean;
+  candidateEmail: { configured: boolean; masked: string | null; reason: string | null };
 }) {
   const [jobUrl, setJobUrl] = useState(destinations[0]?.url ?? "");
   const [dryLocked, setDryLocked] = useState(false);
@@ -106,6 +108,8 @@ export function AtsTestAdminPanel({
       <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 14px", margin: 0, fontSize: 12.5 }}>
         <dt style={{ color: "var(--fg-subtle)" }}>ATS_TEST_REAL_SUBMIT</dt>
         <dd style={{ margin: 0 }}>{realSubmitEnabled ? "true" : "unset / false"}</dd>
+        <dt style={{ color: "var(--fg-subtle)" }}>ATS_TEST_CANDIDATE_EMAIL</dt>
+        <dd style={{ margin: 0 }}>{candidateEmail.configured ? candidateEmail.masked : (candidateEmail.reason ?? "unset")}</dd>
       </dl>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button type="button" className="adm-btn primary" disabled={dryLocked} onClick={() => void run(false)}>

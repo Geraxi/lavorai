@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { atsTestRealSubmitEnabled, parseAtsTestDestinations } from "@/lib/ats-test-capability";
+import { atsTestCandidateEmailState, atsTestRealSubmitEnabled, parseAtsTestDestinations } from "@/lib/ats-test-capability";
 import { PageTitle } from "../_ui";
 import { AtsTestAdminPanel } from "./_panel";
 
@@ -27,6 +27,7 @@ export default function AdminAtsTestPage() {
         <AtsTestAdminPanel
           destinations={destinations}
           realSubmitEnabled={atsTestRealSubmitEnabled()}
+          candidateEmail={atsTestCandidateEmailState()}
         />
       </section>
     </div>

@@ -8,14 +8,20 @@ import ts from "typescript";
 import {
   ATS_TEST_FICTIONAL_MARK,
   ATS_TEST_JOB_SOURCE,
+  ATS_TEST_PLACEHOLDER_EMAIL,
+  ATS_TEST_REFUSED_BEFORE_SUBMIT,
   allowUnpublishedRecruiteeOffer,
   atsTestApplicationId,
+  atsTestCandidateEmail,
+  atsTestCandidateEmailState,
   atsTestDestinationLockKey,
   atsTestJobExternalId,
   atsTestPauseExemption,
   atsTestPauseExemptionForId,
   atsTestPriorAttemptReason,
   atsTestRealSubmitEnabled,
+  atsTestSkipsDocumentTailoring,
+  atsTestSkipsRecruiterLookup,
   atsTestUserId,
   authorizeAtsTest,
   excludeAtsTestJobRelationWhere,
@@ -24,6 +30,7 @@ import {
   isAtsTestDiagnosticApplication,
   isAtsTestJobSource,
   isAtsTestUser,
+  maskAtsTestCandidateEmail,
   matchAtsTestDestination,
   parseAtsTestDestinations,
   prepareAndRunAtsTest,
@@ -32,6 +39,7 @@ import {
   syntheticAtsTestProfile,
   type AtsTestAuthorization,
 } from "../src/lib/ats-test-capability";
+import { recruiteeOfferValidation } from "../src/lib/portal-adapters/recruitee";
 import { currentWorkerIneligibility, type WorkerGateRow } from "../src/lib/application-worker-gates";
 import { historicalRetriesBlocked } from "../src/lib/application-rollout";
 import { applicationsPaused } from "../src/lib/application-pause";
@@ -43,9 +51,11 @@ const DEST = "produzioneweb.recruitee.com/o/trial-offer";
 const DEST_URL = "https://produzioneweb.recruitee.com/o/trial-offer";
 const DEST2 = "produzioneweb.recruitee.com/o/real-offer";
 const DEST2_URL = "https://produzioneweb.recruitee.com/o/real-offer";
+const CANDIDATE_EMAIL = "owner-mailbox@example.test";
 const env = {
   ATS_TEST_USER_ID: TEST_USER,
   ATS_TEST_DESTINATIONS: `${DEST} ${DEST2}`,
+  ATS_TEST_CANDIDATE_EMAIL: CANDIDATE_EMAIL,
 };
 
 assert.equal(ATS_TEST_JOB_SOURCE, "ats_test");
@@ -77,6 +87,24 @@ assert.equal(atsTestApplicationId(dest), expectedId);
 assert.equal(isAtsTestDiagnosticApplication(expectedId, dest), true);
 assert.equal(isAtsTestDiagnosticApplication("app-random", dest), false);
 assert.equal(atsTestDestinationLockKey(dest), "ats_test:produzioneweb.recruitee.com/o/trial-offer");
+
+assert.equal(atsTestCandidateEmail({}).ok, false);
+assert.equal((atsTestCandidateEmail({}) as { reason: string }).reason, "ats_test_candidate_email_unconfigured");
+assert.equal((atsTestCandidateEmail({ ATS_TEST_CANDIDATE_EMAIL: "not-an-email" }) as { reason: string }).reason, "ats_test_candidate_email_invalid");
+assert.equal((atsTestCandidateEmail({ ATS_TEST_CANDIDATE_EMAIL: ATS_TEST_PLACEHOLDER_EMAIL }) as { reason: string }).reason, "ats_test_candidate_email_placeholder");
+assert.equal((atsTestCandidateEmail({ ATS_TEST_CANDIDATE_EMAIL: "x@inbound.lavorai.it" }) as { reason: string }).reason, "ats_test_candidate_email_inbound_domain");
+assert.equal((atsTestCandidateEmail({ ATS_TEST_CANDIDATE_EMAIL: "x@apply.lavorai.it" }) as { reason: string }).reason, "ats_test_candidate_email_inbound_domain");
+assert.equal((atsTestCandidateEmail({ ATS_TEST_CANDIDATE_EMAIL: "x@mail.inbound.lavorai.it" }) as { reason: string }).reason, "ats_test_candidate_email_inbound_domain");
+assert.equal((atsTestCandidateEmail({
+  ATS_TEST_CANDIDATE_EMAIL: "x@mail.custom.test",
+  INBOUND_EMAIL_DOMAIN: "custom.test",
+}) as { reason: string }).reason, "ats_test_candidate_email_inbound_domain");
+const candidateOk = atsTestCandidateEmail(env);
+assert.equal(candidateOk.ok, true);
+if (candidateOk.ok) assert.equal(candidateOk.email, CANDIDATE_EMAIL);
+assert.equal(maskAtsTestCandidateEmail(CANDIDATE_EMAIL), "o***@example.test");
+assert.equal(atsTestCandidateEmailState(env).masked, "o***@example.test");
+assert.equal(authorizeAtsTest({ adminOk: true }, { ATS_TEST_USER_ID: TEST_USER, ATS_TEST_DESTINATIONS: DEST }).ok, false);
 
 assert.equal(authorizeAtsTest({ adminOk: false }, env).ok, false);
 assert.equal((authorizeAtsTest({ adminOk: true }, {}) as { reason: string }).reason, "ats_test_user_unconfigured");
@@ -123,10 +151,11 @@ const recruitee = readFileSync("src/lib/portal-adapters/recruitee.ts", "utf8");
 assert.match(recruitee, /allowUnpublishedRecruiteeOffer/);
 assert.match(recruitee, /recheckAtsTestBeforeSubmitHttp/);
 assert.match(recruitee, /status !== "published" && !allowUnpublishedRecruiteeOffer/);
-const dryRunAt = recruitee.indexOf("if (input.dryRun) return");
+const dryRunAt = recruitee.indexOf("if (input.dryRun)");
 const recheckAt = recruitee.indexOf("const submitGuard = recheckAtsTestBeforeSubmitHttp");
 const candidatesPostAt = recruitee.indexOf('fetch(endpoint, { method: "POST"');
 assert.ok(dryRunAt > 0 && recheckAt > dryRunAt && candidatesPostAt > recheckAt, "dry-run returns before recheck and Recruitee candidates POST");
+assert.match(recruitee, /multipartEmail:/);
 
 const liveness = readFileSync("src/lib/job-liveness.ts", "utf8");
 assert.match(liveness, /allowUnpublishedRecruiteeOffer\(url\.href\)/);
@@ -146,8 +175,19 @@ assert.match(worker, /if \(app\.job\.source === "ats_test"\) verifiedRecruiter =
 assert.match(worker, /"ats_test"/);
 assert.match(worker, /atsTestPauseExemptionForId/);
 assert.match(worker, /syntheticAtsTestProfile/);
+assert.match(worker, /atsTestCandidateEmail/);
+assert.match(worker, /if \(!atsTestSkipsDocumentTailoring\(atsTestAuth\)\)/);
+assert.match(worker, /if \(!atsTestSkipsRecruiterLookup\(atsTestAuth\)\)/);
+assert.match(worker, /tailorProfileForJob/);
+assert.match(worker, /findVerifiedRecruiterEmail/);
 assert.doesNotMatch(worker, /sendWithinQuota\([^)]*atsTestAuth/);
 assert.match(worker, /if \(!input\.atsTestAuth\) assertApplicationsRunning\(\)/);
+const tailorAt = worker.indexOf("tailorProfileForJob");
+assert.ok(worker.lastIndexOf("atsTestSkipsDocumentTailoring", tailorAt) > 0, "token path skips tailoring");
+const recruiterCall = worker.indexOf("verifiedRecruiter = await findVerifiedRecruiterEmail");
+assert.ok(worker.lastIndexOf("atsTestSkipsRecruiterLookup", recruiterCall) > 0, "token path skips recruiter lookup");
+assert.equal(atsTestSkipsDocumentTailoring(undefined), false);
+assert.equal(atsTestSkipsRecruiterLookup(undefined), false);
 
 const apply = readFileSync("src/app/api/applications/apply/route.ts", "utf8");
 assert.match(apply, /isAtsTestJobSource\(job\.source\)/);
@@ -188,6 +228,7 @@ assert.doesNotMatch(capability, /enqueueApplication/);
 assert.doesNotMatch(capability, /autoApplyMode/);
 
 const profile = syntheticAtsTestProfile();
+assert.equal(profile.email, ATS_TEST_PLACEHOLDER_EMAIL);
 assert.match(profile.summary, new RegExp(ATS_TEST_FICTIONAL_MARK.replace(/[[\]]/g, "\\$&")));
 assert.match(syntheticAtsTestCvText(), new RegExp(ATS_TEST_FICTIONAL_MARK.replace(/[[\]]/g, "\\$&")));
 
@@ -195,6 +236,8 @@ const panel = readFileSync("src/app/(app)/admin/ats-test/_panel.tsx", "utf8");
 assert.match(panel, /Dry run \(no submission\)/);
 assert.match(panel, /Real submit \(one-time\)/);
 assert.match(panel, /ATS_TEST_REAL_SUBMIT/);
+assert.match(panel, /ATS_TEST_CANDIDATE_EMAIL/);
+assert.match(panel, /candidateEmail\.masked/);
 assert.match(panel, /submitConfirmation/);
 assert.match(panel, /receiptId/);
 assert.match(panel, /application id/);
@@ -373,6 +416,19 @@ async function testPrepareAndRun() {
   });
   assert.equal(otherUser.ok, false);
   if (!otherUser.ok) assert.equal(otherUser.reason, "ats_test_other_user_application");
+
+  const missingEmail = await prepareAndRunAtsTest({ adminOk: true }, {
+    ...fakeDb(),
+    env: { ATS_TEST_USER_ID: TEST_USER, ATS_TEST_DESTINATIONS: DEST },
+  });
+  assert.equal(missingEmail.ok, false);
+  if (!missingEmail.ok) assert.equal(missingEmail.reason, "ats_test_candidate_email_unconfigured");
+
+  const refusedRetry = await prepareAndRunAtsTest({ adminOk: true }, {
+    ...fakeDb({ existing: [{ id: expectedId, userId: TEST_USER, submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT }] }),
+    env,
+  });
+  assert.equal(refusedRetry.ok, true, "refused-before-submit does not consume the destination");
 }
 
 async function testFourSubmitChecks() {
@@ -386,6 +442,15 @@ async function testFourSubmitChecks() {
   };
 
   assert.equal(recheckAtsTestBeforeSubmitHttp(token, base, env).ok, true);
+  assert.equal(recheckAtsTestBeforeSubmitHttp(token, { ...base, multipartEmail: CANDIDATE_EMAIL }, env).ok, true);
+  assert.equal(
+    (recheckAtsTestBeforeSubmitHttp(token, { ...base, multipartEmail: "other@example.test" }, env) as { reason: string }).reason,
+    "ats_test_candidate_email_mismatch",
+  );
+  assert.equal(
+    (recheckAtsTestBeforeSubmitHttp(token, base, { ...env, ATS_TEST_CANDIDATE_EMAIL: "" }) as { reason: string }).reason,
+    "ats_test_candidate_email_unconfigured",
+  );
 
   assert.equal(
     (recheckAtsTestBeforeSubmitHttp(token, { ...base, ownerUserId: "customer" }, env) as { reason: string }).reason,
@@ -495,8 +560,16 @@ async function testPauseExemptionNotInheritable() {
     assert.equal(currentWorkerIneligibility(row), "applications_paused");
     const token = await captureToken();
     assert.equal(atsTestPauseExemption(token, row, env), true);
+    assert.equal(atsTestSkipsDocumentTailoring(token), true);
+    assert.equal(atsTestSkipsRecruiterLookup(token), true);
     assert.equal(currentWorkerIneligibility(row, new Date(), token), null);
     assert.equal(currentWorkerIneligibility(row, new Date(), { userId: TEST_USER, applicationId: expectedId }), "applications_paused");
+    const customerRow = gateRow({ id: "customer-app", userId: "customer" });
+    assert.equal(atsTestPauseExemption(token, customerRow, env), false);
+    assert.equal(currentWorkerIneligibility(customerRow, new Date(), token), "applications_paused");
+    const otherDest = gateRow({ job: { ...row.job, url: "https://bunq.recruitee.com/o/other" } });
+    assert.equal(atsTestPauseExemption(token, otherDest, env), false);
+    assert.equal(currentWorkerIneligibility(otherDest, new Date(), token), "applications_paused");
 
     const workerExports = loadWorker();
     let loaded = 0;
@@ -526,7 +599,15 @@ function loadWorker() {
     if (name === "@/lib/ats-test-capability") {
       return {
         ATS_TEST_FICTIONAL_MARK,
+        ATS_TEST_REFUSED_BEFORE_SUBMIT,
+        atsTestCandidateEmail: (given?: Record<string, string | undefined>) => atsTestCandidateEmail(given ?? {
+          ATS_TEST_CANDIDATE_EMAIL: process.env.ATS_TEST_CANDIDATE_EMAIL,
+          INBOUND_EMAIL_DOMAIN: process.env.INBOUND_EMAIL_DOMAIN,
+          INBOUND_USER_DOMAIN: process.env.INBOUND_USER_DOMAIN,
+        }),
         atsTestPauseExemptionForId,
+        atsTestSkipsDocumentTailoring,
+        atsTestSkipsRecruiterLookup,
         isAtsTestAuthorization,
         syntheticAtsTestCvText,
         syntheticAtsTestProfile,
@@ -560,6 +641,7 @@ function loadRoute() {
       },
       "@/lib/ats-test-capability": {
         atsTestRealSubmitEnabled: () => false,
+        atsTestCandidateEmailState: () => atsTestCandidateEmailState(env),
         parseAtsTestDestinations: () => parseAtsTestDestinations(env),
         prepareAndRunAtsTest: async () => ({
           ok: true, mode: "dry_run", applicationId: expectedId, jobId: "job-1",
@@ -592,6 +674,7 @@ async function testRoute() {
   const get = await route.GET({});
   assert.equal(get.status, 200);
   assert.equal(get.body.realSubmitEnabled, false);
+  assert.deepEqual(get.body.candidateEmail, { configured: true, masked: "o***@example.test", reason: null });
 }
 
 async function testRecruiteeFetchMock() {
@@ -599,13 +682,15 @@ async function testRecruiteeFetchMock() {
     user: process.env.ATS_TEST_USER_ID,
     dest: process.env.ATS_TEST_DESTINATIONS,
     real: process.env.ATS_TEST_REAL_SUBMIT,
+    candidate: process.env.ATS_TEST_CANDIDATE_EMAIL,
   };
   process.env.ATS_TEST_USER_ID = TEST_USER;
   process.env.ATS_TEST_DESTINATIONS = env.ATS_TEST_DESTINATIONS;
+  process.env.ATS_TEST_CANDIDATE_EMAIL = CANDIDATE_EMAIL;
   delete process.env.ATS_TEST_REAL_SUBMIT;
   const { recruiteeAdapter } = await import("../src/lib/portal-adapters/recruitee");
   const token = await captureToken();
-  const profile = syntheticAtsTestProfile();
+  const profile = { ...syntheticAtsTestProfile(), email: CANDIDATE_EMAIL };
   const calls: Array<{ url: string; method: string }> = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -623,7 +708,7 @@ async function testRecruiteeFetchMock() {
   try {
     const dryOutcome = await recruiteeAdapter.apply({} as never, {
       profile,
-      userEmail: profile.email,
+      userEmail: "user@example.test",
       cvLocalPath: "/tmp/synthetic-cv.txt",
       clLocalPath: "/tmp/synthetic-cl.txt",
       coverLetterText: `${ATS_TEST_FICTIONAL_MARK} letter`,
@@ -638,6 +723,7 @@ async function testRecruiteeFetchMock() {
     if (dryOutcome.ok) {
       assert.equal(dryOutcome.confirmation, "DRY_RUN");
       assert.equal(dryOutcome.receipt, undefined);
+      assert.equal(dryOutcome.offerValidation?.wouldAcceptRealSubmit, true);
     }
     assert.equal(calls.filter((call) => call.method === "POST").length, 0, "dry run makes ZERO submission POSTs");
     assert.ok(calls.some((call) => call.method === "GET" && call.url.includes("/api/offers/")), "read-only offer GET is allowed");
@@ -660,6 +746,7 @@ async function testRecruiteeFetchMock() {
   const { writeFile, unlink } = originalRead;
   const cvPath = "/tmp/lavorai-ats-test-cv.bin";
   await writeFile(cvPath, Buffer.from("cv"));
+  const postedEmails: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
@@ -672,6 +759,8 @@ async function testRecruiteeFetchMock() {
         text: async () => "",
       } as Response;
     }
+    const body = init?.body as FormData | undefined;
+    postedEmails.push(String(body?.get?.("candidate[email]") ?? ""));
     return {
       ok: true,
       status: 201,
@@ -682,7 +771,7 @@ async function testRecruiteeFetchMock() {
   try {
     const realOutcome = await recruiteeAdapter.apply({} as never, {
       profile,
-      userEmail: profile.email,
+      userEmail: "user@example.test",
       cvLocalPath: cvPath,
       clLocalPath: cvPath,
       coverLetterText: `${ATS_TEST_FICTIONAL_MARK} letter`,
@@ -696,10 +785,14 @@ async function testRecruiteeFetchMock() {
     assert.equal(realOutcome.ok, true);
     assert.equal(realCalls.filter((call) => call.method === "POST" && call.url.includes("/candidates")).length, 1, "real submit makes exactly one POST");
     if (realOutcome.ok) assert.equal(realOutcome.receipt?.receiptId, "recruitee-receipt");
+    assert.deepEqual(postedEmails, [CANDIDATE_EMAIL]);
+    assert.notEqual(postedEmails[0], ATS_TEST_PLACEHOLDER_EMAIL);
+    assert.notEqual(postedEmails[0], "user@example.test");
+    assert.doesNotMatch(postedEmails[0] ?? "", /inbound\.lavorai\.it|apply\.lavorai\.it|reply\+/);
 
     const blocked = await recruiteeAdapter.apply({} as never, {
       profile,
-      userEmail: profile.email,
+      userEmail: "user@example.test",
       cvLocalPath: cvPath,
       clLocalPath: cvPath,
       coverLetterText: "x",
@@ -712,6 +805,58 @@ async function testRecruiteeFetchMock() {
     });
     assert.equal(blocked.ok, false);
     assert.equal(realCalls.filter((call) => call.method === "POST" && call.url.includes("/candidates")).length, 1, "failed checks add zero POSTs");
+
+    const mismatch = await recruiteeAdapter.apply({} as never, {
+      profile: { ...profile, email: "other@example.test" },
+      userEmail: "user@example.test",
+      cvLocalPath: cvPath,
+      clLocalPath: cvPath,
+      coverLetterText: `${ATS_TEST_FICTIONAL_MARK} letter`,
+      jobUrl: DEST2_URL,
+      dryRun: false,
+      atsTestAuth: realToken,
+      atsTestOwnerUserId: TEST_USER,
+      atsTestJobSource: "ats_test",
+      applicationId: realToken!.applicationId,
+    });
+    assert.equal(mismatch.ok, false);
+    if (!mismatch.ok) assert.match(mismatch.error, /ats_test_candidate_email_mismatch/);
+    assert.equal(realCalls.filter((call) => call.method === "POST" && call.url.includes("/candidates")).length, 1, "recheck email mismatch makes zero POSTs");
+
+    const offerCalls: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = (init?.method ?? "GET").toUpperCase();
+      offerCalls.push(method);
+      if (method === "POST") throw new Error("unsupported offer must not POST");
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ offer: { status: "published", options_phone: "required", options_photo: "required", open_questions: [] } }),
+        text: async () => "",
+      } as Response;
+    }) as typeof fetch;
+    const phonePhoto = await recruiteeAdapter.apply({} as never, {
+      profile,
+      userEmail: CANDIDATE_EMAIL,
+      cvLocalPath: cvPath,
+      clLocalPath: cvPath,
+      coverLetterText: `${ATS_TEST_FICTIONAL_MARK} letter`,
+      jobUrl: DEST2_URL,
+      dryRun: true,
+      atsTestAuth: realToken,
+      atsTestOwnerUserId: TEST_USER,
+      atsTestJobSource: "ats_test",
+      applicationId: realToken!.applicationId,
+    });
+    assert.equal(phonePhoto.ok, false);
+    if (!phonePhoto.ok) {
+      assert.equal(phonePhoto.status, "not_eligible");
+      assert.equal(phonePhoto.refusedBeforeSubmit, true);
+      assert.ok(phonePhoto.offerValidation?.unsupportedRequired.includes("phone"));
+      assert.ok(phonePhoto.offerValidation?.unsupportedRequired.includes("photo"));
+      assert.equal(phonePhoto.offerValidation?.wouldAcceptRealSubmit, false);
+    }
+    assert.equal(offerCalls.filter((method) => method === "POST").length, 0);
   } finally {
     globalThis.fetch = originalFetch2;
     await unlink(cvPath).catch(() => undefined);
@@ -719,7 +864,47 @@ async function testRecruiteeFetchMock() {
     if (previous.user === undefined) delete process.env.ATS_TEST_USER_ID; else process.env.ATS_TEST_USER_ID = previous.user;
     if (previous.dest === undefined) delete process.env.ATS_TEST_DESTINATIONS; else process.env.ATS_TEST_DESTINATIONS = previous.dest;
     if (previous.real === undefined) delete process.env.ATS_TEST_REAL_SUBMIT; else process.env.ATS_TEST_REAL_SUBMIT = previous.real;
+    if (previous.candidate === undefined) delete process.env.ATS_TEST_CANDIDATE_EMAIL; else process.env.ATS_TEST_CANDIDATE_EMAIL = previous.candidate;
   }
+}
+
+function testOrdinaryGatesWithoutToken() {
+  const previous = process.env.APPLICATIONS_PAUSED;
+  delete process.env.APPLICATIONS_PAUSED;
+  try {
+    assert.equal(applicationsPaused(), false);
+    const row = gateRow();
+    assert.equal(currentWorkerIneligibility(row), "privacy_consent_missing");
+    const withConsent = gateRow({
+      user: { ...row.user, privacyConsentAt: new Date(), emailVerified: new Date() },
+    });
+    assert.equal(currentWorkerIneligibility(withConsent), "auto_apply_not_enabled");
+  } finally {
+    if (previous === undefined) delete process.env.APPLICATIONS_PAUSED; else process.env.APPLICATIONS_PAUSED = previous;
+  }
+}
+
+function testOfferValidationAndHeldRetry() {
+  assert.deepEqual(recruiteeOfferValidation({
+    options_cv: "required",
+    options_cover_letter: "optional",
+    open_questions: [],
+  }, { coverLetterText: "x" }).unsupportedRequired, []);
+  const phone = recruiteeOfferValidation({ options_phone: "required", open_questions: [] }, {});
+  assert.ok(phone.unsupportedRequired.includes("phone"));
+  assert.equal(phone.wouldAcceptRealSubmit, false);
+  const photo = recruiteeOfferValidation({ options_photo: "required", open_questions: [] }, {});
+  assert.ok(photo.unsupportedRequired.includes("photo"));
+  const other = recruiteeOfferValidation({ options_salary: "required", open_questions: [] }, {});
+  assert.ok(other.unsupportedRequired.includes("salary"));
+  const fileQ = recruiteeOfferValidation({
+    open_questions: [{ id: 1, kind: "file", required: true, body: "Upload ID" }],
+  }, {});
+  assert.ok(fileQ.unsupportedRequired.includes("open_question:file"));
+
+  assert.equal(atsTestPriorAttemptReason([{
+    id: expectedId, userId: TEST_USER, submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT,
+  }], "dry_run", env), null);
 }
 
 function testCronDrainStayPaused() {
@@ -757,8 +942,10 @@ async function main() {
   await testPauseExemptionNotInheritable();
   await testRoute();
   await testRecruiteeFetchMock();
+  testOrdinaryGatesWithoutToken();
+  testOfferValidationAndHeldRetry();
   testCronDrainStayPaused();
-  console.log("PASS ats-test-capability: branded token, pause skip only on that path, deterministic PK, dry-run zero POST, real one POST, synthetic profile, fakes");
+  console.log("PASS ats-test-capability: branded token, pause skip only on that path, deterministic PK, dry-run zero POST, real one POST, candidate email, offer validation, fakes");
 }
 
 main().catch((error) => { console.error(error); process.exit(1); });
