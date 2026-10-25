@@ -20,8 +20,9 @@ import { ashbyAdapter } from "../src/lib/portal-adapters/ashby";
 import * as guidance from "../src/lib/application-continuation-guidance";
 import * as answers from "../src/lib/application-answers";
 import { prefersRemoteOrHybrid } from "../src/lib/auto-apply-preferences";
+import { createMemoryReleaseDb } from "../src/lib/application-recovery-release";
 
-process.env.APPLICATION_RECOVERY_RELEASE = "on";
+process.env.APPLICATION_RECOVERY_RELEASE = "app1";
 
 const ASHBY_URL = "https://jobs.ashbyhq.com/alan/93455a8c-fbc5-4421-986b-9a63e3f22b36";
 const GH_URL = "https://boards.greenhouse.io/doctolib/jobs/8000653003";
@@ -56,6 +57,7 @@ function fakeDb(row: Row, channel: string, token: Date) {
     if (v && typeof v === "object" && "in" in (v as object)) return ((v as { in: unknown[] }).in).includes(cur);
     return cur === v;
   });
+  const release = createMemoryReleaseDb();
   const tx = {
     $queryRaw: async () => [],
     application: {
@@ -70,6 +72,8 @@ function fakeDb(row: Row, channel: string, token: Date) {
     applicationEmailAttempt: { findFirst: async () => null },
     job: { findMany: async () => [{ id: row.jobId, url: row.job.url }] },
     userAnswer: { findMany: async () => [] },
+    applicationReleaseGrant: release.applicationReleaseGrant,
+    applicationReleaseBatch: release.applicationReleaseBatch,
   };
   return { application: { findUnique: async () => ({ userId: row.userId, sessionId: row.sessionId, jobId: row.jobId }) },
     $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) } as never;

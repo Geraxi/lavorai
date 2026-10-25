@@ -17,6 +17,7 @@ import { heldMessage } from "../src/lib/application-worker-gates";
 import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "../src/lib/job-liveness";
 import * as applicationLease from "../src/lib/application-lease";
 import * as recoveryRelease from "../src/lib/application-recovery-release";
+import { attachMemoryRelease } from "../src/lib/application-recovery-release";
 import * as uncertainSubmission from "../src/lib/uncertain-submission";
 import * as recruiterEmailFallback from "../src/lib/recruiter-email-fallback";
 
@@ -138,7 +139,7 @@ function database(initial: ReturnType<typeof row>[]) {
       return { count: matches.length };
     },
   };
-  return { rows, prisma: { application }, counts: () => ({ reads, writes }) };
+  return { rows, prisma: attachMemoryRelease({ application }), counts: () => ({ reads, writes }) };
 }
 
 // --- unit: skip list & limits ---
@@ -424,7 +425,7 @@ async function testDrainSummaryBuckets() {
 }
 
 async function testExpiredQueuedClaimRecovery() {
-  process.env.APPLICATION_RECOVERY_RELEASE = "on";
+  process.env.APPLICATION_RECOVERY_RELEASE = "expired";
   const stale = new Date(Date.now() - 25 * 60_000);
   const recent = new Date();
   const historical = new Date(+start - 1);

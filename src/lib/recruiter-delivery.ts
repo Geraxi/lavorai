@@ -1,5 +1,5 @@
 import { applicationsPaused } from "@/lib/application-pause";
-import { authorizeReleaseCanary } from "@/lib/release-email-canary";
+import { authorizeReleaseCanary, isDedicatedTestDestination, RELEASE_CANARY } from "@/lib/release-email-canary";
 import { recruiterEmailFallbackEnabled } from "@/lib/recruiter-email-fallback";
 import { Resend, type CreateEmailOptions } from "resend";
 import { sendWithinQuota } from "@/lib/email-quota";
@@ -39,6 +39,16 @@ export async function sendRecruiterEmailOnce(input: {
   releaseCanary?: true;
 }, overrides: Partial<Dependencies> = {}): Promise<RecruiterDeliveryResult> {
   const canary = input.releaseCanary === true;
+  // Canary is only the dedicated test user + dedicated test destinations +
+  // the fixed diagnostic application id. Ordinary ids, customers, and employer
+  // mailboxes stay refused while paused/gated.
+  if (canary && (
+    input.applicationId !== RELEASE_CANARY.applicationId
+    || !isDedicatedTestDestination(input.recipient)
+    || (typeof input.payload.to === "string" && !isDedicatedTestDestination(input.payload.to))
+  )) {
+    return { kind: "not_sent", reason: "applications_paused" };
+  }
   if (canary ? !await authorizeReleaseCanary(input) : applicationsPaused()) {
     return { kind: "not_sent", reason: "applications_paused" };
   }

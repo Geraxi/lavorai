@@ -17,14 +17,14 @@ async function main() {
   const saved = { pause: process.env.APPLICATIONS_PAUSED, mode: process.env.LAVORAI_RELEASE_CANARY, domain: process.env.INBOUND_EMAIL_DOMAIN, ownerId: process.env.LAVORAI_RELEASE_CANARY_OWNER_ID, recipient: process.env.LAVORAI_RELEASE_CANARY_RECIPIENT };
   try {
     process.env.LAVORAI_RELEASE_CANARY_OWNER_ID = "fictional-owner-test";
-    process.env.LAVORAI_RELEASE_CANARY_RECIPIENT = "fictional-owner@example.invalid";
+    process.env.LAVORAI_RELEASE_CANARY_RECIPIENT = "fictional-owner@inbound.lavorai.it";
     process.env.APPLICATIONS_PAUSED = "true";
     process.env.LAVORAI_RELEASE_CANARY = "email-20261013-owner";
     process.env.INBOUND_EMAIL_DOMAIN = "inbound.lavorai.it";
     let row: any;
     let reads = 0;
     let changeBeforeSend = false;
-    const testPin = createHash("sha256").update(JSON.stringify(["fictional-owner-test", "fictional-owner@example.invalid"])).digest("hex");
+    const testPin = createHash("sha256").update(JSON.stringify(["fictional-owner-test", "fictional-owner@inbound.lavorai.it"])).digest("hex");
     const productionBinding = load("src/lib/release-email-canary.ts", { "node:crypto": { createHash } });
     assert.equal(productionBinding.releaseCanaryOwner(), null, "Production pin rejects fictional/configured arbitrary recipients");
     const canary = load("src/lib/release-email-canary.ts", {
@@ -32,7 +32,7 @@ async function main() {
       "@/lib/application-pause": { applicationsPaused },
       "@/lib/db": { prisma: { application: { findUnique: async () => { reads++; return changeBeforeSend && reads > 1 ? { ...row, userId: "other-customer" } : row; } } } },
     }, source => source.replace(/const PINNED_OWNER_SHA256 = "[a-f0-9]{64}";/, `const PINNED_OWNER_SHA256 = "${testPin}";`));
-    const C = { ...canary.RELEASE_CANARY, userId: "fictional-owner-test", email: "fictional-owner@example.invalid" };
+    const C = { ...canary.RELEASE_CANARY, userId: "fictional-owner-test", email: "fictional-owner@inbound.lavorai.it" };
     process.env.LAVORAI_RELEASE_CANARY_RECIPIENT = "wrong@example.invalid";
     assert.equal(canary.releaseCanaryOwner(), null);
     process.env.LAVORAI_RELEASE_CANARY_RECIPIENT = C.email;
@@ -77,7 +77,7 @@ async function main() {
       withinQuota: async (kind: string, to: string, fn: () => Promise<void>) => {
         assert.equal(kind, "release_canary"); assert.equal(to, C.email); await fn(); return { sent: true, reason: null };
       },
-      recipientDomainAllowed: async () => ({ allowed: true, reason: null, domain: "example.invalid", used: 0, limit: 12 }),
+      recipientDomainAllowed: async () => ({ allowed: true, reason: null, domain: "inbound.lavorai.it", used: 0, limit: 12 }),
       findAttempt: async () => null,
       createAttempt: async () => { events.push("persist"); return { id: "diagnostic-attempt" }; },
       send: async (payload: any, key: string) => {
@@ -92,6 +92,20 @@ async function main() {
     };
     assert.deepEqual(await sender({ ...input, releaseCanary: undefined }, deps), { kind: "not_sent", reason: "applications_paused" });
     assert.deepEqual(events, [], "All ordinary sends stay blocked, including the owner's real applications");
+    assert.equal(canary.isDedicatedTestDestination("hiring@acme.com"), false);
+    assert.equal(canary.isDedicatedTestDestination("owner@resend.dev"), true);
+    assert.equal(canary.isDedicatedTestDestination(C.email), true);
+    assert.deepEqual(await sender({ ...input, recipient: "hiring@acme.com" }, deps), { kind: "not_sent", reason: "applications_paused" }, "non-test recipient refused while paused");
+    assert.deepEqual(events, [], "non-test recipient must not persist or send");
+    assert.deepEqual(await sender({ ...input, applicationId: "ordinary-customer-app" }, deps), { kind: "not_sent", reason: "applications_paused" }, "ordinary application id refused while paused");
+    const previousOwner = process.env.LAVORAI_RELEASE_CANARY_OWNER_ID;
+    process.env.LAVORAI_RELEASE_CANARY_OWNER_ID = "some-other-customer";
+    assert.deepEqual(await sender(input, deps), { kind: "not_sent", reason: "applications_paused" }, "non-test user refused while paused");
+    process.env.LAVORAI_RELEASE_CANARY_OWNER_ID = previousOwner;
+    process.env.LAVORAI_RELEASE_CANARY_RECIPIENT = "fictional-owner@example.invalid";
+    assert.equal(canary.releaseCanaryOwner(), null, "non-test destination host cannot be the canary owner");
+    process.env.LAVORAI_RELEASE_CANARY_RECIPIENT = C.email;
+    assert.match(readFileSync("src/lib/recruiter-delivery.ts", "utf8"), /isDedicatedTestDestination/);
     reads = 0;
     assert.equal((await sender(input, deps)).kind, "accepted");
     assert.equal(reads, 2, "Recheck server identity immediately before transmission");

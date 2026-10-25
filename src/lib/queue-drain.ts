@@ -3,7 +3,7 @@ import { applicationsPaused } from "@/lib/application-pause";
 import { prisma } from "@/lib/db";
 import { heldMessage } from "@/lib/application-worker-gates";
 import { SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData } from "@/lib/ats-skip-hosts";
-import { RecoveryReleaseBudget, controlledReleaseHoldData } from "@/lib/application-recovery-release";
+import { tryConsumeRecoveryRelease, controlledReleaseHoldData } from "@/lib/application-recovery-release";
 import { canClaimAnotherDrainRow, drainProcessConcurrency, drainQueueBatch, maxDrainAttempts } from "@/lib/drain-limits";
 import { JOB_LIVENESS_UNKNOWN_HELD_MESSAGE } from "@/lib/job-liveness";
 import { releaseUnverifiableLivenessHolds } from "@/lib/held-application-release";
@@ -249,11 +249,10 @@ export async function releaseQuotaHoldsIfAvailable(opts: {
     orderBy: { createdAt: "asc" },
   });
   const maps = await loadQuotaUsageMaps(db, rows.map((r) => r.userId), rows.map((r) => r.id), now);
-  const budget = new RecoveryReleaseBudget();
   let released = 0;
   for (const row of rows) {
     if (!isQueuedRowSendable(row, usageFor(maps, row.userId), now)) continue;
-    if (!budget.consume(row.id)) {
+    if (!await tryConsumeRecoveryRelease(row.id, { db })) {
       await db.application.updateMany({
         where: {
           id: row.id, status: "queued", startedAt: { not: null }, retryCount: 0,

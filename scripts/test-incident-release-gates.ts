@@ -8,8 +8,9 @@ import vm from "node:vm";
 import ts from "typescript";
 import {
   CONTROLLED_RELEASE_MESSAGE,
-  RecoveryReleaseBudget,
-  recoveryReleaseConfig,
+  createMemoryReleaseDb,
+  recoveryReleaseAllowlist,
+  tryConsumeRecoveryRelease,
 } from "../src/lib/application-recovery-release";
 import { blocksUncertainAutoRetry, uncertainAutoRetryReason, UNCERTAIN_SUBMISSION_MESSAGE } from "../src/lib/uncertain-submission";
 import {
@@ -34,24 +35,10 @@ import * as recoveryRelease from "../src/lib/application-recovery-release";
 import * as uncertainSubmission from "../src/lib/uncertain-submission";
 
 assert.equal(historicalRetriesBlocked(), true, "historical replay stays disabled");
-assert.deepEqual(recoveryReleaseConfig({}), { enabled: false, allowIds: new Set(), cap: 3 });
-assert.equal(recoveryReleaseConfig({ APPLICATION_RECOVERY_RELEASE: "on" }).enabled, true);
-assert.deepEqual([...recoveryReleaseConfig({ APPLICATION_RECOVERY_RELEASE: "app-a,app-b", APPLICATION_RECOVERY_RELEASE_CAP: "2" }).allowIds], ["app-a", "app-b"]);
-{
-  const budget = new RecoveryReleaseBudget({ APPLICATION_RECOVERY_RELEASE: "on", APPLICATION_RECOVERY_RELEASE_CAP: "2" });
-  assert.equal(budget.consume("a"), true);
-  assert.equal(budget.consume("b"), true);
-  assert.equal(budget.consume("c"), false, "per-run cap");
-}
-{
-  const allow = new RecoveryReleaseBudget({ APPLICATION_RECOVERY_RELEASE: "keep-me" });
-  assert.equal(allow.consume("keep-me"), true);
-  assert.equal(allow.consume("other"), false);
-}
-{
-  const off = new RecoveryReleaseBudget({});
-  assert.equal(off.consume("any"), false);
-}
+assert.deepEqual(recoveryReleaseAllowlist({}), { enabled: false, allowIds: new Set() });
+assert.equal(recoveryReleaseAllowlist({ APPLICATION_RECOVERY_RELEASE: "on" }).enabled, false, "on without ids releases nothing");
+assert.equal(recoveryReleaseAllowlist({ APPLICATION_RECOVERY_RELEASE: "a,b,c,d,e,f" }).enabled, false, "more than 5 ids fails closed");
+assert.deepEqual([...recoveryReleaseAllowlist({ APPLICATION_RECOVERY_RELEASE: "app-a,app-b", APPLICATION_RECOVERY_RELEASE_CAP: "99" }).allowIds], ["app-a", "app-b"]);
 assert.match(CONTROLLED_RELEASE_MESSAGE, /in attesa di rilascio controllato/);
 
 assert.equal(uncertainAutoRetryReason({ submitStartedAt: new Date() }), "uncertain_submit_started");
@@ -171,7 +158,7 @@ async function testRecoveredLeaseStaysHeld() {
 function testSourceFences() {
   const claim = readFileSync("src/lib/application-claim.ts", "utf8");
   assert.match(claim, /blocksUncertainAutoRetry/);
-  assert.match(claim, /RecoveryReleaseBudget/);
+  assert.match(claim, /tryConsumeRecoveryRelease/);
   const gates = readFileSync("src/lib/application-worker-gates.ts", "utf8");
   assert.match(gates, /controlled_release/);
   const retry = readFileSync("src/app/api/admin/retry-captcha/route.ts", "utf8");
@@ -184,7 +171,20 @@ function testSourceFences() {
   assert.equal(SKIPPED_ATS_MANUAL_MESSAGE.includes("Nessun invio effettuato"), true);
 }
 
+async function testDbBackedAllowlist() {
+  const env = { APPLICATION_RECOVERY_RELEASE: "keep-me,also" };
+  const db = createMemoryReleaseDb();
+  assert.equal(await tryConsumeRecoveryRelease("keep-me", { db, env }), true);
+  assert.equal(await tryConsumeRecoveryRelease("keep-me", { db, env }), false, "never released twice");
+  assert.equal(await tryConsumeRecoveryRelease("also", { db, env }), true);
+  assert.equal(await tryConsumeRecoveryRelease("other", { db, env }), false);
+  assert.equal(await tryConsumeRecoveryRelease("any", { db, env: {} }), false);
+  const on = createMemoryReleaseDb();
+  assert.equal(await tryConsumeRecoveryRelease("any", { db: on, env: { APPLICATION_RECOVERY_RELEASE: "on" } }), false);
+}
+
 async function main() {
+  await testDbBackedAllowlist();
   await testRecoveredLeaseStaysHeld();
   testSourceFences();
   console.log("PASS incident release gates: recovery default off, uncertain standalone, recruiter-email fallback held");

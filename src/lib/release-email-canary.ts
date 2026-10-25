@@ -20,13 +20,28 @@ export const RELEASE_CANARY = Object.freeze({
   text: "LavorAI controlled diagnostic. THIS IS A TEST, NOT A REAL JOB APPLICATION.\n\nFictional applicant: Alex Example.\nFictional role: Test Engineer at Example Company (fictional).\nFictional experience: Creating synthetic test cases. No customer CV or personal candidate data is included.\n\nThis single email tests LavorAI's persisted send, provider delivery event, reply routing and Inbox display.\nPlease reply with: LavorAI fictional test reply received.\n\nCustomer applications remain paused. This diagnostic does not count as employer interest or an application outcome.",
 });
 
+/** The authorized-canary exception may only target these hosts. */
+export const DEDICATED_TEST_DESTINATION_HOSTS = Object.freeze(["inbound.lavorai.it", "resend.dev"]);
+
+export function dedicatedTestDestinationHost(email: string): string | null {
+  const at = email.lastIndexOf("@");
+  if (at < 1 || at === email.length - 1) return null;
+  return email.slice(at + 1).trim().toLowerCase();
+}
+
+export function isDedicatedTestDestination(email: string): boolean {
+  const host = dedicatedTestDestinationHost(email);
+  return host !== null && (DEDICATED_TEST_DESTINATION_HOSTS as readonly string[]).includes(host);
+}
+
 // Public-safe pin for the approved exact [account ID, recipient] tuple.
 // Values remain in server-only deployment configuration, never in this repo.
+// The recipient must also be a dedicated test destination (inbound.lavorai.it or resend.dev).
 const PINNED_OWNER_SHA256 = "5b54c0b214f7fc44298a02336a7960b90ae4a5b38e7c6da39f0b048831033ec6";
 export function releaseCanaryOwner(): { userId: string; email: string } | null {
   const userId = process.env.LAVORAI_RELEASE_CANARY_OWNER_ID;
   const email = process.env.LAVORAI_RELEASE_CANARY_RECIPIENT;
-  if (!userId || !email) return null;
+  if (!userId || !email || !isDedicatedTestDestination(email)) return null;
   const digest = createHash("sha256").update(JSON.stringify([userId, email])).digest("hex");
   return digest === PINNED_OWNER_SHA256 ? { userId, email } : null;
 }
@@ -60,6 +75,7 @@ export function isExactReleaseCanaryRequest(input: CanaryRequest): boolean {
   const expected = releaseCanaryPayload() as unknown as Record<string, unknown>;
   const actual = input.payload as unknown as Record<string, unknown>;
   return input.applicationId === RELEASE_CANARY.applicationId && input.attemptKey === RELEASE_CANARY.attemptKey
+    && isDedicatedTestDestination(input.recipient)
     && input.recipient === owner.email && input.recipientProvenanceJson === RELEASE_CANARY_PROVENANCE
     // Exact keys block CC/BCC, arbitrary attachments, headers, templates and body changes.
     && Object.keys(actual).length === Object.keys(expected).length

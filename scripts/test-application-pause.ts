@@ -24,7 +24,7 @@ function load(path: string, extra: Record<string, any> = {}): any {
     },
     "@/lib/deployed-version": { deployedAppVersion: () => "test-sha" },
     "@/lib/application-recovery-release": {
-      RecoveryReleaseBudget: class { consume() { return false; } },
+      tryConsumeRecoveryRelease: async () => false,
       controlledReleaseHoldData: () => ({ startedAt: new Date(), errorMessage: "held" }),
       controlledReleaseMessage: () => "held",
     },

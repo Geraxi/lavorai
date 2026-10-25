@@ -4,7 +4,7 @@ import { applicationsPaused } from "@/lib/application-pause";
 import { applicationRolloutConfig, rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/application-rollout";
 import { submissionSubjectKey } from "@/lib/application-submission-budget";
 import { heldMessage, NOT_SUBMITTED } from "@/lib/application-worker-gates";
-import { RecoveryReleaseBudget, controlledReleaseHoldData } from "@/lib/application-recovery-release";
+import { tryConsumeRecoveryRelease, controlledReleaseHoldData } from "@/lib/application-recovery-release";
 import {
   checkJobUrlLiveness, JOB_CLOSED_HELD_MESSAGE, JOB_LIVENESS_UNKNOWN_HELD_MESSAGE, markJobClosed,
   type JobLivenessResult,
@@ -78,9 +78,9 @@ function sendingOpen(): Date | null {
 }
 
 /** Re-verify under the same per-user lock the worker admission takes, then CAS. */
-async function releaseOne(row: ReleaseRow, now: Date, cutoff: Date, db: DB, budget: RecoveryReleaseBudget): Promise<boolean> {
+async function releaseOne(row: ReleaseRow, now: Date, cutoff: Date, db: DB): Promise<boolean> {
   if (!row.startedAt || rolloutApplicationIneligibility(row, now)) return false;
-  if (!budget.consume(row.id)) {
+  if (!await tryConsumeRecoveryRelease(row.id, { db })) {
     await db.application.updateMany({
       where: { id: row.id, status: { in: ["queued", "needs_user"] }, startedAt: row.startedAt },
       data: controlledReleaseHoldData(now),
@@ -130,8 +130,7 @@ export async function releaseHeldApplicationsForUser(
       select: releaseSelect, orderBy: { createdAt: "asc" }, take: 200,
     });
     let released = 0;
-    const budget = new RecoveryReleaseBudget();
-    for (const row of rows) if (await releaseOne(row, now, cutoff, db, budget)) released++;
+    for (const row of rows) if (await releaseOne(row, now, cutoff, db)) released++;
     if (released) console.log(`[held-release] ${trigger}: released ${released} held application(s) for user ${userId}`);
     return released;
   } catch (err) {
@@ -218,7 +217,7 @@ export async function recheckLivenessHeldApplications(opts: {
         // live OR unknown: unknown proceeds (not held). Re-release through
         // the same fenced path as consent holds.
         if (!row.lastStatusCheckAt) await db.application.updateMany({ where: fence, data: { lastStatusCheckAt: now } });
-        if (await releaseOne({ ...row, lastStatusCheckAt: row.lastStatusCheckAt ?? now }, now, cutoff, db, new RecoveryReleaseBudget())) report.released++;
+        if (await releaseOne({ ...row, lastStatusCheckAt: row.lastStatusCheckAt ?? now }, now, cutoff, db)) report.released++;
       }
     } catch (err) {
       console.error("[held-release] liveness recheck failed", err instanceof Error ? err.message : err);
@@ -245,10 +244,9 @@ export async function releaseUnverifiableLivenessHolds(opts: {
     select: releaseSelect, orderBy: { createdAt: "asc" }, take: Math.max(1, Math.min(opts.limit ?? 80, 200)),
   });
   let released = 0;
-  const budget = new RecoveryReleaseBudget();
   for (const row of rows) {
     try {
-      if (await releaseOne(row, now, cutoff, db, budget)) released++;
+      if (await releaseOne(row, now, cutoff, db)) released++;
     } catch (err) {
       console.error("[held-release] unverifiable release failed", err instanceof Error ? err.message : err);
     }
