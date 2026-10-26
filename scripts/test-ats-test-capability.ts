@@ -1,3 +1,4 @@
+import * as ordinaryValidation from "../src/lib/ordinary-validation";
 /**
  * Restricted ATS test capability. Fakes only — no network, DB, or real submit.
  */
@@ -649,6 +650,7 @@ function loadWorker() {
   }).outputText;
   const exports: Record<string, unknown> = {};
   new Function("require", "exports", js)((name: string) => {
+    if (name === "./ordinary-validation") return ordinaryValidation;
     if (name === "@/lib/application-pause") {
       return { applicationsPaused: () => true, assertApplicationsRunning: () => { throw new Error("applications_paused"); } };
     }

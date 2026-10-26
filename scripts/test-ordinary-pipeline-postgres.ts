@@ -140,6 +140,54 @@ async function main() {
     assert.equal(pendingAfter.confirmedAt,null); assert.equal(pendingAfter.sendStatus,pendingBefore.sendStatus);
     assert.equal(pendingAfter.sentProofRef,pendingBefore.sentProofRef);
     console.log('PASS heuristic inbound receipt cannot promote unsubmitted application');
+    // Bounded ordinary validation: keep the production-style holds ON.
+    const scoped=await fixture('real-optional');
+    const outsider=await fixture('race-two');
+    const selected=await db.application.findUniqueOrThrow({where:{id:scoped},include:{job:true,user:true}});
+    const windowStart=new Date(+selected.createdAt-1000);
+    Object.assign(process.env,{APPLICATIONS_PAUSED:'true',USER_NOTIFICATIONS_HOLD:'true',ATS_TEST_REAL_SUBMIT:'false',
+      ORDINARY_VALIDATION_APPLICATION_ID:scoped,ORDINARY_VALIDATION_USER_ID:selected.userId,
+      ORDINARY_VALIDATION_JOB_ID:selected.jobId,ORDINARY_VALIDATION_USER_EMAIL:selected.user.email,ORDINARY_VALIDATION_RECIPIENT:selected.user.email,
+      ORDINARY_VALIDATION_OFFER_URL:selected.job.url,ORDINARY_VALIDATION_STARTED_AT:windowStart.toISOString(),
+      ORDINARY_VALIDATION_EXPIRES_AT:new Date(+windowStart+15*60_000).toISOString()});
+    const {ordinaryValidationConfig}=req('./ordinary-validation');
+    const {applicationsPaused}=req('./application-pause');
+    assert.ok(ordinaryValidationConfig()); assert.equal(applicationsPaused(),true);
+    const {drainQueuedApplications}=req('./queue-drain');
+    const {runAutoApplyCron}=req('./auto-apply-cron');
+    const scopedBefore=posts(), noticesBefore=mails.length, aiBefore=aiCalls;
+    assert.equal((await drainQueuedApplications({findClaimableQueued:()=>{throw new Error('must not read queue')}})).claimed,0);
+    await runAutoApplyCron();
+    await Promise.all(Array.from({length:4},()=>run(outsider)));
+    assert.equal(aiCalls,aiBefore); assert.equal(posts(),scopedBefore);
+    const savedEmail=process.env.ORDINARY_VALIDATION_USER_EMAIL;
+    process.env.ORDINARY_VALIDATION_USER_EMAIL='wrong@example.test'; await run(scoped);
+    assert.equal(aiCalls,aiBefore); process.env.ORDINARY_VALIDATION_USER_EMAIL=savedEmail;
+    await db.user.update({where:{id:selected.userId},data:{privacyConsentAt:null}}); await run(scoped);
+    assert.equal(posts(),scopedBefore,'scope cannot bypass consent');
+    await db.user.update({where:{id:selected.userId},data:{privacyConsentAt:new Date()}});
+    // A held attempt changed only startedAt, not its queued eligibility. Clear
+    // this LOCAL fixture timestamp before the route's fresh-row preflight.
+    await db.application.update({where:{id:scoped},data:{startedAt:null,errorMessage:null}});
+    let adminSession:any={email:'umbertogeraci0@gmail.com'};
+    fakeModule('./session',{getCurrentUser:async()=>adminSession});
+    const route=req('../app/api/admin/ordinary-validation/route');
+    const {NextRequest}=req('next/server');
+    const request=(id=scoped,origin='http://localhost:3000')=>new NextRequest('http://localhost:3000/api/admin/ordinary-validation',{method:'POST',headers:{host:'localhost:3000',origin,'content-type':'application/json'},body:JSON.stringify({applicationId:id})});
+    assert.equal((await route.POST(request(outsider))).status,400);
+    assert.equal((await route.POST(request(scoped,'https://evil.invalid'))).status,403);
+    adminSession=null; assert.equal((await route.POST(request())).status,403); adminSession={email:'umbertogeraci0@gmail.com'};
+    const runs=await Promise.all([route.POST(request()),route.POST(request()),run(outsider)]);
+    assert.equal(posts()-scopedBefore,1,'only scoped ordinary application crosses provider boundary');
+    assert.equal((await db.application.findUniqueOrThrow({where:{id:scoped}})).status,'success');
+    assert.equal((await db.application.findUniqueOrThrow({where:{id:outsider}})).status,'queued');
+    assert.equal(mails.length,noticesBefore,'application notifications stay held');
+    assert.equal((await route.POST(request())).status,409,'no repeat/reset via route');
+    process.env.APPLICATIONS_PAUSED='false'; assert.equal(applicationsPaused(),true); assert.equal(ordinaryValidationConfig(),null);
+    await run(outsider); assert.equal(posts()-scopedBefore,1);
+    process.env.APPLICATIONS_PAUSED='true'; process.env.ORDINARY_VALIDATION_EXPIRES_AT=new Date(Date.now()-1000).toISOString();
+    assert.equal((await route.POST(request())).status,409); await run(outsider); assert.equal(posts()-scopedBefore,1);
+    console.log('PASS bounded ordinary validation: only scoped row, real consent/quota gates, concurrent single POST, producers/customer mail held, wrong user/origin/recipient/expiry refused');
     assert.deepEqual(forbidden,[],'no external network attempted');
     console.log('PASS zero external requests; notifications use fake SDK only');
   } finally { restore(); await fake.close(); await db.$disconnect(); }
