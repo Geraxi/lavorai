@@ -11,18 +11,18 @@ export const PREFLIGHT_OFFER = 'https://produzioneweb.recruitee.com/o/lavorai-te
 type DB = Pick<PrismaClient, 'user' | 'application' | 'userInbox' | 'cVDocument' | 'applicationSubmissionReservation'>;
 
 /** Reads only. No fixture creation, token, provider call, lease, reservation or scope activation. */
-export async function ordinaryValidationPreflight(db: DB, now = new Date()) {
-  const user = await db.user.findUnique({ where: { id: PREFLIGHT_USER_ID }, select: {
+export async function ordinaryValidationPreflight(db: DB, now = new Date(), scope = { userId: PREFLIGHT_USER_ID, email: PREFLIGHT_USER_EMAIL }) {
+  const user = await db.user.findUnique({ where: { id: scope.userId }, select: {
     ...workerGateSelect.user.select,
     preferences: { select: { ...workerGateSelect.user.select.preferences.select, dailyCap: true } },
   } });
-  if (!user || user.email !== PREFLIGHT_USER_EMAIL) return { status: 'blocked', reason: 'test_account_identity_mismatch' };
+  if (!user || user.email !== scope.email) return { status: 'blocked', reason: 'test_account_identity_mismatch' };
   const [apps, inbox, cvCount, dailyUsed, weeklyUsed, globalUsed] = await Promise.all([
-    db.application.findMany({ where: { userId: PREFLIGHT_USER_ID, job: { url: PREFLIGHT_OFFER } }, select: workerGateSelect, take: 2 }),
-    db.userInbox.findUnique({ where: { userId: PREFLIGHT_USER_ID }, select: { address: true, disabledAt: true } }),
-    db.cVDocument.count({ where: { userId: PREFLIGHT_USER_ID } }),
-    db.application.count({ where: dailyCapUsageWhere(PREFLIGHT_USER_ID, now) }),
-    db.application.count({ where: weeklyQuotaUsageWhere(PREFLIGHT_USER_ID, now) }),
+    db.application.findMany({ where: { userId: scope.userId, job: { url: PREFLIGHT_OFFER } }, select: workerGateSelect, take: 2 }),
+    db.userInbox.findUnique({ where: { userId: scope.userId }, select: { address: true, disabledAt: true } }),
+    db.cVDocument.count({ where: { userId: scope.userId } }),
+    db.application.count({ where: dailyCapUsageWhere(scope.userId, now) }),
+    db.application.count({ where: weeklyQuotaUsageWhere(scope.userId, now) }),
     db.applicationSubmissionReservation.count({ where: { budgetDay: new Date(now.toISOString().slice(0,10)+'T00:00:00.000Z') } }),
   ]);
   const app = apps.length === 1 ? apps[0] : null;
@@ -60,7 +60,7 @@ export async function ordinaryValidationPreflight(db: DB, now = new Date()) {
   const profileLabelMatches = user.cvProfile?.firstName === 'LavorAI' && user.cvProfile?.lastName === 'Test';
   return {
     status: blockers.length ? 'blocked' : 'unknown', // GET is never permission to submit.
-    observedAt: now.toISOString(), userId: PREFLIGHT_USER_ID, accountEmail: user.email, offerUrl: PREFLIGHT_OFFER,
+    observedAt: now.toISOString(), userId: scope.userId, accountEmail: user.email, offerUrl: PREFLIGHT_OFFER,
     holds: { applicationsPaused: process.env.APPLICATIONS_PAUSED === 'true', notificationsHeld: process.env.USER_NOTIFICATIONS_HOLD === 'true', diagnosticRealSubmitDisabled: process.env.ATS_TEST_REAL_SUBMIT === 'false' },
     account: { verified: !!user.emailVerified, privacyConsentRecorded: !!user.privacyConsentAt, suspended: !!user.suspendedAt, subscriptionStatus: user.subscriptionStatus, paidOrTrialAccess: paid, freeQuotaApplies: free, mode: user.preferences?.autoApplyMode ?? null },
     quota: { dailyUsed, dailyLimit, weeklyUsed, weeklyLimit: free ? freeWeeklyApplyQuota() : null, globalUsed, globalLimit: rollout.dailyCap, snapshotOnly: true },

@@ -98,3 +98,16 @@ killed before finally, use close and inspect existing outcome, never run again.
 Closing does not cancel a request already accepted by the provider. The operator
 removes all ORDINARY_VALIDATION_* configuration afterwards and verifies holds.
 Expiry/closed marker/mode-off independently prevent new work. No GET performs setup.
+
+### Main-account replacement: read-only review
+
+The approved replacement test uses the owner's existing real profile/CV. Do not
+prepare the internal synthetic fixture for that test. While signed in as the exact
+main admin account, open `/api/admin/ordinary-validation/main-account` to review
+ordinary eligibility and metadata for the latest CV (the worker's selection rule).
+This GET cannot create an application, seed a profile, reserve quota or send.
+It rejects alternate accounts and query-based scope changes. Document contents
+are never returned; sensitive-category hints are incomplete and require human
+review. A missing/ambiguous CV, a profile requiring seeding, or a blocked ordinary
+setting needs resolution before any one-shot scope is enabled. This endpoint does
+not authorize submission or modify the owner's preferences, consent or plan.
