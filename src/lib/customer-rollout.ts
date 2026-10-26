@@ -1,5 +1,5 @@
 /** Exact customer cohort, inert until separately authorized/configured. No ordinary gate overlays. */
-import type {Prisma} from '@prisma/client';
+import type {Prisma,PrismaClient} from '@prisma/client';
 type Env=Record<string,string|undefined>;
 export type CustomerEntry={applicationId:string;userId:string;jobId:string;url:string;recipient:string;createdAt:string};
 export type CustomerConfig={batchId:string;startedAt:Date;expiresAt:Date;notBefore:Date;maxAttempts:number;applications:CustomerEntry[]};
@@ -49,6 +49,7 @@ export async function claimCustomerSlot(tx:Prisma.TransactionClient,row:Row,leas
  const cfg=customerRolloutConfig(process.env,clocks[0].now);
  if(!cfg||!customerRolloutRow(row,cfg)||hasCustomerStamp(row.userProvidedAnswersJson))return null;
  const batchId='customer:'+cfg.batchId;
+ if(await customerBatchStopped(tx,cfg.batchId))return null;
  await tx.applicationReleaseBatch.upsert({where:{id:batchId},create:{id:batchId,maxCount:cfg.maxAttempts},update:{}});
  const batch=await tx.applicationReleaseBatch.findUnique({where:{id:batchId}});
  if(!batch||batch.maxCount!==cfg.maxAttempts||await tx.applicationReleaseGrant.findUnique({where:{applicationId:row.id}}))return null;
@@ -65,7 +66,7 @@ export async function customerGrantMatches(tx:Prisma.TransactionClient,row:Row&{
  if(!stamp||!cfg||!customerRolloutRow(row,cfg)||stamp.leaseToken!==row.leaseToken||stamp.batchId!=='customer:'+cfg.batchId)return false;
  const grant=await tx.applicationReleaseGrant.findUnique({where:{applicationId:row.id}});
  const batch=await tx.applicationReleaseBatch.findUnique({where:{id:stamp.batchId}});
- return grant?.batchId===stamp.batchId&&batch?.maxCount===cfg.maxAttempts;
+ return grant?.batchId===stamp.batchId&&batch?.maxCount===cfg.maxAttempts&&!await customerBatchStopped(tx,cfg.batchId);
 }
 
 /** Inspection only: structurally validate a retained manifest even after disable/expiry.
@@ -74,8 +75,15 @@ export function inspectCustomerManifest(env:Env=process.env):CustomerConfig|null
  try{const m=JSON.parse(env.CUSTOMER_ROLLOUT_MANIFEST??'');if(!validDate(m.startedAt))return null;
  return customerRolloutConfig({...env,CUSTOMER_ROLLOUT_ENABLED:'true',APPLICATIONS_PAUSED:'true',USER_NOTIFICATIONS_HOLD:'true',ATS_TEST_REAL_SUBMIT:'false',ORDINARY_VALIDATION_APPLICATION_ID:''},new Date(m.startedAt));}catch{return null;}
 }
-/** Irreversible for this batch: no grant refund/rearm. Existing accepted results may still persist. */
-export async function stopCustomerBatch(db:Pick<Prisma.TransactionClient,'applicationReleaseBatch'>,batchId:string){
+/** A separate zero-budget tombstone preserves the real budget and all CHECKs.
+ * Never delete/reopen tombstones. The same lock serializes stop with new grants. */
+export async function customerBatchStopped(db:Pick<Prisma.TransactionClient,'applicationReleaseBatch'>,batchId:string){
+ return !!await db.applicationReleaseBatch.findUnique({where:{id:'customer-stop:'+batchId},select:{id:true}});
+}
+export async function stopCustomerBatch(db:Pick<PrismaClient,'$transaction'>,batchId:string){
  if(!/^[a-z0-9-]{1,60}$/.test(batchId))throw Error('invalid_customer_batch');
- await db.applicationReleaseBatch.upsert({where:{id:'customer:'+batchId},create:{id:'customer:'+batchId,maxCount:0},update:{maxCount:0}});
+ await db.$transaction(async tx=>{
+  await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(1735274851,20261026)`;
+  await tx.applicationReleaseBatch.upsert({where:{id:'customer-stop:'+batchId},create:{id:'customer-stop:'+batchId,maxCount:0,usedCount:0},update:{}});
+ });
 }

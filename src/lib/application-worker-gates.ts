@@ -210,7 +210,7 @@ export async function freeQuotaAvailable(tx: Pick<Prisma.TransactionClient, "app
   return used < freeWeeklyApplyQuota();
 }
 
-async function admissionBlock(tx: Prisma.TransactionClient, row: WorkerGateRow): Promise<string | null> {
+export async function admissionBlock(tx: Prisma.TransactionClient, row: WorkerGateRow): Promise<string | null> {
   if (!await capacityAvailable(tx, row)) return "session_capacity_reached";
   if (!await freeQuotaAvailable(tx, row)) return "free_weekly_quota_reached";
   return null;

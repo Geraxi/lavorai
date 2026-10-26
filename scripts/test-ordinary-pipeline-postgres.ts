@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { startFakeRecruiteeServer, installFakeRecruiteeFetch } from './fake-recruitee-server';
 
@@ -20,6 +21,19 @@ async function main() {
   const existing = await db.$queryRawUnsafe("SELECT count(*) FROM pg_tables WHERE schemaname='public'");
   assert.equal(Number(existing[0].count), 0, 'refuse nonempty database');
   execFileSync(process.execPath, [resolve('node_modules/prisma/build/index.js'),'db','push','--skip-generate'], {stdio:'inherit',env:process.env});
+  // Replace db-push projections with the actual additive migration, including SQL CHECKs.
+  await db.$executeRawUnsafe('DROP TABLE "ApplicationReleaseGrant"');
+  await db.$executeRawUnsafe('DROP TABLE "ApplicationReleaseBatch"');
+  const releaseSql=readFileSync('prisma/migrations/20261025020000_application_release_budget/migration.sql','utf8');
+  for(const sql of releaseSql.split(/;\s*(?:\n|$)/).filter(s=>s.trim()))await db.$executeRawUnsafe(sql);
+  await assert.rejects(()=>db.applicationReleaseBatch.create({data:{id:'invalid-cap',maxCount:6}}));
+  await assert.rejects(()=>db.applicationReleaseBatch.create({data:{id:'invalid-used',maxCount:1,usedCount:2}}));
+  await assert.rejects(()=>db.applicationReleaseBatch.create({data:{id:'invalid-negative',maxCount:1,usedCount:-1}}));
+  await assert.rejects(()=>db.applicationReleaseGrant.create({data:{applicationId:'no-parent',batchId:'missing'}}));
+  const readiness=req('./customer-rollout-readiness');
+  const metadata=await readiness.readReleaseSchema(db);assert.deepEqual(metadata.issues,[],'actual release migration constraints must be recognized');
+  assert.equal(readiness.assessReleaseSchema(metadata.columns,metadata.constraints.filter((c:any)=>c.name!=='ApplicationReleaseBatch_used_le_max'),metadata.indexes).compatible,false,'missing SQL CHECK must not pass readiness');
+  assert.equal(readiness.assessReleaseSchema(metadata.columns,metadata.constraints,[]).compatible,false,'missing grant index must not pass readiness');
   let aiCalls = 0;
   // Replace only AI provider boundaries, not worker gates or adapter decisions.
   function fakeModule(path: string, exports: object) {
@@ -284,6 +298,10 @@ async function main() {
     assert.equal(posts()-cp,2,'shared cohort cap across users/processes');
     assert.equal((await db.applicationReleaseBatch.findUniqueOrThrow({where:{id:'customer:concurrency'}})).usedCount,2);
     assert.equal(await db.applicationReleaseGrant.count({where:{batchId:'customer:concurrency'}}),2);
+    await customer.stopCustomerBatch(db,'concurrency');await customer.stopCustomerBatch(db,'concurrency');
+    assert.equal((await db.applicationReleaseBatch.findUniqueOrThrow({where:{id:'customer:concurrency'}})).usedCount,2);
+    assert.equal((await db.applicationReleaseBatch.findUniqueOrThrow({where:{id:'customer:concurrency'}})).maxCount,2);
+    assert.equal(await customer.customerBatchStopped(db,'concurrency'),true);
     const repeat=posts();await customerDrain.drainCustomerRollout(run,db);assert.equal(posts(),repeat);
     process.env.CUSTOMER_ROLLOUT_ENABLED='false';assert.equal((await customerDrain.drainCustomerRollout(()=>{throw Error('disabled drain invoked')},db)).active,false);
     delete process.env.CUSTOMER_ROLLOUT_MANIFEST;delete process.env.CUSTOMER_ROLLOUT_ENABLED;process.env.APPLICATIONS_PAUSED='false';
@@ -296,12 +314,31 @@ async function main() {
     const expired=await fixture('real-optional');await cohort([expired],'expired');let cm=JSON.parse(process.env.CUSTOMER_ROLLOUT_MANIFEST!);cm.expiresAt=new Date(Date.now()-1).toISOString();process.env.CUSTOMER_ROLLOUT_MANIFEST=JSON.stringify(cm);await run(expired);assert.equal(posts(),nc);
     const uncertainCustomer=await fixture('server-500');await cohort([uncertainCustomer],'uncertain');await run(uncertainCustomer);await run(uncertainCustomer);assert.equal(posts()-nc,1);assert.notEqual((await db.application.findUniqueOrThrow({where:{id:uncertainCustomer}})).status,'success');
     const stopped=await fixture('real-optional');await cohort([stopped],'stopped');await customer.stopCustomerBatch(db,'stopped');const stopPosts=posts();await run(stopped);assert.equal(posts(),stopPosts);assert.equal(await db.applicationReleaseGrant.count({where:{applicationId:stopped}}),0);
+    const racing=await fixture('real-optional');await cohort([racing],'stop-race');const stopRaceRow=await db.application.findUniqueOrThrow({where:{id:racing},include:{job:true}});
+    await Promise.all([customer.stopCustomerBatch(db,'stop-race'),db.$transaction(tx=>customer.claimCustomerSlot(tx,stopRaceRow,'race-lease'))]);
+    assert.equal(await customer.customerGrantMatches(db,{...stopRaceRow,leaseToken:'race-lease',userProvidedAnswersJson:JSON.stringify({customerRollout:{batchId:'customer:stop-race',leaseToken:'race-lease'}})}),false);
+    assert.equal(await db.$transaction(tx=>customer.claimCustomerSlot(tx,stopRaceRow,'second-lease')),null);
     const late=await fixture('real-optional');await cohort([late],'late-receipt');
     adapter.apply=async(...args:any[])=>{const result=await originalApply(...args);await customer.stopCustomerBatch(db,'late-receipt');process.env.CUSTOMER_ROLLOUT_ENABLED='false';return result;};
     await run(late);adapter.apply=originalApply;
     assert.equal((await db.application.findUniqueOrThrow({where:{id:late}})).status,'success','accepted receipt persists even when stop switch flips after provider response');
     assert.equal(mails.length,noticesBefore);
     console.log('PASS customer rollout: default/disabled/expiry, exact cohort, atomic cap, ordinary consent/matching, recipient fence, no uncertainty replay, late accepted receipt retained, no customer notifications');
+    {
+    const readyId=await fixture('fresh-report');
+    const inboxUser=await db.application.findUniqueOrThrow({where:{id:readyId}});
+    const inbox=await db.userInbox.create({data:{userId:inboxUser.userId,slug:'synthetic-inbox',address:'synthetic-inbox@apply.example.test',domain:'apply.example.test'}});
+    await db.inboundEmail.create({data:{inboxId:inbox.id,userId:inboxUser.userId,provider:'resend',providerMessageId:'local-evidence',fromAddress:'sender@example.test',toAddress:inbox.address,receivedAt:new Date(),bodyText:'PRIVATE MESSAGE NEVER RETURN'}});
+    const callsBeforeReport=fake.requests.length,aiBeforeReport=aiCalls;
+    const report=await db.$transaction(async tx=>{await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');return readiness.customerReadiness(tx);},{timeout:30000});
+    assert.equal(report.schema.compatible,true);assert.equal(report.activationAuthorized,false);
+    const selected=report.candidates.find((c:any)=>c.applicationId===readyId);assert.ok(selected);assert.deepEqual(selected.blockers,[]);assert.equal(selected.status,'requires_review');
+    assert.equal(selected.recipient.source,'user_inbox');assert.equal(selected.recipient.receivingEvidence.providerMessageRecorded,true);
+    assert.equal(report.candidates.some((c:any)=>c.userId===mainUser),false,'owner must not be proposed as customer');
+    assert.doesNotMatch(JSON.stringify(report),/PRIVATE MESSAGE|Synthetic ordinary engineer with TypeScript skills|bodyText|extractedText|experiencesJson/);
+    assert.equal(fake.requests.length,callsBeforeReport);assert.equal(aiCalls,aiBeforeReport);
+    console.log('PASS consolidated readiness under PostgreSQL READ ONLY: actual schema constraints, ordinary gates, exact routing metadata, no CV/message bodies, no provider calls');
+    }
     assert.deepEqual(forbidden,[],'no external network attempted');
     console.log('PASS zero external requests; notifications use fake SDK only');
   } finally { restore(); await fake.close(); await db.$disconnect(); }
