@@ -1,3 +1,4 @@
+import { MAIN_VALIDATION_APP, MAIN_VALIDATION_USER, mainMeta, mainSourceMatches } from "./ordinary-main-validation-scope";
 import { ordinaryValidationRow } from "./ordinary-validation";
 import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, CONTINUATION_PROOF_MISSING_MESSAGE, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
 import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
@@ -179,7 +180,13 @@ async function withLockedApplication<T>(id: string, db: DB, operation: (tx: Pris
       try { state = JSON.parse(fixture?.parsedProfileJson ?? "").state; } catch { return null; }
       if (state !== "running") return null;
     }
+    if (id === MAIN_VALIDATION_APP) {
+      const candidate = await tx.application.findUnique({where:{id},select:{userProvidedAnswersJson:true}});
+      const meta = mainMeta(candidate?.userProvidedAnswersJson);
+      if (identity.userId !== MAIN_VALIDATION_USER || !meta || meta.state !== 'running' || !await mainSourceMatches(tx, meta)) return null;
+    }
     const row = await tx.application.findUnique({ where: { id }, select: workerGateSelect });
+    if (id === MAIN_VALIDATION_APP && (!row || !ordinaryValidationRow(row))) return null;
     // Changing ownership/round while admission waits needs a fresh invocation.
     if (row && (row.userId !== identity.userId || row.sessionId !== identity.sessionId || row.jobId !== identity.jobId)) return null;
     return operation(tx, row);
