@@ -54,3 +54,14 @@ production AI/storage credentials, real CV preparation, receiving DNS or mail de
 No migration is required. No live invocation or configuration change was performed
 while preparing this patch. This validates ordinary worker preparation and completion;
 paused automatic admission producers are tested in isolation, not opened in production.
+
+## Read-only owner preflight
+
+GET /api/admin/ordinary-validation/preflight requires the existing admin session,
+accepts no parameters, and is fixed to internal account cmvnz41b9pvoty0ufujkkx0zw
+and the ProduzioneWeb ordinary-validation posting. It reads metadata and quota
+counts only; it never creates a fixture, verifies consent, reserves quota, calls a
+provider, or executes an application. Missing fixture and mailbox ownership remain
+unknown, even when recorded account checks pass. No CV contents are returned.
+Daily quota is informational; shared ordinary billing/weekly usage and existing
+application-policy calculations are reused. Snapshot counts are not reservations.
