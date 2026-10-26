@@ -31,7 +31,10 @@ export function ordinaryValidationRow(row: {
 }): boolean {
   const c=ordinaryValidationConfig();
   return !!c && row.id===c.id && row.userId===c.userId && row.jobId===c.jobId
-    && row.job.url===c.url && row.user.email===c.userEmail && +row.createdAt>=+c.start && +row.createdAt<=Date.now();
+    && row.job.url===c.url && row.user.email===c.userEmail
+    && (process.env.ORDINARY_VALIDATION_CREATED_AT
+      ? +row.createdAt===+new Date(process.env.ORDINARY_VALIDATION_CREATED_AT) && +row.createdAt<=+c.start
+      : +row.createdAt>=+c.start) && +row.createdAt<=Date.now();
 }
 export function ordinaryValidationDestination(id: string, adapter: string, url: string, recipient: string): boolean {
   const c=ordinaryValidationConfig();
