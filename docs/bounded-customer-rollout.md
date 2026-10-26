@@ -5,8 +5,9 @@ USER_NOTIFICATIONS_HOLD=true and ATS_TEST_REAL_SUBMIT=false; remove all
 ORDINARY_VALIDATION_* variables. Leave CUSTOMER_ROLLOUT_ENABLED and
 CUSTOMER_ROLLOUT_MANIFEST absent until the exact cohort is separately approved.
 No schema migration is introduced. Existing ApplicationReleaseBatch and
-ApplicationReleaseGrant tables are required; status checks their existence, not
-migration history or complete column compatibility. Verify metadata/schema before activation.
+ApplicationReleaseGrant tables are required; the consolidated admin report checks columns, defaults, validated CHECKs, primary/foreign
+keys and the grant index against the real migration. It does not fabricate migration history.
+An incompatible result blocks activation; no production migration is performed by this release.
 
 ## Activation prerequisites and configuration
 
@@ -62,7 +63,11 @@ share the cap; a batch may have multiple in-flight members up to that cap.
 Use /admin/customer-rollout in the existing admin session: Read current status is
 read-only; Stop this batch is authenticated and origin checked. GET
 /api/admin/customer-rollout returns selected application outcomes, budget and holds,
-without CV contents. Stop writes maxCount=0 permanently for this batch. Stop also works before the first grant. The same-origin POST accepts
+without CV contents. Stop atomically writes a separate `customer-stop:<batchId>` zero-budget tombstone,
+using the same advisory lock as grant admission. The original maxCount/usedCount and
+all grants remain unchanged, preserving the SQL CHECK usedCount <= maxCount.
+The tombstone is checked before every new grant and submission recheck; it cannot
+be reopened by the same manifest or by a restarted drain. Stop also works before the first grant. The same-origin POST accepts
 {"action":"stop","batchId":"exact-batch-id"}. It cannot activate or send.
 
 Monitor persisted status, submitConfirmation, submittedAt and sendFailureReason;
@@ -81,3 +86,27 @@ provider acceptance, delivery and actual replies are separate evidence.
 Rollback of code is safe only with all holds retained and cohort configuration
 removed. Do not run an older worker against active cohort configuration. This
 release alone is not authorization to activate, unpause or contact anyone.
+
+## Consolidated read-only prerequisite report
+
+Open /api/admin/customer-rollout once in the existing admin session (or press Read
+current status on the admin page). No preparation or activation occurs on GET.
+The report checks the actual release-table metadata and examines up to 20 fresh
+queued Recruitee rows from the preceding 24 hours, newest first. A truncation flag
+means this is not a complete inventory. Founder/admin and internal/test accounts
+are excluded. No customer consent or settings are changed.
+
+For each row it returns exact IDs/time/offer, actual ordinary policy and admission
+results, quota snapshot, duplicate/reservation checks, profile/CV presence and
+resolved candidate recipient. Only inbound metadata (receipt time and presence of
+a provider ID) is included, never email bodies, CV contents or secrets. Stored
+user/application routing and provider-received evidence are distinguished from
+verified account-address ownership; none is silently treated as a successful ATS
+receipt or current proof that a mailbox works.
+
+Rows without recorded blockers remain `requires_review`, not authorized/ready:
+review actual current offer liveness/required fields, readable CV selection and
+receiving evidence. Those checks must not be manufactured by the platform owner
+on behalf of the candidate. Transactional worker checks repeat at execution.
+If no suitable fresh rows are available, do not release old backlog, change consent
+or create synthetic customer eligibility to make the report pass.

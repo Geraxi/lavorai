@@ -6,9 +6,10 @@ import * as rollout from '../src/lib/customer-rollout';
 const code=ts.transpileModule(readFileSync('src/app/api/admin/customer-rollout/route.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 async function main(){
  let admin=false,origin=true,reads=0,writes=0;
- const db={$queryRaw:async()=>{reads++;return[{batch:'batch',grant:'grant'}];},applicationReleaseBatch:{findUnique:async()=>null,upsert:async()=>{writes++;}},application:{findMany:async()=>[]}};
+ const db:any={$queryRaw:async()=>{reads++;return[{batch:'batch',grant:'grant'}];},applicationReleaseBatch:{findUnique:async()=>null,upsert:async()=>{writes++;}},application:{findMany:async()=>[]}};
+ db.$transaction=async(run:any)=>run(db);
  const dependencies:Record<string,unknown>={
-  '@/lib/csrf':{checkOrigin:()=>origin},'@/lib/session':{getCurrentUser:async()=>({email:'owner@example.test'})},'@/lib/admin':{isAdmin:()=>admin},'@/lib/db':{prisma:db},'@/lib/customer-rollout':rollout,'@/lib/deployed-version':{deployedAppVersion:()=> 'test-sha'},'next/server':{NextResponse:{json:(body:unknown,opts?:{status?:number})=>({body,status:opts?.status??200})}}
+  '@/lib/csrf':{checkOrigin:()=>origin},'@/lib/session':{getCurrentUser:async()=>({email:'owner@example.test'})},'@/lib/admin':{isAdmin:()=>admin},'@/lib/db':{prisma:db},'@/lib/customer-rollout':rollout,'@/lib/customer-rollout-readiness':{customerReadiness:async()=>{reads++;return{schema:{compatible:true},candidates:[],activationAuthorized:false};}},'@/lib/deployed-version':{deployedAppVersion:()=> 'test-sha'},'next/server':{NextResponse:{json:(body:unknown,opts?:{status?:number})=>({body,status:opts?.status??200})}}
  };
  const module={exports:{} as any};
  vm.runInNewContext(code,{module,exports:module.exports,process,require:(id:string)=>{assert.ok(id in dependencies,id);return dependencies[id];},fetch:()=>{throw Error('network forbidden');}});
