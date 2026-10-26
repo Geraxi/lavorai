@@ -117,7 +117,12 @@ function overlayAtsTestGateRow(row: WorkerGateRow, now: Date): WorkerGateRow {
 export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date(), atsTestAuth?: unknown): string | null {
   const testOk = atsTestPauseExemption(atsTestAuth, row);
   if (applicationsPaused() && !testOk && !ordinaryValidationRow(row)) return "applications_paused";
-  const gated = testOk ? overlayAtsTestGateRow(row, now) : row;
+  return ordinaryWorkerIneligibility(testOk ? overlayAtsTestGateRow(row, now) : row, now);
+}
+
+/** Pure ordinary policy inspection; does not authorize work or exempt any execution gate. */
+export function ordinaryWorkerIneligibility(gated: WorkerGateRow, now = new Date()): string | null {
+  const row = gated;
   const rolloutReason = rolloutApplicationIneligibility(gated, now);
   if (rolloutReason) return rolloutReason;
   const user = gated.user;
