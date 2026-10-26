@@ -1,3 +1,4 @@
+import { ordinaryValidationRow } from "./ordinary-validation";
 import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, CONTINUATION_PROOF_MISSING_MESSAGE, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
 import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
 import { parseAnswers } from "./application-answers";
@@ -115,7 +116,7 @@ function overlayAtsTestGateRow(row: WorkerGateRow, now: Date): WorkerGateRow {
 
 export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date(), atsTestAuth?: unknown): string | null {
   const testOk = atsTestPauseExemption(atsTestAuth, row);
-  if (applicationsPaused() && !testOk) return "applications_paused";
+  if (applicationsPaused() && !testOk && !ordinaryValidationRow(row)) return "applications_paused";
   const gated = testOk ? overlayAtsTestGateRow(row, now) : row;
   const rolloutReason = rolloutApplicationIneligibility(gated, now);
   if (rolloutReason) return rolloutReason;
@@ -341,6 +342,7 @@ export async function reserveApplicationWork(id: string, db: DB = prisma, atsTes
  */
 export async function beginApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", atsTestAuth?: unknown): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
+    if (applicationsPaused() && channel !== "portal_recruitee" && (!row || !atsTestPauseExemption(atsTestAuth, row))) return false;
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
       || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
@@ -390,6 +392,7 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
  */
 export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit", atsTestAuth?: unknown): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
+    if (applicationsPaused() && channel !== "portal_recruitee" && (!row || !atsTestPauseExemption(atsTestAuth, row))) return false;
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
       || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())

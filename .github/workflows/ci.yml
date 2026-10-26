@@ -55,6 +55,9 @@ jobs:
       - name: Auto-apply quality regressions
         run: npm run test:auto-apply-quality
 
+      - name: Paused ordinary validation and release controls
+        run: npm run test:release-controls
+
       - name: Manual-only rollout and producer regressions
         run: npm run test:manual-rollout
 

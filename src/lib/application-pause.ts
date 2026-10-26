@@ -19,6 +19,9 @@
  * RECRUITER_EMAIL_FALLBACK_ENABLED (see recruiter-email-fallback.ts).
  */
 export function applicationsPaused(): boolean {
+  // A configured ordinary validation never opens general producers, even if
+  // APPLICATIONS_PAUSED is accidentally changed. Invalid/expired scope stays held.
+  if (process.env.ORDINARY_VALIDATION_APPLICATION_ID?.trim()) return true;
   const value = process.env.APPLICATIONS_PAUSED?.trim().toLowerCase();
   return !!value && value !== "false";
 }
