@@ -65,3 +65,36 @@ provider, or executes an application. Missing fixture and mailbox ownership rema
 unknown, even when recorded account checks pass. No CV contents are returned.
 Daily quota is informational; shared ordinary billing/weekly usage and existing
 application-policy calculations are reused. Snapshot counts are not reservations.
+
+## Complete owner flow
+
+/admin/ordinary-validation is admin-session protected. Page load is inert.
+Prepare requires the owner to enter the approved phone and explicitly accept
+privacy processing and this application. A per-user transaction creates the
+missing synthetic profile, one source PDF/document and one deterministic ordinary
+application; existing profile/CV or conflicting posting rows are not overwritten.
+Repeated prepare is idempotent; a closed fixture cannot reopen. Consent uses the
+actual click time; actor and notice URL are retained with fixture provenance.
+The source PDF is a bounded inline database object, avoiding public source uploads.
+Generated application documents still follow the existing ordinary storage path.
+
+The internal account remains Free; no trial, subscription or quota reset occurs.
+Only mode manual is enabled; autoApplyOn remains false and all global holds remain.
+Recipient attestation is a distinct explicit owner action with existing receiving
+evidence. It is owner-provided evidence, not an independent delivery probe.
+
+The operator then configures the existing exact scope for 15 minutes, using the
+prepared application ID/job/user/email/recipient, and ORDINARY_VALIDATION_CREATED_AT
+equal to the returned preparation timestamp. STARTED_AT is the activation time,
+not backdated preparation. No configuration/credential API is exposed in the UI.
+The owner can then invoke exactly once. A durable transaction marks the fixture
+running before calling the ordinary worker without diagnostic options. Worker
+claims for this fixed fixture require that marker. Concurrent attempts are refused.
+
+Run always closes in finally after the worker returns or throws; close sets mode
+off and marks the fixture permanently closed. The close button is also available
+for abandonment or a disconnected request; it does not send. If the runtime is
+killed before finally, use close and inspect existing outcome, never run again.
+Closing does not cancel a request already accepted by the provider. The operator
+removes all ORDINARY_VALIDATION_* configuration afterwards and verifies holds.
+Expiry/closed marker/mode-off independently prevent new work. No GET performs setup.

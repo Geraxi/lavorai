@@ -92,6 +92,15 @@ export async function saveUserFile(
 }
 
 export async function readUserFile(storagePath: string): Promise<Buffer> {
+  // Small synthetic validation source PDFs are stored atomically with the DB
+  // fixture, avoiding a public upload of owner contact details.
+  if (storagePath.startsWith("data:application/pdf;base64,")) {
+    const encoded = storagePath.slice("data:application/pdf;base64,".length);
+    if (encoded.length > 670_000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) throw new Error("invalid inline PDF");
+    const data = Buffer.from(encoded, "base64");
+    if (!data.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("invalid inline PDF");
+    return data;
+  }
   // Existing documents may have been written by a different storage driver.
   // Select the reader from the persisted path, not today's upload setting.
   if (/^https:\/\//i.test(storagePath)) {
@@ -172,6 +181,7 @@ export async function moveFile(
  * Elimina un singolo file. Best-effort: non lancia se non esiste.
  */
 export async function deleteFile(storagePath: string): Promise<void> {
+  if (storagePath.startsWith("data:application/pdf;base64,")) return; // Stored with its DB row, no external object.
   const drv = driver();
   try {
     if (drv === "vercel") {

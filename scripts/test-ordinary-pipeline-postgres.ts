@@ -188,6 +188,45 @@ async function main() {
     process.env.APPLICATIONS_PAUSED='true'; process.env.ORDINARY_VALIDATION_EXPIRES_AT=new Date(Date.now()-1000).toISOString();
     assert.equal((await route.POST(request())).status,409); await run(outsider); assert.equal(posts()-scopedBefore,1);
     console.log('PASS bounded ordinary validation: only scoped row, real consent/quota gates, concurrent single POST, producers/customer mail held, wrong user/origin/recipient/expiry refused');
+
+    // Owner preparation is an atomic fixture transaction, never a submission.
+    const owner=req('./ordinary-validation-owner');
+    const fixedUser='cmvnz41b9pvoty0ufujkkx0zw';
+    await db.user.create({data:{id:fixedUser,email:'email-test-20261025@lavorai.it',name:'Internal fixture',tier:'free',emailVerified:new Date(),preferences:{create:{autoApplyMode:'off',autoApplyOn:false}}}});
+    const fakePdf=async()=>Buffer.from('%PDF-1.4 synthetic test bytes');
+    const beforeOwnerPosts=posts();
+    await db.job.create({data:{id:owner.OWNER_APP+'_job',externalId:'collision-only',source:'fixture',title:'collision',description:'local rollback test',url:'https://example.invalid/rollback'}});
+    await assert.rejects(()=>owner.prepareOwnerFixture(db,'owner-admin','+390000000000',fakePdf));
+    assert.equal((await db.user.findUniqueOrThrow({where:{id:fixedUser}})).privacyConsentAt,null,'transaction rollback preserves consent');
+    assert.equal((await db.userPreferences.findUniqueOrThrow({where:{userId:fixedUser}})).autoApplyMode,'off');
+    assert.equal(await db.cVDocument.count({where:{userId:fixedUser}}),0);
+    assert.equal(await db.cVProfile.count({where:{userId:fixedUser}}),0);
+    await db.job.delete({where:{id:owner.OWNER_APP+'_job'}});
+    await Promise.all(Array.from({length:4},()=>owner.prepareOwnerFixture(db,'owner-admin','+390000000000',fakePdf)));
+    assert.equal(await db.application.count({where:{id:owner.OWNER_APP}}),1);
+    assert.equal(await db.cVDocument.count({where:{userId:fixedUser}}),1);
+    const fixed=await db.user.findUniqueOrThrow({where:{id:fixedUser},include:{preferences:true}});
+    assert.ok(fixed.privacyConsentAt); assert.equal(fixed.tier,'free');assert.equal(fixed.subscriptionStatus,null);assert.equal(fixed.preferences.autoApplyOn,false);
+    const source=await db.cVDocument.findFirstOrThrow({where:{userId:fixedUser}});
+    assert.ok((await storage.readUserFile(source.storagePath)).subarray(0,5).equals(Buffer.from('%PDF-')));
+    assert.equal(posts(),beforeOwnerPosts,'prepare cannot submit');
+    await assert.rejects(()=>owner.prepareOwnerFixture(db,'owner-admin','+391111111111',fakePdf),/prepared_phone_mismatch/);
+    const fixedApp=await db.application.findUniqueOrThrow({where:{id:owner.OWNER_APP}});
+    Object.assign(process.env,{ORDINARY_VALIDATION_APPLICATION_ID:owner.OWNER_APP,ORDINARY_VALIDATION_USER_ID:fixedUser,ORDINARY_VALIDATION_USER_EMAIL:fixed.email,
+      ORDINARY_VALIDATION_JOB_ID:fixedApp.jobId,ORDINARY_VALIDATION_RECIPIENT:fixed.email,ORDINARY_VALIDATION_OFFER_URL:'https://produzioneweb.recruitee.com/o/lavorai-test-ordinary-validation',
+      ORDINARY_VALIDATION_CREATED_AT:fixedApp.createdAt.toISOString(),ORDINARY_VALIDATION_STARTED_AT:new Date().toISOString(),ORDINARY_VALIDATION_EXPIRES_AT:new Date(Date.now()+15*60_000).toISOString()});
+    const gates=req('./application-worker-gates');
+    assert.equal(await gates.reserveApplicationWork(owner.OWNER_APP,db),null,'scope alone cannot admit unclaimed owner fixture');
+    await assert.rejects(()=>owner.claimOwnerInvocation(db),/recipient_unverified/);
+    await owner.verifyOwnerRecipient(db,fixed.email,'Synthetic local ownership/receiving attestation only; fake providers.');
+    const claims=await Promise.allSettled([owner.claimOwnerInvocation(db),owner.claimOwnerInvocation(db)]);
+    assert.equal(claims.filter(x=>x.status==='fulfilled').length,1,'one durable invocation claim');
+    await owner.closeOwnerFixture(db); await owner.closeOwnerFixture(db);
+    assert.equal((await db.userPreferences.findUniqueOrThrow({where:{userId:fixedUser}})).autoApplyMode,'off');
+    assert.equal(await gates.reserveApplicationWork(owner.OWNER_APP,db),null);
+    await assert.rejects(()=>owner.prepareOwnerFixture(db,'owner-admin','+390000000000',fakePdf),/fixture_closed/);
+    assert.equal(posts(),beforeOwnerPosts);assert.equal(mails.length,noticesBefore);
+    console.log('PASS owner flow: concurrent prepare idempotent, no entitlement change, private inline CV, durable single claim, closed fixture cannot reopen/send');
     assert.deepEqual(forbidden,[],'no external network attempted');
     console.log('PASS zero external requests; notifications use fake SDK only');
   } finally { restore(); await fake.close(); await db.$disconnect(); }

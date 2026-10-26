@@ -173,6 +173,12 @@ async function withLockedApplication<T>(id: string, db: DB, operation: (tx: Pris
     await tx.$queryRaw`SELECT id FROM "UserPreferences" WHERE "userId" = ${identity.userId} FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM "Job" WHERE id = ${identity.jobId} FOR UPDATE`;
     await tx.$queryRaw`SELECT id FROM "Application" WHERE id = ${id} FOR UPDATE`;
+    if (id === "ordinary_validation_produzioneweb_20261026") {
+      const fixture = await tx.cVDocument.findUnique({ where: { id: id + "_source" }, select: { parsedProfileJson: true } });
+      let state: unknown;
+      try { state = JSON.parse(fixture?.parsedProfileJson ?? "").state; } catch { return null; }
+      if (state !== "running") return null;
+    }
     const row = await tx.application.findUnique({ where: { id }, select: workerGateSelect });
     // Changing ownership/round while admission waits needs a fresh invocation.
     if (row && (row.userId !== identity.userId || row.sessionId !== identity.sessionId || row.jobId !== identity.jobId)) return null;
