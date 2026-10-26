@@ -22,7 +22,8 @@ export async function ownerFlowState(db:PrismaClient) {
  const doc=await db.cVDocument.findUnique({where:{id:DOC},select:{parsedProfileJson:true}});
  const meta=doc?metadata(doc.parsedProfileJson):null;
  const config=ordinaryValidationConfig();
- return {preflight:result,setup:meta?{state:meta.state,preparedAt:meta.preparedAt,verifiedAt:meta.verifiedAt,recipient:meta.recipient,closedAt:meta.closedAt}:null,
+ const outcome=await db.application.findUnique({where:{id:OWNER_APP},select:{id:true,status:true,submitConfirmation:true,submittedVia:true,submittedAt:true,submissionReceiptJson:true,sendStatus:true,sendFailureReason:true}});
+ return {preflight:result,outcome,setup:meta?{state:meta.state,preparedAt:meta.preparedAt,verifiedAt:meta.verifiedAt,recipient:meta.recipient,closedAt:meta.closedAt}:null,
  window:config?.id===OWNER_APP?{expiresAt:config.end.toISOString(),recipient:config.recipient}:null,applicationId:OWNER_APP};
 }
 export async function prepareOwnerFixture(db:PrismaClient, actor:string, phone:string, render:(p:typeof EMPTY_PROFILE)=>Promise<Buffer>) {
