@@ -79,7 +79,7 @@ export async function closeOwnerFixture(db:PrismaClient) {
   const doc=await tx.cVDocument.findUnique({where:{id:DOC}});
   if(!doc)throw new OwnerFlowError('fixture_not_prepared');
   const m=metadata(doc.parsedProfileJson);
-  await tx.userPreferences.updateMany({where:{userId:USER,autoApplyMode:'manual'},data:{autoApplyMode:'off',autoApplyOn:false}});
+  await tx.userPreferences.updateMany({where:{userId:USER},data:{autoApplyMode:'off',autoApplyOn:false}});
   await tx.cVDocument.update({where:{id:DOC},data:{parsedProfileJson:JSON.stringify({...m,state:'closed',closedAt:m.closedAt??new Date().toISOString()})}});
  });
  return ownerFlowState(db);

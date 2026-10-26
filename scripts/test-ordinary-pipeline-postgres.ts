@@ -221,6 +221,7 @@ async function main() {
     await owner.verifyOwnerRecipient(db,fixed.email,'Synthetic local ownership/receiving attestation only; fake providers.');
     const claims=await Promise.allSettled([owner.claimOwnerInvocation(db),owner.claimOwnerInvocation(db)]);
     assert.equal(claims.filter(x=>x.status==='fulfilled').length,1,'one durable invocation claim');
+    await db.userPreferences.update({where:{userId:fixedUser},data:{autoApplyMode:'auto',autoApplyOn:true}});
     await owner.closeOwnerFixture(db); await owner.closeOwnerFixture(db);
     assert.equal((await db.userPreferences.findUniqueOrThrow({where:{userId:fixedUser}})).autoApplyMode,'off');
     assert.equal(await gates.reserveApplicationWork(owner.OWNER_APP,db),null);
