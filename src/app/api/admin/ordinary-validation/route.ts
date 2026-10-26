@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
   if (!config) return NextResponse.json({error:'validation_closed'},{status:409});
   const body=await request.json().catch(()=>null);
   if (!body || Object.keys(body).length!==1 || body.applicationId!==config.id) return NextResponse.json({error:'invalid_request'},{status:400});
-  if (body.applicationId === 'ordinary_validation_produzioneweb_20261026') return NextResponse.json({error:'use_owner_flow_with_recipient_verification'},{status:409});
+  if (['ordinary_validation_produzioneweb_20261026','ordinary_validation_main_produzioneweb_20261026'].includes(body.applicationId)) return NextResponse.json({error:'use_owner_flow_with_recipient_verification'},{status:409});
   const app=await prisma.application.findUnique({where:{id:config.id},include:{job:true,user:true}});
   if (!app || !ordinaryValidationRow(app) || app.status!=='queued' || app.startedAt || app.leaseToken
     || app.submitStartedAt || app.submittedAt || app.submittedVia || app.submitConfirmation || app.retryCount>0)

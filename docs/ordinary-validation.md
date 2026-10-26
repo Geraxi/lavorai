@@ -111,3 +111,24 @@ are never returned; sensitive-category hints are incomplete and require human
 review. A missing/ambiguous CV, a profile requiring seeding, or a blocked ordinary
 setting needs resolution before any one-shot scope is enabled. This endpoint does
 not authorize submission or modify the owner's preferences, consent or plan.
+
+### Main-account one-shot controls
+
+`/admin/ordinary-validation/main` is restricted to the exact approved owner's ID
+and email. It does nothing on page load. Its explicit prepare action confirms the
+current CV ID/text hash, requires existing ordinary eligibility, and atomically
+creates only the dedicated Job/Application. It never changes the User,
+UserPreferences, CVProfile or CVDocument. Explicit per-application consent is
+recorded for this owned offer; this exercises the ordinary user-selected posting
+path, not automatic discovery/ranking.
+
+Application-local lifecycle evidence is stored in the existing answer envelope
+under `ordinaryValidation` with an empty ordinary answer list. Missing/overwritten
+metadata fails closed. Every worker gate requires the single invocation claim and
+unchanged source CV/profile. Verify the exact resolved mailbox with independent
+receiving evidence before enabling the exact existing env scope for 15 minutes.
+The run action calls the ordinary worker with no diagnostic token or force options.
+It closes only this application's lifecycle in finally; personal mode remains auto.
+A dropped process must be closed through the owner control, never retried. Remove
+the operator env scope after the attempt, even if uncertain. No quota refunds,
+source replacements, customer unpause or historical replay are part of this flow.
