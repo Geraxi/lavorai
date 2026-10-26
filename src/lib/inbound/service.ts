@@ -170,27 +170,19 @@ export async function processUserInboundEmail(mail: NormalizedInbound, deps: {
 }
 
 /**
- * Proof-of-send: an ATS confirmation email proves the application arrived.
- * Writes Application.confirmedAt + sentProofType=ats_confirmation_email (columns
- * from the proof_of_send migration) via SQL so this module also compiles without
- * them; if the columns are absent it logs and skips. Never overwrites an
- * earlier confirmation; keeps an existing stronger proof (e.g. gmail id).
+ * Heuristic mailbox classification is not delivery proof. The current inbound
+ * model carries neither independently verified sender authentication nor an
+ * authenticated provider receipt bound to candidate + offer. A signed receiving
+ * webhook authenticates the receiving service, not the email's author.
+ *
+ * Keep messages/classification/link suggestions, but do not promote application
+ * state, confirmedAt or proof from these callers. Re-enable only with a typed,
+ * validated evidence boundary; From/subject/body or an AI guess are insufficient.
+ * Existing API submission receipts are unaffected; no historical rows rewritten.
  */
-export async function recordAtsConfirmation(db: Pick<PrismaClient, "$executeRaw">, input: { applicationId: string; userId: string; inboundEmailId: string; at: Date }): Promise<boolean> {
-  try {
-    const n = await db.$executeRaw`
-      UPDATE "Application" SET
-        "confirmedAt" = ${input.at},
-        "sentProofType" = COALESCE("sentProofType", 'ats_confirmation_email'::"SentProofType"),
-        "sentProofRef" = COALESCE("sentProofRef", ${`inbound:${input.inboundEmailId}`}),
-        "sentAt" = COALESCE("sentAt", ${input.at}),
-        "sendStatus" = 'submitted'::"SendStatus",
-        "sendFailureReason" = NULL
-      WHERE "id" = ${input.applicationId} AND "userId" = ${input.userId} AND "confirmedAt" IS NULL`;
-    return n === 1;
-  } catch (e) {
-    const code = (e as { code?: string; meta?: { code?: string } })?.meta?.code ?? (e as { code?: string })?.code;
-    console.error(`[inbound] confirmation not recorded for ${input.applicationId} (${code ?? "error"}): apply the proof_of_send migration`);
-    return false;
-  }
+export async function recordAtsConfirmation(
+  _db: Pick<PrismaClient, "$executeRaw">,
+  _input: { applicationId: string; userId: string; inboundEmailId: string; at: Date },
+): Promise<boolean> {
+  return false;
 }

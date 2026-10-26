@@ -10,7 +10,6 @@ import {
   atsTestSkipsDocumentTailoring,
   atsTestSkipsRecruiterLookup,
   isAtsTestAuthorization,
-  syntheticAtsTestCvText,
   syntheticAtsTestProfile,
   type AtsTestAuthorization,
 } from "@/lib/ats-test-capability";
@@ -234,8 +233,8 @@ async function processApplicationRun(
   if (!await ensureLiveJobForApplication(applicationId, workToken, app.job.id, app.job.url)) return;
 
   const cv = app.user.cvDocuments[0];
-  if (!cv && !atsTestAuth) {
-    await markFailed(applicationId, "CV utente mancante.", workToken);
+  if ((!cv || !cv.extractedText.trim()) && !atsTestAuth) {
+    await markFailed(applicationId, "CV utente mancante o illeggibile: carica un documento con testo leggibile.", workToken);
     return;
   }
 
@@ -315,7 +314,7 @@ async function processApplicationRun(
       atsScore: 0,
       suggestions: [] as string[],
     } : await optimizeCV({
-      cvText: cv?.extractedText ?? syntheticAtsTestCvText(),
+      cvText: cv!.extractedText,
       jobPosting,
       jobLang,
       coverLetterHints,
@@ -780,14 +779,17 @@ async function processApplicationRun(
       return; // fatto
     }
 
-    if (atsTestAuth && outcome.status !== "submission_unconfirmed"
+    if (outcome.status !== "submission_unconfirmed"
       && !("attemptEvidence" in outcome && (outcome.attemptEvidence?.outboundRequest || outcome.attemptEvidence?.clickPerformed))
       && "refusedBeforeSubmit" in outcome && outcome.refusedBeforeSubmit) {
       await prisma.application.updateMany({
-        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "queued", "optimizing"] } },
+        where: { id: applicationId, ...liveLeaseFields(workToken), submittedAt: null, submittedVia: null,
+          submitClickPerformedAt: null, outboundSubmissionJson: null,
+          status: { in: ["applying", "ready_to_apply", "queued", "optimizing"] } },
         data: {
           status: "ready_to_apply",
-          submitConfirmation: ATS_TEST_REFUSED_BEFORE_SUBMIT,
+          submitConfirmation: atsTestAuth ? ATS_TEST_REFUSED_BEFORE_SUBMIT : NOT_SUBMITTED,
+          ...(!atsTestAuth ? notSubmitted("needs_user", "portal_refused_before_submit") : {}),
           errorMessage: outcome.error,
           completedAt: null,
           leaseToken: null, leaseExpiresAt: null,
@@ -1334,7 +1336,7 @@ async function sendApplicationEmail(input: {
   const company = input.job.company ?? "l'azienda";
 
   await sendWithinQuota("cv_ready", input.to, async () => {
-    await resend.emails.send({
+    const delivery = await resend.emails.send({
       from,
       to: input.to,
       subject: `CV pronto per "${input.job.title}" — ${company}`,
@@ -1351,6 +1353,9 @@ async function sendApplicationEmail(input: {
         { filename: "Lettera_Motivazionale.docx", content: input.clBuffer },
       ],
     });
+    if (delivery.error || !delivery.data?.id?.trim()) {
+      throw new Error("notification_provider_not_accepted");
+    }
   });
 }
 
@@ -1746,13 +1751,16 @@ async function notifyApplicationSent(applicationId: string, atsTestAuth?: AtsTes
       }\n\nLink annuncio: ${jobUrl}\n\n— LavorAI`;
 
   await sendWithinQuota("application_sent", app.user.email, async () => {
-    await resend.emails.send({
+    const delivery = await resend.emails.send({
       from,
       to: app.user.email,
       subject,
       html: renderSentEmail({ firstName, jobTitle, company, jobUrl, locale, level }),
       text: textBody,
     });
+    if (delivery.error || !delivery.data?.id?.trim()) {
+      throw new Error("notification_provider_not_accepted");
+    }
   });
 }
 
@@ -1890,13 +1898,16 @@ async function notifyApplicationManual(applicationId: string, atsTestAuth?: AtsT
       : `Ciao ${firstName},\n\nIl tuo CV per "${jobTitle}" presso ${company} è pronto, ma non sono riuscito a inviarlo in automatico (career page custom o form non standard).\n\nApri l'annuncio e clicca "Apply" — i file sono già allegati: ${jobUrl}\n\n— LavorAI`;
 
   await sendWithinQuota("application_manual", app.user.email, async () => {
-    await resend.emails.send({
+    const delivery = await resend.emails.send({
       from,
       to: app.user.email,
       subject,
       html: renderManualEmail({ firstName, jobTitle, company, jobUrl, locale }),
       text: textBody,
     });
+    if (delivery.error || !delivery.data?.id?.trim()) {
+      throw new Error("notification_provider_not_accepted");
+    }
   });
 }
 
@@ -1936,7 +1947,7 @@ async function notifyNeedsAnswers(applicationId: string, atsTestAuth?: AtsTestAu
       : `Ciao ${firstName},\n\nLa candidatura per "${jobTitle}" presso ${company} ha alcune domande obbligatorie a cui solo tu puoi rispondere (es. diritto al lavoro, domande di screening).\n\nRispondi una volta qui e inviamo in automatico (e riusiamo le risposte la prossima volta): ${url}\n\n— LavorAI`;
 
   await sendWithinQuota("application_manual", app.user.email, async () => {
-    await resend.emails.send({
+    const delivery = await resend.emails.send({
       from,
       to: app.user.email,
       subject,
@@ -1949,6 +1960,9 @@ async function notifyNeedsAnswers(applicationId: string, atsTestAuth?: AtsTestAu
   <div style="text-align:center;margin:28px 0;"><a href="${url}" style="display:inline-block;background:#16A34A;color:#fff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:600;">${locale === "en" ? "Answer the questions" : "Rispondi alle domande"}</a></div>
 </body></html>`,
     });
+    if (delivery.error || !delivery.data?.id?.trim()) {
+      throw new Error("notification_provider_not_accepted");
+    }
   });
 }
 

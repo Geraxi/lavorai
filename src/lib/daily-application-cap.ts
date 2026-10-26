@@ -140,8 +140,9 @@ export function weeklyQuotaReservationFilter() {
           { status: "ready_to_apply", submitConfirmation: DAILY_CAP_IN_FLIGHT_CONFIRMATION },
         ],
       },
-      { NOT: { errorMessage: { in: [...QUOTA_EXCLUDED_MESSAGES] } } },
-      { NOT: { submitConfirmation: "CAPTCHA" } },
+      // SQL NOT IN / <> exclude NULL: a normal active row has NULL here.
+      { OR: [{ errorMessage: null }, { errorMessage: { notIn: [...QUOTA_EXCLUDED_MESSAGES] } }] },
+      { OR: [{ submitConfirmation: null }, { submitConfirmation: { not: "CAPTCHA" } }] },
     ],
   };
 }
@@ -172,8 +173,9 @@ export function quotaConsumingFilter() {
           { status: "ready_to_apply", submitConfirmation: DAILY_CAP_IN_FLIGHT_CONFIRMATION },
         ],
       },
-      { NOT: { errorMessage: { in: [...QUOTA_EXCLUDED_MESSAGES] } } },
-      { NOT: { submitConfirmation: "CAPTCHA" } },
+      // SQL NOT IN / <> exclude NULL: a normal active row has NULL here.
+      { OR: [{ errorMessage: null }, { errorMessage: { notIn: [...QUOTA_EXCLUDED_MESSAGES] } }] },
+      { OR: [{ submitConfirmation: null }, { submitConfirmation: { not: "CAPTCHA" } }] },
     ],
   };
 }
