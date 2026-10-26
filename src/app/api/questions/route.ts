@@ -1,3 +1,4 @@
+import {hasCustomerStamp} from "@/lib/customer-rollout";
 import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationSelect } from "@/lib/application-answer-continuation";
 import { continuationGuidance } from "@/lib/application-continuation-guidance";
 import { queueAnswerContinuation } from "@/lib/application-worker-gates";
@@ -137,6 +138,7 @@ export async function POST(request: NextRequest) {
   const prepared = new Map<string, string>();
   for (const [applicationId, edits] of changes) {
     const app = appById.get(applicationId)!;
+    if (hasCustomerStamp(app.userProvidedAnswersJson)) return NextResponse.json({error:"customer_rollout_continuation_held"},{status:409});
     const merged = [...parseScopedApplicationAnswers(app.userProvidedAnswersJson, app.id).filter(answer => !edits.has(answer.fingerprint)), ...edits.values()];
     if (merged.length > 100) return NextResponse.json({ error: "too_many_answers" }, { status: 400 });
     const json = encodeExplicitApplicationAnswers(applicationId, merged);
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
   }
   for (const [applicationId, json] of prepared) {
     const app = appById.get(applicationId)!;
+    if (hasCustomerStamp(app.userProvidedAnswersJson)) return NextResponse.json({error:"customer_rollout_continuation_held"},{status:409});
     const changed = await prisma.application.updateMany({
       where: { id: app.id, userId: user.id, status: "needs_answers", startedAt: app.startedAt,
         pendingQuestionsJson: app.pendingQuestionsJson, userProvidedAnswersJson: app.userProvidedAnswersJson,

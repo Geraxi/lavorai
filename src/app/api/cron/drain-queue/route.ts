@@ -16,6 +16,14 @@ export async function GET(request: NextRequest) {
   if (!cronSecret || request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  // A separate exact-cohort drain runs while every ordinary producer remains held.
+  const {customerRolloutConfig}=await import('@/lib/customer-rollout');
+  if(customerRolloutConfig()){
+    const {drainCustomerRollout}=await import('@/lib/customer-rollout-drain');
+    const {processApplication}=await import('@/lib/application-worker');
+    try{return NextResponse.json({ok:true,customerRollout:await drainCustomerRollout(id=>processApplication(id)),deployedVersion:deployedAppVersion()});}
+    catch{return NextResponse.json({error:'customer_rollout_failed_closed'},{status:500});}
+  }
   if (applicationsPaused()) return NextResponse.json({ ok: true, paused: true, reason: "applications_paused", deployedVersion: deployedAppVersion() });
 
   const t0 = Date.now();

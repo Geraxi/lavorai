@@ -1,3 +1,4 @@
+import * as customerRollout from "../src/lib/customer-rollout";
 /**
  * Mocked (in-memory DB, fake Playwright page) tests for the Domande
  * answers-as-consent flow: blank-form pause on Ashby/Greenhouse without prior
@@ -244,6 +245,7 @@ async function main() {
       userPreferences: { findUnique: async () => ({ applicationAnswersJson: null, locationsJson: "[]" }) },
     };
     const dependencies: Record<string, unknown> = {
+      "@/lib/customer-rollout": customerRollout,
       "@/lib/application-answer-continuation": { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationSelect, parseAnswerContinuation },
       "@/lib/application-continuation-guidance": guidance,
       "@/lib/application-worker-gates": {
