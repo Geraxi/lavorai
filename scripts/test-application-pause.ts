@@ -1,3 +1,4 @@
+import * as customerRollout from "../src/lib/customer-rollout";
 import * as ordinaryValidation from "../src/lib/ordinary-validation";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -11,6 +12,8 @@ function load(path: string, extra: Record<string, any> = {}): any {
   const unavailable = new Proxy({}, { get: () => { throw new Error("Paused code accessed an external dependency"); } });
   const mocks: Record<string, any> = {
     "./ordinary-validation": ordinaryValidation,
+    "./customer-rollout": customerRollout,
+    "@/lib/customer-rollout": customerRollout,
     "@/lib/application-pause": { applicationsPaused, assertApplicationsRunning },
     "@/lib/application-rollout": rollout,
     "@/lib/db": { prisma: unavailable },

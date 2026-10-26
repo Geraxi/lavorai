@@ -264,6 +264,44 @@ async function main() {
     assert.equal(JSON.stringify(await db.user.findUnique({where:{id:mainUser},include:{preferences:true,cvProfile:true,cvDocuments:true}})),preserved,'ordinary execution and close preserve owner settings/profile/documents');
     assert.equal(mainScope.mainMeta(mainOutcome.userProvidedAnswersJson).state,'closed');
     console.log('PASS main owner flow: idempotent prepare, source pinning, one atomic claim/ordinary fake POST, receipt, closed no-retry, owner settings and documents preserved');
+    // Customer rollout uses the real ordinary worker and fake provider, not the diagnostic path.
+    for(const key of Object.keys(process.env))if(key.startsWith('ORDINARY_VALIDATION_'))delete process.env[key];
+    const customer=req('./customer-rollout');
+    const customerDrain=req('./customer-rollout-drain');
+    async function cohort(ids:string[],batchId:string,cap=ids.length,recipientOverride?:string){
+      const rows=await db.application.findMany({where:{id:{in:ids}},include:{user:true,job:true}});
+      const start=new Date();
+      process.env.CUSTOMER_ROLLOUT_ENABLED='true';
+      process.env.CUSTOMER_ROLLOUT_MANIFEST=JSON.stringify({batchId,startedAt:start.toISOString(),expiresAt:new Date(+start+15*60_000).toISOString(),notBefore:new Date(+start-60_000).toISOString(),maxAttempts:cap,applications:rows.map((r:any)=>({applicationId:r.id,userId:r.userId,jobId:r.jobId,url:r.job.url,recipient:recipientOverride??r.user.email,createdAt:r.createdAt.toISOString()}))});
+    }
+    const cohortIds=await Promise.all(Array.from({length:5},()=>fixture('real-optional')));
+    const unrelated=await fixture('race-two');
+    await cohort(cohortIds,'concurrency',2);
+    const cp=posts(),ca=aiCalls;
+    process.env.CUSTOMER_ROLLOUT_ENABLED='false';await run(cohortIds[0]);assert.equal(aiCalls,ca);
+    process.env.CUSTOMER_ROLLOUT_ENABLED='true';await run(unrelated);assert.equal(aiCalls,ca);
+    await Promise.all(cohortIds.flatMap(id=>[run(id),run(id)]));
+    assert.equal(posts()-cp,2,'shared cohort cap across users/processes');
+    assert.equal((await db.applicationReleaseBatch.findUniqueOrThrow({where:{id:'customer:concurrency'}})).usedCount,2);
+    assert.equal(await db.applicationReleaseGrant.count({where:{batchId:'customer:concurrency'}}),2);
+    const repeat=posts();await customerDrain.drainCustomerRollout(run,db);assert.equal(posts(),repeat);
+    process.env.CUSTOMER_ROLLOUT_ENABLED='false';assert.equal((await customerDrain.drainCustomerRollout(()=>{throw Error('disabled drain invoked')},db)).active,false);
+    delete process.env.CUSTOMER_ROLLOUT_MANIFEST;delete process.env.CUSTOMER_ROLLOUT_ENABLED;process.env.APPLICATIONS_PAUSED='false';
+    const granted=await db.applicationReleaseGrant.findMany({where:{batchId:'customer:concurrency'}});
+    for(const g of granted)await run(g.applicationId);assert.equal(posts(),repeat,'persisted cohort grants cannot replay after general reopening');
+    process.env.APPLICATIONS_PAUSED='true';
+    const noConsent=await fixture('real-optional',{privacyConsentAt:null});await cohort([noConsent],'no-consent');const nc=posts();await run(noConsent);assert.equal(posts(),nc);assert.equal(await db.applicationReleaseGrant.count({where:{applicationId:noConsent}}),0);
+    const wrongRole=await fixture('real-optional');const wr=await db.application.findUniqueOrThrow({where:{id:wrongRole}});await db.userPreferences.update({where:{userId:wr.userId},data:{rolesJson:'["Nurse"]'}});await cohort([wrongRole],'wrong-role');await run(wrongRole);assert.equal(posts(),nc);assert.equal(await db.applicationReleaseGrant.count({where:{applicationId:wrongRole}}),0);
+    const wrongRecipient=await fixture('real-optional');await cohort([wrongRecipient],'wrong-recipient',1,'other@example.test');await run(wrongRecipient);assert.equal(posts(),nc,'recipient mismatch never reaches candidate POST');
+    const expired=await fixture('real-optional');await cohort([expired],'expired');let cm=JSON.parse(process.env.CUSTOMER_ROLLOUT_MANIFEST!);cm.expiresAt=new Date(Date.now()-1).toISOString();process.env.CUSTOMER_ROLLOUT_MANIFEST=JSON.stringify(cm);await run(expired);assert.equal(posts(),nc);
+    const uncertainCustomer=await fixture('server-500');await cohort([uncertainCustomer],'uncertain');await run(uncertainCustomer);await run(uncertainCustomer);assert.equal(posts()-nc,1);assert.notEqual((await db.application.findUniqueOrThrow({where:{id:uncertainCustomer}})).status,'success');
+    const stopped=await fixture('real-optional');await cohort([stopped],'stopped');await customer.stopCustomerBatch(db,'stopped');const stopPosts=posts();await run(stopped);assert.equal(posts(),stopPosts);assert.equal(await db.applicationReleaseGrant.count({where:{applicationId:stopped}}),0);
+    const late=await fixture('real-optional');await cohort([late],'late-receipt');
+    adapter.apply=async(...args:any[])=>{const result=await originalApply(...args);await customer.stopCustomerBatch(db,'late-receipt');process.env.CUSTOMER_ROLLOUT_ENABLED='false';return result;};
+    await run(late);adapter.apply=originalApply;
+    assert.equal((await db.application.findUniqueOrThrow({where:{id:late}})).status,'success','accepted receipt persists even when stop switch flips after provider response');
+    assert.equal(mails.length,noticesBefore);
+    console.log('PASS customer rollout: default/disabled/expiry, exact cohort, atomic cap, ordinary consent/matching, recipient fence, no uncertainty replay, late accepted receipt retained, no customer notifications');
     assert.deepEqual(forbidden,[],'no external network attempted');
     console.log('PASS zero external requests; notifications use fake SDK only');
   } finally { restore(); await fake.close(); await db.$disconnect(); }

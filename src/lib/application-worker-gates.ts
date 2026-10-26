@@ -1,3 +1,4 @@
+import {customerRolloutConfigured,customerRolloutRow,hasCustomerStamp,claimCustomerSlot,customerGrantMatches} from "./customer-rollout";
 import { MAIN_VALIDATION_APP, MAIN_VALIDATION_USER, mainMeta, mainSourceMatches } from "./ordinary-main-validation-scope";
 import { ordinaryValidationRow } from "./ordinary-validation";
 import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, CONTINUATION_PROOF_MISSING_MESSAGE, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
@@ -116,8 +117,9 @@ function overlayAtsTestGateRow(row: WorkerGateRow, now: Date): WorkerGateRow {
 }
 
 export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date(), atsTestAuth?: unknown): string | null {
+  if ((customerRolloutConfigured() || hasCustomerStamp(row.userProvidedAnswersJson)) && !customerRolloutRow(row)) return "customer_rollout_closed_or_outside_cohort";
   const testOk = atsTestPauseExemption(atsTestAuth, row);
-  if (applicationsPaused() && !testOk && !ordinaryValidationRow(row)) return "applications_paused";
+  if (applicationsPaused() && !testOk && !ordinaryValidationRow(row) && !customerRolloutRow(row)) return "applications_paused";
   return ordinaryWorkerIneligibility(testOk ? overlayAtsTestGateRow(row, now) : row, now);
 }
 
@@ -272,6 +274,8 @@ function nextWorkLease(row: Pick<WorkerGateRow, "leaseToken" | "leaseExpiresAt">
 export async function reserveApplicationWork(id: string, db: DB = prisma, atsTestAuth?: unknown): Promise<ApplicationWorkLease | null> {
   return withLockedApplication(id, db, async (tx, row) => {
     if (!row || !["queued", "answers_claimed"].includes(row.status)) return null;
+    if (hasCustomerStamp(row.userProvidedAnswersJson)) return null;
+    if (customerRolloutConfigured() && (!customerRolloutRow(row) || row.answerContinuationJson || row.startedAt || row.leaseToken || row.retryCount || row.status!=="queued")) return null;
     if (row.submitStartedAt || blocksUncertainAutoRetry(row)) {
       if (row.status === "queued") {
         await tx.application.update({ where: { id }, data: {
@@ -347,7 +351,10 @@ export async function reserveApplicationWork(id: string, db: DB = prisma, atsTes
     }
     const lease = nextWorkLease(row);
     if (!lease) return null;
+    const customerAnswers = customerRolloutConfigured() ? await claimCustomerSlot(tx, row, lease.leaseToken) : null;
+    if (customerRolloutConfigured() && !customerAnswers) return null;
     await tx.application.update({ where: { id }, data: {
+      ...(customerAnswers ? {userProvidedAnswersJson:customerAnswers} : {}),
       status: "optimizing", startedAt: lease, leaseToken: lease.leaseToken,
       leaseExpiresAt: issueApplicationLease().leaseExpiresAt, completedAt: null, errorMessage: null,
     } });
@@ -365,6 +372,7 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
       || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
       || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
       || !["optimizing", "ready_to_apply"].includes(row.status) || hasPotentialSubmission(row)) return false;
+    if ((customerRolloutConfigured() || hasCustomerStamp(row.userProvidedAnswersJson)) && !await customerGrantMatches(tx,row)) return false;
     if (rolloutApplicationIneligibility(row)) return false;
     const reason = currentWorkerIneligibility(row, new Date(), atsTestAuth) ?? await admissionBlock(tx, row);
     if (reason) {
@@ -415,6 +423,7 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
       || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
       || (leaseTokenOf(token) && row.leaseExpiresAt && +row.leaseExpiresAt <= Date.now())
       || row.status !== "applying" || row.submitConfirmation !== SUBMISSION_STARTED) return false;
+    if ((customerRolloutConfigured() || hasCustomerStamp(row.userProvidedAnswersJson)) && !await customerGrantMatches(tx,row)) return false;
     const continuation = parseAnswerContinuation(row.answerContinuationJson);
     const staged = STAGED_CHANNELS.includes(channel);
     if (boundary === "verification_submit" && channel !== "portal_greenhouse") return false;

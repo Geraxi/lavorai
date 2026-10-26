@@ -121,7 +121,7 @@ async function testSourceFences() {
     const text = readFileSync(path, "utf8");
     return /applicationReleaseGrant|applicationReleaseBatch|ApplicationReleaseGrant|ApplicationReleaseBatch/.test(text);
   });
-  assert.deepEqual(tableFiles, ["src/lib/application-recovery-release.ts"], "only the gated helper may name the unapplied tables");
+  assert.deepEqual(tableFiles, ["src/app/api/admin/customer-rollout/route.ts", "src/lib/application-recovery-release.ts", "src/lib/customer-rollout.ts"], "only gated release helpers and read-only admin status may name release tables");
 
   const callSites = [
     ["src/lib/queue-drain.ts", 1],

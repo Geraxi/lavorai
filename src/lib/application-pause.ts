@@ -1,3 +1,4 @@
+import {customerRolloutConfigured} from "./customer-rollout";
 /** Server-only operational hold. No customer preferences or consent are changed.
  * Apply the same setting to every web/worker deployment and retire old instances.
  * Unset/false preserves normal operation; any other nonempty value fails closed.
@@ -19,6 +20,7 @@
  * RECRUITER_EMAIL_FALLBACK_ENABLED (see recruiter-email-fallback.ts).
  */
 export function applicationsPaused(): boolean {
+  if (customerRolloutConfigured()) return true;
   // A configured ordinary validation never opens general producers, even if
   // APPLICATIONS_PAUSED is accidentally changed. Invalid/expired scope stays held.
   if (process.env.ORDINARY_VALIDATION_APPLICATION_ID?.trim()) return true;

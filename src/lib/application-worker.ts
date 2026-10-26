@@ -1,3 +1,4 @@
+import {customerRolloutId,customerRolloutRow,customerRolloutDestination,customerRolloutConfigured,hasCustomerStamp} from "./customer-rollout";
 import { ordinaryValidationId, ordinaryValidationRow, ordinaryValidationDestination } from "./ordinary-validation";
 import { resolveAdapterByUrl, noAdapterMessageFor } from "@/lib/ats-adapter-resolution";
 import { requiresRecruiteeOriginReview } from "@/lib/portal-adapters/recruitee";
@@ -156,7 +157,7 @@ async function processApplicationRun(
   opts?: { forceRealSubmit?: boolean; forceDryRun?: boolean; atsTestAuth?: AtsTestAuthorization },
 ): Promise<void> {
   const atsTestAuth = isAtsTestAuthorization(opts?.atsTestAuth) ? opts.atsTestAuth : undefined;
-  if (applicationsPaused() && !atsTestPauseExemptionForId(atsTestAuth, applicationId) && !ordinaryValidationId(applicationId)) return;
+  if (applicationsPaused() && !atsTestPauseExemptionForId(atsTestAuth, applicationId) && !ordinaryValidationId(applicationId) && !customerRolloutId(applicationId)) return;
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
     include: {
@@ -177,8 +178,10 @@ async function processApplicationRun(
     console.error(`[worker] Application ${applicationId} non trovata`);
     return;
   }
+  if (hasCustomerStamp(app.userProvidedAnswersJson)) return; // never start a new invocation for an already granted customer attempt
+  if (customerRolloutConfigured() && !customerRolloutRow(app)) return;
   if (atsTestAuth && !atsTestPauseExemptionForId(atsTestAuth, applicationId)) return;
-  if (applicationsPaused() && !atsTestAuth && !ordinaryValidationRow(app)) return;
+  if (applicationsPaused() && !atsTestAuth && !ordinaryValidationRow(app) && !customerRolloutRow(app)) return;
 
   // Skip-list hosts: look up a published inbox first. A miss hands off
   // without reserving a daily slot or running CV/AI.
@@ -2253,7 +2256,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   import("@/lib/portal-adapters").ApplyOutcome | { ok: false; status: "worker_gate_blocked"; error: string }
 > {
   const { applicationId, adapter, jobUrl, cvPath, clPath, userId } = input;
-  if (!input.atsTestAuth && !ordinaryValidationId(input.applicationId)) assertApplicationsRunning();
+  if (!input.atsTestAuth && !ordinaryValidationId(input.applicationId) && !customerRolloutId(input.applicationId)) assertApplicationsRunning();
 
   // Profilo utente per compilare i campi del form.
   // The ATS-test path uses an in-memory synthetic profile and never writes one.
@@ -2317,7 +2320,8 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
   }
 
   if (applicationsPaused() && !input.atsTestAuth
-    && !ordinaryValidationDestination(applicationId, adapter.id, jobUrl, profile.email?.trim() || formEmail)) {
+    && !ordinaryValidationDestination(applicationId, adapter.id, jobUrl, profile.email?.trim() || formEmail)
+    && !customerRolloutDestination(applicationId, adapter.id, jobUrl, profile.email?.trim() || formEmail)) {
     return { ok: false, status: "not_eligible", refusedBeforeSubmit: true,
       error: "Ordinary validation destination/recipient mismatch. No submission performed." };
   }

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {customerRolloutConfig,customerRolloutConfigured,customerRolloutRow,customerRolloutDestination,hasCustomerStamp} from '../src/lib/customer-rollout';
+const now=new Date('2026-10-26T15:00:00.000Z');
+const entry={applicationId:'a',userId:'u',jobId:'j',url:'https://owned.recruitee.com/o/engineer',recipient:'candidate@example.test',createdAt:'2026-10-26T14:59:00.000Z'};
+const manifest={batchId:'pilot-a',startedAt:now.toISOString(),expiresAt:'2026-10-26T15:15:00.000Z',notBefore:'2026-10-26T14:30:00.000Z',maxAttempts:1,applications:[entry]};
+const env={APPLICATIONS_PAUSED:'true',USER_NOTIFICATIONS_HOLD:'true',ATS_TEST_REAL_SUBMIT:'false',CUSTOMER_ROLLOUT_ENABLED:'true',CUSTOMER_ROLLOUT_MANIFEST:JSON.stringify(manifest)};
+assert.equal(customerRolloutConfig({},now),null);assert.equal(customerRolloutConfigured({}),false);
+const cfg=customerRolloutConfig(env,now)!;assert.ok(cfg);
+for(const patch of [{CUSTOMER_ROLLOUT_ENABLED:'false'},{APPLICATIONS_PAUSED:'false'},{USER_NOTIFICATIONS_HOLD:'false'},{ATS_TEST_REAL_SUBMIT:'true'},{ORDINARY_VALIDATION_APPLICATION_ID:'other'},{CUSTOMER_ROLLOUT_MANIFEST:'bad'}])assert.equal(customerRolloutConfig({...env,...patch},now),null);
+for(const patch of [{maxAttempts:6},{applications:[entry,entry]},{expiresAt:'2026-10-26T15:31:00.000Z'},{notBefore:'2026-10-24T00:00:00.000Z'},{applications:[{...entry,url:'https://other.invalid/o/engineer'}]},{applications:[{...entry,createdAt:'2026-10-25T14:59:00.000Z'}]}])assert.equal(customerRolloutConfig({...env,CUSTOMER_ROLLOUT_MANIFEST:JSON.stringify({...manifest,...patch})},now),null);
+assert.equal(customerRolloutConfig(env,new Date(manifest.expiresAt)),null);
+const row={id:'a',userId:'u',jobId:'j',createdAt:new Date(entry.createdAt),job:{url:entry.url}};
+assert.equal(customerRolloutRow(row,cfg),true);for(const patch of [{id:'outsider'},{userId:'other'},{jobId:'other'},{job:{url:'https://other.recruitee.com/o/engineer'}},{createdAt:new Date(0)}])assert.equal(customerRolloutRow({...row,...patch},cfg),false);
+assert.equal(hasCustomerStamp('{"customerRollout":null}'),true);
+console.log('PASS cohort configuration: default closed, strict holds, exact row/provider/recipient scope, bounded size/time/cutoff and malformed/expired rejection');

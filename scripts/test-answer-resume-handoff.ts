@@ -1,3 +1,4 @@
+import * as customerRollout from "../src/lib/customer-rollout";
 /**
  * Answer-resumption handoffs: a skip-list (Ashby) answers_claimed row must
  * become a visible manual user-action and drop its quota reservation, and a
@@ -185,6 +186,7 @@ function loadWorker(opts: {
     job: { update: async () => ({}) },
   };
   const mocks: Record<string, unknown> = {
+    "./customer-rollout": customerRollout,
     "@/lib/application-pause": { applicationsPaused: () => false, assertApplicationsRunning: () => undefined },
     "@/lib/ai-usage": { withAiUsageContext: (_ctx: unknown, run: () => unknown) => run() },
     "@/lib/db": { prisma },

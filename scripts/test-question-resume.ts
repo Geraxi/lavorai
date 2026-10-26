@@ -6,6 +6,7 @@ import * as scoped from "../src/lib/application-question-answers";
 import * as facts from "../src/lib/candidate-facts";
 import * as continuation from "../src/lib/application-answer-continuation";
 import * as guidance from "../src/lib/application-continuation-guidance";
+import * as customer from "../src/lib/customer-rollout";
 import * as answers from "../src/lib/application-answers";
 import { EMPTY_PROFILE } from "../src/lib/cv-profile-types";
 
@@ -44,6 +45,7 @@ function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; 
     userPreferences: { findUnique: async () => ({ applicationAnswersJson: '{}' }) },
   };
   const dependencies: Record<string, unknown> = {
+    "@/lib/customer-rollout": customer,
     "@/lib/application-answer-continuation": continuation,
     "@/lib/application-continuation-guidance": guidance,
     "@/lib/application-worker-gates": { queueAnswerContinuation: async (input: any) => { resumes++; assert.equal(input.userId, "owner"); return "continuation_proof_missing"; } },
@@ -65,6 +67,9 @@ function setup(options: { apps?: any[]; authenticated?: boolean; profile?: any; 
     post: (body: any = { answers: [{ applicationId: "owned", fingerprint, answer: "Yes" }] }) => module.exports.POST({ json: async () => body }) };
 }
 async function main() {
+  const customerAttempt=setup({apps:[makeApp("owned",{userProvidedAnswersJson:JSON.stringify({version:1,applicationId:"owned",answers:[],customerRollout:{batchId:"customer:batch",leaseToken:"lease"}})})]});
+  assert.equal((await customerAttempt.post()).status,409);
+  assert.deepEqual(customerAttempt.counts,{writes:0,resumes:0,queued:0},"customer rollout cannot erase a grant or resume");
   const privacy = (await setup({ privacy: false }).get()).body.continuations[0];
   assert.equal(privacy.canResume, false); assert.equal(privacy.reason, "privacy_consent_missing");
   assert.equal(privacy.guidance.href, "/settings#privacy-consent");
