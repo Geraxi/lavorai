@@ -47,6 +47,10 @@ type Row = {
 };
 
 function matchClause(row: Row, clause: Record<string, unknown>): boolean {
+  if (clause.errorMessage === null) return row.errorMessage === null;
+  if (clause.errorMessage && typeof clause.errorMessage === "object" && "notIn" in clause.errorMessage) return row.errorMessage !== null && !(clause.errorMessage as {notIn:string[]}).notIn.includes(row.errorMessage);
+  if (clause.submitConfirmation === null) return row.submitConfirmation === null;
+  if (clause.submitConfirmation && typeof clause.submitConfirmation === "object" && "not" in clause.submitConfirmation) return row.submitConfirmation !== null && row.submitConfirmation !== (clause.submitConfirmation as {not:string}).not;
   if ("submittedAt" in clause) return row.submittedAt != null;
   if ("submitConfirmation" in clause) {
     const conf = clause.submitConfirmation;

@@ -117,6 +117,8 @@ function matchesWeeklyWhere(row: OccRow, where: ReturnType<typeof weeklyQuotaUsa
     }
     if (part.OR) {
       return (part.OR as Array<Record<string, unknown>>).some((clause) => {
+        if ("errorMessage" in clause) return clause.errorMessage === null ? row.errorMessage === null : row.errorMessage !== null && !(clause.errorMessage as {notIn:string[]}).notIn.includes(row.errorMessage);
+        if (!clause.status && "submitConfirmation" in clause) return clause.submitConfirmation === null ? row.submitConfirmation === null : row.submitConfirmation !== null && row.submitConfirmation !== (clause.submitConfirmation as {not:string}).not;
         if (clause.status && typeof clause.status === "object" && "in" in (clause.status as object)) {
           return (clause.status as { in: string[] }).in.includes(row.status);
         }

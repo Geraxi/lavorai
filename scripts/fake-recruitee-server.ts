@@ -2,7 +2,7 @@
  * Local fake Recruitee careers API for ATS-test e2e.
  *
  * Host detection (production, unchanged):
- *   recruiteeAdapter.matches() accepts *.recruitee.com OR pathname /o/<slug>.
+ *   recruiteeAdapter.matches() accepts only validated HTTPS tenant origins and offer paths.
  *   apply() requires https: and calls `${jobUrl.origin}/api/offers/<slug>`.
  *   Job liveness uses https://<tenant>.recruitee.com/api/offers/ only when
  *   the job host is recruitee.com.
@@ -103,6 +103,7 @@ export async function startFakeRecruiteeServer(): Promise<{
   ca: string;
   requests: FakeRecruiteeRequest[];
   postBehavior: Map<string, FakePostBehavior>;
+  offerOverrides: Map<string, Record<string, unknown>>;
   close: () => Promise<void>;
 }> {
   const dir = await mkdtemp(join(tmpdir(), "lavorai-fake-recruitee-"));
@@ -117,6 +118,7 @@ export async function startFakeRecruiteeServer(): Promise<{
   const [key, cert] = await Promise.all([readFile(keyPath, "utf8"), readFile(certPath, "utf8")]);
   const requests: FakeRecruiteeRequest[] = [];
   const postBehavior = new Map<string, FakePostBehavior>();
+  const offerOverrides = new Map<string, Record<string, unknown>>();
   let candidateSeq = 0;
 
   const server: Server = createServer({ key, cert }, async (req, res) => {
@@ -153,7 +155,7 @@ export async function startFakeRecruiteeServer(): Promise<{
           return;
         }
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ offer: payload }));
+        res.end(JSON.stringify({ offer: { ...payload, ...offerOverrides.get(slug) } }));
         return;
       }
       if (method === "GET" && page) {
@@ -203,6 +205,7 @@ export async function startFakeRecruiteeServer(): Promise<{
     ca: cert,
     requests,
     postBehavior,
+    offerOverrides,
     async close() {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
       await rm(dir, { recursive: true, force: true });
@@ -224,6 +227,8 @@ export function installFakeRecruiteeFetch(input: {
         ? String(resource)
         : resource.url,
     );
+    // React-PDF loads bundled WASM through a data URL: no network or credentials.
+    if (url.protocol === "data:") return original(resource, init);
     const recruitee = url.hostname === "recruitee.com" || url.hostname.endsWith(".recruitee.com");
     const localFake = url.protocol === "https:" && url.hostname === "127.0.0.1" && url.port === String(input.port);
     if (url.protocol === "https:" && (recruitee || localFake)) {

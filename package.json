@@ -70,7 +70,8 @@
     "test:application-lease": "node --import tsx scripts/test-application-lease.ts",
     "test:daily-cap": "node --import tsx scripts/test-daily-application-cap.ts",
     "test:apply-reliability": "node --import tsx scripts/test-apply-reliability.ts",
-    "test:live-apply-fixes": "node --import tsx scripts/test-live-apply-fixes.ts && node --import tsx scripts/test-phone-country.ts && node --import tsx scripts/test-candidate-facts.ts"
+    "test:live-apply-fixes": "node --import tsx scripts/test-live-apply-fixes.ts && node --import tsx scripts/test-phone-country.ts && node --import tsx scripts/test-candidate-facts.ts",
+    "test:ordinary-pipeline-postgres": "node --import tsx scripts/test-ordinary-pipeline-postgres.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",

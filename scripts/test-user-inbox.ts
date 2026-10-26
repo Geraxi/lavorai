@@ -115,16 +115,13 @@ async function main() {
     $executeRaw: async (...args: unknown[]) => { raws.push(args); return 1; },
   };
   const r = await processUserInboundEmail(hydrated, { db, env: {}, now: () => new Date("2026-10-23T09:00:00Z") });
-  assert.deepEqual(r, { stored: 1, duplicates: 0, unknownRecipient: false, confirmed: ["a1"] });
+  assert.deepEqual(r, { stored: 1, duplicates: 0, unknownRecipient: false, confirmed: [] });
   assert.equal(stored[0].category, "confirmation"); assert.equal(stored[0].applicationId, "a1");
   assert.equal(stored[0].mailboxKind, "confirmation");
   assert.equal(stored[0].notifyStatus, "digest_queued");
-  assert.equal(raws.length, 1);
-  const sql = (raws[0][0] as TemplateStringsArray).join("?");
-  assert.match(sql, /"confirmedAt" = \?/); assert.match(sql, /'ats_confirmation_email'::"SentProofType"/); assert.match(sql, /"confirmedAt" IS NULL/);
-  assert.ok(raws[0].includes("inbound:ie1") && raws[0].includes("a1") && raws[0].includes("u1"));
+  assert.equal(raws.length, 0, "a classified confirmation must not become proof from sender/body heuristics");
   const again = await processUserInboundEmail(hydrated, { db, env: {} });
-  assert.equal(again.duplicates, 1); assert.equal(raws.length, 1, "replay does not re-confirm");
+  assert.equal(again.duplicates, 1); assert.equal(raws.length, 0, "replay does not promote heuristic evidence");
   const unknown = await processUserInboundEmail({ ...hydrated, providerMessageId: "em_2", to: ["nobody@apply.lavorai.it"] }, { db, env: {} });
   assert.equal(unknown.unknownRecipient, true); assert.equal(stored.length, 1);
   // missing proof columns (proof_of_send migration not applied) → logged, not thrown
@@ -132,7 +129,7 @@ async function main() {
   const errs: unknown[] = []; const orig = console.error; console.error = (...a: unknown[]) => errs.push(a);
   const r3 = await processUserInboundEmail({ ...hydrated, providerMessageId: "em_3" }, { db, env: {} });
   console.error = orig;
-  assert.deepEqual(r3.confirmed, []); assert.equal(r3.stored, 1); assert.match(String(errs[0]), /42703/);
+  assert.deepEqual(r3.confirmed, []); assert.equal(r3.stored, 1); assert.equal(errs.length, 0, "no proof SQL issued even when columns are unavailable");
   assert.ok(!JSON.stringify(errs).includes("greenhouse"), "no sender in logs");
 
   const notices: string[] = [];
