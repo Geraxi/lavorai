@@ -31,7 +31,16 @@ async function main() {
   await assert.rejects(()=>db.applicationReleaseBatch.create({data:{id:'invalid-negative',maxCount:1,usedCount:-1}}));
   await assert.rejects(()=>db.applicationReleaseGrant.create({data:{applicationId:'no-parent',batchId:'missing'}}));
   const readiness=req('./customer-rollout-readiness');
-  const metadata=await readiness.readReleaseSchema(db);assert.deepEqual(metadata.issues,[],'actual release migration constraints must be recognized');
+  const metadata=await readiness.readReleaseSchema({$queryRaw:async(strings:TemplateStringsArray,...values:unknown[])=>{
+    assert.equal(values.length,0,'catalog SQL has no dynamic input');
+    const result=await db.$queryRaw(strings,...values);
+    if(result.length){
+      const types=await db.$queryRawUnsafe('SELECT pg_typeof(q."table")::text AS kind FROM ('+strings.join('')+') q LIMIT 1');
+      assert.equal(types[0].kind,'text','projected catalog identifiers must not use PostgreSQL name OID 19');
+      if('name' in result[0]){const names=await db.$queryRawUnsafe('SELECT pg_typeof(q.name)::text AS kind FROM ('+strings.join('')+') q LIMIT 1');assert.equal(names[0].kind,'text');}
+    }
+    return result;
+  }});assert.deepEqual(metadata.issues,[],'actual release migration constraints must be recognized');
   assert.equal(readiness.assessReleaseSchema(metadata.columns,metadata.constraints.filter((c:any)=>c.name!=='ApplicationReleaseBatch_used_le_max'),metadata.indexes).compatible,false,'missing SQL CHECK must not pass readiness');
   assert.equal(readiness.assessReleaseSchema(metadata.columns,metadata.constraints,[]).compatible,false,'missing grant index must not pass readiness');
   let aiCalls = 0;

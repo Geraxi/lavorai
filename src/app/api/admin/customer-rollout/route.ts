@@ -9,6 +9,7 @@ import {deployedAppVersion} from '@/lib/deployed-version';
 export const dynamic='force-dynamic';export const runtime='nodejs';
 /** Read-only status. No activation, preparation, grant or send action. */
 export async function GET(){
+ try {
  const actor=await getCurrentUser();if(!isAdmin(actor?.email))return NextResponse.json({error:'forbidden'},{status:403});
  const active=customerRolloutConfig(),cfg=inspectCustomerManifest();
  const readiness=await customerReadiness(prisma);
@@ -17,6 +18,11 @@ export async function GET(){
  const stopped=cfg&&storageReady?(await customerBatchStopped(prisma,cfg.batchId)||batch?.maxCount===0):false;
  const applications=cfg?await prisma.application.findMany({where:{id:{in:cfg.applications.map(a=>a.applicationId)}},select:{id:true,status:true,submitConfirmation:true,submittedAt:true,submittedVia:true,sendStatus:true,sendFailureReason:true}}):[];
  return NextResponse.json({deployedVersion:deployedAppVersion(),configured:customerRolloutConfigured(),active:!!active&&storageReady&&!stopped,storageReady,stopped,readiness,holds:{applicationsPaused:process.env.APPLICATIONS_PAUSED==='true',notificationsHeld:process.env.USER_NOTIFICATIONS_HOLD==='true',diagnosticDisabled:process.env.ATS_TEST_REAL_SUBMIT==='false'},batch,batchId:cfg?.batchId??null,expiresAt:cfg?.expiresAt??null,applications},{headers:{'Cache-Control':'private, no-store'}});
+ }catch(error){
+  const code=typeof (error as {code?:unknown})?.code==='string'?(error as {code:string}).code:'unavailable';
+  console.error('[customer-rollout] read-only report failed', {code});
+  return NextResponse.json({error:'readiness_unavailable',databaseErrorCode:code,deployedVersion:deployedAppVersion(),active:false,activationAuthorized:false},{status:503,headers:{'Cache-Control':'private, no-store'}});
+ }
 }
 
 /** Stop only; this action can never enable or run a cohort. */
