@@ -72,6 +72,14 @@ jobs:
       - name: Send and reply safety regressions
         run: npm run test:send-reply
 
+      - name: Gmail sync progress PostgreSQL (fake providers only)
+        env:
+          PGPASSWORD: ci_password
+          GMAIL_TEST_DATABASE_URL: "postgresql://ci_user:ci_password@127.0.0.1:5432/lavorai_gmail_test?connection_limit=16"
+        run: |
+          psql -h 127.0.0.1 -U ci_user -d ci_db -c 'CREATE DATABASE lavorai_gmail_test'
+          npm run test:gmail-sync-postgres
+
       - name: Durable send/reply PostgreSQL integration
         env:
           PGPASSWORD: ci_password
