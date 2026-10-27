@@ -1,3 +1,4 @@
+import { providerApplicationAllowed, providerChannelAllowed } from "./application-provider-policy";
 import {customerRolloutConfigured,customerRolloutRow,hasCustomerStamp,claimCustomerSlot,customerGrantMatches} from "./customer-rollout";
 import { MAIN_VALIDATION_APP, MAIN_VALIDATION_USER, mainMeta, mainSourceMatches } from "./ordinary-main-validation-scope";
 import { ordinaryValidationRow } from "./ordinary-validation";
@@ -126,6 +127,7 @@ export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date(),
 /** Pure ordinary policy inspection; does not authorize work or exempt any execution gate. */
 export function ordinaryWorkerIneligibility(gated: WorkerGateRow, now = new Date()): string | null {
   const row = gated;
+  if (!providerApplicationAllowed(row)) return "provider_not_enabled";
   const rolloutReason = rolloutApplicationIneligibility(gated, now);
   if (rolloutReason) return rolloutReason;
   const user = gated.user;
@@ -232,6 +234,7 @@ async function capacityAvailable(tx: Prisma.TransactionClient, row: WorkerGateRo
  * matches on it to release only rows held for a specific, now-cleared reason. */
 export function heldMessage(reason: string): string {
   const explanations: Record<string, string> = {
+    provider_not_enabled: "Portale non abilitato o candidatura precedente alla riapertura. Nessun invio eseguito; candidatura diretta disponibile sul sito dell’azienda.",
     auto_apply_not_enabled: "Consenso specifico non verificabile nella modalità corrente",
     session_inactive: "Round in pausa, concluso o annullato",
     session_capacity_reached: "Limite del round occupato da invii o candidature ancora in attesa",
@@ -367,6 +370,7 @@ export async function reserveApplicationWork(id: string, db: DB = prisma, atsTes
  */
 export async function beginApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", atsTestAuth?: unknown): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
+    if (!providerChannelAllowed(channel)) return false;
     if (applicationsPaused() && channel !== "portal_recruitee" && (!row || !atsTestPauseExemption(atsTestAuth, row))) return false;
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))
@@ -418,6 +422,7 @@ export async function beginApplicationSubmission(id: string, token: Date, db: DB
  */
 export async function recheckApplicationSubmission(id: string, token: Date, db: DB = prisma, channel = "", boundary: "final_submit" | "candidate_data" | "verification_submit" = "final_submit", atsTestAuth?: unknown): Promise<boolean> {
   return (await withLockedApplication(id, db, async (tx, row) => {
+    if (!providerChannelAllowed(channel)) return false;
     if (applicationsPaused() && channel !== "portal_recruitee" && (!row || !atsTestPauseExemption(atsTestAuth, row))) return false;
     if (!row || row.startedAt?.getTime() !== token.getTime()
       || (leaseTokenOf(token) && row.leaseToken !== leaseTokenOf(token))

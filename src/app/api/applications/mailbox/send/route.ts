@@ -1,3 +1,4 @@
+import { providerChannelAllowed } from "@/lib/application-provider-policy";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/session";
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
   if (!checkOrigin(req)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (!providerChannelAllowed("email_mailbox")) return NextResponse.json({error: "provider_not_enabled"}, {status:409});
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "invalid_body" }, { status: 400 });
   const deps = realMailboxDeps();

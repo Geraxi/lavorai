@@ -1,3 +1,4 @@
+import * as providerPolicy from "../src/lib/application-provider-policy";
 /**
  * Queue drain: claim only sendable rows, park quota/consent,
  * multi-claim without double-send, capped attempts. No network, no real DB.
@@ -35,6 +36,7 @@ const now = new Date();
 
 function load(path: string, extra: Record<string, unknown> = {}) {
   const dependencies: Record<string, unknown> = {
+    "./application-provider-policy": providerPolicy,
     "@/lib/application-rollout": rollout,
     "@/lib/application-pause": { applicationsPaused: () => process.env.APPLICATIONS_PAUSED === "true" },
     "@/lib/application-answer-continuation": continuation,

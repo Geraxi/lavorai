@@ -213,7 +213,7 @@ assert.match(jobsRepo, /excludeAtsTestJobsWhere/);
 assert.match(jobsRepo, /isAtsTestJobSource\(job\.source\)/);
 
 const claim = readFileSync("src/lib/application-claim.ts", "utf8");
-assert.match(claim, /job: \{ source: \{ not: "ats_test" \} \}/);
+assert.match(claim, /job: \{ source: \{ not: "ats_test" \},/);
 assert.match(claim, /blocksUncertainAutoRetry/);
 
 const drain = readFileSync("src/lib/queue-drain.ts", "utf8");

@@ -1,3 +1,4 @@
+import * as providerPolicy from "../src/lib/application-provider-policy";
 /**
  * t124u gates: recovery-release default off, uncertain auto-retry standalone,
  * recruiter-email fallback default off. Fakes only.
@@ -78,6 +79,7 @@ const now = new Date();
 
 function loadClaim(prisma: unknown) {
   const dependencies: Record<string, unknown> = {
+    "./application-provider-policy": providerPolicy,
     "@/lib/application-rollout": rollout,
     "@/lib/application-pause": { applicationsPaused: () => false },
     "@/lib/application-answer-continuation": continuation,

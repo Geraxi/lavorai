@@ -74,6 +74,14 @@ export function recruiteeOfferValidation(
   };
 }
 
+/** Unknown/ambiguous answers must never silently become a negative assertion. */
+export function recruiteeBooleanAnswer(value: string): boolean | null {
+  const normalized = value.trim().toLowerCase();
+  if (["yes", "y", "sì", "si", "true", "1"].includes(normalized)) return true;
+  if (["no", "n", "false", "0"].includes(normalized)) return false;
+  return null;
+}
+
 export const recruiteeAdapter: PortalAdapter = {
   id: "recruitee",
   label: "Recruitee",
@@ -149,7 +157,11 @@ export const recruiteeAdapter: PortalAdapter = {
       const v = res.answers.get(f.idx);
       const kind = (f.q.kind ?? "").toLowerCase();
       if (v == null) { pending.push({ label: f.label, kind: f.kind, options: f.options }); continue; }
-      if (kind === "boolean") answers.push({ open_question_id: f.q.id, flag: /^(y|yes|s|sì|si|true|1)/i.test(v) });
+      if (kind === "boolean") {
+        const flag = recruiteeBooleanAnswer(v);
+        if (flag === null) { pending.push({ label: f.label, kind: f.kind, options: f.options }); continue; }
+        answers.push({ open_question_id: f.q.id, flag });
+      }
       else answers.push({ open_question_id: f.q.id, content: v });
     }
     if (pending.length > 0) return { ok: false, status: "needs_user_input", error: `${pending.length} domande obbligatorie richiedono la tua risposta prima dell'invio.`, pendingQuestions: pending };

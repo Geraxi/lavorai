@@ -1,3 +1,4 @@
+import * as providerPolicy from "../src/lib/application-provider-policy";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -21,6 +22,8 @@ import * as recruiterEmailFallback from "../src/lib/recruiter-email-fallback";
 import * as atsTestCapability from "../src/lib/ats-test-capability";
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
+    "@/lib/application-provider-policy": providerPolicy,
+    "./application-provider-policy": providerPolicy,
     "@/lib/application-rollout": rollout,
     "@/lib/application-prerequisites": prerequisites,
     "./application-answer-continuation": continuation,
@@ -36,7 +39,7 @@ function load(path: string, extra: Record<string, any> = {}) {
     "@/lib/paid-priority": paidPriority,
     "@/lib/ats-skip-hosts": extra["@/lib/ats-skip-hosts"] ?? { requiresManualAtsHandoff: () => false, compareJobsForAutoApply: () => 0, SKIPPED_ATS_MANUAL_MESSAGE: "skip" },
     "@/lib/daily-application-cap": extra["@/lib/daily-application-cap"] ?? {
-      countDailyCapUsage: async () => 0,
+      countDailyCapUsage: async () => 0, weeklyQuotaUsageWhere: () => ({}),
       remainingDailyCap: (used: number, limit: number) => Math.max(0, limit - used),
       countsTowardQuota: () => false,
       monthlyQuotaUsageWhere: () => ({}),
@@ -287,7 +290,8 @@ async function testConsentSkipsClosedPosting() {
 async function testExplicitCreation() {
   enable();
   for (const routeName of ["apply", "apply-batch"]) {
-    for (const mode of ["manual", "hybrid", "auto"]) {
+    for (const scenario of ["manual", "hybrid", "auto", "free"]) {
+      const free = scenario === "free", mode = free ? "manual" : scenario;
       const created: any[] = [], published: string[] = [];
       const job = { id: "selected", title: "Engineer", category: "Engineering", url: "https://jobs.example.invalid/selected", description: "Role", company: "Example" };
       const prisma = {
@@ -300,7 +304,7 @@ async function testExplicitCreation() {
       };
       const route = load(`src/app/api/applications/${routeName}/route.ts`, {
         "@/lib/db": { prisma }, "@/lib/admin-user-actions": { monthlyQuotaSince: () => start },
-        "@/lib/billing": { hasPaidOrTrialApplicationAccess: () => true, usesFreeWeeklyQuota: () => false, requiresPaymentMethodBeforeApp: () => false, effectiveTier: () => "pro", getLimits: () => ({ monthlyApplications: 100 }), dailyApplicationLimit: () => 10 },
+        "@/lib/billing": { hasPaidOrTrialApplicationAccess: () => !free, usesFreeWeeklyQuota: () => free, freeWeeklyApplyQuota: () => 5, requiresPaymentMethodBeforeApp: () => free, effectiveTier: () => free ? "free" : "pro", getLimits: () => ({ monthlyApplications: free ? 0 : 100 }), dailyApplicationLimit: () => free ? 0 : 10 },
         "@/lib/rate-limit": { applyLimiter: { limit: async () => ({ success: true }) }, applyBatchLimiter: { limit: async () => ({ success: true }) } },
         "@/lib/activation-readiness": { getActivationReadiness: async () => ({ ready: true }) },
         "@/lib/apply-session": { resolveSession: async () => ({ id: "round", status: "active" }) },

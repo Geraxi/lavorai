@@ -1,3 +1,4 @@
+import { providerChannelAllowed } from "./application-provider-policy";
 /**
  * Recruiter / employer application-email gate. Default off: no automated
  * application email is sent to an employer (skip-list fallback, published
@@ -26,6 +27,7 @@ const JOB_SPECIFIC_SOURCES = new Set([
 export function recruiterEmailFallbackEnabled(
   env: Record<string, string | undefined> = process.env,
 ): boolean {
+  if (!providerChannelAllowed("email_recruiter", env)) return false;
   const raw = (env.RECRUITER_EMAIL_FALLBACK_ENABLED ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "on" || raw === "yes";
 }
