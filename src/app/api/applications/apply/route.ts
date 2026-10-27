@@ -1,3 +1,4 @@
+import { providerOfferAllowed } from "@/lib/application-provider-policy";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { applicationPrerequisiteBlock } from "@/lib/application-prerequisites";
@@ -7,8 +8,8 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
-import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
-import { countDailyCapUsage } from "@/lib/daily-application-cap";
+import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp, usesFreeWeeklyQuota, freeWeeklyApplyQuota } from "@/lib/billing";
+import { countDailyCapUsage, weeklyQuotaUsageWhere } from "@/lib/daily-application-cap";
 import { applyLimiter } from "@/lib/rate-limit";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
@@ -55,7 +56,11 @@ export async function POST(request: NextRequest) {
     const prerequisite = applicationPrerequisiteBlock(user);
     if (prerequisite) return NextResponse.json(prerequisite.body, { status: prerequisite.status });
 
-    if (requiresPaymentMethodBeforeApp(user)) {
+    const freeWeekly = usesFreeWeeklyQuota(user);
+    if (user.subscriptionStatus === "paused" || (user.pausedUntil && user.pausedUntil > new Date())) {
+      return NextResponse.json({error: "subscription_paused", message: "Abbonamento in pausa."}, {status: 409});
+    }
+    if (!freeWeekly && requiresPaymentMethodBeforeApp(user)) {
       return NextResponse.json(
         { error: "payment_method_required", message: "Completa l'attivazione del pagamento per iniziare a candidarti.", redirect: "/start-membership" },
         { status: 402 },
@@ -126,7 +131,9 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Guardrail checks (dopo il batch, sfrutta gli stessi dati) ---
-    if (usedThisMonth >= limits.monthlyApplications) {
+    const weeklyUsed = freeWeekly ? await prisma.application.count({where: weeklyQuotaUsageWhere(user.id)}) : 0;
+    if (freeWeekly && weeklyUsed >= freeWeeklyApplyQuota()) return NextResponse.json({error: "weekly_limit", message: "Hai raggiunto la quota gratuita degli ultimi sette giorni.", limit: freeWeeklyApplyQuota()}, {status: 429});
+    if (!freeWeekly && usedThisMonth >= limits.monthlyApplications) {
       return NextResponse.json(
         {
           error: "paywall",
@@ -141,7 +148,7 @@ export async function POST(request: NextRequest) {
         { status: 402 },
       );
     }
-    const dailyLimit = dailyApplicationLimit(user, prefs?.dailyCap);
+    const dailyLimit = freeWeekly ? freeWeeklyApplyQuota() : dailyApplicationLimit(user, prefs?.dailyCap);
     if (usedToday >= dailyLimit) {
       return NextResponse.json(
         {
@@ -167,6 +174,7 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       );
     }
+    if (!providerOfferAllowed(job.url)) return NextResponse.json({ error: "provider_not_enabled", message: "Questo portale richiede candidatura diretta sul sito dell’azienda." }, { status: 409 });
     type Mode = "off" | "manual" | "hybrid" | "auto";
     const mode: Mode = (prefs?.autoApplyMode as Mode) ?? "manual";
 

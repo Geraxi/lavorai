@@ -1,3 +1,4 @@
+import * as providerPolicy from "../src/lib/application-provider-policy";
 /**
  * Live-test regressions after #91/#92: same-run handoffs must not consume
  * daily / 30d / monthly slots. No network, no real applications.
@@ -14,6 +15,7 @@ function loadModule(path: string, dependencies: Record<string, unknown>, globals
   vm.runInNewContext(output, {
     module, exports: module.exports,
     require: (id: string) => {
+      if (id.endsWith("/application-provider-policy") || id === "./application-provider-policy") return providerPolicy;
       assert.ok(id in dependencies, `Unexpected dependency: ${id}`);
       return dependencies[id];
     },
@@ -88,7 +90,7 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
     "@/lib/billing": {
       dailyApplicationLimit: () => 5, effectiveTier: () => "pro_plus",
       getLimits: () => ({ monthlyApplications: Infinity }),
-      isApplicationAccessPaused: () => false, requiresPaymentMethodBeforeApp: () => false,
+      isApplicationAccessPaused: () => false, requiresPaymentMethodBeforeApp: () => false, usesFreeWeeklyQuota: () => false, freeWeeklyApplyQuota: () => 5,
       hasPaidOrTrialApplicationAccess: () => true, usesFreeWeeklyQuota: () => false,
     },
     "@/lib/role-match": { titleMatchesAnyRole: () => true },

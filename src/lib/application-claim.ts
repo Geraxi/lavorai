@@ -1,3 +1,4 @@
+import { providerPolicy, providerApplicationAllowed } from "./application-provider-policy";
 import { answerContinuationIneligibility, continuationSelect } from "./application-answer-continuation";
 import { applicationRolloutConfig, historicalRetriesBlocked, rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
@@ -263,11 +264,14 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
   const config = applicationRolloutConfig();
   if (!config.enabled || !config.startedAt) return [];
   const now = new Date();
+  const provider = providerPolicy();
+  if (!provider.valid) return [];
+  const cutoff = provider.notBefore && provider.notBefore > config.startedAt ? provider.notBefore : config.startedAt;
   const attemptCap = maxDrainAttempts();
   const rows = await prisma.application.findMany({
     where: { status: "queued", startedAt: null, leaseToken: null, submitStartedAt: null, completedAt: null, retryCount: { lt: attemptCap },
-      job: { source: { not: "ats_test" } },
-      createdAt: { gt: config.startedAt, lte: now },
+      job: { source: { not: "ats_test" }, ...(provider.restricted ? {url: {contains: ".recruitee.com/o/"}} : {}) },
+      createdAt: { gt: cutoff, lte: now },
       // Automatic mode also admits rows of auto-mode users (no per-application
       // consent); the worker gate re-checks the user's saved mode.
       ...(config.mode === "automatic"
@@ -286,8 +290,8 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
   });
   const continuations = await prisma.application.findMany({
     where: { status: "queued", answerContinuationJson: { not: null }, retryCount: { lt: attemptCap },
-      job: { source: { not: "ats_test" } },
-      createdAt: { gt: config.startedAt, lte: now }, consentGrantedAt: { gt: config.startedAt, lte: now },
+      job: { source: { not: "ats_test" }, ...(provider.restricted ? {url: {contains: ".recruitee.com/o/"}} : {}) },
+      createdAt: { gt: cutoff, lte: now }, consentGrantedAt: { gt: config.startedAt, lte: now },
       submitConfirmation: { in: ["NOT_SUBMITTED", "NEEDS_ANSWERS"] }, completedAt: null, submittedAt: null, submittedVia: null,
       submitStartedAt: null,
     }, select: {
@@ -297,8 +301,8 @@ export async function findClaimableQueued(limit: number): Promise<string[]> {
     }, orderBy: { createdAt: "asc" }, take: claimScanWindow(limit),
   });
   const admitted = [
-    ...rows.filter(row => !rolloutApplicationIneligibility(row, now)),
-    ...continuations.filter(row => !answerContinuationIneligibility(row, "queued", undefined, now)),
+    ...rows.filter(row => providerApplicationAllowed(row) && !rolloutApplicationIneligibility(row, now)),
+    ...continuations.filter(row => providerApplicationAllowed(row) && !answerContinuationIneligibility(row, "queued", undefined, now)),
   ];
   const freeIds = admitted.map(row => row.userId).filter((id): id is string => !!id);
   const usage = await loadQuotaUsageMaps(prisma, freeIds, admitted.map(row => row.id), now);

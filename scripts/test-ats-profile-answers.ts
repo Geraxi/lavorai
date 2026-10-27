@@ -81,7 +81,7 @@ assert.equal(isPrivacyConsentQuestion("I consent to the processing of my persona
 assert.equal(isPrivacyConsentQuestion("I agree to the terms"), false);
 assert.equal(isPrivacyConsentQuestion("I certify that I hold the required license"), false);
 assert.equal(resolveCandidateFact({ label: "I agree to the privacy policy", kind: "checkbox" }, { facts }).answer, null);
-assert.equal(resolveCandidateFact({ label: "I agree to the privacy policy", kind: "checkbox" }, { facts, privacyConsentAt: new Date() }).answer, "Yes");
+assert.equal(resolveCandidateFact({ label: "I agree to the privacy policy", kind: "checkbox" }, { facts, privacyConsentAt: new Date() }).answer, null);
 assert.equal(resolveCandidateFact({ label: "I agree to the terms", kind: "checkbox" }, { facts, privacyConsentAt: new Date() }).answer, null);
 
 assert.equal(sanitizeFormLabel("cards[field-abc]"), "");

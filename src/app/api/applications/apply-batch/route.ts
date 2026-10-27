@@ -1,3 +1,4 @@
+import { providerOfferAllowed } from "@/lib/application-provider-policy";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
 import { applicationPrerequisiteBlock } from "@/lib/application-prerequisites";
@@ -7,8 +8,8 @@ import { prisma } from "@/lib/db";
 import { monthlyQuotaSince } from "@/lib/admin-user-actions";
 import { getCurrentUser } from "@/lib/session";
 import { enqueueApplication } from "@/lib/application-queue";
-import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp } from "@/lib/billing";
-import { countDailyCapUsage } from "@/lib/daily-application-cap";
+import { dailyApplicationLimit, getLimits, effectiveTier, requiresPaymentMethodBeforeApp, usesFreeWeeklyQuota, freeWeeklyApplyQuota } from "@/lib/billing";
+import { countDailyCapUsage, weeklyQuotaUsageWhere } from "@/lib/daily-application-cap";
 import { quickMatchScore } from "@/lib/match-score";
 import { rowToProfile } from "@/lib/cv-profile-types";
 import { resolveSession } from "@/lib/apply-session";
@@ -66,7 +67,11 @@ export async function POST(request: NextRequest) {
     const prerequisite = applicationPrerequisiteBlock(user);
     if (prerequisite) return NextResponse.json(prerequisite.body, { status: prerequisite.status });
 
-    if (requiresPaymentMethodBeforeApp(user)) {
+    const freeWeekly = usesFreeWeeklyQuota(user);
+    if (user.subscriptionStatus === "paused" || (user.pausedUntil && user.pausedUntil > new Date())) {
+      return NextResponse.json({error: "subscription_paused", message: "Abbonamento in pausa."}, {status: 409});
+    }
+    if (!freeWeekly && requiresPaymentMethodBeforeApp(user)) {
       return NextResponse.json(
         { error: "payment_method_required", message: "Completa l'attivazione del pagamento per iniziare a candidarti.", redirect: "/start-membership" },
         { status: 402 },
@@ -129,7 +134,8 @@ export async function POST(request: NextRequest) {
       }),
       prisma.cVProfile.findUnique({ where: { userId: user.id } }),
     ]);
-    const remainingQuota =
+    const weeklyUsed = freeWeekly ? await prisma.application.count({where: weeklyQuotaUsageWhere(user.id)}) : 0;
+    const remainingQuota = freeWeekly ? Math.max(0, freeWeeklyApplyQuota() - weeklyUsed) :
       limits.monthlyApplications === Infinity
         ? Infinity
         : Math.max(0, limits.monthlyApplications - usedThisMonth);
@@ -137,17 +143,17 @@ export async function POST(request: NextRequest) {
     if (remainingQuota === 0) {
       return NextResponse.json(
         {
-          error: "paywall",
-          message:
+          error: freeWeekly ? "weekly_limit" : "paywall",
+          message: freeWeekly ? "Hai raggiunto la quota gratuita degli ultimi sette giorni." :
             tier === "free"
               ? "La prova è terminata. Scegli Pro per continuare a inviare candidature."
               : `Hai esaurito il limite mensile del piano ${tier}.`,
           tier,
         },
-        { status: 402 },
+        { status: freeWeekly ? 429 : 402 },
       );
     }
-    const dailyLimit = dailyApplicationLimit(user, prefs?.dailyCap);
+    const dailyLimit = freeWeekly ? freeWeeklyApplyQuota() : dailyApplicationLimit(user, prefs?.dailyCap);
     const remainingToday = Math.max(0, dailyLimit - usedToday);
     if (remainingToday === 0) {
       return NextResponse.json(
@@ -191,7 +197,7 @@ export async function POST(request: NextRequest) {
     const excludedByCompany =
       jobs.length - alreadySet.size - toApply.length;
 
-    const capped = toApply.slice(0, Math.min(remainingToday, remainingQuota));
+    const capped = toApply.filter(job => providerOfferAllowed(job.url)).slice(0, Math.min(remainingToday, remainingQuota));
 
     // --- Auto-apply mode + match threshold + CV profile ---
     type Mode = "off" | "manual" | "hybrid" | "auto";
@@ -212,9 +218,10 @@ export async function POST(request: NextRequest) {
     let enqueued = 0;             // inviate direttamente
     let awaitingConsent = 0;      // messe in coda "attesa consenso"
     let belowThreshold = 0;       // auto: saltate perché sotto soglia
-    const errors: Array<{ jobId: string; error: string }> = [];
+    const errors: Array<{ jobId: string; error: string }> = toApply.filter(job => !providerOfferAllowed(job.url)).map(job => ({jobId: job.id, error: "Questo portale richiede candidatura diretta sul sito dell’azienda."}));
 
     for (const job of capped) {
+      if (!providerOfferAllowed(job.url)) { errors.push({jobId: job.id, error: "Questo portale richiede candidatura diretta sul sito dell’azienda."}); continue; }
       try {
         let score = 100;
         if (profile) {

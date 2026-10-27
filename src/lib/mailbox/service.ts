@@ -1,3 +1,4 @@
+import { providerChannelAllowed } from "../application-provider-policy";
 /**
  * Invio candidature dalla casella dell'utente: preparazione, approvazione
  * esplicita (con l'elenco dei destinatari), invio una-tantum e verifica dei
@@ -90,6 +91,7 @@ export type SendOutcome = "submitted" | "dry_run" | "failed" | "unverified" | "s
 
 /** Invia UNA volta un invio approvato. Mai ritentato automaticamente. */
 export async function sendApprovedMailbox(sendId: string, userId: string, deps: MailboxDeps, mode: SendMode = resolveSendMode(deps.env)): Promise<SendOutcome> {
+  if (!providerChannelAllowed("email_mailbox", deps.env)) return "skipped";
   const now = deps.now();
   // Claim atomico: un solo processo può attraversare il confine del provider.
   const claim = await deps.db.mailboxSend.updateMany({ where: { id: sendId, userId, state: "approved", sendClaimedAt: null }, data: { sendClaimedAt: now } });

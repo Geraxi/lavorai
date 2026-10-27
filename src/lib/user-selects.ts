@@ -20,6 +20,7 @@ export const sessionUserSelect = {
   name: true,
   emailVerified: true,
   privacyConsentAt: true,
+  pausedUntil: true,
   subscriptionStatus: true,
   stripeCustomerId: true,
   stripeSubscriptionId: true,

@@ -95,6 +95,18 @@ async function main() {
     assert.equal(row.submitConfirmation,'DETECTED_HTTP_201'); assert.ok(row.submissionReceiptJson); assert.ok(row.submittedAt); assert.equal(view(row).phase,'confirmed');
     assert.equal(posts(),1); assert.ok(aiCalls>0); await run(id); assert.equal(posts(),1,'success never replayed');
     console.log('PASS ordinary success: AI, documents, actual adapter, gates, durable receipt; no repeat');
+    const excluded = await fixture('excluded-provider');
+    const excludedRow = await db.application.findUniqueOrThrow({where:{id:excluded}});
+    await db.job.update({where:{id:excludedRow.jobId},data:{url:'https://other.example.test/o/engineer'}});
+    process.env.APPLICATION_PROVIDER_POLICY='recruitee_only';
+    process.env.APPLICATION_PROVIDER_NOT_BEFORE=new Date(Date.now()-3600000).toISOString();
+    const fencedPosts=posts(),fencedAI=aiCalls;
+    await run(excluded);assert.equal(posts(),fencedPosts);assert.equal(aiCalls,fencedAI,'unsupported provider blocked before preparation');
+    const old = await fixture('old-provider');
+    process.env.APPLICATION_PROVIDER_NOT_BEFORE=new Date(Date.now()+1000).toISOString();
+    await run(old);assert.equal(posts(),fencedPosts);assert.equal(aiCalls,fencedAI,'cutoff prevents old backlog');
+    delete process.env.APPLICATION_PROVIDER_POLICY;delete process.env.APPLICATION_PROVIDER_NOT_BEFORE;
+    console.log('PASS ordinary provider/cutoff fences before AI and provider calls');
     const race=await fixture('race-two'); const before=posts(); await Promise.all(Array.from({length:6},()=>run(race)));
     assert.equal(posts()-before,1,'one atomic ordinary owner'); console.log('PASS ordinary concurrency');
     const uncertain=await fixture('server-500'); const n=posts(); await run(uncertain); await run(uncertain);

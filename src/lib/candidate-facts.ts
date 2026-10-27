@@ -278,14 +278,8 @@ function resolveStandardScreening(question: FactQuestion, context: FactContext, 
     if (facts.length) {
       const values = new Set(facts.map((fact) => canonicalFactValue("willingRemote", fact.value)));
       if (values.size !== 1) return { answer: null, provenance: facts, conflict: values.size > 1 };
-      return { answer: yesNoAnswer(question, /^(yes|sì|si)$/i.test(facts[0].value) ? "Yes" : "No"), provenance: facts, conflict: false };
-    }
-    if (context.workRemote === true) {
-      return {
-        answer: yesNoAnswer(question, "Yes"),
-        provenance: [{ key: "willingRemote", value: "Yes", source: "preferences", reference: "locationsJson" }],
-        conflict: false,
-      };
+      if (!/^(yes|no|sì|si)$/i.test(facts[0].value.trim())) return empty;
+      return { answer: yesNoAnswer(question, /^(yes|sì|si)$/i.test(facts[0].value.trim()) ? "Yes" : "No"), provenance: facts, conflict: false };
     }
     return empty;
   }
@@ -296,13 +290,14 @@ function resolveStandardScreening(question: FactQuestion, context: FactContext, 
     if (!target) return empty;
     const history = employerNames(context);
     const hit = history.some((company) => sameCompany(company, target));
+    if (!hit) return empty; // An incomplete CV cannot establish never having worked here.
     return {
-      answer: yesNoAnswer(question, hit ? "Yes" : "No"),
+      answer: yesNoAnswer(question, "Yes"),
       provenance: [{
         key: "previouslyEmployed",
-        value: hit ? "Yes" : "No",
-        source: hit ? "cv" : "profile",
-        reference: hit ? "experiences" : "previously_employed_default",
+        value: "Yes",
+        source: "cv",
+        reference: "experiences",
       }],
       conflict: false,
     };
@@ -314,9 +309,7 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
   let key = reusableFactKey(question.label);
   const empty = { answer: null, provenance: [], conflict: false };
   if (question.kind === "checkbox") {
-    if (isPrivacyConsentQuestion(question.label) && context.privacyConsentAt) {
-      return { answer: "Yes", provenance: [{ key: "privacyConsent", value: "Yes", source: "profile", reference: "privacyConsentAt" }], conflict: false };
-    }
+    // Platform privacy consent does not accept a different employer’s agreement.
     if (key === "marketingOptIn" || isMarketingOptInQuestion(question.label)) {
       return { answer: "No", provenance: [{ key: "marketingOptIn", value: "No", source: "profile", reference: "marketing_opt_in_default" }], conflict: false };
     }

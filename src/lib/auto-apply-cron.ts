@@ -1,3 +1,4 @@
+import { providerOfferAllowed } from "./application-provider-policy";
 import { createLivenessGate, livenessMaxChecksFromEnv, type LivenessGate } from "@/lib/auto-apply-liveness-gate";
 import { checkJobUrlLiveness, markJobClosed } from "@/lib/job-liveness";
 import { automaticApplicationsBlocked } from "@/lib/application-rollout";
@@ -850,6 +851,7 @@ async function processUser(
   const usedThisRun = new Set<string>();
   let enqueued = 0;
   for (const job of jobs) {
+    if (!providerOfferAllowed(job.url)) continue;
     if (enqueued >= remainingToday) break;
     const cKey = (job.company ?? "").toLowerCase();
     if (cKey && usedThisRun.has(cKey)) continue; // pass 1: skip duplicates
@@ -982,6 +984,7 @@ async function processUser(
   // pool), allenta il vincolo e ammetti ripetizioni.
   if (enqueued < remainingToday) {
     for (const job of jobs) {
+    if (!providerOfferAllowed(job.url)) continue;
       if (enqueued >= remainingToday) break;
       if (autoApplyPreferenceMismatch(job, prefs, locationPrefs)) continue;
       // Salta job già processati nel pass 1 (rate-limited per company)

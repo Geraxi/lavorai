@@ -41,9 +41,9 @@ assert.equal(resolveCandidateFact(q("WhatsApp opt-in"), { facts }).answer, "No")
 assert.equal(resolveCandidateFact(q("May we contact you via WhatsApp?"), { facts }).answer, "No");
 assert.equal(resolveCandidateFact(q("SMS marketing", "select", ["Yes", "No"]), { facts }).answer, "No");
 assert.equal(resolveCandidateFact(q("Are you willing to work remotely?"), { facts }).answer, null);
-assert.equal(resolveCandidateFact(q("Are you willing to work remotely?"), { facts, workRemote: true }).answer, "Yes");
+assert.equal(resolveCandidateFact(q("Are you willing to work remotely?"), { facts, workRemote: true }).answer, null);
 assert.equal(resolveCandidateFact(yn("Have you worked for this company?"), { facts }).answer, null, "this company without an application employer goes to the user");
-assert.equal(resolveCandidateFact(yn("Have you worked for this company?"), { facts, company: "Acme" }).answer, "No");
+assert.equal(resolveCandidateFact(yn("Have you worked for this company?"), { facts, company: "Acme" }).answer, null);
 assert.equal(resolveCandidateFact(q("Have you worked for this company?"), { facts, company: "Acme" }).answer, null, "free-text employment question is never Yes/No");
 assert.equal(resolveCandidateFact(q("Why do you want to work at this company?"), { facts, company: "Acme" }).answer, null);
 assert.equal(resolveCandidateFact(q("What excites you about our company?"), { facts, company: "Acme" }).answer, null);
@@ -65,12 +65,12 @@ const threeJobsAgo = candidateFacts({
 }, {}, {}, [], date);
 assert.equal(resolveCandidateFact(yn("Have you worked for this company?"), { facts: threeJobsAgo, company: "Ancient Ltd" }).answer, "Yes", "employer three jobs ago still counts");
 assert.equal(resolveCandidateFact(yn("Have you previously been employed by Ancient?"), { facts: threeJobsAgo, company: "Ancient Ltd" }).answer, "Yes");
-assert.equal(resolveCandidateFact(yn("Have you worked for this company?"), { facts: threeJobsAgo, company: "Stranger Inc" }).answer, "No");
+assert.equal(resolveCandidateFact(yn("Have you worked for this company?"), { facts: threeJobsAgo, company: "Stranger Inc" }).answer, null);
 const stripeFacts = candidateFacts({ ...profile, experiences: [exp("Stripe", "2022")] }, {}, {}, [], date);
 assert.equal(resolveCandidateFact(yn("Have you previously worked for Stripe?"), { facts: stripeFacts, company: "Stripe" }).answer, "Yes");
 assert.equal(resolveCandidateFact(yn("Have you ever been employed by Stripe or a Stripe affiliate?"), { facts: stripeFacts, company: "Stripe" }).answer, "Yes");
 assert.equal(resolveCandidateFact(yn("Have you ever been employed by Stripe or any Stripe subsidiary?"), { facts: stripeFacts, company: "Stripe" }).answer, "Yes");
-assert.equal(resolveCandidateFact(yn("Have you previously worked for Stripe?"), { facts, company: "Stripe" }).answer, "No");
+assert.equal(resolveCandidateFact(yn("Have you previously worked for Stripe?"), { facts, company: "Stripe" }).answer, null);
 assert.equal(resolveCandidateFact(yn("Have you ever been employed by Stripe or a Stripe affiliate?"), { facts: stripeFacts, company: "Acme" }).answer, null);
 assert.equal(resolveCandidateFact(q("Have you previously worked for Stripe?"), { facts: stripeFacts, company: "Stripe" }).answer, null, "named employment on a free-text field stays unanswered");
 assert.equal(resolveCandidateFact(q("Are you a public official?"), { facts }).answer, null);

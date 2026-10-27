@@ -88,7 +88,7 @@ async function testUnknownFacts() {
     { idx: 81, label: "Have you previously been employed by Past Employer?", kind: "select", options: ["Yes", "No"] },
     { idx: 82, label: "Have you worked at a fintech company?", kind: "select", options: ["Yes", "No"] },
   ]);
-  assert.equal(otherEmployer.answers.get(80), "No", "this company with no history match is No");
+  assert.equal(otherEmployer.answers.get(80), undefined, "incomplete history cannot prove no prior employment");
   assert.equal(otherEmployer.answers.get(81), undefined, "Past Employer is not Acme");
   assert.equal(otherEmployer.answers.get(82), undefined, "fintech category is not this employer");
   const acme = { ...context, company: "Acme" };
@@ -116,7 +116,7 @@ async function testUnknownFacts() {
     { idx: 53, label: "I agree to the privacy policy", kind: "checkbox" },
     { idx: 54, label: "I agree to the terms", kind: "checkbox" },
   ]);
-  assert.equal(consented.answers.get(53), "Yes");
+  assert.equal(consented.answers.get(53), undefined, "Platform consent does not accept employer privacy terms");
   assert.equal(consented.answers.get(54), undefined, "Terms stay a question");
   console.log("Unknown eligibility, history, qualifications, salary, availability and consent stay unanswered.");
 }

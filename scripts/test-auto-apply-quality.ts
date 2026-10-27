@@ -1,3 +1,4 @@
+import * as providerPolicy from "../src/lib/application-provider-policy";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -16,6 +17,7 @@ function loadModule(path: string, dependencies: Record<string, unknown>, globals
   vm.runInNewContext(output, {
     module, exports: module.exports,
     require: (id: string) => {
+      if (id.endsWith("/application-provider-policy") || id === "./application-provider-policy") return providerPolicy;
       assert.ok(id in dependencies, `Unexpected dependency: ${id}`);
       return dependencies[id];
     },
@@ -92,7 +94,7 @@ async function testCronBothPasses() {
     "@/lib/billing": {
       dailyApplicationLimit: () => 5, effectiveTier: () => "pro",
       getLimits: () => ({ monthlyApplications: 100 }),
-      isApplicationAccessPaused: () => false, requiresPaymentMethodBeforeApp: () => false,
+      isApplicationAccessPaused: () => false, requiresPaymentMethodBeforeApp: () => false, usesFreeWeeklyQuota: () => false, freeWeeklyApplyQuota: () => 5,
       hasPaidOrTrialApplicationAccess: () => true, usesFreeWeeklyQuota: () => false,
     },
     "@/lib/role-match": { titleMatchesAnyRole: () => true },
