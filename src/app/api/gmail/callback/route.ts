@@ -117,14 +117,13 @@ export async function GET(req: NextRequest) {
     });
 
     if (!tokenResponse.ok) {
-      const errorText = await tokenResponse.text();
-      console.error("[gmail/callback] Token exchange failed:", errorText);
+      console.error("[gmail/callback] Token exchange failed:", tokenResponse.status);
       return redirectWithError(req.url, "token_exchange");
     }
 
     tokenData = await tokenResponse.json();
   } catch (err) {
-    console.error("[gmail/callback] Token exchange error:", err);
+    console.error("[gmail/callback] Token exchange error");
     return redirectWithError(req.url, "token_exchange");
   }
 
@@ -142,7 +141,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (!userinfoResponse.ok) {
-      console.error("[gmail/callback] Userinfo fetch failed:", await userinfoResponse.text());
+      console.error("[gmail/callback] Userinfo fetch failed:", userinfoResponse.status);
       return redirectWithError(req.url, "userinfo_fetch");
     }
 
@@ -154,7 +153,7 @@ export async function GET(req: NextRequest) {
       return redirectWithError(req.url, "userinfo_missing");
     }
   } catch (err) {
-    console.error("[gmail/callback] Userinfo fetch error:", err);
+    console.error("[gmail/callback] Userinfo fetch error");
     return redirectWithError(req.url, "userinfo_fetch");
   }
 
@@ -194,7 +193,7 @@ export async function GET(req: NextRequest) {
 
   // Upsert Account record
   try {
-    await prisma.account.upsert({
+    const linkedAccount = await prisma.account.upsert({
       where: {
         provider_providerAccountId: {
           provider: "google",
@@ -222,8 +221,11 @@ export async function GET(req: NextRequest) {
         id_token: tokenData.id_token || undefined,
       },
     });
+    // A successful explicit reconnection clears only sync backoff/error state.
+    // Preserve pagination, message identity and any in-flight lease.
+    await prisma.$executeRaw`UPDATE "GmailSyncProgress" SET "lastError"=NULL, "nextAttemptAt"=NOW() WHERE "accountId"=${linkedAccount.id}`;
   } catch (err) {
-    console.error("[gmail/callback] Account upsert failed:", err);
+    console.error("[gmail/callback] Account upsert failed");
     return redirectWithError(req.url, "db_error");
   }
 

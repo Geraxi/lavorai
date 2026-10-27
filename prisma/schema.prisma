@@ -32,6 +32,7 @@ model Account {
   scope             String?
   id_token          String?
   session_state     String?
+  gmailSyncProgress GmailSyncProgress?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1291,4 +1292,22 @@ model EmailTestAttempt {
 
   @@unique([runKey, destination])
   @@index([applicationId])
+}
+
+// Runtime accesses the checkpoint through parameterized SQL to atomically fence
+// lease ownership and page progress; message bodies/tokens never enter this row.
+model GmailSyncProgress {
+  accountId       String @id
+  account         Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  leaseToken      String?
+  leaseUntil      DateTime?
+  lastAttemptAt   DateTime?
+  nextAttemptAt   DateTime @default(now())
+  completedBefore BigInt?
+  scanBefore      BigInt?
+  pageToken       String?
+  messageIds      String[] @default([])
+  nextPageToken   String?
+  lastError       String?
+  @@index([nextAttemptAt, lastAttemptAt], map: "GmailSyncProgress_due")
 }

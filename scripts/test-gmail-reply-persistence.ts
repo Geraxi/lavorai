@@ -10,7 +10,7 @@ function load(path: string, dependencies: Record<string, unknown>) {
   const output = ts.transpileModule(readFileSync(path, "utf8"), { compilerOptions: {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
   } }).outputText;
-  vm.runInNewContext(output, { module, exports: module.exports, Date, URL,
+  vm.runInNewContext(output, { module, exports: module.exports, Date, URL, BigInt, AbortSignal, setTimeout: (fn: () => void) => fn(),
     console: { log() {}, warn() {}, error() {} }, process: { env: {} },
     require: (id: string) => { assert.ok(id in dependencies, `Unexpected dependency ${id}`); return dependencies[id]; },
     fetch: (url: string) => fixtureFetch(url),
@@ -21,7 +21,7 @@ const messages: Array<Record<string, any>> = [];
 const apps = [{ id: "owned", userId: "owner", replyCount: 0, lastReplyAt: null as Date | null, userStatus: null }, { id: "other", userId: "someone-else", replyCount: 0, lastReplyAt: null, userStatus: null }];
 let failProjection = true;
 const tx = {
-  account: { findFirst: async () => ({ access_token: "synthetic-only", expires_at: Math.floor(Date.now() / 1000) + 3600 }) },
+  account: { findMany: async () => ([{ id: "account", scope: "https://www.googleapis.com/auth/gmail.readonly", access_token: "synthetic-only", expires_at: Math.floor(Date.now() / 1000) + 3600 }]) },
   gmailMessage: {
     findUnique: async ({ where: { userId_gmailMessageId: key } }: any) => messages.find((row) => row.userId === key.userId && row.gmailMessageId === key.gmailMessageId),
     create: async ({ data }: any) => { messages.push(data); return data; },
@@ -43,7 +43,13 @@ const security = load("src/lib/application-security-code.ts", {});
 const replySecurity = load("src/lib/reply-security-message.ts", { "@/lib/application-security-code": security });
 const parser = load("src/lib/reply-parser.ts", { "@/lib/reply-security-message": replySecurity });
 const projection = load("src/lib/apply-reply-to-application.ts", { "@/lib/db": { prisma: tx }, "@/lib/reply-parser": parser });
+const policy = load("src/lib/gmail-sync-policy.ts", {});
 const gmail = load("src/lib/gmail-client.ts", {
+  "@/lib/gmail-sync-policy": policy,
+  "@/lib/gmail-sync-progress": {
+    claimGmailProgress: async () => ({accountId: "account", leaseToken: "lease", completedBefore: null, scanBefore: null, messageIds: [], pageToken: null, nextPageToken: null}),
+    saveGmailProgress: async () => {}, releaseGmailProgress: async () => {}, gmailDeferredError: async () => undefined,
+  },
   "@/lib/db": { prisma: tx }, "@/lib/reply-parser": parser, "@/lib/reply-security-message": replySecurity,
   "@/lib/apply-reply-to-application": projection,
   "@/lib/gmail-match": { isLikelyJobMail: () => true, matchToApplication: async () => "owned" },
@@ -92,7 +98,7 @@ async function main() {
   const beforeMessages = messages.length;
   const beforeReplies = apps[0].replyCount;
   fixtureFetch = async (url) => {
-    if (url === "https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=50&labelIds=INBOX") return { ok: true, json: async () => ({ messages: [{ id: longForward.id, threadId: longForward.threadId }] }) };
+    if (new URL(url).pathname === "/gmail/v1/users/me/messages") return { ok: true, json: async () => ({ messages: [{ id: longForward.id, threadId: longForward.threadId }] }) };
     assert.equal(url, `https://gmail.googleapis.com/gmail/v1/users/me/messages/${longForward.id}?format=full`);
     return { ok: true, json: async () => longForward };
   };

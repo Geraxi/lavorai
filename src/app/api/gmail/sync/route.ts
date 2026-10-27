@@ -11,6 +11,8 @@ import { syncGmailMessages } from "@/lib/gmail-client";
  * 
  * Returns count of new messages synced.
  */
+export const maxDuration = 60;
+
 export async function POST() {
   try {
     const user = await getCurrentUser();
@@ -31,9 +33,11 @@ export async function POST() {
       success: true,
       synced: result.synced,
       skipped: result.skipped,
+      complete: result.complete,
+      deferred: result.deferred ?? false,
     });
   } catch (error) {
-    console.error("[api/gmail/sync] Error:", error);
+    console.error("[api/gmail/sync] Failed");
     return NextResponse.json(
       { error: "Gmail sync failed. Please try again." },
       { status: 500 },
