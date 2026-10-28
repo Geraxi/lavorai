@@ -40,6 +40,11 @@ jobs:
           DATABASE_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
           DIRECT_URL: "postgresql://ci_user:ci_password@localhost:5432/ci_db"
 
+      - name: Synthetic candidate autofill browser regression
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:candidate-autofill
+
       - name: Typecheck
         run: npx tsc --noEmit
 

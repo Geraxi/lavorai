@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>LavorAI Autofill</title>
+<style>body{font:14px system-ui;width:340px;padding:16px;color:#17252a}label,button{display:block;margin:12px 0}button{padding:10px}pre{white-space:pre-wrap;overflow-wrap:anywhere}small{display:block}</style>
+<h1>LavorAI Autofill</h1><p>Pilot: owned ProduzioneWeb test forms only. No automatic submission.</p>
+<label>Load your reviewed LavorAI contact export <input id="profile" type="file" accept="application/json,.json"></label>
+<pre id="preview">No data loaded.</pre>
+<label><input type="checkbox" id="consent"> I reviewed these details and authorize sharing them with the displayed employer page. Filling can transmit data through the site's own scripts before submission.</label>
+<button id="inspect" disabled>Check active form</button><p id="destination"></p><button id="fill" disabled>Fill contact fields once</button>
+<p>Attach your chosen CV using the employer's file picker. Review all fields, questions and consent yourself. This tool never clicks Submit, solves CAPTCHA or changes consent.</p>
+<button id="clear">Clear loaded details</button><small>Details stay in popup memory only. Closing this popup clears them. No telemetry, storage or network requests.</small><p id="status" role="status"></p>
+<script type="module" src="popup.js"></script></html>

@@ -75,7 +75,8 @@
     "test:gmail-sync": "node --import tsx scripts/test-gmail-sync.ts",
     "test:gmail-sync-postgres": "node --import tsx scripts/test-gmail-sync-postgres.ts",
     "test:job-catalogue": "node --import tsx scripts/test-job-catalogue.ts && node --import tsx scripts/test-recruitee-catalogue-refresh.ts",
-    "test:job-catalogue-postgres": "node --import tsx scripts/test-job-catalogue-postgres.ts"
+    "test:job-catalogue-postgres": "node --import tsx scripts/test-job-catalogue-postgres.ts",
+    "test:candidate-autofill": "node scripts/test-autofill-export.cjs && node scripts/test-candidate-autofill.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.90.0",
