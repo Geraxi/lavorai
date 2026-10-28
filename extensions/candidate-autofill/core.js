@@ -36,14 +36,14 @@ export function supportedUrl(raw) {
 export function fillContacts(profile, expectedUrl, perform = false) {
   if (location.href !== expectedUrl || location.origin !== 'https://produzioneweb.recruitee.com' || !/^\/o\/lavorai-test-[a-z0-9-]+\/c\/new\/?$/.test(location.pathname) || location.search || location.hash || window.top !== window) return {error:'Page changed or unsupported site'};
   if (document.querySelector('iframe[src*="captcha"], .g-recaptcha, .h-captcha, input[type="password"]')) return {error:'Authentication or CAPTCHA requires your attention'};
-  const mapped = {name:['candidate[name]','name'], email:['candidate[email]','email'], phone:['candidate[phone]','phone']};
+  const mapped = {name:['candidate.name'], email:['candidate.email'], phone:['candidate.phone']};
   const fields = [];
   let form = null;
   for (const [key, names] of Object.entries(mapped)) {
     const matches = [...document.querySelectorAll('input')].filter(e => names.includes(e.name));
     if (matches.length !== 1) return {error:`Unsupported or ambiguous ${key} field`};
     const e = matches[0];
-    if (!['text','email','tel'].includes(e.type) || e.disabled || e.readOnly || !e.getClientRects().length || !e.form) return {error:'Unsupported or hidden field'};
+    if (!['text','email','tel'].includes(e.type) || e.disabled || e.readOnly || !e.getClientRects().length || !e.form || e.form.id !== 'offer-application-form') return {error:'Unsupported or hidden field'};
     if (form && form !== e.form) return {error:'Fields belong to different forms'};
     form = e.form;
     if (e.value.trim() && e.value !== profile[key]) return {error:'Existing values differ; review the form manually'};
