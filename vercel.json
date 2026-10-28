@@ -46,7 +46,7 @@
     },
     {
       "path": "/api/cron/recruitee-catalogue",
-      "schedule": "0 */4 * * *"
+      "schedule": "50 */4 * * *"
     }
   ]
 }

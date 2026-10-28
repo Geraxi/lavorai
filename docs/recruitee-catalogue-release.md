@@ -1,6 +1,6 @@
 # Recruitee standard-form catalogue — local release candidate
 
-Base `9631b76077b3cb53622191ba95d8898baba8a7fe`, branch `codex/recruitee-catalogue`. No production writes, sends, imports, commit, push or deployment performed for this candidate.
+Base `9631b76077b3cb53622191ba95d8898baba8a7fe`, branch `codex/recruitee-catalogue`. The release is approved; production verification is reported separately from the local candidate evidence.
 
 ## Exact scope and observed inventory
 
@@ -43,7 +43,7 @@ CLI after separate approval: set only the approved `RECRUITEE_CATALOGUE_REFRESH_
 
 ## Repeatable schedule and rollout prerequisites
 
-The endpoint is default-off unless `RECRUITEE_CATALOGUE_REFRESH_ENABLED=true`, requires existing CRON_SECRET authentication, and rejects missing/invalid tenant configuration. **No schedule is added or activated by this patch.** Proposed approved integration is this route every 4 hours (using the existing scheduler once its plan/cadence is confirmed), with the same fixed allowlist and bounded batch. At 200 per run this provides six opportunities/day for the current pool; actual throughput and pending/stale metrics must be checked, not presumed. The existing generic sync runs daily at 05:30 UTC and does not provide this guarantee.
+The endpoint is default-off unless `RECRUITEE_CATALOGUE_REFRESH_ENABLED=true`, requires existing CRON_SECRET authentication, and rejects missing/invalid tenant configuration. The approved Vercel schedule is `50 */4 * * *` (00:50, 04:50, 08:50, 12:50, 16:50, 20:50 UTC), with the same fixed allowlist and bounded batch. At 200 per run this provides six opportunities/day for the current pool; actual throughput and pending/stale metrics must be checked, not presumed. The existing generic sync runs daily at 05:30 UTC and does not provide this guarantee.
 
 Release sequence requiring approval: exact-head Linux CI; verified-runtime migration; deploy route with refresh disabled; authorize the fixed tenant set and recurring cadence; execute enough bounded metadata-only batches to cover that set; verify fresh standard forms/identity quarantine and live catalogue paths; enable recurring refresh and monitor its natural run. No changes to provider cutoff, five-attempt cap, notification hold or diagnostic disable. Do not publish a catalogue promise without the maintenance schedule configured and tested. Without refresh, evidence expires after 24h and listings disappear fail-closed; an outage does not mark jobs closed merely because fetching failed. Pending/expired evidence must trigger operational follow-up. This can reduce availability during outages; no indefinite stale listing fallback.
 
@@ -51,7 +51,7 @@ Release sequence requiring approval: exact-head Linux CI; verified-runtime migra
 
 Local full `npm test`, typecheck, actual-migration PostgreSQL catalogue tests, ordinary pipeline PostgreSQL tests with fake providers, and webpack build. Catalogue regressions cover standard vs questions/uploads/unknown, explicit owned-test exclusion, filtering before count/pagination, records preserved, closure, transient TTL, changed requirements with zero POST, provider-ID/canonical collision, concurrent/newer observation fencing, and fair bounded resumption. Ordinary tests exercise a positive fresh standard-form row and reject a questionnaire before preparation. No live customer request or application was used.
 
-Build has no production DB credentials; warnings from unrelated data-backed prerender paths are not runtime coverage. Linux CI and authenticated live UI are not yet run. Re-publication rights/opt-outs and scheduler capacity are release prerequisites, not inferred from unauthenticated GET success. Form availability can change after a cached check; the adapter's immediate recheck remains mandatory.
+Build has no production DB credentials; warnings from unrelated data-backed prerender paths are not runtime coverage. Linux CI passed on the initial candidate; final-head CI and authenticated live UI verification remain separate release checks. Re-publication rights/opt-outs and scheduler capacity are release prerequisites, not inferred from unauthenticated GET success. Form availability can change after a cached check; the adapter's immediate recheck remains mandatory.
 
 Official research reports Careers API authentication changes on 10 February 2027; XML feeds are not a submission API replacement. No credentials/partner request or architecture change is included. Revalidate official contracts before then:
 https://docs.recruitee.com/reference/authentication-1
