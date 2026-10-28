@@ -105,8 +105,18 @@ async function main() {
     const old = await fixture('old-provider');
     process.env.APPLICATION_PROVIDER_NOT_BEFORE=new Date(Date.now()+1000).toISOString();
     await run(old);assert.equal(posts(),fencedPosts);assert.equal(aiCalls,fencedAI,'cutoff prevents old backlog');
+    process.env.APPLICATION_PROVIDER_NOT_BEFORE=new Date(Date.now()-3600000).toISOString();
+    const supported = await fixture('real-optional');
+    const supportedRow=await db.application.findUniqueOrThrow({where:{id:supported}});
+    await db.job.update({where:{id:supportedRow.jobId},data:{publicationVerifiedAt:new Date(),applicationFormCapability:'standard',catalogueCheckedAt:new Date()}});
+    await run(supported);assert.equal(posts(),fencedPosts+1,'fresh supported catalogue row passes real ordinary gates');
+    assert.equal((await db.application.findUniqueOrThrow({where:{id:supported}})).status,'success');
+    const hiddenQuestion=await fixture('needs-answers');
+    const hiddenRow=await db.application.findUniqueOrThrow({where:{id:hiddenQuestion}});
+    await db.job.update({where:{id:hiddenRow.jobId},data:{publicationVerifiedAt:new Date(),applicationFormCapability:'questions'}});
+    const beforeHiddenAI=aiCalls;await run(hiddenQuestion);assert.equal(posts(),fencedPosts+1);assert.equal(aiCalls,beforeHiddenAI,'questionnaire hidden before ordinary preparation');
     delete process.env.APPLICATION_PROVIDER_POLICY;delete process.env.APPLICATION_PROVIDER_NOT_BEFORE;
-    console.log('PASS ordinary provider/cutoff fences before AI and provider calls');
+    console.log('PASS ordinary provider/cutoff and catalogue capability fences, supported form success, questionnaire refusal before AI/provider');
     const race=await fixture('race-two'); const before=posts(); await Promise.all(Array.from({length:6},()=>run(race)));
     assert.equal(posts()-before,1,'one atomic ordinary owner'); console.log('PASS ordinary concurrency');
     const uncertain=await fixture('server-500'); const n=posts(); await run(uncertain); await run(uncertain);
@@ -159,12 +169,12 @@ async function main() {
     const raceBefore=posts(); await Promise.all([run(raceFree),run(competing)]);
     assert.equal(posts()-raceBefore,1,'only one remaining free-quota slot under concurrency');
     console.log('PASS ordinary concurrent free quota admits one remaining send');
-    assert.equal(mails.length,3,'only proved successes schedule notifications');
-    assert.equal(await db.emailLog.count(),3,'fake accepted notifications recorded');
+    assert.equal(mails.length,4,'only proved successes schedule notifications');
+    assert.equal(await db.emailLog.count(),4,'fake accepted notifications recorded');
     for(const mode of ['error','no_id']) {
       mailMode=mode; const noticeFailure=await fixture('real-optional'); const before=posts(); await run(noticeFailure);
       assert.equal((await db.application.findUniqueOrThrow({where:{id:noticeFailure}})).status,'success','email failure does not undo real ATS receipt');
-      assert.equal(await db.emailLog.count(),3,'provider error/missing ID never logged as sent');
+      assert.equal(await db.emailLog.count(),4,'provider error/missing ID never logged as sent');
       await run(noticeFailure); assert.equal(posts()-before,1,'notification error cannot retry application');
     }
     console.log('PASS notification error/missing ID never recorded sent, no application replay');

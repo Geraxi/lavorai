@@ -1,3 +1,4 @@
+import { catalogueWhere, catalogueJobVisible } from "@/lib/job-catalogue-policy";
 import { providerOfferAllowed } from "./application-provider-policy";
 import { createLivenessGate, livenessMaxChecksFromEnv, type LivenessGate } from "@/lib/auto-apply-liveness-gate";
 import { checkJobUrlLiveness, markJobClosed } from "@/lib/job-liveness";
@@ -65,6 +66,7 @@ export function maxJobAgeDays(env: Record<string, string | undefined> = typeof p
 export function jobFreshnessWhere(now = new Date(), days = maxJobAgeDays()) {
   const cutoff = new Date(now.getTime() - days * 86_400_000);
   return {
+    AND: [catalogueWhere(now)],
     closedAt: null,
     OR: [
       { postedAt: { gte: cutoff } },
@@ -851,7 +853,7 @@ async function processUser(
   const usedThisRun = new Set<string>();
   let enqueued = 0;
   for (const job of jobs) {
-    if (!providerOfferAllowed(job.url)) continue;
+    if (!providerOfferAllowed(job.url) || !catalogueJobVisible(job)) continue;
     if (enqueued >= remainingToday) break;
     const cKey = (job.company ?? "").toLowerCase();
     if (cKey && usedThisRun.has(cKey)) continue; // pass 1: skip duplicates
@@ -984,7 +986,7 @@ async function processUser(
   // pool), allenta il vincolo e ammetti ripetizioni.
   if (enqueued < remainingToday) {
     for (const job of jobs) {
-    if (!providerOfferAllowed(job.url)) continue;
+    if (!providerOfferAllowed(job.url) || !catalogueJobVisible(job)) continue;
       if (enqueued >= remainingToday) break;
       if (autoApplyPreferenceMismatch(job, prefs, locationPrefs)) continue;
       // Salta job già processati nel pass 1 (rate-limited per company)

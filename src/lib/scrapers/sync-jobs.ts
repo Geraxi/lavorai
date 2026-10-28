@@ -1,3 +1,4 @@
+import { providerPolicy } from "@/lib/application-provider-policy";
 import { prisma } from "@/lib/db";
 import { fetchGreenhouseMulti } from "./greenhouse";
 import { fetchLeverMulti } from "./lever";
@@ -88,7 +89,8 @@ export async function syncAtsJobs(): Promise<{
     // hanno selezionato (es. "Meteorologo", "Analista Climatico"), non
     // solo i verticali design/dev hard-coded.
     fetchDemandJobs(),
-    fetchRecruiteeMulti(merge(RECRUITEE_COMPANIES, disc.recruitee), 4),
+    // The dedicated bounded form refresh owns Recruitee evidence in restricted mode.
+    providerPolicy().restricted ? Promise.resolve([]) : fetchRecruiteeMulti(merge(RECRUITEE_COMPANIES, disc.recruitee), 4),
     fetchPersonioMulti(merge(PERSONIO_COMPANIES, disc.personio), 4),
     fetchTeamtailorMulti(merge(TEAMTAILOR_COMPANIES, disc.teamtailor), 4),
     fetchBambooMulti(merge(BAMBOOHR_COMPANIES, disc.bamboohr), 3),
@@ -231,6 +233,9 @@ async function upsertJobs(items: JobListItem[]): Promise<number> {
               },
             },
             update: {
+              // Board feeds do not prove the current application form. Invalidate
+              // old evidence before changing any Recruitee metadata/URL.
+              ...(j.source === "recruitee" ? {publicationVerifiedAt:null,applicationFormCapability:null,catalogueCheckedAt:null} : {}),
               title: j.title,
               company: j.company,
               location: j.location,

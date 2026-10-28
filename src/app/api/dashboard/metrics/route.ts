@@ -1,3 +1,4 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
 /**
  * Dashboard Metrics API
  * 
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
     // New jobs (last 48h)
     prisma.job.count({
       where: {
+        AND: [catalogueWhere()],
         closedAt: null,
         cachedAt: { gte: hours48Ago },
         dismissals: { none: { userId: user.id } },

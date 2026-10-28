@@ -1,3 +1,4 @@
+import { CATALOGUE_NOTICE } from "@/lib/job-catalogue-policy";
 import { jobSourceLabel } from "@/lib/job-source-label";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -84,6 +85,7 @@ export default async function JobDetailPage({ params }: { params: Params }) {
                   >
                     {job.title}
                   </h1>
+          <p>{CATALOGUE_NOTICE}</p>
                   {job.company && (
                     <p
                       style={{

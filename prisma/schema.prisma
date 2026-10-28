@@ -554,6 +554,10 @@ model Job {
   category      String?
   postedAt      DateTime?
   cachedAt      DateTime  @default(now())
+  /// Last explicit published status from a validated Recruitee board. No legacy backfill.
+  publicationVerifiedAt DateTime?
+  applicationFormCapability String?
+  catalogueCheckedAt DateTime?
   // Email del recruiter estratta scrapando il job.url. Null se non trovata.
   recruiterEmail String?
   recruiterScrapedAt DateTime?

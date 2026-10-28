@@ -1,3 +1,5 @@
+import { CATALOGUE_NOTICE } from "@/lib/job-catalogue-policy";
+import { catalogueWhere, catalogueJobVisible } from "@/lib/job-catalogue-policy";
 import { jobSourceLabel } from "@/lib/job-source-label";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -16,7 +18,8 @@ import { employmentType, isRemoteJob, jobDatePosted, jobPostingJsonLd, jobValidT
  * testo dell'annuncio, CTA "candidati con LavorAI" e annunci simili.
  */
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 type Params = { id: string };
@@ -26,7 +29,7 @@ const EMPLOYMENT_LABEL: Record<string, string> = { FULL_TIME: "Tempo pieno", PAR
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { id } = await params;
   const job = await prisma.job.findUnique({ where: { id } });
-  if (!job || isAtsTestJobSource(job.source)) return {};
+  if (!job || !catalogueJobVisible(job)) return {};
   const closed = !!job.closedAt || jobValidThrough(job) < new Date();
   const where = isRemoteJob(job) ? "Remoto" : job.location ?? "Italia";
   const title = `${job.title} · ${job.company ?? "Azienda"} · ${where}`;
@@ -45,7 +48,7 @@ const fmtDate = (d: Date) => d.toLocaleDateString("it-IT", { day: "numeric", mon
 export default async function PublicJobPage({ params }: { params: Promise<Params> }) {
   const { id } = await params;
   const job = await prisma.job.findUnique({ where: { id } });
-  if (!job || isAtsTestJobSource(job.source)) notFound();
+  if (!job || !catalogueJobVisible(job)) notFound();
 
   const closed = !!job.closedAt || jobValidThrough(job) < new Date();
   const remote = isRemoteJob(job);
@@ -55,7 +58,7 @@ export default async function PublicJobPage({ params }: { params: Promise<Params
 
   const similar = await prisma.job.findMany({
     where: {
-      ...excludeAtsTestJobsWhere(),
+      AND: [catalogueWhere()],
       id: { not: job.id },
       closedAt: null,
       cachedAt: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) },
@@ -97,6 +100,7 @@ export default async function PublicJobPage({ params }: { params: Promise<Params
             <CompanyLogo company={job.company ?? "?"} url={job.url} size={44} rounded={12} />
             <div>
               <h1 style={{ margin: 0 }}>{job.title}</h1>
+          <p>{CATALOGUE_NOTICE}</p>
               <p className="gd-meta" style={{ margin: "4px 0 0" }}>
                 {job.company ?? "Azienda"} · {remote ? "Remoto" : job.location ?? "Italia"} · Pubblicato il {fmtDate(jobDatePosted(job))}
               </p>

@@ -1,3 +1,4 @@
+import * as cataloguePolicy from "../src/lib/job-catalogue-policy";
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -25,7 +26,7 @@ function load(path: string, mocks: Record<string, unknown> = {}): any {
   const source = ts.transpileModule(readFileSync(path, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
-  new Function("require", "exports", source)((name: string) => mocks[name] ?? {}, exports);
+  new Function("require", "exports", source)((name: string) => mocks[name] ?? (name === "@/lib/job-catalogue-policy" ? cataloguePolicy : {}), exports);
   return exports;
 }
 

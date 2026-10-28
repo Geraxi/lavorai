@@ -1,3 +1,5 @@
+import { catalogueWhere, catalogueJobVisible } from "@/lib/job-catalogue-policy";
+import { providerPolicy } from "@/lib/application-provider-policy";
 import { prisma } from "@/lib/db";
 import { searchJobs, type AdzunaSearchParams, type JobListItem } from "@/lib/adzuna";
 import type { Job } from "@prisma/client";
@@ -38,7 +40,7 @@ export async function searchAndCacheJobs(
   //    la cache vale più di un crash. Logghiamo solo a warn.
   let items: JobListItem[] = [];
   try {
-    items = await searchJobs(filter);
+    items = providerPolicy().restricted ? [] : await searchJobs(filter);
   } catch (err) {
     console.warn(
       "[jobs-repo] Adzuna fetch failed, falling back to DB:",
@@ -111,7 +113,7 @@ export async function searchAndCacheJobs(
     | undefined
     ? NonNullable<W>
     : never;
-  const and: WhereClause[] = [excludeAtsTestJobsWhere()];
+  const and: WhereClause[] = [catalogueWhere()];
   if (filter.what) {
     const q = filter.what.trim();
     and.push({
@@ -217,7 +219,7 @@ export function dedupePreferAts(jobs: Job[]): Job[] {
 
 export async function getJobById(id: string): Promise<Job | null> {
   const job = await prisma.job.findUnique({ where: { id } });
-  if (!job || isAtsTestJobSource(job.source)) return null;
+  if (!job || !catalogueJobVisible(job)) return null;
   return job;
 }
 
@@ -227,7 +229,7 @@ export async function getJobById(id: string): Promise<Job | null> {
  */
 export async function getJobFacets() {
   const jobs = await prisma.job.findMany({
-    where: excludeAtsTestJobsWhere(),
+    where: catalogueWhere(),
     select: { location: true, category: true, contractType: true },
     take: 500,
   });

@@ -1,3 +1,4 @@
+import { catalogueJobVisible } from "@/lib/job-catalogue-policy";
 import { providerApplicationAllowed, providerChannelAllowed } from "./application-provider-policy";
 import {customerRolloutConfigured,customerRolloutRow,hasCustomerStamp,claimCustomerSlot,customerGrantMatches} from "./customer-rollout";
 import { MAIN_VALIDATION_APP, MAIN_VALIDATION_USER, mainMeta, mainSourceMatches } from "./ordinary-main-validation-scope";
@@ -44,7 +45,7 @@ const evidenceSelect = {
 export const workerGateSelect = {
   sessionId: true, leaseToken: true, leaseExpiresAt: true, cvDocxPath: true,
   ...evidenceSelect, ...continuationSelect,
-  job: { select: { closedAt: true, url: true, recruiterEmail: true, company: true, title: true, description: true, location: true,
+  job: { select: { source: true, publicationVerifiedAt: true, applicationFormCapability: true, closedAt: true, url: true, recruiterEmail: true, company: true, title: true, description: true, location: true,
     remote: true, contractType: true, salaryMin: true, salaryMax: true } },
   session: { select: { id: true, userId: true, status: true, sentCount: true, targetCount: true, title: true, label: true } },
   user: { select: {
@@ -127,7 +128,8 @@ export function currentWorkerIneligibility(row: WorkerGateRow, now = new Date(),
 /** Pure ordinary policy inspection; does not authorize work or exempt any execution gate. */
 export function ordinaryWorkerIneligibility(gated: WorkerGateRow, now = new Date()): string | null {
   const row = gated;
-  if (!providerApplicationAllowed(row)) return "provider_not_enabled";
+  if (row.job.closedAt) return "job_closed";
+  if (!providerApplicationAllowed(row) || !catalogueJobVisible(row.job, now)) return "provider_not_enabled";
   const rolloutReason = rolloutApplicationIneligibility(gated, now);
   if (rolloutReason) return rolloutReason;
   const user = gated.user;

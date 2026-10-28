@@ -36,17 +36,28 @@ export async function fetchRecruiteeJobs(tenant: string, companyName?: string): 
   // L'API careers risponde solo sul sottodominio recruitee.com (i domini
   // custom come careers.<azienda>.com danno 404 su /api).
   const t = tenant.replace(/^https?:\/\//, "").replace(/\.recruitee\.com.*$/, "").split("/")[0];
+  if (!/^[a-z0-9-]+$/.test(t)) return [];
   const base = `https://${t}.recruitee.com`;
   try {
     const res = await fetch(`${base}/api/offers/`, {
       headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0 LavorAI/1.0 jobs-sync" },
+      redirect: "error",
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) return [];
-    const data = (await res.json()) as { offers?: RecruiteeOffer[] };
+    if (!res.body) return [];
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = []; let size = 0;
+    while (true) {
+      const {done,value} = await reader.read(); if (done) break;
+      size += value.byteLength;
+      if (size > 4_000_000) { await reader.cancel(); throw new Error("board_response_too_large"); }
+      chunks.push(value);
+    }
+    const data = JSON.parse(Buffer.concat(chunks).toString("utf8")) as { offers?: RecruiteeOffer[] };
     const offers = Array.isArray(data.offers) ? data.offers : [];
     return offers
-      .filter((o) => !o.status || o.status === "published")
+      .filter((o) => o.status === "published")
       .map((o) => mapOffer(o, base, t, companyName))
       .filter((j): j is JobListItem => j !== null);
   } catch (err) {
@@ -60,7 +71,7 @@ export async function fetchRecruiteeMulti(companies: Array<{ slug: string; name?
 }
 
 function mapOffer(o: RecruiteeOffer, base: string, tenant: string, companyName?: string): JobListItem | null {
-  if (!o.slug || !o.title) return null;
+  if (!o.slug || !/^[a-zA-Z0-9_-]+$/.test(o.slug) || !o.title || o.id == null) return null;
   const loc = o.location || [o.city, o.country].filter(Boolean).join(", ") || null;
   const remote = String(o.remote) === "true" || /remote|remoto/i.test(loc ?? "");
   const description = storedJobDescription(`${o.description ?? ""}\n${o.requirements ?? ""}`);

@@ -1,3 +1,5 @@
+import { classifyRecruiteeForm } from '@/lib/recruitee-form-capability';
+import { providerPolicy } from '@/lib/application-provider-policy';
 import { allowUnpublishedRecruiteeOffer, recheckAtsTestBeforeSubmitHttp } from "@/lib/ats-test-capability";
 import { verifySubmissionResponse } from "./submission-proof";
 import { readFile } from "node:fs/promises";
@@ -117,6 +119,9 @@ export const recruiteeAdapter: PortalAdapter = {
         if (!j.offer || typeof j.offer !== "object") return { ok: false, status: "form_not_found", error: "Offerta Recruitee non riconosciuta. Nessun invio eseguito." };
         if (j.offer?.status && j.offer.status !== "published" && !allowUnpublishedRecruiteeOffer(input.jobUrl)) {
           return { ok: false, status: "job_closed", error: `Annuncio Recruitee in stato ${j.offer.status}.` };
+        }
+        if (providerPolicy().restricted && !input.atsTestAuth && classifyRecruiteeForm(j.offer) !== 'standard') {
+          return {ok:false,status:'not_eligible',refusedBeforeSubmit:true,error:'Il modulo è cambiato o richiede campi non ancora supportati nel catalogo corrente. Nessun invio eseguito.'};
         }
         questions = j.offer?.open_questions ?? [];
         offerValidation = recruiteeOfferValidation(j.offer, {

@@ -1,3 +1,4 @@
+import { catalogueJobVisible } from "@/lib/job-catalogue-policy";
 import { providerOfferAllowed } from "@/lib/application-provider-policy";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
@@ -197,7 +198,7 @@ export async function POST(request: NextRequest) {
     const excludedByCompany =
       jobs.length - alreadySet.size - toApply.length;
 
-    const capped = toApply.filter(job => providerOfferAllowed(job.url)).slice(0, Math.min(remainingToday, remainingQuota));
+    const capped = toApply.filter(job => providerOfferAllowed(job.url) && catalogueJobVisible(job)).slice(0, Math.min(remainingToday, remainingQuota));
 
     // --- Auto-apply mode + match threshold + CV profile ---
     type Mode = "off" | "manual" | "hybrid" | "auto";
@@ -218,10 +219,10 @@ export async function POST(request: NextRequest) {
     let enqueued = 0;             // inviate direttamente
     let awaitingConsent = 0;      // messe in coda "attesa consenso"
     let belowThreshold = 0;       // auto: saltate perché sotto soglia
-    const errors: Array<{ jobId: string; error: string }> = toApply.filter(job => !providerOfferAllowed(job.url)).map(job => ({jobId: job.id, error: "Questo portale richiede candidatura diretta sul sito dell’azienda."}));
+    const errors: Array<{ jobId: string; error: string }> = toApply.filter(job => !providerOfferAllowed(job.url) || !catalogueJobVisible(job)).map(job => ({jobId: job.id, error: "Questo portale richiede candidatura diretta sul sito dell’azienda."}));
 
     for (const job of capped) {
-      if (!providerOfferAllowed(job.url)) { errors.push({jobId: job.id, error: "Questo portale richiede candidatura diretta sul sito dell’azienda."}); continue; }
+      if (!providerOfferAllowed(job.url) || !catalogueJobVisible(job)) { errors.push({jobId: job.id, error: "Questo portale richiede candidatura diretta sul sito dell’azienda."}); continue; }
       try {
         let score = 100;
         if (profile) {

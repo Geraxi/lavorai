@@ -1,3 +1,4 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
 import { prisma } from "@/lib/db";
 import { deliveryEvidence, isConfirmedDelivery } from "@/lib/application-evidence";
 import { matchCity } from "@/lib/city-centroids";
@@ -93,7 +94,7 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
     // (MB per ogni apertura della dashboard). Il testo serve solo al match
     // score dei ≤600 job del pool e viene letto sotto, solo per quelli.
     prisma.job.findMany({
-      where: { source: { not: "ats_test" }, closedAt: null, cachedAt: { gte: since30 }, dismissals: { none: { userId } } },
+      where: { AND: [catalogueWhere()], closedAt: null, cachedAt: { gte: since30 }, dismissals: { none: { userId } } },
       select: { id: true, title: true, company: true, location: true, cachedAt: true },
       orderBy: { cachedAt: "desc" },
       take: 4000,
@@ -115,7 +116,7 @@ export async function getDashboardGlobeData(userId: string): Promise<DashboardGl
     }),
     prisma.userPreferences.findUnique({ where: { userId }, select: { rolesJson: true, locationsJson: true } }),
     prisma.cVProfile.findUnique({ where: { userId } }),
-    prisma.job.count({ where: { closedAt: null } }),
+    prisma.job.count({ where: catalogueWhere() }),
   ]);
 
   const roles = safeParseArray(prefs?.rolesJson);
