@@ -45,8 +45,9 @@ export function fillContacts(profile, expectedUrl, perform = false) {
     if (e.tagName !== 'IFRAME' || getComputedStyle(e).visibility !== 'hidden' || e.title !== 'Widget containing checkbox for hCaptcha security challenge') return false;
     if (e.parentElement?.tagName !== 'DIV' || !e.parentElement.id.startsWith('input-captchaToken-') || e.closest('form')?.id !== 'offer-application-form') return false;
     try {
-      const u = new URL(e.src);
-      return u.origin === 'https://captcha-assets.recruiteecdn.com' && !u.username && !u.password && !u.search && !u.hash && /^\/captcha\/v1\/[a-zA-Z0-9._-]+\/static\/hcaptcha-enclave\.html$/.test(u.pathname);
+      // Ignore the opaque fragment; do not interpret, log or modify CAPTCHA state.
+      const u = new URL(e.src.split('#', 1)[0]);
+      return u.origin === 'https://captcha-assets.recruiteecdn.com' && !u.username && !u.password && !u.search && /^\/captcha\/v1\/[a-zA-Z0-9._-]+\/static\/hcaptcha-enclave\.html$/.test(u.pathname);
     } catch { return false; }
   };
   if (protections.length > 1 || protections.some(e => !knownHiddenFrame(e))) return {error:'Authentication or CAPTCHA requires your attention'};

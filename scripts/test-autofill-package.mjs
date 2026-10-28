@@ -9,8 +9,9 @@ try {
  const cdp=await context.browser().newBrowserCDPSession();
  const {id}=await cdp.send('Extensions.loadUnpacked',{path:path.resolve('extensions/candidate-autofill')});
  const url=process.env.AUTOFILL_FIXTURE_OPTICS==='1'?'https://optics11.recruitee.com/o/senior-customer-experience-designer/c/new':'https://produzioneweb.recruitee.com/o/lavorai-test-package/c/new';
+ const frameUrl='https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html';
  let posts=0,unexpected=0;
- await context.route(/^https?:\/\//,route=>{const r=route.request();if(r.method()==='POST')posts++;if(r.url()===url)return route.fulfill({contentType:'text/html',body:'<form id="offer-application-form"><input name="candidate.name"><input type="email" name="candidate.email"><input type="tel" name="candidate.phone"><textarea name="screening"></textarea><input type="checkbox" name="consent"><input type="file" name="candidate.cv"><button>Submit</button></form>'});unexpected++;return route.abort();});
+ await context.route(/^https?:\/\//,route=>{const r=route.request();if(r.method()==='POST')posts++;if(r.url()===frameUrl)return route.fulfill({contentType:'text/html',body:'<!doctype html><title>Synthetic inert frame</title>'});if(r.url()===url)return route.fulfill({contentType:'text/html',body:'<form id="offer-application-form"><input name="candidate.name"><input type="email" name="candidate.email"><input type="tel" name="candidate.phone"><textarea name="screening"></textarea><input type="checkbox" name="consent"><input type="file" name="candidate.cv"><button>Submit</button><div id="input-captchaToken-fixture"><iframe title="Widget containing checkbox for hCaptcha security challenge" style="visibility:hidden;position:fixed;width:842px;height:717px" src="https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html#synthetic-opaque-state"></iframe></div><input type="hidden" name="captchaToken" value="synthetic-unchanged"></form>'});unexpected++;return route.abort();});
  await page.goto(url);await page.bringToFront();
  const {targetInfos}=await cdp.send('Target.getTargets',{filter:[{type:'tab',exclude:false}]});
  const targetInfo=targetInfos.find(t=>t.url===url);if(!targetInfo)throw Error(JSON.stringify(targetInfos));
@@ -46,6 +47,7 @@ try {
  await click('#clear');assert.equal(await evaluate('document.querySelector("#preview").textContent'),'No data loaded.');
  await page.locator('[type=file]').setInputFiles({name:'synthetic-alice.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-synthetic')});
  assert.equal(await page.locator('[type=file]').evaluate(e=>e.files[0].name),'synthetic-alice.pdf');
+ assert.equal(await page.locator('iframe').getAttribute('src'),frameUrl+'#synthetic-opaque-state');assert.equal(await page.locator('[name=captchaToken]').inputValue(),'synthetic-unchanged');
  assert.equal(posts,0);assert.equal(unexpected,0);
  console.log('PASS packaged MV3: actual activeTab action, file review, preview, duplicate click, Alice/Bob isolation, overwrite refusal/recovery, native CV selection, cleared memory, zero POST/external requests.');
 } finally {await context.close();}
