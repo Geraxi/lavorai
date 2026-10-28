@@ -1,3 +1,4 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
@@ -11,7 +12,8 @@ import { prisma } from "@/lib/db";
  * Mostra offerte riservate reali dal pool + FAQ (JSON-LD) + CTA.
  */
 
-export const revalidate = 1800;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
 
@@ -48,13 +50,14 @@ const FAQ = [
 ];
 
 export default async function CategorieProtettePage() {
+  const where = { AND: [catalogueWhere()], protectedCategory: true, closedAt: null, cachedAt: { gte: new Date(Date.now() - 45 * 24 * 3600 * 1000) } };
   const jobs = await prisma.job.findMany({
-    where: { source: { not: "ats_test" }, protectedCategory: true, closedAt: null, cachedAt: { gte: new Date(Date.now() - 45 * 24 * 3600 * 1000) } },
+    where,
     orderBy: { cachedAt: "desc" },
     take: 30,
     select: { id: true, title: true, company: true, location: true, remote: true, url: true },
   });
-  const count = await prisma.job.count({ where: { source: { not: "ats_test" }, protectedCategory: true, closedAt: null } });
+  const count = await prisma.job.count({ where });
 
   const faqLd = {
     "@context": "https://schema.org",

@@ -44,7 +44,8 @@ export interface AdzunaJob {
   created: string;
 }
 
-export type JobListItem = Omit<Job, "cachedAt" | "closedAt" | "protectedCategory" | "recruiterEmailSourceUrl" | "companyWebsite" | "descriptionFetchedAt" | "descriptionFetchAttempts" | "descriptionFetchRetryAt"> & {
+export type JobListItem = Omit<Job, "applicationFormCapability" | "catalogueCheckedAt" | "publicationVerifiedAt" | "cachedAt" | "closedAt" | "protectedCategory" | "recruiterEmailSourceUrl" | "companyWebsite" | "descriptionFetchedAt" | "descriptionFetchAttempts" | "descriptionFetchRetryAt"> & {
+  publicationVerifiedAt?: Date;
   closedAt?: Date | null;
   protectedCategory?: boolean;
   recruiterEmailSourceUrl?: string | null;

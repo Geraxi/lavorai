@@ -1,3 +1,4 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
 import { prisma } from "@/lib/db";
 import { handleMcp, supportedMcpVersions, type JobRepository } from "@/lib/mcp-server";
 import { mcpLimiter } from "@/lib/rate-limit";
@@ -14,7 +15,7 @@ const jobs: JobRepository = {
   async search({ query, location, remoteOnly, limit }) {
     return prisma.job.findMany({
       where: {
-        source: { not: "ats_test" },
+        AND: [catalogueWhere()],
         closedAt: null,
         OR: [
           { title: { contains: query, mode: "insensitive" } },
@@ -29,7 +30,7 @@ const jobs: JobRepository = {
     });
   },
   async get(id) {
-    const job = await prisma.job.findFirst({ where: { id, closedAt: null, source: { not: "ats_test" } }, select: { ...jobFields, description: true } });
+    const job = await prisma.job.findFirst({ where: { id, AND: [catalogueWhere()] }, select: { ...jobFields, description: true } });
     return job ? { ...job, description: job.description.slice(0, 16000) } : null;
   },
 };

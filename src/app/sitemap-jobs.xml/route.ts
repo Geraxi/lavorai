@@ -1,3 +1,4 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
 import { prisma } from "@/lib/db";
 import { jobDatePosted } from "@/lib/job-seo";
 
@@ -5,7 +6,7 @@ export const runtime = "nodejs";
 // The job index is backed by the live database.  Do not query it while Vercel
 // builds previews: previews deliberately have no production database access.
 export const dynamic = "force-dynamic";
-export const revalidate = 3600;
+export const revalidate = 0;
 
 /**
  * Sitemap delle offerte pubbliche /lavoro/[id] (Google for Jobs).
@@ -15,7 +16,7 @@ export const revalidate = 3600;
 export async function GET() {
   const base = process.env.NEXT_PUBLIC_SITE_URL ?? "https://lavorai.it";
   const jobs = await prisma.job.findMany({
-    where: { source: { not: "ats_test" }, closedAt: null, cachedAt: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) } },
+    where: { AND: [catalogueWhere()], closedAt: null, cachedAt: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) } },
     orderBy: { cachedAt: "desc" },
     take: 5000,
     select: { id: true, cachedAt: true, postedAt: true },
@@ -24,5 +25,5 @@ export async function GET() {
     .map((j) => `<url><loc>${base}/lavoro/${j.id}</loc><lastmod>${jobDatePosted(j).toISOString().slice(0, 10)}</lastmod><changefreq>weekly</changefreq><priority>0.6</priority></url>`)
     .join("");
   const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>${base}/lavoro</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>${urls}</urlset>`;
-  return new Response(xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=3600" } });
+  return new Response(xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "no-store" } });
 }

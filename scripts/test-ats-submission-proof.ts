@@ -1,3 +1,5 @@
+import * as catalogueForm from '../src/lib/recruitee-form-capability';
+import * as providerPolicyModule from '../src/lib/application-provider-policy';
 import * as candidateFacts from "../src/lib/candidate-facts";
 import * as questionAnswers from "../src/lib/application-question-answers";
 import assert from "node:assert/strict";
@@ -325,6 +327,8 @@ async function testRecruiteeBoundary() {
     let posts = 0;
     const formValues = new Map<string, unknown>();
     const { recruiteeAdapter } = loadAdapter("recruitee", {
+      "@/lib/recruitee-form-capability": catalogueForm,
+      "@/lib/application-provider-policy": providerPolicyModule,
       "./submission-proof": proofModule,
       "@/lib/ats-test-capability": {
         allowUnpublishedRecruiteeOffer: () => false,

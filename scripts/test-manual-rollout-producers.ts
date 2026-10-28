@@ -1,3 +1,4 @@
+import * as cataloguePolicy from "../src/lib/job-catalogue-policy";
 import * as providerPolicy from "../src/lib/application-provider-policy";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -24,6 +25,7 @@ function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-provider-policy": providerPolicy,
     "./application-provider-policy": providerPolicy,
+    "@/lib/job-catalogue-policy": cataloguePolicy,
     "@/lib/application-rollout": rollout,
     "@/lib/application-prerequisites": prerequisites,
     "./application-answer-continuation": continuation,

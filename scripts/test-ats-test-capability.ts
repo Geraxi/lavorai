@@ -178,7 +178,7 @@ assert.doesNotMatch(companies, /produzioneweb/i);
 assert.match(companies, /Restricted ATS-test Recruitee trials are NOT listed here/);
 
 const matching = readFileSync("src/lib/dashboard-metrics-shared.ts", "utf8");
-assert.match(matching, /MATCHING_SOURCES = \["greenhouse", "lever", "ashby", "smartrecruiters", "linkedin"\]/);
+assert.match(matching, /MATCHING_SOURCES = \["greenhouse", "lever", "ashby", "smartrecruiters", "linkedin", "recruitee"\]/);
 assert.doesNotMatch(matching, /MATCHING_SOURCES = \[[^\]]*ats_test/);
 
 const cron = readFileSync("src/lib/auto-apply-cron.ts", "utf8");
@@ -210,7 +210,9 @@ assert.match(applyBatch, /!isAtsTestJobSource\(j\.source\)/);
 
 const jobsRepo = readFileSync("src/lib/jobs-repo.ts", "utf8");
 assert.match(jobsRepo, /excludeAtsTestJobsWhere/);
-assert.match(jobsRepo, /isAtsTestJobSource\(job\.source\)/);
+assert.match(jobsRepo, /!catalogueJobVisible\(job\)/);
+const cataloguePolicy = readFileSync("src/lib/job-catalogue-policy.ts", "utf8");
+assert.match(cataloguePolicy, /job.source==='ats_test'/);
 
 const claim = readFileSync("src/lib/application-claim.ts", "utf8");
 assert.match(claim, /job: \{ source: \{ not: "ats_test" \},/);

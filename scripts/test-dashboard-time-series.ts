@@ -1,3 +1,4 @@
+import * as cataloguePolicy from "../src/lib/job-catalogue-policy";
 /**
  * Dashboard visuals: sparkline + weekly-trend series are evidence-backed,
  * owner-scoped and bucketed correctly. Mock database, no external calls.
@@ -13,7 +14,7 @@ function load(path: string, dependencies: Record<string, unknown>) {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true,
   } }).outputText;
   vm.runInNewContext(output, { module, exports: module.exports, Date, console,
-    require: (id: string) => { assert.ok(id in dependencies, `Unexpected dependency ${id}`); return dependencies[id]; },
+    require: (id: string) => { if(id === "@/lib/job-catalogue-policy") return cataloguePolicy; assert.ok(id in dependencies, `Unexpected dependency ${id}`); return dependencies[id]; },
   }, { filename: path });
   return module.exports;
 }

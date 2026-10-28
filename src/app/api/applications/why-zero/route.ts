@@ -1,3 +1,5 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
+import { providerPolicy } from "@/lib/application-provider-policy";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -81,7 +83,7 @@ export async function GET() {
   const last48hTotal = recentApps.reduce((s, r) => s + r._count._all, 0);
 
   // Inventory funnel: stessi filtri WHERE che usa il cron auto-apply
-  const baseWhere = {
+  const baseWhere = providerPolicy().restricted ? catalogueWhere() : {
     source: {
       in: ["greenhouse", "lever", "ashby", "smartrecruiters", "linkedin"] as string[],
     },

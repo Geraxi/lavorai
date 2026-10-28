@@ -1,3 +1,4 @@
+import * as cataloguePolicy from "../src/lib/job-catalogue-policy";
 import * as providerPolicy from "../src/lib/application-provider-policy";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -18,6 +19,7 @@ function loadModule(path: string, dependencies: Record<string, unknown>, globals
     module, exports: module.exports,
     require: (id: string) => {
       if (id.endsWith("/application-provider-policy") || id === "./application-provider-policy") return providerPolicy;
+      if (id.endsWith("/job-catalogue-policy")) return cataloguePolicy;
       assert.ok(id in dependencies, `Unexpected dependency: ${id}`);
       return dependencies[id];
     },

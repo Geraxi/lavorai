@@ -1,3 +1,4 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
 /**
  * Shared Dashboard Metrics — Single Source of Truth
  * 
@@ -190,6 +191,7 @@ export async function getOpenOpportunities(userId: string): Promise<number> {
   
   return await prisma.job.count({
     where: {
+      AND: [catalogueWhere()],
       closedAt: null,
       cachedAt: { gte: days30Ago },
       dismissals: { none: { userId } },
@@ -747,7 +749,7 @@ export async function getAnalyticsCohort(
  * MATCHING_SCAN jobs are scanned. `total` is the full filtered count;
  * `jobs` is the newest-first list (callers slice it, e.g. Scopri shows 50).
  */
-export const MATCHING_SOURCES = ["greenhouse", "lever", "ashby", "smartrecruiters", "linkedin"];
+export const MATCHING_SOURCES = ["greenhouse", "lever", "ashby", "smartrecruiters", "linkedin", "recruitee"];
 /** `ats_test` is intentionally absent: restricted test jobs never match. */
 export const MATCHING_WINDOW_DAYS = 14;
 const MATCHING_SCAN = 1000;
@@ -775,6 +777,7 @@ export async function getMatchingOpportunities(userId: string) {
   const profile = full?.cvProfile ? rowToProfile(full.cvProfile) : null;
   const raw = await prisma.job.findMany({
     where: {
+      AND: [catalogueWhere()],
       closedAt: null,
       dismissals: { none: { userId } },
       cachedAt: { gte: new Date(Date.now() - MATCHING_WINDOW_DAYS * 86_400_000) },

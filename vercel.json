@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/mailbox-retention",
       "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/recruitee-catalogue",
+      "schedule": "50 */4 * * *"
     }
   ]
 }

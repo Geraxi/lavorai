@@ -1,3 +1,6 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
+import type { Prisma } from "@prisma/client";
+import { CATALOGUE_NOTICE } from "@/lib/job-catalogue-policy";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
@@ -13,7 +16,8 @@ import { isRemoteJob } from "@/lib/job-seo";
  * (oltre alla sitemap) e agli utenti anonimi come vetrina.
  */
 
-export const revalidate = 1800;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Offerte di lavoro aggiornate ogni giorno, candidature su misura",
@@ -36,21 +40,22 @@ export default async function LavoroHub({ searchParams }: { searchParams: Promis
   const remoto = sp.remoto === "1";
   const protette = sp.protette === "1";
 
-  const jobs = await prisma.job.findMany({
-    where: {
-      ...excludeAtsTestJobsWhere(),
+  const where: Prisma.JobWhereInput = {
+      AND: [catalogueWhere()],
       closedAt: null,
       cachedAt: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) },
       ...(citta ? { location: { contains: citta, mode: "insensitive" } } : {}),
       ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
       ...(remoto ? { remote: true } : {}),
       ...(protette ? { protectedCategory: true } : {}),
-    },
+    };
+  const jobs = await prisma.job.findMany({
+    where,
     orderBy: { cachedAt: "desc" },
     take: 120,
     select: { id: true, title: true, company: true, location: true, remote: true, url: true, cachedAt: true, protectedCategory: true },
   });
-  const total = await prisma.job.count({ where: { closedAt: null, cachedAt: { gte: new Date(Date.now() - 30 * 24 * 3600 * 1000) } } });
+  const total = await prisma.job.count({ where });
 
   const heading = protette
     ? "Offerte di lavoro per categorie protette (L. 68/99)"
@@ -104,7 +109,7 @@ export default async function LavoroHub({ searchParams }: { searchParams: Promis
           </nav>
           <h1>{heading}</h1>
           <p className="gd-lead">
-            Cerca tra {total.toLocaleString("it-IT")} offerte attive raccolte direttamente dai portali delle aziende (Greenhouse, Lever, Ashby, Workable, Personio, Recruitee, EURES e altri). Filtra per ruolo, città o remoto. Con LavorAI puoi candidarti in un clic oppure automatizzare la parte ripetitiva dopo aver configurato le tue preferenze.
+            Cerca tra {total.toLocaleString("it-IT")} offerte attive disponibili nel catalogo corrente. Filtra per ruolo, città o remoto. {CATALOGUE_NOTICE}
           </p>
 
           <form action="/lavoro" method="get" style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "10px 0 16px" }}>

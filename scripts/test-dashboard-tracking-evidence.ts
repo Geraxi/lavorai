@@ -1,3 +1,4 @@
+import * as cataloguePolicy from "../src/lib/job-catalogue-policy";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -10,7 +11,7 @@ function load(path: string, dependencies: Record<string, unknown>) {
   } }).outputText;
   vm.runInNewContext(output, { module, exports: module.exports, Date, Set, URL, Buffer, Uint8Array, Response,
     console: { log() {}, warn() {}, error() {} },
-    require: (id: string) => { assert.ok(id in dependencies, `Unexpected dependency ${id}`); return dependencies[id]; },
+    require: (id: string) => { if(id === "@/lib/job-catalogue-policy") return cataloguePolicy; assert.ok(id in dependencies, `Unexpected dependency ${id}`); return dependencies[id]; },
   }, { filename: path });
   return module.exports;
 }

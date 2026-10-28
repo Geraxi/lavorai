@@ -1,3 +1,4 @@
+import { catalogueJobVisible } from "@/lib/job-catalogue-policy";
 import { providerOfferAllowed } from "@/lib/application-provider-policy";
 import { rolloutCreationBlocked } from "@/lib/application-rollout";
 import { applicationsPaused } from "@/lib/application-pause";
@@ -174,7 +175,7 @@ export async function POST(request: NextRequest) {
         { status: 404 },
       );
     }
-    if (!providerOfferAllowed(job.url)) return NextResponse.json({ error: "provider_not_enabled", message: "Questo portale richiede candidatura diretta sul sito dell’azienda." }, { status: 409 });
+    if (!providerOfferAllowed(job.url) || !catalogueJobVisible(job)) return NextResponse.json({ error: "provider_not_enabled", message: "Questo portale richiede candidatura diretta sul sito dell’azienda." }, { status: 409 });
     type Mode = "off" | "manual" | "hybrid" | "auto";
     const mode: Mode = (prefs?.autoApplyMode as Mode) ?? "manual";
 

@@ -1,3 +1,4 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
 import { onboardingAccessBlock } from "@/lib/onboarding-access";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
   const roleWords = parsed.data.targetRole.split(/\s+/).filter((word) => word.length >= 3);
   const roleNeedle = roleWords.sort((a, b) => b.length - a.length)[0] ?? parsed.data.targetRole;
   const job = await prisma.job.findFirst({
-    where: { source: { not: "ats_test" }, closedAt: null, title: { contains: roleNeedle, mode: "insensitive" } },
+    where: { AND: [catalogueWhere()], closedAt: null, title: { contains: roleNeedle, mode: "insensitive" } },
     orderBy: [{ postedAt: "desc" }, { cachedAt: "desc" }],
     select: { title: true, company: true, location: true, description: true },
   });

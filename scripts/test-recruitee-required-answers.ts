@@ -1,3 +1,5 @@
+import * as form from '../src/lib/recruitee-form-capability';
+import * as policy from '../src/lib/application-provider-policy';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import vm from 'node:vm';
@@ -5,6 +7,8 @@ import ts from 'typescript';
 let calls=0;let answer='not sure';
 const module={exports:{} as any};
 const deps:Record<string,unknown>={
+ '@/lib/recruitee-form-capability':form,
+ '@/lib/application-provider-policy':policy,
  '@/lib/ats-test-capability':{allowUnpublishedRecruiteeOffer:()=>false},
  './submission-proof':{},
  'node:fs/promises':{readFile:()=>{throw Error('pending answer must stop before attachment/transmission')}},

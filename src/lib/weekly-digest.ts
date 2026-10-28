@@ -1,3 +1,4 @@
+import { catalogueWhere } from "@/lib/job-catalogue-policy";
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { sendWithinQuota } from "@/lib/email-quota";
@@ -85,7 +86,7 @@ export async function runWeeklyDigest(opts?: {
   const alreadySent = new Set(recentLogs.map((l) => l.to.toLowerCase()));
 
   const pool = await prisma.job.findMany({
-    where: { source: { not: "ats_test" }, cachedAt: { gte: new Date(Date.now() - WEEK_MS) } },
+    where: { AND: [catalogueWhere()], cachedAt: { gte: new Date(Date.now() - WEEK_MS) } },
     orderBy: { cachedAt: "desc" },
     select: { id: true, title: true, company: true, location: true, url: true, remote: true },
     take: 4000,

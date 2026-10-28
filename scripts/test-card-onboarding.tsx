@@ -1,3 +1,4 @@
+import * as cataloguePolicy from "../src/lib/job-catalogue-policy";
 import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import vm from "node:vm";
@@ -28,7 +29,7 @@ function loadModule(path: string, deps: Record<string, unknown>) {
   const module = { exports: {} as Record<string, any> };
   vm.runInNewContext(code, {
     module, exports: module.exports, Date, Map, Set, URL, URLSearchParams, Buffer, console, process,
-    require(id: string) { assert.ok(id in deps, `Unexpected dependency ${id} in ${path}`); return deps[id]; },
+    require(id: string) { if(id === "@/lib/job-catalogue-policy") return cataloguePolicy; assert.ok(id in deps, `Unexpected dependency ${id} in ${path}`); return deps[id]; },
   }, { filename: path });
   return module.exports;
 }
