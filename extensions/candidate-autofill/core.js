@@ -1,14 +1,29 @@
 // Pure validation shared by popup and synthetic tests. No network or persistence.
 export function parseProfile(raw) {
-  if (raw.length > 8192) throw new Error('Profile file too large');
+  if (raw.length > 262144) throw new Error('Profile file too large');
   const p = JSON.parse(raw);
-  if (p?.version !== 1 || p?.purpose !== 'lavorai-contact-autofill') throw new Error('Unsupported profile file');
+  if (![1,2].includes(p?.version) || p?.purpose !== 'lavorai-contact-autofill') throw new Error('Unsupported profile file');
   const out = {};
   for (const key of ['name', 'email', 'phone']) {
     if (typeof p[key] !== 'string' || p[key].length > 200 || /[\x00-\x1f]/.test(p[key])) throw new Error('Invalid contact field');
     out[key] = p[key].trim();
   }
   if (!out.name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.email)) throw new Error('Name and email are required');
+  out.cvFilename = typeof p.cvFilename === 'string' && p.cvFilename.length <= 255 ? p.cvFilename : '';
+  out.experiences = [];
+  if (p.version === 2) {
+    if (!Array.isArray(p.experiences) || p.experiences.length > 30) throw new Error('Invalid work history');
+    out.experiences = p.experiences.map(e => {
+      const clean = {};
+      for (const key of ['role','company','location','startDate','endDate','description']) {
+        if (typeof e?.[key] !== 'string' || e[key].length > 2000) throw new Error('Invalid work history');
+        clean[key] = e[key];
+      }
+      if (!Array.isArray(e.bullets) || e.bullets.length > 12 || e.bullets.some(b=>typeof b !== 'string'||b.length>300)) throw new Error('Invalid work history');
+      clean.bullets = e.bullets;
+      return clean;
+    });
+  }
   return out;
 }
 export function supportedUrl(raw) {

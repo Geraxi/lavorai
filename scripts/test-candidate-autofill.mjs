@@ -5,7 +5,7 @@ import {parseProfile,supportedUrl,fillContacts} from '../extensions/candidate-au
 const manifest=JSON.parse(fs.readFileSync('extensions/candidate-autofill/manifest.json'));
 assert.deepEqual(manifest.permissions,['activeTab','scripting']);assert.equal(manifest.host_permissions,undefined);assert.equal(manifest.content_scripts,undefined);
 const profile=parseProfile(JSON.stringify({version:1,purpose:'lavorai-contact-autofill',name:'Synthetic Candidate',email:'synthetic@example.invalid',phone:'+390000000',secret:'discard'}));assert.equal(profile.secret,undefined);
-assert.throws(()=>parseProfile('{}'));assert.throws(()=>parseProfile('a'.repeat(8193)));
+assert.throws(()=>parseProfile('{}'));assert.throws(()=>parseProfile('a'.repeat(262145)));
 const url='https://produzioneweb.recruitee.com/o/lavorai-test-autofill/c/new';
 assert(supportedUrl(url));for(const bad of ['https://evil.test/o/lavorai-test-a/c/new',url+'?redirect=evil','https://produzioneweb.recruitee.com.evil.test/o/lavorai-test-a/c/new','https://other.recruitee.com/o/job/c/new'])assert(!supportedUrl(bad));
 const browser=await chromium.launch({headless:true,...(process.env.AUTOFILL_TEST_CHROME==='1'?{channel:'chrome'}:{})});
