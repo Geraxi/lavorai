@@ -37,7 +37,19 @@ export function fillContacts(profile, expectedUrl, perform = false) {
   const owned = location.origin === 'https://produzioneweb.recruitee.com' && /^\/o\/lavorai-test-[a-z0-9-]+\/c\/new\/?$/.test(location.pathname);
   const optics = location.origin === 'https://optics11.recruitee.com' && location.pathname.replace(/\/$/,'') === '/o/senior-customer-experience-designer/c/new';
   if (location.href !== expectedUrl || !(owned || optics) || location.search || location.hash || window.top !== window) return {error:'Page changed or unsupported site'};
-  if (document.querySelector('iframe[src*="captcha"], .g-recaptcha, .h-captcha, input[type="password"]')) return {error:'Authentication or CAPTCHA requires your attention'};
+  // Contact-only assistance does not solve, dismiss or submit CAPTCHA. The known
+  // Recruitee hidden hCaptcha frame remains mounted and untouched. Its internal
+  // state is unknown; only this exact hidden integration is non-blocking here.
+  const protections = [...document.querySelectorAll('iframe[src*="captcha"], .g-recaptcha, .h-captcha, input[type="password"]')];
+  const knownHiddenFrame = e => {
+    if (e.tagName !== 'IFRAME' || getComputedStyle(e).visibility !== 'hidden' || e.title !== 'Widget containing checkbox for hCaptcha security challenge') return false;
+    if (e.parentElement?.tagName !== 'DIV' || !e.parentElement.id.startsWith('input-captchaToken-') || e.closest('form')?.id !== 'offer-application-form') return false;
+    try {
+      const u = new URL(e.src);
+      return u.origin === 'https://captcha-assets.recruiteecdn.com' && !u.username && !u.password && !u.search && !u.hash && /^\/captcha\/v1\/[a-zA-Z0-9._-]+\/static\/hcaptcha-enclave\.html$/.test(u.pathname);
+    } catch { return false; }
+  };
+  if (protections.length > 1 || protections.some(e => !knownHiddenFrame(e))) return {error:'Authentication or CAPTCHA requires your attention'};
   const mapped = {name:['candidate.name'], email:['candidate.email'], phone:['candidate.phone']};
   const fields = [];
   let form = null;
@@ -48,15 +60,16 @@ export function fillContacts(profile, expectedUrl, perform = false) {
     if (!['text','email','tel'].includes(e.type) || e.disabled || e.readOnly || !e.getClientRects().length || !e.form || e.form.id !== 'offer-application-form') return {error:'Unsupported or hidden field'};
     if (form && form !== e.form) return {error:'Fields belong to different forms'};
     form = e.form;
-    if (e.value.trim() && e.value !== profile[key]) return {error:'Existing values differ; review the form manually'};
+    if (e.value.trim() && e.value !== profile[key]) return {error:key === 'phone' ? 'Existing phone value differs (including a country-code prefix). Review and clear or correct it manually before filling; nothing was changed.' : 'Existing values differ; review the form manually'};
     fields.push({key,e});
   }
-  if (!perform) return {ready:true,fields:fields.filter(({key})=>profile[key]).map(({key})=>key)};
+  const protectionNotice = protections.length ? 'Hidden hCaptcha remains active; its internal state is unknown. Complete any challenge manually before submission.' : '';
+  if (!perform) return {ready:true,protectionNotice,fields:fields.filter(({key})=>profile[key]).map(({key})=>key)};
   for (const {key,e} of fields) {
     if (!profile[key] || e.value === profile[key]) continue;
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,profile[key]);
     e.dispatchEvent(new Event('input',{bubbles:true}));
     e.dispatchEvent(new Event('change',{bubbles:true}));
   }
-  return {filled:fields.filter(({key})=>profile[key]).map(({key})=>key), submitted:false};
+  return {protectionNotice,filled:fields.filter(({key})=>profile[key]).map(({key})=>key), submitted:false};
 }

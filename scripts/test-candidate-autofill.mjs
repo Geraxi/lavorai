@@ -21,6 +21,32 @@ try{
  await page.fill('[name="candidate.name"]','');await page.evaluate(()=>{const e=document.createElement('input');e.name='candidate.email';document.body.append(e)});assert.match((await call(false)).error,/ambiguous/);
  await page.goto(url);await page.evaluate(()=>document.querySelector('input').style.display='none');assert.match((await call(true)).error,/hidden/);
  await page.goto(url);await page.evaluate(()=>{const e=document.createElement('div');e.className='g-recaptcha';document.body.append(e)});assert.match((await call(true)).error,/CAPTCHA/);
+ await page.goto(url);await page.locator('[name="candidate.phone"]').evaluate(e=>e.placeholder='+31');assert.equal((await call(false)).ready,true);
+ await page.fill('[name="candidate.phone"]','+31');assert.match((await call(true)).error,/country-code prefix/);assert.equal(await page.inputValue('[name="candidate.name"]'),'');assert.equal(await page.inputValue('[name="candidate.phone"]'),'+31');
+ await page.fill('[name="candidate.phone"]','+31612345678');assert.match((await call(true)).error,/Existing phone/);assert.equal(await page.inputValue('[name="candidate.phone"]'),'+31612345678');
+ await page.fill('[name="candidate.phone"]','');assert.equal((await call(false)).ready,true);assert.deepEqual((await call(true)).filled,['name','email','phone']);
+ await page.goto(url);
+ // Exact observed integration, synthetic attributes only. No cross-origin load.
+ await page.evaluate(()=>{const p=document.createElement('div');p.id='input-captchaToken-fixture';const e=document.createElement('iframe');e.title='Widget containing checkbox for hCaptcha security challenge';e.style.visibility='hidden';p.append(e);document.querySelector('form').append(p);Object.defineProperty(e,'src',{value:'https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html',configurable:true});e.setAttribute('src-marker','captcha');});
+ // Include the iframe in the detector selector without navigating its document.
+ await page.evaluate(()=>{const e=document.querySelector('iframe');e.setAttribute('src','about:blank#captcha');});
+ assert.equal((await call(false)).ready,true);
+ const captchaBefore=await page.locator('iframe').evaluate(e=>e.outerHTML);
+ assert.deepEqual((await call(true)).filled,['name','email','phone']);
+ assert.equal(await page.locator('iframe').evaluate(e=>e.outerHTML),captchaBefore);
+ assert.equal(await page.locator('iframe').evaluate(e=>getComputedStyle(e).visibility),'hidden');assert.equal(await page.evaluate(()=>window.submits),0);
+ await page.fill('[name="candidate.name"]','');await page.fill('[name="candidate.email"]','');await page.fill('[name="candidate.phone"]','');
+ await page.locator('iframe').evaluate(e=>e.style.visibility='visible');assert.match((await call(true)).error,/CAPTCHA/);assert.equal(await page.inputValue('[name="candidate.name"]'),'');assert.equal(await page.inputValue('[name="candidate.email"]'),'');assert.equal(await page.inputValue('[name="candidate.phone"]'),'');
+ await page.locator('iframe').evaluate(e=>{e.style.visibility='hidden';e.title='Unknown challenge';});assert.match((await call(false)).error,/CAPTCHA/);
+ // Only one exact parsed provider frame is tolerated; never substring trust.
+ for (const bad of ['https://captcha-assets.recruiteecdn.com.evil.invalid/captcha/v1/fixture/static/hcaptcha-enclave.html','https://evil.invalid/captcha/v1/fixture/static/hcaptcha-enclave.html','https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/other.html','https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html?redirect=elsewhere']) {
+  await page.locator('iframe').evaluate((e,src)=>{e.title='Widget containing checkbox for hCaptcha security challenge';Object.defineProperty(e,'src',{value:src,configurable:true});},bad);
+  assert.match((await call(false)).error,/CAPTCHA/);
+ }
+ await page.locator('iframe').evaluate(e=>{Object.defineProperty(e,'src',{value:'https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html',configurable:true});e.style.visibility='inherit';e.parentElement.style.visibility='hidden';});
+ assert.equal((await call(false)).ready,true);
+ await page.locator('iframe').evaluate(e=>e.style.visibility='visible');assert.match((await call(true)).error,/CAPTCHA/);
+ await page.locator('iframe').evaluate(e=>{e.style.visibility='hidden';const extra=document.createElement('div');extra.className='h-captcha';extra.style.display='none';document.body.append(extra);});assert.match((await call(true)).error,/CAPTCHA/);
  assert.equal(posts,0);assert.equal(external,0);
  console.log('PASS: synthetic browser autofill, preview/no-write, exact-origin, ambiguity, existing values, hidden fields, CAPTCHA refusal; consent/CV/questions untouched; zero POSTs/external requests.');
 }finally{await browser.close()}
