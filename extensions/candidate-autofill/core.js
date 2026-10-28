@@ -29,12 +29,14 @@ export function parseProfile(raw) {
 export function supportedUrl(raw) {
   try {
     const u = new URL(raw);
-    return u.origin === 'https://produzioneweb.recruitee.com' && !u.username && !u.password && !u.search && !u.hash && /^\/o\/lavorai-test-[a-z0-9-]+\/c\/new\/?$/.test(u.pathname);
+    return !u.username && !u.password && !u.search && !u.hash && ((u.origin === 'https://produzioneweb.recruitee.com' && /^\/o\/lavorai-test-[a-z0-9-]+\/c\/new\/?$/.test(u.pathname)) || (u.origin === 'https://optics11.recruitee.com' && u.pathname.replace(/\/$/,'') === '/o/senior-customer-experience-designer/c/new'));
   } catch { return false; }
 }
 // Serialized into Chrome's isolated world. Rechecks URL and DOM at fill time.
 export function fillContacts(profile, expectedUrl, perform = false) {
-  if (location.href !== expectedUrl || location.origin !== 'https://produzioneweb.recruitee.com' || !/^\/o\/lavorai-test-[a-z0-9-]+\/c\/new\/?$/.test(location.pathname) || location.search || location.hash || window.top !== window) return {error:'Page changed or unsupported site'};
+  const owned = location.origin === 'https://produzioneweb.recruitee.com' && /^\/o\/lavorai-test-[a-z0-9-]+\/c\/new\/?$/.test(location.pathname);
+  const optics = location.origin === 'https://optics11.recruitee.com' && location.pathname.replace(/\/$/,'') === '/o/senior-customer-experience-designer/c/new';
+  if (location.href !== expectedUrl || !(owned || optics) || location.search || location.hash || window.top !== window) return {error:'Page changed or unsupported site'};
   if (document.querySelector('iframe[src*="captcha"], .g-recaptcha, .h-captcha, input[type="password"]')) return {error:'Authentication or CAPTCHA requires your attention'};
   const mapped = {name:['candidate.name'], email:['candidate.email'], phone:['candidate.phone']};
   const fields = [];

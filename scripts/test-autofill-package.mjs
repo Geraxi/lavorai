@@ -8,7 +8,7 @@ try {
  const page=await context.newPage();
  const cdp=await context.browser().newBrowserCDPSession();
  const {id}=await cdp.send('Extensions.loadUnpacked',{path:path.resolve('extensions/candidate-autofill')});
- const url='https://produzioneweb.recruitee.com/o/lavorai-test-package/c/new';
+ const url=process.env.AUTOFILL_FIXTURE_OPTICS==='1'?'https://optics11.recruitee.com/o/senior-customer-experience-designer/c/new':'https://produzioneweb.recruitee.com/o/lavorai-test-package/c/new';
  let posts=0,unexpected=0;
  await context.route(/^https?:\/\//,route=>{const r=route.request();if(r.method()==='POST')posts++;if(r.url()===url)return route.fulfill({contentType:'text/html',body:'<form id="offer-application-form"><input name="candidate.name"><input type="email" name="candidate.email"><input type="tel" name="candidate.phone"><textarea name="screening"></textarea><input type="checkbox" name="consent"><input type="file" name="candidate.cv"><button>Submit</button></form>'});unexpected++;return route.abort();});
  await page.goto(url);await page.bringToFront();
