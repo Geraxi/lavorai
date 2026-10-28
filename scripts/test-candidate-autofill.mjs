@@ -27,7 +27,7 @@ try{
  await page.fill('[name="candidate.phone"]','');assert.equal((await call(false)).ready,true);assert.deepEqual((await call(true)).filled,['name','email','phone']);
  await page.goto(url);
  // Exact observed integration, synthetic attributes only. No cross-origin load.
- await page.evaluate(()=>{const p=document.createElement('div');p.id='input-captchaToken-fixture';const e=document.createElement('iframe');e.title='Widget containing checkbox for hCaptcha security challenge';e.style.visibility='hidden';p.append(e);document.querySelector('form').append(p);Object.defineProperty(e,'src',{value:'https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html',configurable:true});e.setAttribute('src-marker','captcha');});
+ await page.evaluate(()=>{const p=document.createElement('div');p.id='input-captchaToken-fixture';const e=document.createElement('iframe');e.title='Widget containing checkbox for hCaptcha security challenge';e.style.visibility='hidden';p.append(e);document.querySelector('form').append(p);Object.defineProperty(e,'src',{value:'https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html#synthetic-opaque-state',configurable:true});e.setAttribute('src-marker','captcha');});
  // Include the iframe in the detector selector without navigating its document.
  await page.evaluate(()=>{const e=document.querySelector('iframe');e.setAttribute('src','about:blank#captcha');});
  assert.equal((await call(false)).ready,true);
@@ -39,11 +39,11 @@ try{
  await page.locator('iframe').evaluate(e=>e.style.visibility='visible');assert.match((await call(true)).error,/CAPTCHA/);assert.equal(await page.inputValue('[name="candidate.name"]'),'');assert.equal(await page.inputValue('[name="candidate.email"]'),'');assert.equal(await page.inputValue('[name="candidate.phone"]'),'');
  await page.locator('iframe').evaluate(e=>{e.style.visibility='hidden';e.title='Unknown challenge';});assert.match((await call(false)).error,/CAPTCHA/);
  // Only one exact parsed provider frame is tolerated; never substring trust.
- for (const bad of ['https://captcha-assets.recruiteecdn.com.evil.invalid/captcha/v1/fixture/static/hcaptcha-enclave.html','https://evil.invalid/captcha/v1/fixture/static/hcaptcha-enclave.html','https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/other.html','https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html?redirect=elsewhere']) {
+ for (const bad of ['https://captcha-assets.recruiteecdn.com.evil.invalid/captcha/v1/fixture/static/hcaptcha-enclave.html','https://evil.invalid/captcha/v1/fixture/static/hcaptcha-enclave.html','https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/other.html','https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html?redirect=elsewhere'].flatMap(u=>[u,u+'#synthetic-opaque-state'])) {
   await page.locator('iframe').evaluate((e,src)=>{e.title='Widget containing checkbox for hCaptcha security challenge';Object.defineProperty(e,'src',{value:src,configurable:true});},bad);
   assert.match((await call(false)).error,/CAPTCHA/);
  }
- await page.locator('iframe').evaluate(e=>{Object.defineProperty(e,'src',{value:'https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html',configurable:true});e.style.visibility='inherit';e.parentElement.style.visibility='hidden';});
+ await page.locator('iframe').evaluate(e=>{Object.defineProperty(e,'src',{value:'https://captcha-assets.recruiteecdn.com/captcha/v1/fixture/static/hcaptcha-enclave.html#synthetic-opaque-state',configurable:true});e.style.visibility='inherit';e.parentElement.style.visibility='hidden';});
  assert.equal((await call(false)).ready,true);
  await page.locator('iframe').evaluate(e=>e.style.visibility='visible');assert.match((await call(true)).error,/CAPTCHA/);
  await page.locator('iframe').evaluate(e=>{e.style.visibility='hidden';const extra=document.createElement('div');extra.className='h-captcha';extra.style.display='none';document.body.append(extra);});assert.match((await call(true)).error,/CAPTCHA/);
