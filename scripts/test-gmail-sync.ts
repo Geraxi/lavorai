@@ -20,6 +20,12 @@ async function main() {
     assert.equal(limit,50);assert.ok(deadline<=now+30_000);seen.push(user);now+=30_000;return {synced:1,skipped:0,complete:false,deferred:true};
   },()=>now);
   assert.equal(seen.length,8);assert.equal(seen[0],eligible[11].userId);assert.equal(partial.deferred,12);assert.equal(partial.reconnectRequired,1);
+  const reconnect=await runGmailSync([eligible[0]],new Map(),async()=>({synced:0,skipped:0,complete:false,error:'reconnect_required'}),()=>now);
+  assert.equal(reconnect.ok,false);assert.equal(reconnect.status,'degraded');assert.equal(reconnect.reconnectRequired,1);assert.equal(reconnect.temporaryErrors,0);
+  const deadline=await runGmailSync([eligible[0]],new Map(),async()=>({synced:0,skipped:0,complete:false,error:'deadline'}),()=>now);
+  assert.equal(deadline.ok,true);assert.equal(deadline.status,'partial');assert.equal(deadline.deferred,1);assert.equal(deadline.failed,0);
+  const config=await runGmailSync([eligible[0]],new Map(),async()=>({synced:0,skipped:0,complete:false,error:'server_configuration'}),()=>now);
+  assert.equal(config.serverConfigurationErrors,1);assert.equal(config.reconnectRequired,0);
   console.log('PASS 264 sign-in accounts: zero provider calls/sleeps; scope classification, mixed eligibility, 240s deadline and oldest-attempt fairness.');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

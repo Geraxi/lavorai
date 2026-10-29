@@ -72,7 +72,7 @@
     "test:apply-reliability": "node --import tsx scripts/test-apply-reliability.ts",
     "test:live-apply-fixes": "node --import tsx scripts/test-live-apply-fixes.ts && node --import tsx scripts/test-phone-country.ts && node --import tsx scripts/test-candidate-facts.ts",
     "test:ordinary-pipeline-postgres": "node --import tsx scripts/test-ordinary-pipeline-postgres.ts",
-    "test:gmail-sync": "node --import tsx scripts/test-gmail-sync.ts",
+    "test:gmail-sync": "node --import tsx scripts/test-gmail-sync.ts && node scripts/test-gmail-workflow-status.mjs",
     "test:gmail-sync-postgres": "node --import tsx scripts/test-gmail-sync-postgres.ts",
     "test:job-catalogue": "node --import tsx scripts/test-job-catalogue.ts && node --import tsx scripts/test-recruitee-catalogue-refresh.ts",
     "test:job-catalogue-postgres": "node --import tsx scripts/test-job-catalogue-postgres.ts",
