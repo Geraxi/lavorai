@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@browserbasehq/stagehand": "3.7.3"
+  }
+}

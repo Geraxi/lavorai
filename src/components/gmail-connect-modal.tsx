@@ -118,9 +118,10 @@ export function GmailConnectModal({
                 margin: "0 0 14px",
               }}
             >
-              Per mostrarti le risposte dei recruiter direttamente nella tua
-              Inbox, LavorAI ha bisogno di accedere alla tua Gmail in
-              <strong> sola lettura</strong>.
+              Il collegamento Gmail è facoltativo: serve a importare le risposte
+              arrivate nella tua casella Gmail, con accesso in
+              <strong> sola lettura</strong>. Le risposte inviate al tuo indirizzo
+              LavorAI arrivano qui senza collegare Gmail.
             </p>
             <ul
               style={{
@@ -132,8 +133,8 @@ export function GmailConnectModal({
               }}
             >
               <li>
-                <strong>Privacy garantita:</strong> leggiamo solo le email che
-                riguardano le tue candidature.
+                <strong>Importazione:</strong> il servizio legge i messaggi della
+                Posta in arrivo e seleziona quelli relativi alle candidature.
               </li>
               <li>
                 <strong>Nessuna modifica:</strong> LavorAI non può cancellare,

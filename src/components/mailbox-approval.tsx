@@ -57,7 +57,7 @@ export function MailboxApproval() {
   return (
     <div className="mbx-approve">
       {!data.connection ? (
-        <section className="pm-card"><EmptyState icon={Mail} title="Collega la tua casella" text="Per inviare candidature a tuo nome collega Gmail o Outlook nelle Impostazioni." cta={{ href: "/settings#mailbox", label: "Vai alle Impostazioni" }} /></section>
+        <section className="pm-card"><EmptyState icon={Mail} title="Collega la tua casella" text="Per questo invio email dalla tua casella collega Gmail o Outlook nelle Impostazioni. Le candidature sui portali supportati e le risposte al tuo indirizzo LavorAI non richiedono questo collegamento." cta={{ href: "/settings#mailbox", label: "Vai alle Impostazioni" }} /></section>
       ) : (
         <p className="mbx-mode"><Mail size={13} strokeWidth={1.75} aria-hidden /> Invio da <strong>{data.connection.email}</strong>{!data.mode.live && <><span aria-hidden>·</span><FlaskConical size={13} strokeWidth={1.75} aria-hidden /> modalità di prova: nessuna email reale</>}</p>
       )}

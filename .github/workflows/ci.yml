@@ -45,6 +45,23 @@ jobs:
           npx playwright install --with-deps chromium
           npm run test:candidate-autofill
 
+      - name: Install isolated local observer SDK
+        run: npm ci --prefix tools/stagehand-observer --ignore-scripts --no-audit --no-fund
+
+      - name: Disabled browser integration and synthetic fixtures
+        run: |
+          npx tsc --noEmit --skipLibCheck --strict --target ES2017 --module esnext --moduleResolution bundler --esModuleInterop tools/stagehand-observer/adapter.ts
+          node scripts/test-browser-integration-suite.mjs
+
+      - name: Durable browser ownership and submission fences
+        env:
+          PGPASSWORD: ci_password
+          ORDINARY_TEST_DATABASE_URL: "postgresql://ci_user:ci_password@127.0.0.1:5432/lavorai_ordinary_test?connection_limit=16"
+        run: |
+          psql -h 127.0.0.1 -U ci_user -d ci_db -c 'CREATE DATABASE lavorai_ordinary_test'
+          node --import tsx scripts/test-durable-browser-postgres.ts
+          psql -h 127.0.0.1 -U ci_user -d ci_db -c 'DROP DATABASE lavorai_ordinary_test'
+
       - name: Typecheck
         run: npx tsc --noEmit
 

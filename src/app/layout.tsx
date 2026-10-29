@@ -113,6 +113,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Local synthetic workspace has no analytics, authentication provider or production data.
+  if (process.env.NODE_ENV === "development" && process.env.LOCAL_WORKSPACE_DEMO === "1") {
+    return <html lang="en"><body>{children}</body></html>;
+  }
   const locale = await getLocale();
   const messages = await getMessages();
   return (

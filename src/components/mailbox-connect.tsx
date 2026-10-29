@@ -34,7 +34,7 @@ export function MailboxConnect({ notice }: { notice?: string | null }) {
   };
   return (
     <div className="mbx">
-      <p className="mbx-lead">Le candidature partono dalla <strong>tua</strong> casella, con il tuo indirizzo: il recruiter risponde direttamente a te e le trovi nella cartella Inviati. Prima di ogni invio vedi destinatario e allegati e lo approvi tu.</p>
+      <p className="mbx-lead">Questo collegamento facoltativo serve agli invii email dalla <strong>tua</strong> casella. Per questi invii vedi destinatario e allegati e dai la tua approvazione. Non è necessario per candidarti sui portali supportati o ricevere risposte al tuo indirizzo LavorAI.</p>
       {notice && NOTICE[notice] && <p className={`mbx-notice${notice === "connected" ? " is-ok" : ""}`} role="status">{NOTICE[notice]}</p>}
       <ul className="mbx-list">
         {(["gmail", "outlook"] as const).map((p) => {
