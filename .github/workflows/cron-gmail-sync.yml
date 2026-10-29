@@ -29,4 +29,6 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             https://lavorai.it/api/cron/gmail-sync
           echo "--- response body ---"
-          cat /tmp/out
+          # HTTP 200 alone is not a healthy sync. Print aggregate fields only.
+          jq '{ok,status,usersChecked,usersWithGmail,signinOnly,reconnectRequired,attempted,completed,deferred,failed,serverConfigurationErrors,temporaryErrors,totalSynced,totalSkipped}' /tmp/out
+          jq -e '.ok == true and (.status == "complete" or .status == "partial" or .status == "no_connected_mailboxes")' /tmp/out > /dev/null

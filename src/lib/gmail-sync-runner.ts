@@ -4,7 +4,7 @@ export type SyncAccount = { id: string; userId: string; scope: string | null; ac
 /** Injected clock/sync for hermetic deadline and 264-account regression tests. */
 export async function runGmailSync(accounts: SyncAccount[], order: Map<string, number>, sync: (userId: string, count: number, deadline: number, accountId?: string) => Promise<GmailSyncResult>, now = Date.now) {
   const started = now(), deadline = started + 240_000;
-  const stats = { usersChecked: accounts.length, usersWithGmail: 0, signinOnly: 0, reconnectRequired: 0, suspended: 0, attempted: 0, completed: 0, deferred: 0, failed: 0, totalSynced: 0, totalSkipped: 0 };
+  const stats = { usersChecked: accounts.length, usersWithGmail: 0, signinOnly: 0, reconnectRequired: 0, suspended: 0, attempted: 0, completed: 0, deferred: 0, failed: 0, serverConfigurationErrors: 0, temporaryErrors: 0, totalSynced: 0, totalSkipped: 0 };
   const eligible: SyncAccount[] = [];
   for (const account of accounts) {
     if (account.user.suspendedAt) { stats.suspended++; continue; }
@@ -22,10 +22,13 @@ export async function runGmailSync(accounts: SyncAccount[], order: Map<string, n
       const result = await sync(account.userId, 50, Math.min(deadline, now() + 30_000), account.id);
       stats.totalSynced += result.synced; stats.totalSkipped += result.skipped;
       if (result.error === "reconnect_required") stats.reconnectRequired++;
-      if (result.error) stats.failed++;
+      if (result.error === "server_configuration") stats.serverConfigurationErrors++;
+      else if (result.error && result.error !== "reconnect_required" && result.error !== "deadline") stats.temporaryErrors++;
+      if (result.error === "deadline") stats.deferred++;
+      else if (result.error) stats.failed++;
       else if (result.complete) stats.completed++;
       else stats.deferred++;
-    } catch { stats.failed++; }
+    } catch { stats.failed++; stats.temporaryErrors++; }
   }
   return { ok: stats.failed === 0 && stats.reconnectRequired === 0, status: stats.failed || stats.reconnectRequired ? "degraded" : stats.deferred ? "partial" : stats.usersWithGmail ? "complete" : "no_connected_mailboxes", ms: now() - started, ...stats };
 }
