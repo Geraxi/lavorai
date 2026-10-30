@@ -89,7 +89,13 @@ async function main() {
     return id;
   }
   try {
-    const id=await fixture(); await run(id);
+    const id=await fixture();
+    await db.userInbox.create({data:{userId:id,slug:'legacy.synthetic',address:'legacy.synthetic@apply.example.test',domain:'apply.example.test'}});
+    process.env.INBOUND_EMAIL_DOMAIN='inbound.example.test';
+    assert.equal(await db.account.count({where:{userId:id}}),0,'ordinary alias routing must not require Gmail OAuth');
+    await run(id);
+    assert.equal(fake.requests.find(r=>r.method==='POST' && r.path.endsWith('/candidates'))?.fields['candidate[email]'],`reply+${id}@inbound.example.test`,'actual ordinary adapter must use exact application alias before legacy inbox');
+    delete process.env.INBOUND_EMAIL_DOMAIN;
     let row=await db.application.findUniqueOrThrow({where:{id}});
     assert.equal(row.status,'success',row.errorMessage); assert.equal(row.submittedVia,'portal_recruitee');
     assert.equal(row.submitConfirmation,'DETECTED_HTTP_201'); assert.ok(row.submissionReceiptJson); assert.ok(row.submittedAt); assert.equal(view(row).phase,'confirmed');

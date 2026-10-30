@@ -26,3 +26,11 @@ Independent read-only review found and prompted fixes for mismatched DB-client c
 ## Remaining production blockers
 
 No production browser-worker deployment, durable browser session hosting, remote takeover transport, supported-provider registration or live employer compatibility has been validated. Profile/document readers now use actual Prisma ownership queries and the existing storage reader, tested only with synthetic records; no production export is activated. Completion must retain existing validated receipt handling. A production model needs explicit resource/isolation/retention choices; the current free local model is variable and is advisory only. No production scope/provider/cap changes or deployment are included. This document records local evidence before draft publication.
+
+## Draft follow-up: bounded execution and mailbox attribution
+
+The ordinary worker now prefers the per-application reply alias over a legacy per-user inbox. A real ordinary-pipeline disposable-PostgreSQL regression verifies the fake adapter receives that alias even when a user inbox exists and no Google Account record exists. Legacy inbox/personal-email fallbacks remain unchanged when no application alias is configured. Receiving-domain readiness remains a deployment prerequisite; this change does not configure DNS or prove sender authenticity.
+
+A local-only bounded harness exercises the existing PortalAdapter/ApplyInput callback contract and existing Chromium launcher. It limits work to 240 seconds, closes the browser at deadline, consumes a task once, prevents concurrent final-boundary grants, and treats timeout after an attempted submission boundary as unconfirmed. Synthetic Chromium tests cover late grants, late writes, duplicate hooks and owner rejection. All non-fixture requests are aborted; this harness deliberately cannot contact an employer and is not registered in the production worker.
+
+Next actual provider validation needs an owned employer test posting and separately approved synthetic submission scope. Long-lived interactive takeover additionally needs an agreed worker host. Neither is implied by the local bounded harness; no paid inference or new infrastructure is needed for its deterministic tests.

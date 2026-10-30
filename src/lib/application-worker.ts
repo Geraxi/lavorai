@@ -23,6 +23,7 @@ import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS, needsAnswersSubmitConfirmation } 
 import { Resend } from "resend";
 import { prisma } from "@/lib/db";
 import { getUserInboxAddress } from "@/lib/inbound/service";
+import { portalRecipient } from "@/lib/portal-recipient";
 import { optimizeCV } from "@/lib/claude";
 import {
   generateCoverLetterDocx,
@@ -2311,11 +2312,11 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       };
     }
 
-    // Per-user LavorAI inbox (<slug>@apply.lavorai.it) when present: ATS
-    // confirmations land in /api/inbound/email and become proof-of-send.
-    // OTP portals keep the per-application alias (auto-OTP is keyed by appId).
-    const userInbox = portalNeedsOtp ? null : await getUserInboxAddress(prisma, userId).catch(() => null);
-    formEmail = userInbox ?? inboundAlias ?? input.userEmail;
+    // Prefer the application-specific alias for exact reply attribution.
+    // Per-user inbox is a legacy fallback, never evidence of submission by itself.
+    // Personal Gmail connection is unrelated to either inbound route.
+    const userInbox = portalNeedsOtp || inboundAlias ? null : await getUserInboxAddress(prisma, userId).catch(() => null);
+    formEmail = portalRecipient({ userEmail: input.userEmail, applicationAlias: inboundAlias, userInbox });
     if (formEmail !== input.userEmail) profile.email = formEmail;
   }
 
