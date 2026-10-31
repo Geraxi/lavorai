@@ -13,19 +13,22 @@ const MAX_ACTIVE_SESSIONS = 3;
  *
  * Read-only listing: session history is preserved without automatic cleanup.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ sessions: [] });
   }
 
+  const target=request?new URL(request.url).searchParams.get("sessionId"):null;
   // Read-only: temporary rollout never silently archives historical rounds.
   const sessions = await prisma.applicationSession.findMany({
     where: {
       userId: user.id,
+      ...(target?{id:target}:{}),
+      NOT:{key:{startsWith:"archived::"}},
       OR: [
         { status: { in: ["active", "auto", "paused"] } },
-        { status: "completed", completedAcknowledgedAt: null },
+        { status: {in:["completed","cancelled"]} },
       ],
     },
     orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
