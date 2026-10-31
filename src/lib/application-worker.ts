@@ -2421,7 +2421,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
     if (audit.length) await persistAiAnswers(userId, applicationId, input.workToken, audit);
     // Greenhouse attests only from its blank-form callback above. Later browser
     // questions (after autosave/uploads) must never create or renew that proof.
-    if (adapter.id === "recruitee" && !finalBoundaryEntered && !outcome.ok && outcome.status === "needs_user_input" && outcome.pendingQuestions?.length) {
+    if (adapter.id === "recruitee" && !finalBoundaryEntered && !outcome.ok && outcome.status === "needs_user_input") {
       await attestAnswerPause(applicationId, input.workToken, "portal_recruitee", JSON.stringify(outcome.pendingQuestions), jobUrl);
     }
     return outcome;

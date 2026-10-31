@@ -351,7 +351,7 @@ async function testRecruiteeBoundary() {
         if (options.method !== "POST") return {
           status: scenario === "lookup-error" ? 500 : 200,
           ok: scenario !== "lookup-error",
-          json: async () => scenario === "not-an-offer" ? {} : { offer: { status: "published", captcha: false, open_questions: ["boolean-no", "unanswered"].includes(scenario) ? [{ id: 17, kind: "boolean", body: "Do you need visa sponsorship?", required: true }] : [] } },
+          json: async () => scenario === "not-an-offer" ? {} : { offer: { status: "published", open_questions: ["boolean-no", "unanswered"].includes(scenario) ? [{ id: 17, kind: "boolean", body: "Do you need visa sponsorship?", required: true }] : [] } },
         };
         posts++;
         if (scenario === "dry-run") throw new Error("dry-run must not POST /candidates");

@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 import {classifyRecruiteeForm,canonicalRecruiteeOffer} from '../src/lib/recruitee-form-capability';
 import {inspectRecruiteeOffer,refreshTenants} from '../src/lib/recruitee-catalogue-refresh';
 import {recruiteeAdapter} from '../src/lib/portal-adapters/recruitee';
-const standard={id:1,status:'published',captcha:false,options_cv:'required',open_questions:[]};
+const standard={id:1,status:'published',options_cv:'required',open_questions:[]};
 assert.equal(classifyRecruiteeForm(standard),'standard');
 for(const kind of ['text','boolean','multi_choice','salary','date','legal'])assert.equal(classifyRecruiteeForm({...standard,open_questions:[{required:true,kind}]}),'questions');
 for(const kind of ['video','file','photo'])assert.equal(classifyRecruiteeForm({...standard,open_questions:[{required:true,kind}]}),'unsupported');

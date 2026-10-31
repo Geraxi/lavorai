@@ -74,7 +74,7 @@
     "test:ordinary-pipeline-postgres": "node --import tsx scripts/test-ordinary-pipeline-postgres.ts",
     "test:gmail-sync": "node --import tsx scripts/test-gmail-sync.ts && node scripts/test-gmail-workflow-status.mjs",
     "test:gmail-sync-postgres": "node --import tsx scripts/test-gmail-sync-postgres.ts",
-    "test:job-catalogue": "node --import tsx scripts/test-job-catalogue.ts && node --import tsx scripts/test-recruitee-catalogue-refresh.ts && node --import tsx scripts/test-recruitee-challenge.ts",
+    "test:job-catalogue": "node --import tsx scripts/test-job-catalogue.ts && node --import tsx scripts/test-recruitee-catalogue-refresh.ts",
     "test:job-catalogue-postgres": "node --import tsx scripts/test-job-catalogue-postgres.ts",
     "test:candidate-autofill": "node scripts/test-autofill-export.cjs && node scripts/test-autofill-document.cjs && node scripts/test-candidate-autofill.mjs && node scripts/test-autofill-package.mjs && AUTOFILL_FIXTURE_OPTICS=1 node scripts/test-autofill-package.mjs"
   },

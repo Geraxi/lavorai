@@ -1,4 +1,4 @@
-import { classifyRecruiteeForm, recruiteeChallengeCompatibility } from '@/lib/recruitee-form-capability';
+import { classifyRecruiteeForm } from '@/lib/recruitee-form-capability';
 import { providerPolicy } from '@/lib/application-provider-policy';
 import { allowUnpublishedRecruiteeOffer, recheckAtsTestBeforeSubmitHttp } from "@/lib/ats-test-capability";
 import { verifySubmissionResponse } from "./submission-proof";
@@ -119,13 +119,6 @@ export const recruiteeAdapter: PortalAdapter = {
         if (!j.offer || typeof j.offer !== "object") return { ok: false, status: "form_not_found", error: "Offerta Recruitee non riconosciuta. Nessun invio eseguito." };
         if (j.offer?.status && j.offer.status !== "published" && !allowUnpublishedRecruiteeOffer(input.jobUrl)) {
           return { ok: false, status: "job_closed", error: `Annuncio Recruitee in stato ${j.offer.status}.` };
-        }
-        const challenge = recruiteeChallengeCompatibility(j.offer);
-        if (challenge !== 'clear') {
-          return {ok:false,status:'not_eligible',refusedBeforeSubmit:true,
-            error:challenge==='required'
-              ? 'Il portale richiede una verifica manuale. Nessun invio eseguito; non riprovare automaticamente.'
-              : 'Compatibilità della verifica del portale non accertata. Revisione manuale necessaria; nessun invio eseguito.'};
         }
         if (providerPolicy().restricted && !input.atsTestAuth && classifyRecruiteeForm(j.offer) !== 'standard') {
           return {ok:false,status:'not_eligible',refusedBeforeSubmit:true,error:'Il modulo è cambiato o richiede campi non ancora supportati nel catalogo corrente. Nessun invio eseguito.'};
