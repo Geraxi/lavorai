@@ -14,16 +14,17 @@ interface ApiSession {
   id: string;
   label: string;
   key: string;
-  status: "auto" | "paused";
-  total: number;
+  status: "auto" | "active" | "paused" | "completed" | "cancelled";
+  totalApplications: number;
+  sentCount:number; targetCount:number; completedAt:string|null;
   awaitingConsent: number;
 }
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
-export function SessionsBlock() {
+export function SessionsBlock({sessionId}:{sessionId?:string}={}) {
   const { data, mutate } = useSWR<{ sessions: ApiSession[]; archivedCount?: number }>(
-    "/api/sessions",
+    sessionId?`/api/sessions?sessionId=${encodeURIComponent(sessionId)}`:"/api/sessions",
     fetcher,
   );
   const sessions = data?.sessions ?? [];
@@ -31,20 +32,23 @@ export function SessionsBlock() {
   const [busy, setBusy] = useState<string | null>(null);
 
   async function toggle(s: ApiSession) {
-    const next = s.status === "auto" ? "paused" : "auto";
+    const terminal=!!s.completedAt||['completed','cancelled'].includes(s.status)||s.sentCount>=s.targetCount;
+    if(terminal&&!window.confirm('Creare un nuovo round? Lo storico e i contatori precedenti restano conservati. Solo le candidature recenti non iniziate in attesa di conferma vengono spostate; nessun invio parte da questa azione.'))return;
+    const next = ["auto", "active"].includes(s.status) ? "paused" : "auto";
     setBusy(s.id);
     try {
       const res = await fetch(`/api/sessions/${s.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: next }),
+        body: JSON.stringify(terminal?{newRound:true}:{ status: next }),
       });
       if (!res.ok) {
-        toast.error("Errore aggiornamento sessione");
+        const body = await res.json().catch(() => ({}));
+        toast.error(body.message ?? "Errore aggiornamento sessione");
         return;
       }
       toast.success(
-        next === "paused"
+        terminal ? "Nuovo round creato. Rivedi e conferma le candidature in attesa." : next === "paused"
           ? `Sessione "${s.label}" in pausa`
           : `Sessione "${s.label}" riattivata`,
       );
@@ -72,9 +76,7 @@ export function SessionsBlock() {
           }}
         >
           Ogni volta che ti candidi a un ruolo in un settore nuovo, LavorAI crea
-          una sessione. Le candidature della stessa sessione partono in
-          automatico. Metti in pausa una sessione per bloccare i nuovi invii
-          (andranno in attesa di consenso).
+          una sessione. Gli invii rispettano la tua modalità e le conferme richieste. Metti in pausa una sessione per bloccare i nuovi invii; riprendila esplicitamente prima di confermare le candidature.
         </p>
         {sessions.length === 0 ? (
           <div
@@ -122,7 +124,7 @@ export function SessionsBlock() {
                       marginTop: 2,
                     }}
                   >
-                    {s.total} {s.total === 1 ? "candidatura" : "candidature"}
+                    {s.totalApplications} {s.totalApplications === 1 ? "candidatura" : "candidature"}
                     {s.awaitingConsent > 0 ? (
                       <>
                         {" · "}
@@ -138,16 +140,16 @@ export function SessionsBlock() {
                   style={{
                     fontSize: 10.5,
                     background:
-                      s.status === "auto"
+                      ["auto", "active"].includes(s.status)
                         ? "var(--primary-weak)"
                         : "var(--bg-sunken)",
                     color:
-                      s.status === "auto"
+                      ["auto", "active"].includes(s.status)
                         ? "var(--primary-ds)"
                         : "var(--fg-muted)",
                   }}
                 >
-                  {s.status === "auto" ? "attiva" : "in pausa"}
+                  {s.completedAt||["completed","cancelled"].includes(s.status)||s.sentCount>=s.targetCount ? "conclusa" : ["auto", "active"].includes(s.status) ? "attiva" : "in pausa"}
                 </span>
                 <button
                   type="button"
@@ -156,7 +158,7 @@ export function SessionsBlock() {
                   className="ds-btn ds-btn-sm ds-btn-ghost"
                   style={{ fontSize: 11.5 }}
                 >
-                  {s.status === "auto" ? (
+                  {s.completedAt||["completed","cancelled"].includes(s.status)||s.sentCount>=s.targetCount ? "Nuovo round" : ["auto", "active"].includes(s.status) ? (
                     <>
                       <Icon name="pause-circle" size={12} /> Pausa
                     </>

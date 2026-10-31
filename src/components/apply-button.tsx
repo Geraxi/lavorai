@@ -42,10 +42,14 @@ export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
       }
       if (!res.ok) {
         toast.error(body?.message ?? "Errore. Riprova tra qualche secondo.");
+        if(body?.error==="session_complete"&&typeof body.redirect==="string"&&body.redirect.startsWith("/preferences?"))router.push(body.redirect);
         return;
       }
 
-      toast.success("Candidatura in coda! Ti avvisiamo appena è partita.");
+      toast.success(body.status === "awaiting_consent"
+        ? "Candidatura da confermare. Rivedi lo stato della ricerca prima dell’invio."
+        : body.status === "queued" ? "Candidatura in coda. L’invio non è ancora confermato."
+        : "Richiesta registrata. Controlla lo stato nelle candidature.");
       router.push("/applications");
     } catch {
       toast.error("Errore di rete. Controlla la connessione.");

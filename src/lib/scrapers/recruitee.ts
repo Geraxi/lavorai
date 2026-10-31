@@ -32,14 +32,15 @@ interface RecruiteeOffer {
   open_questions?: unknown[];
 }
 
-export async function fetchRecruiteeJobs(tenant: string, companyName?: string): Promise<JobListItem[]> {
+export async function fetchRecruiteeJobs(tenant: string, companyName?: string, fetcher: typeof fetch = fetch): Promise<JobListItem[]> {
   // L'API careers risponde solo sul sottodominio recruitee.com (i domini
   // custom come careers.<azienda>.com danno 404 su /api).
   const t = tenant.replace(/^https?:\/\//, "").replace(/\.recruitee\.com.*$/, "").split("/")[0];
   if (!/^[a-z0-9-]+$/.test(t)) return [];
   const base = `https://${t}.recruitee.com`;
   try {
-    const res = await fetch(`${base}/api/offers/`, {
+    const res = await fetcher(`${base}/api/offers/`, {
+      method: "GET",
       headers: { Accept: "application/json", "User-Agent": "Mozilla/5.0 LavorAI/1.0 jobs-sync" },
       redirect: "error",
       signal: AbortSignal.timeout(15_000),

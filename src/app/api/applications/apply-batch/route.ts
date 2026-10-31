@@ -237,6 +237,7 @@ export async function POST(request: NextRequest) {
           title: job.title,
           category: job.category,
         });
+        if(session.completedAt||['completed','cancelled'].includes(session.status)||session.sentCount>=session.targetCount)continue;
         let initialStatus: "queued" | "awaiting_consent";
         if (session.status === "paused") {
           initialStatus = "awaiting_consent";

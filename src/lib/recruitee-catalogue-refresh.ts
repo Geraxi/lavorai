@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import {canonicalRecruiteeOffer, classifyRecruiteeForm, type FormCapability} from './recruitee-form-capability';
 import {PUBLICATION_FRESH_MS,OWNED_TEST_PREFIX} from './job-catalogue-policy';
+import {discoverRecruiteeCatalogue} from './recruitee-catalogue-discovery';
 type Target = {id:string;externalId:string;url:string;source:string};
 type Observation = {at:Date; capability:FormCapability|null; providerId?:string};
 export async function inspectRecruiteeOffer(url:string, fetcher:typeof fetch=fetch, at=new Date()):Promise<Observation> {
@@ -49,17 +50,21 @@ export function refreshTenants(raw:string|undefined):string[] {
  if(!values.length||values.length>64||values.some(x=>!/^[a-z0-9-]+$/.test(x)))throw Error('Explicit approved tenant list required (1–64)');
  return [...new Set(values)];
 }
-export async function refreshRecruiteeCatalogue(db:PrismaClient, options:{tenants:string[];limit?:number;budgetMs?:number;fetcher?:typeof fetch}) {
+export async function refreshRecruiteeCatalogue(db:PrismaClient, options:{tenants:string[];limit?:number;budgetMs?:number;fetcher?:typeof fetch;discover?:boolean}) {
  const tenants=refreshTenants(options.tenants.join(','));
  const limit=options.limit??200,budget=options.budgetMs??210_000;
  if(!Number.isInteger(limit)||limit<1||limit>200||budget<1000||budget>210_000)throw Error('Invalid refresh bounds');
  const started=Date.now();const deadline=started+budget;
+ // Reserve bounded discovery time when enabled so slow existing rows cannot
+ // permanently starve new offers. Both phases share the same overall deadline.
+ const refreshDeadline=options.discover&&budget>=50_000?deadline-35_000:deadline;
  const sourceWhere={source:'recruitee',NOT:{url:{startsWith:OWNED_TEST_PREFIX}},OR:tenants.map(t=>({url:{startsWith:`https://${t}.recruitee.com/o/`}}))};
  const targets=await db.job.findMany({where:sourceWhere,orderBy:[{catalogueCheckedAt:{sort:'asc',nulls:'first'}},{id:'asc'}],take:limit,select:{id:true,externalId:true,url:true,source:true}});
  let cursor=0;const counts:Record<string,number>={};
- async function worker(){while(cursor<targets.length&&Date.now()+13_000<deadline){const target=targets[cursor++];const observation=await inspectRecruiteeOffer(target.url,options.fetcher);const outcome=await persistRecruiteeObservation(db,target,observation);counts[outcome]=(counts[outcome]??0)+1;await new Promise(r=>setTimeout(r,600));}}
+ async function worker(){while(cursor<targets.length&&Date.now()+13_000<refreshDeadline){const target=targets[cursor++];const observation=await inspectRecruiteeOffer(target.url,options.fetcher);const outcome=await persistRecruiteeObservation(db,target,observation);counts[outcome]=(counts[outcome]??0)+1;await new Promise(r=>setTimeout(r,600));}}
  await Promise.all([worker(),worker()]);
  const pending=await db.job.count({where:{AND:[sourceWhere,{OR:[{catalogueCheckedAt:null},{catalogueCheckedAt:{lt:new Date(Date.now()-6*60*60_000)}}]}]}});
  const staleStandard=await db.job.count({where:{AND:[sourceWhere,{applicationFormCapability:'standard',OR:[{publicationVerifiedAt:null},{publicationVerifiedAt:{lt:new Date(Date.now()-PUBLICATION_FRESH_MS)}}]}]}});
- return {selected:targets.length,processed:cursor,counts,pending,staleStandard,deadlineReached:cursor<targets.length,elapsedMs:Date.now()-started,requiresFollowup:pending>0||staleStandard>0||cursor<targets.length||!!counts.transient||!!counts.collision};
+ const discovery=options.discover?await discoverRecruiteeCatalogue(db,{tenants,deadline,fetcher:options.fetcher}):null;
+ return {selected:targets.length,processed:cursor,counts,pending,staleStandard,discovery,deadlineReached:cursor<targets.length,elapsedMs:Date.now()-started,requiresFollowup:pending>0||staleStandard>0||cursor<targets.length||!!counts.transient||!!counts.collision||!!discovery?.created};
 }

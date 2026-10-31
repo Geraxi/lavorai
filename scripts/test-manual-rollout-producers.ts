@@ -95,7 +95,7 @@ function enable() {
   process.env.APPLY_GLOBAL_DAILY_CAP = "10";
 }
 function row(id: string, overrides: Record<string, any> = {}) {
-  return { id, userId: "owner", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
+  return { id, sessionId: null, userId: "owner", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
     answerContinuationJson: null, retryCount: 0, startedAt: null, leaseToken: null, leaseExpiresAt: null,
     submitStartedAt: null, completedAt: null, submittedAt: null, submittedVia: null,
     submitConfirmation: null, canaryLog: null, answersUsedJson: null, viewedAt: null,
@@ -113,6 +113,7 @@ function match(value: any, condition: any): boolean {
     if (key === "in") return expected.includes(value);
     if (key === "notIn") return !expected.includes(value);
     if (key === "not") return !match(value, expected);
+    if (key === "is") return match(value, expected);
     if (key === "OR") return expected.some((condition: any) => match(value, condition));
     return match(value?.[key], expected);
   });
@@ -271,6 +272,20 @@ async function testConsentCohort() {
   assert.equal((await route.POST({ json: async () => ({ ids: ["historical", "boundary"] }) })).body.enqueued, 0);
   assert.equal(db.counts().writes, 1);
 }
+async function testConsentSessionState() {
+  enable();
+  for(const status of ['paused','cancelled','completed','active','auto']) {
+    const db=database([row('session-held',{status:'awaiting_consent',consentGrantedAt:null,sessionId:'session',session:{userId:'owner',status,sentCount:0,targetCount:5,completedAt:null}})]);let enqueued=0;
+    const route=load('src/app/api/applications/consent/route.ts',{'@/lib/db':{prisma:db.prisma},'@/lib/application-queue':{enqueueApplication:async()=>{enqueued++}}});
+    const result=await route.POST({json:async()=>({ids:['session-held']})});
+    if(['active','auto'].includes(status)){assert.equal(result.status,200);assert.equal(enqueued,1);}else{assert.equal(result.status,409);assert.equal(enqueued,0);assert.equal(db.counts().writes,0);assert.equal(db.rows[0].consentGrantedAt,null);}
+  }
+  for(const patch of [{sentCount:5},{completedAt:new Date()},{userId:'foreign'}]){
+    const db=database([row('full',{status:'awaiting_consent',consentGrantedAt:null,sessionId:'session',session:{userId:'owner',status:'active',sentCount:0,targetCount:5,completedAt:null,...patch}})]);
+    const route=load('src/app/api/applications/consent/route.ts',{'@/lib/db':{prisma:db.prisma},'@/lib/application-queue':{enqueueApplication:async()=>{throw Error('must not enqueue')}}});
+    assert.equal((await route.POST({json:async()=>({})})).status,409);assert.equal(db.counts().writes,0);
+  }
+}
 async function testConsentSkipsClosedPosting() {
   enable();
   const db = database([row("closed", { status: "awaiting_consent", consentGrantedAt: null }), row("open", { status: "awaiting_consent", consentGrantedAt: null })]);
@@ -359,7 +374,7 @@ async function main() {
   const original = { ...process.env };
   process.env.CRON_SECRET = "fixture-cron";
   try {
-    await testBlockedEntrypoints(); await testClaimsAndQueue(); await testAutomaticClaimsAndQueue(); await testConsentCohort(); await testConsentSkipsClosedPosting();
+    await testBlockedEntrypoints(); await testClaimsAndQueue(); await testAutomaticClaimsAndQueue(); await testConsentCohort(); await testConsentSessionState(); await testConsentSkipsClosedPosting();
     await testExplicitCreation(); await testReadOnlyAndPreferences();
     assert.equal(forbiddenAccesses, 0);
     console.log("PASS sending producers: automatic producers blocked only when closed/manual_only; retry/reset/replay entrypoints blocked in every mode; automatic-mode claims admit fresh auto rows only; fresh claims/queue/consent only; explicit single/batch enabled; historical records/preferences preserved. Hermetic, no DB/network/provider calls.");
