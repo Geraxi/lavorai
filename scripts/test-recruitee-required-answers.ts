@@ -17,6 +17,6 @@ const deps:Record<string,unknown>={
 };
 vm.runInNewContext(ts.transpileModule(readFileSync('src/lib/portal-adapters/recruitee.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{
  module,exports:module.exports,require:(id:string)=>{assert.ok(id in deps,id);return deps[id]},URL,AbortSignal,Map,Set,
- fetch:async(_url:string,init:any)=>{assert.notEqual(init?.method,'POST');calls++;return{ok:true,json:async()=>({offer:{status:'published',open_questions:[{id:1,required:true,kind:'boolean',body:'Are you authorized to work here?'}]}})}}
+ fetch:async(_url:string,init:any)=>{assert.notEqual(init?.method,'POST');calls++;return{ok:true,json:async()=>({offer:{status:'published',captcha:false,open_questions:[{id:1,required:true,kind:'boolean',body:'Are you authorized to work here?'}]}})}}
 });
 (async()=>{for(answer of ['unknown','yes, if sponsored','no idea']){const result=await module.exports.recruiteeAdapter.apply(null,{jobUrl:'https://fixture.recruitee.com/o/engineer',profile:{}});assert.equal(result.status,'needs_user_input');assert.equal(result.pendingQuestions.length,1);}assert.equal(calls,3);console.log('PASS actual Recruitee adapter: ambiguous required booleans hand off before files/POST; fake GET only');})().catch(e=>{console.error(e);process.exitCode=1});
