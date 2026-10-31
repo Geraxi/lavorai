@@ -7,9 +7,12 @@ import * as jsxRuntime from "react/jsx-runtime";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as rollout from "../src/lib/application-rollout";
 import * as pause from "../src/lib/application-pause";
+import * as prerequisites from "../src/lib/application-prerequisites";
+import * as billing from "../src/lib/billing";
 
 // Actual server and client source, isolated from DB, authentication and network.
 function load(path: string, dependencies: Record<string, unknown>) {
+  dependencies = {"./application-prerequisites":prerequisites,"./billing":billing,...dependencies};
   const module = { exports: {} as Record<string, any> };
   const output = ts.transpileModule(readFileSync(path, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
@@ -121,6 +124,7 @@ async function main() {
       const readiness = load("src/lib/auto-apply-readiness.ts", {
         "@/lib/application-rollout": rollout, "@/lib/application-pause": pause, "@/lib/db": { prisma: {
           userPreferences: { findUnique: async () => ({ autoApplyMode: "auto", rolesJson: '["Engineer"]', locationsJson: '["Milano"]' }) },
+          user: {findUnique: async()=>({privacyConsentAt:new Date(),emailVerified:new Date(),onboardedAt:new Date(),seniority:"mid",englishLevel:"B2",noticePeriod:"now",cvProfile:{id:"profile"}})},
           cVDocument: { count: async () => 1 }, application: { count: async () => 0 },
         } },
       });

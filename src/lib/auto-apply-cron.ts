@@ -1,4 +1,4 @@
-import { catalogueWhere, catalogueJobVisible } from "@/lib/job-catalogue-policy";
+import { catalogueWhere, catalogueJobVisible, PUBLICATION_FRESH_MS } from "@/lib/job-catalogue-policy";
 import { providerOfferAllowed } from "./application-provider-policy";
 import { createLivenessGate, livenessMaxChecksFromEnv, type LivenessGate } from "@/lib/auto-apply-liveness-gate";
 import { checkJobUrlLiveness, markJobClosed } from "@/lib/job-liveness";
@@ -71,6 +71,9 @@ export function jobFreshnessWhere(now = new Date(), days = maxJobAgeDays()) {
     OR: [
       { postedAt: { gte: cutoff } },
       { postedAt: null, cachedAt: { gte: cutoff } },
+      // A current provider publication/form check is stronger evidence than
+      // posting age. This does not reopen old applications or bypass catalogue gates.
+      { source: "recruitee", applicationFormCapability: "standard", publicationVerifiedAt: { gte: new Date(now.getTime() - PUBLICATION_FRESH_MS), lte: now } },
     ],
   };
 }

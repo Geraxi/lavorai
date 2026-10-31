@@ -52,11 +52,11 @@ function prettify(s: string): string {
 export async function resolveSession(
   userId: string,
   job: { title: string; category: string | null },
-): Promise<{ id: string; status: string; label: string; key: string }> {
+): Promise<{ id: string; status: string; label: string; key: string; sentCount: number; targetCount: number; completedAt: Date|null }> {
   const { key, label } = sessionKeyForJob(job);
   if (automaticApplicationsBlocked()) {
     const where = { userId_key: { userId, key } };
-    const select = { id: true, status: true, label: true, key: true } as const;
+    const select = { id: true, status: true, label: true, key: true, sentCount:true, targetCount:true, completedAt:true } as const;
     const existing = await prisma.applicationSession.findUnique({ where, select });
     if (existing) return existing; // Preserve historical label and updatedAt.
     try {
@@ -74,7 +74,7 @@ export async function resolveSession(
     where: { userId_key: { userId, key } },
     create: { userId, key, label },
     update: { label }, // refresh label if title formatting changed
-    select: { id: true, status: true, label: true, key: true },
+    select: { id: true, status: true, label: true, key: true, sentCount:true, targetCount:true, completedAt:true },
   });
   return row;
 }

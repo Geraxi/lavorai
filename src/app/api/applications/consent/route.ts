@@ -60,8 +60,9 @@ export async function POST(request: NextRequest) {
       ...cohort,
       ...(parsed.data.ids ? { id: { in: parsed.data.ids } } : {}),
     },
-    select: { id: true, job: { select: { id: true, url: true } } },
+    select: { id: true, sessionId:true, session:{select:{userId:true,status:true,completedAt:true,sentCount:true,targetCount:true}}, job: { select: { id: true, url: true } } },
   });
+  if(apps.some(a=>a.sessionId&&(!a.session||a.session.userId!==user.id||!['active','auto'].includes(a.session.status)||a.session.completedAt||a.session.sentCount>=a.session.targetCount)))return NextResponse.json({error:'session_inactive',message:'La ricerca è in pausa o conclusa. Riattivala dalle Preferenze, nella sezione Round, poi conferma le candidature.',redirect:'/preferences?tab=rounds'},{status:409});
 
   // Bounded pre-consent liveness check: a closed posting is never queued.
   const gate = createLivenessGate({ check: checkJobUrlLiveness, markClosed: markJobClosed, maxChecks: livenessMaxChecksFromEnv() });
@@ -79,7 +80,8 @@ export async function POST(request: NextRequest) {
         continue;
       }
       const changed = await prisma.application.updateMany({
-        where: { id: a.id, userId: user.id, status: "awaiting_consent", ...cohort },
+        where: { id: a.id, userId: user.id, status: "awaiting_consent", ...cohort,
+          OR:[{sessionId:null},{session:{is:{userId:user.id,status:{in:['active','auto']}}}}] },
         data: { status: "queued", consentGrantedAt: new Date() },
       });
       if (changed.count !== 1) continue;

@@ -5,8 +5,10 @@ import {resolve} from 'node:path';
 import {PrismaClient} from '@prisma/client';
 import {persistRecruiteeObservation,refreshRecruiteeCatalogue} from '../src/lib/recruitee-catalogue-refresh';
 import {catalogueWhere,catalogueJobVisible,PUBLICATION_FRESH_MS} from '../src/lib/job-catalogue-policy';
+import {discoverRecruiteeCatalogue} from '../src/lib/recruitee-catalogue-discovery';
+import {jobFreshnessWhere} from '../src/lib/auto-apply-cron';
 async function main(){
- const url=new URL(process.env.CATALOGUE_TEST_DATABASE_URL??'');assert.equal(url.hostname,'127.0.0.1');assert.equal(url.pathname,'/lavorai_catalogue_test');
+ const url=new URL(process.env.CATALOGUE_TEST_DATABASE_URL??'');assert.equal(url.hostname,'127.0.0.1');assert.ok(['/lavorai_catalogue_test','/lavorai_catalogue_throughput_test'].includes(url.pathname));
  process.env.DATABASE_URL=url.href;process.env.DIRECT_URL=url.href;
  process.env.APPLICATION_PROVIDER_POLICY='recruitee_only';process.env.APPLICATION_PROVIDER_NOT_BEFORE='2026-10-27T23:16:58.626Z';
  const db=new PrismaClient();
@@ -48,6 +50,27 @@ async function main(){
  const invalid=await db.job.create({data:{id:'invalid-url',externalId:'invalid-url',source:'recruitee',url:'https://owned.recruitee.com/o/a?redirect=bad',title:'fixture',description:'fixture'}});
  assert.equal(await persistRecruiteeObservation(db,invalid,{at:new Date(),capability:'unknown'}),'invalid_origin');
  assert.ok((await db.job.findUniqueOrThrow({where:{id:invalid.id}})).catalogueCheckedAt,'invalid URLs cannot pin the refresh queue forever');
+ const oldDate=new Date('2020-01-01');
+ await db.job.update({where:{id:'b'},data:{postedAt:oldDate,publicationVerifiedAt:now}});
+ assert.equal(await db.job.count({where:{id:'b',AND:[jobFreshnessWhere(now)]}}),1,'fresh provider proof overrides old posting age');
+ await db.job.update({where:{id:'b'},data:{publicationVerifiedAt:new Date(+now-PUBLICATION_FRESH_MS-1)}});
+ assert.equal(await db.job.count({where:{id:'b',AND:[jobFreshnessWhere(now)]}}),0,'expired proof never admits old listing');
+ let lists=0;
+ const board:typeof fetch=async(url,init)=>{assert.match(String(url),/^https:\/\/owned.recruitee.com\/api\/offers\/$/);assert.equal(init?.method,'GET');assert.equal(init?.redirect,'error');lists++;return new Response(JSON.stringify({offers:[
+  {id:'new',slug:'new',title:'Engineer',description:'Synthetic engineering role',country:'Italy',status:'published',published_at:'2020-01-01'},
+  {id:'hidden',slug:'hidden',title:'Engineer',description:'Fixture',country:'Italy',status:'closed'},
+ ]}));};
+ const discover=()=>discoverRecruiteeCatalogue(db,{tenants:['owned'],deadline:Date.now()+30_000,fetcher:board,now});
+ const discovered=await Promise.all([discover(),discover()]);
+ assert.equal(discovered.reduce((n,r)=>n+r.created,0),1,'concurrent discovery inserts once');
+ const added=await db.job.findUniqueOrThrow({where:{externalId_source:{externalId:'new',source:'recruitee'}}});
+ assert.equal(added.publicationVerifiedAt,null);assert.equal(catalogueJobVisible(added,now),false,'list response never grants apply eligibility');
+ assert.equal(await db.job.count({where:{externalId:'hidden'}}),0);
+ assert.equal((await discover()).existing,1,'replay preserves identity and history');
+ await persistRecruiteeObservation(db,added,{at:now,capability:'standard',providerId:'new'});
+ assert.equal(await db.job.count({where:{id:added.id,AND:[jobFreshnessWhere(now)]}}),1,'detail-verified discovered old offer enters ordinary matching');
+ const before=lists;assert.equal((await discoverRecruiteeCatalogue(db,{tenants:['owned'],deadline:Date.now()+1000,fetcher:board})).boards,0);assert.equal(lists,before);
+ await assert.rejects(()=>discoverRecruiteeCatalogue(db,{tenants:['evil.test'],deadline:Date.now()+30000,fetcher:board}));
  process.env.APPLICATION_PROVIDER_POLICY='invalid';assert.equal(await db.job.count({where:catalogueWhere(now)}),0);
  console.log('PASS actual additive migration; SQL filtering before pagination/count; mixed/closed/stale/unknown hidden, questionnaire hidden from in-app catalogue; no deletes or external providers');
  }finally{await db.$disconnect()}

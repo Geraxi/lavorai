@@ -33,11 +33,12 @@ export async function PATCH(
   }
   const s = await prisma.applicationSession.findUnique({
     where: { id },
-    select: { userId: true, status: true },
+    select: { userId: true, status: true, completedAt:true,sentCount:true,targetCount:true },
   });
   if (!s || s.userId !== user.id) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  if(['active','auto'].includes(parsed.data.status??'')&&(s.completedAt||['completed','cancelled'].includes(s.status)||s.sentCount>=s.targetCount))return NextResponse.json({error:'session_complete',message:'Il round è concluso. Crea una nuova ricerca: lo storico e i contatori non vengono azzerati.'},{status:409});
   const data: {
     status?: string;
     completedAcknowledgedAt?: Date;

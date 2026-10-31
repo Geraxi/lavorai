@@ -236,7 +236,7 @@ export function PreferencesClient({ initial }: { initial: Initial }) {
                     [
                       { id: "off", title: "Disattivato", sub: "Nessun invio", icon: "pause-circle" as const },
                       { id: "manual", title: "Manuale", sub: "Chiede sempre conferma", icon: "check" as const },
-                      { id: "hybrid", title: "Ibrido", sub: `Auto se match ≥ ${matchMin}%`, icon: "sparkles" as const },
+                      { id: "hybrid", title: "Ibrido", sub: "Trova offerte, invia dopo la tua conferma", icon: "sparkles" as const },
                       { id: "auto", title: "Automatico", sub: "Candida da solo", icon: "zap" as const },
                     ] as const
                   ).map((opt) => {

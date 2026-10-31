@@ -62,11 +62,12 @@ export function SessionsStatus() {
 
   async function pauseResume(s: ApiSession) {
     const next = s.status === "paused" ? "active" : "paused";
-    await fetch(`/api/sessions/${s.id}`, {
+    const res = await fetch(`/api/sessions/${s.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: next }),
     });
+    if(!res.ok){const body=await res.json().catch(()=>({}));toast.error(body.message??"Impossibile aggiornare il round");return;}
     mutate();
     toast.success(next === "paused" ? "Round in pausa" : "Round ripreso");
   }

@@ -227,6 +227,7 @@ export async function POST(request: NextRequest) {
     // awaiting_consent anche in modalità hybrid/manual per evitare il
     // "consenti due volte" segnalato.
     // Eccezione: sessione in pausa → rispettiamo la pausa.
+    if(session.completedAt||['completed','cancelled'].includes(session.status)||session.sentCount>=session.targetCount)return NextResponse.json({error:'session_complete',message:'Questo round è concluso. Crea una nuova ricerca nelle Preferenze prima di candidarti.',redirect:'/preferences?tab=rounds'},{status:409});
     const needsConsent = session.status === "paused";
     const initialStatus = needsConsent ? "awaiting_consent" : "queued";
     // Recheck immediately before creation, including each selected batch job.
