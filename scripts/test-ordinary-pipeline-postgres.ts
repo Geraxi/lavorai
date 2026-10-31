@@ -9,7 +9,7 @@ import { startFakeRecruiteeServer, installFakeRecruiteeFetch } from './fake-recr
 async function main() {
   const url = new URL(process.env.ORDINARY_TEST_DATABASE_URL ?? '');
   assert.equal(url.hostname, '127.0.0.1');
-  assert.match(url.pathname, /^\/lavorai_ordinary_test$/);
+  assert.match(url.pathname, /^\/lavorai_ordinary_(?:throughput_)?test$/);
   process.env.DATABASE_URL = url.href; process.env.DIRECT_URL = url.href;
   Object.assign(process.env, { NODE_ENV: 'test', APPLICATIONS_PAUSED: 'false', APPLICATION_SENDING_MODE: 'automatic',
     USER_NOTIFICATIONS_HOLD: 'true', APPLY_GLOBAL_DAILY_CAP: '100', AUTO_APPLY_ENABLED: 'true' });
