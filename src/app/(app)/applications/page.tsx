@@ -232,7 +232,7 @@ export default function ApplicationsPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast.error(body?.message ?? t("genericError"));
+        toast.error(body?.message ?? t("genericError"),body?.error==="session_inactive"&&typeof body.redirect==="string"&&body.redirect.startsWith("/preferences?")?{action:{label:tr("Apri Round","Open rounds"),onClick:()=>window.location.assign(body.redirect)}}:undefined);
         return;
       }
       toast.success(tr(`${body.enqueued} candidature accodate`, `${body.enqueued} applications queued`));
@@ -251,10 +251,12 @@ export default function ApplicationsPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        toast.error(body?.message ?? t("genericError"));
+        toast.error(body?.message ?? t("genericError"),body?.error==="session_inactive"&&typeof body.redirect==="string"&&body.redirect.startsWith("/preferences?")?{action:{label:tr("Apri Round","Open rounds"),onClick:()=>window.location.assign(body.redirect)}}:undefined);
         return;
       }
-      toast.success(t("appQueued"));
+      const result=await res.json().catch(()=>({}));
+      if(result.enqueued>0)toast.success(t("appQueued"));
+      else toast.info(tr("Nessun nuovo invio accodato. Controlla lo stato della candidatura.","No new submission queued. Check the application status."));
       void mutate();
     } catch {
       toast.error(t("networkError"));

@@ -42,6 +42,7 @@ export function ApplyButton({ jobId, portal }: ApplyButtonProps) {
       }
       if (!res.ok) {
         toast.error(body?.message ?? "Errore. Riprova tra qualche secondo.");
+        if(body?.error==="session_complete"&&typeof body.redirect==="string"&&body.redirect.startsWith("/preferences?"))router.push(body.redirect);
         return;
       }
 

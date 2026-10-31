@@ -83,6 +83,14 @@ jobs:
       - name: Manual-only rollout and producer regressions
         run: npm run test:manual-rollout
 
+      - name: Explicit session replacement PostgreSQL regression
+        env:
+          PGPASSWORD: ci_password
+          SESSION_TEST_DATABASE_URL: "postgresql://ci_user:ci_password@127.0.0.1:5432/lavorai_session_replacement_test"
+        run: |
+          psql -h 127.0.0.1 -U ci_user -d ci_db -c 'CREATE DATABASE lavorai_session_replacement_test'
+          node --import tsx scripts/test-session-replacement-postgres.ts
+
       - name: Atomic global submission budget PostgreSQL integration
         env:
           PGPASSWORD: ci_password

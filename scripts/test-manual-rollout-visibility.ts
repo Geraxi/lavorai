@@ -123,7 +123,7 @@ async function main() {
       assert.deepEqual(response.body.applicationService, { automaticBlocked: false, submissionsPaused: false, dailyCap: capEnv ? 450 : 300 });
       const readiness = load("src/lib/auto-apply-readiness.ts", {
         "@/lib/application-rollout": rollout, "@/lib/application-pause": pause, "@/lib/db": { prisma: {
-          userPreferences: { findUnique: async () => ({ autoApplyMode: "auto", rolesJson: '["Engineer"]', locationsJson: '["Milano"]' }) },
+          userPreferences: { findUnique: async () => ({ autoApplyMode: "auto", rolesJson: '["Engineer"]', locationsJson: '["Milano"]', sourcesJson:'["remoto"]' }) },
           user: {findUnique: async()=>({privacyConsentAt:new Date(),emailVerified:new Date(),onboardedAt:new Date(),seniority:"mid",englishLevel:"B2",noticePeriod:"now",cvProfile:{id:"profile"}})},
           cVDocument: { count: async () => 1 }, application: { count: async () => 0 },
         } },

@@ -16,7 +16,7 @@ function safeArray(json: string): string[] {
   }
 }
 
-export default async function PreferencesPage() {
+export default async function PreferencesPage({searchParams}:{searchParams:Promise<{tab?:string;sessionId?:string}>}) {
   const user = await getCurrentUser();
   if (!user) return null;
 
@@ -77,5 +77,6 @@ export default async function PreferencesPage() {
       .filter(Boolean),
   };
 
-  return <PreferencesClient initial={initial} />;
+  const query=await searchParams;
+  return <PreferencesClient initial={initial} initialTab={query.tab==="rounds"?"rounds":"auto"} initialSessionId={query.sessionId} />;
 }

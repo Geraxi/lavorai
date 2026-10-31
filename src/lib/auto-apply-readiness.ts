@@ -29,7 +29,7 @@ export async function getAutoApplyReadiness(userId: string, matchingJobsInput: n
     cta: "Vedi le offerte", href: "/jobs",
   };
   const [preferences, cvCount, sent, needsAnswers, waitingForConsent, matchingJobs, user] = await Promise.all([
-    prisma.userPreferences.findUnique({ where: { userId }, select: { autoApplyMode: true, rolesJson: true, locationsJson: true } }),
+    prisma.userPreferences.findUnique({ where: { userId }, select: { autoApplyMode: true, rolesJson: true, locationsJson: true, sourcesJson:true } }),
     prisma.cVDocument.count({ where: { userId } }),
     prisma.application.count({ where: { userId, status: "success" } }),
     prisma.application.count({ where: { userId, status: "needs_answers" } }),
@@ -50,7 +50,7 @@ export async function getAutoApplyReadiness(userId: string, matchingJobsInput: n
   const hasLocations = listHasItems(preferences?.locationsJson);
 
   if (!cvCount) return { tone: "action", eyebrow: "Auto-apply", title: "In attesa del tuo CV", detail: "Carica un CV, anche una prima bozza: è il documento che LavorAI adatta a ogni candidatura.", cta: "Carica il CV", href: "/onboarding" };
-  if (!hasRoles || !hasLocations) return { tone: "action", eyebrow: "Auto-apply", title: "Imposta i ruoli e le località", detail: "Ci servono per cercare offerte compatibili con il tuo profilo.", cta: "Imposta preferenze", href: "/preferences" };
+  if (!hasRoles || !hasLocations || !listHasItems(preferences?.sourcesJson)) return { tone: "action", eyebrow: "Auto-apply", title: "Imposta ruoli, località e modalità di lavoro", detail: "Ci servono per cercare offerte compatibili con il tuo profilo.", cta: "Imposta preferenze", href: "/preferences" };
   if (preferences?.autoApplyMode === "off") return { tone: "paused", eyebrow: "Auto-apply", title: "La ricerca automatica è in pausa", detail: "Riattivala dalle Preferenze quando vuoi riprendere a cercare e candidarti.", cta: "Riattiva auto-apply", href: "/preferences" };
   if (needsAnswers > 0) return { tone: "action", eyebrow: "Auto-apply", title: `${needsAnswers} ${needsAnswers === 1 ? "candidatura richiede" : "candidature richiedono"} una risposta`, detail: "Completa le informazioni richieste per farle proseguire.", cta: "Completa le risposte", href: "/questions" };
   if (waitingForConsent > 0) return { tone: "action", eyebrow: "Auto-apply", title: `${waitingForConsent} ${waitingForConsent === 1 ? "candidatura attende" : "candidature attendono"} il tuo consenso`, detail: "Rivedile e conferma quelle che vuoi inviare.", cta: "Rivedi candidature", href: "/applications" };

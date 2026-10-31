@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
     },
     select: { id: true, sessionId:true, session:{select:{userId:true,status:true,completedAt:true,sentCount:true,targetCount:true}}, job: { select: { id: true, url: true } } },
   });
-  if(apps.some(a=>a.sessionId&&(!a.session||a.session.userId!==user.id||!['active','auto'].includes(a.session.status)||a.session.completedAt||a.session.sentCount>=a.session.targetCount)))return NextResponse.json({error:'session_inactive',message:'La ricerca è in pausa o conclusa. Riattivala dalle Preferenze, nella sezione Round, poi conferma le candidature.',redirect:'/preferences?tab=rounds'},{status:409});
+  const blocked=apps.find(a=>a.sessionId&&(!a.session||a.session.userId!==user.id||!['active','auto'].includes(a.session.status)||a.session.completedAt||a.session.sentCount>=a.session.targetCount));
+  if(blocked)return NextResponse.json({error:'session_inactive',message:'Apri Preferenze → Round: riprendi la ricerca in pausa oppure scegli Nuovo round se conclusa. Nessuna candidatura selezionata è stata accodata.',redirect:'/preferences?tab=rounds&sessionId='+encodeURIComponent(blocked.sessionId!)},{status:409});
 
   // Bounded pre-consent liveness check: a closed posting is never queued.
   const gate = createLivenessGate({ check: checkJobUrlLiveness, markClosed: markJobClosed, maxChecks: livenessMaxChecksFromEnv() });
