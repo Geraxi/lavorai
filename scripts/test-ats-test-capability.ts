@@ -764,7 +764,7 @@ async function testRecruiteeFetchMock() {
     return {
       ok: true,
       status: 200,
-      json: async () => ({ offer: { status: "published", open_questions: [] } }),
+      json: async () => ({ offer: { status: "published", captcha: false, open_questions: [] } }),
       text: async () => "",
     } as Response;
   }) as typeof fetch;
@@ -837,7 +837,7 @@ async function testRecruiteeFetchMock() {
       return {
         ok: true,
         status: 200,
-        json: async () => ({ offer: { status: "published", open_questions: [] } }),
+        json: async () => ({ offer: { status: "published", captcha: false, open_questions: [] } }),
         text: async () => "",
       } as Response;
     }
@@ -913,7 +913,7 @@ async function testRecruiteeFetchMock() {
       return {
         ok: true,
         status: 200,
-        json: async () => ({ offer: { status: "published", options_phone: "required", options_photo: "required", open_questions: [] } }),
+        json: async () => ({ offer: { status: "published", captcha: false, options_phone: "required", options_photo: "required", open_questions: [] } }),
         text: async () => "",
       } as Response;
     }) as typeof fetch;
@@ -1098,7 +1098,7 @@ async function testRefusedRetryAtMostOnceClaim() {
           return {
             ok: true,
             status: 200,
-            json: async () => ({ offer: { status: "published", open_questions: [] } }),
+            json: async () => ({ offer: { status: "published", captcha: false, open_questions: [] } }),
             text: async () => "",
           } as Response;
         }) as typeof fetch;

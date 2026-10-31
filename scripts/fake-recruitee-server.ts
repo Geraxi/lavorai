@@ -58,6 +58,7 @@ function offerPayload(slug: string): Record<string, unknown> | null {
     slug,
     title: slug === "cv-required" ? "Fake Recruitee CV required" : realOfferFixture.offer.title,
     status: realOfferFixture.offer.status,
+    captcha: false, // Synthetic no-challenge configuration; not evidence about the live fixture.
     ...REAL_RECRUITEE_OFFER_OPTIONS,
     // Variant used only by the missing-CV refusal case. Default slugs keep
     // the published trial shape (phone/CV/cover_letter optional, photo off).
