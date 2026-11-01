@@ -17,7 +17,7 @@ import {
 } from "@/lib/ats-test-capability";
 import { parseScopedApplicationAnswers } from "@/lib/application-question-answers";
 import { notSubmitted, portalProof, submittedWithProof } from "@/lib/proof-of-send";
-import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
+import { attestAnswerPause, beginApplicationSubmission, completeApplicationSubmission, holdUncommittedSubmission, NOT_SUBMITTED, reserveApplicationWork, recheckApplicationSubmission } from "@/lib/application-worker-gates";
 import { liveLeaseFields, renewLeaseData } from "@/lib/application-lease";
 import { BLANK_FORM_EVIDENCE, STAGED_CHANNELS, needsAnswersSubmitConfirmation } from "@/lib/application-answer-continuation";
 import { Resend } from "resend";
@@ -768,6 +768,7 @@ async function processApplicationRun(
             data: { ...completionData, ...(proof ? submittedWithProof(proof, now) : {}) },
           });
         } else if (!await completeApplicationSubmission(applicationId, workToken, completionData)) {
+          await holdUncommittedSubmission(applicationId, workToken);
           return;
         }
       } else {
