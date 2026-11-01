@@ -180,6 +180,7 @@ export function linkMailboxApplication(
   if (replyPlusAppId) return replyPlusAppId;
   const scored = candidates.map((c) => {
     let s = scoreCandidate(c, mail);
+    const hasCompanyEvidence = s >= 2;
     const fromHost = (mail.from.match(/@([^>\s]+)/)?.[1] ?? "").toLowerCase();
     if (c.url) {
       try {
@@ -192,12 +193,11 @@ export function linkMailboxApplication(
         if (ats.some((host) => fromHost.endsWith(host) && jobHost.includes(host.split(".")[0]))) s += 1;
       } catch { /* ignore */ }
     }
-    return { id: c.id, s, title: c.title, at: c.at };
+    return { id: c.id, s: hasCompanyEvidence ? s : 0, title: c.title, at: c.at };
   }).filter((x) => x.s >= 2).sort((a, b) => b.s - a.s || (b.at?.getTime() ?? 0) - (a.at?.getTime() ?? 0));
   if (!scored.length) return bestApplicationMatch(candidates, mail);
   if (scored.length > 1 && scored[1].s === scored[0].s) {
-    const same = scored.filter((x) => x.s === scored[0].s);
-    if (new Set(same.map((x) => x.title.toLowerCase())).size > 1) return null;
+    return null; // Same title does not identify one posting or application.
   }
   return scored[0].id;
 }

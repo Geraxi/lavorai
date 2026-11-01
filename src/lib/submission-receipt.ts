@@ -24,7 +24,7 @@ export function parseVerifiedSubmissionReceipt(json: string | null | undefined, 
     const endpoint = new URL(receipt.endpoint);
     if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) return null;
     const domains: Record<string, string[]> = { ashby: ["ashbyhq.com"], greenhouse: ["greenhouse.io"], lever: ["lever.co"],
-      workable: ["workable.com"], personio: ["personio.de", "personio.com"], bamboohr: ["bamboohr.com"],
+      recruitee: ["recruitee.com"], workable: ["workable.com"], personio: ["personio.de", "personio.com"], bamboohr: ["bamboohr.com"],
       breezy: ["breezy.hr"], pinpoint: ["pinpointhq.com"], smartrecruiters: ["smartrecruiters.com"] };
     if (domains[receipt.provider] && !domains[receipt.provider].some((host) => endpoint.hostname === host || endpoint.hostname.endsWith(`.${host}`))) return null;
     return receipt;

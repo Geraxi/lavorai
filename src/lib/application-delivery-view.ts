@@ -6,6 +6,7 @@ export interface DeliveryView {
   label: string;
   detail: string;
   tone: "positive" | "warning" | "neutral";
+  action?: "privacy_consent";
 }
 export function applicationDeliveryView(app: {
   status: string;
@@ -70,6 +71,10 @@ export function applicationDeliveryView(app: {
   }
   if (app.status === "ready_to_apply" && app.submitConfirmation === "NOT_SUBMITTED" && app.errorMessage === ROLLOUT_BUDGET_HELD_MESSAGE) {
     return { phase: "pending", label: "In attesa: limite giornaliero", tone: "warning", detail: ROLLOUT_BUDGET_HELD_MESSAGE };
+  }
+  if (app.status === "needs_user" && /^(?:Invio in attesa: )?Consenso privacy mancante\./.test(app.errorMessage ?? "")) {
+    return { phase: "pending", label: "Consenso privacy necessario", tone: "warning", action: "privacy_consent",
+      detail: "Nessun invio effettuato. Leggi l’informativa nelle Impostazioni e scegli se acconsentire. Il consenso alla candidatura e gli altri controlli restano necessari." };
   }
   const labels: Record<string, string> = {
     queued: "In coda", optimizing: "In preparazione", applying: "Invio in corso", submitting: "Invio in corso",

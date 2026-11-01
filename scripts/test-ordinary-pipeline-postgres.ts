@@ -123,12 +123,41 @@ async function main() {
     const beforeHiddenAI=aiCalls;await run(hiddenQuestion);assert.equal(posts(),fencedPosts+1);assert.equal(aiCalls,beforeHiddenAI,'questionnaire hidden before ordinary preparation');
     delete process.env.APPLICATION_PROVIDER_POLICY;delete process.env.APPLICATION_PROVIDER_NOT_BEFORE;
     console.log('PASS ordinary provider/cutoff and catalogue capability fences, supported form success, questionnaire refusal before AI/provider');
+    for (const mode of ['manual','hybrid']) {
+      const mid=await fixture();
+      await db.userPreferences.update({where:{userId:mid},data:{autoApplyMode:mode}});
+      const beforeMode=posts();
+      await run(mid);assert.equal(posts(),beforeMode,'unapproved '+mode+' cannot send');
+      const approved=await fixture();
+      await db.userPreferences.update({where:{userId:approved},data:{autoApplyMode:mode}});
+      await db.application.update({where:{id:approved},data:{consentGrantedAt:new Date()}});
+      await run(approved);await run(approved);
+      assert.equal(posts(),beforeMode+1,'approved '+mode+' sends exactly once');
+      assert.equal((await db.application.findUniqueOrThrow({where:{id:approved}})).submitConfirmation,'DETECTED_HTTP_201');
+    }
+    for(const state of ['paused','completed','cancelled','full','completed-marker']) {
+      const sid=await fixture();const sn=await db.applicationSession.create({data:{userId:sid,key:'session-audit',label:'Engineer',status:['full','completed-marker'].includes(state)?'active':state,sentCount:state==='full'?5:0,targetCount:5,completedAt:state==='completed-marker'?new Date():null}});
+      await db.application.update({where:{id:sid},data:{sessionId:sn.id}});
+      const beforeSession=posts(),beforeAI=aiCalls;await run(sid);
+      assert.equal(posts(),beforeSession,state+' session cannot send');assert.equal(aiCalls,beforeAI,state+' session blocked before preparation');
+    }
+    console.log('PASS actual manual/hybrid consent-to-worker receipt/no-repeat and paused/completed/cancelled/full/terminal-marker sessions');
     const race=await fixture('race-two'); const before=posts(); await Promise.all(Array.from({length:6},()=>run(race)));
     assert.equal(posts()-before,1,'one atomic ordinary owner'); console.log('PASS ordinary concurrency');
     const uncertain=await fixture('server-500'); const n=posts(); await run(uncertain); await run(uncertain);
     row=await db.application.findUniqueOrThrow({where:{id:uncertain}});
     assert.equal(row.submitConfirmation,'UNCONFIRMED'); assert.equal(view(row).phase,'unconfirmed'); assert.notEqual(row.status,'success'); assert.equal(posts()-n,1);
     console.log('PASS ambiguous response retains fence and never repeats');
+    for(const behavior of ['validation422','timeout'] as const) {
+      fake.postBehavior.set('real-optional',behavior);
+      const rejected=await fixture();const p=posts();await run(rejected);await run(rejected);
+      const outcome=await db.application.findUniqueOrThrow({where:{id:rejected}});
+      assert.equal(posts()-p,1,'no automatic replay after '+behavior);
+      assert.equal(outcome.submitConfirmation,behavior==='validation422'?'REJECTED_NOT_SENT':'UNCONFIRMED');
+      assert.notEqual(outcome.status,'success');assert.equal(outcome.submissionReceiptJson,null);
+      fake.postBehavior.delete('real-optional');
+    }
+    console.log('PASS actual 422 refusal differs from disconnected transport; neither yields receipt/success/replay');
     for(const changes of [{privacyConsentAt:null},{subscriptionStatus:'paused'}]) {
       const blocked=await fixture('real-optional',changes); const n=posts(), a=aiCalls; await run(blocked);
       assert.equal(posts(),n); assert.equal(aiCalls,a); assert.notEqual((await db.application.findUniqueOrThrow({where:{id:blocked}})).status,'success');
@@ -175,12 +204,12 @@ async function main() {
     const raceBefore=posts(); await Promise.all([run(raceFree),run(competing)]);
     assert.equal(posts()-raceBefore,1,'only one remaining free-quota slot under concurrency');
     console.log('PASS ordinary concurrent free quota admits one remaining send');
-    assert.equal(mails.length,4,'only proved successes schedule notifications');
-    assert.equal(await db.emailLog.count(),4,'fake accepted notifications recorded');
+    assert.equal(mails.length,6,'only proved successes schedule notifications');
+    assert.equal(await db.emailLog.count(),6,'fake accepted notifications recorded');
     for(const mode of ['error','no_id']) {
       mailMode=mode; const noticeFailure=await fixture('real-optional'); const before=posts(); await run(noticeFailure);
       assert.equal((await db.application.findUniqueOrThrow({where:{id:noticeFailure}})).status,'success','email failure does not undo real ATS receipt');
-      assert.equal(await db.emailLog.count(),4,'provider error/missing ID never logged as sent');
+      assert.equal(await db.emailLog.count(),6,'provider error/missing ID never logged as sent');
       await run(noticeFailure); assert.equal(posts()-before,1,'notification error cannot retry application');
     }
     console.log('PASS notification error/missing ID never recorded sent, no application replay');
