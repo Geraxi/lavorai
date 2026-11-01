@@ -6,7 +6,7 @@ import { ordinaryValidationRow } from "./ordinary-validation";
 import { answerContinuationIneligibility, answerConfirmationDigest, continuationConfirmationAccepted, continuationDigest, continuationSelect, parseAnswerContinuation, ANSWERS_CONSENT_NOTE, BLANK_FORM_EVIDENCE, CONTINUATION_CHANNELS, CONTINUATION_PROOF_MISSING_MESSAGE, STAGED_CHANNELS, type AnswerContinuation, type PreTransmissionEvidence } from "./application-answer-continuation";
 import { candidateFacts, resolveCandidateFact } from "./candidate-facts";
 import { parseAnswers } from "./application-answers";
-import { isValidProof, portalProof, submittedWithProof, type SentProof } from "./proof-of-send";
+import { isValidProof, notSubmitted, portalProof, submittedWithProof, type SentProof } from "./proof-of-send";
 import { completesApplicationQuestion, resolveExplicitApplicationAnswer, parseApplicationQuestion } from "./application-question-answers";
 import { applicationsPaused } from "@/lib/application-pause";
 import { atsTestPauseExemption, syntheticAtsTestProfile } from "@/lib/ats-test-capability";
@@ -476,6 +476,30 @@ export async function recheckApplicationSubmission(id: string, token: Date, db: 
       },
     });
     return marked.count === 1;
+  })) === true;
+}
+
+/** A response that cannot be committed is uncertainty, not ongoing work.
+ * Only the original lease owner may quarantine its attempt, even after expiry.
+ * This never releases the reservation, clears attempt evidence, renews a lease,
+ * accepts a receipt or permits retry; a replacement owner is never overwritten.
+ */
+export async function holdUncommittedSubmission(id: string, token: Date, db: DB = prisma): Promise<boolean> {
+  const leaseToken = leaseTokenOf(token);
+  if (!leaseToken) return false;
+  return (await withLockedApplication(id, db, async (tx, row) => {
+    if (!row || row.startedAt?.getTime() !== token.getTime() || row.leaseToken !== leaseToken
+      || row.status !== "applying" || row.submitConfirmation !== SUBMISSION_STARTED
+      || row.submittedAt || row.submittedVia) return false;
+    const changed = await tx.application.updateMany({ where: {
+      id, startedAt: token, leaseToken, status: "applying", submitConfirmation: SUBMISSION_STARTED,
+      submittedAt: null, submittedVia: null, submissionReceiptJson: null, sentProofRef: null,
+    }, data: {
+      status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
+      ...notSubmitted("needs_user", "submission_receipt_not_committed"),
+      errorMessage: "Risposta del portale ricevuta, ma conferma non registrabile per ricevuta o scadenza dell'elaborazione. Esito da verificare: nessun nuovo invio automatico.",
+    } });
+    return changed.count === 1;
   })) === true;
 }
 
