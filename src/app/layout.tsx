@@ -14,7 +14,6 @@ import { TrackingPixels } from "@/components/tracking-pixels";
 import { RegistrationConversion } from "@/components/registration-conversion";
 import { Analytics } from "@vercel/analytics/next";
 import { assertEnvOrCrash } from "@/lib/env";
-import { ServiceNoticeBanner } from "@/components/service-notice-banner";
 import "./globals.css";
 
 // Fail-fast al PRIMO runtime request in prod se mancano env vars critiche.
@@ -127,7 +126,6 @@ export default async function RootLayout({
     >
       <head><script dangerouslySetInnerHTML={{ __html: GOOGLE_CONSENT_DEFAULT }} /></head>
       <body className="min-h-screen antialiased">
-        <ServiceNoticeBanner />
         {/* JSON-LD structured data: Organization + WebSite +
             SoftwareApplication. Renderizzato server-side per essere
             visibile ai crawler senza richiedere JS. */}
