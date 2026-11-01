@@ -47,7 +47,7 @@ export const workerGateSelect = {
   ...evidenceSelect, ...continuationSelect,
   job: { select: { source: true, publicationVerifiedAt: true, applicationFormCapability: true, closedAt: true, url: true, recruiterEmail: true, company: true, title: true, description: true, location: true,
     remote: true, contractType: true, salaryMin: true, salaryMax: true } },
-  session: { select: { id: true, userId: true, status: true, sentCount: true, targetCount: true, title: true, label: true } },
+  session: { select: { id: true, userId: true, status: true, sentCount: true, targetCount: true, completedAt: true, title: true, label: true } },
   user: { select: {
     email: true, name: true, yearsExperience: true, englishLevel: true, noticePeriod: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
     subscriptionStatus: true, currentPeriodEnd: true, pausedUntil: true, suspendedAt: true,
@@ -145,7 +145,7 @@ export function ordinaryWorkerIneligibility(gated: WorkerGateRow, now = new Date
   if (gated.job.closedAt) return "job_closed";
   if (isAvoidedCompany(gated.job.company, user.avoidCompanies)) return "company_avoided";
   if (gated.sessionId && (!gated.session || gated.session.userId !== gated.userId
-    || !["active", "auto"].includes(gated.session.status))) return "session_inactive";
+    || gated.session.completedAt || !["active", "auto"].includes(gated.session.status))) return "session_inactive";
   if (gated.session && gated.session.sentCount >= gated.session.targetCount) return "session_capacity_reached";
   // Explicit single-job consent may override search preferences. Automatic
   // selection must re-evaluate current facts after the queue wait and at send.
@@ -522,7 +522,7 @@ export async function completeApplicationSubmission(
     } else {
       if (typeof data.submittedVia !== "string" || !data.submittedVia.startsWith("portal_") || typeof data.submissionReceiptJson !== "string") return false;
       const receipt = parseVerifiedSubmissionReceipt(data.submissionReceiptJson, data.submittedVia);
-      if (!receipt || receipt.jobId !== receiptJobId(receipt.provider, row.job.url)
+      if (!receipt || (receipt.provider === "recruitee" && (receipt.kind !== "http" || new URL(receipt.endpoint!).origin !== new URL(row.job.url).origin)) || receipt.jobId !== receiptJobId(receipt.provider, row.job.url)
         || Date.parse(receipt.capturedAt) < token.getTime() || Date.parse(receipt.capturedAt) > Date.now() + 60_000) return false;
       proof = portalProof({ receipt, postSubmitScreenshotUrl: canaryScreenshot(data.canaryLog) });
     }

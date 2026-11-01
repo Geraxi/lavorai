@@ -1,3 +1,5 @@
+import {applicationDeliveryView as auditDeliveryView} from '../src/lib/application-delivery-view';
+import {deliveryCopy as auditDeliveryCopy} from '../src/lib/application-presentation';
 /**
  * Application mailbox: classify, link, notify, usage, GDPR retention.
  * Fakes only — no Resend, no network, no production DB.
@@ -83,6 +85,10 @@ async function main() {
     { id: "a1", company: "Acme", title: "Backend Engineer", url: "https://boards.greenhouse.io/acme/jobs/1", at: new Date("2026-10-20") },
     { id: "a2", company: "Globex", title: "Data Analyst", url: "https://jobs.lever.co/globex/2", at: new Date("2026-10-21") },
   ];
+  const ambiguous=[{id:'old',company:'Acme',title:'Designer',url:'https://acme.recruitee.com/o/one',at:new Date(0)},{id:'new',company:'Acme',title:'Designer',url:'https://acme.recruitee.com/o/two',at:new Date()}];
+  assert.equal(linkMailboxApplication(ambiguous,{from:'hr@acme.com',subject:'Acme Designer',body:'Update'}),null,'same-title postings remain unassigned');
+  assert.equal(linkMailboxApplication(ambiguous,{from:'hr@acme.com',subject:'Acme Designer',body:'Update'},'old'),'old','exact application alias wins');
+  assert.equal(linkMailboxApplication([{...ambiguous[0],company:'Different'}],{from:'no-reply@acme.recruitee.com',subject:'Update',body:'Hello'}),null,'ATS domain alone is not application evidence');
   assert.equal(linkMailboxApplication(jobs, { from: "x@y.com", subject: "x", body: "y" }, "a1"), "a1");
   assert.equal(linkMailboxApplication(jobs, { from: "no-reply@greenhouse.io", subject: "Thank you for applying to Acme", body: "Backend Engineer" }), "a1");
   assert.equal(jobApplySupport("https://boards.greenhouse.io/acme/jobs/1"), "supported");
@@ -222,3 +228,6 @@ async function main() {
 }
 
 main().catch((e) => { process.stderr.write(String(e?.stack ?? e) + "\n"); process.exit(1); });
+
+const privacyView=auditDeliveryView({status:'needs_user',submittedVia:null,submitConfirmation:null,errorMessage:'Invio in attesa: Consenso privacy mancante. Apri Impostazioni'});
+assert.equal(privacyView.action,'privacy_consent');assert.match(auditDeliveryCopy(privacyView,'en')!.detail,/Nothing was sent/);

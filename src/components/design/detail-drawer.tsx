@@ -126,6 +126,7 @@ export function DetailDrawer({
               {app.delivery && <section style={{ padding: 14, border: "1px solid var(--border-ds)", borderRadius: 8, marginBottom: 18 }}>
                 <strong>{app.delivery.label}</strong>
                 <p style={{ fontSize: 13, marginTop: 6 }}>{app.delivery.detail}</p>
+                {app.delivery.action === "privacy_consent" && <a className="ds-btn ds-btn-sm" href="/settings#privacy-consent">{tr("Rivedi il consenso privacy", "Review privacy consent")}</a>}
                 {app.deliveryRecipient && <p style={{ fontSize: 12, marginTop: 6 }}>{tr("Destinatario", "Recipient")}: {app.deliveryRecipient}</p>}
               </section>}
               {/* Mini stats */}

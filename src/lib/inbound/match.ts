@@ -35,9 +35,7 @@ export function bestApplicationMatch(cands: MatchCandidate[], mail: { from: stri
     .sort((a, b) => b.s - a.s || (b.c.at?.getTime() ?? 0) - (a.c.at?.getTime() ?? 0));
   if (!scored.length) return null;
   if (scored.length > 1 && scored[1].s === scored[0].s) {
-    // Same company + same score: only accept when it's literally one job (same title).
-    const same = scored.filter((x) => x.s === scored[0].s);
-    if (new Set(same.map((x) => norm(x.c.title))).size > 1) return null;
+    return null; // A newer same-title application is not stronger correlation evidence.
   }
   return scored[0].c.id;
 }

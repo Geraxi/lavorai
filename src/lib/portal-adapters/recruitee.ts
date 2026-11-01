@@ -230,6 +230,13 @@ export const recruiteeAdapter: PortalAdapter = {
       const body = await r.text().catch(() => null);
       const proof = verifySubmissionResponse("recruitee", input.jobUrl, { url: endpoint, method: "POST", postData: null, status: r.status, body });
       if (proof.receipt) return { ok: true, status: "submitted", confirmation: `DETECTED_HTTP_${r.status}`, receipt: proof.receipt };
+      // Only a structured, definitive validation refusal is classified as rejected.
+      // Conflict/auth/challenge responses and transport failures remain uncertain.
+      let validationErrors: unknown;
+      try { validationErrors = JSON.parse(body ?? 'null')?.errors; } catch { /* unknown body */ }
+      if (proof.rejected && r.status === 422 && validationErrors && typeof validationErrors === 'object' && Object.keys(validationErrors).length > 0) {
+        return { ok: false, status: "validation_failed", error: "Recruitee ha rifiutato i dati della candidatura (HTTP 422). Nessuna ricezione confermata; correggi i dati prima di richiedere un nuovo invio." };
+      }
       return { ok: false, status: "submission_unconfirmed", error: `Ricezione Recruitee non confermata (HTTP ${r.status}). Verificare prima di un nuovo invio per evitare duplicati.` };
     } catch (err) {
       return { ok: false, status: "submission_unconfirmed", error: `Ricezione Recruitee non confermata: ${err instanceof Error ? err.message : err}` };

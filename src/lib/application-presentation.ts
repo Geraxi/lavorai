@@ -24,6 +24,7 @@ export function applicationLabel(value: string, locale: string): string {
 }
 export function deliveryCopy(delivery: DeliveryView | undefined, locale: string): DeliveryView | undefined {
   if (!delivery || locale !== "en") return delivery;
+  if (delivery.action === "privacy_consent") return { ...delivery, label: "Privacy consent needed", detail: "Nothing was sent. Review the privacy notice in Settings and choose whether to consent. Application consent and all other delivery checks still apply." };
   const details: Record<DeliveryView["phase"], string> = {
     confirmed: "The portal confirmed receipt of the application. The company decides whether and when to respond.",
     delivered: "The recipient mail server accepted the email. This does not prove recruiter readership or a reply.",

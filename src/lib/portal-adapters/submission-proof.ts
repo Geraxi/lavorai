@@ -85,6 +85,7 @@ function safeIdentifier(value: unknown): string | undefined {
 function trustedUrl(provider: string, raw: string, jobUrl: string): boolean {
   try {
     const url = new URL(raw), job = new URL(jobUrl);
+    if (provider === "recruitee" && url.origin !== job.origin) return false;
     if (url.protocol !== "https:" || job.protocol !== "https:" || url.username || url.password || job.username || job.password) return false;
     return !!HOSTS[provider]?.test(url.hostname) || (CUSTOM_HOST_PROVIDERS.has(provider) && url.hostname === job.hostname);
   } catch { return false; }

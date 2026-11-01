@@ -359,7 +359,7 @@ async function testRecruiteeBoundary() {
         if (scenario === "timeout") throw Error("Timed out after dispatch");
         return {
           status: scenario === "rejected" ? 422 : scenario === "empty" ? 204 : 201,
-          text: async () => scenario === "error" ? '{"errors":{"email":"Invalid"}}' : scenario === "empty" ? "" : '{"candidate":{"id":"recruitee-receipt"}}',
+          text: async () => ["error", "rejected"].includes(scenario) ? '{"errors":{"email":"Invalid"}}' : scenario === "empty" ? "" : '{"candidate":{"id":"recruitee-receipt"}}',
         };
       },
     });
@@ -379,6 +379,8 @@ async function testRecruiteeBoundary() {
     if (scenario === "unanswered") { assert.equal(outcome.status, "needs_user_input"); assert.equal(formValues.size, 0, "No candidate payload constructed before the missing-answer return"); }
     if (scenario === "boolean-no") assert.equal(formValues.get("candidate[open_question_answers_attributes][0][flag]"), "false", "An explicit No must stay false for required API booleans");
     assert.equal(posts, ["unanswered", "paused", "gate-error", "lookup-error", "not-an-offer", "dry-run"].includes(scenario) ? 0 : 1, scenario);
+    if (scenario === "rejected") assert.equal(outcome.status, "validation_failed");
+    if (["error", "empty", "timeout"].includes(scenario)) assert.equal(outcome.status, "submission_unconfirmed");
     if (outcome.ok && scenario !== "dry-run") assert.equal(outcome.receipt.receiptId, "recruitee-receipt");
   }
   console.log("Real Recruitee adapter: receipt/error/empty/timeout and final-gate paths passed with isolated HTTP/files.");
@@ -405,3 +407,5 @@ async function main() {
   console.log("ATS submission-proof regression suite passed (no external sends or network).");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });
+
+assert.equal(verifySubmissionResponse('recruitee','https://acme.recruitee.com/o/same-slug',{url:'https://other.recruitee.com/api/offers/same-slug/candidates',method:'POST',postData:null,status:201,body:'{"candidate":{"id":"wrong-tenant"}}'}).receipt,undefined,'same slug on another employer is not this application receipt');

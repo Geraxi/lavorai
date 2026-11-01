@@ -45,7 +45,7 @@ export type FakeRecruiteeRequest = {
   files: FakeRecruiteeFile[];
 };
 
-export type FakePostBehavior = "ok" | "error500" | "timeout";
+export type FakePostBehavior = "ok" | "error500" | "validation422" | "timeout";
 
 const OFFER_PATH = /^\/api\/offers\/([^/]+)\/?$/;
 const CANDIDATE_PATH = /^\/api\/offers\/([^/]+)\/candidates\/?$/;
@@ -177,6 +177,11 @@ export async function startFakeRecruiteeServer(): Promise<{
         if (behavior === "error500") {
           res.writeHead(500, { "content-type": "application/json" });
           res.end(JSON.stringify({ error: "synthetic_server_error" }));
+          return;
+        }
+        if (behavior === "validation422") {
+          res.writeHead(422, { "content-type": "application/json" });
+          res.end(JSON.stringify({ errors: { email: ["synthetic invalid email"] } }));
           return;
         }
         candidateSeq += 1;
