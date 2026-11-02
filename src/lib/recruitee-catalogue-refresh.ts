@@ -1,3 +1,4 @@
+import {reviewedOfferUrls} from './assisted-reviewed-offers';
 import type { PrismaClient } from '@prisma/client';
 import {canonicalRecruiteeOffer, classifyRecruiteeForm, type FormCapability} from './recruitee-form-capability';
 import {PUBLICATION_FRESH_MS,OWNED_TEST_PREFIX} from './job-catalogue-policy';
@@ -49,13 +50,6 @@ export function refreshTenants(raw:string|undefined):string[] {
  const values=(raw??'').split(',').map(x=>x.trim()).filter(Boolean);
  if(!values.length||values.length>64||values.some(x=>!/^[a-z0-9-]+$/.test(x)))throw Error('Explicit approved tenant list required (1–64)');
  return [...new Set(values)];
-}
-/** Exact reviewed offers only; does not add tenants to discovery. */
-export function reviewedOfferUrls(raw: string | undefined): string[] {
- if (!raw?.trim()) return [];
- const values=[...new Set(raw.split(',').map(x=>x.trim()))];
- if(values.length>5||values.some(x=>canonicalRecruiteeOffer(x)!==x||x.startsWith(OWNED_TEST_PREFIX)))return [];
- return values;
 }
 export async function refreshRecruiteeCatalogue(db:PrismaClient, options:{tenants:string[];limit?:number;budgetMs?:number;fetcher?:typeof fetch;discover?:boolean}) {
  const tenants=refreshTenants(options.tenants.join(','));

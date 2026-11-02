@@ -1,4 +1,4 @@
-import {reviewedOfferUrls} from '../src/lib/recruitee-catalogue-refresh';
+import {reviewedOfferUrls} from '../src/lib/assisted-reviewed-offers';
 import assert from 'node:assert/strict';
 import type {Job} from '@prisma/client';
 import {assistedOpportunity} from '../src/lib/assisted-opportunity';
@@ -17,3 +17,8 @@ console.log('Assisted review policy: 16 checks passed; no DB/network/submission'
 assert.deepEqual(reviewedOfferUrls('https://gtowizard.recruitee.com/o/graphic-designer'),['https://gtowizard.recruitee.com/o/graphic-designer']);
 assert.deepEqual(reviewedOfferUrls('https://gtowizard.recruitee.com/o/graphic-designer,https://evil.test/x'),[]);
 assert.deepEqual(reviewedOfferUrls(undefined),[]);
+
+process.env.ASSISTED_RECRUITEE_REVIEW_URLS='https://gtowizard.recruitee.com/o/graphic-designer';
+const reviewed={...job,url:process.env.ASSISTED_RECRUITEE_REVIEW_URLS,applicationFormCapability:'standard'};
+assert.equal(catalogueJobVisible(reviewed,now),false,'review-only posting cannot become auto-sendable after form changes');
+assert.equal(assistedOpportunity(reviewed,p,now)?.canSubmit,false);

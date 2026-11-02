@@ -1,3 +1,4 @@
+import {reviewedOfferUrls} from './assisted-reviewed-offers';
 import type { Job } from '@prisma/client';
 import { canonicalRecruiteeOffer } from './recruitee-form-capability';
 import { OWNED_TEST_PREFIX, PUBLICATION_FRESH_MS } from './job-catalogue-policy';
@@ -11,7 +12,7 @@ export function assistedOpportunity(job: Job, preferences: {
 }, now = new Date()) {
  const url = canonicalRecruiteeOffer(job.url);
  if (!url || url.startsWith(OWNED_TEST_PREFIX) || job.source !== 'recruitee' || job.closedAt ||
-     job.applicationFormCapability !== 'questions' || !job.publicationVerifiedAt ||
+     !(job.applicationFormCapability === 'questions' || job.applicationFormCapability === 'standard' && reviewedOfferUrls(process.env.ASSISTED_RECRUITEE_REVIEW_URLS).includes(url)) || !job.publicationVerifiedAt ||
      +job.publicationVerifiedAt > +now || +job.publicationVerifiedAt < +now-PUBLICATION_FRESH_MS) return null;
  if ((job.protectedCategory && !preferences.protectedCategory) || !preferences.roles.length || !preferences.locations.length ||
      !titleMatchesAnyRole(job.title, preferences.roles, preferences.seniority) ||

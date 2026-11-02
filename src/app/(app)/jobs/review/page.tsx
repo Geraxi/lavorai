@@ -1,3 +1,4 @@
+import {reviewedOfferUrls} from '@/lib/assisted-reviewed-offers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
@@ -18,7 +19,7 @@ export default async function ReviewOpportunities() {
      !prefs || !['manual','hybrid','auto'].includes(prefs.autoApplyMode)) redirect('/settings');
  const now = new Date();
  const jobs = await prisma.job.findMany({where:{source:'recruitee',closedAt:null,
-   applicationFormCapability:'questions',publicationVerifiedAt:{gte:new Date(+now-PUBLICATION_FRESH_MS),lte:now}},
+   OR:[{applicationFormCapability:'questions'},{applicationFormCapability:'standard',url:{in:reviewedOfferUrls(process.env.ASSISTED_RECRUITEE_REVIEW_URLS)}}],publicationVerifiedAt:{gte:new Date(+now-PUBLICATION_FRESH_MS),lte:now}},
    orderBy:[{publicationVerifiedAt:'desc'},{id:'asc'}],take:200});
  const matched = jobs.filter(job=>assistedOpportunity(job,{
    ...prefs,roles:parsePreferenceList(prefs.rolesJson)??[],locations:parsePreferenceList(prefs.locationsJson)??[],
