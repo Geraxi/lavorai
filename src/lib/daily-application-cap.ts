@@ -29,6 +29,7 @@ export const DAILY_CAP_IN_FLIGHT_STATUSES = [
   "applying",
   "submitting",
   "answers_claimed",
+  "assisted_unconfirmed",
 ] as const;
 
 /** Weekly quota reservation: a send in progress. Queued backlog and handoffs do not count. */
@@ -37,6 +38,7 @@ export const WEEKLY_QUOTA_IN_FLIGHT_STATUSES = [
   "applying",
   "submitting",
   "answers_claimed",
+  "assisted_unconfirmed",
 ] as const;
 
 export const DAILY_CAP_SENT_STATUSES = ["success"] as const;
@@ -184,7 +186,8 @@ export function quotaConsumingFilter() {
 export function dailyCapUsageWhere(userId: string, now = new Date()) {
   return {
     userId,
-    createdAt: { gte: romeDayStart(now) },
+    OR: [{ status: { not: "assisted_unconfirmed" }, createdAt: { gte: romeDayStart(now) } },
+      { status: "assisted_unconfirmed", consentGrantedAt: { gte: romeDayStart(now) } }],
     ...excludeAtsTestJobRelationWhere(),
     ...quotaConsumingFilter(),
   };
@@ -193,7 +196,8 @@ export function dailyCapUsageWhere(userId: string, now = new Date()) {
 export function monthlyQuotaUsageWhere(userId: string, since: Date) {
   return {
     userId,
-    createdAt: { gte: since },
+    OR: [{ status: { not: "assisted_unconfirmed" }, createdAt: { gte: since } },
+      { status: "assisted_unconfirmed", consentGrantedAt: { gte: since } }],
     ...excludeAtsTestJobRelationWhere(),
     ...quotaConsumingFilter(),
   };
@@ -202,7 +206,8 @@ export function monthlyQuotaUsageWhere(userId: string, since: Date) {
 export function companyCapUsageWhere(userId: string, since: Date) {
   return {
     userId,
-    createdAt: { gte: since },
+    OR: [{ status: { not: "assisted_unconfirmed" }, createdAt: { gte: since } },
+      { status: "assisted_unconfirmed", consentGrantedAt: { gte: since } }],
     ...excludeAtsTestJobRelationWhere(),
     ...quotaConsumingFilter(),
   };

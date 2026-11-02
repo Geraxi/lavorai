@@ -50,6 +50,13 @@ export function refreshTenants(raw:string|undefined):string[] {
  if(!values.length||values.length>64||values.some(x=>!/^[a-z0-9-]+$/.test(x)))throw Error('Explicit approved tenant list required (1–64)');
  return [...new Set(values)];
 }
+/** Exact reviewed offers only; does not add tenants to discovery. */
+export function reviewedOfferUrls(raw: string | undefined): string[] {
+ if (!raw?.trim()) return [];
+ const values=[...new Set(raw.split(',').map(x=>x.trim()))];
+ if(values.length>5||values.some(x=>canonicalRecruiteeOffer(x)!==x||x.startsWith(OWNED_TEST_PREFIX)))return [];
+ return values;
+}
 export async function refreshRecruiteeCatalogue(db:PrismaClient, options:{tenants:string[];limit?:number;budgetMs?:number;fetcher?:typeof fetch;discover?:boolean}) {
  const tenants=refreshTenants(options.tenants.join(','));
  const limit=options.limit??200,budget=options.budgetMs??210_000;
@@ -58,7 +65,7 @@ export async function refreshRecruiteeCatalogue(db:PrismaClient, options:{tenant
  // Reserve bounded discovery time when enabled so slow existing rows cannot
  // permanently starve new offers. Both phases share the same overall deadline.
  const refreshDeadline=options.discover&&budget>=50_000?deadline-35_000:deadline;
- const sourceWhere={source:'recruitee',NOT:{url:{startsWith:OWNED_TEST_PREFIX}},OR:tenants.map(t=>({url:{startsWith:`https://${t}.recruitee.com/o/`}}))};
+ const sourceWhere={source:'recruitee',NOT:{url:{startsWith:OWNED_TEST_PREFIX}},OR:[...tenants.map(t=>({url:{startsWith:`https://${t}.recruitee.com/o/`}})),{url:{in:reviewedOfferUrls(process.env.ASSISTED_RECRUITEE_REVIEW_URLS)}}]};
  const targets=await db.job.findMany({where:sourceWhere,orderBy:[{catalogueCheckedAt:{sort:'asc',nulls:'first'}},{id:'asc'}],take:limit,select:{id:true,externalId:true,url:true,source:true}});
  let cursor=0;const counts:Record<string,number>={};
  async function worker(){while(cursor<targets.length&&Date.now()+13_000<refreshDeadline){const target=targets[cursor++];const observation=await inspectRecruiteeOffer(target.url,options.fetcher);const outcome=await persistRecruiteeObservation(db,target,observation);counts[outcome]=(counts[outcome]??0)+1;await new Promise(r=>setTimeout(r,600));}}

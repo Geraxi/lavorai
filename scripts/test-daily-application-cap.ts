@@ -72,7 +72,9 @@ function matchClause(row: Row, clause: Record<string, unknown>): boolean {
 
 function matchesWhere(row: Row, where: ReturnType<typeof dailyCapUsageWhere>): boolean {
   if (row.userId !== where.userId) return false;
-  if (row.createdAt < where.createdAt.gte) return false;
+  const cutoff = where.OR[0].createdAt!.gte;
+  const at = row.status === "assisted_unconfirmed" ? (row as Row & { consentGrantedAt?: Date }).consentGrantedAt : row.createdAt;
+  if (!at || at < cutoff) return false;
   const and = where.AND as Array<Record<string, unknown>>;
   return and.every((part) => {
     if ("OR" in part) return (part.OR as Array<Record<string, unknown>>).some((c) => matchClause(row, c));
@@ -190,7 +192,7 @@ async function main() {
 
   await test("where clause is Rome-bounded and omits handoff statuses", () => {
     const where = dailyCapUsageWhere("owner", now);
-    assert.equal(+where.createdAt.gte, +romeDayStart(now));
+    assert.equal(+where.OR[0].createdAt!.gte, +romeDayStart(now));
     const include = JSON.stringify(where.AND);
     assert.ok(include.includes("queued"));
     assert.ok(!include.includes("needs_answers"));
