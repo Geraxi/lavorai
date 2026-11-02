@@ -305,6 +305,8 @@ await test("captcha in full-auto is routed to the manual queue with a notificati
     assert.equal(h.submitConfirmation, "CAPTCHA");
     assert.doesNotMatch(h.errorMessage, /Saltato/);
     assert.match(h.errorMessage, /Nessuna candidatura è stata inviata/);
+    assert.doesNotMatch(h.errorMessage, /risposte sono pronti|circa 1 minuto/);
+    assert.match(h.errorMessage, /non costituiscono una ricevuta verificata/);
     assert.equal(JSON.parse(h.canaryLog).routedTo, "manual_queue");
   }
 });

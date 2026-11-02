@@ -118,7 +118,7 @@ export async function applyOnPublicForm(page: Page, input: ApplyInput, cfg: WebF
 
     const captcha = await detectBlockingCaptcha(page);
     if (captcha.blocking) {
-      return { ok: false, status: "captcha", error: `Il form ha un captcha interattivo (${captcha.kind}): completa l'invio a mano, CV e risposte sono pronti.` };
+      return { ok: false, status: "captcha", error: `Il form ha un captcha interattivo (${captcha.kind}). Nessun invio effettuato: verifica documenti e risposte prima di completare personalmente il modulo.` };
     }
     if (pending.length > 0) {
       return { ok: false, status: "needs_user_input", error: `${pending.length} domande obbligatorie richiedono la tua risposta prima dell'invio.`, pendingQuestions: pending };

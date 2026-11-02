@@ -19,6 +19,12 @@ export function applicationDeliveryView(app: {
   emailAttempts?: Array<{ status: string; acceptedAt?: Date | string | null; providerEmailId?: string | null }>;
 }): DeliveryView {
   const email = app.emailAttempts?.[0];
+  if (app.status === "assisted_draft") return { phase: "manual", label: "Preparazione assistita, non inviata", tone: "neutral",
+    detail: "Controlla documenti e risposte in Offerte → Opportunità con completamento manuale. Nessun invio effettuato." };
+  if (app.status === "assisted_cancelled") return { phase: "manual", label: "Preparazione interrotta", tone: "neutral",
+    detail: "La preparazione è stata interrotta prima del passaggio al datore di lavoro. Nessun invio effettuato." };
+  if (app.status === "assisted_unconfirmed") return { phase: "unconfirmed", label: "Completamento esterno, non verificato", tone: "warning",
+    detail: "L'apertura del modulo e la dichiarazione del candidato non provano l'accettazione. Non ripetiamo l'invio automaticamente." };
   if (app.status === "diagnostic") {
     if (email?.status === "delivered" && email.providerEmailId) {
       return { phase: "delivered", label: "Email consegnata", tone: "neutral",

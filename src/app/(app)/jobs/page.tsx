@@ -256,6 +256,7 @@ function JobsFrame({ title, breadcrumb, subtitle, what, where, remoteOnly, prote
   return (
     <>
       <AppTopbar title={title} breadcrumb={breadcrumb} />
+      {process.env.ASSISTED_OPPORTUNITIES_REVIEW === "true" && <Link href="/jobs/review">Opportunità con completamento manuale</Link>}
       <div className="pm-page jobs-page">
         <header className="pm-page-head">
           <div>

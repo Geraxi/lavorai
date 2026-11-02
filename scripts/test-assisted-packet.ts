@@ -1,0 +1,31 @@
+import {applicationDeliveryView} from '../src/lib/application-delivery-view';
+import assert from 'node:assert/strict';
+import {approvePacket,digest,finishPacket,formSnapshot,readAssistedForm,revisePacket,type AssistedPacket} from '../src/lib/assisted-packet';
+async function main(){
+for(const status of ['assisted_draft','assisted_cancelled','assisted_unconfirmed'])assert.notEqual(applicationDeliveryView({status,submittedVia:null,submitConfirmation:'UNCONFIRMED',confirmedAt:new Date()}).phase,'confirmed');
+const offer={id:42,status:'published',options_cv:'required',options_cover_letter:'required',open_questions:[{id:1,body:'Portfolio URL',kind:'string',required:true},{id:2,body:'Work authorization?',kind:'boolean',required:true}]};
+const snap=formSnapshot(offer,'42');const p:AssistedPacket={version:1,kind:'assisted',state:'draft',url:'https://example.recruitee.com/o/designer',...snap,cvId:'synthetic-owner-cv',cvName:'synthetic.pdf',cover:'',answers:{}};
+assert.throws(()=>approvePacket(p,digest(p),snap.formHash),/answers_incomplete/);
+assert.throws(()=>revisePacket(p,{'2':'invented'},''),/invalid_option/);
+assert.throws(()=>revisePacket(p,{'unknown':'x'},''),/invalid_answers/);
+const filled=revisePacket(p,{'1':'https://portfolio.example','2':'No'},'Synthetic candidate-authored letter');
+assert.throws(()=>approvePacket(filled,digest(p),snap.formHash),/review_changed/);
+assert.throws(()=>approvePacket(filled,digest(filled),'changed'),/form_changed/);
+const handoff=approvePacket(filled,digest(filled),snap.formHash);
+assert.equal(handoff.state,'handoff');assert.equal(handoff.answers['2'],'No','negative factual answer remains truthful');
+assert.throws(()=>approvePacket(handoff,digest(handoff),snap.formHash),/already_handed_off/);
+assert.throws(()=>revisePacket(handoff,{},''),/already_handed_off/);
+const reported=finishPacket(handoff,'report');assert.equal(reported.state,'reported');assert.deepEqual(finishPacket(reported,'report'),reported);
+assert.throws(()=>finishPacket(reported,'cancel'),/outcome_unconfirmed/);
+assert.equal(finishPacket(p,'cancel').state,'cancelled');assert.equal(finishPacket(handoff,'cancel').state,'cancelled');
+assert.throws(()=>finishPacket(p,'report'),/handoff_required/);
+const unsupported={...filled,...formSnapshot({...offer,open_questions:[{id:3,body:'Required video',kind:'video',required:true}]},'42')};assert.throws(()=>approvePacket(unsupported,digest(unsupported),unsupported.formHash),/answers_incomplete/);
+assert.throws(()=>formSnapshot({...offer,id:43},'42'),/offer_unavailable/);
+assert.throws(()=>formSnapshot({...offer,status:'closed'},'42'),/offer_unavailable/);
+let gets=0;const fake:typeof fetch=async(url,init)=>{assert.equal(String(url),'https://example.recruitee.com/api/offers/designer');assert.equal(init?.method,'GET');assert.equal(init?.redirect,'error');gets++;return new Response(JSON.stringify({offer}));};
+assert.deepEqual(await readAssistedForm(p.url,'42',fake),snap);
+await assert.rejects(readAssistedForm('http://127.0.0.1/private','42',fake),/invalid_destination/);assert.equal(gets,1);
+await assert.rejects(readAssistedForm(p.url,'42',async()=>new Response('x'.repeat(1_000_001))),/form_too_large/);
+console.log('Assisted packet: capture → save → reviewed approval → handoff → unverified report/cancel passed; missing/changed/unsupported/duplicate/SSRF guards passed; no external requests.');
+}
+main().catch(e=>{console.error(e);process.exitCode=1;});

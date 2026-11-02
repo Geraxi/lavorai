@@ -1,3 +1,4 @@
+import {reviewedOfferUrls} from './assisted-reviewed-offers';
 import type { PrismaClient } from '@prisma/client';
 import {canonicalRecruiteeOffer, classifyRecruiteeForm, type FormCapability} from './recruitee-form-capability';
 import {PUBLICATION_FRESH_MS,OWNED_TEST_PREFIX} from './job-catalogue-policy';
@@ -58,7 +59,7 @@ export async function refreshRecruiteeCatalogue(db:PrismaClient, options:{tenant
  // Reserve bounded discovery time when enabled so slow existing rows cannot
  // permanently starve new offers. Both phases share the same overall deadline.
  const refreshDeadline=options.discover&&budget>=50_000?deadline-35_000:deadline;
- const sourceWhere={source:'recruitee',NOT:{url:{startsWith:OWNED_TEST_PREFIX}},OR:tenants.map(t=>({url:{startsWith:`https://${t}.recruitee.com/o/`}}))};
+ const sourceWhere={source:'recruitee',NOT:{url:{startsWith:OWNED_TEST_PREFIX}},OR:[...tenants.map(t=>({url:{startsWith:`https://${t}.recruitee.com/o/`}})),{url:{in:reviewedOfferUrls(process.env.ASSISTED_RECRUITEE_REVIEW_URLS)}}]};
  const targets=await db.job.findMany({where:sourceWhere,orderBy:[{catalogueCheckedAt:{sort:'asc',nulls:'first'}},{id:'asc'}],take:limit,select:{id:true,externalId:true,url:true,source:true}});
  let cursor=0;const counts:Record<string,number>={};
  async function worker(){while(cursor<targets.length&&Date.now()+13_000<refreshDeadline){const target=targets[cursor++];const observation=await inspectRecruiteeOffer(target.url,options.fetcher);const outcome=await persistRecruiteeObservation(db,target,observation);counts[outcome]=(counts[outcome]??0)+1;await new Promise(r=>setTimeout(r,600));}}
