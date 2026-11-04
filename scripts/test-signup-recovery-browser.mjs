@@ -20,7 +20,7 @@ const entry=`import React from 'react';import {createRoot} from 'react-dom/clien
 await build({stdin:{contents:entry,resolveDir:process.cwd(),loader:'tsx'},bundle:true,platform:'browser',format:'iife',jsx:'automatic',outfile:out+'/workspace.js',plugins:[{name:'boundaries',setup(b){b.onResolve({filter:/.*/},a=>a.path in stubs?{path:a.path,namespace:'fixture'}:undefined);b.onLoad({filter:/.*/,namespace:'fixture'},a=>({contents:stubs[a.path],loader:'tsx',resolveDir:process.cwd()}));}}]});
 execFileSync(process.execPath,['node_modules/tailwindcss/lib/cli.js','-i','src/app/globals.css','-o',out+'/base.css']);
 const navHtml='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/workspace.css"></head><body><div id="root"></div><script src="/workspace.js"></script></body></html>';
-const server=createServer(async(req,res)=>{let f=req.url?.split('?')[0]?.slice(1)||'unavailable';if(['workspace.js','workspace.css','base.css'].includes(f)){res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':'text/css');res.end(await readFile(out+'/'+f));}else if(['unavailable','empty','visible'].includes(f)){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(await readFile('scripts/tmp/public-job-entry/'+f+'.html'));}else if(f==='inbox'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(navHtml);}else{res.end('<h1>Destination fixture</h1>');}});
+const server=createServer(async(req,res)=>{let f=req.url?.split('?')[0]?.slice(1)||'unavailable';if(['workspace.js','workspace.css','base.css'].includes(f)){res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':'text/css');res.end(await readFile(out+'/'+f));}else if(['unavailable','empty','visible'].includes(f)){res.setHeader('Content-Type','text/html; charset=utf-8');res.end((await readFile('scripts/tmp/public-job-entry/'+f+'.html','utf8')).replace(/<style>[\s\S]*?<\/style>/,'<link rel="stylesheet" href="/base.css">'));}else if(f==='inbox'){res.setHeader('Content-Type','text/html; charset=utf-8');res.end(navHtml);}else{res.end('<h1>Destination fixture</h1>');}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
 let browser;
 try { browser=await chromium.launch({...(process.env.CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.CHROMIUM_EXECUTABLE_PATH}:{}),headless:true});
@@ -43,8 +43,8 @@ for(const width of [1440,390,320]){
   else{
    await page.getByRole('button',{name:locale==='en'?'Open menu':'Apri menu'}).click();await page.getByRole('dialog').waitFor();
    assert.equal(await page.getByRole('dialog').locator('a[href="/inbox"]').count(),1);assert.equal(await page.getByRole('dialog').locator('a[href="/posta"]').count(),0);
-   await page.keyboard.press('Escape');assert.equal(await page.getByRole('dialog').count(),0);
-   await page.getByRole('button',{name:locale==='en'?'Open menu':'Apri menu'}).click();await page.getByRole('dialog').locator('a[href="/inbox"]').click();await page.waitForLoadState();assert.equal(await page.getByRole('dialog').count(),0);
+   await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'detached'});
+   await page.getByRole('button',{name:locale==='en'?'Open menu':'Apri menu'}).click();await page.getByRole('dialog').locator('a[href="/inbox"]').click();await page.waitForLoadState();await page.getByRole('dialog').waitFor({state:'detached'});await page.goto(base+'/inbox?locale='+locale);await page.locator('.lavorai-app-shell').waitFor();
   }
   await page.screenshot({path:out+'/inbox-'+locale+'-'+width+'.png'});
  }
