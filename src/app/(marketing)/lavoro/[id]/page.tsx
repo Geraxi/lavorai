@@ -3,11 +3,9 @@ import { catalogueWhere, catalogueJobVisible } from "@/lib/job-catalogue-policy"
 import { jobSourceLabel } from "@/lib/job-source-label";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteNav } from "@/components/site-nav";
 import { CompanyLogo } from "@/components/design/company-logo";
-import { excludeAtsTestJobsWhere, isAtsTestJobSource } from "@/lib/ats-test-capability";
 import { prisma } from "@/lib/db";
 import { formatSalary } from "@/lib/jobs-repo";
 import { employmentType, isRemoteJob, jobDatePosted, jobPostingJsonLd, jobValidThrough, publicJobPath } from "@/lib/job-seo";
@@ -29,7 +27,13 @@ const EMPLOYMENT_LABEL: Record<string, string> = { FULL_TIME: "Tempo pieno", PAR
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { id } = await params;
   const job = await prisma.job.findUnique({ where: { id } });
-  if (!job || !catalogueJobVisible(job)) return {};
+  if (!job || !catalogueJobVisible(job) || jobValidThrough(job) < new Date()) {
+    return {
+      title: "Annuncio non disponibile | LavorAI",
+      description: "Questa offerta non è disponibile nel catalogo corrente. Scopri le offerte disponibili o crea un account LavorAI.",
+      robots: { index: false, follow: true },
+    };
+  }
   const closed = !!job.closedAt || jobValidThrough(job) < new Date();
   const where = isRemoteJob(job) ? "Remoto" : job.location ?? "Italia";
   const title = `${job.title} · ${job.company ?? "Azienda"} · ${where}`;
@@ -48,7 +52,67 @@ const fmtDate = (d: Date) => d.toLocaleDateString("it-IT", { day: "numeric", mon
 export default async function PublicJobPage({ params }: { params: Promise<Params> }) {
   const { id } = await params;
   const job = await prisma.job.findUnique({ where: { id } });
-  if (!job || !catalogueJobVisible(job)) notFound();
+  const now = new Date();
+  if (!job || !catalogueJobVisible(job, now) || jobValidThrough(job) < now) {
+    // Do not render historical/hidden job fields, source links, or JobPosting data.
+    // Alternatives use the same visibility policy as the public catalogue.
+    const candidates = await prisma.job.findMany({
+      where: {
+        AND: [catalogueWhere(now)],
+        id: { not: id },
+        closedAt: null,
+        cachedAt: { gte: new Date(+now - 30 * 24 * 3600 * 1000) },
+      },
+      orderBy: { cachedAt: "desc" },
+      take: 6,
+      select: {
+        id: true, title: true, company: true, location: true, remote: true,
+        url: true, source: true, closedAt: true,
+        publicationVerifiedAt: true, applicationFormCapability: true,
+      },
+    });
+    const alternatives = candidates.filter((candidate) => catalogueJobVisible(candidate, now));
+    return (
+      <div className="flex min-h-screen flex-col">
+        <SiteNav />
+        <main className="gd-main flex-1">
+          <article className="gd-wrap gd-article">
+            <nav aria-label="breadcrumb" className="gd-crumbs">
+              <Link href="/">LavorAI</Link> <span>/</span> <Link href="/lavoro">Offerte di lavoro</Link>
+            </nav>
+            <h1>Questo annuncio non è disponibile</h1>
+            <p className="gd-lead">L’offerta che cercavi non è disponibile nel catalogo corrente di LavorAI. Può essere scaduta, essere stata rimossa o non rientrare nelle offerte attualmente supportate.</p>
+            <p>Non è possibile candidarsi a questa offerta tramite LavorAI. Puoi consultare le offerte disponibili qui sotto oppure cercare un altro ruolo.</p>
+            <p><Link href="/lavoro">Esplora il catalogo corrente →</Link></p>
+            <section>
+              <h2>Altre offerte nel catalogo corrente</h2>
+              {alternatives.length > 0 ? (
+                <>
+                  <p>{CATALOGUE_NOTICE}</p>
+                  <div className="gd-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))" }}>
+                    {alternatives.map((alternative) => (
+                      <Link key={alternative.id} href={publicJobPath(alternative)} className="gd-card">
+                        <div style={{ fontWeight: 600 }}>{alternative.title}</div>
+                        <div className="gd-meta" style={{ margin: 0 }}>{alternative.company ?? "Azienda"} · {isRemoteJob(alternative) ? "Remoto" : alternative.location ?? "Italia"}</div>
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p>Al momento non ci sono altre offerte da mostrare. Puoi tornare a consultare il catalogo più tardi.</p>
+              )}
+            </section>
+            <aside className="gd-cta">
+              <h2 style={{ marginTop: 0 }}>Continua la tua ricerca con LavorAI</h2>
+              <p>Crea un account per impostare le tue preferenze e preparare candidature per le offerte supportate. Prova gratuita, con carta richiesta prima dell’onboarding.</p>
+              <Link href="/signup?next=%2Fjobs" className="gd-cta-btn">Crea un account →</Link>
+            </aside>
+          </article>
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
 
   const closed = !!job.closedAt || jobValidThrough(job) < new Date();
   const remote = isRemoteJob(job);

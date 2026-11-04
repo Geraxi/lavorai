@@ -44,6 +44,7 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
           npm run test:candidate-autofill
+          node scripts/test-signup-recovery-browser.mjs
 
       - name: Install isolated local observer SDK
         run: npm ci --prefix tools/stagehand-observer --ignore-scripts --no-audit --no-fund
@@ -149,6 +150,7 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U ci_user -d ci_db -c 'CREATE DATABASE lavorai_catalogue_test'
           npm run test:job-catalogue
+          npm run test:user-workspace
           npm run test:job-catalogue-postgres
 
       - name: MCP protocol tests
