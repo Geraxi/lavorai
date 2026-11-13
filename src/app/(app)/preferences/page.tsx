@@ -44,7 +44,7 @@ export default async function PreferencesPage({searchParams}:{searchParams:Promi
         | undefined) ??
       (prefs?.autoApplyOn === false ? "manual" : "auto"),
     dailyCap: prefs?.dailyCap ?? 10,
-    matchMin: prefs?.matchMin ?? 50,
+    matchMin: prefs?.matchMin ?? 60,
     protectedCategory: (prefs as { protectedCategory?: boolean } | null | undefined)?.protectedCategory ?? false,
     employmentType:
       ((prefs as { employmentType?: string } | null | undefined)
