@@ -10,12 +10,16 @@ import type { CVProfile } from "../src/lib/cv-profile-types";
 
 const profile: CVProfile = {
   firstName: "Mario", lastName: "Rossi", email: "mario@example.test", phone: "+39 333 1234567",
-  city: "Milano", title: "Engineer", summary: "", skills: [], languages: [], education: [],
-  experiences: [], links: [{ label: "LinkedIn", url: "https://linkedin.com/in/mario" }],
+  city: "Milano", title: "Engineer", summary: "", skills: [], languages: [],
+  education: [{ school: "Politecnico di Milano", degree: "Master of Science", startDate: "2018", endDate: "2020", location: "", notes: "" }],
+  experiences: [], links: [
+    { label: "LinkedIn", url: "https://linkedin.com/in/mario" },
+    { label: "Portfolio", url: "https://mario.dev" },
+  ],
 };
 
 const user = { name: "Mario Rossi", phone: "+39 333 1234567", noticePeriod: "1month" as const };
-const answers = { salaryExpectationEur: 65_000, linkedinUrl: "https://linkedin.com/in/mario", howHeard: "linkedin" as const };
+const answers = { salaryExpectationEur: 65_000, linkedinUrl: "https://linkedin.com/in/mario", portfolioUrl: "https://mario.dev", howHeard: "linkedin" as const };
 const facts = candidateFacts(profile, user, answers);
 
 const productionLabels: Array<[string, string]> = [
@@ -25,6 +29,11 @@ const productionLabels: Array<[string, string]> = [
   ["Best Contact Number", "phone"],
   ["LinkedIn Profile URL", "linkedinUrl"],
   ["Location", "city"],
+  ["Localisation (ville)", "city"],
+  ["Location (City)", "city"],
+  ["School", "school"],
+  ["Degree", "degree"],
+  ["Portfolio link", "portfolioUrl"],
   ["Available from", "noticePeriod"],
   ["Earliest start date", "noticePeriod"],
   ["Salary expectations", "salaryExpectationEur"],
@@ -51,6 +60,11 @@ assert.equal(resolved["Phone Number"], "+39 333 1234567");
 assert.equal(resolved["Best Contact Number"], "+39 333 1234567");
 assert.equal(resolved["LinkedIn Profile URL"], "https://linkedin.com/in/mario");
 assert.equal(resolved.Location, "Milano");
+assert.equal(resolved["Localisation (ville)"], "Milano");
+assert.equal(resolved["Location (City)"], "Milano");
+assert.equal(resolved.School, "Politecnico di Milano");
+assert.equal(resolved.Degree, "Master of Science");
+assert.equal(resolved["Portfolio link"], "https://mario.dev");
 assert.equal(resolved["Available from"], "1 month");
 assert.equal(resolved["Earliest start date"], "1 month");
 assert.equal(resolved["Salary expectations"], "65000");

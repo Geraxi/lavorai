@@ -257,120 +257,200 @@ async function processApplicationRun(
     return;
   }
 
+  // Cheap portal form probe BEFORE optimizeCV / tailor (~40–60s). Avoids
+  // starving the drain when Lever/Personio forms are unreachable.
+  const portalSubmitEnabledEarly = process.env.PORTAL_SUBMIT_ENABLED !== "false";
+  let earlyAdapterUrl: string | null = null;
+  let earlyAdapterId: string | null = null;
+  if (portalSubmitEnabledEarly && !atsTestAuth && !isSkippedPortalUrl(app.job.url)) {
+    let earlyResolved = app.job.url;
+    try {
+      earlyResolved = await resolveFinalUrl(app.job.url);
+    } catch {
+      /* keep original */
+    }
+    const earlyMatch = resolveAdapterByUrl([app.job.url, earlyResolved]);
+    if (earlyMatch && (earlyMatch.adapter.id === "lever" || earlyMatch.adapter.id === "personio" || earlyMatch.adapter.id === "greenhouse")) {
+      earlyAdapterId = earlyMatch.adapter.id;
+      earlyAdapterUrl = earlyMatch.url;
+      const { probePortalForm, preferredApplyUrl } = await import("@/lib/portal-adapters/form-probe");
+      const probe = await probePortalForm(earlyMatch.adapter.id, earlyMatch.url);
+      console.log(`[worker] ${applicationId} form-probe ${earlyMatch.adapter.id}: ${probe.status} (${probe.detail})`);
+      if (probe.status === "missing") {
+        await prisma.application.updateMany({
+          where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["optimizing", "ready_to_apply", "applying"] } },
+          data: {
+            status: "ready_to_apply",
+            submitConfirmation: NOT_SUBMITTED,
+            errorMessage: `Form ${earlyMatch.adapter.label} non rilevato (preflight). Nessun invio; CV non generato per non bruciare AI.`,
+            leaseToken: null,
+            leaseExpiresAt: null,
+          },
+        });
+        return;
+      }
+      if (probe.status === "present") {
+        earlyAdapterUrl = preferredApplyUrl(earlyMatch.adapter.id, earlyMatch.url, probe.detail);
+      }
+    }
+  }
+
   const jobPosting = `${app.job.title}\n${app.job.company ?? ""}\n\n${clipJobDescriptionForAi(app.job.description)}`;
   const jobLang = detectLanguage(`${app.job.title} ${app.job.description}`);
 
-  let result: Awaited<ReturnType<typeof optimizeCV>>;
-  let cvPath: string;
-  let clPath: string;
-  let cvBuffer: Buffer;
-  let clBuffer: Buffer;
+  let result: Awaited<ReturnType<typeof optimizeCV>> | undefined;
+  let cvPath = "";
+  let clPath = "";
+  let cvBuffer: Buffer = Buffer.alloc(0);
+  let clBuffer: Buffer = Buffer.alloc(0);
+
+  // Reuse prepared documents on retry so a prior AI spend is not repeated.
+  const reusePrepared =
+    !atsTestAuth &&
+    typeof app.cvDocxPath === "string" &&
+    app.cvDocxPath.length > 0 &&
+    typeof app.coverLetterPath === "string" &&
+    app.coverLetterPath.length > 0;
 
   try {
-    // 1. OpenAI: ottimizza CV + cover letter per questo job specifico
-    const coverLetterHints = coverLetterHintsFor(app.user.email, {
-      title: app.job.title,
-      category: app.job.category,
-    });
-    // Se l'utente è in modalità P.IVA/both E l'annuncio sembra freelance,
-    // passiamo al modello il contesto commerciale per generare un pitch B2B
-    // invece di una classica cover letter motivazionale.
-    const prefs = app.user.preferences;
-    const empType = prefs?.employmentType ?? "employee";
-    const looksFreelance =
-      /\b(freelance|freelancer|contract|contractor|p\.?\s?iva|partita\s?iva|consultant|consulente|project-based|ad hoc|short[-\s]?term|6\s?months?|12\s?months?)\b/i.test(
-        `${app.job.title} ${app.job.contractType ?? ""} ${app.job.description ?? ""}`.slice(
-          0,
-          2000,
-        ),
+    let reused = false;
+    if (reusePrepared) {
+      const existingCv = await readUserFile(app.cvDocxPath!).catch(() => Buffer.alloc(0));
+      const existingCl = await readUserFile(app.coverLetterPath!).catch(() => Buffer.alloc(0));
+      if (existingCv.length > 0 && existingCl.length > 0) {
+        cvPath = app.cvDocxPath!;
+        clPath = app.coverLetterPath!;
+        cvBuffer = existingCv;
+        clBuffer = existingCl;
+        result = {
+          optimizedCV: {
+            fullName: app.user.name ?? "Candidate",
+            targetRole: app.job.title,
+            email: app.user.email,
+            phone: "",
+            location: "",
+            linkedinUrl: null,
+            summary: "",
+            experiences: [],
+            education: [],
+            skills: { technical: [], soft: [], tools: [] },
+            languages: [],
+          },
+          coverLetter: "(reused)",
+          atsScore: 0,
+          suggestions: [],
+        };
+        reused = true;
+        console.log(`[worker] ${applicationId} reusing prepared CV/CL (skip optimizeCV)`);
+      }
+    }
+
+    if (!reused) {
+      // 1. OpenAI: ottimizza CV + cover letter per questo job specifico
+      const coverLetterHints = coverLetterHintsFor(app.user.email, {
+        title: app.job.title,
+        category: app.job.category,
+      });
+      // Se l'utente è in modalità P.IVA/both E l'annuncio sembra freelance,
+      // passiamo al modello il contesto commerciale per generare un pitch B2B
+      // invece di una classica cover letter motivazionale.
+      const prefs = app.user.preferences;
+      const empType = prefs?.employmentType ?? "employee";
+      const looksFreelance =
+        /\b(freelance|freelancer|contract|contractor|p\.?\s?iva|partita\s?iva|consultant|consulente|project-based|ad hoc|short[-\s]?term|6\s?months?|12\s?months?)\b/i.test(
+          `${app.job.title} ${app.job.contractType ?? ""} ${app.job.description ?? ""}`.slice(
+            0,
+            2000,
+          ),
+        );
+      const usePivaPitch =
+        empType !== "employee" &&
+        (empType === "piva" || looksFreelance) &&
+        (prefs?.dailyRate != null ||
+          prefs?.availableFrom != null ||
+          prefs?.vatNumber != null ||
+          prefs?.portfolioUrl != null);
+
+      result = atsTestAuth ? {
+        optimizedCV: {
+          fullName: `${syntheticAtsTestProfile().firstName} ${syntheticAtsTestProfile().lastName}`,
+          targetRole: app.job.title,
+          email: syntheticAtsTestProfile().email,
+          phone: syntheticAtsTestProfile().phone,
+          location: syntheticAtsTestProfile().city,
+          linkedinUrl: null,
+          summary: syntheticAtsTestProfile().summary,
+          experiences: syntheticAtsTestProfile().experiences.map((item) => ({
+            role: item.role,
+            company: item.company,
+            location: item.location,
+            startDate: item.startDate,
+            endDate: item.endDate,
+            bullets: item.bullets,
+          })),
+          education: [],
+          skills: { technical: ["ATS test"], soft: [], tools: [] },
+          languages: syntheticAtsTestProfile().languages.map((item) => ({
+            language: item.name,
+            level: item.level,
+          })),
+        },
+        coverLetter: `${ATS_TEST_FICTIONAL_MARK} Synthetic cover letter. Not a real candidate.`,
+        atsScore: 0,
+        suggestions: [] as string[],
+      } : await optimizeCV({
+        cvText: cv!.extractedText,
+        jobPosting,
+        jobLang,
+        coverLetterHints,
+        sessionContext: app.session?.customContext ?? null,
+        pivaContext: usePivaPitch
+          ? {
+              dailyRate: prefs?.dailyRate ?? null,
+              availableFrom: prefs?.availableFrom ?? null,
+              vatNumber: prefs?.vatNumber ?? null,
+              portfolioUrl: prefs?.portfolioUrl ?? null,
+              candidateName: app.user.name ?? null,
+            }
+          : undefined,
+      });
+
+      // 2. Genera DOCX — la cover letter contiene un blocco "Get in touch"
+      // con multi-link tracciati (portfolio, LinkedIn, GitHub, email) tutti
+      // routati via lavorai.it/r/<token>?ref=... Ogni click dal recruiter
+      // dentro l'ATS logga viewedAt. Più link = più chance di tracciare
+      // una view senza falsi positivi.
+      const trackingLinks = computeTrackingLinks(
+        app.user.cvProfile?.linksJson ?? null,
       );
-    const usePivaPitch =
-      empType !== "employee" &&
-      (empType === "piva" || looksFreelance) &&
-      (prefs?.dailyRate != null ||
-        prefs?.availableFrom != null ||
-        prefs?.vatNumber != null ||
-        prefs?.portfolioUrl != null);
+      [cvBuffer, clBuffer] = await Promise.all([
+        generateOptimizedCVDocx({
+          ...result.optimizedCV,
+          targetRole: app.job.title,
+        }),
+        generateCoverLetterDocx(
+          result.coverLetter,
+          undefined,
+          app.trackingToken ?? undefined,
+          app.user.locale === "en" ? "en" : "it",
+          trackingLinks,
+        ),
+      ]);
 
-    result = atsTestAuth ? {
-      optimizedCV: {
-        fullName: `${syntheticAtsTestProfile().firstName} ${syntheticAtsTestProfile().lastName}`,
-        targetRole: app.job.title,
-        email: syntheticAtsTestProfile().email,
-        phone: syntheticAtsTestProfile().phone,
-        location: syntheticAtsTestProfile().city,
-        linkedinUrl: null,
-        summary: syntheticAtsTestProfile().summary,
-        experiences: syntheticAtsTestProfile().experiences.map((item) => ({
-          role: item.role,
-          company: item.company,
-          location: item.location,
-          startDate: item.startDate,
-          endDate: item.endDate,
-          bullets: item.bullets,
-        })),
-        education: [],
-        skills: { technical: ["ATS test"], soft: [], tools: [] },
-        languages: syntheticAtsTestProfile().languages.map((item) => ({
-          language: item.name,
-          level: item.level,
-        })),
-      },
-      coverLetter: `${ATS_TEST_FICTIONAL_MARK} Synthetic cover letter. Not a real candidate.`,
-      atsScore: 0,
-      suggestions: [] as string[],
-    } : await optimizeCV({
-      cvText: cv!.extractedText,
-      jobPosting,
-      jobLang,
-      coverLetterHints,
-      sessionContext: app.session?.customContext ?? null,
-      pivaContext: usePivaPitch
-        ? {
-            dailyRate: prefs?.dailyRate ?? null,
-            availableFrom: prefs?.availableFrom ?? null,
-            vatNumber: prefs?.vatNumber ?? null,
-            portfolioUrl: prefs?.portfolioUrl ?? null,
-            candidateName: app.user.name ?? null,
-          }
-        : undefined,
-    });
-
-    // 2. Genera DOCX — la cover letter contiene un blocco "Get in touch"
-    // con multi-link tracciati (portfolio, LinkedIn, GitHub, email) tutti
-    // routati via lavorai.it/r/<token>?ref=... Ogni click dal recruiter
-    // dentro l'ATS logga viewedAt. Più link = più chance di tracciare
-    // una view senza falsi positivi.
-    const trackingLinks = computeTrackingLinks(
-      app.user.cvProfile?.linksJson ?? null,
-    );
-    [cvBuffer, clBuffer] = await Promise.all([
-      generateOptimizedCVDocx({
-        ...result.optimizedCV,
-        targetRole: app.job.title,
-      }),
-      generateCoverLetterDocx(
-        result.coverLetter,
-        undefined,
-        app.trackingToken ?? undefined,
-        app.user.locale === "en" ? "en" : "it",
-        trackingLinks,
-      ),
-    ]);
-
-    // 3. Salva DOCX su storage
-    cvPath = await saveUserFile(
-      app.userId,
-      `applications/${applicationId}`,
-      applicationDocumentFilename("CV", app.job.title, applicationId, "docx"),
-      cvBuffer,
-    );
-    clPath = await saveUserFile(
-      app.userId,
-      `applications/${applicationId}`,
-      applicationDocumentFilename("Lettera", app.job.title, applicationId, "docx"),
-      clBuffer,
-    );
+      // 3. Salva DOCX su storage
+      cvPath = await saveUserFile(
+        app.userId,
+        `applications/${applicationId}`,
+        applicationDocumentFilename("CV", app.job.title, applicationId, "docx"),
+        cvBuffer,
+      );
+      clPath = await saveUserFile(
+        app.userId,
+        `applications/${applicationId}`,
+        applicationDocumentFilename("Lettera", app.job.title, applicationId, "docx"),
+        clBuffer,
+      );
+    }
   } catch (err) {
     console.error(`[worker] ${applicationId} AI/generate failed`, err);
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -423,8 +503,16 @@ async function processApplicationRun(
 
   // 3b. PDF tailoring (structured CVProfile → tailored → ATS PDF). Non-fatal.
   // Token path: skip so the test does not write a CVProfile or burn tailoring credits.
+  // Retries reuse an existing PDF when present so drain time is not spent twice.
   let cvPdfPath: string | null = null;
-  if (!atsTestSkipsDocumentTailoring(atsTestAuth)) {
+  if (!atsTestSkipsDocumentTailoring(atsTestAuth) && typeof app.cvPdfPath === "string" && app.cvPdfPath.length > 0) {
+    const existingPdf = await readUserFile(app.cvPdfPath).catch(() => Buffer.alloc(0));
+    if (existingPdf.length > 0) {
+      cvPdfPath = app.cvPdfPath;
+      console.log(`[worker] ${applicationId} reusing tailored CV PDF (skip cv-profile-tailor)`);
+    }
+  }
+  if (!atsTestSkipsDocumentTailoring(atsTestAuth) && !cvPdfPath) {
   try {
     let profileRow = await prisma.cVProfile.findUnique({
       where: { userId: app.userId },
@@ -479,6 +567,11 @@ async function processApplicationRun(
   } catch (err) {
     console.error(`[worker] ${applicationId} PDF tailoring failed`, err);
   }
+  }
+
+  if (!result || !cvPath || !clPath) {
+    await markFailed(applicationId, "Documenti candidatura non generati.", workToken);
+    return;
   }
 
   // A recovered worker cannot overwrite a newer owner or reach delivery.
@@ -573,7 +666,13 @@ async function processApplicationRun(
   const skipPortal = isSkippedPortalUrl(app.job.url) || isSkippedPortalUrl(resolvedUrl);
   const resolvedAdapter = portalSubmitEnabled && !skipPortal ? resolveAdapterByUrl([app.job.url, resolvedUrl]) : null;
   const adapter = resolvedAdapter?.adapter ?? null;
-  const adapterUrl = resolvedAdapter?.url ?? app.job.url;
+  // Prefer the URL the early form-probe confirmed (e.g. Personio /apply).
+  const adapterUrl =
+    (earlyAdapterId && earlyAdapterUrl && resolvedAdapter?.adapter.id === earlyAdapterId
+      ? earlyAdapterUrl
+      : null) ??
+    resolvedAdapter?.url ??
+    app.job.url;
   // An unverified custom offer URL must not fall through to email or browser submit.
   if (requiresRecruiteeOriginReview([app.job.url, resolvedUrl], app.job.source, adapter?.id)) {
     await prisma.application.updateMany({
@@ -668,6 +767,7 @@ async function processApplicationRun(
       jobTitle: app.job.title,
       company: app.job.company,
       jobDescription: clipJobDescriptionForAi(app.job.description),
+      jobSource: app.job.source,
       forceRealSubmit: atsTestAuth ? atsTestAuth.mode === "real_submit" : opts?.forceRealSubmit === true,
       forceDryRun: atsTestAuth ? atsTestAuth.mode === "dry_run" : opts?.forceDryRun === true,
       atsTestAuth,
@@ -813,6 +913,32 @@ async function processApplicationRun(
         canaryLog: JSON.stringify(("canary" in outcome ? outcome.canary : null) ?? { adapterFailure: outcome.status, error: outcome.error }),
         ...attemptEvidenceWrite(outcome.attemptEvidence),
       } });
+      return;
+    }
+
+    // Vercel 300s kill / browser closed mid-fill with no outbound POST: requeue
+    // so the row is not left UNCONFIRMED and starved. Never requeue if a click
+    // or request may have started a submission.
+    const browserClosed =
+      outcome.status === "unknown_error" &&
+      /Target page, context or browser has been closed|browser has been closed/i.test(outcome.error ?? "");
+    const mayHaveSubmitted = !!(
+      ("attemptEvidence" in outcome && outcome.attemptEvidence &&
+        (outcome.attemptEvidence.clickPerformed || outcome.attemptEvidence.outboundRequest))
+    );
+    if (browserClosed && !mayHaveSubmitted) {
+      console.warn(`[worker] ${applicationId} browser closed before submit — requeue for retry`);
+      await prisma.application.updateMany({
+        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "optimizing"] } },
+        data: {
+          status: "queued",
+          startedAt: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          submitConfirmation: NOT_SUBMITTED,
+          errorMessage: `Tentativo interrotto (browser chiuso / timeout funzione): ${outcome.error ?? "unknown"}. In coda per retry.`,
+        },
+      });
       return;
     }
 
@@ -2246,6 +2372,7 @@ interface AdapterSubmitInput {
   jobTitle?: string | null;
   company?: string | null;
   jobDescription?: string | null;
+  jobSource?: string | null;
   /** Override chirurgico: forza l'invio REALE anche se PORTAL_SUBMIT_DRY_RUN=true.
    *  Usato dal test admin per un singolo invio confermato, senza toccare il
    *  flag globale (che farebbe partire il backlog dal worker locale). */
@@ -2415,6 +2542,7 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       jobTitle: input.jobTitle,
       company: input.company,
       jobDescription: input.jobDescription,
+      jobSource: input.jobSource,
       // Audit of generated answers is separate from explicit application-bound
       // permission. Historical values never authorize another form.
       onAiAnswers: (given) => { audit.push(...given); },

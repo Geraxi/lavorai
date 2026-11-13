@@ -349,6 +349,30 @@ export const greenhouseAdapter: PortalAdapter = {
         }
       }
 
+      // LinkedIn / portfolio when present as plain inputs (also covered by facts).
+      const linkedinUrl =
+        input.answers?.linkedinUrl ||
+        input.profile.links?.find((l) => /linkedin/i.test(`${l.label} ${l.url}`))?.url;
+      if (linkedinUrl) {
+        await page
+          .locator('input[name*="linkedin" i], input[placeholder*="linkedin" i], input[aria-label*="linkedin" i]')
+          .first()
+          .fill(linkedinUrl)
+          .catch(() => void 0);
+      }
+      const portfolioUrl =
+        input.answers?.portfolioUrl ||
+        input.profile.links?.find((l) => /portfolio|behance|dribbble|website/i.test(`${l.label} ${l.url}`))?.url;
+      if (portfolioUrl) {
+        await page
+          .locator(
+            'input[name*="portfolio" i], input[placeholder*="portfolio" i], input[aria-label*="portfolio" i], input[name*="website" i]',
+          )
+          .first()
+          .fill(portfolioUrl)
+          .catch(() => void 0);
+      }
+
       // Fill custom questions usando le risposte standard dell'utente
       // (work auth, salary, notice period, LinkedIn, EEO, ecc).
       // Eseguito PRIMA di check/submit così le validazioni required

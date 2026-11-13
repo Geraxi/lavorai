@@ -47,6 +47,7 @@ export interface CandidateContext extends FactContext {
   mostRecentEmployer?: string | null;
   mostRecentJobTitle?: string | null;
   school?: string | null;
+  degree?: string | null;
   /** Estratto del CV (testo) per rispondere a domande tipo "hai esperienza con X?". */
   cvText?: string | null;
   jobTitle?: string | null;
@@ -407,16 +408,41 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
               .trim();
           })
           .filter(Boolean);
-        // Domanda del gruppo: legend/label del container
-        const cont = el.closest("fieldset, [class*='field'], [class*='question']");
-        let q =
-          cont?.querySelector("legend")?.textContent ??
-          cont?.querySelector("label")?.textContent ??
-          gname;
-        q = (q || gname)
-          .replace(/SVGs? not supported by this browser\.?/gi, " ")
-          .replace(/\s+/g, " ")
-          .trim();
+        // Domanda del gruppo: legend / question heading — NEVER the option text
+        // alone (Workable bug: pending question labelled "YES").
+        const cont = el.closest("fieldset, [class*='field'], [class*='question'], [data-ui*='question']");
+        const pickText = (node: Element | null | undefined) =>
+          (node?.textContent ?? "")
+            .replace(/SVGs? not supported by this browser\.?/gi, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        const labelledBy = el.getAttribute("aria-labelledby");
+        let q = "";
+        if (labelledBy) {
+          q = labelledBy.split(/\s+/).map((id) => pickText(document.getElementById(id))).filter(Boolean).join(" ");
+        }
+        if (!q) q = pickText(cont?.querySelector("legend"));
+        if (!q) {
+          q = pickText(
+            cont?.querySelector(
+              "[data-ui='label'], [class*='question-label'], [class*='QuestionLabel'], [class*='field-label'], h1, h2, h3, h4, p",
+            ),
+          );
+        }
+        // First label in the container is often the first option ("YES") — only
+        // use it when it is clearly longer than any single option.
+        if (!q) {
+          const firstLabel = pickText(cont?.querySelector("label"));
+          const isOptionOnly = opts.some((o) => o.toLowerCase() === firstLabel.toLowerCase());
+          if (firstLabel && !isOptionOnly && firstLabel.replace(/[^a-z0-9]/gi, "").length >= 8) q = firstLabel;
+        }
+        if (!q) q = gname;
+        q = (q || gname).replace(/\s+/g, " ").trim();
+        const optionOnly = opts.some((o) => o.toLowerCase() === q.toLowerCase())
+          || /^(yes|no|y|n|si|sì|true|false|1|0)$/i.test(q);
+        if (optionOnly || q.replace(/[^a-z0-9]/gi, "").length < 3) {
+          q = `Radio group ${idx + 1}`;
+        }
         group.forEach((r) => r.setAttribute(tag, String(idx)));
         out.push({ idx, label: q, kind: "radio", options: opts });
         idx++;

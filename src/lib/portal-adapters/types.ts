@@ -80,6 +80,8 @@ export interface ApplyInput {
   company?: string | null;
   jobDescription?: string | null;
   jobLocation?: string | null;
+  /** Catalogue source (greenhouse/lever/…) for "how did you hear" when unset. */
+  jobSource?: string | null;
   /** L'utente è iscritto alle categorie protette (L. 68/99). */
   protectedCategory?: boolean | null;
   /** Callback: risposte usate nel form (utente/profilo/regole/AI), per
