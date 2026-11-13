@@ -3,14 +3,21 @@ import { findSubmitButton } from "./submit-button";
 import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
 import { fillPhoneCountryCode } from "./phone-country-fill";
+import { detectBlockingCaptcha } from "./captcha";
 
 /**
  * Lever ATS — `jobs.lever.co/<company>/<uuid>`.
  * Form pubblico; apply button porta a `<url>/apply`.
  * Campi: name (unico input), email, phone, resume upload, LinkedIn URL.
+ *
+ * The posting page often has no inputs; `/apply` SSRs the full form
+ * (name/email/resume). Prefer `/apply`, wait for hydration, and treat
+ * interactive challenges as captcha rather than form_not_found.
  */
 
 const HOSTS = [/(^|\.)jobs\.lever\.co$/i, /(^|\.)jobs\.eu\.lever\.co$/i];
+
+const FORM_INPUT = 'input[name="name"], input[data-qa="name-input"], input[name="email"], input[name="resume"]';
 
 export const leverAdapter: PortalAdapter = {
   id: "lever",
@@ -24,10 +31,7 @@ export const leverAdapter: PortalAdapter = {
     }
   },
   async apply(page, input: ApplyInput): Promise<ApplyOutcome> {
-    // Provo sia /apply (form puro) sia URL nudo. Le aziende moderne
-    // possono redirezionare il base URL alla loro career page custom,
-    // ma /apply resta sul dominio Lever in molti setup.
-    const base = input.jobUrl.replace(/\/$/, "").replace(/\/apply$/, "");
+    const base = input.jobUrl.replace(/\/$/, "").replace(/\/apply$/i, "");
     const candidates = [`${base}/apply`, base];
 
     let formFound = false;
@@ -42,7 +46,10 @@ export const leverAdapter: PortalAdapter = {
       } catch {
         continue;
       }
-      // Verifica che siamo ancora su Lever (no redirect career page custom)
+
+      await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => void 0);
+      await page.waitForTimeout(800);
+
       const finalHost = (() => {
         try {
           return new URL(page.url()).hostname.toLowerCase();
@@ -52,18 +59,31 @@ export const leverAdapter: PortalAdapter = {
       })();
       if (!finalHost.includes("lever.co")) continue;
 
-      // Lever ha 2-3 form layout: signature input "name" sempre presente
+      const captchaEarly = await detectBlockingCaptcha(page);
+      if (captchaEarly.blocking) {
+        return {
+          ok: false,
+          status: "captcha",
+          error: `Form Lever protetto da captcha interattivo (${captchaEarly.kind}). Nessun invio automatico.`,
+        };
+      }
+
+      // Posting page: click Apply to reach the form when /apply was not used.
+      const applyBtn = page.locator(
+        'a.postings-btn:has-text("Apply"), a[href$="/apply"], button:has-text("Apply for this job"), a:has-text("Apply for this job")',
+      ).first();
+      if ((await applyBtn.count().catch(() => 0)) > 0 && (await applyBtn.isVisible().catch(() => false))) {
+        await applyBtn.click({ timeout: 4000 }).catch(() => void 0);
+        await page.waitForLoadState("domcontentloaded", { timeout: 15_000 }).catch(() => void 0);
+        await page.waitForTimeout(800);
+      }
+
       try {
-        await page
-          .locator(
-            'input[name="name"], input[name="firstName"], input[name="resume"]',
-          )
-          .first()
-          .waitFor({ timeout: 8_000 });
+        await page.locator(FORM_INPUT).first().waitFor({ timeout: 12_000 });
         formFound = true;
         break;
       } catch {
-        // niente form qui, prossimo
+        // try next URL
       }
     }
 
@@ -83,7 +103,7 @@ export const leverAdapter: PortalAdapter = {
     try {
       const emailToUse = input.profile.email?.trim() || input.userEmail;
       const phoneToUse = input.profile.phone?.trim() || input.userPhone;
-      await page.locator('input[name="name"]').first().fill(fullName);
+      await page.locator('input[name="name"], input[data-qa="name-input"]').first().fill(fullName);
       await page
         .locator('input[name="email"], input[type="email"]')
         .first()
@@ -98,7 +118,6 @@ export const leverAdapter: PortalAdapter = {
       }
       await fillPhoneCountryCode(page, phoneToUse, input.answers?.country);
 
-      // LinkedIn URL se disponibile
       const li = input.profile.links?.find((l) =>
         /linkedin/i.test(l.url),
       );
@@ -112,7 +131,6 @@ export const leverAdapter: PortalAdapter = {
           .catch(() => void 0);
       }
 
-      // Upload CV — Lever usa input[name="resume"]
       const cvInput = page.locator(
         'input[type="file"][name="resume"], input[type="file"][name*="resume" i], input[type="file"]',
       );
@@ -125,7 +143,6 @@ export const leverAdapter: PortalAdapter = {
       }
       await cvInput.first().setInputFiles(input.cvLocalPath);
 
-      // Cover letter textarea se c'è
       const clTextarea = page.locator(
         'textarea[name*="cover" i], textarea[name="comments"]',
       );
@@ -133,7 +150,6 @@ export const leverAdapter: PortalAdapter = {
         await clTextarea.first().fill(input.coverLetterText).catch(() => void 0);
       }
 
-      // Fill custom questions usando le risposte standard dell'utente
       try {
         const { fillCustomQuestions } = await import("./generic-fill");
         const { buildAnswerContext } = await import("./web-form");
@@ -147,7 +163,6 @@ export const leverAdapter: PortalAdapter = {
         console.warn("[lever] generic-fill failed", err);
       }
 
-      // Required consents and declarations need explicit user answers.
       const { prepareRequiredAnswers } = await import("./web-form");
       const unanswered = await prepareRequiredAnswers(page, input);
       if (unanswered) return unanswered;
@@ -159,8 +174,16 @@ export const leverAdapter: PortalAdapter = {
         return { ok: true, status: "submitted", confirmation: "DRY_RUN" };
       }
 
-      // hCaptcha detect: i Lever moderni mettono il submit reale dietro
-      // hcaptcha. Se trovato → skip, non possiamo risolverlo.
+      const captcha = await detectBlockingCaptcha(page);
+      if (captcha.blocking) {
+        return {
+          ok: false,
+          status: "captcha",
+          error:
+            "Form Lever protetto da captcha interattivo — submit automatico bloccato. Apri l'annuncio e candidati manualmente.",
+        };
+      }
+
       const hcaptcha = await page
         .locator('iframe[src*="hcaptcha"], div[class*="h-captcha"], #hcaptchaSubmitBtn')
         .count()
@@ -174,7 +197,6 @@ export const leverAdapter: PortalAdapter = {
         };
       }
 
-      // Submit "vero" — escludi i bottoni hidden (hcaptchaSubmitBtn)
       const submit = await findSubmitButton(page);
       if (!submit) {
         return {
@@ -186,10 +208,14 @@ export const leverAdapter: PortalAdapter = {
       return (await observeSubmission(page, "lever", input.jobUrl,
         () => submit.click({ timeout: 5_000 }), input.beforeSubmit, { applicationId: input.applicationId })).outcome;
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore imprevisto Lever";
+      if (/Target page, context or browser has been closed|browser has been closed/i.test(message)) {
+        return { ok: false, status: "unknown_error", error: message };
+      }
       return {
         ok: false,
         status: "unknown_error",
-        error: err instanceof Error ? err.message : "Errore imprevisto Lever",
+        error: message,
       };
     }
   },

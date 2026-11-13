@@ -189,7 +189,7 @@ assert.match(worker, /"ats_test"/);
 assert.match(worker, /atsTestPauseExemptionForId/);
 assert.match(worker, /syntheticAtsTestProfile/);
 assert.match(worker, /atsTestCandidateEmail/);
-assert.match(worker, /if \(!atsTestSkipsDocumentTailoring\(atsTestAuth\)\)/);
+assert.match(worker, /if \(!atsTestSkipsDocumentTailoring\(atsTestAuth\) && !cvPdfPath\)/);
 assert.match(worker, /if \(!atsTestSkipsRecruiterLookup\(atsTestAuth\)\)/);
 assert.match(worker, /tailorProfileForJob/);
 assert.match(worker, /findVerifiedRecruiterEmail/);

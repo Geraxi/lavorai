@@ -34,6 +34,8 @@ export type FactContext = {
   company?: string | null;
   /** Every CV / work-history employer, including jobs older than current + most recent. */
   employers?: string[] | null;
+  /** Job board / catalogue source for "how did you hear about us" when no preference is set. */
+  jobSource?: string | null;
 };
 export function factQuestionKey(label: string): string {
   return label.normalize("NFKC").toLowerCase().replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim()
@@ -46,8 +48,21 @@ const aliases: Record<string, string[]> = {
   email: ["email", "e-mail", "email address", "indirizzo email", "qual è il tuo indirizzo email"],
   phone: ["phone", "phone number", "telephone", "mobile", "best contact number", "best phone number", "contact number", "mobile number", "telefono", "numero di telefono", "cellulare"],
   phoneCountry: ["phone country", "phone country code", "phone country/region", "country calling code", "dial code", "dialing code", "country code", "prefisso telefonico"],
-  city: ["city", "location", "your location", "location (city)", "current city", "city of residence", "current location", "current location (city)", "current location (country, city)", "current location (city, country)", "città", "citta", "città di residenza", "citta di residenza", "where do you live", "where are you based", "where are you currently based", "where are you located", "what city do you live in", "dove vivi", "dove risiedi", "in quale città vivi", "qual è la tua città di residenza"],
-  country: ["country", "current country", "country of residence", "current country of residence", "country/region of residence", "residence country", "country where you currently reside", "in which country do you currently reside", "which country do you currently live in", "what country do you live in", "paese", "nazione", "paese di residenza", "in quale paese risiedi"],
+  city: [
+    "city", "location", "your location", "location (city)", "localisation (ville)", "localization (city)",
+    "localisation", "ville", "current city", "city of residence", "current location",
+    "current location (city)", "current location (country, city)", "current location (city, country)",
+    "città", "citta", "città di residenza", "citta di residenza",
+    "where do you live", "where are you based", "where are you currently based", "where are you located",
+    "what city do you live in", "dove vivi", "dove risiedi", "in quale città vivi", "qual è la tua città di residenza",
+  ],
+  country: [
+    "country", "current country", "country of residence", "current country of residence",
+    "country/region of residence", "residence country", "country where you currently reside",
+    "country where you reside", "country located", "country of location",
+    "in which country do you currently reside", "which country do you currently live in",
+    "what country do you live in", "paese", "nazione", "paese di residenza", "in quale paese risiedi",
+  ],
   currentEmployer: ["current employer", "current company", "azienda attuale", "datore di lavoro attuale", "qual è la tua azienda attuale", "where do you currently work"],
   currentOrPreviousEmployer: ["current or previous employer", "current/previous employer", "current / previous employer", "who is your current or previous employer", "current or last company", "current or last employer", "current or most recent company", "current or most recent employer"],
   previousEmployer: ["previous employer", "previous employer name", "name of your previous employer", "previous company", "most recent previous employer", "azienda precedente", "datore di lavoro precedente"],
@@ -55,9 +70,16 @@ const aliases: Record<string, string[]> = {
   currentJobTitle: ["current job title", "current position", "current role", "ruolo attuale", "posizione attuale", "qual è il tuo ruolo attuale", "qual è la tua posizione attuale"],
   currentOrPreviousJobTitle: ["current or previous job title"],
   mostRecentJobTitle: ["most recent job title", "last job title"],
-  school: ["most recent school", "most recent university", "ultima università", "ultima universita"],
-  linkedinUrl: ["linkedin", "linkedin url", "linkedin profile", "linkedin profile url", "linkedin profile link", "profilo linkedin"],
-  portfolioUrl: ["portfolio", "portfolio url"],
+  school: [
+    "school", "university", "college", "most recent school", "most recent university",
+    "ultima università", "ultima universita", "école", "ecole", "università", "universita",
+  ],
+  degree: ["degree", "diploma", "qualification", "titolo di studio conseguito"],
+  linkedinUrl: [
+    "linkedin", "linkedin url", "linkedin profile", "linkedin profile url",
+    "linkedin profile link", "profilo linkedin",
+  ],
+  portfolioUrl: ["portfolio", "portfolio url", "portfolio link", "link to portfolio", "website / portfolio"],
   githubUrl: ["github", "github url", "github profile"],
   websiteUrl: ["website", "personal website", "sito web personale"],
   yearsExperience: ["years of experience", "years of professional experience", "years of total experience", "total years of experience", "how many years of experience do you have", "how many years of professional experience do you have", "anni di esperienza", "anni di esperienza professionale", "quanti anni di esperienza hai", "quanti anni di esperienza professionale hai"],
@@ -204,7 +226,13 @@ function canonicalFactValue(key: string | null, value: string): string {
   const groups: Record<string, string[][]> = {
     country: [["italy", "italia", "it", "ita"], ["united kingdom", "uk", "gb", "gbr", "regno unito"], ["united states", "united states of america", "us", "usa", "stati uniti"]],
     noticePeriod: [["immediate", "immediately", "immediata", "immediato"], ["2weeks", "2 weeks", "2 settimane"], ["1month", "1 month", "1 mese"], ["2months", "2 months", "2 mesi"], ["3months_plus", "3 months or more", "3 mesi o più"]],
-    howHeard: [["linkedin"], ["google", "google / search", "search"], ["referral", "referral / passaparola", "word of mouth", "passaparola"], ["other", "altro"]],
+    howHeard: [
+      ["linkedin"],
+      ["google", "google / search", "search"],
+      ["referral", "referral / passaparola", "word of mouth", "passaparola"],
+      ["job board", "jobboard", "company website", "careers site", "job site", "board"],
+      ["other", "altro"],
+    ],
     highestEducation: [["high_school", "high school", "high school diploma"], ["bachelor", "bachelor's degree", "bachelor’s degree"], ["master", "master's degree", "master’s degree"], ["phd", "ph.d.", "doctorate"]],
   };
   const group = groups[key ?? ""]?.find(values => values.includes(normalized));
@@ -256,8 +284,42 @@ function sameCompany(a: string, b: string): boolean {
   return left === right || left.includes(right) || right.includes(left);
 }
 
+function howHeardFromJobSource(source: string | null | undefined): string | null {
+  if (!source?.trim()) return null;
+  const s = source.trim().toLowerCase();
+  if (s === "linkedin" || s === "linkedin_jobs") return "LinkedIn";
+  if (s === "indeed") return "Indeed";
+  if (s === "google" || s === "google_jobs") return "Google";
+  // Catalogue / board scrape — honest "job board" rather than inventing LinkedIn.
+  if ([
+    "greenhouse", "lever", "ashby", "workable", "personio", "bamboohr", "recruitee",
+    "smartrecruiters", "teamtailor", "welcometothejungle", "remoto", "adzuna", "eures",
+  ].includes(s)) return "Job board";
+  return "Job board";
+}
+
 function resolveStandardScreening(question: FactQuestion, context: FactContext, key: string | null): FactResolution | null {
   const empty = { answer: null, provenance: [] as Fact[], conflict: false };
+  if (key === "howHeard") {
+    const facts = (context.facts ?? []).filter((fact) => fact.key === "howHeard" && fact.value.trim());
+    if (facts.length) {
+      const values = new Set(facts.map((fact) => canonicalFactValue("howHeard", fact.value)));
+      if (values.size !== 1) return { ...empty, conflict: values.size > 1, provenance: facts };
+      return { answer: matchFactOption(question, facts[0].value), provenance: facts, conflict: false };
+    }
+    const derived = howHeardFromJobSource(context.jobSource);
+    if (!derived) return empty;
+    const answer = matchFactOption(question, derived)
+      ?? matchFactOption(question, "Other")
+      ?? matchFactOption(question, "Job board")
+      ?? (["select", "react-select", "radio"].includes(question.kind) ? null : derived);
+    if (!answer) return empty;
+    return {
+      answer,
+      provenance: [{ key: "howHeard", value: derived, source: "profile", reference: "job_source" }],
+      conflict: false,
+    };
+  }
   if (key === "marketingOptIn" || isMarketingOptInQuestion(question.label)) {
     const facts = (context.facts ?? []).filter((fact) => fact.key === "marketingOptIn" && fact.value.trim());
     const values = new Set(facts.map((fact) => canonicalFactValue("marketingOptIn", fact.value)));
@@ -402,6 +464,7 @@ export function candidateFacts(profile: CVProfile | null, user: { email?: string
       if (e.company.trim()) add("employerHistory", e.company, "cv", `experiences.${i}.company`);
     });
     add("school", profile.education[0]?.school, "cv", "education.0.school");
+    add("degree", profile.education[0]?.degree, "cv", "education.0.degree");
     // No qualification is inferred from an education entry, including a past end date.
     (profile.skills ?? []).forEach((skill, i) => add(`skill:${skill.name.toLowerCase().trim()}`, "Yes", "cv", `skills.${i}`));
     profile.links.forEach((link, i) => { if (/linkedin/i.test(`${link.label} ${link.url}`)) add("linkedinUrl", link.url, "cv", `links.${i}`); else if (/portfolio|behance|dribbble/i.test(`${link.label} ${link.url}`)) add("portfolioUrl", link.url, "cv", `links.${i}`); else if (/github/i.test(`${link.label} ${link.url}`)) add("githubUrl", link.url, "cv", `links.${i}`); else if (/^(?:website|personal website|sito web personale)$/i.test(link.label.trim())) add("websiteUrl", link.url, "cv", `links.${i}`); });
