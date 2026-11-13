@@ -33,7 +33,7 @@ interface Initial {
   excludedCompanies: string[];
 }
 
-const MATCH_STEPS = [30, 50, 65, 75, 85] as const;
+const MATCH_STEPS = [30, 50, 60, 70, 80] as const;
 
 type TabKey = "auto" | "search" | "form" | "rounds";
 

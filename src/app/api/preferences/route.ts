@@ -71,7 +71,7 @@ export async function GET() {
   const rollout = applicationRolloutConfig();
   return NextResponse.json({
     autoApplyMode: prefs?.autoApplyMode ?? "manual",
-    matchMin: prefs?.matchMin ?? 75,
+    matchMin: prefs?.matchMin ?? 60,
     applicationService: {
       automaticBlocked: automaticApplicationsBlocked(),
       submissionsPaused: applicationsPaused() || !rollout.enabled,
@@ -129,7 +129,7 @@ export async function PUT(request: NextRequest) {
       // settimana converte; chi deve tornare a cliccare "Consenti" no.
       autoApplyMode: autoApplyMode ?? "auto",
       dailyCap: dailyCap ?? 10,
-      matchMin: matchMin ?? 50,
+      matchMin: matchMin ?? 60,
       employmentType: employmentType ?? "employee",
       protectedCategory: protectedCategory ?? false,
       dailyRate: dailyRate ?? null,
