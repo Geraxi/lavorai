@@ -2081,10 +2081,11 @@ async function deliverApplicationToRecruiter(
     console.error(
       `[worker] RECRUITER_EMAIL_FROM è sandbox Resend (${from}) — nessuna delivery reale possibile a recruiter esterni. Configura RECRUITER_EMAIL_FROM su lavorai.it.`,
     );
+    // Alert founder about configuration issue
     await alertFounder(
       "email_from_sandbox",
       "RECRUITER_EMAIL_FROM è sandbox — delivery bloccata",
-      `L'app sta cercando di inviare candidature ai recruiter ma RECRUITER_EMAIL_FROM punta ancora al sandbox Resend (${from}).\nResend accetta invii sandbox solo verso caselle interne all'account → NIENTE candidatura arriva ai recruiter esterni.\n\nFix: su Resend verifica lavorai.it, poi setta RECRUITER_EMAIL_FROM=candidature@lavorai.it su Vercel.`,
+      `L'app sta cercando di inviare candidature ai recruiter ma RECRUITER_EMAIL_FROM punta ancora al sandbox Resend (${from}).\nResend accetta invii sandbox solo verso caselle interne all'account → NIENTE candidatura arriva ai recruiter esterni.\n\nFix urgente richiesto:\n1. Verifica dominio lavorai.it su Resend\n2. Aggiungi record DNS (SPF, DKIM, DMARC)\n3. Setta EMAIL_FROM=candidature@lavorai.it su Vercel\n4. Riavvia deployment\n\nFinché questo non è risolto, NESSUNA candidatura può essere inviata ai recruiter.`,
     ).catch(() => void 0);
     return { kind: "not_sent", reason: "email_provider_not_configured" };
   }
