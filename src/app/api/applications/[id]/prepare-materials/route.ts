@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
-import { enqueueApplication } from "@/lib/application-queue";
+import { processApplication } from "@/lib/application-worker";
 import { isSkippedPortalUrl } from "@/lib/ats-skip-hosts";
 import { materialPreparationRequestJson } from "@/lib/application-material-preparation";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 /**
  * Retry a manual-ATS handoff solely to create its tailored materials.
  * This endpoint deliberately cannot send: it only accepts untouched rows and
  * the worker keeps the ATS in its manual handoff path after generation.
+ *
+ * It runs in the Vercel request itself rather than relying on the separate
+ * browser worker: document generation does not need Playwright, and this
+ * route never attempts a portal or email delivery.
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -61,6 +66,38 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   });
   if (updated.count !== 1) return NextResponse.json({ error: "state_changed" }, { status: 409 });
 
-  await enqueueApplication(app.id, { preserveClaim: true });
-  return NextResponse.json({ ok: true, status: "queued" });
+  await processApplication(app.id);
+
+  const prepared = await prisma.application.findUnique({
+    where: { id: app.id },
+    select: {
+      status: true,
+      cvDocxPath: true,
+      coverLetterPath: true,
+      cvPdfPath: true,
+      errorMessage: true,
+      submittedAt: true,
+      submittedVia: true,
+    },
+  });
+  if (!prepared?.cvDocxPath || !prepared.coverLetterPath) {
+    return NextResponse.json({
+      error: "material_generation_failed",
+      message: prepared?.errorMessage ?? "I materiali non sono stati generati. Riprova tra qualche istante.",
+      status: prepared?.status ?? "unknown",
+    }, { status: 500 });
+  }
+  // Defensive invariant for this route: it prepares files only. A delivery
+  // record would be a bug and must never be presented as successful prep.
+  if (prepared.submittedAt || prepared.submittedVia) {
+    return NextResponse.json({ error: "unexpected_delivery_state" }, { status: 409 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    status: prepared.status,
+    cvPdfReady: Boolean(prepared.cvPdfPath),
+    cvDocxReady: true,
+    coverLetterReady: true,
+  });
 }
