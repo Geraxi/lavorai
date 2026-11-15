@@ -175,6 +175,32 @@ async function testConsentRelease() {
   // A failing DB never throws into the caller's request.
   const broken = { ...db, user: { findUnique: async () => { throw new Error("outage"); } } };
   assert.equal(await rel.releaseHeldApplicationsForUser("u1", "privacy_consent", broken, NOW), 0);
+  assert.deepEqual(await rel.releaseHeldApplicationsForUserReport("u1", "privacy_consent", broken, NOW), { status: "incomplete", requeuedCount: 0 });
+
+  // Completed transitions remain verifiable when a later row fails. Never
+  // reset the count to zero or confuse queued with sent after partial work.
+  const partialState = { users: { u1: { ...READY } }, reservations: [], apps: [app("first"), app("second")] };
+  const partialDb = fakeDb(partialState).db;
+  const originalTransaction = partialDb.$transaction;
+  let calls = 0;
+  partialDb.$transaction = async (fn: any) => {
+    if (++calls === 2) throw new Error("Synthetic failure after first confirmed release");
+    return originalTransaction(fn);
+  };
+  assert.deepEqual(await rel.releaseHeldApplicationsForUserReport("u1", "privacy_consent", partialDb, NOW), { status: "incomplete", requeuedCount: 1 });
+  assert.equal(partialState.apps[0].startedAt, null);
+  assert.notEqual(partialState.apps[1].startedAt, null);
+  assert.equal(partialState.apps[0].status, "queued");
+  assert.equal(partialState.apps[0].submittedAt, null);
+  assert.deepEqual(await rel.releaseHeldApplicationsForUserReport("u1", "privacy_consent", partialDb, NOW), { status: "checked", requeuedCount: 1 });
+  assert.deepEqual(await rel.releaseHeldApplicationsForUserReport("u1", "privacy_consent", partialDb, NOW), { status: "checked", requeuedCount: 0 });
+
+  const recoveryOff = load("src/lib/held-application-release.ts", { "@/lib/db": { prisma: null }, "@/lib/application-pause": pause,
+    "@/lib/application-rollout": rollout, "@/lib/application-submission-budget": budget, "@/lib/application-worker-gates": gates, "@/lib/job-liveness": liveness,
+    "@/lib/application-recovery-release": { ...alwaysRelease, tryConsumeRecoveryRelease: async () => false } });
+  const offState = { users: { u1: { ...READY } }, reservations: [], apps: [app("recovery-off")] };
+  assert.deepEqual(await recoveryOff.releaseHeldApplicationsForUserReport("u1", "privacy_consent", fakeDb(offState).db, NOW), { status: "checked", requeuedCount: 0 });
+  assert.notEqual(offState.apps[0].startedAt, null, "consent reporting must not bypass the recovery gate");
   console.log("PASS held release: consent/verification/profile holds released only with zero prior-submission evidence, no ledger/sibling, after cutoff; paused/closed/unready → none.");
 }
 

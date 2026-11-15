@@ -1,3 +1,4 @@
+import { loadReusableApplicationDocuments, type PreparedDocumentMetadata } from "./prepared-application-documents";
 import {customerRolloutId,customerRolloutRow,customerRolloutDestination,customerRolloutConfigured,hasCustomerStamp} from "./customer-rollout";
 import { ordinaryValidationId, ordinaryValidationRow, ordinaryValidationDestination } from "./ordinary-validation";
 import { resolveAdapterByUrl, noAdapterMessageFor } from "@/lib/ats-adapter-resolution";
@@ -298,51 +299,27 @@ async function processApplicationRun(
   const jobPosting = `${app.job.title}\n${app.job.company ?? ""}\n\n${clipJobDescriptionForAi(app.job.description)}`;
   const jobLang = detectLanguage(`${app.job.title} ${app.job.description}`);
 
-  let result: Awaited<ReturnType<typeof optimizeCV>> | undefined;
+  let documentMetadata: PreparedDocumentMetadata | undefined;
+  let reused = false;
   let cvPath = "";
   let clPath = "";
   let cvBuffer: Buffer = Buffer.alloc(0);
   let clBuffer: Buffer = Buffer.alloc(0);
 
-  // Reuse prepared documents on retry so a prior AI spend is not repeated.
-  const reusePrepared =
-    !atsTestAuth &&
-    typeof app.cvDocxPath === "string" &&
-    app.cvDocxPath.length > 0 &&
-    typeof app.coverLetterPath === "string" &&
-    app.coverLetterPath.length > 0;
-
   try {
-    let reused = false;
-    if (reusePrepared) {
-      const existingCv = await readUserFile(app.cvDocxPath!).catch(() => Buffer.alloc(0));
-      const existingCl = await readUserFile(app.coverLetterPath!).catch(() => Buffer.alloc(0));
-      if (existingCv.length > 0 && existingCl.length > 0) {
-        cvPath = app.cvDocxPath!;
-        clPath = app.coverLetterPath!;
-        cvBuffer = existingCv;
-        clBuffer = existingCl;
-        result = {
-          optimizedCV: {
-            fullName: app.user.name ?? "Candidate",
-            targetRole: app.job.title,
-            email: app.user.email,
-            phone: "",
-            location: "",
-            linkedinUrl: null,
-            summary: "",
-            experiences: [],
-            education: [],
-            skills: { technical: [], soft: [], tools: [] },
-            languages: [],
-          },
-          coverLetter: "(reused)",
-          atsScore: 0,
-          suggestions: [],
-        };
-        reused = true;
-        console.log(`[worker] ${applicationId} reusing prepared CV/CL (skip optimizeCV)`);
-      }
+    const prepared = await loadReusableApplicationDocuments(app, {
+      allowReuse: !atsTestAuth,
+      jobLanguage: jobLang,
+      readFile: readUserFile,
+    });
+    if (prepared) {
+      cvPath = prepared.cvPath;
+      clPath = prepared.clPath;
+      cvBuffer = prepared.cvBuffer;
+      clBuffer = prepared.clBuffer;
+      documentMetadata = prepared.metadata;
+      reused = true;
+      console.log(`[worker] ${applicationId} reusing prepared CV/CL with saved text and metadata (skip optimizeCV)`);
     }
 
     if (!reused) {
@@ -371,7 +348,7 @@ async function processApplicationRun(
           prefs?.vatNumber != null ||
           prefs?.portfolioUrl != null);
 
-      result = atsTestAuth ? {
+      const result = atsTestAuth ? {
         optimizedCV: {
           fullName: `${syntheticAtsTestProfile().firstName} ${syntheticAtsTestProfile().lastName}`,
           targetRole: app.job.title,
@@ -450,6 +427,11 @@ async function processApplicationRun(
         applicationDocumentFilename("Lettera", app.job.title, applicationId, "docx"),
         clBuffer,
       );
+      documentMetadata = {
+        coverLetterText: result.coverLetter,
+        atsScore: result.atsScore,
+        suggestionsJson: JSON.stringify(result.suggestions),
+      };
     }
   } catch (err) {
     console.error(`[worker] ${applicationId} AI/generate failed`, err);
@@ -503,9 +485,10 @@ async function processApplicationRun(
 
   // 3b. PDF tailoring (structured CVProfile → tailored → ATS PDF). Non-fatal.
   // Token path: skip so the test does not write a CVProfile or burn tailoring credits.
-  // Retries reuse an existing PDF when present so drain time is not spent twice.
+  // Reuse a PDF only with the matching reused document set. Regeneration must
+  // not pair a fresh CV/letter with an old PDF (e.g. changed language).
   let cvPdfPath: string | null = null;
-  if (!atsTestSkipsDocumentTailoring(atsTestAuth) && typeof app.cvPdfPath === "string" && app.cvPdfPath.length > 0) {
+  if (reused && !atsTestSkipsDocumentTailoring(atsTestAuth) && typeof app.cvPdfPath === "string" && app.cvPdfPath.length > 0) {
     const existingPdf = await readUserFile(app.cvPdfPath).catch(() => Buffer.alloc(0));
     if (existingPdf.length > 0) {
       cvPdfPath = app.cvPdfPath;
@@ -569,7 +552,7 @@ async function processApplicationRun(
   }
   }
 
-  if (!result || !cvPath || !clPath) {
+  if (!documentMetadata || !cvPath || !clPath) {
     await markFailed(applicationId, "Documenti candidatura non generati.", workToken);
     return;
   }
@@ -580,11 +563,11 @@ async function processApplicationRun(
     data: {
       status: "ready_to_apply",
       ...renewLeaseData(),
-      atsScore: result.atsScore,
-      suggestionsJson: JSON.stringify(result.suggestions),
+      atsScore: documentMetadata.atsScore,
+      suggestionsJson: documentMetadata.suggestionsJson,
       cvDocxPath: cvPath,
       coverLetterPath: clPath,
-      coverLetterText: result.coverLetter,
+      coverLetterText: documentMetadata.coverLetterText,
       cvPdfPath,
       cvLanguage: jobLang,
     },
@@ -747,7 +730,7 @@ async function processApplicationRun(
       jobUrl: adapterUrl,
       cvPath,
       clPath,
-      coverLetterText: result.coverLetter,
+      coverLetterText: documentMetadata.coverLetterText,
       userId: app.userId,
       userEmail: app.user.email,
       userName: app.user.name,
@@ -916,32 +899,10 @@ async function processApplicationRun(
       return;
     }
 
-    // Vercel 300s kill / browser closed mid-fill with no outbound POST: requeue
-    // so the row is not left UNCONFIRMED and starved. Never requeue if a click
-    // or request may have started a submission.
-    const browserClosed =
-      outcome.status === "unknown_error" &&
-      /Target page, context or browser has been closed|browser has been closed/i.test(outcome.error ?? "");
-    const mayHaveSubmitted = !!(
-      ("attemptEvidence" in outcome && outcome.attemptEvidence &&
-        (outcome.attemptEvidence.clickPerformed || outcome.attemptEvidence.outboundRequest))
-    );
-    if (browserClosed && !mayHaveSubmitted) {
-      console.warn(`[worker] ${applicationId} browser closed before submit — requeue for retry`);
-      await prisma.application.updateMany({
-        where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply", "optimizing"] } },
-        data: {
-          status: "queued",
-          startedAt: null,
-          leaseToken: null,
-          leaseExpiresAt: null,
-          submitConfirmation: NOT_SUBMITTED,
-          errorMessage: `Tentativo interrotto (browser chiuso / timeout funzione): ${outcome.error ?? "unknown"}. In coda per retry.`,
-        },
-      });
-      return;
-    }
-
+    // Missing attempt evidence is not proof of no dispatch. A browser can close
+    // after accepting a click/POST but before an adapter returns its evidence.
+    // Keep the durable submission fence/reservation and require reconciliation;
+    // never rewrite an unknown outcome as NOT_SUBMITTED or automatically requeue.
     if (["submission_unconfirmed", "unknown_error", "missing_field"].includes(outcome.status)) {
       await prisma.application.updateMany({ where: { id: applicationId, ...liveLeaseFields(workToken), status: { in: ["applying", "ready_to_apply"] } }, data: {
         status: "ready_to_apply", submitConfirmation: "UNCONFIRMED",
@@ -1303,7 +1264,7 @@ async function processApplicationRun(
       clBuffer,
       cvPdfPath,
       cvLanguage: jobLang,
-      coverLetterText: result.coverLetter,
+      coverLetterText: documentMetadata.coverLetterText,
       trackingToken,
     }).catch((err) => {
       console.error(`[worker] ${applicationId} recruiter delivery state unavailable`);

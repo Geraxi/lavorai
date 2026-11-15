@@ -119,23 +119,36 @@ async function releaseOne(row: ReleaseRow, now: Date, cutoff: Date, db: DB): Pro
 export async function releaseHeldApplicationsForUser(
   userId: string, trigger: ReleaseTrigger, db: DB = prisma, now = new Date(),
 ): Promise<number> {
+  return (await releaseHeldApplicationsForUserReport(userId, trigger, db, now)).requeuedCount;
+}
+
+export type HeldApplicationReleaseReport = {
+  /** Only confirmed queue transitions from this call, never delivery receipts. */
+  requeuedCount: number;
+  status: "checked" | "incomplete";
+};
+
+/** Report partial progress without confusing consent persistence with recovery. */
+export async function releaseHeldApplicationsForUserReport(
+  userId: string, trigger: ReleaseTrigger, db: DB = prisma, now = new Date(),
+): Promise<HeldApplicationReleaseReport> {
+  let released = 0;
   try {
     const cutoff = sendingOpen();
-    if (!cutoff) return 0;
+    if (!cutoff) return { requeuedCount: 0, status: "checked" };
     const user = await db.user.findUnique({ where: { id: userId },
       select: { suspendedAt: true, privacyConsentAt: true, emailVerified: true } });
-    if (!user || !userReady(user)) return 0;
+    if (!user || !userReady(user)) return { requeuedCount: 0, status: "checked" };
     const rows = await db.application.findMany({
       where: { ...noPriorSubmissionWhere(now, cutoff), userId, errorMessage: { in: releasableHoldMessages(trigger) } },
       select: releaseSelect, orderBy: { createdAt: "asc" }, take: 200,
     });
-    let released = 0;
     for (const row of rows) if (await releaseOne(row, now, cutoff, db)) released++;
     if (released) console.log(`[held-release] ${trigger}: released ${released} held application(s) for user ${userId}`);
-    return released;
+    return { requeuedCount: released, status: "checked" };
   } catch (err) {
     console.error(`[held-release] ${trigger} failed`, err instanceof Error ? err.message : err);
-    return 0;
+    return { requeuedCount: released, status: "incomplete" };
   }
 }
 

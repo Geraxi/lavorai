@@ -11,6 +11,8 @@
  * by the Recruitee adapter (HTTP apply), not by this probe.
  */
 
+import { publicApplyUrls } from "./apply-url";
+
 export type FormProbeResult =
   | { status: "present"; detail: string }
   | { status: "missing"; detail: string }
@@ -38,21 +40,22 @@ async function getText(url: string): Promise<{ ok: boolean; status: number; fina
   }
 }
 
+/** Injected transports may reject too; never turn a network failure into absence. */
+async function fetchProbeText(fetchText: typeof getText, url: string): ReturnType<typeof getText> {
+  try {
+    return await fetchText(url);
+  } catch {
+    return { ok: false, status: 0, finalUrl: url, body: "" };
+  }
+}
+
 function leverApplyCandidates(jobUrl: string): string[] {
-  const base = jobUrl.replace(/\/$/, "").replace(/\/apply$/i, "");
-  return [`${base}/apply`, base];
+  return publicApplyUrls(jobUrl);
 }
 
 function personioApplyCandidates(jobUrl: string): string[] {
-  try {
-    const u = new URL(jobUrl);
-    u.hash = "";
-    const clean = u.toString().replace(/\/$/, "");
-    const withApply = /\/apply\/?$/i.test(u.pathname) ? clean : `${clean}/apply`;
-    return [withApply, `${clean}#apply`, clean];
-  } catch {
-    return [jobUrl];
-  }
+  const [apply, posting] = publicApplyUrls(jobUrl);
+  return [apply, `${posting}#apply`, posting];
 }
 
 function bodyLooksLikeLeverForm(body: string): boolean {
@@ -75,38 +78,56 @@ export async function probePortalForm(
 ): Promise<FormProbeResult> {
   if (adapterId === "lever") {
     let last = "";
+    let unavailable: string | null = null;
     for (const url of leverApplyCandidates(jobUrl)) {
-      const res = await fetchText(url);
+      const res = await fetchProbeText(fetchText, url);
       last = `${res.status} ${res.finalUrl}`;
-      if (!res.ok) continue;
+      if (!res.ok) {
+        // Only a definitive not-found/gone response proves absence. A failed
+        // request (including 403/429/5xx/timeouts) tells us nothing about the
+        // form, even if another candidate URL serves an ordinary job page.
+        if (res.status !== 404 && res.status !== 410) unavailable ??= last;
+        continue;
+      }
       if (!/lever\.co/i.test(res.finalUrl)) {
+        if (unavailable) return { status: "unknown", detail: `lever_probe_unavailable:${unavailable}` };
         return { status: "missing", detail: `redirected_off_lever:${res.finalUrl}` };
       }
       if (bodyLooksLikeLeverForm(res.body)) {
         return { status: "present", detail: `lever_form:${res.finalUrl}` };
       }
     }
+    if (unavailable) return { status: "unknown", detail: `lever_probe_unavailable:${unavailable}` };
     return { status: "missing", detail: `lever_form_absent:${last}` };
   }
 
   if (adapterId === "personio") {
     let last = "";
+    let unavailable: string | null = null;
     for (const url of personioApplyCandidates(jobUrl)) {
-      const res = await fetchText(url);
+      const res = await fetchProbeText(fetchText, url);
       last = `${res.status} ${res.finalUrl}`;
-      if (!res.ok) continue;
+      if (!res.ok) {
+        // Only a definitive not-found/gone response proves absence. A failed
+        // request (including 403/429/5xx/timeouts) tells us nothing about the
+        // form, even if another candidate URL serves an ordinary job page.
+        if (res.status !== 404 && res.status !== 410) unavailable ??= last;
+        continue;
+      }
       if (!/personio\.(com|de)/i.test(res.finalUrl)) {
+        if (unavailable) return { status: "unknown", detail: `personio_probe_unavailable:${unavailable}` };
         return { status: "missing", detail: `redirected_off_personio:${res.finalUrl}` };
       }
       if (bodyLooksLikePersonioForm(res.body)) {
         return { status: "present", detail: `personio_form:${res.finalUrl}` };
       }
     }
+    if (unavailable) return { status: "unknown", detail: `personio_probe_unavailable:${unavailable}` };
     return { status: "missing", detail: `personio_form_absent:${last}` };
   }
 
   if (adapterId === "greenhouse") {
-    const res = await fetchText(jobUrl.includes("/apply") ? jobUrl : `${jobUrl.replace(/\/$/, "")}/apply`);
+    const res = await fetchProbeText(fetchText, jobUrl.includes("/apply") ? jobUrl : `${jobUrl.replace(/\/$/, "")}/apply`);
     if (!res.ok) return { status: "unknown", detail: `greenhouse_http_${res.status}` };
     if (!/greenhouse\.io/i.test(res.finalUrl)) {
       return { status: "unknown", detail: `greenhouse_redirect:${res.finalUrl}` };
@@ -124,18 +145,6 @@ export async function probePortalForm(
 export function preferredApplyUrl(adapterId: string, jobUrl: string, probeDetail: string): string {
   const m = probeDetail.match(/:(https?:\/\/\S+)/);
   if (m?.[1]) return m[1];
-  if (adapterId === "personio") {
-    try {
-      const u = new URL(jobUrl);
-      u.hash = "";
-      const clean = u.toString().replace(/\/$/, "");
-      return /\/apply\/?$/i.test(u.pathname) ? clean : `${clean}/apply`;
-    } catch {
-      return jobUrl;
-    }
-  }
-  if (adapterId === "lever") {
-    return jobUrl.replace(/\/$/, "").replace(/\/apply$/i, "") + "/apply";
-  }
+  if (adapterId === "personio" || adapterId === "lever") return publicApplyUrls(jobUrl)[0];
   return jobUrl;
 }

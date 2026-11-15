@@ -349,12 +349,15 @@ export async function observeSubmission(page: Page, provider: string, jobUrl: st
     if (beforeSubmit && !(await beforeSubmit().catch(() => false))) {
       return { response: null, outcome: { ok: false, status: "submission_unconfirmed", error: "Invio bloccato: le condizioni o le autorizzazioni della candidatura sono cambiate. Nessun nuovo invio eseguito.", attemptEvidence: emptyAttemptEvidence() } };
     }
-    // A timeout after dispatch is ambiguous, so never force-click/replay it.
-    await click().catch(() => void 0);
+    // Crossing the dispatch boundary is ambiguous even when the click rejects
+    // or the browser closes. Record it before awaiting, never click again.
     clickPerformed = true;
     clickPerformedAt = new Date().toISOString();
+    try { await click(); } catch { /* Dispatch may already have happened. */ }
     await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
-    await page.waitForTimeout(1_200);
+    // Teardown after dispatch must not throw away the captured POST/receipt
+    // and let an adapter return an evidence-free unknown_error.
+    await page.waitForTimeout(1_200).catch(() => void 0);
   } finally {
     page.off("request", onRequest);
     page.off("response", onResponse);
