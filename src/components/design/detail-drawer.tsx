@@ -30,6 +30,7 @@ export interface DrawerApp {
   hasCoverLetterDocx?: boolean;
   hasCvPdf?: boolean;
   cvLanguage?: string | null;
+  submittedAt?: string | null;
   ghostingDays?: number;
   lastReplyAt?: string | null;
   delivery?: DeliveryView;
@@ -195,6 +196,11 @@ export function DetailDrawer({
                     <PrepareMaterialsButton appId={app.id} locale={locale} />
                   </div>
                 )}
+                {app.hasCvDocx && app.hasCoverLetterDocx && !app.submittedAt && app.jobUrl?.includes("ashbyhq.com") && (
+                  <div style={{ padding: "0 16px 14px" }}>
+                    <SubmitAshbyButton appId={app.id} locale={locale} />
+                  </div>
+                )}
               </div>
 
               {/* Cover letter anteprima */}
@@ -323,6 +329,38 @@ function PrepareMaterialsButton({ appId, locale }: { appId: string; locale: stri
 
   return <button type="button" className="ds-btn ds-btn-sm" disabled={busy} onClick={prepare}>
     <Icon name="sparkles" size={12} /> {busy ? tr("Preparazione…", "Preparing…") : tr("Prepara materiali", "Prepare materials")}
+  </button>;
+}
+
+function SubmitAshbyButton({ appId, locale }: { appId: string; locale: string }) {
+  const tr = (it: string, en: string) => locale === "en" ? en : it;
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    const confirmed = window.confirm(tr(
+      "Invieremo questa candidatura ad Ashby con il CV e la lettera già preparati. Se Ashby richiede un CAPTCHA o una risposta obbligatoria che non hai salvato, l'invio si fermerà senza inventare dati. Continuare?",
+      "We will submit this application to Ashby with the prepared CV and cover letter. If Ashby requires a CAPTCHA or a required answer you have not saved, the submission will pause without inventing data. Continue?",
+    ));
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/applications/${encodeURIComponent(appId)}/submit-portal`, { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast.error(body.message ?? tr("Invio automatico non disponibile per questa candidatura.", "Automatic submission is not available for this application."));
+        return;
+      }
+      toast.success(tr("Candidatura affidata all'invio automatico. Verificheremo la ricevuta prima di segnalarla come inviata.", "Application queued for automatic delivery. We will verify a receipt before marking it sent."));
+      window.setTimeout(() => window.location.reload(), 500);
+    } catch {
+      toast.error(tr("Errore di rete. Riprova.", "Network error. Please try again."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <button type="button" className="ds-btn ds-btn-sm ds-btn-accent" disabled={busy} onClick={submit}>
+    <Icon name="send" size={12} /> {busy ? tr("Accodo l'invio…", "Queuing send…") : tr("Invia automaticamente", "Send automatically")}
   </button>;
 }
 

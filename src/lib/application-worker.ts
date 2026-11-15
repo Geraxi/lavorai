@@ -49,8 +49,8 @@ import { humanContext, launchBrowser } from "@/lib/browser";
 import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { discoverPublishedHiringInbox } from "@/lib/employer-hiring-inbox";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
-import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData, skipListManualHandoffWhere } from "@/lib/ats-skip-hosts";
-import { isMaterialPreparationRequested } from "@/lib/application-material-preparation";
+import { isSkippedPortalUrl, portalFamily, SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData, skipListManualHandoffWhere } from "@/lib/ats-skip-hosts";
+import { isExplicitPortalSubmissionRequested, isMaterialPreparationRequested } from "@/lib/application-material-preparation";
 import { recruiterEmailFallbackEnabled, skipListEmailSendDecision } from "@/lib/recruiter-email-fallback";
 import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
 import { attemptEvidenceWrite, REJECTED_NOT_SENT } from "@/lib/portal-adapters/submission-attempt-evidence";
@@ -188,13 +188,21 @@ async function processApplicationRun(
   const prepareManualAtsMaterials =
     isSkippedPortalUrl(app.job.url) &&
     isMaterialPreparationRequested(app.suggestionsJson);
+  // A direct, per-application confirmation can opt an Ashby application into
+  // the existing adapter. It never changes the default skip-list behaviour
+  // for batch/automatic applications.
+  const explicitAshbySubmission =
+    isSkippedPortalUrl(app.job.url) &&
+    portalFamily(app.job.url) === "ashby" &&
+    isExplicitPortalSubmissionRequested(app.suggestionsJson);
 
   // Skip-list hosts: look up a published inbox first. A normal automatic
   // match with no inbox hands off without reserving a daily slot or using AI.
-  // A job explicitly selected by its owner may prepare documents, but it still
-  // remains a manual handoff: this never opts it into portal submission.
+  // A job selected for material preparation remains a manual handoff. The
+  // separate explicitAshbySubmission marker is the sole exception and comes
+  // from an immediate, per-application confirmation in the UI.
   if (isSkippedPortalUrl(app.job.url)) {
-    if (prepareManualAtsMaterials) {
+    if (prepareManualAtsMaterials || explicitAshbySubmission) {
       if (blocksUncertainAutoRetry(app)) {
         await prisma.application.updateMany({
           where: skipListManualHandoffWhere(applicationId),
@@ -282,7 +290,7 @@ async function processApplicationRun(
   const portalSubmitEnabledEarly = process.env.PORTAL_SUBMIT_ENABLED !== "false";
   let earlyAdapterUrl: string | null = null;
   let earlyAdapterId: string | null = null;
-  if (portalSubmitEnabledEarly && !atsTestAuth && !isSkippedPortalUrl(app.job.url)) {
+  if (portalSubmitEnabledEarly && !atsTestAuth && (!isSkippedPortalUrl(app.job.url) || explicitAshbySubmission)) {
     let earlyResolved = app.job.url;
     try {
       earlyResolved = await resolveFinalUrl(app.job.url);
@@ -683,7 +691,7 @@ async function processApplicationRun(
   // alcuni ATS (Greenhouse) redirigono a career page custom dove il form
   // non è raggiungibile. L'URL canonico porta al form puro dell'ATS.
   // Risoluzione per host URL: app.portal è un'etichetta storica e non decide.
-  const skipPortal = isSkippedPortalUrl(app.job.url) || isSkippedPortalUrl(resolvedUrl);
+  const skipPortal = (isSkippedPortalUrl(app.job.url) || isSkippedPortalUrl(resolvedUrl)) && !explicitAshbySubmission;
   const resolvedAdapter = portalSubmitEnabled && !skipPortal ? resolveAdapterByUrl([app.job.url, resolvedUrl]) : null;
   const adapter = resolvedAdapter?.adapter ?? null;
   // Prefer the URL the early form-probe confirmed (e.g. Personio /apply).
@@ -712,7 +720,7 @@ async function processApplicationRun(
     discoverEmployerInbox: discoverPublishedHiringInbox,
   };
   let verifiedRecruiter = null as Awaited<ReturnType<typeof findVerifiedRecruiterEmail>>;
-  if (!prepareManualAtsMaterials && !atsTestSkipsRecruiterLookup(atsTestAuth)) {
+  if (!prepareManualAtsMaterials && !explicitAshbySubmission && !atsTestSkipsRecruiterLookup(atsTestAuth)) {
     verifiedRecruiter = await findVerifiedRecruiterEmail(
       resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
     );
@@ -788,7 +796,10 @@ async function processApplicationRun(
       company: app.job.company,
       jobDescription: clipJobDescriptionForAi(app.job.description),
       jobSource: app.job.source,
-      forceRealSubmit: atsTestAuth ? atsTestAuth.mode === "real_submit" : opts?.forceRealSubmit === true,
+      // The per-application marker exists only after the user confirms this
+      // exact application in the drawer, so it may intentionally override a
+      // global dry-run used for non-confirmed backlog rows.
+      forceRealSubmit: atsTestAuth ? atsTestAuth.mode === "real_submit" : explicitAshbySubmission || opts?.forceRealSubmit === true,
       forceDryRun: atsTestAuth ? atsTestAuth.mode === "dry_run" : opts?.forceDryRun === true,
       atsTestAuth,
     }).catch((err) => {
