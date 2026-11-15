@@ -58,11 +58,8 @@ const SYSTEM_NOTIFICATION_DOMAINS = [
   "datadog.com",
   "pagerduty.com",
   "statuspage.io",
-  "google.com", // Google Alerts, Calendar, etc.
   "amazonaws.com", // AWS notifications
   "azure.com", // Azure notifications
-  "linkedin.com", // job alerts / marketing — never human risposta
-  "jobalerts-noreply@linkedin",
   "mail.ideabrowser.com",
   "polymarket.com",
   "fundingoptions",
@@ -79,6 +76,11 @@ const SYSTEM_NOTIFICATION_FROM = [
   "notify@",
   "system@",
   "automated@",
+  "jobalerts-noreply@linkedin",
+  "jobs-noreply@linkedin",
+  "linkedin-notifications@",
+  "googlealerts-noreply@google",
+  "calendar-notification@google",
 ];
 
 const BOUNCE_SUBJECT = [

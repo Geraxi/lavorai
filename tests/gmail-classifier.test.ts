@@ -116,6 +116,15 @@ const testCases = [
     },
     expected: { kind: "auto", isHuman: false },
   },
+  {
+    name: "Recruiter at a platform domain remains a human reply",
+    input: {
+      fromAddress: "recruiting@linkedin.com",
+      subject: "Interview invitation",
+      bodyText: "We would love to schedule a call. Are you available next week?",
+    },
+    expected: { kind: "colloquio", isHuman: true },
+  },
 ];
 
 function runTests() {
