@@ -245,12 +245,17 @@ export function effectiveTier(user: {
 }
 
 /** Stato della prova gratuita per UI/email. */
-export function trialState(user: { tier?: string | null; createdAt?: Date | string;
+export function trialState(user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
   trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null }): {
   status: "none" | "active" | "ended";
   endsAt: Date | null;
   daysLeft: number;
 } {
+  // A permanent Pro+ entitlement is not a completed trial.  Returning
+  // "ended" here made the owner-facing billing UI incorrectly say that
+  // applications were blocked even though every actual access gate permits
+  // this account.
+  if (isLifetimeProPlus(user.email)) return { status: "none", endsAt: null, daysLeft: 0 };
   if (!trialEnd(user) || normalizeTier(user.tier) !== "free") return { status: "none", endsAt: null, daysLeft: 0 };
   const endsAt = trialEnd(user)!;
   const msLeft = endsAt.getTime() - Date.now();

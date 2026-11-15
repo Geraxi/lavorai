@@ -18,6 +18,10 @@ async function main() {
   assert.equal(requiresPaymentMethodBeforeApp({ ...active, subscriptionStatus: "trialing" }), false, "A Stripe trial subscription unlocks the app");
   assert.equal(requiresPaymentMethodBeforeApp({ ...active, tier: "pro" }), false, "A paid tier is never blocked by the new-member gate");
   assert.equal(trialState(expired).status, "ended", "Delayed setup or stored extension must not restart trial");
+
+  const lifetime = { email: "umbertogeraci0@gmail.com", tier: "free", createdAt: new Date("2026-01-01T00:00:00.000Z") };
+  assert.equal(trialState(lifetime).status, "none", "Lifetime Pro+ accounts must never be presented as an expired trial");
+  assert.equal(effectiveTier(lifetime), "pro_plus", "Lifetime Pro+ entitlement is applied independently of Stripe");
   assert.equal(isApplicationAccessPaused(expired), true);
   const legacy = { ...expired, createdAt: new Date("2026-09-01T12:00:00Z"), trialGraceEndsAt: new Date("2026-09-20T12:00:00Z") };
   const realNow = Date.now;
