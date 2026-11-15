@@ -17,9 +17,12 @@ const server = createServer(async (request, response) => {
 });
 try {
   await build({
-    stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {PrivacyConsentForm} from './src/components/privacy-consent-form';
+    stdin: { contents: `import React from 'react'; import {createRoot} from 'react-dom/client'; import {flushSync} from 'react-dom'; import {PrivacyConsentForm} from './src/components/privacy-consent-form';
       const root=createRoot(document.getElementById('root')); let key=0;
-      window.__scenario=(options={})=>{window.__options=options;window.__requests=[];window.__refreshes=0;root.render(<PrivacyConsentForm key={++key} recorded={!!options.recorded} locale={options.locale||'en'}/>);};
+      // A scenario switch must commit its new keyed form before Playwright
+      // can check it. Concurrent root.render otherwise leaves the preceding
+      // checkbox briefly actionable, then replaces it with an unchecked one.
+      window.__scenario=(options={})=>{window.__options=options;window.__requests=[];window.__refreshes=0;flushSync(()=>root.render(<PrivacyConsentForm key={++key} recorded={!!options.recorded} locale={options.locale||'en'}/>));};
       window.fetch=async(url,options)=>{window.__requests.push({url,body:JSON.parse(options.body)});const fixture=window.__options;
         if(fixture.delay) await new Promise(resolve=>{window.__resolve=resolve;});
         if(fixture.networkError) throw Error('Synthetic connection failure');
