@@ -199,37 +199,42 @@ async function processApplicationRun(
       companyWebsite: app.job.companyWebsite,
     }).catch(() => null);
     const prepareMaterials = isMaterialPreparationRequested(app.suggestionsJson);
-    if (!cheap && !prepareMaterials) {
-      await prisma.application.updateMany({
-        where: skipListManualHandoffWhere(applicationId),
-        data: skipListManualHandoffData(),
-      });
-      return;
-    }
-    await prisma.job.update({
-      where: { id: app.job.id },
-      data: {
-        recruiterEmail: cheap.email,
-        recruiterEmailSourceUrl: cheap.provenance.sourceUrl,
-        recruiterScrapedAt: new Date(),
-      },
-    }).catch(() => undefined);
-    app.job.recruiterEmail = cheap.email;
-    app.job.recruiterEmailSourceUrl = cheap.provenance.sourceUrl;
-    if (blocksUncertainAutoRetry(app)) {
-      await prisma.application.updateMany({
-        where: skipListManualHandoffWhere(applicationId),
-        data: { ...skipListManualHandoffData(), errorMessage: UNCERTAIN_SUBMISSION_MESSAGE, sendFailureReason: "uncertain_submission" },
-      });
-      return;
-    }
-    const cheapDecision = skipListEmailSendDecision(cheap, app.job);
-    if (!cheapDecision.ok) {
-      await prisma.application.updateMany({
-        where: skipListManualHandoffWhere(applicationId),
-        data: skipListManualHandoffData(undefined, { sendFailureReason: cheapDecision.reason }),
-      });
-      return;
+    if (!cheap) {
+      if (!prepareMaterials || blocksUncertainAutoRetry(app)) {
+        await prisma.application.updateMany({
+          where: skipListManualHandoffWhere(applicationId),
+          data: blocksUncertainAutoRetry(app)
+            ? { ...skipListManualHandoffData(), errorMessage: UNCERTAIN_SUBMISSION_MESSAGE, sendFailureReason: "uncertain_submission" }
+            : skipListManualHandoffData(),
+        });
+        return;
+      }
+    } else {
+      await prisma.job.update({
+        where: { id: app.job.id },
+        data: {
+          recruiterEmail: cheap.email,
+          recruiterEmailSourceUrl: cheap.provenance.sourceUrl,
+          recruiterScrapedAt: new Date(),
+        },
+      }).catch(() => undefined);
+      app.job.recruiterEmail = cheap.email;
+      app.job.recruiterEmailSourceUrl = cheap.provenance.sourceUrl;
+      if (blocksUncertainAutoRetry(app)) {
+        await prisma.application.updateMany({
+          where: skipListManualHandoffWhere(applicationId),
+          data: { ...skipListManualHandoffData(), errorMessage: UNCERTAIN_SUBMISSION_MESSAGE, sendFailureReason: "uncertain_submission" },
+        });
+        return;
+      }
+      const cheapDecision = skipListEmailSendDecision(cheap, app.job);
+      if (!cheapDecision.ok) {
+        await prisma.application.updateMany({
+          where: skipListManualHandoffWhere(applicationId),
+          data: skipListManualHandoffData(undefined, { sendFailureReason: cheapDecision.reason }),
+        });
+        return;
+      }
     }
   }
 
