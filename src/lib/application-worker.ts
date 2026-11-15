@@ -185,41 +185,16 @@ async function processApplicationRun(
   if (atsTestAuth && !atsTestPauseExemptionForId(atsTestAuth, applicationId)) return;
   if (applicationsPaused() && !atsTestAuth && !ordinaryValidationRow(app) && !customerRolloutRow(app)) return;
 
+  const prepareManualAtsMaterials =
+    isSkippedPortalUrl(app.job.url) &&
+    isMaterialPreparationRequested(app.suggestionsJson);
+
   // Skip-list hosts: look up a published inbox first. A normal automatic
   // match with no inbox hands off without reserving a daily slot or using AI.
   // A job explicitly selected by its owner may prepare documents, but it still
   // remains a manual handoff: this never opts it into portal submission.
   if (isSkippedPortalUrl(app.job.url)) {
-    const cheap = await lookupPublishedSkipListInbox({
-      url: app.job.url,
-      company: app.job.company,
-      description: app.job.description,
-      recruiterEmail: app.job.recruiterEmail,
-      recruiterEmailSourceUrl: app.job.recruiterEmailSourceUrl,
-      companyWebsite: app.job.companyWebsite,
-    }).catch(() => null);
-    const prepareMaterials = isMaterialPreparationRequested(app.suggestionsJson);
-    if (!cheap) {
-      if (!prepareMaterials || blocksUncertainAutoRetry(app)) {
-        await prisma.application.updateMany({
-          where: skipListManualHandoffWhere(applicationId),
-          data: blocksUncertainAutoRetry(app)
-            ? { ...skipListManualHandoffData(), errorMessage: UNCERTAIN_SUBMISSION_MESSAGE, sendFailureReason: "uncertain_submission" }
-            : skipListManualHandoffData(),
-        });
-        return;
-      }
-    } else {
-      await prisma.job.update({
-        where: { id: app.job.id },
-        data: {
-          recruiterEmail: cheap.email,
-          recruiterEmailSourceUrl: cheap.provenance.sourceUrl,
-          recruiterScrapedAt: new Date(),
-        },
-      }).catch(() => undefined);
-      app.job.recruiterEmail = cheap.email;
-      app.job.recruiterEmailSourceUrl = cheap.provenance.sourceUrl;
+    if (prepareManualAtsMaterials) {
       if (blocksUncertainAutoRetry(app)) {
         await prisma.application.updateMany({
           where: skipListManualHandoffWhere(applicationId),
@@ -227,13 +202,49 @@ async function processApplicationRun(
         });
         return;
       }
-      const cheapDecision = skipListEmailSendDecision(cheap, app.job);
-      if (!cheapDecision.ok) {
+    } else {
+      const cheap = await lookupPublishedSkipListInbox({
+        url: app.job.url,
+        company: app.job.company,
+        description: app.job.description,
+        recruiterEmail: app.job.recruiterEmail,
+        recruiterEmailSourceUrl: app.job.recruiterEmailSourceUrl,
+        companyWebsite: app.job.companyWebsite,
+      }).catch(() => null);
+      if (!cheap) {
         await prisma.application.updateMany({
           where: skipListManualHandoffWhere(applicationId),
-          data: skipListManualHandoffData(undefined, { sendFailureReason: cheapDecision.reason }),
+          data: blocksUncertainAutoRetry(app)
+            ? { ...skipListManualHandoffData(), errorMessage: UNCERTAIN_SUBMISSION_MESSAGE, sendFailureReason: "uncertain_submission" }
+            : skipListManualHandoffData(),
         });
         return;
+      } else {
+        await prisma.job.update({
+          where: { id: app.job.id },
+          data: {
+            recruiterEmail: cheap.email,
+            recruiterEmailSourceUrl: cheap.provenance.sourceUrl,
+            recruiterScrapedAt: new Date(),
+          },
+        }).catch(() => undefined);
+        app.job.recruiterEmail = cheap.email;
+        app.job.recruiterEmailSourceUrl = cheap.provenance.sourceUrl;
+        if (blocksUncertainAutoRetry(app)) {
+          await prisma.application.updateMany({
+            where: skipListManualHandoffWhere(applicationId),
+            data: { ...skipListManualHandoffData(), errorMessage: UNCERTAIN_SUBMISSION_MESSAGE, sendFailureReason: "uncertain_submission" },
+          });
+          return;
+        }
+        const cheapDecision = skipListEmailSendDecision(cheap, app.job);
+        if (!cheapDecision.ok) {
+          await prisma.application.updateMany({
+            where: skipListManualHandoffWhere(applicationId),
+            data: skipListManualHandoffData(undefined, { sendFailureReason: cheapDecision.reason }),
+          });
+          return;
+        }
       }
     }
   }
@@ -701,7 +712,7 @@ async function processApplicationRun(
     discoverEmployerInbox: discoverPublishedHiringInbox,
   };
   let verifiedRecruiter = null as Awaited<ReturnType<typeof findVerifiedRecruiterEmail>>;
-  if (!atsTestSkipsRecruiterLookup(atsTestAuth)) {
+  if (!prepareManualAtsMaterials && !atsTestSkipsRecruiterLookup(atsTestAuth)) {
     verifiedRecruiter = await findVerifiedRecruiterEmail(
       resolvedUrl, app.job.company, app.job.recruiterEmail, recruiterLookup,
     );
