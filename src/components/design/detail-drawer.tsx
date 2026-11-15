@@ -190,6 +190,11 @@ export function DetailDrawer({
                     last
                   />
                 </div>
+                {!app.hasCvDocx && !app.hasCoverLetterDocx && app.jobUrl?.includes("ashbyhq.com") && (
+                  <div style={{ padding: "0 16px 14px" }}>
+                    <PrepareMaterialsButton appId={app.id} locale={locale} />
+                  </div>
+                )}
               </div>
 
               {/* Cover letter anteprima */}
@@ -292,6 +297,33 @@ export function DetailDrawer({
       </aside>
     </>
   );
+}
+
+function PrepareMaterialsButton({ appId, locale }: { appId: string; locale: string }) {
+  const tr = (it: string, en: string) => locale === "en" ? en : it;
+  const [busy, setBusy] = useState(false);
+
+  async function prepare() {
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/applications/${encodeURIComponent(appId)}/prepare-materials`, { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast.error(body.message ?? tr("Preparazione non disponibile per questa candidatura.", "Materials cannot be prepared for this application."));
+        return;
+      }
+      toast.success(body.alreadyPrepared ? tr("Materiali già pronti.", "Materials are already ready.") : tr("Preparazione avviata. Non invieremo la candidatura.", "Preparation started. This will not submit the application."));
+      window.setTimeout(() => window.location.reload(), 500);
+    } catch {
+      toast.error(tr("Errore di rete. Riprova.", "Network error. Please try again."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <button type="button" className="ds-btn ds-btn-sm" disabled={busy} onClick={prepare}>
+    <Icon name="sparkles" size={12} /> {busy ? tr("Preparazione…", "Preparing…") : tr("Prepara materiali", "Prepare materials")}
+  </button>;
 }
 
 function MiniStat({

@@ -50,6 +50,7 @@ import { findVerifiedRecruiterEmail } from "@/lib/recruiter-email";
 import { discoverPublishedHiringInbox } from "@/lib/employer-hiring-inbox";
 import { lookupPublishedSkipListInbox } from "@/lib/skip-list-email-lookup";
 import { isSkippedPortalUrl, SKIPPED_ATS_MANUAL_MESSAGE, skipListManualHandoffData, skipListManualHandoffWhere } from "@/lib/ats-skip-hosts";
+import { isMaterialPreparationRequested } from "@/lib/application-material-preparation";
 import { recruiterEmailFallbackEnabled, skipListEmailSendDecision } from "@/lib/recruiter-email-fallback";
 import { blocksUncertainAutoRetry, UNCERTAIN_SUBMISSION_MESSAGE } from "@/lib/uncertain-submission";
 import { attemptEvidenceWrite, REJECTED_NOT_SENT } from "@/lib/portal-adapters/submission-attempt-evidence";
@@ -184,8 +185,10 @@ async function processApplicationRun(
   if (atsTestAuth && !atsTestPauseExemptionForId(atsTestAuth, applicationId)) return;
   if (applicationsPaused() && !atsTestAuth && !ordinaryValidationRow(app) && !customerRolloutRow(app)) return;
 
-  // Skip-list hosts: look up a published inbox first. A miss hands off
-  // without reserving a daily slot or running CV/AI.
+  // Skip-list hosts: look up a published inbox first. A normal automatic
+  // match with no inbox hands off without reserving a daily slot or using AI.
+  // A job explicitly selected by its owner may prepare documents, but it still
+  // remains a manual handoff: this never opts it into portal submission.
   if (isSkippedPortalUrl(app.job.url)) {
     const cheap = await lookupPublishedSkipListInbox({
       url: app.job.url,
@@ -195,7 +198,8 @@ async function processApplicationRun(
       recruiterEmailSourceUrl: app.job.recruiterEmailSourceUrl,
       companyWebsite: app.job.companyWebsite,
     }).catch(() => null);
-    if (!cheap) {
+    const prepareMaterials = isMaterialPreparationRequested(app.suggestionsJson);
+    if (!cheap && !prepareMaterials) {
       await prisma.application.updateMany({
         where: skipListManualHandoffWhere(applicationId),
         data: skipListManualHandoffData(),

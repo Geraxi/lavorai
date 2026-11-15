@@ -19,6 +19,8 @@ import { recordConversionEvent } from "@/lib/conversion-events";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { ACTIVATION_MESSAGES, getActivationReadiness } from "@/lib/activation-readiness";
 import { isAtsTestJobSource } from "@/lib/ats-test-capability";
+import { isSkippedPortalUrl } from "@/lib/ats-skip-hosts";
+import { materialPreparationRequestJson } from "@/lib/application-material-preparation";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -244,6 +246,10 @@ export async function POST(request: NextRequest) {
         trackingToken: randomToken(),
         atsScore: score, // pre-stima; il worker la sovrascrive con score AI
         sessionId: session.id,
+        // An explicit click on an ATS held for manual completion prepares the
+        // documents, then stops. It does not authorize a CAPTCHA bypass or
+        // automatic submission.
+        ...(isSkippedPortalUrl(job.url) ? { suggestionsJson: materialPreparationRequestJson() } : {}),
       },
     });
     await recordConversionEvent(AnalyticsEvent.APPLICATION_CREATED, {
