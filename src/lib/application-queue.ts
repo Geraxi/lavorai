@@ -3,7 +3,6 @@ import { rolloutApplicationIneligibility, rolloutCreationBlocked } from "@/lib/a
 import { prisma } from "@/lib/db";
 import { applicationsPaused } from "@/lib/application-pause";
 import { processApplication } from "@/lib/application-worker";
-import { isExplicitPortalSubmissionRequested } from "@/lib/application-material-preparation";
 
 /**
  * Queue abstraction per processare candidature.
@@ -36,7 +35,7 @@ export async function enqueueApplication(
     select: { ...continuationSelect, createdAt: true, consentGrantedAt: true, retryCount: true,
       status: true, startedAt: true, completedAt: true, submittedAt: true, submittedVia: true,
       submitConfirmation: true, canaryLog: true, answersUsedJson: true,
-      viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true, suggestionsJson: true },
+      viewedAt: true, lastReplyAt: true, replyCount: true, userStatus: true },
   });
   const continuation = app?.answerContinuationJson && !answerContinuationIneligibility(app, "queued");
   if (!continuation && (!app || rolloutApplicationIneligibility(app) || app.status !== "queued"
@@ -53,26 +52,17 @@ export async function enqueueApplication(
     await resetClaim(applicationId);
   }
 
-  // A per-application, user-confirmed Ashby submission may use the supported
-  // Vercel Chromium launcher. Keep ordinary queued rows on their existing
-  // worker path: this must never turn a backlog into a bulk send.
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
-  const canSelfInvoke = Boolean(
-    baseUrl &&
-    process.env.NODE_ENV === "production" &&
-    isExplicitPortalSubmissionRequested(app.suggestionsJson),
-  );
-
-  // The DB-polling worker remains the default. Only the explicit marker above
-  // enables a serverless run for the same one confirmed application.
-  if (process.env.QUEUE_MODE !== "bullmq" && !canSelfInvoke) {
+  // Il polling DB è il default. Il worker Railway
+  // fa polling su Postgres (status=queued, claim atomico) ogni 15s: non
+  // serve Redis, e soprattutto NON si passa dal fallback self-invoke su
+  // Vercel, dove Playwright non c'è e le candidature ATS finiscono in
+  // ready_to_apply senza invio.
+  if (process.env.QUEUE_MODE !== "bullmq") {
     console.log(`[queue] queued for db-polling worker app=${applicationId}`);
     return;
   }
 
-  if (process.env.QUEUE_MODE === "bullmq" && process.env.REDIS_URL) {
+  if (process.env.REDIS_URL) {
     try {
       const { getApplicationsQueue } = await import("@/lib/bullmq-queue");
       await getApplicationsQueue().add(
@@ -140,7 +130,11 @@ export async function enqueueApplication(
   // serverless function con proprio budget 300s isolato. Se una fallisce
   // le altre continuano. Vercel gestisce la concurrency (fluid compute
   // riusa le istanze). Nessuna dipendenza da Redis/BullMQ/QStash.
-  if (canSelfInvoke && baseUrl) {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+
+  if (baseUrl && process.env.NODE_ENV === "production") {
     const secret = process.env.APP_WORKER_SECRET ?? process.env.ADMIN_SYNC_KEY ?? "";
     try {
       // Fire-and-forget: non aspettare la risposta. La function chiamata

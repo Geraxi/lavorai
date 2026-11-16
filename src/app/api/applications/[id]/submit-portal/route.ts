@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/db";
-import { enqueueApplication } from "@/lib/application-queue";
+import { processApplication } from "@/lib/application-worker";
 import { isSkippedPortalUrl, portalFamily } from "@/lib/ats-skip-hosts";
 import { explicitPortalSubmissionRequestJson } from "@/lib/application-material-preparation";
 import { applicationsPaused } from "@/lib/application-pause";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 /**
  * Confirm one already-prepared Ashby application for browser-worker delivery.
@@ -76,6 +77,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   });
   if (updated.count !== 1) return NextResponse.json({ error: "state_changed" }, { status: 409 });
 
-  await enqueueApplication(app.id, { preserveClaim: true });
-  return NextResponse.json({ ok: true, status: "queued" });
+  // This is a narrowly scoped, explicitly confirmed send. Run it in this
+  // Vercel function so it does not depend on a separate Railway poller or an
+  // internal HTTP self-invocation. `processApplication` retains all normal
+  // liveness, answer, CAPTCHA, and hard-receipt gates.
+  await processApplication(app.id);
+  const result = await prisma.application.findUnique({
+    where: { id: app.id },
+    select: { status: true, errorMessage: true, submittedAt: true, submittedVia: true },
+  });
+  return NextResponse.json({
+    ok: true,
+    status: result?.status ?? "queued",
+    submitted: Boolean(result?.submittedAt && result?.submittedVia),
+    message: result?.errorMessage ?? null,
+  });
 }
