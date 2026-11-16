@@ -428,7 +428,9 @@ async function processUser(
         englishLevel: true,
         noticePeriod: true,
         privacyConsentAt: true,
-        preferences: { select: { applicationAnswersJson: true, locationsJson: true } },
+        euAuthorized: true,
+        onboardedAt: true,
+        preferences: { select: { applicationAnswersJson: true, locationsJson: true, availableFrom: true, portfolioUrl: true } },
         answers: {
           where: { source: "user", answeredAt: { not: null } },
           select: { label: true, answer: true, kind: true, optionsJson: true, source: true, answeredAt: true },
@@ -445,6 +447,10 @@ async function processUser(
           englishLevel: extra?.englishLevel,
           noticePeriod: extra?.noticePeriod,
           privacyConsentAt: extra?.privacyConsentAt,
+          availableFrom: extra?.preferences?.availableFrom,
+          portfolioUrl: extra?.preferences?.portfolioUrl,
+          // Column defaults to true: only a submitted onboarding answer counts.
+          euAuthorized: extra?.onboardedAt ? extra.euAuthorized : null,
         },
         applicationAnswersJson: extra?.preferences?.applicationAnswersJson,
         locationsJson: extra?.preferences?.locationsJson,
@@ -460,6 +466,7 @@ async function processUser(
     company?: string | null;
     recruiterEmail?: string | null;
     applicationFormCapability?: string | null;
+    location?: string | null;
   }): Promise<boolean> => {
     if (!restrictProven || !provenCtx) return true;
     const verdict = await evaluateProvenChannelEligibility(
@@ -470,7 +477,7 @@ async function processUser(
         recruiterEmail: job.recruiterEmail,
         applicationFormCapability: job.applicationFormCapability ?? null,
       },
-      { ...provenCtx, factContext: { ...provenCtx.factContext, company: job.company } },
+      { ...provenCtx, factContext: { ...provenCtx.factContext, company: job.company, jobLocation: job.location ?? null } },
       { formBudget },
     );
     const counter = `${verdict.ok ? "admitted" : "rejected"}:${verdict.channel ?? "none"}${verdict.ok ? "" : `:${verdict.reason}`}`;

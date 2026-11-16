@@ -125,6 +125,10 @@ export function buildProvenChannelFactContext(input: {
     englishLevel?: string | null;
     noticePeriod?: string | null;
     privacyConsentAt?: Date | string | null;
+    availableFrom?: string | null;
+    portfolioUrl?: string | null;
+    /** Only when the user submitted it (onboarded); the column defaults to true. */
+    euAuthorized?: boolean | null;
   };
   applicationAnswersJson?: string | null;
   locationsJson?: string | null;

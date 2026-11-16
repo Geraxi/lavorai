@@ -63,7 +63,26 @@ async function main() {
     await widget("Country", ["United States (+1)", "Canada (+1)"], ["United States (+1)", "Canada (+1)"], true);
     const ambiguous = await module.exports.answerRequiredFields(page, { phone: "+1 212 555 1234" });
     assert.equal(ambiguous.answered, 0); assert.equal(ambiguous.remainingRequired, 1);
+    // Workable: each Yes/No is its own <label>; the question is a sibling node.
+    await page.setContent(`<form><div data-ui="question-wrap"><span class="q-text">Are you willing to work from our Rotterdam office 3 days a week?</span>
+      <div class="opts"><label><input type="radio" name="QA_7341" value="true" required>YES</label><label><input type="radio" name="QA_7341" value="false">NO</label></div></div></form>`);
+    const workable = await module.exports.inspectRequiredQuestions(page);
+    assert.equal(workable.length, 1);
+    assert.equal(workable[0].label, "Are you willing to work from our Rotterdam office 3 days a week?");
+    assert.notEqual(workable[0].label.toUpperCase(), "YES");
+    // Workable checkbox group whose first <label> is an option.
+    await page.setContent(`<form><div class="field"><p>Which offices could you work from?</p><label><input type="checkbox" name="offices" value="a" required>Amsterdam</label><label><input type="checkbox" name="offices" value="b">Berlin</label></div></form>`);
+    const group = await module.exports.inspectRequiredQuestions(page);
+    assert.equal(group[0].label, "Which offices could you work from?");
+    // Lever custom card: text in .application-label, control named cards[...].
+    await page.setContent(`<form><ul><li class="application-question custom-question"><div class="application-label"><div class="text">What is your current location?<span class="required">✱</span></div></div>
+      <div class="application-field"><input type="text" name="cards[5f1e][field0]" required></div></li></ul></form>`);
+    const lever = await module.exports.inspectRequiredQuestions(page);
+    assert.equal(lever.length, 1);
+    assert.match(lever[0].label, /^What is your current location\?/);
+    assert.doesNotMatch(lever[0].label, /senza etichetta/);
     assert.deepEqual(external, []); assert.deepEqual(errors, []);
+    console.log("PASS real browser (labels): Workable YES/NO radio and checkbox groups take the question text; Lever custom cards use .application-label.");
     console.log("PASS real browser: delayed city option, stale unrelated results, phone-country metadata, prefix versus residence, shared +1 disambiguated by country. No external requests or submissions.");
   } finally { await browser.close(); }
 }
