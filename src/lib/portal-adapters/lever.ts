@@ -4,6 +4,7 @@ import type { PortalAdapter, ApplyInput, ApplyOutcome } from "./types";
 import { abortIfFieldsWrong, inspectLivePage } from "./page-guards";
 import { fillPhoneCountryCode } from "./phone-country-fill";
 import { detectBlockingCaptcha } from "./captcha";
+import { publicApplyUrls } from "./apply-url";
 
 /**
  * Lever ATS — `jobs.lever.co/<company>/<uuid>`.
@@ -31,8 +32,7 @@ export const leverAdapter: PortalAdapter = {
     }
   },
   async apply(page, input: ApplyInput): Promise<ApplyOutcome> {
-    const base = input.jobUrl.replace(/\/$/, "").replace(/\/apply$/i, "");
-    const candidates = [`${base}/apply`, base];
+    const candidates = publicApplyUrls(input.jobUrl);
 
     let formFound = false;
     let lastTriedUrl = "";

@@ -32,7 +32,7 @@ await build({
   stdin: { contents: `import React from 'react'; import { createRoot } from 'react-dom/client'; import { QuestionsView } from './src/app/(app)/questions/questions-view'; import { PrivacyConsentForm } from './src/components/privacy-consent-form'; import { continuationGuidance } from './src/lib/application-continuation-guidance';
   window.__requests = []; window.__fail = false; window.__resumed = false; window.__cards = ${JSON.stringify(cards)};
   window.fetch = async (url, options) => { window.__requests.push({url, options});
-    if(url === '/api/account/privacy-consent') return {ok: !window.__privacyFailure};
+    if(url === '/api/account/privacy-consent') return {ok: !window.__privacyFailure, json: async () => ({ok:true, privacyConsentRecorded:true, release:{status:'checked',requeuedCount:0}})};
     if (!options?.method) return { ok: true, json: async () => ({ questions: window.__cards, waitingApplications: 4, locale: 'en', continuations: [{ applicationId: 'alpha', company: 'Alpha Studio', title: 'Product Designer', canResume: !window.__resumed && window.__cards[0].answer === 'Yes', reason: 'answers_incomplete', proofDigest: 'a'.repeat(64) }, { applicationId: 'beta', company: 'Beta Company', title: 'UX Researcher', canResume: false, reason: 'continuation_proof_missing', proofDigest: null, guidance: continuationGuidance('continuation_proof_missing', 'beta', true) }, { applicationId: 'delta', company: 'Delta Agency', title: 'Developer', canResume: false, reason: 'privacy_consent_missing', proofDigest: null, guidance: continuationGuidance('privacy_consent_missing', 'delta', true) }] }) };
     const body = JSON.parse(options.body);
     if (body.reuseCvOnly) return {ok:true,json:async()=>({ok:true})};

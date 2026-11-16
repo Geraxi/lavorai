@@ -65,11 +65,17 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Prepared document and apply URL regressions
+        run: npm run test:prepared-docs-and-urls
+
       - name: Advertising consent and signup conversion regressions
         run: npm run test:google-ads && npm run test:meta-consent && npm run test:google-auth
 
       - name: Credit retry and worker safety tests
         run: npm run test:credit-retry && npm run test:worker-gates
+
+      - name: Transient probe and closed-browser replay regressions
+        run: npm run test:transient-replay-safety && npm run test:transient-replay-browser
 
       - name: Application lifecycle, duplicate prevention and retry rules
         run: npm run test:application-lifecycle && npm run test:reliability-metrics
@@ -82,6 +88,12 @@ jobs:
 
       - name: Manual-only rollout and producer regressions
         run: npm run test:manual-rollout
+
+      - name: Privacy consent persistence and guarded recovery (synthetic only)
+        run: |
+          npm run test:privacy-consent
+          npm run test:held-release
+          node scripts/test-privacy-consent-ui.mjs
 
       - name: Explicit session replacement PostgreSQL regression
         env:
