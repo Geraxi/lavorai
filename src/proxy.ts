@@ -4,7 +4,7 @@ import { accessUserSelect } from "@/lib/user-selects";
 import { accessUnavailableResponse } from "@/lib/access-unavailable";
 import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp } from "@/lib/billing";
 import { isAdmin } from "@/lib/admin";
-import { requiresTrialAccess } from "@/lib/trial-access";
+import { allowedAfterTrialExpiry, expiredTrialRedirect, requiresTrialAccess } from "@/lib/trial-access";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isBotUserAgent } from "@/lib/bot-ua";
@@ -101,10 +101,10 @@ export async function proxy(request: NextRequest) {
         });
         return accessUnavailableResponse(pathname);
       }
-      if (user && !isAdmin(user.email) && isApplicationAccessPaused(user)) {
+      if (user && !isAdmin(user.email) && isApplicationAccessPaused(user) && !allowedAfterTrialExpiry(pathname)) {
         return pathname.startsWith("/api/")
           ? NextResponse.json({ error: "trial_expired", message: "Free trial expired", redirect: "/trial-expired" }, { status: 402 })
-          : NextResponse.redirect(new URL("/trial-expired", request.url));
+          : NextResponse.redirect(new URL(expiredTrialRedirect(pathname), request.url));
       }
       if (user && !isAdmin(user.email) && requiresPaymentMethodBeforeApp(user)) {
         return pathname.startsWith("/api/")

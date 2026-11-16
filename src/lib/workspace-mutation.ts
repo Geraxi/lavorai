@@ -8,17 +8,23 @@ export class WorkspaceError extends Error {
   constructor(public code: string, public status = 400) { super(code); }
 }
 /** Same access boundary as Inbox replies. Never accepts an owner from the client. */
-export async function workspaceOwner(request: NextRequest) {
+export type WorkspaceAccessOptions = {
+  /** Free accounts whose Pro trial ended still get applications on the free
+   * weekly quota, so they must be able to record their own privacy consent
+   * and answer form questions. Suspension and card-verification gates stay. */
+  allowExpiredTrial?: boolean;
+};
+export async function workspaceOwner(request: NextRequest, options: WorkspaceAccessOptions = {}) {
   if (request.headers.get("origin") !== request.nextUrl.origin || request.headers.get("sec-fetch-site") === "cross-site") throw new WorkspaceError("invalid_origin", 403);
-  return workspaceReadOwner();
+  return workspaceReadOwner(options);
 }
-export async function workspaceReadOwner() {
+export async function workspaceReadOwner(options: WorkspaceAccessOptions = {}) {
   const session = await auth();
   if (!session?.user?.id) throw new WorkspaceError("unauthenticated", 401);
   const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, email: true, suspendedAt: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, stripeSubscriptionId: true, subscriptionStatus: true } });
   if (!user) throw new WorkspaceError("unauthenticated", 401);
   if (user.suspendedAt) throw new WorkspaceError("account_access_required", 403);
-  if (!isAdmin(user.email) && (isApplicationAccessPaused(user) || requiresPaymentMethodBeforeApp(user))) throw new WorkspaceError("account_access_required", 403);
+  if (!isAdmin(user.email) && ((!options.allowExpiredTrial && isApplicationAccessPaused(user)) || requiresPaymentMethodBeforeApp(user))) throw new WorkspaceError("account_access_required", 403);
   return user.id;
 }
 export async function smallJson(request: NextRequest) {

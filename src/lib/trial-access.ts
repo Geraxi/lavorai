@@ -8,3 +8,26 @@ export function requiresTrialAccess(path: string): boolean {
   const parts = path.split("/");
   return parts[1] === "api" ? featureApis.includes(parts[2]) : featurePages.includes(parts[1]);
 }
+
+/**
+ * Paths an expired-trial free account may still use. The cron keeps applying
+ * for these users on the free weekly quota, so they must be able to answer the
+ * form questions that hold their applications. Privacy consent is recorded via
+ * /api/account/privacy-consent, which is not trial-gated here.
+ */
+const expiredTrialAllowedPaths = ["/api/questions", "/api/questions/"];
+export function allowedAfterTrialExpiry(path: string): boolean {
+  return expiredTrialAllowedPaths.includes(path);
+}
+
+/**
+ * Where an expired-trial account lands instead of a gated page. The settings
+ * consent section and the questions page have working equivalents outside the
+ * app shell, so links from our emails (/settings#privacy-consent) and from
+ * application holds (/questions) still let the user act. Browsers keep the
+ * URL fragment across the redirect, so #privacy-consent scrolls to the form.
+ */
+export function expiredTrialRedirect(path: string): string {
+  if (path === "/questions" || path.startsWith("/questions/")) return "/trial-expired/questions";
+  return "/trial-expired";
+}
