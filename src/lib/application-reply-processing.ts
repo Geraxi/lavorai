@@ -178,7 +178,7 @@ export async function processInboundReply(input: {
   const isSecurityCode = isApplicationVerificationMessage({ fromAddress, subject, bodyText });
   const mailbox = isSecurityCode || !bodyText
     ? { kind: "otp" as const }
-    : await classifyMailbox({ fromAddress, subject, bodyText });
+    : await classifyMailbox({ fromAddress, subject, bodyText, headers: data.headers ?? null });
   const classification = {
     kind: mailboxKindToReplyKind(mailbox.kind),
     isHuman: mailboxKindIsHuman(mailbox.kind),

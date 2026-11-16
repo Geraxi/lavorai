@@ -57,17 +57,22 @@ export function classifyMailboxByRules(input: {
   fromAddress: string;
   subject?: string | null;
   bodyText?: string | null;
-}): { kind: MailboxKind; by: "rules" } {
+  headers?: Record<string, unknown> | null;
+}): { kind: MailboxKind; by: "rules"; final?: true } {
   const subject = input.subject ?? "";
   const body = input.bodyText ?? "";
   const text = `${subject}\n${body}`;
   if (isApplicationVerificationMessage(input)) return { kind: "otp", by: "rules" };
   if (isPortalRedirectText(text)) return { kind: "redirected_to_portal", by: "rules" };
-  const reply = classifyReply({ fromAddress: input.fromAddress, subject, bodyText: body });
+  const reply = classifyReply({ fromAddress: input.fromAddress, subject, bodyText: body, headers: input.headers });
+  if (reply.isSecurityCode) return { kind: "otp", by: "rules" };
   if (reply.kind === "ricevuta") return { kind: "confirmation", by: "rules" };
-  if (reply.kind === "auto_reply") return { kind: "auto_reply", by: "rules" };
+  // Notifications, newsletters, ATS relays and autoresponders: automated, so
+  // they never reach the AI fallback (which could upgrade them to "human").
+  if (reply.kind === "auto_reply" || reply.kind === "auto") return { kind: "auto_reply", by: "rules" };
   if (reply.kind === "redirected_to_portal") return { kind: "redirected_to_portal", by: "rules" };
-  if (reply.kind === "bounce") return { kind: "other", by: "rules" };
+  // A delivery failure is never a recruiter message: no AI upgrade.
+  if (reply.kind === "bounce") return { kind: "other", by: "rules", final: true };
   if (isExplicitRejection(text) && classifyByRules(subject, body) === "rejection") {
     return { kind: "rejection", by: "rules" };
   }
@@ -88,11 +93,11 @@ export function mailboxKindFromAi(value: unknown): MailboxKind | null {
 }
 
 export async function classifyMailbox(
-  input: { fromAddress: string; subject?: string | null; bodyText?: string | null },
+  input: { fromAddress: string; subject?: string | null; bodyText?: string | null; headers?: Record<string, unknown> | null },
   ai?: ((payload: { subject: string; body: string }) => Promise<string | null>) | null,
 ): Promise<{ kind: MailboxKind; by: "rules" | "ai" }> {
   const rules = classifyMailboxByRules(input);
-  if (rules.kind !== "other" || !ai) return rules;
+  if (rules.kind !== "other" || rules.final || !ai) return rules;
   const guess = await ai({
     subject: (input.subject ?? "").slice(0, 300),
     body: (input.bodyText ?? "").slice(0, 4000),
