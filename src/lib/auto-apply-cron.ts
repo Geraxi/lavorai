@@ -113,6 +113,9 @@ export interface RunStats {
   skippedJobClosed: number;
   skippedManualAts: number;
   skippedUnprovenChannel: number;
+  /** Proven-channel admissions per channel/reason, e.g. "admitted:recruitee",
+   * "rejected:lever:lever_form_precheck_missing". Logged once per run. */
+  provenChannelAdmissions: Record<string, number>;
   candidatesFetched: number;
   descriptionsBackfilled: number;
   errors: number;
@@ -146,6 +149,7 @@ function emptyRunStats(): RunStats {
     skippedJobClosed: 0,
     skippedManualAts: 0,
     skippedUnprovenChannel: 0,
+    provenChannelAdmissions: {},
     candidatesFetched: 0,
     descriptionsBackfilled: 0,
     errors: 0,
@@ -184,6 +188,9 @@ export function finalizeRunStats(stats: RunStats): RunStats {
   stats.blockedByReason = blockedByReason;
   stats.awaitingAction = stats.applicationsHandedOff + stats.applicationsAwaitingConsent;
   stats.deployedVersion = deployedAppVersion();
+  if (Object.keys(stats.provenChannelAdmissions ?? {}).length) {
+    console.log("[auto-apply] proven-channel admissions", JSON.stringify(stats.provenChannelAdmissions));
+  }
   return stats;
 }
 
@@ -452,6 +459,7 @@ async function processUser(
     sourceSlug?: string | null;
     company?: string | null;
     recruiterEmail?: string | null;
+    applicationFormCapability?: string | null;
   }): Promise<boolean> => {
     if (!restrictProven || !provenCtx) return true;
     const verdict = await evaluateProvenChannelEligibility(
@@ -460,10 +468,13 @@ async function processUser(
         sourceSlug: job.sourceSlug,
         company: job.company,
         recruiterEmail: job.recruiterEmail,
+        applicationFormCapability: job.applicationFormCapability ?? null,
       },
       { ...provenCtx, factContext: { ...provenCtx.factContext, company: job.company } },
       { formBudget },
     );
+    const counter = `${verdict.ok ? "admitted" : "rejected"}:${verdict.channel ?? "none"}${verdict.ok ? "" : `:${verdict.reason}`}`;
+    stats.provenChannelAdmissions[counter] = (stats.provenChannelAdmissions[counter] ?? 0) + 1;
     if (!verdict.ok) {
       stats.skippedUnprovenChannel++;
       return false;
