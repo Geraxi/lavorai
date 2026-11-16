@@ -36,6 +36,9 @@ export type FactContext = {
   employers?: string[] | null;
   /** Job board / catalogue source for "how did you hear about us" when no preference is set. */
   jobSource?: string | null;
+  /** Posting location of the current application. Only used to scope
+   * right-to-work answers to the job's own (EU) country. */
+  jobLocation?: string | null;
 };
 export function factQuestionKey(label: string): string {
   return label.normalize("NFKC").toLowerCase().replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim()
@@ -207,8 +210,10 @@ export function isPreviouslyEmployedQuestion(label: string, company?: string | n
   const named = namedEmployerFromQuestion(label);
   return !!(named && company && sameCompany(named, company));
 }
+const PHONE_COUNTRY_LABEL = /^(?:(?:phone|telephone|mobile|cell(?:phone)?)(?: number)? (?:country(?:\/region)?|country code|country calling code|prefix|dial(?:l?ing)? code|international code|area code \(country\))|country code (?:for|of) (?:your )?(?:phone|mobile|telephone)(?: number)?|(?:international )?(?:dial(?:l?ing)?|calling) (?:code|prefix)|country (?:dial(?:l?ing)?|calling) code|prefisso(?: internazionale| telefonico| del telefono| cellulare)?)(?: \(e\.?g\.? ?\+?\d{1,4}\))?$/;
 export function reusableFactKey(label: string): string | null {
   const key = factQuestionKey(label);
+  if (PHONE_COUNTRY_LABEL.test(key)) return "phoneCountry";
   if (/^(?:(?:expected|desired) annual (?:salary|compensation)|annual (?:salary|compensation) expectations?)\s*\(?\s*(?:eur|€|euros?)\s*\)?$/.test(key)
     || /^(?:ral desiderata|ral attesa|aspettativa (?:di )?ral)$/.test(key)
     || /^(?:salary|compensation) expectations?$/.test(key)) return "salaryExpectationEur";
@@ -225,7 +230,9 @@ function canonicalFactValue(key: string | null, value: string): string {
   if (key === "phone") return normalized.replace(/[\s().-]/g, "").replace(/^00/, "+");
   const groups: Record<string, string[][]> = {
     country: [["italy", "italia", "it", "ita"], ["united kingdom", "uk", "gb", "gbr", "regno unito"], ["united states", "united states of america", "us", "usa", "stati uniti"]],
-    noticePeriod: [["immediate", "immediately", "immediata", "immediato"], ["2weeks", "2 weeks", "2 settimane"], ["1month", "1 month", "1 mese"], ["2months", "2 months", "2 mesi"], ["3months_plus", "3 months or more", "3 mesi o più"]],
+    // User.noticePeriod stores "immediate" | "1m" | "2m" | "3m_plus"; the
+    // preferences JSON stores "1month" etc. Both describe the same fact.
+    noticePeriod: [["immediate", "immediately", "immediata", "immediato", "subito", "asap"], ["2weeks", "2 weeks", "2 settimane"], ["1month", "1 month", "1 mese", "1m"], ["2months", "2 months", "2 mesi", "2m"], ["3months_plus", "3 months or more", "3 mesi o più", "3m_plus", "3m"]],
     howHeard: [
       ["linkedin"],
       ["google", "google / search", "search"],
@@ -387,6 +394,18 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
     if (typeof value === "string" || typeof value === "number") return [{ key: field, value: String(value), source: "profile", reference: field }];
     return [];
   });
+  if (key.startsWith("workAuthorization:") && !facts.some(fact => fact.key === key && fact.value.trim())) {
+    return resolveDerivedWorkAuthorization(question, context, facts, key.slice("workAuthorization:".length));
+  }
+  if (key === "noticePeriod" && START_DATE_LABEL.test(factQuestionKey(question.label)) && !["select", "react-select", "radio"].includes(question.kind)) {
+    const dates = facts.filter(fact => fact.key === "startDate" && fact.value.trim());
+    const notices = facts.filter(fact => fact.key === "noticePeriod" && fact.value.trim());
+    if (dates.length && !notices.length) {
+      const values = new Set(dates.map(fact => fact.value.trim()));
+      if (values.size !== 1) return { answer: null, provenance: dates, conflict: true };
+      return { answer: dates[0].value.trim(), provenance: dates, conflict: false };
+    }
+  }
   if (key === "phoneCountry" || (key === "country" && question.options?.some((option) => /\+\d/.test(option)))) {
     const phones = facts.filter((fact) => fact.key === "phone" && fact.value.trim());
     const countries = facts.filter((fact) => fact.key === "country" && fact.value.trim());
@@ -430,6 +449,49 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
   return { answer, provenance, conflict: false };
 }
 
+const START_DATE_LABEL = /^(?:start date|earliest start date|earliest start|available from|available to start|when can you start|availability(?: date)?|data di inizio|disponibilità|disponibile dal)$/;
+
+/** EU member states, ISO2. Norway/Switzerland/UK are not EU. */
+const EU_MEMBERS = new Set(["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"]);
+const SCREENING_COUNTRY_ISO: Record<string, string> = {
+  italy: "IT", germany: "DE", france: "FR", spain: "ES", netherlands: "NL", ireland: "IE", austria: "AT",
+  belgium: "BE", portugal: "PT", poland: "PL", sweden: "SE", denmark: "DK",
+  switzerland: "CH", norway: "NO", united_kingdom: "GB", united_states: "US",
+};
+
+/** The job's country (ISO2) from its posting location, or null when unknown,
+ * remote-only, or ambiguous (city and named country disagree). */
+export function jobCountryIso(location: string | null | undefined): string | null {
+  if (!location?.trim()) return null;
+  const fromCity = matchCity(location)?.cc?.toUpperCase() ?? null;
+  const named = screeningCountryFromLabel(location);
+  const fromName = named ? SCREENING_COUNTRY_ISO[named] ?? null : null;
+  if (named === "european_union") return fromCity;
+  if (fromCity && fromName && fromCity !== fromName) return null;
+  return fromCity ?? fromName;
+}
+
+/**
+ * "Are you authorised to work in <country>?" — answered Yes only when the
+ * candidate stated EU work authorisation (onboarding toggle or EU-citizen
+ * preference), the job is located in an EU member state, and the question asks
+ * about that same country (or the EU). Never answers No, never covers
+ * non-EU countries or sponsorship, and any conflicting statement stays manual.
+ */
+function resolveDerivedWorkAuthorization(question: FactQuestion, context: FactContext, facts: Fact[], country: string): FactResolution {
+  const empty = { answer: null, provenance: [] as Fact[], conflict: false };
+  const statements = facts.filter(fact => fact.key === "euWorkAuthorized" && fact.value.trim());
+  if (!statements.length) return empty;
+  if (statements.some(fact => fact.value.trim() !== "Yes")) return { ...empty, conflict: statements.some(fact => fact.value.trim() === "Yes"), provenance: statements };
+  const jobIso = jobCountryIso(context.jobLocation);
+  if (!jobIso || !EU_MEMBERS.has(jobIso)) return empty;
+  const asked = country === "european_union" ? "EU" : SCREENING_COUNTRY_ISO[country] ?? null;
+  if (!asked || (asked !== "EU" && asked !== jobIso)) return empty;
+  const answer = yesNoAnswer(question, "Yes");
+  if (!answer) return empty;
+  return { answer, conflict: false, provenance: [...statements, { key: "jobLocation", value: context.jobLocation!.trim(), source: "profile", reference: `job_country:${jobIso}` }] };
+}
+
 /** Only a fully elapsed, explicit calendar period proves a job has ended.
  * Current-year-only, empty, ambiguous and invalid dates remain unknown. */
 export function employmentEnded(endDate: string, now = new Date()): boolean {
@@ -444,7 +506,18 @@ export function employmentEnded(endDate: string, now = new Date()): boolean {
   return date.toISOString().slice(0, 10) === value && +date + 86400000 <= +now;
 }
 
-export function candidateFacts(profile: CVProfile | null, user: { email?: string | null; name?: string | null; phone?: string | null; yearsExperience?: number | null; englishLevel?: string | null; noticePeriod?: string | null } = {}, preferences: ApplicationAnswers = {}, saved: SavedFactAnswer[] = [], now = new Date()): Fact[] {
+export type CandidateFactUser = {
+  email?: string | null; name?: string | null; phone?: string | null; yearsExperience?: number | null;
+  englishLevel?: string | null; noticePeriod?: string | null;
+  /** UserPreferences.availableFrom: "immediate" | "2 settimane" | "2026-06-01" (free text). */
+  availableFrom?: string | null;
+  /** UserPreferences.portfolioUrl (portfolio / site / LinkedIn link the user typed). */
+  portfolioUrl?: string | null;
+  /** User.euAuthorized, ONLY when the user actually submitted it (onboarded).
+   * The column defaults to true, so callers must not pass the bare default. */
+  euAuthorized?: boolean | null;
+};
+export function candidateFacts(profile: CVProfile | null, user: CandidateFactUser = {}, preferences: ApplicationAnswers = {}, saved: SavedFactAnswer[] = [], now = new Date()): Fact[] {
   const facts: Fact[] = [];
   const add = (key: string, value: unknown, source: FactSource, reference = key) => {
     if ((typeof value === "string" && value.trim()) || (typeof value === "number" && Number.isFinite(value) && value >= 0)) facts.push({ key, value: String(value).trim(), source, reference });
@@ -472,6 +545,29 @@ export function candidateFacts(profile: CVProfile | null, user: { email?: string
     add("languages", (profile.languages ?? []).map(l => l.level ? `${l.name} (${l.level})` : l.name).join(", "), "cv");
   }
   for (const key of ["yearsExperience", "englishLevel", "noticePeriod"] as const) add(key, user[key], "profile");
+  // availableFrom: a notice-type value ("immediate", "2 settimane") agrees or
+  // conflicts with noticePeriod like any other source; an ISO date is kept
+  // separately and only used for explicit start-date questions.
+  const availableFrom = user.availableFrom?.trim();
+  if (availableFrom) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(availableFrom)) {
+      // A past date is stale, not a start date: leave the question manual.
+      const at = Date.parse(`${availableFrom}T00:00:00Z`);
+      if (Number.isFinite(at) && at + 86400000 > +now) add("startDate", availableFrom, "preferences", "availableFrom");
+    }
+    else if (canonicalFactValue("noticePeriod", availableFrom) in NOTICE_TEXT) add("noticePeriod", availableFrom, "preferences", "availableFrom");
+  }
+  const typedPortfolio = user.portfolioUrl?.trim();
+  if (typedPortfolio && /^https?:\/\/\S+$/i.test(typedPortfolio)) {
+    add(/(?:^|\.)linkedin\.com\//i.test(typedPortfolio.replace(/^https?:\/\//i, "")) ? "linkedinUrl" : "portfolioUrl", typedPortfolio, "preferences", "portfolioUrl");
+  }
+  // Right to work is only ever derived for an EU job (see resolveWorkAuthorization).
+  if (preferences.workAuthEU === "no_needs_sponsorship") add("euWorkAuthorized", "No", "preferences", "workAuthEU");
+  else {
+    if (preferences.workAuthEU === "yes_eu_citizen") add("euWorkAuthorized", "Yes", "preferences", "workAuthEU");
+    if (user.euAuthorized === true) add("euWorkAuthorized", "Yes", "profile", "euAuthorized");
+    else if (user.euAuthorized === false) add("euWorkAuthorized", "No", "profile", "euAuthorized");
+  }
   if (!profile?.email?.trim()) add("email", user.email, "profile");
   if (!profile?.phone?.trim()) add("phone", user.phone, "profile");
   if (!(profile?.firstName?.trim() && profile?.lastName?.trim()) && user.name?.trim()) {

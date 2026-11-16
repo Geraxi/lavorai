@@ -64,6 +64,11 @@ export interface ApplyInput {
   userEnglishLevel?: string | null;
   userNoticePeriod?: string | null;
   userHighestEducation?: string | null;
+  /** UserPreferences.availableFrom / portfolioUrl, typed by the user. */
+  userAvailableFrom?: string | null;
+  userPortfolioUrl?: string | null;
+  /** User.euAuthorized only when the user submitted it (onboarded); else null. */
+  userEuAuthorized?: boolean | null;
   /** Application ID — opzionale, usato solo per naming canary asset
    *  (es. screenshot Blob filename). Non strettamente necessario per
    *  l'apply normale. */

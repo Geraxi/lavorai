@@ -329,6 +329,14 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
           el.getAttribute("aria-label") ||
           el.getAttribute("placeholder") ||
           "";
+      // Lever custom cards: the question text sits in .application-label
+      // (no <label>), and the control is named cards[uuid][fieldN]. Without
+      // this every such field became "Campo obbligatorio senza etichetta".
+      if (!label) {
+        const card = el.closest(".application-question, [class*='application-question'], li[class*='question'], [data-qa*='question']");
+        const heading = card?.querySelector(".application-label .text, .application-label, [class*='application-label'], legend, [class*='question-title'], [class*='QuestionTitle']");
+        if (heading) label = (heading.textContent ?? "").replace(/[✱*]\s*$/, " *");
+      }
       const rawName = el.getAttribute("name") || "";
       // Lever custom cards and autocomplete widgets use cards[field] as the
       // control name. That is not a question label.
@@ -438,6 +446,18 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
         }
         if (!q) q = gname;
         q = (q || gname).replace(/\s+/g, " ").trim();
+        // Workable renders each Yes/No as a <label> and puts the question in a
+        // sibling node: walk up and take the text that is not an option.
+        // (Inline checks only: no named helpers inside page.evaluate.)
+        if (opts.some((o) => o.toLowerCase() === q.toLowerCase()) || /^(yes|no|y|n|si|sì|true|false|1|0)$/i.test(q) || /^[a-z0-9_-]{20,}$/i.test(q) || q === gname) {
+          let node: Element | null = el.parentElement;
+          for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
+            let text = pickText(node);
+            for (const o of opts) text = text.split(o).join(" ");
+            text = text.replace(/\s+/g, " ").trim();
+            if (text.replace(/[^a-z0-9]/gi, "").length >= 8 && text.length <= 300) { q = text; break; }
+          }
+        }
         const optionOnly = opts.some((o) => o.toLowerCase() === q.toLowerCase())
           || /^(yes|no|y|n|si|sì|true|false|1|0)$/i.test(q);
         if (optionOnly || q.replace(/[^a-z0-9]/gi, "").length < 3) {
@@ -486,6 +506,17 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
             ccont?.querySelector("label")?.textContent ??
             cname;
           cq = (cq || cname).replace(/\s+/g, " ").trim();
+          if (copts.some((o) => o.toLowerCase() === cq.toLowerCase())) {
+            // First <label> was an option ("YES"): use the group's own heading text.
+            let node: Element | null = ccont ?? el.parentElement;
+            cq = `Checkbox group ${idx + 1}`;
+            for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
+              let text = (node.textContent ?? "").replace(/\s+/g, " ");
+              for (const o of copts) text = text.split(o).join(" ");
+              text = text.replace(/\s+/g, " ").trim();
+              if (text.replace(/[^a-z0-9]/gi, "").length >= 8 && text.length <= 300) { cq = text; break; }
+            }
+          }
           cgroup.forEach((c) => c.setAttribute(tag, String(idx)));
           out.push({ idx, label: cq, kind: "radio", options: copts });
           idx++;

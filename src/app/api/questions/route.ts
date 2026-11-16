@@ -34,11 +34,12 @@ export async function GET() {
     }),
     prisma.userAnswer.findMany({ where: { userId: user.id, source: "user" }, select: { label: true, kind: true, answer: true, source: true, answeredAt: true, optionsJson: true } }),
     prisma.cVProfile.findUnique({ where: { userId: user.id } }),
-    prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { applicationAnswersJson: true, locationsJson: true } }),
-    prisma.user.findUnique({ where: { id: user.id }, select: { email: true, name: true, yearsExperience: true, englishLevel: true, noticePeriod: true, privacyConsentAt: true } }),
+    prisma.userPreferences.findUnique({ where: { userId: user.id }, select: { applicationAnswersJson: true, locationsJson: true, availableFrom: true, portfolioUrl: true } }),
+    prisma.user.findUnique({ where: { id: user.id }, select: { email: true, name: true, yearsExperience: true, englishLevel: true, noticePeriod: true, privacyConsentAt: true, euAuthorized: true, onboardedAt: true } }),
   ]);
   const profile = profileRow ? rowToProfile(profileRow) : null;
-  const facts = candidateFacts(profile, userFacts ?? user, parseAnswers(preferences?.applicationAnswersJson), globalAnswers);
+  const facts = candidateFacts(profile, { ...(userFacts ?? user), availableFrom: preferences?.availableFrom, portfolioUrl: preferences?.portfolioUrl,
+    euAuthorized: userFacts?.onboardedAt ? userFacts.euAuthorized : null }, parseAnswers(preferences?.applicationAnswersJson), globalAnswers);
   const questions = waiting.flatMap(app => {
     const values = safeParse(app.pendingQuestionsJson ?? "[]");
     if (!Array.isArray(values)) return [];
@@ -54,6 +55,7 @@ export async function GET() {
         facts,
         privacyConsentAt: userFacts?.privacyConsentAt,
         company: app.job.company,
+        jobLocation: app.job.location,
         workRemote: prefersRemoteOrHybrid(preferences?.locationsJson),
       });
       const suggestion = resolved?.answer ?? null;

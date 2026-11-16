@@ -785,6 +785,10 @@ async function processApplicationRun(
       userYearsExperience: app.user.yearsExperience,
       userEnglishLevel: app.user.englishLevel,
       userNoticePeriod: app.user.noticePeriod,
+      userAvailableFrom: app.user.preferences?.availableFrom ?? null,
+      userPortfolioUrl: app.user.preferences?.portfolioUrl ?? null,
+      // The column defaults to true: only trust it once the user submitted onboarding.
+      userEuAuthorized: app.user.onboardedAt ? app.user.euAuthorized : null,
       privacyConsentAt: app.user.privacyConsentAt,
       // Unknown facts and declarations always wait for the candidate.
       autonomous: true,
@@ -2393,6 +2397,9 @@ interface AdapterSubmitInput {
   userYearsExperience?: number | null;
   userEnglishLevel?: string | null;
   userNoticePeriod?: string | null;
+  userAvailableFrom?: string | null;
+  userPortfolioUrl?: string | null;
+  userEuAuthorized?: boolean | null;
   privacyConsentAt?: Date | string | null;
   /** Auto-apply "auto": l'AI risponde da sola alle domande del form. */
   autonomous?: boolean;
@@ -2564,6 +2571,9 @@ async function attemptPortalAdapterSubmit(input: AdapterSubmitInput): Promise<
       userYearsExperience: input.userYearsExperience,
       userEnglishLevel: input.userEnglishLevel,
       userNoticePeriod: input.userNoticePeriod,
+      userAvailableFrom: input.userAvailableFrom,
+      userPortfolioUrl: input.userPortfolioUrl,
+      userEuAuthorized: input.userEuAuthorized,
       applicationId: input.applicationId, // per naming canary assets
       autonomous: input.autonomous === true,
       preferredCity: input.preferredCity,

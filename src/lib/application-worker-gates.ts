@@ -51,11 +51,12 @@ export const workerGateSelect = {
   user: { select: {
     email: true, name: true, yearsExperience: true, englishLevel: true, noticePeriod: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
     subscriptionStatus: true, currentPeriodEnd: true, pausedUntil: true, suspendedAt: true,
-    emailVerified: true, privacyConsentAt: true, avoidCompanies: true,
+    emailVerified: true, privacyConsentAt: true, avoidCompanies: true, euAuthorized: true, onboardedAt: true,
     cvProfile: { select: { firstName: true, lastName: true, email: true, phone: true, city: true, title: true, summary: true,
       experiencesJson: true, educationJson: true, skillsJson: true, languagesJson: true, linksJson: true } },
     preferences: { select: { autoApplyMode: true, rolesJson: true, locationsJson: true,
-      applicationAnswersJson: true, employmentType: true, salaryMin: true, matchMin: true, sourcesJson: true } },
+      applicationAnswersJson: true, employmentType: true, salaryMin: true, matchMin: true, sourcesJson: true,
+      availableFrom: true, portfolioUrl: true } },
   } },
 } satisfies Prisma.ApplicationSelect;
 export type WorkerGateRow = Prisma.ApplicationGetPayload<{ select: typeof workerGateSelect }>;
@@ -96,6 +97,8 @@ function overlayAtsTestGateRow(row: WorkerGateRow, now: Date): WorkerGateRow {
         locationsJson: row.user.preferences?.locationsJson ?? "[]",
         applicationAnswersJson: row.user.preferences?.applicationAnswersJson ?? "{}",
         employmentType: row.user.preferences?.employmentType ?? "employee",
+        availableFrom: row.user.preferences?.availableFrom ?? null,
+        portfolioUrl: row.user.preferences?.portfolioUrl ?? null,
         salaryMin: row.user.preferences?.salaryMin ?? 0,
         matchMin: row.user.preferences?.matchMin ?? 0,
         sourcesJson: row.user.preferences?.sourcesJson ?? "[]",
@@ -743,7 +746,10 @@ export async function queueAnswerContinuation(input: {
     try { pending = JSON.parse(row.pendingQuestionsJson!); } catch { return "questions_invalid"; }
     if (!Array.isArray(pending) || !pending.length) return "questions_invalid";
     const saved = await tx.userAnswer.findMany({ where: { userId: row.userId, source: "user", answeredAt: { not: null } } });
-    const facts = candidateFacts(row.user.cvProfile ? rowToProfile(row.user.cvProfile) : null, row.user, parseAnswers(row.user.preferences?.applicationAnswersJson), saved);
+    // Must build the same facts as GET /api/questions, or the digest never matches.
+    const facts = candidateFacts(row.user.cvProfile ? rowToProfile(row.user.cvProfile) : null, { ...row.user,
+      availableFrom: row.user.preferences?.availableFrom, portfolioUrl: row.user.preferences?.portfolioUrl,
+      euAuthorized: row.user.onboardedAt ? row.user.euAuthorized : null }, parseAnswers(row.user.preferences?.applicationAnswersJson), saved);
     if (answerConfirmationDigest(row.answerContinuationJson, row.userProvidedAnswersJson, facts) !== input.proofDigest) return "questions_changed_reload";
     for (const value of pending) {
       const question = parseApplicationQuestion(value);
@@ -754,6 +760,7 @@ export async function queueAnswerContinuation(input: {
         facts,
         privacyConsentAt: row.user.privacyConsentAt,
         company: row.job.company,
+        jobLocation: row.job.location,
         workRemote: prefersRemoteOrHybrid(row.user.preferences?.locationsJson),
       });
       const answer = explicit.answer ?? fact?.answer;
