@@ -11,11 +11,11 @@ function load(path: string, dependencies: Record<string, unknown>) {
   return module.exports;
 }
 async function main() {
-  let owner: string | null = "owner", blocked = false, failure = false;
+  let owner: string | null = "owner", blocked = false, payment = false, suspended = false, failure = false;
   const rows = new Map<string, Date | null>([["owner", null], ["other", null]]);
   let changes = 0;
   const prisma = { user: {
-    findUnique: async () => owner ? { id: owner, email: "synthetic@example.invalid", suspendedAt: null } : null,
+    findUnique: async () => owner ? { id: owner, email: "synthetic@example.invalid", suspendedAt: suspended ? new Date() : null } : null,
     updateMany: async ({ where, data }: any) => {
       if (failure) throw Error("Synthetic outage");
       assert.deepEqual(Object.keys(data), ["privacyConsentAt"]);
@@ -25,19 +25,32 @@ async function main() {
     },
   } };
   const workspace = load("src/lib/workspace-mutation.ts", { "next/server": { NextResponse }, "@/lib/auth": { auth: async () => owner ? { user: { id: owner } } : null },
-    "@/lib/db": { prisma }, "@/lib/admin": { isAdmin: () => false }, "@/lib/billing": { isApplicationAccessPaused: () => blocked, requiresPaymentMethodBeforeApp: () => false } });
+    "@/lib/db": { prisma }, "@/lib/admin": { isAdmin: () => false }, "@/lib/billing": { isApplicationAccessPaused: () => blocked, requiresPaymentMethodBeforeApp: () => payment } });
   const releases: Array<[string, string]> = [];
   const route = load("src/app/api/account/privacy-consent/route.ts", { "next/server": { NextResponse }, "@/lib/db": { prisma }, "@/lib/workspace-mutation": workspace,
     "@/lib/held-application-release": { releaseHeldApplicationsForUser: async (id: string, trigger: string) => { releases.push([id, trigger]); return 0; } } });
   const request = (body: unknown, origin = "http://localhost") => new NextRequest("http://localhost/api/account/privacy-consent", { method: "POST", headers: { origin, "Content-Type": "application/json" }, body: JSON.stringify(body) });
   owner = null; assert.equal((await route.POST(request({ privacyConsent: true }))).status, 401); owner = "owner";
-  blocked = true; assert.equal((await route.POST(request({ privacyConsent: true }))).status, 403); blocked = false;
+  // Card-verification and suspension gates still refuse; nothing is written.
+  payment = true; assert.equal((await route.POST(request({ privacyConsent: true }))).status, 403); payment = false;
+  suspended = true; assert.equal((await route.POST(request({ privacyConsent: true }))).status, 403); suspended = false;
+  // Other workspace mutations keep refusing expired-trial accounts.
+  blocked = true;
+  await assert.rejects(workspace.workspaceOwner(request({ privacyConsent: true })), (error: any) => error.code === "account_access_required");
+  blocked = false;
   assert.equal((await route.POST(request({ privacyConsent: true }, "https://foreign.invalid"))).status, 403);
   for (const body of [null, {}, { privacyConsent: false }, { privacyConsent: "true" }, { privacyConsent: true, userId: "other" }, { privacyConsent: true, consentGrantedAt: new Date().toISOString() }]) assert.equal((await route.POST(request(body))).status, 400);
   assert.equal(changes, 0); assert.equal(releases.length, 0, "rejected requests release nothing");
   failure = true; assert.equal((await route.POST(request({ privacyConsent: true }))).status, 503); failure = false;
   const replies = await Promise.all([route.POST(request({ privacyConsent: true })), route.POST(request({ privacyConsent: true }))]);
   assert.ok(replies.every(r => r.status === 200)); assert.equal(changes, 1); assert.equal(rows.get("other"), null);
+  // Expired-trial free accounts (still applied for on the free weekly quota)
+  // can record their own explicit consent, which releases their held rows.
+  blocked = true; rows.set("owner", null); const releasesBefore = releases.length;
+  assert.equal((await route.POST(request({ privacyConsent: false }))).status, 400, "expired trial: consent stays explicit");
+  assert.equal(rows.get("owner"), null);
+  assert.equal((await route.POST(request({ privacyConsent: true }))).status, 200);
+  assert.ok(rows.get("owner") instanceof Date); assert.equal(releases.length, releasesBefore + 1); blocked = false;
   const first = rows.get("owner"); await route.POST(request({ privacyConsent: true })); assert.equal(rows.get("owner"), first);
   // Only the owner's own held rows are handed to the fenced release (it re-checks everything itself).
   assert.ok(releases.length >= 1 && releases.every(([id, trigger]) => id === "owner" && trigger === "privacy_consent"));

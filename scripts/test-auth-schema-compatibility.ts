@@ -61,6 +61,14 @@ async function main() {
     Object.assign(row, expired);
     assert.equal((await proxy(request("/dashboard"))).headers.get("location"), "https://lavorai.it/trial-expired");
     assert.equal((await proxy(request("/api/applications"))).status, 402);
+    // Expired-trial free accounts are still applied for on the weekly quota:
+    // they keep a working path to consent and to the questions holding rows.
+    assert.equal((await proxy(request("/settings"))).headers.get("location"), "https://lavorai.it/trial-expired");
+    assert.equal((await proxy(request("/questions"))).headers.get("location"), "https://lavorai.it/trial-expired/questions");
+    assert.equal((await proxy(request("/api/questions"))).headers.get("x-middleware-next"), "1");
+    assert.equal((await proxy(request("/trial-expired/questions"))).headers.get("x-middleware-next"), "1");
+    assert.equal((await proxy(request("/api/account/privacy-consent"))).headers.get("x-middleware-next"), "1");
+    assert.equal((await proxy(request("/api/preferences"))).status, 402);
     row.email = "schema-admin@example.com";
     assert.equal((await proxy(request("/dashboard"))).headers.get("x-middleware-next"), "1");
     row.email = "antonella.lasalandra07@gmail.com";

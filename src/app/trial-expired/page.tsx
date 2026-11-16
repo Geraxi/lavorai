@@ -6,6 +6,9 @@ import { TrialExpiredActions } from "./trial-expired-actions";
 import { SupportLink } from "@/components/support-link";
 import { Logo } from "@/components/logo";
 import { getConfirmedSubmissions } from "@/lib/dashboard-metrics-shared";
+import { PrivacyConsentForm } from "@/components/privacy-consent-form";
+import { prisma } from "@/lib/db";
+import Link from "next/link";
 
 export const metadata = { title: "Free trial expired | LavorAI", robots: { index: false, follow: false } };
 
@@ -14,7 +17,14 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (isAdmin(user.email) || !isApplicationAccessPaused(user)) redirect("/dashboard");
-  const applicationsSent = await getConfirmedSubmissions(user.id);
+  // The free plan keeps applying on the weekly quota, so the two actions that
+  // unblock held applications (privacy consent, form questions) stay usable
+  // here. Consent remains an explicit user action via PrivacyConsentForm.
+  const [applicationsSent, waitingForAnswers, heldForConsent] = await Promise.all([
+    getConfirmedSubmissions(user.id),
+    prisma.application.count({ where: { userId: user.id, status: "needs_answers" } }),
+    user.privacyConsentAt ? Promise.resolve(0) : prisma.application.count({ where: { userId: user.id, status: { in: ["queued", "needs_user"] }, errorMessage: { contains: "Consenso privacy mancante" } } }),
+  ]);
   return (
     <main className="trial-expired-screen min-h-screen flex items-center justify-center bg-background text-foreground px-6 py-12">
       <section className="trial-expired-panel w-full max-w-2xl overflow-hidden rounded-2xl border bg-card shadow-lg">
@@ -39,6 +49,25 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
             <p className="mt-1 text-xs text-muted-foreground">Pagamento sicuro con Stripe</p>
           </div>
         </div>
+        {(!user.privacyConsentAt || waitingForAnswers > 0) && (
+          <div className="border-t border-border px-8 py-7 sm:px-10 space-y-6">
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-400">Piano gratuito: azioni richieste</p>
+            {!user.privacyConsentAt && (
+              <section id="privacy-consent" className="scroll-mt-6">
+                <h2 className="text-lg font-semibold">Consenso privacy</h2>
+                <p className="mt-1 mb-3 text-sm text-muted-foreground">{heldForConsent > 0 ? `${heldForConsent} ${heldForConsent === 1 ? "candidatura è in attesa" : "candidature sono in attesa"} del tuo consenso privacy. Dopo il salvataggio tornano ai normali controlli di invio.` : "Senza consenso privacy LavorAI non può elaborare le candidature del piano gratuito."}</p>
+                <PrivacyConsentForm recorded={false} locale={user.locale ?? "it"} />
+              </section>
+            )}
+            {waitingForAnswers > 0 && (
+              <section id="pending-questions">
+                <h2 className="text-lg font-semibold">Domande in sospeso</h2>
+                <p className="mt-1 mb-3 text-sm text-muted-foreground">{waitingForAnswers} {waitingForAnswers === 1 ? "candidatura attende" : "candidature attendono"} risposte che solo tu puoi dare.</p>
+                <Link href="/trial-expired/questions" className="ds-btn inline-flex">Rispondi alle domande</Link>
+              </section>
+            )}
+          </div>
+        )}
         <div className="border-t border-border px-8 py-7 sm:px-10">
           <TrialExpiredActions confirming={confirming} />
           <SupportLink />

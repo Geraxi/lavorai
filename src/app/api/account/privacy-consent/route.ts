@@ -11,7 +11,9 @@ export const runtime = "nodejs";
  * normal admission (held-application-release.ts); nothing is sent here. */
 export async function POST(request: NextRequest) {
   try {
-    const userId = await workspaceOwner(request);
+    // Expired-trial free accounts keep receiving applications on the free
+    // weekly quota, so they must be able to give (explicit) consent too.
+    const userId = await workspaceOwner(request, { allowExpiredTrial: true });
     const body = await smallJson(request);
     if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length !== 1 || body.privacyConsent !== true) throw new WorkspaceError("explicit_consent_required");
     await prisma.user.updateMany({ where: { id: userId, privacyConsentAt: null }, data: { privacyConsentAt: new Date() } });
