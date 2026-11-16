@@ -28,6 +28,8 @@ export interface ClassifiedReply {
   kind: ReplyKind;
   /** true solo per risposte umane reali (colloquio/rifiutata/risposta). */
   isHuman: boolean;
+  /** Set (true) only for ATS security / verification codes: kind "auto", never bounce. */
+  isSecurityCode?: true;
 }
 
 const BOUNCE_FROM = [
@@ -64,6 +66,15 @@ const SYSTEM_NOTIFICATION_DOMAINS = [
   "polymarket.com",
   "fundingoptions",
   "tide.co",
+  // Job-alert and marketing senders seen in production, never recruiter replies.
+  "gulftalent.com",
+  "jobs2web.com",
+  "gema.de",
+  "mailchimp",
+  "mcsv.net",
+  "sendgrid.net",
+  "hubspotemail.net",
+  "substack.com",
 ];
 
 const SYSTEM_NOTIFICATION_FROM = [
@@ -81,6 +92,26 @@ const SYSTEM_NOTIFICATION_FROM = [
   "linkedin-notifications@",
   "googlealerts-noreply@google",
   "calendar-notification@google",
+  "newsletter@",
+  "newsletters@",
+  "news@",
+  "marketing@",
+  "promo@",
+  "promotions@",
+  "updates@",
+  "digest@",
+  "jobalerts@",
+  "job-alerts@",
+  "jobalert@",
+];
+
+/** ATS relay / notification domains. Mail from these is automated unless it
+ * carries a decision (rejection / interview) or actually asks something. */
+const ATS_SENDER = [
+  "greenhouse.io", "greenhouse-mail.io", "lever.co", "hire.lever.co", "workablemail.com", "workable.com",
+  "ashbyhq.com", "smartrecruiters.com", "recruitee.com", "recruiteemail.com", "personio.de", "personio.com",
+  "teamtailor.com", "teamtailor-mail.com", "bamboohr.com", "jobvite.com", "myworkday.com", "workday.com",
+  "successfactors.com", "icims.com", "taleo.net", "breezy.hr", "pinpointhq.com", "join.com", "homerun.co",
 ];
 
 const BOUNCE_SUBJECT = [
@@ -122,6 +153,58 @@ const ACKNOWLEDGEMENT = [
   "grazie per aver inviato",
   "conferma di ricezione",
   "candidatura inviata con successo",
+  "ti ringraziamo per la candidatura",
+  "ti ringraziamo per la tua candidatura",
+  "la ringraziamo per la candidatura",
+  "la ringraziamo per la sua candidatura",
+  "abbiamo ricevuto il tuo cv",
+  "thanks for your interest in",
+  "we appreciate your interest in",
+  // NL
+  "bedankt voor je sollicitatie",
+  "bedankt voor jouw sollicitatie",
+  "bedankt voor uw sollicitatie",
+  "dank voor je sollicitatie",
+  "dank voor uw sollicitatie",
+  "dank je wel voor je sollicitatie",
+  "we hebben je sollicitatie ontvangen",
+  "wij hebben je sollicitatie ontvangen",
+  "we hebben jouw sollicitatie ontvangen",
+  "wij hebben uw sollicitatie ontvangen",
+  "je sollicitatie is ontvangen",
+  "uw sollicitatie is ontvangen",
+  "ontvangstbevestiging",
+  // DE
+  "vielen dank für ihre bewerbung",
+  "vielen dank für deine bewerbung",
+  "danke für ihre bewerbung",
+  "danke für deine bewerbung",
+  "wir haben ihre bewerbung erhalten",
+  "wir haben deine bewerbung erhalten",
+  "ihre bewerbung ist bei uns eingegangen",
+  "deine bewerbung ist bei uns eingegangen",
+  "eingangsbestätigung",
+  // FR
+  "merci pour votre candidature",
+  "merci de votre candidature",
+  "merci pour ta candidature",
+  "nous avons bien reçu votre candidature",
+  "nous avons reçu votre candidature",
+  "votre candidature a bien été reçue",
+  "votre candidature a été reçue",
+  "accusé de réception",
+  // ES / PT
+  "gracias por tu candidatura",
+  "gracias por su candidatura",
+  "gracias por postularte",
+  "gracias por tu solicitud",
+  "hemos recibido tu candidatura",
+  "hemos recibido su candidatura",
+  "hemos recibido tu solicitud",
+  "obrigado pela sua candidatura",
+  "obrigado pela tua candidatura",
+  "recebemos a sua candidatura",
+  "recebemos sua candidatura",
 ];
 
 const AUTO_REPLY = [
@@ -137,6 +220,37 @@ const AUTO_REPLY = [
   "this is an automated",
   "do not reply to this email",
   "questo messaggio è generato automaticamente",
+  "this mailbox is not monitored",
+  "this inbox is not monitored",
+  "this email address is not monitored",
+  "afwezigheidsmelding",
+  "abwesenheitsnotiz",
+  "réponse automatique",
+  "respuesta automática",
+];
+
+/** Generic mailbox autoresponders ("thanks for your message, we'll get back to
+ * you"). Only counted when the message asks nothing (see classifyReply). */
+const SOFT_AUTO_REPLY = [
+  "thank you for your message",
+  "thank you for your email",
+  "thanks for your message",
+  "thanks for your email",
+  "thank you for contacting",
+  "thank you for reaching out",
+  "we have received your message",
+  "we have received your email",
+  "we have received your request",
+  "we've received your email",
+  "we've received your message",
+  "we will get back to you",
+  "we'll get back to you",
+  "we will respond as soon as possible",
+  "we will reply as soon as possible",
+  "grazie per il tuo messaggio",
+  "grazie per la tua email",
+  "abbiamo ricevuto la tua richiesta",
+  "ti risponderemo al più presto",
 ];
 
 /** Employer autoresponder: apply on the careers site, not over email. Never a rejection. */
@@ -179,8 +293,16 @@ const PORTAL_REDIRECT = [
   "invia la candidatura dal portale",
 ];
 
+/** "We don't accept applications/CVs by e-mail" in any common phrasing. */
+const PORTAL_REDIRECT_RE = [
+  /\b(?:do not|don't|dont|cannot|can't|can not|unable to|not able to|no longer|will not|won't|do not currently)\s+(?:accept|take|process|review|consider|receive)\s+(?:any\s+)?(?:job\s+)?(?:applications?|cvs?|cv's|resumes?|résumés?)(?:\s+(?:sent|submitted))?\s+(?:by|via|over|through|per|using)\s+(?:e-?mail|mail)\b/,
+  /\b(?:applications?|cvs?|resumes?)\s+(?:sent|submitted)?\s*(?:by|via|over|through)\s+e-?mail\s+(?:are not|will not be|cannot be|can't be|won't be)\s+(?:accepted|considered|processed|reviewed)\b/,
+  /\bnon (?:accettiamo|prendiamo|valutiamo|consideriamo) (?:più )?(?:candidature|cv|curricula)(?: inviat[ie])? (?:via|tramite|per) (?:e-?mail|posta)\b/,
+];
+
 export function isPortalRedirectText(text: string): boolean {
-  return containsAny(text.toLowerCase(), PORTAL_REDIRECT);
+  const normalized = text.toLowerCase().replace(/[’‘]/g, "'");
+  return containsAny(normalized, PORTAL_REDIRECT) || PORTAL_REDIRECT_RE.some((re) => re.test(normalized));
 }
 
 const REJECTION = [
@@ -215,6 +337,16 @@ const REJECTION = [
   "ci dispiace informarti",
   "posizione è stata chiusa",
   "non possiamo procedere",
+  // NL / DE / FR / ES (explicit decision phrases only)
+  "helaas hebben we besloten",
+  "helaas moeten we je laten weten",
+  "helaas moeten wij je laten weten",
+  "leider müssen wir ihnen mitteilen",
+  "leider müssen wir dir mitteilen",
+  "leider haben wir uns für",
+  "nous ne pouvons pas donner une suite favorable",
+  "nous avons le regret de vous informer",
+  "lamentablemente hemos decidido",
 ];
 
 const INTERVIEW = [
@@ -270,13 +402,78 @@ export interface ClassifyInput {
   fromAddress: string;
   subject?: string | null;
   bodyText?: string | null;
+  /** Raw message headers when available (any key casing). */
+  headers?: Record<string, unknown> | null;
+}
+
+function headerValue(headers: Record<string, unknown> | null | undefined, name: string): string | null {
+  if (!headers || typeof headers !== "object") return null;
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== name) continue;
+    if (typeof value === "string") return value.trim().toLowerCase();
+    if (Array.isArray(value)) return value.filter((v) => typeof v === "string").join(",").trim().toLowerCase();
+  }
+  return null;
+}
+
+/** RFC 3834 / vendor autoresponder headers (out-of-office, mailbox auto-replies). */
+export function hasAutoresponderHeaders(headers: Record<string, unknown> | null | undefined): boolean {
+  const autoSubmitted = headerValue(headers, "auto-submitted");
+  if (autoSubmitted && autoSubmitted !== "no" && autoSubmitted.startsWith("auto-replied")) return true;
+  if (headerValue(headers, "x-autoreply") || headerValue(headers, "x-autorespond") || headerValue(headers, "x-autoresponder")) return true;
+  const precedence = headerValue(headers, "precedence");
+  if (precedence === "auto_reply") return true;
+  const suppress = headerValue(headers, "x-auto-response-suppress");
+  return !!suppress && /\b(?:oof|all)\b/.test(suppress) && /out of office|automatic reply|auto(?:matic)?[- ]?reply/.test(headerValue(headers, "subject") ?? "");
+}
+
+/** Machine-generated (not necessarily a reply): Auto-Submitted: auto-generated. */
+function hasAutoGeneratedHeader(headers: Record<string, unknown> | null | undefined): boolean {
+  const autoSubmitted = headerValue(headers, "auto-submitted");
+  return !!autoSubmitted && autoSubmitted !== "no";
+}
+
+/** Mailing-list / newsletter delivery. */
+export function hasBulkHeaders(headers: Record<string, unknown> | null | undefined): boolean {
+  const precedence = headerValue(headers, "precedence");
+  return precedence === "bulk" || precedence === "list" || precedence === "junk"
+    || !!headerValue(headers, "list-id") || !!headerValue(headers, "list-unsubscribe");
+}
+
+function senderAddress(from: string): string {
+  return (from.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1] ?? from.match(/[^\s<>"]+@[^\s<>"]+/)?.[0] ?? from).toLowerCase();
+}
+
+function fromAtsDomain(from: string): boolean {
+  const domain = senderAddress(from).split("@")[1] ?? "";
+  return ATS_SENDER.some((ats) => domain === ats || domain.endsWith(`.${ats}`));
+}
+
+/** A "?" that is not template boilerplate ("Questions?", "Heb je vragen?"). */
+function asksAQuestion(body: string): boolean {
+  return body.split(/\n+/).some((raw) => {
+    const line = raw.replace(/https?:\/\/\S+/g, " ").trim(); // query strings are not questions
+    if (!line.includes("?")) return false;
+    const boilerplate = line.length <= 60 && /\b(?:questions?|vragen|fragen|domande|preguntas|help|aiuto|hilfe|hulp|contact|faq|need assistance)\b/i.test(line);
+    return !boilerplate;
+  });
 }
 
 export function classifyReply(input: ClassifyInput): ClassifiedReply {
   const from = (input.fromAddress ?? "").toLowerCase();
-  const subject = (input.subject ?? "").toLowerCase();
-  const body = (input.bodyText ?? "").toLowerCase();
+  const subject = (input.subject ?? "").toLowerCase().replace(/[’‘]/g, "'");
+  const body = (input.bodyText ?? "").toLowerCase().replace(/[’‘]/g, "'");
   const subjectBody = `${subject}\n${body}`;
+  const headers = input.headers ?? null;
+
+  // 0. ATS security / verification codes (Greenhouse OTP) are their own
+  //    automated kind, checked before bounce so they are never stored as a
+  //    bounce (25 historical rows were). A real delivery failure that merely
+  //    quotes an OTP subject is still a bounce (isApplicationVerificationMessage
+  //    excludes mailer-daemon / DSN subjects).
+  if (isApplicationVerificationMessage(input)) {
+    return { kind: "auto", isHuman: false, isSecurityCode: true };
+  }
 
   // 1. Bounce / mailer-daemon → non è una risposta umana.
   if (
@@ -286,11 +483,6 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     return { kind: "bounce", isHuman: false };
   }
 
-  // 2. Security challenges are automated messages, not delivery failures or
-  //    application receipts, even if their template thanks the applicant.
-  if (isApplicationVerificationMessage(input)) {
-    return { kind: "auto", isHuman: false };
-  }
 
   // 3. Conferma di ricezione → in Inbox, separata dalle risposte umane,
   //    ma non cambia lo stato (non è un umano che ha letto il CV).
@@ -300,15 +492,17 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
   //    resta una risposta umana.
   //    Check BEFORE system notifications so ATS acknowledgements (Greenhouse, Lever)
   //    are properly classified as "ricevuta" instead of generic "auto".
-  const asksSomething = /\?/.test(body);
-  const systemSignal =
-    containsAny(from, ["no-reply", "noreply", "donotreply", "do-not-reply", "notification", "careers@", "jobs@", "recruiting@", "talent@", "greenhouse", "lever.co", "workable", "ashbyhq", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr"]) ||
+  const asksSomething = asksAQuestion(body);
+  const atsSender = fromAtsDomain(from);
+  const noReplySender = /^(?:no[-_.]?reply|do[-_.]?not[-_.]?reply|notifications?)(?:[+._-][^@]*)?@/.test(senderAddress(from));
+  const systemSignal = atsSender || noReplySender || hasAutoGeneratedHeader(headers) || hasAutoresponderHeaders(headers) ||
+    containsAny(from, ["no-reply", "noreply", "donotreply", "do-not-reply", "notification", "careers@", "jobs@", "recruiting@", "talent@", "recruitment@", "recrutement@", "bewerbung@", "karriere@", "sollicitatie@", "werkenbij@", "candidature@", "lavora-con-noi@", "greenhouse", "lever.co", "workable", "ashbyhq", "smartrecruiters", "recruitee", "personio", "teamtailor", "bamboohr"]) ||
     containsAny(subjectBody, ["do not reply", "don't reply", "non rispondere", "automat", "this email was sent", "questa email è stata inviata", "unsubscribe"]);
   if (
     containsAny(subjectBody, ACKNOWLEDGEMENT) &&
     !containsAny(subjectBody, REJECTION) &&
     !containsAny(subjectBody, INTERVIEW) &&
-    !asksSomething &&
+    (!asksSomething || atsSender || noReplySender) &&
     (systemSignal || body.length > 250 || containsAny(subject, ACKNOWLEDGEMENT))
   ) {
     return { kind: "ricevuta", isHuman: false };
@@ -316,8 +510,13 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
 
   // 4. Apply-via-portal / "we don't take applications over email" is an
   //    autoresponder, never a rejection — even if the copy says "unfortunately".
-  if (containsAny(subjectBody, PORTAL_REDIRECT)) {
+  if (isPortalRedirectText(subjectBody)) {
     return { kind: "redirected_to_portal", isHuman: false };
+  }
+
+  // 4b. Autoresponder headers (RFC 3834 Auto-Submitted: auto-replied, X-Autoreply…).
+  if (hasAutoresponderHeaders(headers)) {
+    return { kind: "auto_reply", isHuman: false };
   }
 
   // 5. System/automated notifications (CI/CD, monitoring, etc.) → auto, never human.
@@ -330,9 +529,17 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
   if (SYSTEM_NOTIFICATION_DOMAINS.some((domain) => from.includes(domain))) {
     return { kind: "auto", isHuman: false };
   }
+  // 5b. Newsletters / mailing lists / marketing senders (not ATS mail, which
+  //     may legitimately carry a decision and is handled below).
+  if (!atsSender && (hasBulkHeaders(headers) || containsAny(from, SYSTEM_NOTIFICATION_FROM.filter((p) => /news|marketing|promo|updates|digest|alert/.test(p))))) {
+    return { kind: "auto", isHuman: false };
+  }
 
   // 6. Auto-reply (out of office, ecc.) → not a recruiter decision.
   if (containsAny(subjectBody, AUTO_REPLY)) {
+    return { kind: "auto_reply", isHuman: false };
+  }
+  if (containsAny(subjectBody, SOFT_AUTO_REPLY) && !asksSomething && !containsAny(subjectBody, REJECTION) && !containsAny(subjectBody, INTERVIEW)) {
     return { kind: "auto_reply", isHuman: false };
   }
 
@@ -354,7 +561,14 @@ export function classifyReply(input: ClassifyInput): ClassifiedReply {
     return { kind: "auto", isHuman: false };
   }
 
-  // 10. Risposta umana generica (qualcuno ha scritto, ma senza segnali chiari).
+  // 10. Risposta umana generica: only with human signals. ATS relays,
+  //     machine-generated mail and newsletter-style footers that ask nothing
+  //     are automated, so they never set userStatus=risposta.
+  if (hasAutoGeneratedHeader(headers) && !asksSomething) return { kind: "auto", isHuman: false };
+  if (atsSender && !asksSomething) return { kind: "auto", isHuman: false };
+  if (!asksSomething && /\bunsubscribe\b|annulla l'iscrizione|disiscriviti|uitschrijven|abmelden|se désabonner|view (?:this email )?in (?:your )?browser/.test(body)) {
+    return { kind: "auto", isHuman: false };
+  }
   return { kind: "risposta", isHuman: true };
 }
 
