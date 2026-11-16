@@ -19,6 +19,9 @@ import {
   parseGreenhouseBoardJob,
 } from "../src/lib/greenhouse-job-form";
 import {
+  DEFAULT_PROVEN_PORTALS,
+  portalChannelOf,
+  provenPortalChannels,
   GREENHOUSE_FORM_FETCH_BUDGET,
   buildProvenChannelFactContext,
   evaluateProvenChannelEligibility,
@@ -227,9 +230,62 @@ async function testEligibility() {
     { env, loadForm: async () => { throw new Error("non-GH must not fetch"); } },
   );
   assert.equal(lever.ok, false);
-  assert.equal(lever.reason, "no_proven_channel");
+  assert.equal(lever.reason, "lever_not_enabled", "Lever is not in the default portal list");
+  const unknownHost = await evaluateProvenChannelEligibility({ url: "https://careers.acme.test/jobs/1", company: "Acme" }, user, { env });
+  assert.equal(unknownHost.reason, "no_proven_channel");
   assert.equal(GREENHOUSE_FORM_FETCH_BUDGET, 12);
   console.log("PASS proven-channel eligibility (email / GH / skip)");
+}
+
+async function testPortalChannels() {
+  // Configurable list; default admits Recruitee only.
+  assert.deepEqual(DEFAULT_PROVEN_PORTALS, ["recruitee"]);
+  assert.deepEqual(provenPortalChannels({}), ["recruitee"]);
+  assert.deepEqual(provenPortalChannels({ PROVEN_CHANNEL_PORTALS: " Lever, recruitee ,bogus" }), ["recruitee", "lever"]);
+  assert.deepEqual(provenPortalChannels({ PROVEN_CHANNEL_PORTALS: "none" }), []);
+  assert.equal(portalChannelOf("https://adesso.recruitee.com/o/senior-java"), "recruitee");
+  assert.equal(portalChannelOf("https://jobs.lever.co/acme/abc"), "lever");
+  assert.equal(portalChannelOf("https://apply.workable.com/garmin/j/ABC/"), "workable");
+  assert.equal(portalChannelOf("https://impower.jobs.personio.com/job/2879528"), "personio");
+  assert.equal(portalChannelOf("https://recruitee.com.evil.test/o/x"), null);
+  const env = { INBOUND_EMAIL_DOMAIN: "inbound.lavorai.it" };
+  const user = { factContext: { facts: [] }, hasCv: true };
+  const noNetwork = { loadForm: async () => { throw new Error("no GH fetch"); }, probeForm: async () => { throw new Error("no probe for recruitee"); } };
+  const recruitee = await evaluateProvenChannelEligibility({ url: "https://adesso.recruitee.com/o/senior-java", company: "adesso", applicationFormCapability: "standard" }, user, { env, ...noNetwork });
+  assert.deepEqual(recruitee, { ok: true, channel: "recruitee", reason: "recruitee_portal" });
+  const recruiteeQuestions = await evaluateProvenChannelEligibility({ url: "https://x.recruitee.com/o/a", applicationFormCapability: "questions" }, user, { env, ...noNetwork });
+  assert.equal(recruiteeQuestions.ok, true);
+  for (const capability of ["unsupported", "closed"]) {
+    const blocked = await evaluateProvenChannelEligibility({ url: "https://x.recruitee.com/o/a", applicationFormCapability: capability }, user, { env, ...noNetwork });
+    assert.equal(blocked.ok, false, capability);
+  }
+  const off = await evaluateProvenChannelEligibility({ url: "https://x.recruitee.com/o/a" }, user, { env: { ...env, PROVEN_CHANNEL_PORTALS: "none" }, ...noNetwork });
+  assert.equal(off.reason, "recruitee_not_enabled");
+  // Lever/Personio/Workable: only when listed AND the form pre-check finds the form.
+  const listed = { ...env, PROVEN_CHANNEL_PORTALS: "recruitee,lever,personio,workable" };
+  const probes: string[] = [];
+  const probeForm = async (id: string, url: string) => { probes.push(`${id} ${url}`); return url.includes("present") ? { status: "present" as const, detail: "ok" } : url.includes("unknown") ? { status: "unknown" as const, detail: "?" } : { status: "missing" as const, detail: "absent" }; };
+  const leverOk = await evaluateProvenChannelEligibility({ url: "https://jobs.lever.co/acme/present" }, user, { env: listed, probeForm });
+  assert.deepEqual(leverOk, { ok: true, channel: "lever", reason: "lever_form_present" });
+  const leverMissing = await evaluateProvenChannelEligibility({ url: "https://jobs.lever.co/acme/gone" }, user, { env: listed, probeForm });
+  assert.equal(leverMissing.reason, "lever_form_precheck_missing");
+  const workableUnknown = await evaluateProvenChannelEligibility({ url: "https://apply.workable.com/garmin/j/unknown/" }, user, { env: listed, probeForm });
+  assert.equal(workableUnknown.ok, false, "unknown pre-check is not a pass");
+  const throwing = await evaluateProvenChannelEligibility({ url: "https://impower.jobs.personio.com/job/1" }, user, { env: listed, probeForm: async () => { throw new Error("boom"); } });
+  assert.equal(throwing.reason, "personio_form_precheck_unknown");
+  const notListed = await evaluateProvenChannelEligibility({ url: "https://jobs.lever.co/acme/present" }, user, { env, probeForm });
+  assert.equal(notListed.reason, "lever_not_enabled");
+  // Pre-checks share the per-user form budget.
+  const budget = { remaining: 1 };
+  await evaluateProvenChannelEligibility({ url: "https://jobs.lever.co/acme/present" }, user, { env: listed, probeForm, formBudget: budget });
+  const exhausted = await evaluateProvenChannelEligibility({ url: "https://jobs.lever.co/acme/present2" }, user, { env: listed, probeForm, formBudget: budget });
+  assert.equal(exhausted.reason, "lever_form_budget");
+  assert.equal(probes.filter(p => p.includes("present2")).length, 0);
+  // Caps are unchanged.
+  const cron = readFileSync("src/lib/auto-apply-cron.ts", "utf8");
+  assert.match(cron, /const PER_USER_RUN_CAP = 5;/);
+  assert.match(cron, /provenChannelAdmissions\[counter\]/);
+  console.log("PASS portal channels: Recruitee by default, env-configurable list, Lever/Personio/Workable only with a passing form pre-check, shared budget, caps unchanged");
 }
 
 function testReplyClassificationAndReceiptSurface() {
@@ -318,6 +374,7 @@ async function main() {
   testGreenhouseParseAndQuestions();
   await testGreenhouseFormCache();
   await testEligibility();
+  await testPortalChannels();
   testReplyClassificationAndReceiptSurface();
   await testSilentKindsDoNotReject();
   testSourceGuards();
