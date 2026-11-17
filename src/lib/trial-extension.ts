@@ -23,6 +23,9 @@ import { baseTrialEnd, isLifetimeProPlus, normalizeTier } from "@/lib/billing";
  *  - TRIAL_EXTENSION_ENABLED must be exactly "true"; otherwise (or with
  *    dryRun) a dry run: counts only, no DB writes, no email.
  *  - Never twice: trialExtensionEndsAt must be null and the ledger row unused.
+ *  - The week can also be activated in the app (/trial-expired banner, on click,
+ *    claimTrialExtension). Those users still get the email later (confirmation
+ *    wording) while at least 24h are left; their end date is never reset.
  *  - Never paying/paid users, Stripe subscriptions, suspended, unverified,
  *    test/internal, admin or lifetime accounts; never users whose trial is
  *    still running. Opted-out or bounced users are skipped.
@@ -63,24 +66,52 @@ export interface ExtensionLedger { kind: string; sentCount: number; optedOutAt: 
 export interface ExtensionCandidate {
   userId: string; email: string; name: string | null; locale: string;
   needsCard: boolean; needsConsent: boolean; needsCv: boolean; needsAutoApply: boolean; trialEndedAt: Date;
+  /** Set when the user already activated the week from the app: the email only confirms it, the date is kept. */
+  activeUntil?: Date | null;
+}
+
+/** A week activated in the app still gets its email only while at least this much of it is left. */
+export const EMAIL_MIN_REMAINING_MS = 24 * 3_600_000;
+
+/**
+ * Pure base eligibility shared by the cron and the in-app offer (ledger-free):
+ * free, never subscribed, verified, not suspended/test/admin/lifetime, signup
+ * trial over. Does not look at trialExtensionEndsAt.
+ */
+export function extensionBaseEligible(
+  u: Pick<ExtensionUser, "email" | "tier" | "createdAt" | "trialEndsAt" | "trialGraceEndsAt" | "stripeSubscriptionId" | "subscriptionStatus" | "emailVerified" | "suspendedAt">,
+  now: Date, isTest: (email: string) => boolean, isAdmin: (email: string) => boolean,
+): { ok: true; trialEndedAt: Date } | { ok: false } {
+  if (normalizeTier(u.tier) !== "free" || u.stripeSubscriptionId
+    || ["active", "trialing", "past_due", "paused"].includes(u.subscriptionStatus ?? "")) return { ok: false };
+  if (!u.emailVerified || u.suspendedAt || isTest(u.email) || isAdmin(u.email) || isLifetimeProPlus(u.email)) return { ok: false };
+  const ended = baseTrialEnd(u);
+  if (!ended || ended.getTime() > now.getTime()) return { ok: false };
+  return { ok: true, trialEndedAt: ended };
 }
 
 export type SkipReason = "not_eligible" | "already_extended" | "opted_out" | "bounced";
 
-/** Pure: is this user eligible, and why not. */
+/**
+ * Pure cron decision. Eligible = base eligibility, not yet emailed, not opted
+ * out/bounced, and either not yet extended (grant + email) or extended in the
+ * app with at least EMAIL_MIN_REMAINING_MS left (email only, date unchanged).
+ */
 export function extensionDecision(
   u: ExtensionUser, ledgers: ExtensionLedger[], now: Date,
   isTest: (email: string) => boolean, isAdmin: (email: string) => boolean,
-): { ok: true; trialEndedAt: Date } | { ok: false; reason: SkipReason } {
-  if (u.trialExtensionEndsAt || ledgers.some((l) => l.kind === TRIAL_EXTENSION_KIND && l.sentCount > 0)) return { ok: false, reason: "already_extended" };
-  if (normalizeTier(u.tier) !== "free" || u.stripeSubscriptionId
-    || ["active", "trialing", "past_due", "paused"].includes(u.subscriptionStatus ?? "")) return { ok: false, reason: "not_eligible" };
-  if (!u.emailVerified || u.suspendedAt || isTest(u.email) || isAdmin(u.email) || isLifetimeProPlus(u.email)) return { ok: false, reason: "not_eligible" };
-  const ended = baseTrialEnd(u);
-  if (!ended || ended.getTime() > now.getTime()) return { ok: false, reason: "not_eligible" };
+): { ok: true; trialEndedAt: Date; activeUntil: Date | null } | { ok: false; reason: SkipReason } {
+  if (ledgers.some((l) => l.kind === TRIAL_EXTENSION_KIND && l.sentCount > 0)) return { ok: false, reason: "already_extended" };
+  const base = extensionBaseEligible(u, now, isTest, isAdmin);
+  if (!base.ok) return { ok: false, reason: "not_eligible" };
+  let activeUntil: Date | null = null;
+  if (u.trialExtensionEndsAt) {
+    if (u.trialExtensionEndsAt.getTime() - now.getTime() < EMAIL_MIN_REMAINING_MS) return { ok: false, reason: "already_extended" };
+    activeUntil = u.trialExtensionEndsAt;
+  }
   if (ledgers.some((l) => l.bouncedAt)) return { ok: false, reason: "bounced" };
   if (ledgers.some((l) => l.kind === TRIAL_EXTENSION_KIND && l.optedOutAt)) return { ok: false, reason: "opted_out" };
-  return { ok: true, trialEndedAt: ended };
+  return { ok: true, trialEndedAt: base.trialEndedAt, activeUntil };
 }
 
 /** Users who can start applying right away first, then the most recently expired. */
@@ -122,16 +153,23 @@ export function renderTrialExtensionEmail(c: ExtensionCandidate, endsAt: Date, e
   if (c.needsAutoApply) todo.push(en ? "<strong>Turn on automatic applications</strong> and choose the roles you want." : "<strong>Attiva la candidatura automatica</strong> e scegli i ruoli che ti interessano.");
   if (c.needsConsent) todo.push(en ? "<strong>Confirm the privacy consent</strong> in the app: without it no application can be sent." : "<strong>Conferma il consenso privacy</strong> nell’app: senza, nessuna candidatura può partire.");
 
-  const subject = en ? "You have another free week of LavorAI" : "Hai un’altra settimana gratis di LavorAI";
+  const active = !!c.activeUntil;
+  const subject = active
+    ? (en ? "Your free week of LavorAI is on" : "La tua settimana gratis di LavorAI è attiva")
+    : (en ? "You have another free week of LavorAI" : "Hai un’altra settimana gratis di LavorAI");
   const paragraphs = en
     ? [
-        `Your free trial had ended, so we have reopened it for <strong>7 more days, until ${ends}</strong>.`,
+        active
+          ? `You activated your extra free week in the app: it runs <strong>until ${ends}</strong>.`
+          : `Your free trial had ended, so we have reopened it for <strong>7 more days, until ${ends}</strong>.`,
         "As with every LavorAI trial, a card is required: add it through Stripe to use the week. Nothing is charged during the 7 days. When the week ends, the plan you chose renews automatically and is charged (Pro is €19.99/month) unless you cancel before then. Stripe shows the exact date and price before you confirm.",
         "Once it is active, LavorAI can look again for roles that match your profile and send applications for you (up to 5 a day).",
         todo.length ? "To get started:" : "Your profile is ready: applications can start on the next run.",
       ]
     : [
-        `La tua prova gratuita era terminata: l’abbiamo riaperta per altri <strong>7 giorni, fino a ${ends}</strong>.`,
+        active
+          ? `Hai attivato dall’app la tua settimana gratuita extra: è valida <strong>fino a ${ends}</strong>.`
+          : `La tua prova gratuita era terminata: l’abbiamo riaperta per altri <strong>7 giorni, fino a ${ends}</strong>.`,
         "Come per ogni prova LavorAI, serve una carta: aggiungila tramite Stripe per usare la settimana. Nei 7 giorni non ti addebitiamo nulla. Alla fine della settimana il piano scelto si rinnova automaticamente con addebito (Pro costa €19,99/mese), salvo disdetta prima della scadenza. Stripe ti mostra data e prezzo esatti prima della conferma.",
         "Una volta attivata, LavorAI può tornare a cercare offerte in linea con il tuo profilo e inviare candidature per te (fino a 5 al giorno).",
         todo.length ? "Per iniziare:" : "Il tuo profilo è pronto: le candidature possono partire dal prossimo giro.",
@@ -186,7 +224,10 @@ export interface ExtensionRunResult {
 
 export async function findExtensionCandidates(db: ExtDb, deps: Pick<ExtensionDeps, "isTest" | "isAdmin">, now: Date) {
   const users = await db.user.findMany({
-    where: { tier: "free", stripeSubscriptionId: null, trialExtensionEndsAt: null, suspendedAt: null, emailVerified: { not: null } },
+    where: {
+      tier: "free", stripeSubscriptionId: null, suspendedAt: null, emailVerified: { not: null },
+      OR: [{ trialExtensionEndsAt: null }, { trialExtensionEndsAt: { gt: new Date(now.getTime() + EMAIL_MIN_REMAINING_MS) } }],
+    },
     select: {
       id: true, email: true, name: true, locale: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, trialExtensionEndsAt: true,
       stripeSubscriptionId: true, subscriptionStatus: true, emailVerified: true, suspendedAt: true, privacyConsentAt: true,
@@ -208,7 +249,7 @@ export async function findExtensionCandidates(db: ExtDb, deps: Pick<ExtensionDep
     if (!d.ok) { skipped[d.reason]++; continue; }
     candidates.push({
       userId: u.id, email: u.email, name: u.name, locale: u.locale === "en" ? "en" : "it",
-      needsCard: !["active", "trialing"].includes(u.subscriptionStatus ?? ""), needsConsent: !u.privacyConsentAt, needsCv: !u.hasCv, needsAutoApply: !autoApplyOn, trialEndedAt: d.trialEndedAt,
+      needsCard: !["active", "trialing"].includes(u.subscriptionStatus ?? ""), needsConsent: !u.privacyConsentAt, needsCv: !u.hasCv, needsAutoApply: !autoApplyOn, trialEndedAt: d.trialEndedAt, activeUntil: d.activeUntil,
     });
   }
   return { candidates: orderCandidates(candidates), skipped };
@@ -259,21 +300,25 @@ export async function runTrialExtension(deps: ExtensionDeps, opts: { now?: Date;
       data: { sentCount: 1, lastSentAt: now },
     });
     if (claimed.count !== 1) { result.notSent++; continue; }
-    const endsAt = new Date(now.getTime() + TRIAL_EXTENSION_DAYS * DAY_MS);
-    const granted = await deps.db.user.updateMany({
-      where: { id: c.userId, trialExtensionEndsAt: null, tier: "free", stripeSubscriptionId: null },
-      data: { trialExtensionEndsAt: endsAt },
-    });
     const releaseClaim = () => deps.db.userNudge.updateMany({ where: { id: row.id, lastSentAt: now }, data: { sentCount: 0, lastSentAt: null } });
-    if (granted.count !== 1) { result.notSent++; await releaseClaim(); continue; }
-    const rollback = async () => {
-      await deps.db.user.updateMany({ where: { id: c.userId, trialExtensionEndsAt: endsAt }, data: { trialExtensionEndsAt: null } });
-      await releaseClaim();
-    };
+    // Already activated in the app: email only, keep the date.
+    const endsAt = c.activeUntil ?? new Date(now.getTime() + TRIAL_EXTENSION_DAYS * DAY_MS);
+    let rollback: () => Promise<unknown> = releaseClaim;
+    if (!c.activeUntil) {
+      const granted = await deps.db.user.updateMany({
+        where: { id: c.userId, trialExtensionEndsAt: null, tier: "free", stripeSubscriptionId: null },
+        data: { trialExtensionEndsAt: endsAt },
+      });
+      if (granted.count !== 1) { result.notSent++; await releaseClaim(); continue; }
+      rollback = async () => {
+        await deps.db.user.updateMany({ where: { id: c.userId, trialExtensionEndsAt: endsAt }, data: { trialExtensionEndsAt: null } });
+        await releaseClaim();
+      };
+    }
     try {
       const sent = await deps.send(c, renderTrialExtensionEmail(c, endsAt, env), { nudgeId: row.id });
       if (sent.sent) {
-        result.granted++;
+        if (!c.activeUntil) result.granted++;
         result.sent++;
         if (sent.providerEmailId) await deps.db.userNudge.update({ where: { id: row.id }, data: { lastProviderEmailId: sent.providerEmailId } });
       } else {
@@ -288,6 +333,43 @@ export async function runTrialExtension(deps: ExtensionDeps, opts: { now?: Date;
   }
   deps.log("[trial-extension] run", { eligible: result.eligible, granted: result.granted, sent: result.sent, notSent: result.notSent, failed: result.failed, stoppedBy: result.stoppedBy ?? null });
   return result;
+}
+
+// ---------- In-app activation ----------
+
+type OfferUser = Parameters<typeof extensionBaseEligible>[0] & { id: string; trialExtensionEndsAt: Date | null };
+
+/** The in-app offer is shown only while sending is enabled (same kill switch) and the week was never granted. */
+export function trialExtensionOffered(u: OfferUser, now: Date, isTest: (e: string) => boolean, isAdmin: (e: string) => boolean, env: Env = process.env): boolean {
+  return trialExtensionEnabled(env) && !u.trialExtensionEndsAt && extensionBaseEligible(u, now, isTest, isAdmin).ok;
+}
+
+/**
+ * Grant the week on the user's click (idempotent). The column itself records
+ * the grant, so the cron never grants it again; it still sends the email later
+ * (confirmation wording, date unchanged).
+ */
+export async function claimTrialExtension(
+  db: Pick<PrismaClient, "user">, userId: string,
+  deps: { isTest: (e: string) => boolean; isAdmin: (e: string) => boolean }, opts: { now?: Date; env?: Env } = {},
+): Promise<{ ok: true; endsAt: Date; already: boolean } | { ok: false; reason: "disabled" | "not_eligible" }> {
+  const now = opts.now ?? new Date();
+  if (!trialExtensionEnabled(opts.env ?? process.env)) return { ok: false, reason: "disabled" };
+  const u = await db.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, trialExtensionEndsAt: true, stripeSubscriptionId: true, subscriptionStatus: true, emailVerified: true, suspendedAt: true },
+  });
+  if (!u) return { ok: false, reason: "not_eligible" };
+  if (u.trialExtensionEndsAt) return { ok: true, endsAt: u.trialExtensionEndsAt, already: true };
+  if (!extensionBaseEligible(u, now, deps.isTest, deps.isAdmin).ok) return { ok: false, reason: "not_eligible" };
+  const endsAt = new Date(now.getTime() + TRIAL_EXTENSION_DAYS * DAY_MS);
+  const granted = await db.user.updateMany({
+    where: { id: userId, trialExtensionEndsAt: null, tier: "free", stripeSubscriptionId: null },
+    data: { trialExtensionEndsAt: endsAt },
+  });
+  if (granted.count === 1) return { ok: true, endsAt, already: false };
+  const again = await db.user.findUnique({ where: { id: userId }, select: { trialExtensionEndsAt: true } });
+  return again?.trialExtensionEndsAt ? { ok: true, endsAt: again.trialExtensionEndsAt, already: true } : { ok: false, reason: "not_eligible" };
 }
 
 // ---------- Production wiring ----------

@@ -3,11 +3,14 @@ import assert from "node:assert/strict";
 import {
   extensionDecision, orderCandidates, renderTrialExtensionEmail, runTrialExtension, TRIAL_EXTENSION_KIND,
   type ExtensionDeps, type ExtensionUser, type ExtensionCandidate,
+  claimTrialExtension, trialExtensionOffered, EMAIL_MIN_REMAINING_MS,
 } from "../src/lib/trial-extension";
 import {
   trialEnd, trialState, isApplicationAccessPaused, requiresPaymentMethodBeforeApp, hasPaidOrTrialApplicationAccess,
   usesFreeWeeklyQuota, dailyApplicationLimit, effectiveTier, EARLY_USER_TRIAL_FINAL_END,
+  stripeCheckoutTrialEnd, STRIPE_MIN_TRIAL_MS,
 } from "../src/lib/billing";
+import { trialExtensionBannerCopy } from "../src/app/trial-expired/trial-extension-banner";
 import { isScheduledUserNotificationKind } from "../src/lib/user-notification-guard";
 import { verifyOneClick } from "../src/lib/one-click-token";
 
@@ -117,7 +120,8 @@ function fakeDeps(users: ExtensionUser[], o: { sendOk?: (email: string) => boole
   const match = (r: Record<string, unknown>, w: Record<string, unknown>) => Object.entries(w).every(([k, v]) => v instanceof Date ? (r[k] as Date)?.getTime() === v.getTime() : (r[k] ?? null) === v);
   const db = {
     user: {
-      findMany: async () => rows.filter((r) => r.tier === "free" && !r.stripeSubscriptionId && !r.trialExtensionEndsAt && !r.suspendedAt && r.emailVerified),
+      findMany: async () => rows.filter((r) => r.tier === "free" && !r.stripeSubscriptionId && (!r.trialExtensionEndsAt || r.trialExtensionEndsAt.getTime() > Date.now() + EMAIL_MIN_REMAINING_MS - 60_000) && !r.suspendedAt && r.emailVerified),
+      findUnique: async ({ where }: any) => rows.find((r) => r.id === where.id) ?? null,
       updateMany: async ({ where, data }: any) => { const hit = rows.filter((r) => match(r as any, where)); hit.forEach((r) => Object.assign(r, data)); return { count: hit.length }; },
     },
     userNudge: {
@@ -177,7 +181,7 @@ async function main() {
     // Even if the extension column were cleared, the ledger blocks a second grant.
     a.trialExtensionEndsAt = null;
     const r3 = await runTrialExtension(f.deps, { env, now: new Date(NOW.getTime() + 2 * DAY) });
-    assert.equal(r3.eligible, 0); assert.equal(r3.skipped.already_extended, 1);
+    assert.equal(r3.eligible, 0); assert.equal(r3.skipped.already_extended, 2, "both emailed users are blocked by the ledger");
   }
   // Batch cap and ?limit.
   {
@@ -211,6 +215,69 @@ async function main() {
     assert.equal(r.held, "user_notifications_hold"); assert.equal(f.sent.length, 0);
     const d = await runTrialExtension(f.deps, { env: {}, now: NOW });
     assert.equal(d.eligible, 2);
+  }
+  // Activated in the app: the cron still emails (confirmation wording) and never resets the date.
+  {
+    const until = new Date(NOW.getTime() + 5 * DAY);
+    const f = fakeDeps([u({ id: "app", email: "app@x.it", trialExtensionEndsAt: until }), u({ id: "late", email: "late@x.it", trialExtensionEndsAt: new Date(NOW.getTime() + 3_600_000) })]);
+    const env = { TRIAL_EXTENSION_ENABLED: "true" };
+    const d = await runTrialExtension(f.deps, { env: {}, now: NOW });
+    assert.equal(d.eligible, 1, "app-activated with >24h left is still emailed; <24h left is not");
+    const r = await runTrialExtension(f.deps, { env, now: NOW });
+    assert.equal(r.sent, 1); assert.equal(r.granted, 0, "no new grant");
+    assert.equal(f.rows.find((x) => x.id === "app")!.trialExtensionEndsAt?.getTime(), until.getTime(), "date unchanged");
+    const r2 = await runTrialExtension(f.deps, { env, now: NOW });
+    assert.equal(r2.eligible, 0, "emailed once");
+    // Failed email for an app-activated user keeps the week.
+    const g = fakeDeps([u({ id: "app2", email: "app2@x.it", trialExtensionEndsAt: until })], { sendOk: () => "throw" });
+    await runTrialExtension(g.deps, { env, now: NOW });
+    assert.equal(g.rows[0].trialExtensionEndsAt?.getTime(), until.getTime(), "a failed email never takes the week back");
+    assert.equal(g.nudges[0].sentCount, 0, "and it is retried later");
+    const msg = renderTrialExtensionEmail({ userId: "app", email: "app@x.it", name: null, locale: "it", needsCard: true, needsConsent: false, needsCv: false, needsAutoApply: false, trialEndedAt: ago(10), activeUntil: until }, until, { NEXT_PUBLIC_SITE_URL: "https://lavorai.it" });
+    assert.equal(msg.subject, "La tua settimana gratis di LavorAI è attiva");
+    assert.match(msg.html, /Hai attivato dall’app la tua settimana gratuita extra/);
+  }
+  // In-app claim: flag, eligibility, idempotency.
+  {
+    const deps = { isTest, isAdmin };
+    const on = { TRIAL_EXTENSION_ENABLED: "true" };
+    const f = fakeDeps([u({ id: "a", email: "a@x.it" }), u({ id: "run", email: "run@x.it", createdAt: ago(2) }), u({ id: "sub", email: "sub@x.it", subscriptionStatus: "trialing" })]);
+    assert.deepEqual(await claimTrialExtension(f.deps.db as any, "a", deps, { now: NOW, env: {} }), { ok: false, reason: "disabled" });
+    assert.equal(f.rows[0].trialExtensionEndsAt, null);
+    const c1 = await claimTrialExtension(f.deps.db as any, "a", deps, { now: NOW, env: on });
+    assert.ok(c1.ok && !c1.already && c1.endsAt.getTime() === NOW.getTime() + 7 * DAY);
+    const c2 = await claimTrialExtension(f.deps.db as any, "a", deps, { now: new Date(NOW.getTime() + DAY), env: on });
+    assert.ok(c2.ok && c2.already && c2.endsAt.getTime() === NOW.getTime() + 7 * DAY, "second click keeps the first date");
+    assert.deepEqual(await claimTrialExtension(f.deps.db as any, "run", deps, { now: NOW, env: on }), { ok: false, reason: "not_eligible" });
+    assert.deepEqual(await claimTrialExtension(f.deps.db as any, "sub", deps, { now: NOW, env: on }), { ok: false, reason: "not_eligible" });
+    assert.equal(f.sent.length, 0, "claim sends no email");
+    assert.equal(trialExtensionOffered(u(), NOW, isTest, isAdmin, on), true);
+    assert.equal(trialExtensionOffered(u(), NOW, isTest, isAdmin, {}), false, "offer follows the kill switch");
+    assert.equal(trialExtensionOffered(u({ trialExtensionEndsAt: ago(1) }), NOW, isTest, isAdmin, on), false, "never twice");
+    // After claiming, the week needs a card like any active trial.
+    const claimed = { ...f.rows[0], subscriptionStatus: null };
+    assert.equal(isApplicationAccessPaused(claimed), false);
+    assert.equal(requiresPaymentMethodBeforeApp(claimed), true);
+  }
+  // Stripe trial_end minimum: never earlier than 48h (+1h margin), never omitted.
+  {
+    const t = NOW.getTime();
+    const far = new Date(t + 5 * DAY);
+    assert.deepEqual(stripeCheckoutTrialEnd(far, t), { trialEnd: far, clamped: false });
+    const near = stripeCheckoutTrialEnd(new Date(t + 10 * 3_600_000), t);
+    assert.equal(near.clamped, true);
+    assert.equal(near.trialEnd.getTime(), t + STRIPE_MIN_TRIAL_MS + 3_600_000);
+    assert.equal(stripeCheckoutTrialEnd(new Date(t + STRIPE_MIN_TRIAL_MS), t).clamped, true, "exactly 48h is too tight once Checkout takes a while");
+  }
+  // Banner copy (IT default, EN).
+  {
+    const it = trialExtensionBannerCopy({ locale: "it", endsLabel: "mercoledì 25 novembre", needsCv: true, needsAutoApply: false, needsConsent: true });
+    assert.equal(it.title, "Hai un’altra settimana gratis");
+    assert.equal(it.cta, "Attiva la settimana gratuita");
+    assert.match(it.card, /serve una carta/); assert.match(it.card, /€19,99\/mese/); assert.match(it.card, /si rinnova automaticamente con addebito/);
+    assert.deepEqual(it.checklist.length, 2);
+    const en = trialExtensionBannerCopy({ locale: "en", endsLabel: "Wednesday 25 November", needsCv: false, needsAutoApply: false, needsConsent: false });
+    assert.equal(en.title, "You have another free week"); assert.equal(en.checklist.length, 0); assert.match(en.card, /€19\.99\/month/);
   }
   console.log("trial-extension: ok");
 }

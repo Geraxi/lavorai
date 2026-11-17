@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
-import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd, trialExtensionActive } from "@/lib/billing";
+import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, stripeCheckoutTrialEnd, trialEnd, trialExtensionActive } from "@/lib/billing";
 import { StartMembershipActions } from "./start-membership-actions";
 import { SupportLink } from "@/components/support-link";
 import { Logo } from "@/components/logo";
@@ -27,6 +27,11 @@ export default async function StartMembershipPage({
 
   const endsAt = trialEnd(user);
   const date = endsAt?.toLocaleDateString("it-IT", { day: "numeric", month: "long" }) ?? "tra 7 giorni";
+  // Stripe needs >= 48h of trial: with less left the first charge moves later.
+  const stripeTrial = endsAt ? stripeCheckoutTrialEnd(endsAt) : null;
+  const firstChargeDate = stripeTrial?.clamped
+    ? stripeTrial.trialEnd.toLocaleString("it-IT", { timeZone: "Europe/Rome", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
+    : null;
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#0a0b0b] px-5 py-7 text-white sm:px-8 sm:py-10">
@@ -43,6 +48,7 @@ export default async function StartMembershipPage({
             {trialExtensionActive(user)
               ? <>Aggiungi una carta per usare la settimana di prova extra. La settimana termina il {date}; nessun addebito fino ad allora, poi il piano si rinnova automaticamente salvo disdetta.</>
               : <>Aggiungi una carta per continuare con CV e preferenze. La prova termina il {date}, 7 giorni dopo la registrazione; il primo addebito avverrà alla fine della prova, salvo disdetta.</>}
+            {firstChargeDate && <span className="mt-3 block text-sm text-emerald-200">Ti restano meno di 48 ore di prova. Stripe richiede almeno 48 ore prima del primo addebito, quindi se attivi ora il primo addebito avverrà più tardi, intorno al {firstChargeDate} (mai prima), salvo disdetta.</span>}
           </p>
           <div className="mt-10 grid max-w-md grid-cols-3 gap-0 border-y border-white/10 text-sm text-slate-300">
             <div className="py-4 pr-4"><span className="block font-mono text-xs text-emerald-300">01 · OGGI</span><span className="mt-1 block">Metodo sicuro</span></div>

@@ -9,6 +9,10 @@ import { getConfirmedSubmissions } from "@/lib/dashboard-metrics-shared";
 import { PrivacyConsentForm } from "@/components/privacy-consent-form";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { isTestAccount } from "@/lib/admin";
+import { formatExtensionEnd, TRIAL_EXTENSION_DAYS, trialExtensionOffered } from "@/lib/trial-extension";
+import { TrialExtensionBanner, TRIAL_EXTENSION_DISMISS_COOKIE } from "./trial-extension-banner";
 
 export const metadata = { title: "Free trial expired | LavorAI", robots: { index: false, follow: false } };
 
@@ -20,6 +24,13 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
   // The free plan keeps applying on the weekly quota, so the two actions that
   // unblock held applications (privacy consent, form questions) stay usable
   // here. Consent remains an explicit user action via PrivacyConsentForm.
+  const now = new Date();
+  const offerRow = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { id: true, email: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, trialExtensionEndsAt: true, stripeSubscriptionId: true, subscriptionStatus: true, emailVerified: true, suspendedAt: true, privacyConsentAt: true, preferences: { select: { autoApplyMode: true, rolesJson: true } }, _count: { select: { cvDocuments: true } } },
+  });
+  const dismissed = (await cookies()).get(TRIAL_EXTENSION_DISMISS_COOKIE)?.value === "1";
+  const showExtension = !!offerRow && !dismissed && trialExtensionOffered(offerRow, now, isTestAccount, isAdmin);
   const [applicationsSent, waitingForAnswers, heldForConsent] = await Promise.all([
     getConfirmedSubmissions(user.id),
     prisma.application.count({ where: { userId: user.id, status: "needs_answers" } }),
@@ -34,6 +45,15 @@ export default async function TrialExpiredPage({ searchParams }: { searchParams:
           <h1 className="mt-3 text-3xl font-bold tracking-tight sm:text-4xl">Riprendi da dove eri arrivato.</h1>
           <p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">La prova Pro di 7 giorni è terminata. Con il piano gratuito LavorAI continua a inviare fino a {freeWeeklyApplyQuota()} candidature ogni 7 giorni con le tue preferenze attuali. Attiva Pro per far ripartire la ricerca completa, le candidature su misura e il monitoraggio delle risposte.</p>
         </div>
+        {showExtension && offerRow && (
+          <TrialExtensionBanner
+            locale={user.locale ?? "it"}
+            endsLabel={formatExtensionEnd(new Date(now.getTime() + TRIAL_EXTENSION_DAYS * 86_400_000), user.locale === "en")}
+            needsCv={offerRow._count.cvDocuments === 0}
+            needsAutoApply={!offerRow.preferences || !["auto", "hybrid"].includes(offerRow.preferences.autoApplyMode) || offerRow.preferences.rolesJson === "[]"}
+            needsConsent={!offerRow.privacyConsentAt}
+          />
+        )}
         <div className="grid gap-6 px-8 py-7 sm:grid-cols-[1fr_auto] sm:px-10">
           <div>
             <p className="text-sm font-medium text-foreground">{applicationsSent > 0 ? `Durante la prova LavorAI ha inviato ${applicationsSent} ${applicationsSent === 1 ? "candidatura" : "candidature"} per te.` : "Il tuo profilo resta pronto: Pro riattiva subito la tua ricerca."}</p>
