@@ -298,6 +298,20 @@ function destinationResponseEvidence(
   return { capturedAt: outbound.capturedAt, rejected: false, ambiguous: true };
 }
 
+/** Bounded wait for application POSTs started by this click to answer or fail.
+ * Returns true when it had to wait. Never clicks or replays anything. */
+export const IN_FLIGHT_SUBMISSION_WAIT_MS = 30_000;
+const IN_FLIGHT_POLL_MS = 250;
+async function waitForInFlightSubmissions(page: Page, started: Set<Request>, settled: Set<Request>, budgetMs = IN_FLIGHT_SUBMISSION_WAIT_MS): Promise<boolean> {
+  let waited = false;
+  for (let elapsed = 0; elapsed < budgetMs; elapsed += IN_FLIGHT_POLL_MS) {
+    if (![...started].some((request) => !settled.has(request))) break;
+    waited = true;
+    await page.waitForTimeout(IN_FLIGHT_POLL_MS);
+  }
+  return waited;
+}
+
 /** Observe only requests STARTED in this click's window; never click twice. */
 export async function observeSubmission(page: Page, provider: string, jobUrl: string, click: () => Promise<unknown>, beforeSubmit?: () => Promise<boolean>, opts?: ObserveSubmissionOptions): Promise<ObservedSubmission> {
   const before = await snapshotPage(page);
@@ -314,6 +328,7 @@ export async function observeSubmission(page: Page, provider: string, jobUrl: st
     };
   }
   const started = new Set<Request>();
+  const settled = new Set<Request>();
   const responses: SubmissionResponse[] = [];
   const pending: Promise<void>[] = [];
   let outboundRequest: OutboundSubmissionEvidence | null = null;
@@ -336,13 +351,16 @@ export async function observeSubmission(page: Page, provider: string, jobUrl: st
   const onResponse = (response: Response) => {
     if (!started.has(response.request())) return;
     const request = response.request();
+    settled.add(request);
     pending.push((async () => {
       const body = await boundedResponseBody(response);
       responses.push({ url: response.url(), method: request.method(), postData: request.postData(), status: response.status(), body });
     })());
   };
+  const onRequestFailed = (request: Request) => { if (started.has(request)) settled.add(request); };
   page.on("request", onRequest);
   page.on("response", onResponse);
+  page.on("requestfailed", onRequestFailed);
   let clickPerformed = false;
   let clickPerformedAt: string | undefined;
   try {
@@ -355,9 +373,18 @@ export async function observeSubmission(page: Page, provider: string, jobUrl: st
     clickPerformedAt = new Date().toISOString();
     await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => void 0);
     await page.waitForTimeout(1_200);
+    // waitForLoadState resolves at once when the page was already idle before
+    // the click, so a slow application POST (Workable: "Submitting…" for
+    // seconds) used to be cut off: listeners removed, no response, receipt
+    // "unconfirmed". Keep listening while a matched submission is in flight.
+    if (await waitForInFlightSubmissions(page, started, settled)) {
+      // Give the SPA a moment to swap the form for its confirmation view.
+      await page.waitForTimeout(1_500);
+    }
   } finally {
     page.off("request", onRequest);
     page.off("response", onResponse);
+    page.off("requestfailed", onRequestFailed);
   }
   await Promise.all(pending);
   const after = await snapshotPage(page);
