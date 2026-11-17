@@ -27,6 +27,14 @@ assert.match(ask("Country code for phone number", ctx()) ?? "", /\+39/);
 // No prefix and no city: unknown, never guessed.
 assert.equal(ask("Phone country code", ctx({}, {}, { ...profile, phone: "333 1234567", city: "" }), "select", ["Italy (+39)", "Germany (+49)"]), null);
 
+// 17 Nov 2026 Stripe form: the live option list carries every territory, so
+// +39 matched both "Italy +39" and "Vatican City +39" and nothing was chosen.
+// The calling code's primary country dials the same number; NANP +1 stays ambiguous.
+const fullList = ["United States +1", "Canada +1", "Guernsey +44", "Italy +39", "Jersey +44", "United Kingdom +44", "Vatican City +39"];
+assert.equal(ask("Phone country code", ctx(), "react-select", fullList), "Italy +39");
+assert.equal(ask("Phone country code", ctx({}, {}, { ...profile, phone: "+44 7700 900123" }), "react-select", fullList), "United Kingdom +44");
+assert.equal(ask("Phone country code", ctx({}, {}, { ...profile, phone: "+1 415 555 0100", city: "" }), "react-select", fullList), null, "+1 needs a profile country");
+
 // Country of residence and city come from the CV city.
 assert.equal(ask("Country of residence", ctx()), "Italia");
 assert.equal(ask("City", ctx()), "Milano");
@@ -60,6 +68,31 @@ assert.equal(ask("Are you legally authorized to work in the Netherlands?", ctx({
 assert.equal(ask("Will you require visa sponsorship to work in the Netherlands?", eu("Amsterdam, Netherlands"), "select", ["Yes", "No"]), null, "sponsorship stays manual");
 const conflicting: FactContext = { jobLocation: "Amsterdam, Netherlands", facts: candidateFacts(profile, { euAuthorized: true }, { workAuthEU: "no_needs_sponsorship" }, [], now) };
 assert.equal(ask("Are you legally authorized to work in the Netherlands?", conflicting, "select", ["Yes", "No"]), null);
+
+// Label variants seen on 17 Nov forms (Recruitee: machinelearningreply).
+for (const label of ["What is your preferred/possible start date?", "Preferred start date", "Possible starting date", "Earliest possible start date"]) {
+  assert.equal(ask(label, ctx({}, { noticePeriod: "immediate" })), "Immediate", label);
+  assert.equal(ask(label, ctx()), null, `${label}: nothing on file → manual`);
+}
+// Salary only from the candidate's own stated expectation (EUR), never invented.
+const withSalary: FactContext = { facts: candidateFacts(profile, {}, { salaryExpectationEur: 40000 }, [], now) };
+for (const label of ["What are your yearly salary expectations?", "Salary expectations", "Annual gross salary expectations (EUR)"]) {
+  assert.equal(ask(label, withSalary), "40000", label);
+  assert.equal(ask(label, ctx()), null, `${label}: no stated expectation → manual`);
+}
+assert.equal(ask("What are your salary expectations in USD?", withSalary), null, "other currency stays manual");
+assert.equal(ask("What are your salary expectations (GBP)?", withSalary), null, "other currency stays manual");
+
+// Optional WhatsApp/SMS/marketing opt-ins are declined; privacy/data consent never auto-answered.
+assert.equal(ask("Do you opt-in to receive WhatsApp messages from Stripe Recruiting?*", ctx(), "react-select", ["Yes", "No"]), "No");
+assert.equal(ask("Do you allow us to provide you TEXT/SMS updates of your interview process?*", ctx(), "select", ["Yes", "No"]), "No");
+assert.equal(ask("I consent to the processing of my personal data and to receive marketing updates", ctx(), "select", ["Yes", "No"]), null, "privacy consent is never auto-answered");
+assert.equal(ask("Do you agree to our privacy policy and to receive SMS updates?", ctx(), "select", ["Yes", "No"]), null);
+
+// Still manual: C1 German, relocation, grades (no CV fact), country of work.
+for (const label of ["Do you have at least a C1 level of German?", "Are you living in Munich or Berlin, or willing to relocate there?", "What is your highest qualification, and what grade did you achieve?"]) {
+  assert.equal(ask(label, ctx({}, { noticePeriod: "immediate" })), null, label);
+}
 
 // EEO, salary and essays stay manual.
 for (const label of ["Gender", "Veteran status", "Expected salary", "Why do you want to work at Stripe?"]) {
