@@ -18,7 +18,9 @@ export type ScheduledUserNotificationKind =
   | "trial_ended"
   | "trial_ending"
   | "checkout_recovery"
-  | "checkout_feedback";
+  | "checkout_feedback"
+  | "privacy_consent_nudge"
+  | "pending_questions_nudge";
 
 export const SCHEDULED_USER_NOTIFICATION_KINDS: readonly ScheduledUserNotificationKind[] = [
   "onboarding_nudge",
@@ -30,6 +32,8 @@ export const SCHEDULED_USER_NOTIFICATION_KINDS: readonly ScheduledUserNotificati
   "trial_ending",
   "checkout_recovery",
   "checkout_feedback",
+  "privacy_consent_nudge",
+  "pending_questions_nudge",
 ];
 
 const SCHEDULED_KIND_SET = new Set<string>(SCHEDULED_USER_NOTIFICATION_KINDS);

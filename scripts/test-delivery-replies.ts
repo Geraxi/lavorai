@@ -293,11 +293,16 @@ async function main() {
     "@/lib/resend-webhook-signature": { verifyResendWebhook: () => true },
     "@/lib/application-delivery": { DELIVERY_EVENT_STATUS: delivery.DELIVERY_EVENT_STATUS, recordApplicationDeliveryEvent: async () => { throw new Error("synthetic_db_failure"); } },
     "@/lib/application-reply-processing": { processInboundReply: async () => { throw new Error("synthetic_db_failure"); } },
+    "@/lib/consent-questions-nudge": { recordNudgeEmailEvent: async (input: { nudgeId: string; type: string }) => { nudgeEvents.push(input); return true; } },
   }, globals);
+  const nudgeEvents: Array<{ nudgeId: string; type: string }> = [];
   const request = (type: string) => ({ text: async () => JSON.stringify({ type, data: { email_id: "test" } }), headers: new Headers({ "svix-id": "test" }) });
   assert.equal((await route.POST(request("email.received"))).status, 503, "Missing secret blocks production");
   env.RESEND_WEBHOOK_SECRET = secret;
   assert.equal((await route.POST(request("email.received"))).status, 500, "Every inbound storage failure retries");
+  const nudgeRequest = { text: async () => JSON.stringify({ type: "email.bounced", data: { email_id: "test", to: ["user@example.test"], tags: { user_nudge_id: "nudge_1" } } }), headers: new Headers({ "svix-id": "nudge" }) };
+  assert.equal((await route.POST(nudgeRequest)).status, 200, "Service-nudge outcomes are recorded on the nudge ledger, not as application delivery");
+  assert.deepEqual(nudgeEvents.map((e) => [e.nudgeId, e.type]), [["nudge_1", "email.bounced"]]);
   assert.equal((await route.POST(request("email.delivered"))).status, 500, "Delivery storage failure retries");
   console.log("PASS webhook fail-closed configuration and non-2xx on all processing/storage failures.");
 

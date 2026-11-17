@@ -176,6 +176,7 @@ model User {
   mailboxConnections MailboxConnection[]
   userInbox      UserInbox?
   inboundEmails  InboundEmail[]
+  nudges         UserNudge[]
 
   // Referral: ogni utente ha un codice univoco da condividere; referredById
   // punta a chi l'ha invitato (se applicabile). Reward gestito a parte
@@ -1314,4 +1315,26 @@ model GmailSyncProgress {
   nextPageToken   String?
   lastError       String?
   @@index([nextAttemptAt, lastAttemptAt], map: "GmailSyncProgress_due")
+}
+
+/// Per-user ledger for service nudges ("privacy_consent" | "pending_questions").
+/// Throttle: at most 1 email per kind every 3 days and 3 in total per kind.
+/// optedOutAt = the user turned this reminder off from the email link;
+/// bouncedAt = Resend reported a bounce/complaint for one of these emails.
+model UserNudge {
+  id                  String    @id @default(cuid())
+  userId              String
+  kind                String
+  sentCount           Int       @default(0)
+  lastSentAt          DateTime?
+  lastProviderEmailId String?
+  optedOutAt          DateTime?
+  bouncedAt           DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kind])
+  @@index([lastProviderEmailId])
 }

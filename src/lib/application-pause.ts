@@ -14,6 +14,8 @@ import {customerRolloutConfigured} from "./customer-rollout";
  *
  * User-facing notification emails (to our users, not employers) stay allowed:
  *   /api/cron/mailbox-digest       10:15 UTC
+ *   /api/cron/consent-questions-nudge 08:30 UTC (skips itself while paused:
+ *                                  nothing could be sent after consent/answers)
  *   nudges / onboarding / trial / daily summary / weekly digest
  *
  * Employer application emails are separately default-off via
