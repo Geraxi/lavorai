@@ -48,6 +48,35 @@ const cases = [
   { fromAddress: "Jane Doe <jane.doe@acme.example>", subject: "Re: Developer role", bodyText: "Hi Mario, would love to chat. Are you available Tuesday?", kind: "colloquio", isHuman: true },
   { fromAddress: "Acme Hiring <hiring@acme.recruitee.com>", subject: "Re: Developer role", bodyText: "Hi Mario, could you send us your portfolio before Friday?", kind: "risposta", isHuman: true },
   { fromAddress: "hr@firma.nl", subject: "Je sollicitatie", bodyText: "Helaas hebben we besloten om verder te gaan met andere kandidaten.", kind: "rifiutata", isHuman: true },
+
+  // --- 17 Nov 2026 production miss: Recruitee per-job relay mailbox (recruitee-mailbox.com),
+  // Dutch receipt whose template offers help with a long "?" line. Was risposta/human and
+  // triggered a "recruiter replied" notification. Real shape, name anonymised.
+  { fromAddress: "job.aaaaa.bbbbbb.werkenbijacme@recruitee-mailbox.com", subject: "Bedankt voor jouw sollicitatie",
+    bodyText: "Beste Mario\n\nHartelijk dank voor je sollicitatie bij \nAcme Netherlands\n\nWe waarderen het dat je de tijd hebt genomen om ons te benaderen en meer over ons bedrijf te weten wilt komen.\n\nWe zullen je sollicitatie zorgvuldig doornemen en laten je spoedig weten of we je uitnodigen voor een kennismakingsgesprek. Mochten we op basis van jouw profiel een match zien, kijken we ernaar uit om verder in te gaan op de mogelijkheden.\n\nHeb je in de tussentijd vragen over de functie of over Acme? Aarzel niet om contact op te nemen. Wij staan klaar om je verder te helpen.\n\nNogmaals dank\n\n\n  This email was sent via Recruitee – the collaborative hiring software\n",
+    kind: "ricevuta", isHuman: false },
+  // Same relay, English receipt (Optics11 shape) stays a receipt.
+  { fromAddress: "job.ccccc.dddddd.acme@recruitee-mailbox.com", subject: "Thank you, we received your application for Senior Project Manager",
+    bodyText: "Hi Mario,\n\nWe are happy to see your interest in Acme. In case of questions; don't hesitate to reach out.\n\n  This email was sent via Recruitee – the collaborative hiring software", kind: "ricevuta", isHuman: false },
+  // Employer-domain receipts (no ATS / no-reply signal) whose template offers help with a long "?".
+  { fromAddress: "Recruiting <recruiting@firma.de>", subject: "Ihre Bewerbung",
+    bodyText: "Sehr geehrter Herr Rossi,\n\nherzlichen Dank für Ihre Bewerbung als Projektmanager. Wir prüfen Ihre Unterlagen und melden uns in den nächsten Wochen bei Ihnen.\n\nHaben Sie in der Zwischenzeit Fragen zur Stelle oder zu unserem Unternehmen? Kontaktieren Sie uns gerne.\n\nMit freundlichen Grüßen\nIhr Recruiting-Team", kind: "ricevuta", isHuman: false },
+  { fromAddress: "RH <rh@societe.fr>", subject: "Votre candidature",
+    bodyText: "Bonjour,\n\nNous vous remercions pour votre candidature au poste de chef de projet. Notre équipe va l'étudier attentivement et reviendra vers vous rapidement.\n\nVous avez des questions sur le poste ou sur notre entreprise en attendant ? N'hésitez pas à nous contacter.\n\nCordialement", kind: "ricevuta", isHuman: false },
+  { fromAddress: "Talento <talento@empresa.es>", subject: "Tu candidatura",
+    bodyText: "Hola Mario,\n\nGracias por enviarnos tu candidatura para el puesto de Project Manager. Revisaremos tu perfil y te contactaremos lo antes posible.\n\n¿Tienes alguna pregunta sobre el puesto o sobre la empresa mientras tanto? No dudes en contactarnos.\n\nUn saludo", kind: "ricevuta", isHuman: false },
+  { fromAddress: "Werving <werving@bedrijf.nl>", subject: "Je sollicitatie",
+    bodyText: "Beste Mario,\n\nWij hebben je sollicitatie in goede orde ontvangen en nemen binnen twee weken contact met je op.\n\nHeb je in de tussentijd vragen over de vacature of de procedure? Neem dan gerust contact met ons op.\n\nMet vriendelijke groet", kind: "ricevuta", isHuman: false },
+  // A recruiter writing through the same Recruitee relay is still human (no acknowledgement phrase).
+  { fromAddress: "job.aaaaa.bbbbbb.werkenbijacme@recruitee-mailbox.com", subject: "Re: Senior Fullstack Java Developer",
+    bodyText: "Hoi Mario, wij willen je graag uitnodigen voor een eerste gesprek. Schikt dinsdag om 10:00?", kind: "risposta", isHuman: true },
+  { fromAddress: "job.aaaaa.bbbbbb.werkenbijacme@recruitee-mailbox.com", subject: "Senior Fullstack Java Developer",
+    bodyText: "Hoi Mario, dank voor je sollicitatie! Kun je ons je salarisindicatie en beschikbaarheid laten weten?", kind: "risposta", isHuman: true },
+  // A rejection relayed by the ATS is still a decision, never a receipt.
+  { fromAddress: "job.aaaaa.bbbbbb.werkenbijacme@recruitee-mailbox.com", subject: "Je sollicitatie",
+    bodyText: "Beste Mario, bedankt voor je sollicitatie. Helaas hebben we besloten om verder te gaan met andere kandidaten.", kind: "rifiutata", isHuman: true },
+  // A human at an employer domain who thanks AND asks something specific stays human.
+  { fromAddress: "Anna <anna@firma.de>", subject: "Ihre Bewerbung", bodyText: "Vielen Dank für Ihre Bewerbung. Wann könnten Sie frühestens anfangen?", kind: "risposta", isHuman: true },
 ];
 for (const { kind, isHuman, isSecurityCode, ...input } of cases) {
   assert.deepEqual(classifyReply(input), isSecurityCode ? { kind, isHuman, isSecurityCode } : { kind, isHuman }, `${input.fromAddress} | ${input.subject ?? input.bodyText}`);
