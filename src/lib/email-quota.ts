@@ -102,6 +102,8 @@ export type EmailKind =
   | "checkout_feedback"
   | "founder_alert"
   | "reactivation_blast"
+  | "privacy_consent_nudge"
+  | "pending_questions_nudge"
   | "other";
 
 /** Marca un'email come effettivamente consegnata per il tracking quota. */

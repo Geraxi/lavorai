@@ -14,6 +14,8 @@ import { isAdmin } from "@/lib/admin";
 import { AdminAssistant } from "@/components/admin-assistant";
 import { Notice } from "@/components/ui-premium/notice";
 import { ShieldCheck } from "lucide-react";
+import { prisma } from "@/lib/db";
+import { heldForConsentWhere } from "@/lib/consent-questions-nudge";
 
 /**
  * App layout. Strippato delle 2 prisma.count() che giravano su OGNI
@@ -42,6 +44,11 @@ export default async function AppLayout({
 
   const tier = effectiveTier(user);
   const trial = trialState(user);
+  // One indexed count, only for users still without privacy consent.
+  const heldForConsent = user.privacyConsentAt
+    ? 0
+    : await prisma.application.count({ where: { userId: user.id, ...heldForConsentWhere() } }).catch(() => 0);
+  const en = user.locale === "en";
 
   return (
     <>
@@ -74,7 +81,11 @@ export default async function AppLayout({
             id="privacy-consent"
             icon={ShieldCheck}
             tone="amber"
-            title={user.locale === "en" ? "Applications are waiting for your privacy consent." : "Le candidature sono in attesa del tuo consenso privacy."}
+            title={heldForConsent > 0
+              ? (en
+                ? `${heldForConsent} ${heldForConsent === 1 ? "application is" : "applications are"} waiting for your privacy consent.`
+                : `${heldForConsent} ${heldForConsent === 1 ? "candidatura è in attesa" : "candidature sono in attesa"} del tuo consenso privacy.`)
+              : (en ? "Applications are waiting for your privacy consent." : "Le candidature sono in attesa del tuo consenso privacy.")}
             body={user.locale === "en"
               ? "Queued applications cannot be sent until you review the notice and consent. Nothing is emailed to you from this prompt."
               : "Le candidature in coda restano bloccate finché non leggi l’informativa e acconsenti. Questo avviso non invia email."}
