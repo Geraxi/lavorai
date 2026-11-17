@@ -89,11 +89,17 @@ export function portalFamily(url: string): string {
   return "other";
 }
 
+/** Portal families with verified ATS receipts in production (Recruitee:
+ * HTTP 201 + receipt emails, Oct–Nov 2026). Ranked ahead of other captcha-free
+ * portals so a user's few per-run slots go where a send is proven to land. */
+export const RECEIPT_PROVEN_PORTAL_FAMILIES = ["recruitee"] as const;
+
 /** Higher = enqueue / claim first. Recruiter email and captcha-free ATS win. */
 export function jobDeliveryPriority(job: { url: string; recruiterEmail?: string | null }): number {
   let n = 0;
   if (job.recruiterEmail?.trim()) n += 100;
   if ((PREFERRED_PORTAL_FAMILIES as readonly string[]).includes(portalFamily(job.url))) n += 10;
+  if ((RECEIPT_PROVEN_PORTAL_FAMILIES as readonly string[]).includes(portalFamily(job.url))) n += 5;
   if (isSkippedPortalUrl(job.url) && !job.recruiterEmail?.trim()) n -= 100;
   return n;
 }

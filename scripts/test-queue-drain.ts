@@ -501,6 +501,13 @@ async function testSkipListEmailPreferred() {
   ) < 0, true, "recruiter email outranks a captcha-free form");
   assert.ok(skipHosts.jobDeliveryPriority({ url: "https://jobs.lever.co/a/1", recruiterEmail: null })
     > skipHosts.jobDeliveryPriority({ url: "https://jobs.ashbyhq.com/a/1", recruiterEmail: null }));
+  // Recruitee (the only portal with verified receipts) ranks ahead of other
+  // captcha-free portals, but never ahead of a published recruiter inbox.
+  const recruitee = { url: "https://acme.recruitee.com/o/designer", recruiterEmail: null };
+  for (const other of ["https://boards.greenhouse.io/a/jobs/1", "https://jobs.lever.co/a/1", "https://apply.workable.com/a/j/ABC/"]) {
+    assert.ok(skipHosts.compareJobsForAutoApply(recruitee, { url: other, recruiterEmail: null }) < 0, other);
+  }
+  assert.ok(skipHosts.compareJobsForAutoApply(recruitee, { url: "https://boards.greenhouse.io/a/jobs/1", recruiterEmail: "jobs@a.com" }) > 0);
 }
 
 (async () => {
