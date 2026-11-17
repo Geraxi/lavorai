@@ -260,6 +260,61 @@ async function testClickObservation() {
   console.log("Mock browser: pre-click responses ignored; single dispatch, captcha/OTP and fresh-gate safeguards passed.");
 }
 
+/** 17 Nov 2026 Workable row: the POST was still "Submitting…" when the
+ * listeners were removed (networkidle had resolved before the click), so the
+ * accepted response was never seen. A slow response must still be observed. */
+class SlowMockPage extends MockPage {
+  waits = 0;
+  late: Array<{ afterWaits: number; response?: SubmissionResponse; fail?: boolean; request?: Request }> = [];
+  override async click() {
+    this.clicks++;
+    this.phase = "after";
+    for (const item of this.late) {
+      const r = item.response ?? accepted;
+      item.request = { url: () => r.url, method: () => r.method, postData: () => r.postData } as Request;
+      this.emit("request", item.request);
+    }
+  }
+  override async waitForTimeout() {
+    this.waits++;
+    for (const item of this.late) {
+      if (item.afterWaits !== this.waits || !item.request) continue;
+      const request = item.request;
+      if (item.fail) { this.emit("requestfailed", request); continue; }
+      const r = item.response ?? accepted;
+      this.emit("response", { request: () => request, url: () => r.url, status: () => r.status, text: async () => r.body ?? "" } as Response);
+    }
+  }
+}
+async function testSlowSubmissionResponse() {
+  // Response arrives ~10 polls (2.5 s) after the fixed 1.2 s settle wait.
+  let page = new SlowMockPage(); page.late = [{ afterWaits: 12 }];
+  let result = await observeSubmission(page.asPage(), "ashby", job, () => page.click());
+  assert.equal(result.outcome.ok, true, "a slow but accepted POST is a verified receipt");
+  assert.equal(result.outcome.ok && result.outcome.receipt?.receiptId, "receipt-123");
+  assert.equal(page.clicks, 1);
+  assert.equal(page.listenerCount("response") + page.listenerCount("request") + page.listenerCount("requestfailed"), 0);
+  // A slow explicit rejection is still rejected-not-sent.
+  page = new SlowMockPage(); page.late = [{ afterWaits: 5, response: { ...accepted, status: 422 } }];
+  assert.equal((await observeSubmission(page.asPage(), "ashby", job, () => page.click())).outcome.status, "validation_failed");
+  // A failed request ends the wait early and stays uncertain (never a second click).
+  page = new SlowMockPage(); page.late = [{ afterWaits: 3, fail: true }];
+  result = await observeSubmission(page.asPage(), "ashby", job, () => page.click());
+  assert.equal(result.outcome.status, "submission_unconfirmed");
+  assert.ok(page.waits < 10, "requestfailed settles the in-flight wait");
+  assert.equal(page.clicks, 1);
+  // No response at all: bounded wait, then uncertain (unchanged semantics).
+  page = new SlowMockPage(); page.late = [{ afterWaits: Number.POSITIVE_INFINITY }];
+  result = await observeSubmission(page.asPage(), "ashby", job, () => page.click());
+  assert.equal(result.outcome.status, "submission_unconfirmed");
+  assert.ok(page.waits <= proofModule.IN_FLIGHT_SUBMISSION_WAIT_MS / 250 + 2, "wait is bounded");
+  // No matched request: no extra waiting beyond the fixed settle.
+  page = new SlowMockPage();
+  await observeSubmission(page.asPage(), "ashby", job, () => page.click());
+  assert.equal(page.waits, 1);
+  console.log("Slow submissions: late 2xx receipt captured, late 4xx rejected, failure/timeout uncertain and bounded, single click.");
+}
+
 function loadAdapter(name: string, dependencies: Record<string, unknown>, globals: Record<string, unknown> = {}) {
   const source = readFileSync(`src/lib/portal-adapters/${name}.ts`, "utf8");
   const output = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
@@ -403,7 +458,7 @@ function testNoLegacySuccessBypass() {
 
 async function main() {
   testResponses(); testOtherProviders(); testDomReceipts();
-  await testClickObservation(); await testRealAshbyAndOtp(); await testRecruiteeBoundary(); testNoLegacySuccessBypass();
+  await testClickObservation(); await testSlowSubmissionResponse(); await testRealAshbyAndOtp(); await testRecruiteeBoundary(); testNoLegacySuccessBypass();
   console.log("ATS submission-proof regression suite passed (no external sends or network).");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });
