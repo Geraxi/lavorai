@@ -35,7 +35,7 @@ export async function getAutoApplyReadiness(userId: string, matchingJobsInput: n
     prisma.application.count({ where: { userId, status: "needs_answers" } }),
     prisma.application.count({ where: { userId, status: "awaiting_consent" } }),
     matchingJobsInput,
-    prisma.user.findUnique({where:{id:userId},select:{email:true,tier:true,subscriptionStatus:true,currentPeriodEnd:true,trialEndsAt:true,trialGraceEndsAt:true,createdAt:true,privacyConsentAt:true,emailVerified:true,suspendedAt:true,pausedUntil:true,onboardedAt:true,seniority:true,englishLevel:true,noticePeriod:true,cvProfile:{select:{id:true}}}}),
+    prisma.user.findUnique({where:{id:userId},select:{email:true,tier:true,subscriptionStatus:true,currentPeriodEnd:true,trialEndsAt:true,trialGraceEndsAt:true,trialExtensionEndsAt:true,createdAt:true,privacyConsentAt:true,emailVerified:true,suspendedAt:true,pausedUntil:true,onboardedAt:true,seniority:true,englishLevel:true,noticePeriod:true,cvProfile:{select:{id:true}}}}),
   ]);
   if (!user) return {tone:'action',eyebrow:'Candidature',title:'Profilo non disponibile',detail:'Accedi nuovamente per verificare lo stato delle candidature.',cta:'Accedi',href:'/login'};
   const prerequisite=applicationPrerequisiteBlock(user);

@@ -50,7 +50,7 @@
     "test:integrated-postgres": "node scripts/test-integrated-postgres.mjs",
     "test:attention-evidence": "node --import tsx scripts/test-attention-evidence.ts",
     "test:attention-postgres": "node scripts/test-attention-postgres.mjs",
-    "test:privacy-consent": "node --import tsx scripts/test-privacy-consent.ts && node --import tsx scripts/test-consent-questions-nudge.ts && node --import tsx scripts/test-lifecycle-nudge-caps.ts",
+    "test:privacy-consent": "node --import tsx scripts/test-privacy-consent.ts && node --import tsx scripts/test-consent-questions-nudge.ts && node --import tsx scripts/test-lifecycle-nudge-caps.ts && node --import tsx scripts/test-trial-extension.ts",
     "test:held-release": "node --import tsx scripts/test-held-application-release.ts",
     "test:meta-consent": "node --import tsx scripts/test-meta-consent.ts",
     "test:application-lifecycle": "node --import tsx scripts/test-application-lifecycle.ts && node --import tsx scripts/test-confirmation-semantics.ts",

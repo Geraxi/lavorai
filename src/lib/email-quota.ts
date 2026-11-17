@@ -104,6 +104,7 @@ export type EmailKind =
   | "reactivation_blast"
   | "privacy_consent_nudge"
   | "pending_questions_nudge"
+  | "trial_extension"
   | "other";
 
 /** Marca un'email come effettivamente consegnata per il tracking quota. */

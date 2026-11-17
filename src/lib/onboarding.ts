@@ -6,7 +6,7 @@ export async function getOnboardingState(userId: string): Promise<ChecklistState
   const [cvCount, prefs, user, card] = await Promise.all([
     prisma.cVDocument.count({ where: { userId } }),
     prisma.userPreferences.findUnique({ where: { userId }, select: { rolesJson: true } }),
-    prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerified: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, stripeSubscriptionId: true, subscriptionStatus: true } }),
+    prisma.user.findUnique({ where: { id: userId }, select: { email: true, emailVerified: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, trialExtensionEndsAt: true, stripeSubscriptionId: true, subscriptionStatus: true } }),
     prisma.conversionEvent.findFirst({ where: { userId, name: "card_setup_confirmed", source: "stripe_verified" }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
   ]);
   let roles: unknown = []; try { roles = JSON.parse(prefs?.rolesJson ?? "[]"); } catch { /* incomplete */ }

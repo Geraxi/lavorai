@@ -21,7 +21,7 @@ export async function workspaceOwner(request: NextRequest, options: WorkspaceAcc
 export async function workspaceReadOwner(options: WorkspaceAccessOptions = {}) {
   const session = await auth();
   if (!session?.user?.id) throw new WorkspaceError("unauthenticated", 401);
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, email: true, suspendedAt: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, stripeSubscriptionId: true, subscriptionStatus: true } });
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, email: true, suspendedAt: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, trialExtensionEndsAt: true, stripeSubscriptionId: true, subscriptionStatus: true } });
   if (!user) throw new WorkspaceError("unauthenticated", 401);
   if (user.suspendedAt) throw new WorkspaceError("account_access_required", 403);
   if (!isAdmin(user.email) && ((!options.allowExpiredTrial && isApplicationAccessPaused(user)) || requiresPaymentMethodBeforeApp(user))) throw new WorkspaceError("account_access_required", 403);

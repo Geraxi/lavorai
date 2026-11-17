@@ -279,7 +279,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
       tier: true,
       subscriptionStatus: true,
       currentPeriodEnd: true,
-      trialEndsAt: true, trialGraceEndsAt: true,
+      trialEndsAt: true, trialGraceEndsAt: true, trialExtensionEndsAt: true,
       createdAt: true,
       avoidCompanies: true,
       quotaResetAt: true,
@@ -376,7 +376,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       tier: true,
       subscriptionStatus: true,
       currentPeriodEnd: true,
-      trialEndsAt: true, trialGraceEndsAt: true,
+      trialEndsAt: true, trialGraceEndsAt: true, trialExtensionEndsAt: true,
       createdAt: true,
       avoidCompanies: true,
       quotaResetAt: true,
@@ -420,6 +420,7 @@ async function processUser(
     currentPeriodEnd?: Date | null;
     trialEndsAt: Date | null;
     trialGraceEndsAt: Date | null;
+    trialExtensionEndsAt?: Date | null;
     createdAt: Date;
     avoidCompanies: string | null;
     privacyConsentAt?: Date | null;

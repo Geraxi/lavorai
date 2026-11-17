@@ -21,6 +21,7 @@ export type PriorityUser = {
   createdAt?: Date | string;
   trialEndsAt?: Date | string | null;
   trialGraceEndsAt?: Date | string | null;
+  trialExtensionEndsAt?: Date | string | null;
   currentPeriodEnd?: Date | string | null;
 };
 

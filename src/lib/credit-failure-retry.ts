@@ -79,7 +79,7 @@ export const creditRetrySelect = {
   errorMessage: true, startedAt: true, completedAt: true, createdAt: true, retryCount: true,
   ...evidenceSelect,
   user: { select: {
-    id: true, email: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true,
+    id: true, email: true, tier: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, trialExtensionEndsAt: true,
     subscriptionStatus: true, currentPeriodEnd: true, pausedUntil: true, suspendedAt: true,
     emailVerified: true, privacyConsentAt: true,
     preferences: { select: { autoApplyMode: true } },
