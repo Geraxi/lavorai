@@ -1,12 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyOneClick } from "@/lib/one-click-token";
-import { NUDGE_KINDS, type NudgeKind } from "@/lib/consent-questions-nudge";
+import { NUDGE_KINDS } from "@/lib/consent-questions-nudge";
+import { TRIAL_EXTENSION_KIND } from "@/lib/trial-extension";
+
+const OPTOUT_KINDS = [...NUDGE_KINDS, TRIAL_EXTENSION_KIND] as const;
+type NudgeKind = (typeof OPTOUT_KINDS)[number];
 
 export const runtime = "nodejs";
 
 /**
- * Opt-out from one service nudge kind (privacy consent / pending questions).
+ * Opt-out from one service nudge kind (privacy consent / pending questions /
+ * trial extension). Opting out of the trial-extension email never revokes the week.
  * GET shows a confirmation button only (link scanners must not opt users out);
  * POST (the button, or RFC 8058 List-Unsubscribe=One-Click) records optedOutAt.
  * The signed token is the authorisation. It changes nothing else: no consent,
@@ -15,7 +20,7 @@ export const runtime = "nodejs";
 function parse(request: NextRequest): { userId: string; kind: NudgeKind } | null {
   const kind = request.nextUrl.searchParams.get("k") ?? "";
   const token = request.nextUrl.searchParams.get("t") ?? "";
-  if (!(NUDGE_KINDS as readonly string[]).includes(kind)) return null;
+  if (!(OPTOUT_KINDS as readonly string[]).includes(kind)) return null;
   const verified = verifyOneClick(token, `nudge-optout:${kind}`);
   return verified ? { userId: verified.userId, kind: kind as NudgeKind } : null;
 }
@@ -31,8 +36,9 @@ function page(title: string, body: string, form?: string): NextResponse {
 }
 
 const LABEL: Record<NudgeKind, string> = {
-  privacy_consent: "promemoria sul consenso privacy",
-  pending_questions: "promemoria sulle domande in attesa",
+  privacy_consent: "i promemoria sul consenso privacy",
+  pending_questions: "i promemoria sulle domande in attesa",
+  trial_extension: "le email sulla settimana di prova extra",
 };
 
 export async function GET(request: NextRequest) {
@@ -40,8 +46,10 @@ export async function GET(request: NextRequest) {
   if (!parsed) return page("Link non valido o scaduto", "Puoi gestire tutto da Impostazioni nell’app.");
   const action = `${request.nextUrl.pathname}?${request.nextUrl.searchParams.toString()}`.replace(/"/g, "&quot;");
   return page(
-    `Disattivare i ${LABEL[parsed.kind]}?`,
-    "Non riceverai più queste email. Le candidature in attesa restano ferme finché non agisci nell’app.",
+    `Disattivare ${LABEL[parsed.kind]}?`,
+    parsed.kind === TRIAL_EXTENSION_KIND
+      ? "Non riceverai più queste email. La settimana di prova già concessa resta attiva."
+      : "Non riceverai più queste email. Le candidature in attesa restano ferme finché non agisci nell’app.",
     `<form method="post" action="${action}"><button type="submit" style="background:#0F1012;color:#fff;border:0;border-radius:8px;padding:12px 22px;font-size:15px;font-weight:600;cursor:pointer;">Disattiva</button></form>`,
   );
 }
@@ -57,5 +65,5 @@ export async function POST(request: NextRequest) {
       update: { optedOutAt: new Date() },
     });
   }
-  return page("Fatto", `Non riceverai più i ${LABEL[parsed.kind]}.`);
+  return page("Fatto", `Non riceverai più ${LABEL[parsed.kind]}.`);
 }

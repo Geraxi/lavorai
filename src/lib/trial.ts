@@ -96,7 +96,7 @@ export async function runTrialNudges(opts?: { dryRun?: boolean }): Promise<Trial
   const users = await prisma.user.findMany({
     where: { trialEndsAt: { not: null }, stripeSubscriptionId: null, suspendedAt: null, emailVerified: { not: null } },
     select: {
-      id: true, email: true, name: true, locale: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, tier: true,
+      id: true, email: true, name: true, locale: true, createdAt: true, trialEndsAt: true, trialGraceEndsAt: true, trialExtensionEndsAt: true, tier: true,
       preferences: { select: { rolesJson: true, autoApplyMode: true } },
       _count: { select: { cvDocuments: true, applications: { where: { status: "success" } } } },
     },

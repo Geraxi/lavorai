@@ -97,7 +97,7 @@ export async function findUpgradeCandidates(opts?: {
       tier: true,
       createdAt: true,
       trialEndsAt: true,
-      trialGraceEndsAt: true,
+      trialGraceEndsAt: true, trialExtensionEndsAt: true,
       _count: { select: { applications: true } },
     },
   });

@@ -8,7 +8,7 @@ export const accessUserSelect = {
   tier: true,
   createdAt: true,
   trialEndsAt: true,
-  trialGraceEndsAt: true,
+  trialGraceEndsAt: true, trialExtensionEndsAt: true,
   subscriptionStatus: true,
 } satisfies Prisma.UserSelect;
 

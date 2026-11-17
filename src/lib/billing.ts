@@ -146,7 +146,10 @@ export function registrationTrialEnd(createdAt: Date | string): Date {
 export const EARLY_USER_TRIAL_COHORT_CUTOFF = "2026-09-23T12:43:08.000Z";
 export const EARLY_USER_TRIAL_FINAL_END = "2026-09-25T12:43:08.000Z";
 
-export function trialEnd(user: { createdAt?: Date | string; trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null }): Date | null {
+type TrialDates = { createdAt?: Date | string; trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; trialExtensionEndsAt?: Date | string | null };
+
+/** Trial end from signup only (registration window or the fixed early-user deadline). */
+export function baseTrialEnd(user: TrialDates): Date | null {
   const createdAt = user.createdAt ? new Date(user.createdAt) : null;
   // The legacy field identifies the original extension recipients only. Its
   // stored date no longer grants any configurable/rolling grace period.
@@ -155,6 +158,28 @@ export function trialEnd(user: { createdAt?: Date | string; trialGraceEndsAt?: D
     return new Date(EARLY_USER_TRIAL_FINAL_END);
   }
   return createdAt ? registrationTrialEnd(createdAt) : user.trialEndsAt ? new Date(user.trialEndsAt) : null;
+}
+
+/**
+ * One-off extra free week granted after the trial ended (see trial-extension.ts).
+ * Only the dedicated trialExtensionEndsAt column extends a trial: trialEndsAt,
+ * trialGraceEndsAt, login, onboarding and setup never restart it.
+ */
+export function trialExtensionEnd(user: TrialDates): Date | null {
+  if (!user.trialExtensionEndsAt) return null;
+  const ext = new Date(user.trialExtensionEndsAt);
+  if (!Number.isFinite(ext.getTime())) return null;
+  const base = baseTrialEnd(user);
+  return !base || ext.getTime() > base.getTime() ? ext : null;
+}
+
+/** The granted extra week is running now. It needs a card like any active trial. */
+export function trialExtensionActive(user: TrialDates, now = Date.now()): boolean {
+  return (trialExtensionEnd(user)?.getTime() ?? 0) > now;
+}
+
+export function trialEnd(user: TrialDates): Date | null {
+  return trialExtensionEnd(user) ?? baseTrialEnd(user);
 }
 
 /**
@@ -235,7 +260,8 @@ export function effectiveTier(user: {
   tier?: string | null;
   email?: string | null;
   createdAt?: Date | string;
-  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null;
+  trialGraceEndsAt?: Date | string | null;
+  trialExtensionEndsAt?: Date | string | null; trialEndsAt?: Date | string | null;
 }): Tier {
   if (isLifetimeProPlus(user.email)) return "pro_plus";
   const base = normalizeTier(user.tier);
@@ -246,7 +272,8 @@ export function effectiveTier(user: {
 
 /** Stato della prova gratuita per UI/email. */
 export function trialState(user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
-  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null }): {
+  trialGraceEndsAt?: Date | string | null;
+  trialExtensionEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null }): {
   status: "none" | "active" | "ended";
   endsAt: Date | null;
   daysLeft: number;
@@ -268,7 +295,8 @@ export function trialState(user: { tier?: string | null; email?: string | null; 
  */
 export function dailyApplicationLimit(
   user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
-  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  trialGraceEndsAt?: Date | string | null;
+  trialExtensionEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
   preferredCap?: number | null,
 ): number {
   if (isLifetimeProPlus(user.email)) return Math.max(1, Math.min(100, preferredCap ?? 100));
@@ -281,7 +309,8 @@ export function dailyApplicationLimit(
 /** Un account Free fuori dalla prova deve passare dalla schermata di pagamento. */
 export function isApplicationAccessPaused(
   user: { tier?: string | null; email?: string | null; createdAt?: Date | string;
-  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
+  trialGraceEndsAt?: Date | string | null;
+  trialExtensionEndsAt?: Date | string | null; trialEndsAt?: Date | string | null; stripeSubscriptionId?: string | null },
 ): boolean {
   return !isLifetimeProPlus(user.email) && normalizeTier(user.tier) === "free" && trialState(user).status !== "active";
 }
@@ -298,6 +327,7 @@ export function requiresPaymentMethodBeforeApp(
     email?: string | null;
     createdAt?: Date | string;
     trialGraceEndsAt?: Date | string | null;
+    trialExtensionEndsAt?: Date | string | null;
     trialEndsAt?: Date | string | null;
     subscriptionStatus?: string | null;
   },
@@ -401,7 +431,8 @@ export const FREE_QUOTA_WORKER_INFLIGHT_STATUSES = ["optimizing", "applying", "s
 
 type AccessUser = {
   tier?: string | null; email?: string | null; createdAt?: Date | string;
-  trialGraceEndsAt?: Date | string | null; trialEndsAt?: Date | string | null;
+  trialGraceEndsAt?: Date | string | null;
+  trialExtensionEndsAt?: Date | string | null; trialEndsAt?: Date | string | null;
   subscriptionStatus?: string | null; currentPeriodEnd?: Date | null;
 };
 

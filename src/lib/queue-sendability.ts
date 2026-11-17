@@ -38,13 +38,14 @@ export type SendabilityUser = {
   createdAt?: Date | string;
   trialEndsAt?: Date | string | null;
   trialGraceEndsAt?: Date | string | null;
+  trialExtensionEndsAt?: Date | string | null;
   currentPeriodEnd?: Date | null;
   preferences?: { autoApplyMode?: string | null } | null;
 };
 
 export const claimUserSelect = {
   tier: true, email: true, subscriptionStatus: true, createdAt: true, trialEndsAt: true,
-  trialGraceEndsAt: true, currentPeriodEnd: true, pausedUntil: true, suspendedAt: true,
+  trialGraceEndsAt: true, trialExtensionEndsAt: true, currentPeriodEnd: true, pausedUntil: true, suspendedAt: true,
   emailVerified: true, privacyConsentAt: true,
   preferences: { select: { autoApplyMode: true } },
 } as const;

@@ -10,7 +10,7 @@ async function main() {
   // never implicitly read the whole generated User model.
   const row = {
     id: "schema-compat-user", email: "schema-compat@example.com", name: "Test",
-    tier: "pro", createdAt: new Date(), trialEndsAt: null, trialGraceEndsAt: null,
+    tier: "pro", createdAt: new Date(), trialEndsAt: null, trialGraceEndsAt: null, trialExtensionEndsAt: null,
     emailVerified: null, privacyConsentAt: null, pausedUntil: null, subscriptionStatus: "active", stripeCustomerId: null,
     stripeSubscriptionId: null, stripePriceId: null, currentPeriodEnd: null,
     welcomeSeenAt: null, onboardedAt: null, locale: "it", yearsExperience: null,
@@ -20,7 +20,7 @@ async function main() {
     for (const column of ["passwordHash", "signupUtmSource", "referralRewardedAt", "demoCompletedAt", "trialDurationDays", "lastLoginAt"]) {
       assert.ok(!(column in select), `Unrelated column ${column} must not be selected`);
     }
-    for (const column of ["email", "tier", "createdAt", "trialEndsAt", "trialGraceEndsAt"]) {
+    for (const column of ["email", "tier", "createdAt", "trialEndsAt", "trialGraceEndsAt", "trialExtensionEndsAt"]) {
       assert.equal(select[column as keyof typeof select], true, `Required billing column ${column}`);
     }
   }

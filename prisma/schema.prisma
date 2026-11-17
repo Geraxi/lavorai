@@ -119,6 +119,9 @@ model User {
   trialEndsAt      DateTime?
   /// Legacy cohort marker only; billing.ts fixes the final early-user deadline. No rolling grace.
   trialGraceEndsAt DateTime?
+  /// Settimana gratuita extra concessa una sola volta dopo la fine della prova
+  /// (senza carta). Solo questo campo estende la prova; vedi billing.trialEnd.
+  trialExtensionEndsAt DateTime?
   /// Durata della prova dalla creazione dell’account (7 giorni).
   trialDurationDays Int      @default(7)
   /// Mesi gratis maturati dal referral, da applicare al prossimo checkout.

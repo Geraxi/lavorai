@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { isAdmin } from "@/lib/admin";
-import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd } from "@/lib/billing";
+import { isApplicationAccessPaused, requiresPaymentMethodBeforeApp, trialEnd, trialExtensionActive } from "@/lib/billing";
 import { StartMembershipActions } from "./start-membership-actions";
 import { SupportLink } from "@/components/support-link";
 import { Logo } from "@/components/logo";
@@ -40,7 +40,9 @@ export default async function StartMembershipPage({
             <span className="text-emerald-400">Nessun addebito oggi.</span>
           </h1>
           <p className="mt-6 max-w-lg text-base leading-7 text-slate-300 sm:text-lg">
-            Aggiungi una carta per continuare con CV e preferenze. La prova termina il {date}, 7 giorni dopo la registrazione; il primo addebito avverrà alla fine della prova, salvo disdetta.
+            {trialExtensionActive(user)
+              ? <>Aggiungi una carta per usare la settimana di prova extra. La settimana termina il {date}; nessun addebito fino ad allora, poi il piano si rinnova automaticamente salvo disdetta.</>
+              : <>Aggiungi una carta per continuare con CV e preferenze. La prova termina il {date}, 7 giorni dopo la registrazione; il primo addebito avverrà alla fine della prova, salvo disdetta.</>}
           </p>
           <div className="mt-10 grid max-w-md grid-cols-3 gap-0 border-y border-white/10 text-sm text-slate-300">
             <div className="py-4 pr-4"><span className="block font-mono text-xs text-emerald-300">01 · OGGI</span><span className="mt-1 block">Metodo sicuro</span></div>
