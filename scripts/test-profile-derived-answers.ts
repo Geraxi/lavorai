@@ -109,4 +109,45 @@ const questions = [
 assert.equal(greenhouseRequiredQuestionsAnswerable(questions, eu("Dublin, Ireland"), { hasCv: true }).ok, true);
 assert.deepEqual(greenhouseRequiredQuestionsAnswerable(questions, ctx({ jobLocation: "Dublin, Ireland" }), { hasCv: true }).missing, ["Are you legally authorized to work in Ireland?"]);
 
-console.log("PASS profile-derived answers: phone code, residence, LinkedIn/portfolio, start date, EU right to work (job country only); EEO/salary/essays/sponsorship manual; answerable check aligned.");
+// Live 16–17 Nov labels: politeness prefixes, leading *, months, LinkedIn "link".
+const maurizio = ctx({}, { yearsExperience: 20, englishLevel: "b1", noticePeriod: "immediate", euAuthorized: true });
+assert.equal(ask("Please select the country where you currently reside. *", maurizio, "react-select", ["Australia", "Italy", "Germany", "UK", "US"]), "Italy");
+assert.equal(ask("*LinkedIn Link", maurizio), "https://www.linkedin.com/in/giulia");
+assert.equal(ask("*What is your current notice period?", maurizio), "Immediate");
+assert.equal(ask("Please indicate your notice period in Months*", maurizio), "0");
+assert.equal(ask("What is your level of English?", maurizio, "select", ["A1", "A2", "B1", "B2", "C1", "C2"]), "B1");
+// CV "B1 - Livello intermedio" and User.englishLevel "b1" are the same fact, not a conflict.
+const mixedEnglish: FactContext = {
+  facts: candidateFacts(
+    { ...profile, languages: [{ name: "Inglese", level: "B1 - Livello intermedio" }] },
+    { englishLevel: "b1" }, {}, [], now,
+  ),
+};
+assert.equal(ask("What is your level of English?", mixedEnglish, "select", ["A1", "A2", "B1", "B2"]), "B1");
+// A bare www. LinkedIn URL from a CV is usable.
+assert.equal(ask("*LinkedIn Link", ctx({}, {}, { ...profile, links: [{ label: "LinkedIn", url: "www.linkedin.com/in/giulia" }] })), "https://www.linkedin.com/in/giulia");
+// Still manual: work-country preference, selected-location auth, salary, GDPR, "described roles".
+for (const label of [
+  "Please select the country or countries you anticipate working in for the role in which you are applying. *",
+  "Are you authorized to work in the location(s) you selected in your previous response?*",
+  "What are your salary expectations? *",
+  "I hereby agree that I have received the notification to candidates acc. to Art. 13 GDPR.*",
+  "Do you have at least 8 years of experience in the described roles?",
+]) {
+  assert.equal(ask(label, maurizio, "select", ["Yes", "No"]), null, label);
+}
+
+
+// Small Italian towns use "Comune (PR)" and are not in the major-city list;
+// US profiles often use "City, ST ZIP". Both should still yield a country.
+const smallTown = ctx({}, {}, { ...profile, city: "Carbognano (VT)" });
+assert.equal(ask("Please select the country where you currently reside. *", smallTown, "react-select", ["Australia", "Italy", "Germany", "UK", "US"]), "Italy");
+assert.equal(ask("Please select the country you are currently located in.*", smallTown, "react-select", ["Australia", "Italy", "Germany"]), "Italy");
+const chietiTown = ctx({}, {}, { ...profile, city: "Montazzoli (CH)", phone: "+39 333 1234567" });
+assert.equal(ask("Country of residence", chietiTown), "Italia", "Italian phone disambiguates (CH) as Chieti, not Switzerland");
+assert.equal(ask("Country of residence", ctx({}, {}, { ...profile, city: "Davos Dorf (CH)", phone: "+41 81 123 45 67" })), null, "(CH) without an Italian phone stays manual");
+const usCity = ctx({}, {}, { ...profile, city: "Jersey City, NJ 07302", phone: "+1 201 555 0100" });
+assert.equal(ask("Country of residence", usCity), "Stati Uniti");
+assert.equal(ask("Phone country code", usCity, "react-select", ["United States +1", "Canada +1", "Italy +39"]), "United States +1");
+
+console.log("PASS profile-derived answers: phone code, residence, LinkedIn/portfolio, start date, EU right to work (job country only); EEO/salary/essays/sponsorship manual; answerable check aligned; live form-label variants.");

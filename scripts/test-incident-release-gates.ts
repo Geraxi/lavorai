@@ -111,7 +111,10 @@ function loadClaim(prisma: unknown) {
       return dependencies[name];
     },
   }, { filename: "src/lib/application-claim.ts" });
-  return module.exports as { recoverExpiredQueuedClaims: (now?: Date) => Promise<number> };
+  return module.exports as {
+    recoverExpiredQueuedClaims: (now?: Date) => Promise<number>;
+    releaseControlledRecoveryHolds: (now?: Date) => Promise<number>;
+  };
 }
 
 function match(value: any, condition: any): boolean {
@@ -187,10 +190,78 @@ async function testDbBackedAllowlist() {
   assert.equal(await tryConsumeRecoveryRelease("any", { db: on, env: { APPLICATION_RECOVERY_RELEASE: "on" } }), false);
 }
 
+
+async function testRecoveredNotSubmittedIsReleased() {
+  const stale = new Date(Date.now() - 25 * 60_000);
+  const rows = [{
+    id: "expired-not-submitted", userId: "paid", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
+    answerContinuationJson: null, retryCount: 0, startedAt: stale, leaseToken: "dead",
+    leaseExpiresAt: new Date(Date.now() - 1000), submitStartedAt: null, completedAt: null,
+    submittedAt: null, submittedVia: null, submitConfirmation: "NOT_SUBMITTED", canaryLog: null,
+    answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+    errorMessage: null,
+  }];
+  const prisma = {
+    application: {
+      findMany: async ({ where }: any) => rows.filter((r) => match(r, where)),
+      updateMany: async ({ where, data }: any) => {
+        const hits = rows.filter((r) => match(r, where));
+        for (const r of hits) Object.assign(r, data);
+        return { count: hits.length };
+      },
+    },
+  };
+  const claims = loadClaim(prisma);
+  const recovered = await claims.recoverExpiredQueuedClaims(now);
+  assert.equal(recovered, 1);
+  assert.equal(rows[0].startedAt, null, "NOT_SUBMITTED expired claims are retried without the allowlist");
+  assert.equal(rows[0].leaseToken, null);
+  assert.match(rows[0].errorMessage ?? "", /Riavviato: presa in carico scaduta/);
+  assert.equal(rows[0].retryCount, 1);
+}
+
+async function testReleaseControlledHoldNotSubmitted() {
+  const stale = new Date(Date.now() - 25 * 60_000);
+  const rows = [{
+    id: "held-not-submitted", userId: "paid", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
+    answerContinuationJson: null, retryCount: 2, startedAt: stale, leaseToken: null,
+    leaseExpiresAt: null, submitStartedAt: null, completedAt: null,
+    submittedAt: null, submittedVia: null, submitConfirmation: "NOT_SUBMITTED", canaryLog: null,
+    answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+    errorMessage: CONTROLLED_RELEASE_MESSAGE,
+  }, {
+    id: "held-unknown", userId: "paid", status: "queued", createdAt: freshAt, consentGrantedAt: freshAt,
+    answerContinuationJson: null, retryCount: 1, startedAt: stale, leaseToken: null,
+    leaseExpiresAt: null, submitStartedAt: null, completedAt: null,
+    submittedAt: null, submittedVia: null, submitConfirmation: null, canaryLog: null,
+    answersUsedJson: null, viewedAt: null, lastReplyAt: null, replyCount: 0, userStatus: null,
+    errorMessage: CONTROLLED_RELEASE_MESSAGE,
+  }];
+  const prisma = {
+    application: {
+      findMany: async ({ where }: any) => rows.filter((r) => match(r, where)),
+      updateMany: async ({ where, data }: any) => {
+        const hits = rows.filter((r) => match(r, where));
+        for (const r of hits) Object.assign(r, data);
+        return { count: hits.length };
+      },
+    },
+  };
+  const claims = loadClaim(prisma);
+  const released = await claims.releaseControlledRecoveryHolds(now);
+  assert.equal(released, 1);
+  assert.equal(rows[0].startedAt, null);
+  assert.equal(rows[0].errorMessage, null);
+  assert.ok(rows[1].startedAt, "null confirmation stays held without the allowlist");
+  assert.equal(rows[1].errorMessage, CONTROLLED_RELEASE_MESSAGE);
+}
+
 async function main() {
   await testDbBackedAllowlist();
   await testRecoveredLeaseStaysHeld();
+  await testRecoveredNotSubmittedIsReleased();
+  await testReleaseControlledHoldNotSubmitted();
   testSourceFences();
-  console.log("PASS incident release gates: recovery default off, uncertain standalone, recruiter-email fallback held");
+  console.log("PASS incident release gates: recovery default off, NOT_SUBMITTED auto-release, uncertain standalone, recruiter-email fallback held");
 }
 main().catch((error) => { console.error(error); process.exit(1); });

@@ -209,3 +209,55 @@ export function matchCity(location: string | null | undefined): { key: string; n
   }
   return null;
 }
+
+/** Official Italian province codes, including suppressed ones still used in addresses. */
+const ITALIAN_PROVINCE_CODES = new Set([
+  "AG", "AL", "AN", "AO", "AP", "AQ", "AR", "AT", "AV", "BA", "BG", "BI", "BL", "BN", "BO", "BR", "BS", "BT", "BZ",
+  "CA", "CB", "CE", "CH", "CI", "CL", "CN", "CO", "CR", "CS", "CT", "CZ", "EN", "FC", "FE", "FG", "FI", "FM", "FR",
+  "GE", "GO", "GR", "IM", "IS", "KR", "LC", "LE", "LI", "LO", "LT", "LU", "MB", "MC", "ME", "MI", "MN", "MO", "MS",
+  "MT", "NA", "NO", "NU", "OG", "OR", "OT", "PA", "PC", "PD", "PE", "PG", "PI", "PN", "PO", "PR", "PT", "PU", "PV",
+  "PZ", "RA", "RC", "RE", "RG", "RI", "RM", "RN", "RO", "SA", "SI", "SO", "SP", "SR", "SS", "SU", "SV", "TA", "TE",
+  "TN", "TO", "TP", "TR", "TS", "TV", "UD", "VA", "VB", "VC", "VE", "VI", "VR", "VS", "VT", "VV",
+]);
+
+/** Province codes that also appear as "City (CC)" for a country (e.g. Zurich (CH)). */
+const ITALIAN_PROVINCE_AMBIGUOUS_WITH_COUNTRY = new Set([
+  "AL", "AT", "BO", "CH", "CL", "CO", "CR", "IS", "LT", "MC", "ME", "MT", "PA", "PE", "RE", "TO", "TV", "VA",
+]);
+
+const US_STATE_CODES = new Set([
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA",
+  "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR",
+  "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+]);
+
+/**
+ * When matchCity cannot identify a known city, infer only the country from a
+ * typical address pattern: "Carbognano (VT)" or "Jersey City, NJ 07302".
+ * "(CH)" / "(AT)" stay unset unless preferItalian is set (Italian phone prefix),
+ * because those codes also mean Switzerland / Austria.
+ */
+export function inferCountryFromLocation(
+  location: string | null | undefined,
+  opts: { preferItalian?: boolean } = {},
+): { cc: string; name: string } | null {
+  if (!location?.trim()) return null;
+  const located = matchCity(location);
+  if (located?.cc && COUNTRY_CENTROIDS[located.cc]?.name) {
+    return { cc: located.cc, name: COUNTRY_CENTROIDS[located.cc].name };
+  }
+  const trimmed = location.trim();
+  const usCityState = trimmed.match(/^(.+?),\s*([A-Za-z]{2})(?:\s+\d{5}(?:-\d{4})?)?\s*$/);
+  if (usCityState && US_STATE_CODES.has(usCityState[2].toUpperCase())) {
+    const info = COUNTRY_CENTROIDS.US;
+    return info ? { cc: "US", name: info.name } : null;
+  }
+  const italianComune = trimmed.match(/^(.+?)\s*\(([A-Za-z]{2})\)\s*$/);
+  if (italianComune && ITALIAN_PROVINCE_CODES.has(italianComune[2].toUpperCase())) {
+    const code = italianComune[2].toUpperCase();
+    if (ITALIAN_PROVINCE_AMBIGUOUS_WITH_COUNTRY.has(code) && !opts.preferItalian) return null;
+    const info = COUNTRY_CENTROIDS.IT;
+    return info ? { cc: "IT", name: info.name } : null;
+  }
+  return null;
+}
