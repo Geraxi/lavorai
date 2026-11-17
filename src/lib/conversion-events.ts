@@ -33,21 +33,26 @@ export async function recordConversionEvent(
   name: AnalyticsEventName,
   input: ConversionEventInput = {},
 ): Promise<void> {
+  const data = {
+    name,
+    userId: input.userId ?? null,
+    sessionId: input.sessionId?.slice(0, 80) ?? null,
+    path: input.path?.slice(0, 250) ?? null,
+    plan: input.plan?.slice(0, 30) ?? null,
+    source: input.source?.slice(0, 80) ?? null,
+    valueCents: input.valueCents ?? null,
+    propertiesJson: cleanProperties(input.properties),
+    dedupeKey: input.dedupeKey?.slice(0, 190) ?? null,
+  };
   try {
-    await prisma.conversionEvent.create({
-      data: {
-        name,
-        userId: input.userId ?? null,
-        sessionId: input.sessionId?.slice(0, 80) ?? null,
-        path: input.path?.slice(0, 250) ?? null,
-        plan: input.plan?.slice(0, 30) ?? null,
-        source: input.source?.slice(0, 80) ?? null,
-        valueCents: input.valueCents ?? null,
-        propertiesJson: cleanProperties(input.properties),
-        dedupeKey: input.dedupeKey?.slice(0, 190) ?? null,
-      },
-    });
+    if (data.dedupeKey) {
+      // ON CONFLICT DO NOTHING: a retried/duplicate event is expected, so it
+      // must not surface as a prisma:error log line (17 Nov drain logs).
+      await prisma.conversionEvent.createMany({ data: [data], skipDuplicates: true });
+    } else {
+      await prisma.conversionEvent.create({ data });
+    }
   } catch {
-    // Includes harmless unique-key conflicts from webhook retries.
+    // Measurement must never break a user flow.
   }
 }
