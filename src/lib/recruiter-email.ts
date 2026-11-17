@@ -830,3 +830,80 @@ export async function findVerifiedRecruiterEmail(
 export async function scrapeRecruiterEmail(jobUrl: string, company: string | null): Promise<string | null> {
   return (await findVerifiedRecruiterEmail(jobUrl, company))?.email ?? null;
 }
+
+/**
+ * Construct generic recruiter email addresses for a company domain.
+ * 
+ * Only use when:
+ * 1. Company has a verified domain (not freemail)
+ * 2. No specific recruiter email found via scraping
+ * 3. Domain has valid MX records
+ * 
+ * Returns common patterns: jobs@, careers@, hr@domain
+ * This is a last-resort fallback to increase delivery rate for companies
+ * that don't publish specific recruiter contacts but do have hiring inboxes.
+ */
+export async function constructGenericRecruiterEmails(
+  companyDomain: string,
+  company: string | null,
+): Promise<string[]> {
+  if (!companyDomain || isFreemailDomain(companyDomain)) return [];
+  
+  // Validate company domain identity
+  const source = registrableIdentity(companyDomain);
+  if (!source) return [];
+  
+  // If company name provided, verify domain matches
+  if (company) {
+    const companyKey = identity(company);
+    if (companyKey.length >= 3 && source.key !== companyKey) return [];
+  }
+  
+  // Check MX records exist
+  if (!await hasMxRecord(companyDomain)) return [];
+  
+  // Generate candidates in preference order
+  const candidates = [
+    `jobs@${companyDomain}`,
+    `careers@${companyDomain}`,
+    `hr@${companyDomain}`,
+    `recruiting@${companyDomain}`,
+  ];
+  
+  // Filter out any that would be blacklisted
+  const valid: string[] = [];
+  for (const email of candidates) {
+    if (score(email, slug(company)) >= 0) {
+      valid.push(email);
+    }
+  }
+  
+  return valid;
+}
+
+/**
+ * Try to extract company domain from job URL or company website.
+ * Returns domain suitable for constructGenericRecruiterEmails.
+ */
+export function extractCompanyDomain(
+  jobUrl: string,
+  companyWebsite?: string | null,
+): string | null {
+  const candidates = [companyWebsite, jobUrl].filter(Boolean) as string[];
+  
+  for (const candidate of candidates) {
+    const page = httpsPage(candidate);
+    if (!page) continue;
+    
+    const source = registrableIdentity(page.hostname);
+    if (!source) continue;
+    
+    // Skip ATS and aggregator domains
+    if (ATS_HOSTS.some((host) => domainIs(page.hostname, host))) continue;
+    if (AGGREGATOR_HOSTS.some((host) => domainIs(page.hostname, host))) continue;
+    
+    return source.domain;
+  }
+  
+  return null;
+}
