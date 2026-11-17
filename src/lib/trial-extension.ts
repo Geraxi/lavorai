@@ -6,6 +6,10 @@ import { baseTrialEnd, isLifetimeProPlus, normalizeTier } from "@/lib/billing";
 /**
  * One-off extra free week for users whose trial ended and who never paid.
  *
+ * The week needs a card exactly like an active trial: the user is sent to
+ * /start-membership (Stripe Checkout with trial_end = extension end; Stripe bills
+ * the chosen plan at the end unless cancelled). The 5/day trial cap applies.
+ *
  * Per user, in this order and only together:
  *   1. claim the UserNudge row kind "trial_extension" (sentCount 0 → 1),
  *   2. set User.trialExtensionEndsAt = now + 7 days (only if still null),
@@ -58,7 +62,7 @@ export interface ExtensionLedger { kind: string; sentCount: number; optedOutAt: 
 
 export interface ExtensionCandidate {
   userId: string; email: string; name: string | null; locale: string;
-  needsConsent: boolean; needsCv: boolean; needsAutoApply: boolean; trialEndedAt: Date;
+  needsCard: boolean; needsConsent: boolean; needsCv: boolean; needsAutoApply: boolean; trialEndedAt: Date;
 }
 
 export type SkipReason = "not_eligible" | "already_extended" | "opted_out" | "bounced";
@@ -109,7 +113,11 @@ export function renderTrialExtensionEmail(c: ExtensionCandidate, endsAt: Date, e
   const optOutLabel = en ? "Stop emails like this" : "Non ricevere più email come questa";
   const optOutLink = `<a href="${optOutUrl}" style="color:#8A8C90;">${optOutLabel}</a>`;
 
+  // Every eligible user has no active/trialing Stripe subscription, so the card
+  // step always applies: the week opens only after Stripe Checkout (card, trial
+  // until endsAt). At the end Stripe bills the chosen plan unless cancelled.
   const todo: string[] = [];
+  if (c.needsCard) todo.push(en ? "<strong>Add a card through Stripe</strong> to unlock the week (nothing is charged during the 7 days)." : "<strong>Aggiungi una carta tramite Stripe</strong> per sbloccare la settimana (nessun addebito nei 7 giorni).");
   if (c.needsCv) todo.push(en ? "<strong>Upload your CV</strong> so applications can be tailored to you." : "<strong>Carica il CV</strong>, così le candidature vengono adattate a te.");
   if (c.needsAutoApply) todo.push(en ? "<strong>Turn on automatic applications</strong> and choose the roles you want." : "<strong>Attiva la candidatura automatica</strong> e scegli i ruoli che ti interessano.");
   if (c.needsConsent) todo.push(en ? "<strong>Confirm the privacy consent</strong> in the app: without it no application can be sent." : "<strong>Conferma il consenso privacy</strong> nell’app: senza, nessuna candidatura può partire.");
@@ -117,27 +125,29 @@ export function renderTrialExtensionEmail(c: ExtensionCandidate, endsAt: Date, e
   const subject = en ? "You have another free week of LavorAI" : "Hai un’altra settimana gratis di LavorAI";
   const paragraphs = en
     ? [
-        `Your free trial had ended, so we have reopened it for <strong>7 more days, until ${ends}</strong>. You don’t need to add a card and you won’t be charged.`,
-        "During this week LavorAI can look again for roles that match your profile and send up to 5 applications a day for you.",
-        todo.length ? "To make the most of it:" : "Your profile is ready: applications can start on the next run.",
+        `Your free trial had ended, so we have reopened it for <strong>7 more days, until ${ends}</strong>.`,
+        "As with every LavorAI trial, a card is required: add it through Stripe to use the week. Nothing is charged during the 7 days. When the week ends, the plan you chose renews automatically and is charged (Pro is €19.99/month) unless you cancel before then. Stripe shows the exact date and price before you confirm.",
+        "Once it is active, LavorAI can look again for roles that match your profile and send applications for you (up to 5 a day).",
+        todo.length ? "To get started:" : "Your profile is ready: applications can start on the next run.",
       ]
     : [
-        `La tua prova gratuita era terminata: l’abbiamo riaperta per altri <strong>7 giorni, fino a ${ends}</strong>. Non serve aggiungere una carta e non ti addebitiamo nulla.`,
-        "In questa settimana LavorAI può tornare a cercare offerte in linea con il tuo profilo e inviare per te fino a 5 candidature al giorno.",
-        todo.length ? "Per sfruttarla al meglio:" : "Il tuo profilo è pronto: le candidature possono partire dal prossimo giro.",
+        `La tua prova gratuita era terminata: l’abbiamo riaperta per altri <strong>7 giorni, fino a ${ends}</strong>.`,
+        "Come per ogni prova LavorAI, serve una carta: aggiungila tramite Stripe per usare la settimana. Nei 7 giorni non ti addebitiamo nulla. Alla fine della settimana il piano scelto si rinnova automaticamente con addebito (Pro costa €19,99/mese), salvo disdetta prima della scadenza. Stripe ti mostra data e prezzo esatti prima della conferma.",
+        "Una volta attivata, LavorAI può tornare a cercare offerte in linea con il tuo profilo e inviare candidature per te (fino a 5 al giorno).",
+        todo.length ? "Per iniziare:" : "Il tuo profilo è pronto: le candidature possono partire dal prossimo giro.",
       ];
   const footnote = en
-    ? `When the week ends the trial simply closes: nothing is charged, and you can choose a plan if you want to continue. You are receiving this one-off email because your LavorAI trial had ended. ${optOutLink}.`
-    : `Alla fine della settimana la prova si chiude da sola: nessun addebito, e se vuoi continuare potrai scegliere un piano. Ricevi questa email una tantum perché la tua prova LavorAI era terminata. ${optOutLink}.`;
+    ? `If you don’t add a card, nothing happens and the week simply expires. You can cancel any time before the end of the week to avoid being charged. You are receiving this one-off email because your LavorAI trial had ended. ${optOutLink}.`
+    : `Se non aggiungi una carta non succede nulla e la settimana scade da sola. Puoi disdire in qualsiasi momento prima della fine della settimana per non ricevere addebiti. Ricevi questa email una tantum perché la tua prova LavorAI era terminata. ${optOutLink}.`;
   const { html, text } = renderBrandEmail({
     locale: c.locale,
     eyebrow: en ? "Free trial extended" : "Prova gratuita estesa",
-    preheader: en ? `7 more days, until ${ends}. No card needed.` : `7 giorni in più, fino a ${ends}. Nessuna carta richiesta.`,
+    preheader: en ? `7 more days, until ${ends}. Add a card to use them; nothing is charged during the week.` : `7 giorni in più, fino a ${ends}. Aggiungi una carta per usarli; nessun addebito durante la settimana.`,
     title: en ? "Another week of LavorAI, on us" : "Un’altra settimana di LavorAI, offerta da noi",
     greeting,
     paragraphs,
     bullets: todo.length ? todo : undefined,
-    cta: { label: en ? "Go to your dashboard" : "Vai alla dashboard", url: `${site}/dashboard` },
+    cta: { label: en ? "Activate your free week" : "Attiva la settimana gratuita", url: `${site}/start-membership` },
     footnote,
   });
   return { subject, html, text: text.replace(`${optOutLabel}.`, `${optOutLabel}: ${optOutUrl}`), optOutUrl };
@@ -198,7 +208,7 @@ export async function findExtensionCandidates(db: ExtDb, deps: Pick<ExtensionDep
     if (!d.ok) { skipped[d.reason]++; continue; }
     candidates.push({
       userId: u.id, email: u.email, name: u.name, locale: u.locale === "en" ? "en" : "it",
-      needsConsent: !u.privacyConsentAt, needsCv: !u.hasCv, needsAutoApply: !autoApplyOn, trialEndedAt: d.trialEndedAt,
+      needsCard: !["active", "trialing"].includes(u.subscriptionStatus ?? ""), needsConsent: !u.privacyConsentAt, needsCv: !u.hasCv, needsAutoApply: !autoApplyOn, trialEndedAt: d.trialEndedAt,
     });
   }
   return { candidates: orderCandidates(candidates), skipped };

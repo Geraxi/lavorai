@@ -173,7 +173,7 @@ export function trialExtensionEnd(user: TrialDates): Date | null {
   return !base || ext.getTime() > base.getTime() ? ext : null;
 }
 
-/** The granted extra week is running now (no card required during it). */
+/** The granted extra week is running now. It needs a card like any active trial. */
 export function trialExtensionActive(user: TrialDates, now = Date.now()): boolean {
   return (trialExtensionEnd(user)?.getTime() ?? 0) > now;
 }
@@ -334,8 +334,6 @@ export function requiresPaymentMethodBeforeApp(
 ): boolean {
   if (isLifetimeProPlus(user.email) || normalizeTier(user.tier) !== "free") return false;
   if (user.subscriptionStatus === "active" || user.subscriptionStatus === "trialing") return false;
-  // The extra free week is granted without a card.
-  if (trialExtensionActive(user)) return false;
   return trialState(user).status === "active";
 }
 
@@ -445,8 +443,6 @@ type AccessUser = {
  */
 export function hasPaidOrTrialApplicationAccess(user: AccessUser, now = new Date()): boolean {
   if (isLifetimeProPlus(user.email)) return true;
-  // Extra free week: trial access (5/day cap via dailyApplicationLimit) without Stripe.
-  if (normalizeTier(user.tier) === "free" && trialExtensionActive(user, now.getTime())) return true;
   return !isApplicationAccessPaused(user) && !requiresPaymentMethodBeforeApp(user)
     && ["active", "trialing"].includes(user.subscriptionStatus ?? "")
     && !(user.currentPeriodEnd != null && user.currentPeriodEnd <= now);

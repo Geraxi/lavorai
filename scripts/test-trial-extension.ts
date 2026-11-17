@@ -26,10 +26,13 @@ const isAdmin = (e: string) => e === "boss@x.it";
   assert.equal(trialState(ext).status, "active");
   assert.equal(trialEnd(ext)?.getTime(), ext.trialExtensionEndsAt.getTime());
   assert.equal(isApplicationAccessPaused(ext), false, "extended user can open the app");
-  assert.equal(requiresPaymentMethodBeforeApp(ext), false, "no card wall during the extra week");
-  assert.equal(hasPaidOrTrialApplicationAccess(ext), true, "trial access during the extra week");
-  assert.equal(usesFreeWeeklyQuota(ext), false);
-  assert.equal(dailyApplicationLimit(ext), 5, "trial cap of 5/day applies");
+  assert.equal(requiresPaymentMethodBeforeApp(ext), true, "the extra week needs a card like any active trial");
+  assert.equal(hasPaidOrTrialApplicationAccess(ext), false, "no trial access before Stripe has a card");
+  const withCard = { ...ext, subscriptionStatus: "trialing", currentPeriodEnd: null };
+  assert.equal(requiresPaymentMethodBeforeApp(withCard), false);
+  assert.equal(hasPaidOrTrialApplicationAccess(withCard), true, "trial access once the card is on file");
+  assert.equal(usesFreeWeeklyQuota(withCard), false);
+  assert.equal(dailyApplicationLimit(withCard), 5, "trial cap of 5/day applies");
   assert.equal(effectiveTier(ext), "pro");
   const over = { ...expired, trialExtensionEndsAt: ago(1) };
   assert.equal(isApplicationAccessPaused(over), true, "access closes again when the week ends");
@@ -73,7 +76,7 @@ const u = (o: Partial<ExtensionUser> = {}): ExtensionUser => ({
 
 // ---- ordering ----
 {
-  const c = (userId: string, o: Partial<ExtensionCandidate>): ExtensionCandidate => ({ userId, email: `${userId}@x.it`, name: null, locale: "it", needsConsent: true, needsCv: true, needsAutoApply: true, trialEndedAt: ago(10), ...o });
+  const c = (userId: string, o: Partial<ExtensionCandidate>): ExtensionCandidate => ({ userId, email: `${userId}@x.it`, name: null, locale: "it", needsCard: true, needsConsent: true, needsCv: true, needsAutoApply: true, trialEndedAt: ago(10), ...o });
   assert.deepEqual(orderCandidates([c("bare", {}), c("ready", { needsConsent: false, needsCv: false, needsAutoApply: false }), c("cv", { needsCv: false }), c("bareRecent", { trialEndedAt: ago(1) })]).map((x) => x.userId),
     ["ready", "cv", "bareRecent", "bare"]);
 }
@@ -81,21 +84,27 @@ const u = (o: Partial<ExtensionUser> = {}): ExtensionUser => ({
 // ---- email ----
 {
   const env = { NEXT_PUBLIC_SITE_URL: "https://lavorai.it" };
-  const c: ExtensionCandidate = { userId: "u1", email: "m@x.it", name: "Mario Rossi", locale: "it", needsConsent: true, needsCv: false, needsAutoApply: false, trialEndedAt: ago(10) };
+  const c: ExtensionCandidate = { userId: "u1", email: "m@x.it", name: "Mario Rossi", locale: "it", needsCard: true, needsConsent: true, needsCv: false, needsAutoApply: false, trialEndedAt: ago(10) };
   const ends = new Date("2026-11-25T11:30:00Z");
   const it = renderTrialExtensionEmail(c, ends, env);
   assert.equal(it.subject, "Hai un’altra settimana gratis di LavorAI");
   assert.match(it.html, /mercoledì 25 novembre/);
-  assert.match(it.html, /https:\/\/lavorai\.it\/dashboard/);
+  assert.match(it.html, /https:\/\/lavorai\.it\/start-membership/);
+  assert.match(it.html, /Aggiungi una carta tramite Stripe/);
+  assert.match(it.html, /si rinnova automaticamente con addebito/);
+  assert.doesNotMatch(it.html + it.text, /Non richiesta|Nessuna carta|non serve/i);
+  assert.match(it.html, /inviare candidature per te \(fino a 5 al giorno\)/);
   assert.match(it.html, /Conferma il consenso privacy/);
   assert.doesNotMatch(it.html, /Carica il CV/);
   assert.match(it.text, /Non ricevere più email come questa: https:\/\/lavorai\.it\/api\/notifications\/nudge-optout\?k=trial_extension/);
   const t = new URL(it.optOutUrl).searchParams.get("t")!;
   assert.deepEqual(verifyOneClick(t, `nudge-optout:${TRIAL_EXTENSION_KIND}`), { userId: "u1" });
-  const en = renderTrialExtensionEmail({ ...c, locale: "en", needsConsent: false }, ends, env);
+  const en = renderTrialExtensionEmail({ ...c, locale: "en", needsCard: false, needsConsent: false }, ends, env);
   assert.equal(en.subject, "You have another free week of LavorAI");
   assert.match(en.html, /Wednesday 25 November/);
   assert.match(en.html, /Your profile is ready/);
+  assert.match(en.html, /renews automatically and is charged/);
+  assert.doesNotMatch(en.html + en.text, /not needed|no card/i);
   assert.ok(isScheduledUserNotificationKind("trial_extension"));
 }
 
