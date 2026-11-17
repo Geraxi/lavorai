@@ -105,6 +105,7 @@ export type EmailKind =
   | "privacy_consent_nudge"
   | "pending_questions_nudge"
   | "trial_extension"
+  | "settings_blocker_nudge"
   | "other";
 
 /** Marca un'email come effettivamente consegnata per il tracking quota. */

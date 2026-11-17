@@ -17,6 +17,10 @@
       "schedule": "30 8 * * *"
     },
     {
+      "path": "/api/cron/settings-blocker-nudge",
+      "schedule": "45 8 * * *"
+    },
+    {
       "path": "/api/cron/trial-extension",
       "schedule": "30 11 * * *"
     },

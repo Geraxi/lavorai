@@ -20,6 +20,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { getAttentionQueue } from "@/lib/attention-repository";
+import { getSettingsBlockerForUser } from "@/lib/settings-blocker-nudge";
+import { SettingsBlockerBanner } from "@/components/settings-blocker-banner";
 import { AppTopbar } from "@/components/design/topbar";
 import { WelcomeModal } from "@/components/welcome-modal";
 import { DashboardLiveRefresh } from "@/components/dashboard-live-refresh";
@@ -82,6 +84,7 @@ export default async function DashboardPage() {
     recentInterviews,
     recentActivity,
     series,
+    settingsBlocker,
   ] = await Promise.all([
     getApplicationStageCounts(user.id),
     getRecruiterReplies(user.id),
@@ -122,6 +125,7 @@ export default async function DashboardPage() {
       },
     }),
     getDashboardTimeSeries(user.id).catch(() => null),
+    getSettingsBlockerForUser(user.id),
   ]);
 
   // ── Progress by journey stage ────────────────────────────────────────
@@ -208,6 +212,8 @@ export default async function DashboardPage() {
 
         <div className="dash-grid">
           <div className="dash-main">
+            {settingsBlocker && <SettingsBlockerBanner result={settingsBlocker} locale={locale} />}
+
             {/* Next step (featured) */}
             <section className="pm-card pm-card-featured dash-next" aria-labelledby="dash-next-title">
               <div className="dash-next-body">
