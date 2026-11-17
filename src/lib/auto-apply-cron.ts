@@ -56,6 +56,14 @@ import {
 
 const PER_USER_RUN_CAP = 5;
 
+/** Skip-list ("apply yourself") suggestions created per user per run. They
+ * never take a send slot, but each one costs a liveness check and an inbox
+ * lookup inside the 300 s cron (17 Nov: 18 Ashby rows for one user). */
+export const MAX_HANDOFFS_PER_USER_RUN = 5;
+/** Liveness checks reserved for skip-list suggestions, separate from the
+ * shared budget that protects sendable jobs. */
+export const HANDOFF_LIVENESS_MAX_CHECKS = 20;
+
 /** Età massima (giorni) di un annuncio per l'auto-apply. Env AUTO_APPLY_MAX_JOB_AGE_DAYS (1-365, default 30). */
 export const DEFAULT_MAX_JOB_AGE_DAYS = 30;
 export function maxJobAgeDays(env: Record<string, string | undefined> = typeof process === "undefined" ? {} : process.env): number {
@@ -113,6 +121,11 @@ export interface RunStats {
   skippedJobClosed: number;
   skippedManualAts: number;
   skippedUnprovenChannel: number;
+  /** Auto users without privacy consent who already have a held application:
+   * nothing new is created until they decide (the held rows are released on consent). */
+  skippedPrivacyConsent: number;
+  /** Skip-list suggestions not created because the per-user run cap was reached. */
+  skippedHandoffCap: number;
   /** Proven-channel admissions per channel/reason, e.g. "admitted:recruitee",
    * "rejected:lever:lever_form_precheck_missing". Logged once per run. */
   provenChannelAdmissions: Record<string, number>;
@@ -149,6 +162,8 @@ function emptyRunStats(): RunStats {
     skippedJobClosed: 0,
     skippedManualAts: 0,
     skippedUnprovenChannel: 0,
+    skippedPrivacyConsent: 0,
+    skippedHandoffCap: 0,
     provenChannelAdmissions: {},
     candidatesFetched: 0,
     descriptionsBackfilled: 0,
@@ -181,6 +196,8 @@ export function finalizeRunStats(stats: RunStats): RunStats {
   add("session_paused", stats.skippedSessionPaused);
   add("already_applied", stats.skippedAlreadyApplied);
   add("manual_ats", stats.skippedManualAts);
+  add("privacy_consent_pending_user", stats.skippedPrivacyConsent);
+  add("manual_ats_run_cap", stats.skippedHandoffCap);
   stats.attempted = stats.applicationsEnqueued + stats.applicationsHandedOff
     + stats.applicationsHeld + stats.applicationsAwaitingConsent;
   stats.accepted = 0;
@@ -196,6 +213,15 @@ export function finalizeRunStats(stats: RunStats): RunStats {
 
 function newLivenessGate(): LivenessGate {
   return createLivenessGate({ check: checkJobUrlLiveness, markClosed: markJobClosed, maxChecks: livenessMaxChecksFromEnv() });
+}
+
+function newHandoffLivenessGate(): LivenessGate {
+  return createLivenessGate({ check: checkJobUrlLiveness, markClosed: markJobClosed, maxChecks: HANDOFF_LIVENESS_MAX_CHECKS });
+}
+
+/** Skip-list job with no published inbox: can only become a manual suggestion. */
+function isHandoffCandidate(job: { url: string; recruiterEmail?: string | null }): boolean {
+  return isSkippedPortalUrl(job.url) && !job.recruiterEmail?.trim();
 }
 
 export async function runAutoApplyCron(): Promise<RunStats> {
@@ -221,6 +247,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   const stats = emptyRunStats();
   // One bounded liveness budget per cron run, shared by all users.
   const livenessGate = newLivenessGate();
+  const handoffLivenessGate = newHandoffLivenessGate();
 
   // Utenti in modalità auto O hybrid con CV + preferenze.
   // - "auto":   creiamo candidature "queued" e le mandiamo subito in coda.
@@ -256,6 +283,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
       createdAt: true,
       avoidCompanies: true,
       quotaResetAt: true,
+      privacyConsentAt: true,
       preferences: {
         select: {
           autoApplyMode: true,
@@ -286,7 +314,7 @@ export async function runAutoApplyCron(): Promise<RunStats> {
   for (const user of orderedUsers) {
     try {
       stats.usersProcessed++;
-      await processUser(user, stats, todayStart, monthStart, resolutionDeadline, livenessGate);
+      await processUser(user, stats, todayStart, monthStart, resolutionDeadline, livenessGate, handoffLivenessGate);
     } catch (err) {
       console.error(`[auto-apply-cron] user ${user.id} errored`, err);
       stats.errors++;
@@ -352,6 +380,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
       createdAt: true,
       avoidCompanies: true,
       quotaResetAt: true,
+      privacyConsentAt: true,
       preferences: {
         select: {
           autoApplyMode: true,
@@ -374,7 +403,7 @@ export async function runAutoApplyForUser(userId: string): Promise<RunStats> {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   try {
     stats.usersProcessed = 1;
-    await processUser(user, stats, todayStart, monthStart, Date.now() + BOARD_RESOLUTION_USER_BUDGET_MS, newLivenessGate());
+    await processUser(user, stats, todayStart, monthStart, Date.now() + BOARD_RESOLUTION_USER_BUDGET_MS, newLivenessGate(), newHandoffLivenessGate());
   } catch (err) {
     console.error(`[runAutoApplyForUser] ${userId} errored`, err);
     stats.errors++;
@@ -393,6 +422,7 @@ async function processUser(
     trialGraceEndsAt: Date | null;
     createdAt: Date;
     avoidCompanies: string | null;
+    privacyConsentAt?: Date | null;
     preferences: {
       autoApplyMode: string;
       matchMin: number;
@@ -410,6 +440,7 @@ async function processUser(
   monthStart: Date,
   resolutionDeadline: number,
   livenessGate: LivenessGate = newLivenessGate(),
+  handoffLivenessGate: LivenessGate = newHandoffLivenessGate(),
 ): Promise<void> {
   if (!user.preferences || !user.cvProfile) return;
   const prefs = user.preferences;
@@ -591,6 +622,22 @@ async function processUser(
 
   // Cap globale per run
   remainingToday = Math.min(remainingToday, PER_USER_RUN_CAP);
+
+  // Auto mode without privacy consent: the worker holds every row
+  // (needs_user / privacy_consent_missing) and releases them once the user
+  // consents. One held row is enough to keep a job waiting and the prompt
+  // visible; more only burn this run's shared liveness checks, board lookups
+  // and time. Consent is never assumed or granted here.
+  if (!isHybrid && user.privacyConsentAt === null) {
+    const alreadyHeld = await prisma.application.count({
+      where: { userId: user.id, status: "needs_user", sendFailureReason: "privacy_consent_missing", completedAt: null },
+    });
+    if (alreadyHeld > 0) {
+      stats.skippedPrivacyConsent++;
+      return;
+    }
+    remainingToday = Math.min(remainingToday, 1);
+  }
 
 
 
@@ -873,6 +920,9 @@ async function processUser(
   // tocchino 5 aziende diverse quando possibile.
   const usedThisRun = new Set<string>();
   let enqueued = 0;
+  let handoffs = 0;
+  const gateFor = (job: { url: string; recruiterEmail?: string | null }) =>
+    isHandoffCandidate(job) ? handoffLivenessGate : livenessGate;
   for (const job of jobs) {
     if (!providerOfferAllowed(job.url) || !catalogueJobVisible(job)) continue;
     if (enqueued >= remainingToday) break;
@@ -956,8 +1006,12 @@ async function processUser(
       continue;
     }
 
+    if (isHandoffCandidate(job) && handoffs >= MAX_HANDOFFS_PER_USER_RUN) {
+      stats.skippedHandoffCap++;
+      continue;
+    }
     // Never queue or ask consent for a posting the company already closed.
-    if (await livenessGate.verdict(job) === "closed") {
+    if (await gateFor(job).verdict(job) === "closed") {
       stats.skippedJobClosed++;
       continue;
     }
@@ -978,6 +1032,7 @@ async function processUser(
       });
       // Handoffs (skip-list ATS, CAPTCHA) and later liveness holds must not
       // consume the per-user daily slot, 30-day company cap, or session target.
+      if (outcome === "handoff" && isHandoffCandidate(job)) handoffs++;
       if (outcome !== "slot") continue;
       enqueued++;
       // Marca azienda usata nel run (diversificazione)
@@ -1052,7 +1107,8 @@ async function processUser(
         sessionId = legacy.id;
       }
 
-      if (await livenessGate.verdict(job) === "closed") {
+      if (isHandoffCandidate(job) && handoffs >= MAX_HANDOFFS_PER_USER_RUN) continue;
+      if (await gateFor(job).verdict(job) === "closed") {
         stats.skippedJobClosed++;
         continue;
       }
@@ -1069,6 +1125,7 @@ async function processUser(
           sessionId,
           stats,
         });
+        if (outcome === "handoff" && isHandoffCandidate(job)) handoffs++;
         if (outcome !== "slot") continue;
         enqueued++;
         if (cKey2) {

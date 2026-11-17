@@ -28,7 +28,8 @@ function loadModule(path: string, dependencies: Record<string, unknown>, globals
   return module.exports;
 }
 
-async function testAshbyHandoffsDoNotConsumeDailySlots() {
+type Scenario = { jobs?: Array<Record<string, any>>; user?: Record<string, unknown>; heldPrivacyRows?: number; liveness?: (url: string) => Promise<{ state: string; reason: string; checkedAt: Date }> };
+async function runCron(opts: Scenario = {}) {
   const created: Array<Record<string, any>> = [];
   const queued: string[] = [];
   const job = (id: string, overrides: Record<string, unknown> = {}) => ({
@@ -37,7 +38,7 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
     salaryMin: 60_000, salaryMax: 70_000, postedAt: new Date("2026-01-01T00:00:00.000Z"),
     url: `https://boards.greenhouse.io/acme/jobs/${id}`, category: "design", ...overrides,
   });
-  const jobs = [
+  const jobs = opts.jobs?.map((j) => job(String(j.id), j)) ?? [
     job("ashby-1", { company: "AshbyOne", url: "https://jobs.ashbyhq.com/ashbyone/uuid-1" }),
     job("ashby-2", { company: "AshbyTwo", url: "https://jobs.ashbyhq.com/ashbytwo/uuid-2" }),
     job("gh-1", { company: "GreenOne" }),
@@ -53,15 +54,18 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
   const user = {
     id: "owner", email: "owner@example.test", tier: "pro_plus", trialEndsAt: null,
     trialGraceEndsAt: null, createdAt: new Date(), avoidCompanies: null,
-    preferences, cvProfile: {},
+    preferences, cvProfile: {}, privacyConsentAt: new Date("2026-11-01T00:00:00Z"), ...opts.user,
   };
+  const livenessChecked: string[] = [];
   const skip = await import("../src/lib/ats-skip-hosts");
   const prisma = {
     user: { findUnique: async () => user },
     applicationSession: { findMany: async () => [] },
     job: { findMany: async () => jobs, update: async () => ({}) },
     application: {
-      count: async () => 0, groupBy: async () => [], findMany: async () => [],
+      count: async (query?: { where?: Record<string, unknown> }) =>
+        query?.where?.sendFailureReason === "privacy_consent_missing" ? (opts.heldPrivacyRows ?? 0) : 0,
+      groupBy: async () => [], findMany: async () => [],
       findFirst: async (query: { where: { jobId: string } }) => created.find((a) => a.jobId === query.where.jobId) ?? null,
       create: async ({ data }: { data: Record<string, unknown> }) => {
         const app = { id: `app-${created.length}`, ...data };
@@ -108,7 +112,10 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
     },
     "@/lib/auto-apply-self-heal": { runSelfHeal: async () => { throw new Error("Unexpected self-heal"); } },
     "@/lib/auto-apply-liveness-gate": await import("../src/lib/auto-apply-liveness-gate"),
-    "@/lib/job-liveness": { checkJobUrlLiveness: async () => ({ state: "live", reason: "test", checkedAt: new Date() }), markJobClosed: async () => {} },
+    "@/lib/job-liveness": {
+      checkJobUrlLiveness: async (url: string) => { livenessChecked.push(url); return opts.liveness ? opts.liveness(url) : { state: "live", reason: "test", checkedAt: new Date() }; },
+      markJobClosed: async () => {},
+    },
     "@/lib/conversion-events": { recordConversionEvent: async () => {} },
     "@/lib/analytics": { AnalyticsEvent: { APPLICATION_CREATED: "application_created" } },
     "@/lib/board-apply-resolver": { resolveBoardListingsForRoles: async () => ({ attempted: 0, promoted: 0, existing: 0, unsupported: 0 }) },
@@ -120,6 +127,11 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
     },
   });
   const stats = await api.runAutoApplyForUser(user.id);
+  return { created, queued, stats, livenessChecked, skip };
+}
+
+async function testAshbyHandoffsDoNotConsumeDailySlots() {
+  const { created, queued, stats, skip } = await runCron();
   const ashby = created.filter((a) => String(a.jobId).startsWith("ashby-"));
   const sendable = created.filter((a) => a.status === "queued");
   assert.equal(ashby.length, 2, "Ashby skip-list rows are created as handoffs when no inbox exists");
@@ -135,4 +147,61 @@ async function testAshbyHandoffsDoNotConsumeDailySlots() {
   console.log("live-apply-fixes: skip-list miss hands off without consuming a daily slot");
 }
 
-testAshbyHandoffsDoNotConsumeDailySlots().catch((err) => { console.error(err); process.exitCode = 1; });
+/** 17 Nov 2026: one user got 18 Ashby suggestions in a single run; each cost a
+ * shared liveness check and an inbox lookup inside the 300 s cron. */
+async function testHandoffsCappedAndOnTheirOwnLivenessBudget() {
+  const ashby = Array.from({ length: 12 }, (_, i) => ({ id: `ashby-${i}`, company: `Ashby${i}`, url: `https://jobs.ashbyhq.com/a${i}/uuid-${i}` }));
+  const gh = Array.from({ length: 5 }, (_, i) => ({ id: `gh-${i}`, company: `Green${i}` }));
+  const { created, stats, livenessChecked } = await runCron({ jobs: [...ashby, ...gh] });
+  const handoffs = created.filter((a) => String(a.jobId).startsWith("ashby-"));
+  assert.equal(handoffs.length, 5, "at most MAX_HANDOFFS_PER_USER_RUN suggestions per user per run");
+  assert.ok(handoffs.every((a) => a.status === "ready_to_apply"), "Ashby stays a manual suggestion (skip-list unchanged)");
+  assert.equal(created.filter((a) => a.status === "queued").length, 5, "sendable slots unaffected");
+  assert.equal(stats.skippedHandoffCap, 7);
+  assert.equal(stats.blockedByReason.manual_ats_run_cap, 7);
+  assert.equal(livenessChecked.filter((u) => u.includes("ashbyhq")).length, 5, "no liveness checks for suggestions beyond the cap");
+  console.log("live-apply-fixes: skip-list suggestions capped per run; sendable slots unchanged");
+}
+
+async function testHandoffChecksDoNotStarveSendableJobs() {
+  // Shared sendable budget of 3 checks; 4 suggestions come first in the ranking.
+  // Before: they used up the budget and the closed Greenhouse posting went
+  // unchecked into a send slot. Now suggestions use their own budget.
+  const previous = process.env.AUTO_APPLY_LIVENESS_MAX_CHECKS;
+  process.env.AUTO_APPLY_LIVENESS_MAX_CHECKS = "3";
+  const ashby = Array.from({ length: 4 }, (_, i) => ({ id: `ashby-${i}`, company: `Ashby${i}`, url: `https://jobs.ashbyhq.com/a${i}/uuid-${i}` }));
+  const { created, stats } = await runCron({
+    jobs: [...ashby, { id: "gh-closed", company: "Closed" }, { id: "gh-open", company: "Open" }],
+    liveness: async (url) => ({ state: url.includes("gh-closed") ? "closed" : "live", reason: "test", checkedAt: new Date() }),
+  }).finally(() => { if (previous === undefined) delete process.env.AUTO_APPLY_LIVENESS_MAX_CHECKS; else process.env.AUTO_APPLY_LIVENESS_MAX_CHECKS = previous; });
+  assert.ok(stats.skippedJobClosed >= 1);
+  assert.equal(created.filter((a) => String(a.jobId).startsWith("ashby-")).length, 4, "suggestions still checked and created");
+  assert.ok(!created.some((a) => a.jobId === "gh-closed"), "closed posting never created");
+  assert.ok(created.some((a) => a.jobId === "gh-open" && a.status === "queued"));
+  console.log("live-apply-fixes: suggestions use a separate liveness budget");
+}
+
+async function testPrivacyConsentPrecheck() {
+  // No consent, nothing held yet: exactly one row (held by the worker until the user decides).
+  let run = await runCron({ user: { privacyConsentAt: null } });
+  assert.equal(run.created.filter((a) => a.status === "queued").length, 1, "one held row keeps a job waiting and the prompt visible");
+  assert.equal(run.stats.skippedPrivacyConsent, 0);
+  // Already holding a privacy row: nothing new is created, no liveness/board work is spent.
+  run = await runCron({ user: { privacyConsentAt: null }, heldPrivacyRows: 3 });
+  assert.equal(run.created.length, 0);
+  assert.equal(run.livenessChecked.length, 0);
+  assert.equal(run.stats.skippedPrivacyConsent, 1);
+  assert.equal(run.stats.blockedByReason.privacy_consent_pending_user, 1);
+  // Consent given: unchanged behaviour.
+  run = await runCron({ heldPrivacyRows: 3 });
+  assert.equal(run.created.filter((a) => a.status === "queued").length, 5);
+  // Hybrid users create awaiting_consent rows the user approves; not affected.
+  console.log("live-apply-fixes: non-consented auto users never accumulate held rows; consent is never assumed");
+}
+
+(async () => {
+  await testAshbyHandoffsDoNotConsumeDailySlots();
+  await testHandoffsCappedAndOnTheirOwnLivenessBudget();
+  await testHandoffChecksDoNotStarveSendableJobs();
+  await testPrivacyConsentPrecheck();
+})().catch((err) => { console.error(err); process.exitCode = 1; });
