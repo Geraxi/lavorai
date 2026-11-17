@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
+import { PaymentCelebration } from "./payment-celebration";
+import type { Tier } from "@/lib/billing";
 
 /**
  * Handler degli intent di billing che atterrano su /settings.
@@ -28,6 +30,8 @@ export function PostCheckoutRefresh() {
   const { data: session, update } = useSession();
   const done = useRef(false);
   const attempts = useRef(0);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationTier, setCelebrationTier] = useState<Tier | null>(null);
 
   const upgrade = params.get("upgrade");
   const interval = params.get("interval") === "year" ? "year" : "month";
@@ -76,7 +80,8 @@ export function PostCheckoutRefresh() {
       const tier = session?.user?.tier;
       if (tier && tier !== "free") {
         done.current = true;
-        toast.success("Abbonamento attivato — accesso premium sbloccato.");
+        setCelebrationTier(tier as Tier);
+        setShowCelebration(true);
         router.refresh();
         return;
       }
@@ -95,5 +100,14 @@ export function PostCheckoutRefresh() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribed]);
 
-  return null;
+  return (
+    <>
+      {showCelebration && celebrationTier && (
+        <PaymentCelebration 
+          tier={celebrationTier} 
+          subscriptionId={session?.user?.id}
+        />
+      )}
+    </>
+  );
 }
