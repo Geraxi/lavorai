@@ -3,7 +3,7 @@ import { z } from "zod";
 import { ensureReferralCoupon, stripe, tierToPriceId } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
-import { ANNUAL_PRICING, TIERS, trialEnd, type BillingInterval, type Tier } from "@/lib/billing";
+import { ANNUAL_PRICING, TIERS, trialEnd, type BillingInterval, type Tier, stripeCheckoutTrialEnd } from "@/lib/billing";
 import { AnalyticsEvent } from "@/lib/analytics";
 import { recordConversionEvent } from "@/lib/conversion-events";
 import { CARD_REQUIRED_CHECKOUT } from "@/lib/stripe-subscription-access";
@@ -131,8 +131,9 @@ export async function POST(request: NextRequest) {
           trial: hasRemainingTrial ? "registration_trial_with_payment_method" : "none",
           referralCredit: referralCoupon ? "1" : "0",
         },
+        // Stripe needs trial_end >= 48h ahead: clamp later (never charge early).
         ...(hasRemainingTrial && registrationTrialEndsAt
-          ? { trial_end: Math.floor(registrationTrialEndsAt.getTime() / 1000) }
+          ? { trial_end: Math.floor(stripeCheckoutTrialEnd(registrationTrialEndsAt).trialEnd.getTime() / 1000) }
           : {}),
       },
       locale: "it",

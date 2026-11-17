@@ -183,6 +183,20 @@ export function trialEnd(user: TrialDates): Date | null {
 }
 
 /**
+ * Stripe Checkout rejects subscription_data.trial_end less than 48 hours in the
+ * future ("Has to be at least 48 hours in the future", Stripe API reference).
+ * With less left we clamp it to now + 49h (1h margin): the customer is charged
+ * later than the app trial end, never earlier and never immediately. Omitting
+ * trial_end instead would charge on confirmation, a surprise charge.
+ */
+export const STRIPE_MIN_TRIAL_MS = 48 * 3_600_000;
+const STRIPE_TRIAL_MARGIN_MS = 3_600_000;
+export function stripeCheckoutTrialEnd(trialEndsAt: Date, now = Date.now()): { trialEnd: Date; clamped: boolean } {
+  const min = now + STRIPE_MIN_TRIAL_MS + STRIPE_TRIAL_MARGIN_MS;
+  return trialEndsAt.getTime() >= min ? { trialEnd: trialEndsAt, clamped: false } : { trialEnd: new Date(min), clamped: true };
+}
+
+/**
  * Ritorna i limiti effettivi per un tier.
  */
 export function getLimits(tier: Tier): {
