@@ -87,12 +87,19 @@ export const RECRUITEE_COMPANIES: AtsCompany[] = [
   { slug: "mollie", name: "Mollie", country: "NL" },
   { slug: "sendcloud", name: "Sendcloud", country: "NL" },
   // Verified dead (404) as of 2026-10-18: growens, subito
-  { slug: "italiaonline", name: "Italiaonline", country: "IT" },
-  { slug: "musement", name: "Musement", country: "IT" },
-  { slug: "casavo", name: "Casavo", country: "IT" },
-  { slug: "tiledesk", name: "Tiledesk", country: "IT" },
+  // Verified dead (404) as of 2026-11-17: italiaonline, musement, casavo, tiledesk
   { slug: "boggimilano1", name: "Boggi Milano", country: "IT" },
   { slug: "jobsdeerns", name: "Deerns Italia", country: "IT" },
+  // Italian Recruitee tenants verified 2026-11-17 (public offers API, Italy
+  // locations, standard/question apply forms — no closed/unsupported forms):
+  { slug: "affideaitaly", name: "Affidea Italy", country: "IT" }, // ~68 IT offers
+  { slug: "kodland", name: "Kodland", country: "IT" }, // ~15 IT remote offers
+  { slug: "italconsult", name: "ITALCONSULT", country: "IT" },
+  { slug: "exelab", name: "Exelab", country: "IT" },
+  { slug: "miaplatform", name: "Mia-Platform", country: "IT" },
+  { slug: "mobilae1", name: "Mobilae", country: "IT" },
+  { slug: "oneworks", name: "One Works", country: "IT" },
+  { slug: "switchojob", name: "Switcho", country: "IT" },
   { slug: "wacomeurope", name: "Wacom Europe", country: "DE" },
   { slug: "navinfoeurope", name: "NavInfo Europe", country: "NL" },
   { slug: "benqeuropebv", name: "BenQ Europe", country: "NL" },
