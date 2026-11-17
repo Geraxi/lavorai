@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { applicationsPaused } from "@/lib/application-pause";
 import { runOnboardingNudges } from "@/lib/onboarding-nudge";
 import { runUpgradeNudges } from "@/lib/upgrade-nudge";
+import { lifecycleNudgeCaps } from "@/lib/lifecycle-nudge-caps";
 import { runAutoApplyCron } from "@/lib/auto-apply-cron";
 import { syncAtsJobs } from "@/lib/scrapers/sync-jobs";
 import { runCronSelfHeal } from "@/lib/cron-self-heal";
@@ -53,9 +54,11 @@ export async function GET(request: NextRequest) {
   //    + daily summary a ogni utente attivo nelle 24h (copre il gap
   //    "auto mode + 0 success" dove l'utente prima non riceveva nulla).
   const mailboxMailer = createResendMailboxMailer();
+  // Env caps keep onboarding/upgrade from filling the shared daily email quota.
+  const caps = lifecycleNudgeCaps();
   const [onboarding, upgrade, noReply, dailySummary, weeklyDigest, trial, checkoutRecovery, mailboxDigest, mailboxRetention] = await Promise.all([
-    runOnboardingNudges({}).catch((err) => ({ error: String(err) })),
-    runUpgradeNudges({}).catch((err) => ({ error: String(err) })),
+    runOnboardingNudges({ cap: caps.onboarding }).catch((err) => ({ error: String(err) })),
+    runUpgradeNudges({ cap: caps.upgrade }).catch((err) => ({ error: String(err) })),
     runNoReplyFollowups({}).catch((err) => ({ error: String(err) })),
     runDailySummary({}).catch((err) => ({ error: String(err) })),
     runWeeklyDigest({}).catch((err) => ({ error: String(err) })),

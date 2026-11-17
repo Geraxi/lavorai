@@ -204,6 +204,7 @@ assert.match(readFileSync("src/lib/queue-drain.ts", "utf8"), /processApplication
   const nudges = load("src/app/api/cron/nudges/route.ts", {
     "@/lib/onboarding-nudge": { runOnboardingNudges: async () => { userMail++; return { sent: 0 }; } },
     "@/lib/upgrade-nudge": { runUpgradeNudges: async () => { userMail++; return { sent: 0 }; } },
+    "@/lib/lifecycle-nudge-caps": { lifecycleNudgeCaps: () => ({}) },
     "@/lib/auto-apply-cron": { runAutoApplyCron: async () => { apply++; return { applicationsEnqueued: 0 }; } },
     "@/lib/scrapers/sync-jobs": { syncAtsJobs: async () => ({}) },
     "@/lib/cron-self-heal": { runCronSelfHeal: async () => { heal++; return { appsRecoveredSafely: 0 }; } },
