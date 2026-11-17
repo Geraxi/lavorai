@@ -162,6 +162,7 @@ async function main() {
         ...routeMocks,
         "@/lib/onboarding-nudge": { runOnboardingNudges: async () => { userMail++; return { sent: 0 }; } },
         "@/lib/upgrade-nudge": { runUpgradeNudges: async () => { userMail++; return { sent: 0 }; } },
+        "@/lib/lifecycle-nudge-caps": { lifecycleNudgeCaps: () => ({}) },
         "@/lib/auto-apply-cron": { runAutoApplyCron: async () => { applyCalls++; throw new Error("paused nudges must not auto-apply"); } },
         "@/lib/scrapers/sync-jobs": { syncAtsJobs: async () => ({}) },
         "@/lib/cron-self-heal": { runCronSelfHeal: async () => { healCalls++; throw new Error("paused nudges must not self-heal"); } },
