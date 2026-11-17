@@ -88,7 +88,9 @@ const aliases: Record<string, string[]> = {
   yearsExperience: ["years of experience", "years of professional experience", "years of total experience", "total years of experience", "how many years of experience do you have", "how many years of professional experience do you have", "anni di esperienza", "anni di esperienza professionale", "quanti anni di esperienza hai", "quanti anni di esperienza professionale hai"],
   englishLevel: ["english level", "level of english", "english proficiency", "livello di inglese"],
   languages: ["languages", "languages spoken", "spoken languages", "lingue", "lingue parlate"],
-  noticePeriod: ["notice period", "preavviso", "periodo di preavviso", "available from", "available to start", "earliest start date", "earliest start", "when can you start", "start date", "disponibilità"],
+  noticePeriod: ["notice period", "preavviso", "periodo di preavviso", "available from", "available to start", "earliest start date", "earliest start", "when can you start", "start date", "disponibilità",
+    "preferred start date", "possible start date", "preferred/possible start date", "possible/preferred start date",
+    "earliest possible start date", "desired start date", "starting date", "possible starting date", "earliest starting date"],
   highestEducation: ["highest education", "highest level of education", "titolo di studio", "titolo di studio più alto"],
   howHeard: ["where did you hear about us", "how did you hear about us", "how did you hear about this role", "how did you hear about this job", "how did you find us", "where did you hear about this role", "come ci hai conosciuto", "come hai saputo di noi"],
   willingRemote: [
@@ -199,8 +201,15 @@ function previouslyEmployedLabel(label: string): boolean {
 function isYesNoQuestionKind(kind: string): boolean {
   return ["select", "react-select", "radio", "checkbox"].includes(kind);
 }
+/** Optional promotional channels (WhatsApp/SMS/marketing). Never privacy,
+ * data-processing or terms consent, which always wait for the candidate. */
+const MARKETING_CHANNEL = /\b(?:whatsapp|sms|text messages?|text\/sms|sms\/text|newsletters?|marketing)\b/;
+const MARKETING_ACTION = /\b(?:opt[- ]?in|receive|subscribe|sign up|contact you|send you|provide you)\b/;
+const NOT_MARKETING = /\b(?:privacy|personal data|data processing|process(?:ing)? (?:of )?(?:my|your) data|gdpr|terms|policy|retain|retention|background check)\b/;
 export function isMarketingOptInQuestion(label: string): boolean {
-  return aliases.marketingOptIn.includes(factQuestionKey(label));
+  const key = factQuestionKey(label);
+  if (aliases.marketingOptIn.includes(key)) return true;
+  return MARKETING_CHANNEL.test(key) && MARKETING_ACTION.test(key) && !NOT_MARKETING.test(key);
 }
 export function isRemoteWillingnessQuestion(label: string): boolean {
   return aliases.willingRemote.includes(factQuestionKey(label));
@@ -216,7 +225,9 @@ export function reusableFactKey(label: string): string | null {
   if (PHONE_COUNTRY_LABEL.test(key)) return "phoneCountry";
   if (/^(?:(?:expected|desired) annual (?:salary|compensation)|annual (?:salary|compensation) expectations?)\s*\(?\s*(?:eur|€|euros?)\s*\)?$/.test(key)
     || /^(?:ral desiderata|ral attesa|aspettativa (?:di )?ral)$/.test(key)
-    || /^(?:salary|compensation) expectations?$/.test(key)) return "salaryExpectationEur";
+    || /^(?:salary|compensation) expectations?$/.test(key)
+    // "What are your yearly salary expectations?" — no other currency named.
+    || /^(?:what (?:are|is) (?:your )?)?(?:(?:yearly|annual|expected) )?(?:gross )?(?:salary|compensation) expectations?(?: \(?(?:eur|€|euros?)\)?)?$/.test(key)) return "salaryExpectationEur";
   const scoped = countryScopedScreeningKey(label);
   if (scoped) return scoped;
   if (previouslyEmployedLabel(label)) return "previouslyEmployed";
@@ -449,7 +460,7 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
   return { answer, provenance, conflict: false };
 }
 
-const START_DATE_LABEL = /^(?:start date|earliest start date|earliest start|available from|available to start|when can you start|availability(?: date)?|data di inizio|disponibilità|disponibile dal)$/;
+const START_DATE_LABEL = /^(?:start date|earliest start date|earliest start|available from|available to start|when can you start|availability(?: date)?|data di inizio|disponibilità|disponibile dal|(?:preferred|possible|desired|earliest possible|preferred\/possible|possible\/preferred) start(?:ing)? date|(?:possible |earliest )?starting date)$/;
 
 /** EU member states, ISO2. Norway/Switzerland/UK are not EU. */
 const EU_MEMBERS = new Set(["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"]);

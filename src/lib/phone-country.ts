@@ -288,6 +288,14 @@ export function matchPhoneCountryOption(
       const byCountry = exact.filter((m) => optionMatchesCountry(m.option, country));
       if (byCountry.length === 1) return byCountry[0].option;
     }
+    // Same calling code listed under several territories ("Italy +39" /
+    // "Vatican City +39", "United Kingdom +44" / "Jersey +44"): every choice
+    // dials the identical number, so the code's primary country is a faithful
+    // pick. NANP +1 and +7 stay ambiguous without a profile country.
+    if (parsed && !isSharedDial(parsed.dial) && longest === parsed.dial.length - 1) {
+      const primary = exact.filter((m) => optionMatchesCountry(m.option, parsed.name));
+      if (primary.length === 1) return primary[0].option;
+    }
     return null;
   }
   if (!parsed && country?.trim()) {
