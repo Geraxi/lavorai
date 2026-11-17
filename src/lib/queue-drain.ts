@@ -319,6 +319,16 @@ export async function drainQueuedApplications(opts: {
       console.error("[drain] queued-claim recovery failed", err);
     }
   }
+  // Released NOT_SUBMITTED rows with zero submit evidence go back to a pristine
+  // queued row so the claim below can see them (see not-submitted-pickup.ts).
+  if (!opts.db) {
+    try {
+      const { pickUpNeverSubmittedRows } = await import("@/lib/not-submitted-pickup");
+      await pickUpNeverSubmittedRows({ now });
+    } catch (err) {
+      console.error("[drain] not-submitted pickup failed", err instanceof Error ? err.message : err);
+    }
+  }
   const find = opts.findClaimableQueued ?? claims.findClaimableQueued;
   const claim = opts.claimApplication ?? claims.claimApplication;
   const process = opts.processApplication ?? (await import("@/lib/application-worker")).processApplication;

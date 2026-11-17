@@ -66,7 +66,7 @@
     "test:google-ads-browser": "node scripts/test-google-ads-browser.mjs",
     "test:paid-priority": "node --import tsx scripts/test-paid-priority.ts",
     "test:free-quota": "node --import tsx scripts/test-free-weekly-quota.ts",
-    "test:queue-drain": "node --import tsx scripts/test-queue-drain.ts",
+    "test:queue-drain": "node --import tsx scripts/test-queue-drain.ts && node --import tsx scripts/test-not-submitted-pickup.ts",
     "test:application-lease": "node --import tsx scripts/test-application-lease.ts",
     "test:daily-cap": "node --import tsx scripts/test-daily-application-cap.ts",
     "test:apply-reliability": "node --import tsx scripts/test-apply-reliability.ts",
