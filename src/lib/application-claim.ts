@@ -110,6 +110,22 @@ const stuckEvidenceSelect = {
   replyCount: true, userStatus: true, answerContinuationJson: true,
 } as const;
 
+
+/** Rows the worker marked NOT_SUBMITTED and never reached an irreversible
+ * submit can be retried without the recovery allowlist. Null/UNCONFIRMED
+ * confirmation stays behind the allowlist. */
+export function safeToAutoReleaseControlledHold(row: {
+  submitConfirmation: string | null;
+  submitStartedAt: Date | null;
+  submittedAt?: Date | null;
+  submittedVia?: string | null;
+}): boolean {
+  return row.submitConfirmation === "NOT_SUBMITTED"
+    && row.submitStartedAt == null
+    && row.submittedAt == null
+    && !row.submittedVia;
+}
+
 /** Claimed `queued` rows whose worker died before reserve/process. */
 export async function recoverExpiredQueuedClaims(now = new Date()): Promise<number> {
   if (applicationsPaused()) return 0;
@@ -153,6 +169,8 @@ export async function recoverExpiredQueuedClaims(now = new Date()): Promise<numb
     }
     const next = (app.retryCount ?? 0) + 1;
     const exhausted = next >= maxAttempts;
+    const releaseWithoutAllowlist = safeToAutoReleaseControlledHold(app);
+    const released = !exhausted && (releaseWithoutAllowlist || await tryConsumeRecoveryRelease(app.id, { db: prisma }));
     const changed = await prisma.application.updateMany({
       where: {
         ...reclaimWhere,
@@ -163,7 +181,7 @@ export async function recoverExpiredQueuedClaims(now = new Date()): Promise<numb
         retryCount: next,
         startedAt: null, leaseToken: null, leaseExpiresAt: null,
         errorMessage: staleQueuedClaimExhaustedMessage(maxAttempts),
-      } : await tryConsumeRecoveryRelease(app.id, { db: prisma }) ? {
+      } : released ? {
         startedAt: null, leaseToken: null, leaseExpiresAt: null,
         retryCount: next,
         errorMessage: staleQueuedClaimReleaseMessage(),
@@ -193,13 +211,19 @@ export async function releaseControlledRecoveryHolds(
       submitStartedAt: null,
       createdAt: { gt: config.startedAt, lte: now },
     },
-    select: { id: true },
+    select: { id: true, submitConfirmation: true },
     take: 50,
     orderBy: { createdAt: "asc" },
   });
   let released = 0;
   for (const row of held) {
-    if (!await tryConsumeRecoveryRelease(row.id, { db: prisma })) continue;
+    const canRelease = safeToAutoReleaseControlledHold({
+      submitConfirmation: row.submitConfirmation,
+      submitStartedAt: null,
+      submittedAt: null,
+      submittedVia: null,
+    }) || await tryConsumeRecoveryRelease(row.id, { db: prisma });
+    if (!canRelease) continue;
     const changed = await prisma.application.updateMany({
       where: {
         id: row.id, status: "queued", errorMessage: controlledReleaseMessage(),

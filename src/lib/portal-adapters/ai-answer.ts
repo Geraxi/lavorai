@@ -1,6 +1,6 @@
 import { resolveCandidateFact, matchFactOption, type Fact, type FactContext } from "../candidate-facts";
 import { exactOption, isNarrativeQuestion, matchingScopedAnswer, resolveScopedQuestionAnswer } from "./answer-safety";
-import { sanitizeFormLabel } from "./form-labels";
+import { isInternalAtsFieldName, sanitizeFormLabel } from "./form-labels";
 import type { Page } from "playwright";
 import { complete } from "@/lib/ai-router";
 
@@ -340,7 +340,7 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
       const rawName = el.getAttribute("name") || "";
       // Lever custom cards and autocomplete widgets use cards[field] as the
       // control name. That is not a question label.
-      if (!label && rawName && !/^cards?\[/i.test(rawName)) label = rawName;
+      if (!label && rawName && !/^cards?\[/i.test(rawName) && !/^(?:CA|QA|HA)_\d+$/i.test(rawName)) label = rawName;
       label = label
         .replace(/SVGs? not supported by this browser\.?/gi, " ")
         // Workable: il selettore paesi del telefono dumpa l'intera lista
@@ -348,6 +348,21 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
         .split(/\s*\+\d{1,4}[A-Z]/)[0]
         .replace(/\s+/g, " ")
         .trim();
+      // Workable custom fields are named CA_33134 / QA_12784602 — find the visible heading.
+      if (!label || /^(?:CA|QA|HA)_\d+$/i.test(label)) {
+        const box = el.closest("fieldset, [class*='field'], [class*='question'], [data-ui*='question'], li");
+        const heading = box?.querySelector("legend, [data-ui='label'], [class*='question-label'], [class*='QuestionLabel'], [class*='field-label'], [class*='question-title'], [class*='QuestionTitle'], h1, h2, h3, h4, p");
+        let walked = (heading?.textContent ?? "").replace(/SVGs? not supported by this browser\.?/gi, " ").replace(/\s+/g, " ").trim();
+        if (!walked || /^(?:CA|QA|HA)_\d+$/i.test(walked)) {
+          let node: Element | null = el.parentElement;
+          for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
+            let text = (node.textContent ?? "").replace(/SVGs? not supported by this browser\.?/gi, " ").replace(/\s+/g, " ").trim();
+            if (/^(?:CA|QA|HA)_\d+$/i.test(text)) continue;
+            if (text.replace(/[^a-z0-9]/gi, "").length >= 8 && text.length <= 300) { walked = text; break; }
+          }
+        }
+        if (walked && !/^(?:CA|QA|HA)_\d+$/i.test(walked)) label = walked;
+      }
 
       const phoneContainer = el.closest("[class*='phone'], [class*='Phone'], [class*='tel-input']");
       if (/country|dial|prefix/i.test(`${el.id} ${el.getAttribute("name") || ""} ${label}`)
@@ -459,7 +474,9 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
           }
         }
         const optionOnly = opts.some((o) => o.toLowerCase() === q.toLowerCase())
-          || /^(yes|no|y|n|si|sì|true|false|1|0)$/i.test(q);
+          || /^(yes|no|y|n|si|sì|true|false|1|0)$/i.test(q)
+          || /^(?:CA|QA|HA)_\d+$/i.test(q)
+          || q === gname;
         if (optionOnly || q.replace(/[^a-z0-9]/gi, "").length < 3) {
           q = `Radio group ${idx + 1}`;
         }
@@ -506,14 +523,15 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
             ccont?.querySelector("label")?.textContent ??
             cname;
           cq = (cq || cname).replace(/\s+/g, " ").trim();
-          if (copts.some((o) => o.toLowerCase() === cq.toLowerCase())) {
-            // First <label> was an option ("YES"): use the group's own heading text.
+          if (copts.some((o) => o.toLowerCase() === cq.toLowerCase()) || /^(?:CA|QA|HA)_\d+$/i.test(cq) || cq === cname) {
+            // First <label> was an option ("YES") or a Workable CA_/QA_ id.
             let node: Element | null = ccont ?? el.parentElement;
             cq = `Checkbox group ${idx + 1}`;
             for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
               let text = (node.textContent ?? "").replace(/\s+/g, " ");
               for (const o of copts) text = text.split(o).join(" ");
               text = text.replace(/\s+/g, " ").trim();
+              if (/^(?:CA|QA|HA)_\d+$/i.test(text)) continue;
               if (text.replace(/[^a-z0-9]/gi, "").length >= 8 && text.length <= 300) { cq = text; break; }
             }
           }
@@ -556,7 +574,10 @@ async function collectRequiredEmptyFields(page: Page, includePopulated = false):
 
     return out;
   }, { tag: TAG, includePopulated }).then((fields) => fields.flatMap((field) => {
-    const label = sanitizeFormLabel(field.label);
+    const label = sanitizeFormLabel(field.label)
+      || (isInternalAtsFieldName(field.label) || /^(yes|no|y|n|si|sì)$/i.test(field.label.trim())
+        ? `Campo obbligatorio senza etichetta (${field.idx + 1})`
+        : "");
     if (!label) return [];
     return [{ ...field, label }];
   })) as Promise<FieldDescriptor[]>;

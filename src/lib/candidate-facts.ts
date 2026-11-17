@@ -1,8 +1,8 @@
 import type { CVProfile } from "./cv-profile-types";
 import type { ApplicationAnswers } from "./application-answers";
-import { matchCity } from "./city-centroids";
+import { inferCountryFromLocation, matchCity } from "./city-centroids";
 import { COUNTRY_CENTROIDS } from "./country-centroids";
-import { derivePhoneCountryLabel, matchPhoneCountryOption } from "./phone-country";
+import { derivePhoneCountryLabel, matchPhoneCountryOption, normalizePhoneDigits, parsePhoneCountry } from "./phone-country";
 
 /** Employer privacy/GDPR consent only — never terms, marketing, or certifications. */
 export function isPrivacyConsentQuestion(label: string): boolean {
@@ -41,8 +41,21 @@ export type FactContext = {
   jobLocation?: string | null;
 };
 export function factQuestionKey(label: string): string {
-  return label.normalize("NFKC").toLowerCase().replace(/[?*:]/g, "").replace(/[.]$/, "").replace(/\s+/g, " ").trim()
-    .replace(/^(?:what is|please enter|please provide|enter|provide) (?:your )?/, "").replace(/^your /, "");
+  let key = label.normalize("NFKC").toLowerCase()
+    .replace(/[?*:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.,;]+$/g, "");
+  // Repeat so stacked politeness ("Please select the...") still matches aliases.
+  for (let i = 0; i < 3; i++) {
+    const next = key
+      .replace(/^(?:what(?:['’]?s| is| are)|please (?:select|indicate|choose|enter|provide|tell us|specify)|select|indicate|choose|enter|provide|tell us)(?: the| your| a| an)?\s+/, "")
+      .replace(/^your\s+/, "")
+      .trim();
+    if (next === key) break;
+    key = next;
+  }
+  return key.replace(/\s+in months?$/, "").trim();
 }
 const aliases: Record<string, string[]> = {
   firstName: ["first name", "given name", "nome", "qual è il tuo nome"],
@@ -64,6 +77,7 @@ const aliases: Record<string, string[]> = {
     "country/region of residence", "residence country", "country where you currently reside",
     "country where you reside", "country located", "country of location",
     "in which country do you currently reside", "which country do you currently live in",
+    "country you are currently located in", "country you are currently living in",
     "what country do you live in", "paese", "nazione", "paese di residenza", "in quale paese risiedi",
   ],
   currentEmployer: ["current employer", "current company", "azienda attuale", "datore di lavoro attuale", "qual è la tua azienda attuale", "where do you currently work"],
@@ -80,7 +94,7 @@ const aliases: Record<string, string[]> = {
   degree: ["degree", "diploma", "qualification", "titolo di studio conseguito"],
   linkedinUrl: [
     "linkedin", "linkedin url", "linkedin profile", "linkedin profile url",
-    "linkedin profile link", "profilo linkedin",
+    "linkedin profile link", "linkedin link", "link linkedin", "profilo linkedin",
   ],
   portfolioUrl: ["portfolio", "portfolio url", "portfolio link", "link to portfolio", "website / portfolio"],
   githubUrl: ["github", "github url", "github profile"],
@@ -88,7 +102,7 @@ const aliases: Record<string, string[]> = {
   yearsExperience: ["years of experience", "years of professional experience", "years of total experience", "total years of experience", "how many years of experience do you have", "how many years of professional experience do you have", "anni di esperienza", "anni di esperienza professionale", "quanti anni di esperienza hai", "quanti anni di esperienza professionale hai"],
   englishLevel: ["english level", "level of english", "english proficiency", "livello di inglese"],
   languages: ["languages", "languages spoken", "spoken languages", "lingue", "lingue parlate"],
-  noticePeriod: ["notice period", "preavviso", "periodo di preavviso", "available from", "available to start", "earliest start date", "earliest start", "when can you start", "start date", "disponibilità",
+  noticePeriod: ["notice period", "current notice period", "notice period in months", "preavviso", "periodo di preavviso", "available from", "available to start", "earliest start date", "earliest start", "when can you start", "start date", "disponibilità",
     "preferred start date", "possible start date", "preferred/possible start date", "possible/preferred start date",
     "earliest possible start date", "desired start date", "starting date", "possible starting date", "earliest starting date"],
   highestEducation: ["highest education", "highest level of education", "titolo di studio", "titolo di studio più alto"],
@@ -239,6 +253,11 @@ const normalizedValue = (value: string) => value.normalize("NFKC").trim().toLowe
 function canonicalFactValue(key: string | null, value: string): string {
   const normalized = normalizedValue(value);
   if (key === "phone") return normalized.replace(/[\s().-]/g, "").replace(/^00/, "+");
+  if (key === "englishLevel") {
+    if (/\b(native|madrelingua|mother tongue)\b/.test(normalized)) return "native";
+    const cefr = normalized.match(/\b(c2|c1|b2|b1|a2|a1)\b/);
+    if (cefr) return cefr[1];
+  }
   const groups: Record<string, string[][]> = {
     country: [["italy", "italia", "it", "ita"], ["united kingdom", "uk", "gb", "gbr", "regno unito"], ["united states", "united states of america", "us", "usa", "stati uniti"]],
     // User.noticePeriod stores "immediate" | "1m" | "2m" | "3m_plus"; the
@@ -453,7 +472,10 @@ export function resolveCandidateFact(question: FactQuestion, context: FactContex
   let answer = matchFactOption(question, value)
     ?? (allowSearchValue && question.kind === "react-select" && reusableFactKey(question.label) !== "phoneCountry" ? value : null);
   if (answer && key === "noticePeriod" && !["select", "react-select", "radio"].includes(question.kind)) {
-    answer = NOTICE_TEXT[canonicalFactValue("noticePeriod", answer)] ?? answer;
+    const canon = canonicalFactValue("noticePeriod", answer);
+    const months: Record<string, string> = { immediate: "0", "1month": "1", "2months": "2", "3months_plus": "3" };
+    if (/\bin months?\b/i.test(question.label) && months[canon]) answer = months[canon];
+    else answer = NOTICE_TEXT[canon] ?? answer;
   }
   // A search string is never a selected answer: the browser must fetch current
   // options and map them again before clicking. Offline suggestions stay strict.
@@ -517,6 +539,15 @@ export function employmentEnded(endDate: string, now = new Date()): boolean {
   return date.toISOString().slice(0, 10) === value && +date + 86400000 <= +now;
 }
 
+
+/** Prefix https:// on bare www./linkedin hosts so a CV link is a usable URL. Never invent a profile. */
+function withHttpUrl(url: string): string {
+  const value = url.trim();
+  if (!value || /^https?:\/\//i.test(value)) return value;
+  if (/^(?:www\.)?(?:linkedin\.com|github\.com)\//i.test(value)) return `https://${value}`;
+  return value;
+}
+
 export type CandidateFactUser = {
   email?: string | null; name?: string | null; phone?: string | null; yearsExperience?: number | null;
   englishLevel?: string | null; noticePeriod?: string | null;
@@ -528,6 +559,14 @@ export type CandidateFactUser = {
    * The column defaults to true, so callers must not pass the bare default. */
   euAuthorized?: boolean | null;
 };
+
+function looksItalianPhone(phone: string | null | undefined): boolean {
+  if (!phone?.trim()) return false;
+  if (parsePhoneCountry(phone)?.iso2 === "IT") return true;
+  const digits = normalizePhoneDigits(phone).replace(/^\+/, "");
+  return /^3\d{8,9}$/.test(digits);
+}
+
 export function candidateFacts(profile: CVProfile | null, user: CandidateFactUser = {}, preferences: ApplicationAnswers = {}, saved: SavedFactAnswer[] = [], now = new Date()): Fact[] {
   const facts: Fact[] = [];
   const add = (key: string, value: unknown, source: FactSource, reference = key) => {
@@ -551,7 +590,7 @@ export function candidateFacts(profile: CVProfile | null, user: CandidateFactUse
     add("degree", profile.education[0]?.degree, "cv", "education.0.degree");
     // No qualification is inferred from an education entry, including a past end date.
     (profile.skills ?? []).forEach((skill, i) => add(`skill:${skill.name.toLowerCase().trim()}`, "Yes", "cv", `skills.${i}`));
-    profile.links.forEach((link, i) => { if (/linkedin/i.test(`${link.label} ${link.url}`)) add("linkedinUrl", link.url, "cv", `links.${i}`); else if (/portfolio|behance|dribbble/i.test(`${link.label} ${link.url}`)) add("portfolioUrl", link.url, "cv", `links.${i}`); else if (/github/i.test(`${link.label} ${link.url}`)) add("githubUrl", link.url, "cv", `links.${i}`); else if (/^(?:website|personal website|sito web personale)$/i.test(link.label.trim())) add("websiteUrl", link.url, "cv", `links.${i}`); });
+    profile.links.forEach((link, i) => { if (/linkedin/i.test(`${link.label} ${link.url}`)) add("linkedinUrl", withHttpUrl(link.url), "cv", `links.${i}`); else if (/portfolio|behance|dribbble/i.test(`${link.label} ${link.url}`)) add("portfolioUrl", link.url, "cv", `links.${i}`); else if (/github/i.test(`${link.label} ${link.url}`)) add("githubUrl", link.url, "cv", `links.${i}`); else if (/^(?:website|personal website|sito web personale)$/i.test(link.label.trim())) add("websiteUrl", link.url, "cv", `links.${i}`); });
     (profile.languages ?? []).filter(l => /^(english|inglese)$/i.test(l.name.trim())).forEach(l => add("englishLevel", l.level, "cv", "languages.english"));
     add("languages", (profile.languages ?? []).map(l => l.level ? `${l.name} (${l.level})` : l.name).join(", "), "cv");
   }
@@ -590,10 +629,9 @@ export function candidateFacts(profile: CVProfile | null, user: CandidateFactUse
   for (const key of ["city", "country", "linkedinUrl", "portfolioUrl", "githubUrl", "websiteUrl", "salaryExpectationEur", "yearsExperience", "englishLevel", "noticePeriod", "highestEducation", "howHeard"] as const) add(key, preferences[key], "preferences");
   add("languages", preferences.languagesText, "preferences", "languagesText");
   if (profile?.city && !facts.some((fact) => fact.key === "country")) {
-    const located = matchCity(profile.city);
-    if (located?.cc && COUNTRY_CENTROIDS[located.cc]?.name) {
-      add("country", COUNTRY_CENTROIDS[located.cc].name, "cv", "city");
-    }
+    const phone = profile.phone ?? user?.phone ?? null;
+    const located = inferCountryFromLocation(profile.city, { preferItalian: looksItalianPhone(phone) });
+    if (located?.name) add("country", located.name, "cv", "city");
   }
   // Do not reuse a bare historical label/value or any generated/assumed source.
   for (const answer of saved) {

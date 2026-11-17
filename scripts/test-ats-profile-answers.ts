@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { candidateFacts, isPrivacyConsentQuestion, resolveCandidateFact, reusableFactKey } from "../src/lib/candidate-facts";
 import { isReusableProfileQuestion } from "../src/lib/application-question-answers";
-import { canaryScreenshotFilename, sanitizeFormLabel } from "../src/lib/portal-adapters/form-labels";
+import { canaryScreenshotFilename, isInternalAtsFieldName, preferVisibleQuestionLabel, sanitizeFormLabel } from "../src/lib/portal-adapters/form-labels";
 import type { CVProfile } from "../src/lib/cv-profile-types";
 
 const profile: CVProfile = {
@@ -104,6 +104,24 @@ assert.equal(sanitizeFormLabel("+1United States+44United Kingdom+39Italy"), "");
 assert.equal(sanitizeFormLabel("United StatesUnited KingdomAfghanistanAlbaniaAlgeria"), "");
 assert.equal(sanitizeFormLabel("LinkedIn Profile URL"), "LinkedIn Profile URL");
 assert.equal(sanitizeFormLabel("Best Contact Number *"), "Best Contact Number *");
+assert.equal(isInternalAtsFieldName("CA_33134"), true);
+assert.equal(isInternalAtsFieldName("QA_12784602"), true);
+assert.equal(isInternalAtsFieldName("LinkedIn Link"), false);
+assert.equal(sanitizeFormLabel("CA_33134"), "");
+assert.equal(sanitizeFormLabel("QA_12784602"), "");
+assert.equal(
+  preferVisibleQuestionLabel({ name: "CA_33134", visibleText: "CA_33134", options: ["YES", "NO"], fallback: "Radio group 1" }),
+  "Radio group 1",
+);
+assert.equal(
+  preferVisibleQuestionLabel({ name: "CA_33134", visibleText: "Do you have a driving licence?", options: ["YES", "NO"], fallback: "Radio group 1" }),
+  "Do you have a driving licence?",
+);
+assert.equal(
+  preferVisibleQuestionLabel({ name: "QA_12810223", visibleText: "YES", options: ["YES", "NO"], fallback: "Radio group 2" }),
+  "Radio group 2",
+);
+
 
 const shotA = canaryScreenshotFilename("post-submit");
 const shotB = canaryScreenshotFilename("post-submit");
