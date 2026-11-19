@@ -1,0 +1,11 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const worker = readFileSync("src/lib/application-worker.ts", "utf8");
+const body = worker.slice(worker.indexOf("async function notifyNeedsAnswers("), worker.indexOf("function renderManualEmail("));
+assert.ok(body.includes("Saving does not submit the application."));
+assert.ok(body.includes("Salvare non invia la candidatura."));
+assert.ok(body.includes("Confirm continuation separately"));
+assert.ok(body.includes("Conferma la ripresa separatamente"));
+assert.ok(!body.includes("we'll submit automatically"));
+assert.ok(!body.includes("inviamo in automatico"));
+console.log("PASS needs-answers email consent semantics");

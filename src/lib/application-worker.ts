@@ -2111,8 +2111,8 @@ async function notifyNeedsAnswers(applicationId: string, atsTestAuth?: AtsTestAu
       : `❓ Poche domande per completare la candidatura a ${company}`;
   const text =
     locale === "en"
-      ? `Hi ${firstName},\n\nThe application for "${jobTitle}" at ${company} has a few required questions only you can answer (e.g. work authorization, screening questions).\n\nAnswer them once here and we'll submit automatically (and reuse your answers next time): ${url}\n\n— LavorAI`
-      : `Ciao ${firstName},\n\nLa candidatura per "${jobTitle}" presso ${company} ha alcune domande obbligatorie a cui solo tu puoi rispondere (es. diritto al lavoro, domande di screening).\n\nRispondi una volta qui e inviamo in automatico (e riusiamo le risposte la prossima volta): ${url}\n\n— LavorAI`;
+      ? `Hi ${firstName},\n\nThe application for "${jobTitle}" at ${company} has a few required questions only you can answer (e.g. work authorization, screening questions).\n\nReview and save your answers here: ${url}\n\nSaving does not submit the application. Confirm continuation separately when a safe pre-submission pause is verified. We reuse explicit facts only when they agree.\n\n— LavorAI`
+      : `Ciao ${firstName},\n\nLa candidatura per "${jobTitle}" presso ${company} ha alcune domande obbligatorie a cui solo tu puoi rispondere (es. diritto al lavoro, domande di screening).\n\nVerifica e salva le risposte qui: ${url}\n\nSalvare non invia la candidatura. Conferma la ripresa separatamente quando la pausa prima dell’invio è verificata. Riutilizziamo i fatti espliciti solo quando concordano.\n\n— LavorAI`;
 
   await sendWithinQuota("application_manual", app.user.email, async () => {
     const delivery = await resend.emails.send({
