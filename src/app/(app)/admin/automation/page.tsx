@@ -97,7 +97,7 @@ export default async function AdminAutomationPage() {
       />
 
       <div className="adm-automation-kpis">
-        <KpiTrendCard label="Candidature inviate (7g)" value={compactNumber(apps7)} delta={dPct(apps7, appsPrev7)} series={appsSeries} color="hsl(var(--primary))" icon={<Send size={15} />} />
+        <KpiTrendCard label="Candidature create (7g)" value={compactNumber(apps7)} delta={dPct(apps7, appsPrev7)} series={appsSeries} color="hsl(var(--primary))" icon={<Send size={15} />} />
         <KpiTrendCard label="Utenti attivi" value={compactNumber(activeUsers)} delta={dPct(activeUsers, activePrev)} series={appsSeries.map((v, i) => activeUsers * (0.8 + i * 0.015) + v * 0)} color="#60a5fa" icon={<Users size={15} />} />
         <KpiTrendCard label="Email inviate" value={compactNumber(emails7)} delta={dPct(emails7, emailsPrev7)} series={emailSeries} color="#a78bfa" icon={<Mail size={15} />} />
         <KpiTrendCard label="Tasso di completamento" value={`${rate.toFixed(1)}%`} deltaLabel={`${success14}/${apps14d.length}`} series={succSeries} color="hsl(var(--primary))" icon={<Target size={15} />} />
