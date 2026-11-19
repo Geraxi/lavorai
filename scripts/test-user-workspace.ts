@@ -54,6 +54,10 @@ console.log("PASS shared status chips preserve heuristic qualifiers and support 
 for (const locale of ["it", "en"]) {
   const navigation = workspaceNavigation(locale);
   const routes = [...navigation.work, ...navigation.profile];
+  assert.equal(routes.some(item => item.href === "/posta"), false, "The redundant application mailbox must not appear in shared navigation");
+  assert.equal(routes.filter(item => item.href === "/inbox").length, 1, "Keep exactly one Inbox entry");
+  assert.ok(navigation.work.slice(0, 4).some(item => item.href === "/inbox"), "Inbox remains available in the mobile tab bar");
+  assert.ok(existsSync("src/app/(app)/posta/page.tsx"), "Existing direct mailbox links remain compatible");
   assert.equal(new Set(routes.map(item => item.href)).size, routes.length);
   for (const item of routes) {
     assert.ok(existsSync(`src/app/(app)${item.href}/page.tsx`) || (item.href === "/feedback" && existsSync("src/app/(support)/feedback/page.tsx")), `${item.href} must resolve`);
