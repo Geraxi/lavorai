@@ -21,6 +21,8 @@ import * as recoveryRelease from "../src/lib/application-recovery-release";
 import * as uncertainSubmission from "../src/lib/uncertain-submission";
 import * as recruiterEmailFallback from "../src/lib/recruiter-email-fallback";
 import * as atsTestCapability from "../src/lib/ats-test-capability";
+import * as atsSkipHosts from "../src/lib/ats-skip-hosts";
+import * as materialPreparation from "../src/lib/application-material-preparation";
 function load(path: string, extra: Record<string, any> = {}) {
   const dependencies: Record<string, any> = {
     "@/lib/application-provider-policy": providerPolicy,
@@ -39,7 +41,8 @@ function load(path: string, extra: Record<string, any> = {}) {
     "next/server": { NextResponse: { json, redirect: (location: string) => ({ status: 307, location }) } },
     "@/lib/auto-apply-liveness-gate": liveness,
     "@/lib/paid-priority": paidPriority,
-    "@/lib/ats-skip-hosts": extra["@/lib/ats-skip-hosts"] ?? { requiresManualAtsHandoff: () => false, compareJobsForAutoApply: () => 0, SKIPPED_ATS_MANUAL_MESSAGE: "skip" },
+    "@/lib/ats-skip-hosts": atsSkipHosts,
+    "@/lib/application-material-preparation": materialPreparation,
     "@/lib/daily-application-cap": extra["@/lib/daily-application-cap"] ?? {
       countDailyCapUsage: async () => 0, weeklyQuotaUsageWhere: () => ({}),
       remainingDailyCap: (used: number, limit: number) => Math.max(0, limit - used),
