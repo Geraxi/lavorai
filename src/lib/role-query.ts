@@ -1,3 +1,5 @@
+import { isInternshipTitle, ROLE_ACRONYMS, significantTokens } from "./role-match";
+
 /**
  * Token sets for the auto-apply job query: one AND-group of title tokens per
  * role (OR across roles). Before, only the first 5 roles were queried, so a
@@ -8,8 +10,6 @@
  * matches every title the larger one would). Capped at MAX_ROLE_GROUPS.
  */
 export const MAX_ROLE_GROUPS = 40;
-
-const ACRONYMS = new Set(["ai", "ml", "ui", "ux", "qa", "bi", "ki", "ia", "ar", "vr"]);
 
 const ENGINEER_WORDS = new Set(["engineer", "engineers", "developer", "developers", "dev", "devs", "sviluppatore", "sviluppatori", "sviluppatrice", "programmer", "programmers"]);
 
@@ -45,7 +45,15 @@ export function roleTitleTokenGroups(roles: string[], max = MAX_ROLE_GROUPS): st
   const groups: string[][] = [];
   const seen = new Set<string>();
   for (const role of roles) {
-    const toks = [...new Set(role.replace(/\b(full|front|back)\s+(stack|end)\b/gi, "$1-$2").split(/\s+/).map((t) => t.trim()).filter((t) => t.length >= 3 || ACRONYMS.has(t.toLowerCase())))];
+    const normalized = significantTokens(role);
+    // The database prefilter must not reject cases the final title gate knows
+    // how to evaluate, e.g. "Senior Product Designer" or "Engineer (AI)".
+    // Keep the older explicit internship filter so this cannot widen a role
+    // such as "Marketing Intern" to regular marketing openings.
+    const legacy = () => role.replace(/\b(full|front|back)\s+(stack|end)\b/gi, "$1-$2")
+      .split(/\s+/).map((t) => t.trim())
+      .filter((t) => t.length >= 3 || ROLE_ACRONYMS.has(t.toLowerCase()));
+    const toks = [...new Set(isInternshipTitle(role) || normalized.length === 0 ? legacy() : normalized)];
     if (!toks.length) continue;
     const key = toks.map((t) => t.toLowerCase()).sort().join(" ");
     if (seen.has(key)) continue;

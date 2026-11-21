@@ -79,7 +79,7 @@ function testRoleQuery() {
   assert(!keys.includes("senior ios engineer"), "superset of another role is redundant");
   assert.equal(keys.filter((k) => k === "machine learning engineer").length, 1, "duplicates merged");
   // "AI" is a meaningful acronym: "AI Engineer" must not collapse to "Engineer" (every engineering job).
-  assert.deepEqual(roleTitleTokenGroups(["AI Engineer", "iOS Engineer"]).map((g) => g.join(" ")), ["AI Engineer", "iOS Engineer"]);
+  assert.deepEqual(roleTitleTokenGroups(["AI Engineer", "iOS Engineer"]).map((g) => g.join(" ").toLowerCase()), ["ai engineer", "ios engineer"]);
   assert.equal(titleMatchesRole("Software Engineer, Trust & Safety", "AI Engineer"), false, "AI Engineer is not any engineer");
   assert.equal(titleMatchesRole("Senior AI Engineer", "AI Engineer"), true);
   assert.equal(titleMatchesRole("Forward-Deployed AI Engineer - Internship", "AI Engineer"), false, "internships are not a selected AI Engineer role");
