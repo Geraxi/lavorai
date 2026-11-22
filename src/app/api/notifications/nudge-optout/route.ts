@@ -3,8 +3,9 @@ import { prisma } from "@/lib/db";
 import { verifyOneClick } from "@/lib/one-click-token";
 import { NUDGE_KINDS } from "@/lib/consent-questions-nudge";
 import { TRIAL_EXTENSION_KIND } from "@/lib/trial-extension";
+import { SETTINGS_NUDGE_KIND } from "@/lib/settings-blocker-nudge";
 
-const OPTOUT_KINDS = [...NUDGE_KINDS, TRIAL_EXTENSION_KIND] as const;
+const OPTOUT_KINDS = [...NUDGE_KINDS, TRIAL_EXTENSION_KIND, SETTINGS_NUDGE_KIND] as const;
 type NudgeKind = (typeof OPTOUT_KINDS)[number];
 
 export const runtime = "nodejs";
@@ -39,6 +40,7 @@ const LABEL: Record<NudgeKind, string> = {
   privacy_consent: "i promemoria sul consenso privacy",
   pending_questions: "i promemoria sulle domande in attesa",
   trial_extension: "le email sulla settimana di prova extra",
+  settings_blocker: "i promemoria sulle impostazioni che bloccano le candidature",
 };
 
 export async function GET(request: NextRequest) {
