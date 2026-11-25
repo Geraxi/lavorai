@@ -198,3 +198,7 @@
 .mail-attention-controls button { padding:5px 8px; border:1px solid var(--border-ds); border-radius:6px; color:var(--fg); }
 .mail-attention-controls button:focus-visible { outline:2px solid var(--primary-ds); }
 .mail-attention-controls small { width:100%; color:var(--fg-muted); }
+
+.mail-translation-actions { display:flex; flex-wrap:wrap; gap:4px 14px; margin:0 0 4px; }
+.mail-translation-actions .mail-text-button { display:inline-flex; align-items:center; gap:5px; text-decoration:underline; text-underline-offset:3px; }
+.mail-translation-subject { display:block; overflow-wrap:anywhere; margin-bottom:6px; }

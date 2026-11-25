@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Archive, ArrowDownWideNarrow, ArrowLeft, BriefcaseBusiness, ChevronLeft, ChevronRight, CircleAlert, FilePenLine, Inbox, Mail, RefreshCw, Reply, Search, Send, X } from "lucide-react";
 import { GmailConnectModal } from "@/components/gmail-connect-modal";
+import { InboxMessageTranslation } from "@/components/inbox-message-translation";
 import { filterInboxMessages, inboxThreadKey, type InboxFilter, type InboxMessage, type InboxOutgoing } from "@/lib/inbox-message";
 import "./design/inbox-mailbox.css";
 import "./design/inbox-premium.css";
@@ -225,7 +226,13 @@ export function GmailInboxView({ messages: initialMessages, gmailConnected, user
             {conversation.slice(-conversationLimit).map(item => <article className={`mail-letter${item.reply ? " mail-letter-outgoing" : ""}`} key={item.reply?.id ?? item.message!.id}>
               <header><span className="mail-avatar" aria-hidden="true">{item.reply ? <Send size={16} /> : senderName(item.message!.from).slice(0,2).toUpperCase()}</span><div><strong>{item.reply ? tr("You", "Tu") : senderName(item.message!.from)}</strong><small>{item.reply ? `${tr("To", "A")} ${item.reply.recipient}` : item.message!.from}</small></div><time>{fmtDate(item.date,en,true)}</time></header>
               {item.reply && <div className="mail-delivery">{statusText(item.reply.status,en)}</div>}
-              <div className="mail-body" data-testid="message-body">{item.reply?.bodyText ?? item.message?.bodyText ?? item.message?.snippet ?? tr("No content", "Nessun contenuto")}</div>
+              {!item.reply && item.message?.jobRelated && (item.message.bodyText ?? item.message.snippet)?.trim() ? (
+                <InboxMessageTranslation
+                  body={item.message.bodyText ?? item.message.snippet ?? ""}
+                  subject={item.message.subject}
+                  en={en}
+                />
+              ) : <div className="mail-body" data-testid="message-body">{item.reply?.bodyText ?? item.message?.bodyText ?? item.message?.snippet ?? tr("No content", "Nessun contenuto")}</div>}
               {item.reply?.failureCode && <p className="mail-notice">{errorText(item.reply.failureCode,en)}</p>}
             </article>)}
           </div>

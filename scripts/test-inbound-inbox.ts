@@ -154,6 +154,9 @@ function componentDependencies(react: unknown, router: unknown, fetch: unknown) 
       "@/components/design/icon": { Icon: () => null },
       "@/components/design/company-logo": { CompanyLogo: () => null, companyColor: () => "#000" },
       "@/components/gmail-connect-modal": { GmailConnectModal: () => null },
+      "@/components/inbox-message-translation": loadModule("src/components/inbox-message-translation.tsx", {
+        react, "react/jsx-runtime": jsx, "lucide-react": { Languages: () => null },
+      }),
       "@/lib/inbox-message": presentation,
     },
     globals: { fetch, URLSearchParams },
