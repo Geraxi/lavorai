@@ -23,6 +23,7 @@ const base={source:'application_reply',from:'Sara Bianchi <sara@example.test>',s
 const names=['Marco Rossi','Elena Conti','Julian Martin','Chiara Verdi'];
 const companies=['Sample Labs','Demo Cloud','Example Works','Sample Design'];
 const messages=[{...base,id:'application_reply:first'},...Array.from({length:54},(_,i)=>({...base,id:'application_reply:fixture-'+i,applicationId:'fixture-app-'+i,from:names[i%4]+' <recruiter'+i+'@example.test>',company:companies[i%4],date:new Date(Date.parse('2026-10-14T10:00:00Z')-i*3600000).toISOString(),kind:i%3===0?'colloquio':'risposta',subject:['Aggiornamento sulla tua candidatura','Un primo incontro con il team','La tua esperienza con React','Informazioni sul ruolo'][i%4]})),{...base,id:'gmail:fixture',source:'gmail',gmailMessageId:'fixture-gmail',applicationId:'gmail-app',subject:'Gmail original fixture',date:'2026-09-10T10:00:00Z'}];
+messages[1]={...messages[1],subject:'Einladung zum Gespräch',bodyText:'Guten Tag! Haben Sie am Donnerstag um 14 Uhr Zeit?'};
 const outgoing=[{id:'00000000-0000-4000-8000-000000000099',parentReplyId:'application_reply:first',applicationId:'fixture-app',bodyText:'Ciao Sara, grazie per avermi contattato. Sono disponibile giovedì mattina o venerdì pomeriggio. Possiamo organizzare una call conoscitiva.\\n\\nA presto,\\nAlex',recipient:'sara@example.test',subject:'Re: Disponibilità per un colloquio',status:'delivered',failureCode:null,date:'2026-10-15T10:36:00Z',updatedAt:'2026-10-15T10:37:00Z'}];
 window.__requests=[];window.__refreshes=0;window.__replyMode='quota';
 window.fetch=async(url,options={})=>{
@@ -45,7 +46,9 @@ const server=createServer(async(req,res)=>{const file=['/preview.js','/preview.c
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const port=server.address().port;
 let browser;
 try{
- browser=await chromium.launch({channel:'chrome',headless:true});const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[],external=[];
+ browser=await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+  ? {executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,headless:true}
+  : {channel:'chrome',headless:true});const page=await browser.newPage({viewport:{width:1440,height:900}});const errors=[],external=[];
  page.on('pageerror',err=>errors.push(err.message)); await page.route('**/*',route=>{if(!route.request().url().startsWith('http://127.0.0.1:'+port+'/')){external.push(route.request().url());return route.abort()}return route.continue()});
  await page.goto('http://127.0.0.1:'+port+'/inbox');await page.getByRole('textbox',{name:'Testo risposta'}).waitFor();
  await page.waitForFunction(()=>document.querySelector('.mail-recipient')?.textContent.includes('sara@example.test'));
@@ -64,6 +67,49 @@ try{
  const last=await page.evaluate(()=>JSON.parse(window.__requests.filter(r=>r.method==='POST').at(-1).body));assert.equal(first.id,last.id,'Same request identity after quota/network error');assert.ok(!('recipient'in last));
  await page.screenshot({path:join(out,'inbox-provider-accepted.png'),fullPage:false});
  await page.getByRole('textbox',{name:'Cerca nella inbox'}).fill('Gmail original fixture');await page.getByRole('link',{name:'Rispondi in Gmail'}).waitFor();assert.equal(await page.getByRole('textbox',{name:'Testo risposta'}).count(),0);assert.ok((await page.getByRole('link',{name:'Rispondi in Gmail'}).getAttribute('href')).includes('fixture-gmail'));
+ await page.getByRole('textbox',{name:'Cerca nella inbox'}).fill('Einladung zum Gespräch');
+ const inbound=page.locator('.mail-letter');
+ const original='Guten Tag! Haben Sie am Donnerstag um 14 Uhr Zeit?';
+ assert.equal(await inbound.getByTestId('message-body').textContent(),original);
+ await page.evaluate(()=>{
+  window.__translationCalls=[];
+  Object.defineProperty(window,'Translator',{configurable:true,value:{
+   async create({sourceLanguage,targetLanguage}){
+    window.__translationCalls.push([sourceLanguage,targetLanguage]);
+    return {
+     async translate(text){
+      window.__translationCalls.push(text);
+      return text.startsWith('Einladung')?'Invito al colloquio':'Buongiorno! Ha tempo giovedì alle 14?';
+     },
+     destroy(){window.__translationCalls.push('destroy')},
+    };
+   },
+  }});
+ });
+ assert.deepEqual(await page.evaluate(()=>window.__translationCalls),[],'Never translate without a click');
+ const fetchCount=await page.evaluate(()=>window.__requests.length);
+ await inbound.getByRole('button',{name:'Traduci dal tedesco'}).click();
+ await inbound.getByRole('status').filter({hasText:'Traduzione automatica'}).waitFor();
+ assert.equal(await inbound.getByTestId('message-body').textContent(),'Buongiorno! Ha tempo giovedì alle 14?');
+ assert.match(await inbound.innerText(),/Invito al colloquio/);
+ assert.deepEqual(await page.evaluate(()=>window.__translationCalls),[['de','it'],original,'Einladung zum Gespräch','destroy']);
+ await inbound.getByRole('button',{name:'Mostra originale'}).click();
+ assert.equal(await inbound.getByTestId('message-body').textContent(),original);
+ await page.evaluate(()=>{
+  Object.defineProperty(window,'Translator',{value:undefined});
+  Object.defineProperty(navigator,'clipboard',{configurable:true,value:{async writeText(text){window.__copiedText=text}}});
+ });
+ // Switching threads remounts the message. No browser translation API is available now.
+ await page.getByRole('textbox',{name:'Cerca nella inbox'}).fill('Gmail original fixture');
+ await page.getByRole('link',{name:'Rispondi in Gmail'}).waitFor();
+ await page.getByRole('textbox',{name:'Cerca nella inbox'}).fill('Einladung zum Gespräch');
+ await inbound.getByRole('button',{name:'Traduci dal tedesco'}).click();
+ await inbound.getByRole('status').filter({hasText:'Questo browser non può tradurre'}).waitFor();
+ await inbound.getByRole('button',{name:'Copia originale'}).click();
+ await inbound.getByRole('status').filter({hasText:'Originale copiato.'}).waitFor();
+ assert.equal(await page.evaluate(()=>window.__copiedText),'Einladung zum Gespräch\n\n'+original);
+ assert.equal(await inbound.getByTestId('message-body').textContent(),original);
+ assert.ok((await page.evaluate((n)=>window.__requests.slice(n),fetchCount)).every(({url,method})=>method==='GET'&&url.startsWith('/api/inbox/replies')));
  await page.getByRole('textbox',{name:'Cerca nella inbox'}).fill('no match');await page.getByText('Nessun messaggio trovato').waitFor();
  await page.getByRole('textbox',{name:'Cerca nella inbox'}).fill('');await page.evaluate(()=>window.__long());
  await page.locator('.mail-row').first().click();assert.equal(await page.locator('[data-testid="message-body"] img,[data-testid="message-body"] script').count(),0);assert.ok(await page.evaluate(()=>document.body.scrollHeight<=innerHeight+2));assert.ok(await page.locator('.mail-conversation').evaluate(el=>el.scrollHeight>el.clientHeight));
@@ -71,5 +117,24 @@ try{
  await page.goto('http://127.0.0.1:'+port+'/inbox?locale=en');await page.setViewportSize({width:390,height:844});await page.locator('.mail-row').first().waitFor();await page.screenshot({path:join(out,'inbox-mobile-list.png'),fullPage:false});
  assert.ok(await page.evaluate(()=>document.body.scrollWidth<=innerWidth));await page.locator('.mail-row').first().click();await page.getByRole('textbox',{name:'Reply message'}).waitFor();await page.screenshot({path:join(out,'inbox-mobile-conversation.png'),fullPage:false});assert.ok(await page.evaluate(()=>document.body.scrollWidth<=innerWidth));
  await page.getByRole('button',{name:'Back to messages'}).click();await page.locator('.mail-row').first().waitFor();
- assert.deepEqual(external,[]);assert.deepEqual(errors,[]);console.log('[inbox-browser] PASS: 56-message pagination, desktop viewport bounds, mobile list/reader, no dropdowns, quota draft retention, send identity, Gmail fallback, safe text/zero external requests. '+out);
+ await page.getByRole('textbox',{name:'Search inbox'}).fill('Einladung zum Gespräch');await page.locator('.mail-row').first().click();
+ await page.evaluate(()=>{
+  window.__englishAttempts=[];
+  Object.defineProperty(window,'Translator',{configurable:true,value:{async create({sourceLanguage,targetLanguage}){
+   window.__englishAttempts.push([sourceLanguage,targetLanguage]);
+   if(window.__englishAttempts.length===1)throw new Error('Fixture: language pack unavailable');
+   return {async translate(text){return text.startsWith('Einladung')?'Interview invitation':'Hello! Are you free on Thursday at 2 PM?'},destroy(){}};
+  }}});
+ });
+ await inbound.getByRole('button',{name:'Translate from German'}).click();
+ await inbound.getByRole('status').filter({hasText:'On-device translation didn’t finish'}).waitFor();
+ assert.equal(await inbound.getByTestId('message-body').textContent(),original);
+ await inbound.getByRole('button',{name:'Translate from German'}).click();
+ await inbound.getByRole('status').filter({hasText:'Automatic translation'}).waitFor();
+ assert.equal(await inbound.getByTestId('message-body').textContent(),'Hello! Are you free on Thursday at 2 PM?');
+ assert.deepEqual(await page.evaluate(()=>window.__englishAttempts),[['de','en'],['de','en']]);
+ await inbound.getByRole('button',{name:'Show original'}).click();
+ assert.equal(await inbound.getByTestId('message-body').textContent(),original);
+ assert.ok(await page.evaluate(()=>document.body.scrollWidth<=innerWidth));
+ assert.deepEqual(external,[]);assert.deepEqual(errors,[]);console.log('[inbox-browser] PASS: 56-message pagination, desktop viewport bounds, mobile list/reader, no dropdowns, quota draft retention, send identity, Gmail fallback, safe text/zero external requests, German translation into Italian/English, original toggle, translation retry and clipboard fallback. '+out);
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));}
